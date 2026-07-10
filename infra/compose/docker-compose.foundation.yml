@@ -20,6 +20,9 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/backend.Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+        PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-}
     env_file:
       - ../../${OFFERSTEADY_ENV_FILE:-.env.production}
     environment:

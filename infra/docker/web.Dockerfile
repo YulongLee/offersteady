@@ -9,7 +9,7 @@ ENV VITE_APP_ENV=$VITE_APP_ENV
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 ENV VITE_PUBLIC_APP_VERSION=$VITE_PUBLIC_APP_VERSION
 
-COPY package.json package-lock.json* /app/
+COPY package.json package-lock.json* tsconfig.base.json /app/
 COPY apps /app/apps
 COPY packages /app/packages
 
