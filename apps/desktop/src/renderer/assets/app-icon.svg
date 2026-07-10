@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">面试稳应用图标</title>
+  <rect width="512" height="512" rx="144" fill="#6ee7bd"/>
+  <text x="256" y="340" text-anchor="middle" font-size="260" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-weight="800" fill="#07110d">稳</text>
+</svg>

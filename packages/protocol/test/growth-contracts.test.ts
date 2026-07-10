@@ -1,0 +1,7 @@
+import { describe, expect, it } from "vitest";
+import type { GuideContent, OfficialCheckoutOrder, ProductAssetManifest, WechatAuthorizationSession, WindowsSupportReadiness } from "../src/index";
+describe("growth contracts", () => {
+  it("serializes authorization without provider secrets", () => { const value: WechatAuthorizationSession = { id: "auth-1", state: "opaque", status: "waiting", authorizeUrl: "https://open.weixin.qq.com/connect", expiresAtMs: 10 }; const text = JSON.stringify(value); expect(text).not.toMatch(/secret|access_token|subject/i); });
+  it("uses discriminated dynamic checkout actions", () => { const order = { id: "o1", userId: "u1", product: { id: "p", catalogVersion: 2, kind: "points_pack", displayName: "300 点", priceCents: 3990, points: 300, published: true }, amountCents: 3990, currency: "CNY", channel: "wechat", status: "payment_pending", action: { kind: "dynamic_qr", value: "provider-value", expiresAtMs: 10 }, createdAtMs: 1, updatedAtMs: 1 } satisfies OfficialCheckoutOrder; expect(order.action.kind).toBe("dynamic_qr"); });
+  it("keeps readiness, assets and guide versions explicit", () => { const readiness: WindowsSupportReadiness = { releaseVersion: "1", status: "not-ready", evidence: [] }; const assets: ProductAssetManifest = { version: 1, entries: [] }; const guide: GuideContent = { version: "1", locale: "zh-CN", chapters: [] }; expect([readiness.status, assets.version, guide.locale]).toEqual(["not-ready", 1, "zh-CN"]); });
+});

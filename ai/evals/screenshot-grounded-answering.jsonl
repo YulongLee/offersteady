@@ -1,0 +1,3 @@
+{"input":{"session":"live","instruction":"请根据截图回答这道系统设计题","images":["system-design-1.png","system-design-2.png"]},"expected":{"checks":["returns_answer_outline","mentions_constraints_or_tradeoffs","does_not_invent_user_experience"]}}
+{"input":{"session":"live","instruction":"这是一道算法笔试题，请帮我梳理解法","images":["coding-question.png"]},"expected":{"checks":["returns_stepwise_reasoning","keeps_interview_style","grounds_answer_in_screenshot_context"]}}
+{"input":{"session":"live","instruction":"用户通过当前屏幕截取发起截图回答","capture":"current-screen"},"expected":{"checks":["starts_from_live_capture","does_not_require_file_upload_step","grounds_answer_in_captured_context"]}}

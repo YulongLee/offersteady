@@ -1,0 +1,3 @@
+{"id":"empty-context-no-fabrication","selection":{"resume":null,"jd":null,"knowledge":[]},"question":"请介绍一个最有挑战的项目","must_include":["资料不足","真实经历"],"must_not_claim":["公司名称","项目名称","负责范围","量化结果"],"synthetic":true}
+{"id":"jd-only-no-resume-claim","selection":{"resume":null,"jd":"合成高级前端岗位","knowledge":[]},"question":"为什么你适合这个岗位","must_use_sources":["合成高级前端岗位"],"must_not_claim":["候选人曾就职公司","候选人项目经历","候选人量化结果"],"synthetic":true}
+{"id":"knowledge-only-no-identity-claim","selection":{"resume":null,"jd":null,"knowledge":["合成系统设计清单"]},"question":"如何设计实时协作系统","must_use_sources":["合成系统设计清单"],"must_not_claim":["候选人亲自实施过","候选人负责过"],"synthetic":true}

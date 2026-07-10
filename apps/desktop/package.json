@@ -1,0 +1,43 @@
+{
+  "name": "@offersteady/desktop",
+  "version": "0.1.0",
+  "description": "面试稳 macOS 与 Windows 音频伴随程序",
+  "author": "OfferSteady",
+  "private": true,
+  "type": "commonjs",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "dev": "npm run build && electron .",
+    "build": "npm run build:native && npm run build:main && npm run build:renderer",
+    "build:native": "node scripts/build-native-runtime.mjs",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:renderer": "vite build -c vite.config.mts",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "test": "vitest run",
+    "diagnose:runtime": "node scripts/diagnose-runtime.mjs",
+    "package:mac": "npm run package:mac:arm64",
+    "package:mac:arm64": "npm run build && node scripts/package-local-mac.mjs arm64",
+    "package:mac:x64": "npm run build && node scripts/package-local-mac.mjs x64",
+    "reset-privacy-open:mac:arm64": "node scripts/reset-privacy-and-open.mjs arm64",
+    "reset-privacy-open:mac:x64": "node scripts/reset-privacy-and-open.mjs x64",
+    "package:mac:builder:arm64": "npm run build && electron-builder --mac --arm64 --config electron-builder.yml",
+    "package:mac:builder:x64": "npm run build && electron-builder --mac --x64 --config electron-builder.yml",
+    "package:mac:dir": "npm run build && electron-builder --mac --dir --config electron-builder.yml",
+    "package:win:x64": "npm run build && electron-builder --win --x64 --config electron-builder.yml",
+    "diagnose:e2e": "node scripts/diagnose-runtime.mjs"
+  },
+  "dependencies": {
+    "@offersteady/protocol": "*",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "electron": "42.5.0",
+    "electron-builder": "^26.15.3",
+    "vite": "^8.1.0"
+  }
+}

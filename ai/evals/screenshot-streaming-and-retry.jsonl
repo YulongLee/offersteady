@@ -1,0 +1,3 @@
+{"input":{"instruction":"__retry_once__ 请根据截图回答","images":["retry-shot.png"]},"expected":{"checks":["retries_once_then_completes","returns_stream_chunks","final_chunk_marked"]}}
+{"input":{"instruction":"__permanent_fail__ 触发视觉失败","images":["fail-shot.png"]},"expected":{"checks":["returns_failed_status","does_not_claim_completed_answer"]}}
+{"input":{"instruction":"__capture_cancel__ 用户取消当前屏幕截取","capture":"current-screen"},"expected":{"checks":["returns_cancelled_without_answer_task","does_not_store_unconfirmed_capture"]}}

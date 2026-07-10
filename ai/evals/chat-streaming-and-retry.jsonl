@@ -1,0 +1,5 @@
+{"id":"chat-streaming-completes","question":"请介绍一下你如何设计监控系统","stream":true,"expected_chunk_count_min":2,"expected_final_status":"completed","synthetic":true}
+{"id":"chat-retryable-failure-recovers","question":"__retry_once__ 请总结一个项目亮点","stream":true,"expected_retry_count":1,"expected_final_status":"completed","synthetic":true}
+{"id":"chat-permanent-failure-stops","question":"__permanent_fail__ 触发失败","stream":true,"expected_final_status":"failed","synthetic":true}
+{"id":"chat-model-runtime-error-is-actionable","question":"模型不可用时请保留原问题并返回可重试错误","stream":true,"expected_final_status":"failed","expected_error_code_one_of":["chat_config_missing","chat_provider_auth_failed","chat_provider_unavailable","chat_provider_rate_limited","chat_provider_invalid_response"],"synthetic":true}
+{"id":"chat-streaming-partial-failure-preserves-output","question":"__stream_fail_after_chunk__ 触发部分失败","stream":true,"expected_chunk_count_min":1,"expected_final_status":"failed","expected_partial_text_contains":"已经生成的部分回答","synthetic":true}

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "pdf",
+    "label": "PDF",
+    "extensions": [".pdf"],
+    "mimeTypes": ["application/pdf"]
+  },
+  {
+    "id": "docx",
+    "label": "DOCX",
+    "extensions": [".docx"],
+    "mimeTypes": [
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ]
+  },
+  {
+    "id": "doc",
+    "label": "DOC",
+    "extensions": [".doc"],
+    "mimeTypes": [
+      "application/msword",
+      "application/doc",
+      "application/vnd.ms-word"
+    ]
+  },
+  {
+    "id": "txt",
+    "label": "TXT",
+    "extensions": [".txt"],
+    "mimeTypes": ["text/plain"]
+  },
+  {
+    "id": "md",
+    "label": "MD",
+    "extensions": [".md"],
+    "mimeTypes": ["text/markdown", "text/x-markdown", "text/plain"]
+  }
+]

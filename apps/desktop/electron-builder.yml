@@ -1,0 +1,38 @@
+appId: com.offersteady.companion
+productName: 面试稳伴随程序
+directories:
+  output: release
+files:
+  - dist/**/*
+extraResources:
+  - from: dist/native/macos-capture/OfferSteadyCaptureRuntime
+    to: app/native/macos-capture/OfferSteadyCaptureRuntime
+    filter:
+      - "**/*"
+asar: true
+mac:
+  category: public.app-category.productivity
+  minimumSystemVersion: 14.2.0
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    NSMicrophoneUsageDescription: 面试稳仅在你明确开始后使用麦克风识别你的表达。
+    NSAudioCaptureUsageDescription: 面试稳仅在你明确开始后采集系统音频以识别面试问题。
+    NSScreenCaptureUsageDescription: 面试稳使用 macOS 屏幕与系统音频权限捕获你选择的会议音频，不保存屏幕画面。
+  target:
+    - target: dmg
+    - target: zip
+  artifactName: OfferSteady-Companion-${version}-macOS-${arch}.${ext}
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: OfferSteady-Companion-${version}-Windows-${arch}.${ext}
+  verifyUpdateCodeSignature: true
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  deleteAppDataOnUninstall: false

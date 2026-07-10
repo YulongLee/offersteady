@@ -1,0 +1,13 @@
+import { useMemo, useState } from "react";
+import type { DesktopReleaseManifest } from "@offersteady/protocol";
+import { downloadableRelease, recommendedRelease } from "./platform";
+import { Link } from "react-router-dom";
+import { routes } from "./routes";
+
+export function DownloadCenter({ manifest }: { readonly manifest: DesktopReleaseManifest }) {
+  const recommendation = useMemo(() => recommendedRelease(manifest, navigator.userAgent), [manifest]);
+  const [selectedId, setSelectedId] = useState(recommendation?.id ?? manifest.entries[0]?.id ?? "");
+  const selected = manifest.entries.find(entry => entry.id === selectedId);
+  const size = (bytes: number) => `${Math.round(bytes / 1024 / 1024)} MB`;
+  return <section className="panel download-center"><div className="panel-heading"><div><h2>下载电脑伴随程序</h2><p>选择与你的系统和芯片匹配的安装包。</p></div><Link to={`${routes.guide}#desktop`}>安装说明</Link></div><div className="download-grid">{manifest.entries.map(entry => { const available = downloadableRelease(entry); const local = entry.signingStatus === "local-development"; return <button key={entry.id} className={`download-choice ${selectedId === entry.id ? "selected" : ""}`} onClick={() => setSelectedId(entry.id)}><span className="platform-mark">{entry.platform === "macos" ? "⌘" : "⊞"}</span><strong>{entry.displayName}</strong><small>{entry.architecture} · {entry.minimumOs}</small>{recommendation?.id === entry.id ? <b>推荐</b> : null}<i>{local ? (available ? "✓ 本机开发版" : "待本机构建") : available ? "✓ 已验证" : "签名验证中"}</i></button>; })}</div>{selected ? <div className="release-detail"><div><strong>{selected.displayName} · {selected.version}</strong><span>{size(selected.fileSizeBytes)} · SHA-256 {selected.sha256.slice(0, 10)}…</span><span>麦克风：{selected.capabilities.microphone ? "支持" : "不可用"} · 系统音频：{selected.capabilities.systemAudio ? "支持" : "当前预览版暂不支持"}</span>{selected.signingStatus === "local-development" ? <span>本机开发版已做本机 ad-hoc 签名；下载后解压，若 macOS 提示无法验证开发者，请右键 App 选择“打开”。</span> : null}{selected.buildCommand && !downloadableRelease(selected) ? <span>生成命令：{selected.buildCommand}</span> : null}</div>{downloadableRelease(selected) ? <a className="button primary" href={selected.downloadUrl ?? selected.localPath} download>{selected.signingStatus === "local-development" ? "下载本机开发版" : "下载安装包"}</a> : <button className="button ghost" disabled>{selected.signingStatus === "local-development" ? "先生成本机包" : "完成签名后开放"}</button>}</div> : null}<details className="install-help"><summary>如何查看 Mac 芯片或 Windows 架构？</summary><p>Mac：打开“关于本机”，芯片显示 Apple M 系列请选择 Apple Silicon，显示 Intel 请选择 Intel。Windows：设置 → 系统 → 系统信息，查看“系统类型”。</p></details></section>;
+}

@@ -1,0 +1,7 @@
+import { describe, expect, it } from "vitest";
+import { AuthorizationEntryService } from "../src/authorization-entry-service.js";
+describe("AuthorizationEntryService", () => {
+  it("creates, authorizes and expires server sessions", async () => { const service = new AuthorizationEntryService({ createAuthorizationUrl: async state => `https://open.weixin.qq.com/${state}` }); const session = await service.create("ip", 1); expect(session.authorizeUrl).toContain(session.state); expect(service.markAuthorized(session.id, session.state, 2).status).toBe("authorized"); const expiring = await service.create("ip2", 1); expect(service.status(expiring.id, expiring.expiresAtMs).status).toBe("expired"); });
+  it("rejects wrong state, replay and abusive creation", async () => { const service = new AuthorizationEntryService({ createAuthorizationUrl: async state => state }, 1); const session = await service.create("ip", 1); expect(() => service.markAuthorized(session.id, "wrong")).toThrowError(expect.objectContaining({ code: "invalid-state" })); await expect(service.create("ip", 2)).rejects.toMatchObject({ code: "rate-limited" }); });
+  it("redacts provider failures", async () => { const service = new AuthorizationEntryService({ createAuthorizationUrl: async () => { throw new Error("provider secret detail"); } }); await expect(service.create("ip", 1)).rejects.toMatchObject({ message: "微信授权暂时不可用" }); });
+});

@@ -1,0 +1,38 @@
+[project]
+name = "offersteady-backend"
+version = "0.1.0"
+description = "FastAPI foundation for OfferSteady MVP phase one."
+requires-python = ">=3.13"
+dependencies = [
+  "fastapi>=0.116.1",
+  "httpx>=0.28.1",
+  "oss2>=2.18.5",
+  "Pillow>=11.0.0",
+  "PyJWT>=2.10.1",
+  "pydantic-settings>=2.11.0",
+  "psycopg[binary]>=3.2.9",
+  "python-multipart>=0.0.20",
+  "uvicorn>=0.35.0",
+  "websockets>=15.0.1",
+  "python-socks>=2.7.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.4.2",
+]
+
+[project.scripts]
+offersteady-verify-integrations = "app.services.integration_verification:main"
+offersteady-run-e2e = "app.services.end_to_end_integration:main"
+offersteady-screenshot-perf = "app.services.screenshot_answer_performance:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

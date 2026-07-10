@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-offersteady}
+      POSTGRES_USER: ${POSTGRES_USER:-offersteady}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-offersteady}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-offersteady} -d ${POSTGRES_DB:-offersteady}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: infra/docker/backend.Dockerfile
+    env_file:
+      - ../../${OFFERSTEADY_ENV_FILE:-.env.production}
+    environment:
+      OFFERSTEADY_ENV: ${OFFERSTEADY_ENV:-development}
+      OFFERSTEADY_DATABASE_URL: ${OFFERSTEADY_DATABASE_URL:-postgresql://offersteady:offersteady@postgres:5432/offersteady}
+      OFFERSTEADY_OSS_BUCKET: ${OFFERSTEADY_OSS_BUCKET:-local-materials}
+      OFFERSTEADY_OSS_ENDPOINT: ${OFFERSTEADY_OSS_ENDPOINT:-https://oss-cn-hangzhou.aliyuncs.com}
+      OFFERSTEADY_OSS_REGION: ${OFFERSTEADY_OSS_REGION:-cn-hangzhou}
+      OFFERSTEADY_OSS_ACCESS_KEY_ID: ${OFFERSTEADY_OSS_ACCESS_KEY_ID:-placeholder-access-key}
+      OFFERSTEADY_OSS_ACCESS_KEY_SECRET: ${OFFERSTEADY_OSS_ACCESS_KEY_SECRET:-placeholder-access-secret}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        VITE_APP_ENV: ${VITE_APP_ENV:-production}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/}
+        VITE_PUBLIC_APP_VERSION: ${VITE_PUBLIC_APP_VERSION:-0.1.0}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+volumes:
+  postgres-data:

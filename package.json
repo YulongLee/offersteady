@@ -1,0 +1,29 @@
+{
+  "name": "offersteady",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w @offersteady/web",
+    "preview:web": "npm run preview -w @offersteady/web",
+    "doctor:web": "npm run doctor:access -w @offersteady/web",
+    "dev:backend": "python3 -m uvicorn app.main:app --reload --app-dir apps/backend",
+    "dev:desktop": "npm run dev -w @offersteady/desktop",
+    "desktop:reset-privacy-open": "npm run reset-privacy-open:mac:arm64 -w @offersteady/desktop",
+    "test:backend": "PYTHONPATH=apps/backend pytest apps/backend/tests",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "realtime:e2e-diagnose": "npm run diagnose:e2e -w @offersteady/desktop"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}

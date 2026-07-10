@@ -1,0 +1,2 @@
+{"input":{"source":"system","text":"__low_conf__ 讲讲你最有挑战的项目？","is_final":true},"expected":{"checks":["creates_question_candidate","requires_manual_confirmation","does_not_auto_trigger_before_confirm"]}}
+{"input":{"source":"system","text":"__asr_fail__ 请介绍一下项目","is_final":true},"expected":{"checks":["returns_asr_failure","does_not_claim_reliable_transcript"]}}

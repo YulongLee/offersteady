@@ -1,0 +1,9 @@
+import type { ReadinessCheck, WindowsSupportEvidence, WindowsSupportReadiness } from "@offersteady/protocol";
+const mandatory: readonly ReadinessCheck[] = ["signed-artifact", "install-lifecycle", "protocol", "identity", "pairing", "reconnect", "microphone", "system-audio", "physical-devices"];
+export class WindowsReadinessError extends Error { constructor(readonly code: "forbidden" | "invalid-evidence", message: string) { super(message); } }
+export class WindowsReadinessService {
+  private records = new Map<string, WindowsSupportEvidence[]>(); private revoked = new Set<string>();
+  update(role: "release-manager" | "support", evidence: WindowsSupportEvidence) { if (role !== "release-manager") throw new WindowsReadinessError("forbidden", "没有更新权限"); if (evidence.expiresAtMs <= evidence.verifiedAtMs) throw new WindowsReadinessError("invalid-evidence", "验证有效期无效"); const current = this.records.get(evidence.releaseVersion) ?? []; this.records.set(evidence.releaseVersion, [...current.filter(item => item.check !== evidence.check), evidence]); return this.readiness(evidence.releaseVersion, evidence.verifiedAtMs); }
+  revoke(role: "release-manager" | "support", version: string) { if (role !== "release-manager") throw new WindowsReadinessError("forbidden", "没有撤回权限"); this.revoked.add(version); }
+  readiness(version: string, nowMs = Date.now()): WindowsSupportReadiness { const evidence = this.records.get(version) ?? []; if (this.revoked.has(version)) return { releaseVersion: version, status: "revoked", evidence }; const valid = evidence.filter(item => item.expiresAtMs > nowMs && item.releaseVersion === version); const passed = new Set(valid.filter(item => item.passed).map(item => item.check)); const status = mandatory.every(check => passed.has(check)) ? "supported" : "not-ready"; return { releaseVersion: version, status, evidence: valid }; }
+}

@@ -1,0 +1,52 @@
+# System
+.DS_Store
+
+# Editors
+.idea/
+.vscode/
+*.swp
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+secrets/
+private/
+
+# JavaScript / TypeScript
+node_modules/
+.next/
+dist/
+build/
+coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Logs
+*.log
+infra/logs/
+artifacts/
+apps/backend/artifacts/
+
+# Temporary files
+.cache/
+tmp/
+
+# Sensitive user-provided raw data
+uploads/
+downloads/
+*.har
+
+# Desktop build outputs
+apps/desktop/release/
+apps/desktop/dist/
