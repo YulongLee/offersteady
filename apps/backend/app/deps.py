@@ -300,7 +300,7 @@ def authentication_service() -> AuthenticationService:
 
 @lru_cache(maxsize=1)
 def billing_service() -> BillingService:
-    return BillingService()
+    return BillingService(get_settings())
 
 
 @lru_cache(maxsize=1)

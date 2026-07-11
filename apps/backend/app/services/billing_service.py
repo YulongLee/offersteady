@@ -4,8 +4,14 @@ from dataclasses import dataclass, field
 from time import time
 from uuid import uuid4
 
+from app.core.config import Settings
+
 
 WELCOME_GRANT_POINTS = 200
+DEFAULT_REDEMPTION_CODE_POINTS = {
+    "OFFERSTEADY-DEMO": 120,
+    "SYNTHETIC-DEMO": 120,
+}
 
 
 def _now_ms() -> int:
@@ -115,10 +121,16 @@ class OfficialCheckoutOrderRecord:
 
 
 class BillingService:
-    def __init__(self) -> None:
+    def __init__(self, settings: Settings | None = None) -> None:
+        configured_codes = settings.redemption_code_points if settings is not None else {}
+        self.redemption_code_points: dict[str, int] = {
+            **DEFAULT_REDEMPTION_CODE_POINTS,
+            **{code.strip().upper(): int(points) for code, points in configured_codes.items() if code.strip() and int(points) > 0},
+        }
         self.ledger_by_user: dict[str, list[PointsLedgerRecord]] = {}
         self.redemptions_by_user_and_key: dict[tuple[str, str], dict[str, object]] = {}
         self.redemptions_by_user_and_code: dict[tuple[str, str], PointsRedemptionRecord] = {}
+        self.redemptions_by_code: dict[str, PointsRedemptionRecord] = {}
         self.index_quotes_by_user_and_key: dict[tuple[str, str], KnowledgeIndexQuoteRecord] = {}
         self.index_quotes_by_id: dict[str, KnowledgeIndexQuoteRecord] = {}
         self.index_reservations_by_quote: dict[str, KnowledgeIndexReservationRecord] = {}
@@ -182,7 +194,8 @@ class BillingService:
             result = {"outcome": "temporarily-unavailable"}
             self.redemptions_by_user_and_key[request_key] = result
             return result
-        if normalized_code not in {"OFFERSTEADY-DEMO", "SYNTHETIC-DEMO"}:
+        points = self.redemption_code_points.get(normalized_code)
+        if points is None:
             result = {"outcome": "code-unavailable"}
             self.redemptions_by_user_and_key[request_key] = result
             return result
@@ -192,8 +205,11 @@ class BillingService:
             result = {"outcome": "already-redeemed-by-you", "data": self._redemption_payload(existing)}
             self.redemptions_by_user_and_key[request_key] = result
             return result
+        if normalized_code not in DEFAULT_REDEMPTION_CODE_POINTS and normalized_code in self.redemptions_by_code:
+            result = {"outcome": "code-unavailable"}
+            self.redemptions_by_user_and_key[request_key] = result
+            return result
         self._ensure_welcome_grant(user_id=user_id)
-        points = 120
         redeemed_at_ms = _now_ms()
         ledger_entry = PointsLedgerRecord(
             id=f"ledger-{uuid4().hex}",
@@ -215,6 +231,8 @@ class BillingService:
             ledger_entry=ledger_entry,
         )
         self.redemptions_by_user_and_code[code_key] = redemption
+        if normalized_code not in DEFAULT_REDEMPTION_CODE_POINTS:
+            self.redemptions_by_code[normalized_code] = redemption
         result = {"outcome": "redeemed", "data": self._redemption_payload(redemption)}
         self.redemptions_by_user_and_key[request_key] = result
         return result
