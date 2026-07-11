@@ -40,14 +40,17 @@ const stateLabels: Record<CaptureState, string> = {
   error: "连接异常",
 };
 
+const defaultWebWorkspaceUrl = () => "https://mianshiwen.cn/app";
+const defaultApiBaseUrl = () => "https://mianshiwen.cn/api/v1";
+
 const desktopConfig = () => ({
   appVersion: app.getVersion(),
   platform: process.platform === "darwin" ? "macos" : process.platform === "win32" ? "windows" : "unsupported",
   architecture: process.arch === "arm64" ? "arm64" : process.arch === "x64" ? "x64" : "unknown",
   platformVersion: process.getSystemVersion(),
   protocolVersion: "1.0.0",
-  webWorkspaceUrl: process.env.OFFERSTEADY_DESKTOP_WEB_URL || "http://localhost:5173/app",
-  apiBaseUrl: process.env.OFFERSTEADY_API_BASE_URL || "http://127.0.0.1:8000/api/v1",
+  webWorkspaceUrl: process.env.OFFERSTEADY_DESKTOP_WEB_URL || defaultWebWorkspaceUrl(),
+  apiBaseUrl: process.env.OFFERSTEADY_API_BASE_URL || defaultApiBaseUrl(),
 });
 
 const nativeRuntimePath = () => {

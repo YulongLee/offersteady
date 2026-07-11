@@ -1122,7 +1122,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
                   <button type="button" className="inline-web-link" onClick={() => { void window.offersteady?.openPermissionSettings("microphone"); }}>
                     打开麦克风权限设置
                   </button>
-                ) : null}
+                )}
               </p>
               <p className="route-copy">
                 当前路由：我的声音来自麦克风/耳机；面试官声音来自电脑输出音频，也就是微信、会议或网页面试在这台电脑上播放出来的声音；屏幕捕捉用于截图回答。

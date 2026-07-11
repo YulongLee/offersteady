@@ -12,6 +12,7 @@ COPY apps/backend/pyproject.toml /app/apps/backend/pyproject.toml
 RUN pip install --no-cache-dir /app/apps/backend
 
 COPY apps/backend /app/apps/backend
+COPY ai /app/ai
 
 EXPOSE 8000
 

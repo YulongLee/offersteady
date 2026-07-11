@@ -37,7 +37,9 @@ http://127.0.0.1:8000/api/v1/web/downloads/desktop/OfferSteady-Companion-0.1.0-m
 http://127.0.0.1:8000/api/v1
 ```
 
-如果网页或手机端使用了局域网地址，需要同时设置桌面环境变量 `OFFERSTEADY_API_BASE_URL`，否则会出现“网页绑定了机器码，但助手仍显示未连接”的错位。
+打包后的本地助手默认连接线上服务：`https://mianshiwen.cn/app` 和 `https://mianshiwen.cn/api/v1`。开发模式仍默认连接本地：`http://localhost:5173/app` 和 `http://127.0.0.1:8000/api/v1`。
+
+如果网页或手机端使用了局域网地址，或者需要让助手连接本地开发后端，需要同时设置桌面环境变量 `OFFERSTEADY_API_BASE_URL`，否则会出现“网页绑定了机器码，但助手仍显示未连接”的错位。
 
 可以运行统一实时 E2E 诊断：
 
