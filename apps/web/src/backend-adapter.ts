@@ -294,6 +294,19 @@ const toInterviewSummary = (session: BackendSessionResponse, fallback?: { title?
   readiness: session.materialBinding.confirmedAtMs ? 100 : 0,
 });
 
+const deriveInterviewTitle = (input: { title: string; role: string; company?: string }) => {
+  const explicitTitle = input.title.trim();
+  const role = input.role.trim();
+  const company = input.company?.trim() ?? "";
+
+  if (explicitTitle && explicitTitle !== "新的面试") {
+    return explicitTitle;
+  }
+
+  const derivedTitle = [company, role].filter(Boolean).join(" · ");
+  return derivedTitle || explicitTitle || "新的面试";
+};
+
 const toDesktopDeviceBinding = (binding: BackendDesktopBindingResponse): DesktopDeviceBinding => ({
   bindingId: binding.bindingId,
   sessionId: binding.sessionId,
@@ -594,12 +607,13 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   }
 
   async createDraft(input: { title: string; role: string; company?: string }, signal?: AbortSignal) {
+    const persistedTitle = deriveInterviewTitle(input);
     const created = await this.client.request<BackendSessionResponse>("/api/v1/sessions", {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ userId: requireUserId(), title: input.title.trim() }),
+      body: JSON.stringify({ userId: requireUserId(), title: persistedTitle }),
     }, signal);
-    return toInterviewSummary(created, input);
+    return toInterviewSummary(created, { ...input, title: persistedTitle });
   }
 
   async confirmInterviewMaterials(selection: Parameters<InterviewAppAdapter["confirmInterviewMaterials"]>[0], signal?: AbortSignal) {
