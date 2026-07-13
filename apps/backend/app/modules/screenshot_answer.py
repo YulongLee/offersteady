@@ -290,7 +290,7 @@ async def create_remote_capture_request(
 ) -> ApiEnvelope[RemoteScreenshotCaptureRequestResponse]:
     resolved_user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
     binding = realtime.get_desktop_binding(user_id=resolved_user_id, session_id=session_id)
-    realtime.get_desktop_active_binding(device_id=binding.device_id, manual_code=binding.manual_code)
+    realtime.get_desktop_capture_binding(device_id=binding.device_id, manual_code=binding.manual_code)
     capture_request = service.create_remote_capture_request(
         user_id=resolved_user_id,
         session_id=session_id,
@@ -337,7 +337,7 @@ async def get_next_remote_capture_request(
     service: ScreenshotAnswerService = Depends(screenshot_answer_service),
     realtime: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[RemoteScreenshotCaptureRequestResponse | None]:
-    realtime.get_desktop_active_binding(device_id=device_id, manual_code=manual_code)
+    realtime.get_desktop_capture_binding(device_id=device_id, manual_code=manual_code)
     capture_request = service.get_next_remote_capture_request(device_id=device_id, manual_code=manual_code)
     return success_response(request=request, data=_to_remote_capture_request_response(capture_request) if capture_request is not None else None, timestamp=utc_now_iso())
 
@@ -353,7 +353,7 @@ async def complete_remote_capture_request(
     service: ScreenshotAnswerService = Depends(screenshot_answer_service),
     realtime: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[RemoteScreenshotCaptureRequestResponse]:
-    realtime.get_desktop_active_binding(device_id=device_id, manual_code=manual_code)
+    realtime.get_desktop_capture_binding(device_id=device_id, manual_code=manual_code)
     payload = await screenshot.read()
     capture_request = service.claim_remote_capture_request(
         request_id=request_id,
@@ -380,7 +380,7 @@ async def fail_remote_capture_request(
     service: ScreenshotAnswerService = Depends(screenshot_answer_service),
     realtime: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[RemoteScreenshotCaptureRequestResponse]:
-    realtime.get_desktop_active_binding(device_id=request.device_id, manual_code=request.manual_code)
+    realtime.get_desktop_capture_binding(device_id=request.device_id, manual_code=request.manual_code)
     capture_request = service.fail_remote_capture_request(
         request_id=request_id,
         device_id=request.device_id,

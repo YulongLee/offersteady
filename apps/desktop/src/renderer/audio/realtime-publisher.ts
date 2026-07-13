@@ -341,11 +341,7 @@ export class DesktopRealtimePublisher {
   async start() {
     this.stopped = false;
     this.options.onCaptureState("reconnecting");
-    const nativeStarted = await this.startNativeCapture().catch(() => false);
-    if (nativeStarted) {
-      this.options.onCaptureState("capturing");
-      return;
-    }
+    const nativeStarted = false;
     const [microphoneRuntime, systemRuntime] = await Promise.all([
       this.startSource({
         sourceKind: "microphone",
@@ -742,6 +738,7 @@ export class DesktopRealtimePublisher {
         tokenBySource.clear();
         return false;
       }
+      startWebAudioFallback("microphone", "原生麦克风采集暂不可用，已切换到浏览器麦克风采集。");
     } catch {
       unsubscribe();
       tokenBySource.clear();

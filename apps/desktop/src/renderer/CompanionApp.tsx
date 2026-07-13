@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AudioPermission, AudioSourceDescriptor, AudioSourceHealth, CaptureState, CompanionCapabilities } from "@offersteady/protocol";
 import type { DesktopNativeRuntimeHealth, DesktopPairingIdentity, DesktopRuntimeConfig, DesktopScreenSource } from "./global";
 import { MicrophoneAudioAdapter, SystemAudioAdapter, describeMediaError } from "./audio/audio-source-adapter";
@@ -66,6 +66,7 @@ interface DesktopRuntimeStatus {
   readonly deviceRegistered: boolean;
   readonly machineCodeBound: boolean;
   readonly sessionLive: boolean;
+  readonly publishers?: readonly unknown[];
   readonly transcriptCount: number;
   readonly sourceHealth?: readonly AudioSourceHealth[];
   readonly frameReceipts?: readonly {
@@ -384,6 +385,7 @@ export function CompanionApp() {
   const [nativeRuntimeHealth, setNativeRuntimeHealth] = useState<DesktopNativeRuntimeHealth | null>(null);
   const [liveSourceHealthState, setLiveSourceHealthState] = useState<readonly AudioSourceHealth[]>([]);
   const [monitorSourceHealthState, setMonitorSourceHealthState] = useState<readonly AudioSourceHealth[]>([]);
+  const [publisherRetryNonce, setPublisherRetryNonce] = useState(0);
   const previewRef = useRef<HTMLVideoElement>(null);
   const previewStream = useRef<MediaStream | null>(null);
   const publisherRef = useRef<DesktopRealtimePublisher | null>(null);
@@ -396,6 +398,7 @@ export function CompanionApp() {
   const completedScreenshotRequestIdsRef = useRef<Set<string>>(new Set());
   const lastBindingSessionIdRef = useRef<string | null>(null);
   const lastLiveSessionIdRef = useRef<string | null>(null);
+  const lastPublisherKickSessionIdRef = useRef<string | null>(null);
   const [webOpenNotice, setWebOpenNotice] = useState("");
   const applyConnectionCopy = (notice: string, info?: string) => {
     setConnectionNotice(current => current === notice ? current : notice);
@@ -405,6 +408,10 @@ export function CompanionApp() {
   };
   const [captureDiagnostic, setCaptureDiagnostic] = useState<string | null>(null);
   const sourceHealthState = mergeDisplayedSourceHealth(liveSourceHealthState, monitorSourceHealthState);
+  const publisherHasTakenOver = useMemo(
+    () => bindingSessionStatus === "live" && hasPublisherTakenOver(liveSourceHealthState),
+    [bindingSessionStatus, liveSourceHealthState],
+  );
 
   useEffect(() => {
     liveSourceHealthRef.current = liveSourceHealthState;
@@ -618,7 +625,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
   }, [config, pairingIdentity, microphoneSources, permissions, activeBinding, selectedMicrophoneId, selectedSystemAudioId]);
 
   useEffect(() => {
-    if (!config || !pairingIdentity || !activeBinding) return;
+    if (!config || !pairingIdentity) return;
     let stopped = false;
     const pollRemoteScreenshotRequests = async () => {
       if (processingScreenshotRequestIdRef.current) return;
@@ -660,7 +667,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [config, pairingIdentity, activeBinding, selectedScreenId]);
+  }, [config, pairingIdentity, selectedScreenId, screenSources]);
 
   useEffect(() => {
     if (!config || !pairingIdentity) return;
@@ -739,6 +746,15 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
         if ((runtimeStatus?.transcriptCount ?? 0) > 0 || (runtimeStatus?.frameReceipts?.length ?? 0) > 0) {
           setCaptureDiagnostic(null);
         }
+        if (
+          live
+          && !publisherRef.current
+          && (runtimeStatus?.publishers?.length ?? 0) === 0
+          && lastPublisherKickSessionIdRef.current !== binding.sessionId
+        ) {
+          lastPublisherKickSessionIdRef.current = binding.sessionId;
+          setPublisherRetryNonce((value) => value + 1);
+        }
         window.offersteady?.publishCaptureState(nextCaptureState);
         await desktopBackendFetch(config, `/realtime-speech/sessions/${encodeURIComponent(binding.sessionId)}/device-status`, {
           method: "POST",
@@ -775,8 +791,6 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
   }, [captureDiagnostic, config, pairingIdentity, selectedMicrophoneId, selectedSystemAudioId, microphoneSources, permissions, screenReady, nativeRuntimeReady, nativeRuntimeHealth]);
 
   useEffect(() => {
-    const publisherHasTakenOver = bindingSessionStatus === "live"
-      && hasPublisherTakenOver(liveSourceHealthState);
     if (publisherHasTakenOver || !selectedSystemAudioId) {
       void localMonitorRef.current?.stop();
       localMonitorRef.current = null;
@@ -818,7 +832,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       if (localMonitorRef.current === monitor) localMonitorRef.current = null;
       void monitor.stop();
     };
-  }, [bindingSessionStatus, liveSourceHealthState, effectiveMicrophoneId, selectedSystemAudioId]);
+  }, [bindingSessionStatus, publisherHasTakenOver, effectiveMicrophoneId, selectedSystemAudioId]);
 
   useEffect(() => {
     if (!config || !pairingIdentity || !activeBinding || bindingSessionStatus !== "live") {
@@ -890,13 +904,18 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       if (cancelled) return;
       const message = error instanceof Error ? error.message : "采集链路启动失败";
       setConnectionInfo(message);
+      if (publisherRef.current === publisher) publisherRef.current = null;
+      void publisher.stop();
+      window.setTimeout(() => {
+        if (!cancelled) setPublisherRetryNonce((value) => value + 1);
+      }, 3_000);
     });
     return () => {
       cancelled = true;
       if (publisherRef.current === publisher) publisherRef.current = null;
       void publisher.stop();
     };
-  }, [activeBinding?.sessionId, activeBinding?.ownerUserId, bindingSessionStatus, config, pairingIdentity, effectiveMicrophoneId, selectedSystemAudioId]);
+  }, [activeBinding?.sessionId, activeBinding?.ownerUserId, bindingSessionStatus, config, pairingIdentity, effectiveMicrophoneId, selectedSystemAudioId, publisherRetryNonce]);
 
   useEffect(() => {
     const video = previewRef.current;

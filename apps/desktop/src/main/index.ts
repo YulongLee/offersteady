@@ -13,9 +13,16 @@ let isQuitting = false;
 let credentialVault: DeviceCredentialVault | null = null;
 let pairingIdentityStore: DevicePairingIdentityStore | null = null;
 let registrationInterval: NodeJS.Timeout | null = null;
+let screenshotRequestInterval: NodeJS.Timeout | null = null;
+let realtimeAudioInterval: NodeJS.Timeout | null = null;
 let preferredScreenSourceId: string | null = null;
 let hasRegisteredThisRun = false;
+let processingRemoteScreenshotRequestId: string | null = null;
 const nativeAudioProcesses = new Map<string, ChildProcess>();
+let mainRealtimeBindingKey: string | null = null;
+let mainRealtimePublisherTokens = new Map<"microphone" | "system", { token: string; sourceId: string }>();
+let mainRealtimeSequences = new Map<"microphone" | "system", number>();
+let mainRealtimeEnsureInFlight = false;
 const SCREENSHOT_VISION_MAX_LONG_EDGE = 1600;
 const SCREENSHOT_VISION_JPEG_QUALITY = 72;
 
@@ -140,7 +147,11 @@ const startNativeAudioProcess = (sourceKind: "microphone" | "system", sourceId: 
       stdoutBuffer = stdoutBuffer.slice(newlineIndex + 1);
       if (line) {
         try {
-          emitNativeAudioEvent(JSON.parse(line));
+          const event = JSON.parse(line);
+          emitNativeAudioEvent(event);
+          void publishNativeAudioEventFromMain(event).catch((error) => {
+            console.warn("[main-realtime-audio] frame publish failed", error);
+          });
         } catch {
           emitNativeAudioEvent({
             type: "status",
@@ -188,6 +199,149 @@ const startNativeAudioProcess = (sourceKind: "microphone" | "system", sourceId: 
     });
   });
   return true;
+};
+
+const createMainRealtimePublisher = async (
+  binding: { sessionId: string; ownerUserId: string; displayName?: string },
+  sourceKind: "microphone" | "system",
+) => {
+  const response = await fetch(desktopApiUrl("/realtime-speech/publishers"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      userId: binding.ownerUserId,
+      sessionId: binding.sessionId,
+      sourceKind,
+      clientName: `${binding.displayName || app.getName()} · main-${sourceKind}`,
+    }),
+  });
+  if (!response.ok) throw new Error(`main_publisher_create_failed_${sourceKind}_${response.status}`);
+  const envelope = await response.json() as { data?: { token?: string } };
+  const token = envelope.data?.token;
+  if (!token) throw new Error(`main_publisher_token_missing_${sourceKind}`);
+  return token;
+};
+
+const stopMainRealtimeAudioPublishing = () => {
+  stopNativeAudioStreams();
+  mainRealtimeBindingKey = null;
+  mainRealtimePublisherTokens.clear();
+  mainRealtimeSequences.clear();
+  mainRealtimeEnsureInFlight = false;
+};
+
+const getLiveDesktopBinding = async () => {
+  if (!pairingIdentityStore) return null;
+  const identity = await pairingIdentityStore.loadOrCreate(`${app.getName()} · ${process.platform === "darwin" ? "Mac" : "Desktop"}`);
+  const response = await fetch(desktopApiUrl(`/realtime-speech/desktop-devices/pairing-status?manualCode=${encodeURIComponent(identity.manualCode)}&deviceId=${encodeURIComponent(identity.deviceId)}`));
+  if (!response.ok) return null;
+  const envelope = await response.json() as {
+    data?: {
+      registered?: boolean;
+      bound?: boolean;
+      sessionStatus?: string;
+      binding?: {
+        sessionId: string;
+        ownerUserId: string;
+        deviceId: string;
+        manualCode: string;
+        displayName?: string;
+      };
+    };
+  };
+  if (!envelope.data?.registered || envelope.data.sessionStatus !== "live" || !envelope.data.binding) return null;
+  return envelope.data.binding;
+};
+
+const ensureMainRealtimeAudioPublishing = async () => {
+  if (mainRealtimeEnsureInFlight) return;
+  mainRealtimeEnsureInFlight = true;
+  try {
+    const binding = await getLiveDesktopBinding();
+    if (!binding) {
+      if (mainRealtimeBindingKey) stopMainRealtimeAudioPublishing();
+      return;
+    }
+    const bindingKey = `${binding.sessionId}:${binding.ownerUserId}:${binding.deviceId}:${binding.manualCode}`;
+    if (mainRealtimeBindingKey === bindingKey && mainRealtimePublisherTokens.size > 0) return;
+    stopMainRealtimeAudioPublishing();
+    mainRealtimeEnsureInFlight = true;
+    mainRealtimeBindingKey = bindingKey;
+    const [microphoneToken, systemToken] = await Promise.all([
+      createMainRealtimePublisher(binding, "microphone").catch((error) => {
+        console.warn("[main-realtime-audio] microphone publisher failed", error);
+        return null;
+      }),
+      createMainRealtimePublisher(binding, "system").catch((error) => {
+        console.warn("[main-realtime-audio] system publisher failed", error);
+        return null;
+      }),
+    ]);
+    if (microphoneToken) mainRealtimePublisherTokens.set("microphone", { token: microphoneToken, sourceId: "native-microphone" });
+    if (systemToken) mainRealtimePublisherTokens.set("system", { token: systemToken, sourceId: "native-system-output" });
+    if (mainRealtimePublisherTokens.size === 0) {
+      mainRealtimeBindingKey = null;
+      return;
+    }
+    const microphoneStarted = microphoneToken ? startNativeAudioProcess("microphone", "native-microphone") : false;
+    const systemStarted = systemToken ? startNativeAudioProcess("system", "native-system-output") : false;
+    if (!microphoneStarted) mainRealtimePublisherTokens.delete("microphone");
+    if (!systemStarted) mainRealtimePublisherTokens.delete("system");
+    if (mainRealtimePublisherTokens.size === 0) mainRealtimeBindingKey = null;
+  } finally {
+    mainRealtimeEnsureInFlight = false;
+  }
+};
+
+const publishNativeAudioEventFromMain = async (event: Record<string, unknown>) => {
+  if (event.type !== "frame") return;
+  if (event.sourceKind !== "microphone" && event.sourceKind !== "system") return;
+  const sourceKind = event.sourceKind;
+  const tokenInfo = mainRealtimePublisherTokens.get(sourceKind);
+  if (!tokenInfo || typeof event.audioBase64 !== "string" || !event.audioBase64) return;
+  const sequence = (mainRealtimeSequences.get(sourceKind) ?? 0) + 1;
+  mainRealtimeSequences.set(sourceKind, sequence);
+  const capturedAtMs = typeof event.capturedAtMs === "number" ? event.capturedAtMs : Date.now();
+  const durationMs = typeof event.durationMs === "number" ? event.durationMs : 20;
+  const sampleRateHz = typeof event.sampleRateHz === "number" ? event.sampleRateHz : 16_000;
+  const channels = event.channels === 2 ? 2 : 1;
+  const response = await fetch(desktopApiUrl("/realtime-speech/frames"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      type: "audio-frame",
+      token: tokenInfo.token,
+      deviceId: (await pairingIdentityStore?.loadOrCreate(`${app.getName()} · ${process.platform === "darwin" ? "Mac" : "Desktop"}`))?.deviceId || "",
+      sourceId: typeof event.sourceId === "string" ? event.sourceId : tokenInfo.sourceId,
+      sourceKind,
+      sequence,
+      segmentId: `${sourceKind}-main-${sequence}`,
+      revision: 1,
+      capturedAtMs,
+      startedAtMs: capturedAtMs - durationMs,
+      endedAtMs: capturedAtMs,
+      durationMs,
+      codec: "pcm-s16le",
+      sampleRateHz,
+      channels,
+      isFinal: true,
+      traceId: `${sourceKind}:main:${sequence}`,
+      sentAtMs: Date.now(),
+      audioBase64: event.audioBase64,
+    }),
+  });
+  if (!response.ok) {
+    const message = await response.text().catch(() => "");
+    throw new Error(`main_frame_publish_failed_${response.status}:${message.slice(0, 200)}`);
+  }
+};
+
+const startMainRealtimeAudioLoop = () => {
+  if (realtimeAudioInterval) clearInterval(realtimeAudioInterval);
+  void ensureMainRealtimeAudioPublishing().catch((error) => console.warn("[main-realtime-audio] ensure failed", error));
+  realtimeAudioInterval = setInterval(() => {
+    void ensureMainRealtimeAudioPublishing().catch((error) => console.warn("[main-realtime-audio] ensure failed", error));
+  }, 2500);
 };
 
 const probeWebUrl = async (url: string) => {
@@ -270,6 +424,11 @@ const startDesktopRegistrationLoop = () => {
   }, 10000);
 };
 
+const desktopApiUrl = (pathName: string) => {
+  const config = desktopConfig();
+  return `${config.apiBaseUrl.replace(/\/+$/, "")}/${pathName.replace(/^\/+/, "")}`;
+};
+
 const allowedRuntimePermissions = new Set(["media", "display-capture"]);
 
 const permissionSettingsUrl = (kind: "microphone" | "screen" | "camera" | "audio") => {
@@ -298,6 +457,146 @@ const updateTray = () => {
       },
     },
   ]));
+};
+
+const captureCurrentScreen = async (screenSourceId: string | null) => {
+  let sources;
+  try {
+    sources = await desktopCapturer.getSources({
+      types: ["screen"],
+      thumbnailSize: { width: 1920, height: 1080 },
+    });
+  } catch (error) {
+    return {
+      name: "共享屏幕截取",
+      errorMessage: error instanceof Error
+        ? `获取屏幕源失败：${error.message}。请在系统设置中允许面试稳伴随程序录制屏幕后重启应用。`
+        : "获取屏幕源失败，请在系统设置中允许面试稳伴随程序录制屏幕后重启应用。",
+    };
+  }
+  const requestedScreenSourceId = screenSourceId || preferredScreenSourceId;
+  const selectedScreen = requestedScreenSourceId
+    ? sources.find((source) => source.id === requestedScreenSourceId)
+    : sources[0];
+  if (requestedScreenSourceId && !selectedScreen) {
+    return {
+      name: "共享屏幕截取",
+      errorMessage: "当前选择的屏幕源已经不可用，请在本地助手中重新选择显示器后再试。",
+    };
+  }
+  if (!selectedScreen) {
+    return { name: "共享屏幕截取", errorMessage: "没有找到可截取的屏幕，请检查屏幕录制权限。" };
+  }
+  const thumbnail = selectedScreen.thumbnail;
+  const size = thumbnail.getSize();
+  if (thumbnail.isEmpty()) {
+    return {
+      name: selectedScreen.name || "共享屏幕截取",
+      width: size.width,
+      height: size.height,
+      errorMessage: "屏幕缩略图为空，请在系统设置中允许面试稳伴随程序录制屏幕后重启应用。",
+    };
+  }
+  const optimized = optimizeScreenshotForVision(thumbnail);
+  return {
+    name: selectedScreen.name || "共享屏幕截取",
+    width: optimized.width,
+    height: optimized.height,
+    dataUrl: optimized.dataUrl,
+    contentType: optimized.contentType,
+    byteLength: optimized.byteLength,
+    originalWidth: size.width,
+    originalHeight: size.height,
+    extension: optimized.extension,
+  };
+};
+
+const uploadScreenshotCapture = async (request: {
+  url: string;
+  deviceId: string;
+  manualCode: string;
+  dataUrl: string;
+  filename: string;
+}) => {
+  const url = assertOfferSteadyApiUrl(request.url);
+  const [meta, payload] = request.dataUrl.split(",", 2);
+  if (!meta || !payload) throw new Error("invalid_screenshot_data_url");
+  const mimeType = meta.match(/^data:(.*?);base64$/)?.[1] || "image/png";
+  const binary = Buffer.from(payload, "base64");
+  const form = new FormData();
+  form.append("deviceId", request.deviceId);
+  form.append("manualCode", request.manualCode);
+  form.append("screenshot", new Blob([binary], { type: mimeType }), request.filename);
+  const response = await fetch(url, {
+    method: "POST",
+    body: form,
+  });
+  return {
+    ok: response.ok,
+    status: response.status,
+    statusText: response.statusText,
+    headers: Object.fromEntries(response.headers.entries()),
+    bodyText: await response.text(),
+  };
+};
+
+const reportRemoteScreenshotFailure = async (identity: { deviceId: string; manualCode: string }, requestId: string, message: string, stage = "capture-failed") => {
+  try {
+    await fetch(desktopApiUrl(`/screenshot-answer/capture-requests/${encodeURIComponent(requestId)}/desktop-fail`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        deviceId: identity.deviceId,
+        manualCode: identity.manualCode,
+        message,
+        stage,
+      }),
+    });
+  } catch (error) {
+    console.warn("[remote-screenshot] failed to report capture failure", error);
+  }
+};
+
+const pollRemoteScreenshotRequest = async () => {
+  if (!pairingIdentityStore || processingRemoteScreenshotRequestId) return;
+  const identity = await pairingIdentityStore.loadOrCreate(`${app.getName()} · ${process.platform === "darwin" ? "Mac" : "Desktop"}`);
+  const response = await fetch(desktopApiUrl(`/screenshot-answer/desktop-devices/${encodeURIComponent(identity.deviceId)}/capture-requests/next?manualCode=${encodeURIComponent(identity.manualCode)}`));
+  if (!response.ok) return;
+  const envelope = await response.json() as { data?: { requestId: string; status: string } | null };
+  const request = envelope.data;
+  if (!request || request.status === "completed" || request.status === "failed") return;
+  processingRemoteScreenshotRequestId = request.requestId;
+  try {
+    mainWindow?.webContents.send("desktop:remote-screenshot-notice", "网页端已请求截图回答，本地助手正在截取当前屏幕。");
+    const capture = await captureCurrentScreen(null);
+    if (capture.errorMessage) throw new Error(capture.errorMessage);
+    if (!capture.dataUrl) throw new Error("本地助手未获取到有效共享屏幕画面，请检查屏幕捕捉权限。");
+    const extension = capture.extension || (capture.contentType === "image/jpeg" ? "jpg" : capture.contentType === "image/webp" ? "webp" : "png");
+    const filename = `${(capture.name || "current-screen").replace(/[\\/:*?"<>|]+/g, "-")}.${extension}`;
+    const upload = await uploadScreenshotCapture({
+      url: desktopApiUrl(`/screenshot-answer/capture-requests/${encodeURIComponent(request.requestId)}/desktop-upload`),
+      deviceId: identity.deviceId,
+      manualCode: identity.manualCode,
+      dataUrl: capture.dataUrl,
+      filename,
+    });
+    if (!upload.ok) throw new Error(upload.bodyText || `截图上传失败：${upload.status}`);
+    mainWindow?.webContents.send("desktop:remote-screenshot-notice", "本地助手已完成截图并回传后端。");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "本地助手执行截图回答失败";
+    await reportRemoteScreenshotFailure(identity, request.requestId, message, message.includes("上传") ? "upload-failed" : "capture-failed");
+    mainWindow?.webContents.send("desktop:remote-screenshot-notice", `截图失败：${message}`);
+  } finally {
+    processingRemoteScreenshotRequestId = null;
+  }
+};
+
+const startRemoteScreenshotRequestLoop = () => {
+  if (screenshotRequestInterval) clearInterval(screenshotRequestInterval);
+  void pollRemoteScreenshotRequest().catch((error) => console.warn("[remote-screenshot] poll failed", error));
+  screenshotRequestInterval = setInterval(() => {
+    void pollRemoteScreenshotRequest().catch((error) => console.warn("[remote-screenshot] poll failed", error));
+  }, 1200);
 };
 
 const createWindow = () => {
@@ -357,6 +656,7 @@ app.whenReady().then(() => {
   updateTray();
   createWindow();
   startDesktopRegistrationLoop();
+  startRemoteScreenshotRequestLoop();
 
   app.on("activate", () => mainWindow?.show());
 });
@@ -427,55 +727,7 @@ ipcMain.handle("desktop:set-preferred-screen", async (_event, screenSourceId: st
 });
 
 ipcMain.handle("desktop:capture-current-screen", async (_event, screenSourceId: string | null) => {
-  let sources;
-  try {
-    sources = await desktopCapturer.getSources({
-      types: ["screen"],
-      thumbnailSize: { width: 1920, height: 1080 },
-    });
-  } catch (error) {
-    return {
-      name: "共享屏幕截取",
-      errorMessage: error instanceof Error
-        ? `获取屏幕源失败：${error.message}。请在系统设置中允许面试稳伴随程序录制屏幕后重启应用。`
-        : "获取屏幕源失败，请在系统设置中允许面试稳伴随程序录制屏幕后重启应用。",
-    };
-  }
-  const requestedScreenSourceId = screenSourceId || preferredScreenSourceId;
-  const selectedScreen = requestedScreenSourceId
-    ? sources.find((source) => source.id === requestedScreenSourceId)
-    : sources[0];
-  if (requestedScreenSourceId && !selectedScreen) {
-    return {
-      name: "共享屏幕截取",
-      errorMessage: "当前选择的屏幕源已经不可用，请在本地助手中重新选择显示器后再试。",
-    };
-  }
-  if (!selectedScreen) {
-    return { name: "共享屏幕截取", errorMessage: "没有找到可截取的屏幕，请检查屏幕录制权限。" };
-  }
-  const thumbnail = selectedScreen.thumbnail;
-  const size = thumbnail.getSize();
-  if (thumbnail.isEmpty()) {
-    return {
-      name: selectedScreen.name || "共享屏幕截取",
-      width: size.width,
-      height: size.height,
-      errorMessage: "屏幕缩略图为空，请在系统设置中允许面试稳伴随程序录制屏幕后重启应用。",
-    };
-  }
-  const optimized = optimizeScreenshotForVision(thumbnail);
-  return {
-    name: selectedScreen.name || "共享屏幕截取",
-    width: optimized.width,
-    height: optimized.height,
-    dataUrl: optimized.dataUrl,
-    contentType: optimized.contentType,
-    byteLength: optimized.byteLength,
-    originalWidth: size.width,
-    originalHeight: size.height,
-    extension: optimized.extension,
-  };
+  return captureCurrentScreen(screenSourceId);
 });
 
 ipcMain.handle("desktop:upload-screenshot-capture", async (_event, request: {
@@ -485,26 +737,7 @@ ipcMain.handle("desktop:upload-screenshot-capture", async (_event, request: {
   dataUrl: string;
   filename: string;
 }) => {
-  const url = assertOfferSteadyApiUrl(request.url);
-  const [meta, payload] = request.dataUrl.split(",", 2);
-  if (!meta || !payload) throw new Error("invalid_screenshot_data_url");
-  const mimeType = meta.match(/^data:(.*?);base64$/)?.[1] || "image/png";
-  const binary = Buffer.from(payload, "base64");
-  const form = new FormData();
-  form.append("deviceId", request.deviceId);
-  form.append("manualCode", request.manualCode);
-  form.append("screenshot", new Blob([binary], { type: mimeType }), request.filename);
-  const response = await fetch(url, {
-    method: "POST",
-    body: form,
-  });
-  return {
-    ok: response.ok,
-    status: response.status,
-    statusText: response.statusText,
-    headers: Object.fromEntries(response.headers.entries()),
-    bodyText: await response.text(),
-  };
+  return uploadScreenshotCapture(request);
 });
 
 ipcMain.handle("desktop:open-external", async (_event, url: string) => {
@@ -549,4 +782,13 @@ app.on("before-quit", () => {
     clearInterval(registrationInterval);
     registrationInterval = null;
   }
+  if (screenshotRequestInterval) {
+    clearInterval(screenshotRequestInterval);
+    screenshotRequestInterval = null;
+  }
+  if (realtimeAudioInterval) {
+    clearInterval(realtimeAudioInterval);
+    realtimeAudioInterval = null;
+  }
+  stopMainRealtimeAudioPublishing();
 });

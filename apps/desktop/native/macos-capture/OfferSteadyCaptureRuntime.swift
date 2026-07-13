@@ -205,6 +205,119 @@ func rmsForInterleaved(samples: UnsafePointer<Float>, frameCount: Int, channelCo
     return sampleCount > 0 ? sqrt(sumSquares / Double(sampleCount)) : 0
 }
 
+func downsampleFloatArrayToPcm16Base64(samples: [Float], inputSampleRate: Double, targetSampleRate: Double = 16000) -> String {
+    if samples.isEmpty || inputSampleRate <= 0 { return "" }
+    let ratio = inputSampleRate / targetSampleRate
+    let outputLength = max(1, Int(Double(samples.count) / ratio))
+    var data = Data(capacity: outputLength * 2)
+    for outputIndex in 0..<outputLength {
+        let start = min(samples.count - 1, Int(Double(outputIndex) * ratio))
+        let end = min(samples.count, max(start + 1, Int(Double(outputIndex + 1) * ratio)))
+        var sum: Float = 0
+        var count: Float = 0
+        for sampleIndex in start..<end {
+            sum += samples[sampleIndex]
+            count += 1
+        }
+        let averaged = count > 0 ? sum / count : samples[start]
+        let clamped = max(-1, min(1, averaged))
+        var value = Int16(clamped < 0 ? clamped * 32768 : clamped * 32767).littleEndian
+        withUnsafeBytes(of: &value) { data.append(contentsOf: $0) }
+    }
+    return data.base64EncodedString()
+}
+
+func rmsFor(samples: [Float]) -> Double {
+    if samples.isEmpty { return 0 }
+    var sumSquares = 0.0
+    for sample in samples {
+        let value = Double(sample)
+        sumSquares += value * value
+    }
+    return sqrt(sumSquares / Double(samples.count))
+}
+
+final class MicrophoneSampleDelegate: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
+    let sourceId: String
+    var lastCapturedAtMs = nowMs()
+
+    init(sourceId: String) {
+        self.sourceId = sourceId
+    }
+
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let streamDescription = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription) else { return }
+        let sampleRate = streamDescription.pointee.mSampleRate
+        let channels = max(1, Int(streamDescription.pointee.mChannelsPerFrame))
+        let bitsPerChannel = max(1, Int(streamDescription.pointee.mBitsPerChannel))
+        let flags = streamDescription.pointee.mFormatFlags
+        let isFloat = (flags & kAudioFormatFlagIsFloat) != 0
+        let isSignedInteger = (flags & kAudioFormatFlagIsSignedInteger) != 0
+        let maxBuffers = 8
+        let audioBufferListSize = MemoryLayout<AudioBufferList>.size + MemoryLayout<AudioBuffer>.size * (maxBuffers - 1)
+        let rawAudioBufferList = UnsafeMutableRawPointer.allocate(byteCount: audioBufferListSize, alignment: MemoryLayout<AudioBufferList>.alignment)
+        defer { rawAudioBufferList.deallocate() }
+        let audioBufferListPointer = rawAudioBufferList.bindMemory(to: AudioBufferList.self, capacity: 1)
+        let audioBufferList = UnsafeMutableAudioBufferListPointer(audioBufferListPointer)
+        var blockBuffer: CMBlockBuffer?
+        let status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+            sampleBuffer,
+            bufferListSizeNeededOut: nil,
+            bufferListOut: audioBufferListPointer,
+            bufferListSize: audioBufferListSize,
+            blockBufferAllocator: nil,
+            blockBufferMemoryAllocator: nil,
+            flags: 0,
+            blockBufferOut: &blockBuffer
+        )
+        if status != noErr { return }
+
+        var monoSamples: [Float] = []
+        for buffer in audioBufferList {
+            guard let data = buffer.mData else { continue }
+            let channelCount = max(1, Int(buffer.mNumberChannels))
+            if isFloat && bitsPerChannel == 32 {
+                let valueCount = Int(buffer.mDataByteSize) / MemoryLayout<Float>.size
+                let pointer = data.bindMemory(to: Float.self, capacity: valueCount)
+                let frameCount = max(0, valueCount / channelCount)
+                monoSamples.reserveCapacity(monoSamples.count + frameCount)
+                for frameIndex in 0..<frameCount {
+                    monoSamples.append(pointer[frameIndex * channelCount])
+                }
+            } else if isSignedInteger && bitsPerChannel == 16 {
+                let valueCount = Int(buffer.mDataByteSize) / MemoryLayout<Int16>.size
+                let pointer = data.bindMemory(to: Int16.self, capacity: valueCount)
+                let frameCount = max(0, valueCount / channelCount)
+                monoSamples.reserveCapacity(monoSamples.count + frameCount)
+                for frameIndex in 0..<frameCount {
+                    monoSamples.append(Float(Int16(littleEndian: pointer[frameIndex * channelCount])) / 32768.0)
+                }
+            }
+        }
+        if monoSamples.isEmpty { return }
+        let capturedAtMs = nowMs()
+        let durationMs = max(1, Int(capturedAtMs - lastCapturedAtMs))
+        lastCapturedAtMs = capturedAtMs
+        let audioBase64 = downsampleFloatArrayToPcm16Base64(samples: monoSamples, inputSampleRate: sampleRate)
+        if audioBase64.isEmpty { return }
+        try? writeJson(NativeAudioStreamEvent(
+            type: "frame",
+            sourceKind: "microphone",
+            sourceId: sourceId,
+            capturedAtMs: capturedAtMs,
+            durationMs: durationMs,
+            sampleRateHz: 16000,
+            channels: 1,
+            level: rmsFor(samples: monoSamples),
+            audioBase64: audioBase64,
+            errorCode: nil,
+            message: nil
+        ))
+        fflush(stdout)
+    }
+}
+
 func probeMicrophone(durationMs: Int) -> AudioProbeResult {
     let permission = microphonePermissionName()
     if permission != "granted" {
@@ -233,7 +346,7 @@ func probeMicrophone(durationMs: Int) -> AudioProbeResult {
     var peakRms = 0.0
     let lock = NSLock()
 
-    input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
+    input.installTap(onBus: 0, bufferSize: 1024, format: nil) { buffer, _ in
         let channels = Int(buffer.format.channelCount)
         let frames = Int(buffer.frameLength)
         var sumSquares = 0.0
@@ -323,67 +436,73 @@ func streamMicrophone(sourceId: String) throws -> Never {
         exit(65)
     }
 
-    let engine = AVAudioEngine()
-    let input = engine.inputNode
-    let format = input.outputFormat(forBus: 0)
     let source = sourceId.isEmpty ? "native-microphone" : sourceId
-    var lastCapturedAtMs = nowMs()
-
-    input.installTap(onBus: 0, bufferSize: 2048, format: format) { buffer, _ in
-        guard let channelData = buffer.floatChannelData else { return }
-        let capturedAtMs = nowMs()
-        let frameCount = Int(buffer.frameLength)
-        if frameCount <= 0 { return }
-        let samples = channelData[0]
-        let level = rmsFor(samples: samples, frameCount: frameCount)
-        let durationMs = max(1, Int(capturedAtMs - lastCapturedAtMs))
-        lastCapturedAtMs = capturedAtMs
-        let audioBase64 = downsampleToPcm16Base64(samples: samples, frameCount: frameCount, inputSampleRate: format.sampleRate)
-        if audioBase64.isEmpty { return }
-        try? writeJson(NativeAudioStreamEvent(
-            type: "frame",
+    let audioDevices = AVCaptureDevice.devices(for: .audio)
+    guard let device = AVCaptureDevice.default(for: .audio) ?? audioDevices.first else {
+        try writeJson(NativeAudioStreamEvent(
+            type: "status",
             sourceKind: "microphone",
             sourceId: source,
-            capturedAtMs: capturedAtMs,
-            durationMs: durationMs,
-            sampleRateHz: 16000,
-            channels: 1,
-            level: level,
-            audioBase64: audioBase64,
-            errorCode: nil,
-            message: nil
+            capturedAtMs: nil,
+            durationMs: nil,
+            sampleRateHz: nil,
+            channels: nil,
+            level: 0,
+            audioBase64: nil,
+            errorCode: "microphone-device-not-found",
+            message: "No default microphone device is available."
         ))
         fflush(stdout)
+        exit(66)
     }
 
     do {
-        try engine.start()
+        let session = AVCaptureSession()
+        let input = try AVCaptureDeviceInput(device: device)
+        if session.canAddInput(input) {
+            session.addInput(input)
+        } else {
+            throw NSError(domain: "OfferSteadyCaptureRuntime", code: 67, userInfo: [NSLocalizedDescriptionKey: "Cannot add microphone input to capture session."])
+        }
+        let output = AVCaptureAudioDataOutput()
+        let queue = DispatchQueue(label: "offersteady.native.microphone.capture")
+        let delegate = MicrophoneSampleDelegate(sourceId: source)
+        output.setSampleBufferDelegate(delegate, queue: queue)
+        if session.canAddOutput(output) {
+            session.addOutput(output)
+        } else {
+            throw NSError(domain: "OfferSteadyCaptureRuntime", code: 68, userInfo: [NSLocalizedDescriptionKey: "Cannot add microphone output to capture session."])
+        }
+        session.startRunning()
         try writeJson(NativeAudioStreamEvent(
             type: "status",
             sourceKind: "microphone",
             sourceId: source,
             capturedAtMs: nil,
             durationMs: nil,
-            sampleRateHz: Int(format.sampleRate),
-            channels: Int(format.channelCount),
+            sampleRateHz: 16000,
+            channels: 1,
             level: 0,
             audioBase64: nil,
             errorCode: nil,
-            message: "Native microphone stream started. Raw audio is only written to stdout for live publishing and is not persisted."
+            message: "Native microphone capture session started. Raw audio is only written to stdout for live publishing and is not persisted."
         ))
         fflush(stdout)
-        RunLoop.current.run()
+        withExtendedLifetime(delegate) {
+            withExtendedLifetime(session) {
+                RunLoop.current.run()
+            }
+        }
         fatalError("Native microphone run loop exited unexpectedly.")
     } catch {
-        input.removeTap(onBus: 0)
         try writeJson(NativeAudioStreamEvent(
             type: "status",
             sourceKind: "microphone",
             sourceId: source,
             capturedAtMs: nil,
             durationMs: nil,
-            sampleRateHz: Int(format.sampleRate),
-            channels: Int(format.channelCount),
+            sampleRateHz: 16000,
+            channels: 1,
             level: 0,
             audioBase64: nil,
             errorCode: "microphone-engine-start-failed",

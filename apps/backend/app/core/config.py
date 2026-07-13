@@ -116,8 +116,8 @@ class Settings(BaseSettings):
     screenshot_vision_max_long_edge: int = 1600
     screenshot_vision_jpeg_quality: int = 72
     realtime_publisher_ttl_seconds: int = 1800
-    realtime_desktop_heartbeat_ttl_seconds: int = 15
-    realtime_web_heartbeat_ttl_seconds: int = 15
+    realtime_desktop_heartbeat_ttl_seconds: int = 45
+    realtime_web_heartbeat_ttl_seconds: int = 60
     realtime_asr_frame_timeout_seconds: float = 12.0
     realtime_asr_partial_timeout_seconds: float = 0.08
     realtime_asr_finalize_timeout_seconds: float = 8.0

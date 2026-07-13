@@ -552,9 +552,9 @@ function LivePage() {
     };
     const sendHeartbeat = async () => {
       try {
-        if (!heartbeatBindingId) {
+        if (!heartbeatBindingId || document.visibilityState === "visible") {
           const binding = await runAdapterOperation(signal => interviewAppAdapter.getDesktopDeviceBinding(id, signal));
-          heartbeatBindingId = binding?.bindingId ?? null;
+          if (binding?.bindingId) heartbeatBindingId = binding.bindingId;
         }
         await runAdapterOperation(signal => interviewAppAdapter.sendDesktopSessionHeartbeat({ interviewId: id, bindingId: heartbeatBindingId, page: "live" }, signal));
       } catch {
@@ -585,6 +585,12 @@ function LivePage() {
     };
     void sendHeartbeat();
     const heartbeatTimer = window.setInterval(() => void sendHeartbeat(), 3000);
+    const sendForegroundHeartbeat = () => {
+      if (!stopped && document.visibilityState === "visible") void sendHeartbeat();
+    };
+    document.addEventListener("visibilitychange", sendForegroundHeartbeat);
+    window.addEventListener("focus", sendForegroundHeartbeat);
+    window.addEventListener("online", sendForegroundHeartbeat);
     void loadRealtime();
     void subscribeRealtime();
     return () => {
@@ -592,6 +598,9 @@ function LivePage() {
       realtimeController.abort();
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       window.clearInterval(heartbeatTimer);
+      document.removeEventListener("visibilitychange", sendForegroundHeartbeat);
+      window.removeEventListener("focus", sendForegroundHeartbeat);
+      window.removeEventListener("online", sendForegroundHeartbeat);
     };
   }, [id, setState]);
   const scopedAdvice = {

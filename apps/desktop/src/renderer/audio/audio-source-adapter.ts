@@ -87,6 +87,14 @@ export class MicrophoneAudioAdapter implements AudioSourceAdapter {
 
   async open(sourceId?: string): Promise<OpenAudioSource> {
     const normalizedSourceId = sourceId === "default" ? undefined : sourceId;
+    const openDefaultMicrophone = async () => {
+      const stream = await this.mediaDevices.getUserMedia({ audio: true, video: false });
+      if (stream.getAudioTracks().length === 0) {
+        closeStream(stream);
+        throw new Error("microphone-audio-unavailable");
+      }
+      return stream;
+    };
     const openWithConstraints = async (constraints: MediaTrackConstraints) => {
       const stream = await this.mediaDevices.getUserMedia({
         audio: constraints,
@@ -101,7 +109,9 @@ export class MicrophoneAudioAdapter implements AudioSourceAdapter {
 
     let stream: MediaStream;
     try {
-      stream = await openWithConstraints(preferredMicrophoneConstraints(normalizedSourceId));
+      stream = normalizedSourceId
+        ? await openWithConstraints(preferredMicrophoneConstraints(normalizedSourceId))
+        : await openDefaultMicrophone();
     } catch (error) {
       try {
         stream = await openWithConstraints(fallbackMicrophoneConstraints(normalizedSourceId));
@@ -122,7 +132,7 @@ export class MicrophoneAudioAdapter implements AudioSourceAdapter {
         }
         if (!stream!) {
           try {
-            stream = await openWithConstraints({ echoCancellation: { ideal: true }, noiseSuppression: { ideal: true }, autoGainControl: { ideal: true } });
+            stream = await openDefaultMicrophone();
           } catch {
             throw lastError ?? error;
           }

@@ -281,6 +281,33 @@ class RealtimeSpeechService:
             raise DomainRequestError("realtime-speech", "desktop-active-binding", "网页端绑定已过期，请打开面试页面重新验证机器码。", 404)
         return binding
 
+    def get_desktop_capture_binding(self, *, device_id: str, manual_code: str) -> SessionDesktopBindingRecord:
+        code = manual_code.strip()
+        requested_device_id = device_id.strip()
+        device = self.repository.get_desktop_device_by_code(code)
+        if device is None:
+            raise DomainRequestError("realtime-speech", "desktop-capture-binding", "这台电脑尚未登记或机器码不匹配。", 404)
+        binding = self.repository.get_latest_session_desktop_binding_for_device(device_id=requested_device_id, manual_code=device.manual_code)
+        if binding is None and device.device_id != requested_device_id:
+            binding = self.repository.get_latest_session_desktop_binding_for_device(device_id=device.device_id, manual_code=device.manual_code)
+        if binding is None:
+            binding = self.repository.get_latest_session_desktop_binding_by_code(manual_code=device.manual_code)
+        if binding is None:
+            raise DomainRequestError("realtime-speech", "desktop-capture-binding", "网页端尚未输入该机器码绑定面试。", 404)
+        if binding.status != "bound":
+            raise DomainRequestError("realtime-speech", "desktop-capture-binding", "网页端绑定已失效，请重新绑定机器码。", 404)
+        if binding.binding_generation != device.generation:
+            raise DomainRequestError("realtime-speech", "desktop-capture-binding", "伴随程序已重新登记，请在面试页重新绑定机器码。", 404)
+        if not self._desktop_device_fresh(device):
+            raise DomainRequestError("realtime-speech", "desktop-capture-binding", "电脑伴随程序心跳已过期，请保持伴随程序打开。", 404)
+        try:
+            session_status = self.session_service.get_session(user_id=binding.owner_user_id, session_id=binding.session_id).status
+        except DomainRequestError:
+            raise DomainRequestError("realtime-speech", "desktop-capture-binding", "当前面试不存在或已不可用。", 404)
+        if session_status not in {"preparing", "live"}:
+            raise DomainRequestError("realtime-speech", "desktop-capture-binding", "当前面试已结束，不能继续截图回答。", 409)
+        return binding
+
     def get_desktop_active_binding_by_code(self, *, manual_code: str) -> SessionDesktopBindingRecord:
         code = manual_code.strip()
         device = self.repository.get_desktop_device_by_code(code)
