@@ -341,7 +341,11 @@ export class DesktopRealtimePublisher {
   async start() {
     this.stopped = false;
     this.options.onCaptureState("reconnecting");
-    const nativeStarted = false;
+    const nativeStarted = await this.startNativeCapture().catch(() => false);
+    if (nativeStarted) {
+      this.options.onCaptureState("capturing");
+      return;
+    }
     const [microphoneRuntime, systemRuntime] = await Promise.all([
       this.startSource({
         sourceKind: "microphone",
@@ -573,6 +577,7 @@ export class DesktopRealtimePublisher {
   private async startNativeCapture(): Promise<boolean> {
     if (!window.offersteady?.startNativeAudioStream || !window.offersteady?.onNativeAudioEvent) return false;
     const tokenBySource = new Map<AudioSourceKind, { token: string; sourceId: string }>();
+    const tokenPromiseBySource = new Map<AudioSourceKind, Promise<{ token: string; sourceId: string } | null>>();
     const fallbackStarted = new Set<AudioSourceKind>();
     const sourceIds: Record<AudioSourceKind, string> = {
       microphone: "native-microphone",
@@ -596,52 +601,53 @@ export class DesktopRealtimePublisher {
         this.options.onFailure(reason);
       });
     };
-    const createNativeSource = async (sourceKind: AudioSourceKind) => {
-      const sourceId = sourceIds[sourceKind];
-      try {
-        this.updateHealth({
-          sourceId,
-          sourceKind,
-          label: sourceLabel(sourceKind),
-          state: "permission-required",
-          stage: "permission-required",
-          level: 0,
-          active: false,
+    const ensureNativePublisher = async (sourceKind: AudioSourceKind, sourceId: string) => {
+      const existing = tokenBySource.get(sourceKind);
+      if (existing) return existing;
+      const existingPromise = tokenPromiseBySource.get(sourceKind);
+      if (existingPromise) return existingPromise;
+      const promise = this.createPublisher(sourceKind)
+        .then((publisher) => {
+          const tokenInfo = { token: publisher.token, sourceId };
+          tokenBySource.set(sourceKind, tokenInfo);
+          tokenPromiseBySource.delete(sourceKind);
+          return tokenInfo;
+        })
+        .catch((error) => {
+          tokenPromiseBySource.delete(sourceKind);
+          const diagnostic = publisherFailureDiagnostic(sourceKind, error);
+          this.updateHealth({
+            sourceId,
+            sourceKind,
+            label: sourceLabel(sourceKind),
+            state: diagnostic.state,
+            stage: diagnostic.stage,
+            level: 0,
+            active: false,
+            errorCode: diagnostic.errorCode,
+          });
+          this.options.onFailure(diagnostic.displayMessage);
+          return null;
         });
-        const publisher = await this.createPublisher(sourceKind);
-        tokenBySource.set(sourceKind, { token: publisher.token, sourceId });
-        this.updateHealth({
-          sourceId,
-          sourceKind,
-          label: sourceLabel(sourceKind),
-          state: "silent",
-          stage: "track-live",
-          level: 0,
-          active: true,
-        });
-        return true;
-      } catch (error) {
-        const diagnostic = publisherFailureDiagnostic(sourceKind, error);
-        this.updateHealth({
-          sourceId,
-          sourceKind,
-          label: sourceLabel(sourceKind),
-          state: diagnostic.state,
-          stage: diagnostic.stage,
-          level: 0,
-          active: false,
-          errorCode: diagnostic.errorCode,
-        });
-        this.options.onFailure(diagnostic.displayMessage);
-        return false;
-      }
+      tokenPromiseBySource.set(sourceKind, promise);
+      return promise;
     };
 
-    const [microphoneReady, systemReady] = await Promise.all([
-      createNativeSource("microphone"),
-      createNativeSource("system"),
-    ]);
-    if (!microphoneReady && !systemReady) return false;
+    const markNativeSourcePending = (sourceKind: AudioSourceKind) => {
+      const sourceId = sourceIds[sourceKind];
+      this.updateHealth({
+        sourceId,
+        sourceKind,
+        label: sourceLabel(sourceKind),
+        state: "permission-required",
+        stage: "permission-required",
+        level: 0,
+        active: false,
+      });
+    };
+
+    markNativeSourcePending("microphone");
+    markNativeSourcePending("system");
 
     const unsubscribe = window.offersteady.onNativeAudioEvent((event) => {
       if (this.stopped) return;
@@ -676,56 +682,57 @@ export class DesktopRealtimePublisher {
         return;
       }
       if (event.type !== "frame" || !event.audioBase64) return;
-      const tokenInfo = tokenBySource.get(sourceKind);
-      if (!tokenInfo) return;
       const payloadBytes = base64ToBytes(event.audioBase64);
       if (payloadBytes.byteLength === 0) return;
       const capturedAtMs = event.capturedAtMs ?? Date.now();
       const durationMs = event.durationMs ?? 20;
       const level = Number((event.level ?? 0).toFixed(3));
-      const frame = createAudioFrame(this.sequencer, {
-        sessionId: this.options.binding.sessionId,
-        deviceId: this.options.binding.deviceId,
-        sourceId,
-        sourceKind,
-        capturedAtMs,
-        durationMs,
-        payload: payloadBytes,
+      void ensureNativePublisher(sourceKind, sourceId).then((tokenInfo) => {
+        if (this.stopped || !tokenInfo) return;
+        const frame = createAudioFrame(this.sequencer, {
+          sessionId: this.options.binding.sessionId,
+          deviceId: this.options.binding.deviceId,
+          sourceId,
+          sourceKind,
+          capturedAtMs,
+          durationMs,
+          payload: payloadBytes,
+        });
+        const frameCount = (this.frameCounts.get(sourceKind) ?? 0) + 1;
+        this.frameCounts.set(sourceKind, frameCount);
+        this.updateHealth({
+          sourceId,
+          sourceKind,
+          label: sourceLabel(sourceKind),
+          state: level >= SPEECH_CONTINUE_THRESHOLD ? "receiving" : "silent",
+          stage: "frames-produced",
+          level,
+          ...(level >= SPEECH_CONTINUE_THRESHOLD ? { lastSignalAtMs: capturedAtMs } : {}),
+          frameCount,
+          lastFrameAtMs: capturedAtMs,
+          active: true,
+        });
+        this.sendFrameHttp(sourceKind, {
+          type: "audio-frame",
+          token: tokenInfo.token,
+          deviceId: frame.deviceId,
+          sourceId: frame.sourceId,
+          sourceKind: frame.sourceKind,
+          sequence: frame.sequence,
+          segmentId: `${sourceKind}-native-${frame.sequence}`,
+          revision: 1,
+          capturedAtMs: frame.capturedAtMs,
+          startedAtMs: capturedAtMs - durationMs,
+          endedAtMs: capturedAtMs,
+          durationMs: frame.durationMs,
+          codec: "pcm-s16le",
+          sampleRateHz: event.sampleRateHz ?? 16_000,
+          channels: event.channels === 2 ? 2 : 1,
+          isFinal: true,
+          traceId: `${sourceKind}:native:${frame.sequence}`,
+          audioBase64: event.audioBase64,
+        }, frame, sourceId);
       });
-      const frameCount = (this.frameCounts.get(sourceKind) ?? 0) + 1;
-      this.frameCounts.set(sourceKind, frameCount);
-      this.updateHealth({
-        sourceId,
-        sourceKind,
-        label: sourceLabel(sourceKind),
-        state: level >= SPEECH_CONTINUE_THRESHOLD ? "receiving" : "silent",
-        stage: "frames-produced",
-        level,
-        ...(level >= SPEECH_CONTINUE_THRESHOLD ? { lastSignalAtMs: capturedAtMs } : {}),
-        frameCount,
-        lastFrameAtMs: capturedAtMs,
-        active: true,
-      });
-      this.sendFrameHttp(sourceKind, {
-        type: "audio-frame",
-        token: tokenInfo.token,
-        deviceId: frame.deviceId,
-        sourceId: frame.sourceId,
-        sourceKind: frame.sourceKind,
-        sequence: frame.sequence,
-        segmentId: `${sourceKind}-native-${frame.sequence}`,
-        revision: 1,
-        capturedAtMs: frame.capturedAtMs,
-        startedAtMs: capturedAtMs - durationMs,
-        endedAtMs: capturedAtMs,
-        durationMs: frame.durationMs,
-        codec: "pcm-s16le",
-        sampleRateHz: event.sampleRateHz ?? 16_000,
-        channels: event.channels === 2 ? 2 : 1,
-        isFinal: true,
-        traceId: `${sourceKind}:native:${frame.sequence}`,
-        audioBase64: event.audioBase64,
-      }, frame, sourceId);
     });
 
     try {
@@ -750,6 +757,7 @@ export class DesktopRealtimePublisher {
         unsubscribe();
         await window.offersteady?.stopNativeAudioStream?.().catch(() => undefined);
         tokenBySource.clear();
+        tokenPromiseBySource.clear();
       },
     }];
     this.options.onServerEvent?.({ kind: "connection-state", payload: { transport: "native-jsonl-http-frame-ingest" } });

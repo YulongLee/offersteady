@@ -164,6 +164,33 @@ const permissionFromHealth = (health: AudioSourceHealth | undefined, current: Au
   return current;
 };
 
+const microphonePreferenceScore = (source: AudioSourceDescriptor) => {
+  const id = source.id.toLowerCase();
+  const label = source.label.toLowerCase();
+  if (id === "default" || label.startsWith("default")) return 0;
+  if (label.includes("airpods") || label.includes("bluetooth") || label.includes("耳机") || label.includes("headset") || label.includes("headphone")) return 1;
+  if (label.includes("macbook") || label.includes("built-in") || label.includes("内建")) return 3;
+  return 2;
+};
+
+const sortMicrophoneSources = (sources: readonly AudioSourceDescriptor[]) =>
+  [...sources].sort((left, right) => microphonePreferenceScore(left) - microphonePreferenceScore(right) || left.label.localeCompare(right.label));
+
+const requestMicrophoneAccessInBackground = async () => {
+  if (!window.offersteady?.requestMicrophoneAccess) return false;
+  let timeoutId: number | undefined;
+  try {
+    return await Promise.race([
+      window.offersteady.requestMicrophoneAccess(),
+      new Promise<boolean>((resolve) => {
+        timeoutId = window.setTimeout(() => resolve(false), 2500);
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+  }
+};
+
 const buildRuntimeCaptureNotice = (
   live: boolean,
   runtimeStatus: DesktopRuntimeStatus | null,
@@ -421,10 +448,12 @@ export function CompanionApp() {
 
   const refreshMicrophoneSources = async (preferredId?: string) => {
     const adapter = new MicrophoneAudioAdapter();
-    const sources = await adapter.listSources().catch(() => [] as AudioSourceDescriptor[]);
+    const sources = sortMicrophoneSources(await adapter.listSources().catch(() => [] as AudioSourceDescriptor[]));
     setMicrophoneSources(sources);
     setSelectedMicrophoneId((current) => {
       if (preferredId && sources.some((source) => source.id === preferredId)) return preferredId;
+      const defaultSource = sources.find((source) => source.id === DEFAULT_MICROPHONE_ID || source.label.toLowerCase().startsWith("default"));
+      if (defaultSource) return defaultSource.id;
       if (current && sources.some((source) => source.id === current)) return current;
       return sources[0]?.id ?? DEFAULT_MICROPHONE_ID;
     });
@@ -530,7 +559,6 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
     void window.offersteady?.getDesktopConfig().then(async runtime => {
       if (!mounted) return;
       setConfig(runtime);
-      await window.offersteady?.requestMicrophoneAccess().catch(() => false);
       const [identity, sources, listedScreens] = await Promise.all([
         window.offersteady.getPairingIdentity(),
         refreshMicrophoneSources(),
@@ -555,6 +583,9 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
           ...systemAudioOptions.map(source => ({ id: source.id, kind: source.kind, label: source.label, available: true })),
         ],
       });
+      void requestMicrophoneAccessInBackground()
+        .then(() => refreshMicrophoneSources())
+        .catch(() => undefined);
     }).catch(() => {
       if (!mounted) return;
       setConnectionNotice("未连接 | 本机运行信息读取失败，请重新打开伴随程序");
@@ -695,15 +726,19 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
         }
         if (!pairingStatus.bound || !pairingStatus.binding) {
           if (!stopped) {
+            const staleBinding = pairingStatus.state === "stale-bound" && pairingStatus.binding ? pairingStatus.binding : null;
             const nextState: CaptureState = pairingStatus.registered ? "ready" : "not-connected";
-            setActiveBinding(null);
-            setBindingSessionStatus(null);
-            setState(nextState);
-            applyConnectionCopy(
-              "未连接",
-              waitingConnectionInfo(config),
-            );
-            window.offersteady?.publishCaptureState(nextState);
+            const displayState: CaptureState = staleBinding ? "reconnecting" : nextState;
+            setActiveBinding(staleBinding);
+        setBindingSessionStatus(null);
+            setState(displayState);
+            const staleCopy = pairingStatus.staleReason === "web-heartbeat-missing"
+              ? "网页端绑定已存在，但当前面试页心跳暂未到达；请保持线上实时面试页面打开。"
+              : pairingStatus.staleReason === "desktop-heartbeat-stale"
+                ? "本地助手心跳过期，正在重新登记这台电脑。"
+                : pairingStatus.message ?? waitingConnectionInfo(config);
+            applyConnectionCopy(staleBinding ? "已绑定 | 等待网页实时连接" : "未连接", staleBinding ? staleCopy : waitingConnectionInfo(config));
+            window.offersteady?.publishCaptureState(displayState);
           }
           return;
         }
@@ -791,10 +826,10 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
   }, [captureDiagnostic, config, pairingIdentity, selectedMicrophoneId, selectedSystemAudioId, microphoneSources, permissions, screenReady, nativeRuntimeReady, nativeRuntimeHealth]);
 
   useEffect(() => {
-    if (publisherHasTakenOver || !selectedSystemAudioId) {
+    if (nativeRuntimeHealth?.available !== false || publisherHasTakenOver || !selectedSystemAudioId) {
       void localMonitorRef.current?.stop();
       localMonitorRef.current = null;
-      if (publisherHasTakenOver) setMonitorSourceHealthState([]);
+      if (nativeRuntimeReady || publisherHasTakenOver) setMonitorSourceHealthState([]);
       return;
     }
     let cancelled = false;
@@ -832,7 +867,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       if (localMonitorRef.current === monitor) localMonitorRef.current = null;
       void monitor.stop();
     };
-  }, [bindingSessionStatus, publisherHasTakenOver, effectiveMicrophoneId, selectedSystemAudioId]);
+  }, [bindingSessionStatus, nativeRuntimeHealth, nativeRuntimeReady, publisherHasTakenOver, effectiveMicrophoneId, selectedSystemAudioId]);
 
   useEffect(() => {
     if (!config || !pairingIdentity || !activeBinding || bindingSessionStatus !== "live") {

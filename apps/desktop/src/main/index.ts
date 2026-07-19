@@ -20,9 +20,19 @@ let hasRegisteredThisRun = false;
 let processingRemoteScreenshotRequestId: string | null = null;
 const nativeAudioProcesses = new Map<string, ChildProcess>();
 let mainRealtimeBindingKey: string | null = null;
+let mainRealtimeBinding: {
+  sessionId: string;
+  ownerUserId: string;
+  deviceId: string;
+  manualCode: string;
+  displayName?: string;
+} | null = null;
 let mainRealtimePublisherTokens = new Map<"microphone" | "system", { token: string; sourceId: string }>();
+let mainRealtimePublisherPromises = new Map<"microphone" | "system", Promise<{ token: string; sourceId: string } | null>>();
 let mainRealtimeSequences = new Map<"microphone" | "system", number>();
 let mainRealtimeEnsureInFlight = false;
+let mainRealtimeOwnsNativeAudio = false;
+let rendererOwnsNativeAudio = false;
 const SCREENSHOT_VISION_MAX_LONG_EDGE = 1600;
 const SCREENSHOT_VISION_JPEG_QUALITY = 72;
 
@@ -223,11 +233,37 @@ const createMainRealtimePublisher = async (
 };
 
 const stopMainRealtimeAudioPublishing = () => {
-  stopNativeAudioStreams();
+  if (mainRealtimeOwnsNativeAudio) stopNativeAudioStreams();
+  mainRealtimeOwnsNativeAudio = false;
   mainRealtimeBindingKey = null;
+  mainRealtimeBinding = null;
   mainRealtimePublisherTokens.clear();
+  mainRealtimePublisherPromises.clear();
   mainRealtimeSequences.clear();
   mainRealtimeEnsureInFlight = false;
+};
+
+const ensureMainRealtimePublisher = async (sourceKind: "microphone" | "system", sourceId: string) => {
+  const existing = mainRealtimePublisherTokens.get(sourceKind);
+  if (existing) return existing;
+  if (!mainRealtimeBinding || rendererOwnsNativeAudio) return null;
+  const pending = mainRealtimePublisherPromises.get(sourceKind);
+  if (pending) return pending;
+  const promise = createMainRealtimePublisher(mainRealtimeBinding, sourceKind)
+    .then((token) => {
+      const tokenInfo = { token, sourceId };
+      mainRealtimePublisherTokens.set(sourceKind, tokenInfo);
+      return tokenInfo;
+    })
+    .catch((error) => {
+      console.warn(`[main-realtime-audio] ${sourceKind} publisher failed`, error);
+      return null;
+    })
+    .finally(() => {
+      mainRealtimePublisherPromises.delete(sourceKind);
+    });
+  mainRealtimePublisherPromises.set(sourceKind, promise);
+  return promise;
 };
 
 const getLiveDesktopBinding = async () => {
@@ -257,37 +293,27 @@ const ensureMainRealtimeAudioPublishing = async () => {
   if (mainRealtimeEnsureInFlight) return;
   mainRealtimeEnsureInFlight = true;
   try {
+    if (rendererOwnsNativeAudio) {
+      if (mainRealtimeBindingKey || mainRealtimePublisherTokens.size > 0) stopMainRealtimeAudioPublishing();
+      return;
+    }
     const binding = await getLiveDesktopBinding();
     if (!binding) {
       if (mainRealtimeBindingKey) stopMainRealtimeAudioPublishing();
       return;
     }
     const bindingKey = `${binding.sessionId}:${binding.ownerUserId}:${binding.deviceId}:${binding.manualCode}`;
-    if (mainRealtimeBindingKey === bindingKey && mainRealtimePublisherTokens.size > 0) return;
-    stopMainRealtimeAudioPublishing();
-    mainRealtimeEnsureInFlight = true;
-    mainRealtimeBindingKey = bindingKey;
-    const [microphoneToken, systemToken] = await Promise.all([
-      createMainRealtimePublisher(binding, "microphone").catch((error) => {
-        console.warn("[main-realtime-audio] microphone publisher failed", error);
-        return null;
-      }),
-      createMainRealtimePublisher(binding, "system").catch((error) => {
-        console.warn("[main-realtime-audio] system publisher failed", error);
-        return null;
-      }),
-    ]);
-    if (microphoneToken) mainRealtimePublisherTokens.set("microphone", { token: microphoneToken, sourceId: "native-microphone" });
-    if (systemToken) mainRealtimePublisherTokens.set("system", { token: systemToken, sourceId: "native-system-output" });
-    if (mainRealtimePublisherTokens.size === 0) {
-      mainRealtimeBindingKey = null;
-      return;
+    if (mainRealtimeBindingKey !== bindingKey) {
+      stopMainRealtimeAudioPublishing();
+      mainRealtimeEnsureInFlight = true;
+      mainRealtimeBindingKey = bindingKey;
+      mainRealtimeBinding = binding;
     }
-    const microphoneStarted = microphoneToken ? startNativeAudioProcess("microphone", "native-microphone") : false;
-    const systemStarted = systemToken ? startNativeAudioProcess("system", "native-system-output") : false;
-    if (!microphoneStarted) mainRealtimePublisherTokens.delete("microphone");
-    if (!systemStarted) mainRealtimePublisherTokens.delete("system");
-    if (mainRealtimePublisherTokens.size === 0) mainRealtimeBindingKey = null;
+    const microphoneStarted = nativeAudioProcesses.has("microphone")
+      || startNativeAudioProcess("microphone", "native-microphone");
+    const systemStarted = nativeAudioProcesses.has("system")
+      || startNativeAudioProcess("system", "native-system-output");
+    mainRealtimeOwnsNativeAudio = microphoneStarted || systemStarted;
   } finally {
     mainRealtimeEnsureInFlight = false;
   }
@@ -296,9 +322,14 @@ const ensureMainRealtimeAudioPublishing = async () => {
 const publishNativeAudioEventFromMain = async (event: Record<string, unknown>) => {
   if (event.type !== "frame") return;
   if (event.sourceKind !== "microphone" && event.sourceKind !== "system") return;
+  if (rendererOwnsNativeAudio) return;
   const sourceKind = event.sourceKind;
-  const tokenInfo = mainRealtimePublisherTokens.get(sourceKind);
-  if (!tokenInfo || typeof event.audioBase64 !== "string" || !event.audioBase64) return;
+  if (typeof event.audioBase64 !== "string" || !event.audioBase64) return;
+  const eventSourceId = typeof event.sourceId === "string"
+    ? event.sourceId
+    : sourceKind === "microphone" ? "native-microphone" : "native-system-output";
+  const tokenInfo = await ensureMainRealtimePublisher(sourceKind, eventSourceId);
+  if (!tokenInfo) return;
   const sequence = (mainRealtimeSequences.get(sourceKind) ?? 0) + 1;
   mainRealtimeSequences.set(sourceKind, sequence);
   const capturedAtMs = typeof event.capturedAtMs === "number" ? event.capturedAtMs : Date.now();
@@ -635,22 +666,36 @@ app.whenReady().then(() => {
     callback(allowedRuntimePermissions.has(permission));
   });
   session.defaultSession.setPermissionCheckHandler((_webContents, permission) => allowedRuntimePermissions.has(permission));
-  session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
-    const sources = await desktopCapturer.getSources({
-      types: ["screen"],
-      thumbnailSize: { width: 0, height: 0 },
-    });
-    const selectedScreen = (preferredScreenSourceId
-      ? sources.find((source) => source.id === preferredScreenSourceId)
-      : null) ?? sources[0];
-    if (!selectedScreen) {
-      callback({});
-      return;
-    }
-    callback({
-      ...(request.videoRequested ? { video: selectedScreen } : {}),
-      ...(request.audioRequested ? { audio: "loopback" } : {}),
-    });
+  session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+    void desktopCapturer.getSources({
+        types: ["screen"],
+        thumbnailSize: { width: 0, height: 0 },
+      })
+      .then((sources) => {
+      const selectedScreen = (preferredScreenSourceId
+        ? sources.find((source) => source.id === preferredScreenSourceId)
+        : null) ?? sources[0];
+      if (!selectedScreen) {
+        try {
+          callback({});
+        } catch (error) {
+          console.warn("[desktop-capture] display media callback rejected an empty source", error);
+        }
+        return;
+      }
+      callback({
+        ...(request.videoRequested ? { video: selectedScreen } : {}),
+        ...(request.audioRequested ? { audio: "loopback" } : {}),
+      });
+      })
+      .catch((error) => {
+        console.warn("[desktop-capture] display media source unavailable", error);
+        try {
+          callback({});
+        } catch (callbackError) {
+          console.warn("[desktop-capture] display media callback rejected an unavailable source", callbackError);
+        }
+      });
   }, { useSystemPicker: false });
   tray = new Tray(trayImage());
   updateTray();
@@ -683,12 +728,16 @@ ipcMain.handle("credential:clear", async () => {
 ipcMain.handle("desktop:get-config", async () => desktopConfig());
 ipcMain.handle("desktop:get-native-runtime-health", async () => getNativeRuntimeHealth());
 ipcMain.handle("desktop:start-native-audio-stream", async (_event, options: { microphoneSourceId?: string; systemSourceId?: string }) => {
+  stopMainRealtimeAudioPublishing();
   stopNativeAudioStreams();
+  rendererOwnsNativeAudio = true;
   const microphoneStarted = startNativeAudioProcess("microphone", options.microphoneSourceId || "native-microphone");
   const systemStarted = startNativeAudioProcess("system", options.systemSourceId || "native-system-output");
+  if (!microphoneStarted && !systemStarted) rendererOwnsNativeAudio = false;
   return { ok: microphoneStarted || systemStarted, microphoneStarted, systemStarted };
 });
 ipcMain.handle("desktop:stop-native-audio-stream", async () => {
+  rendererOwnsNativeAudio = false;
   stopNativeAudioStreams();
   return { ok: true };
 });
