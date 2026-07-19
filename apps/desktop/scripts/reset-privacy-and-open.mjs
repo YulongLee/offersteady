@@ -27,6 +27,8 @@ if (!existsSync(appPath)) {
 }
 
 const run = (command, args, options = {}) => spawnSync(command, args, { encoding: "utf8", stdio: "inherit", ...options });
+const desktopLaunchEnv = { ...process.env };
+delete desktopLaunchEnv.ELECTRON_RUN_AS_NODE;
 
 run("osascript", ["-e", 'tell application "面试稳伴随程序" to quit']);
 run("pkill", ["-f", "面试稳伴随程序"]);
@@ -53,7 +55,7 @@ for (const id of bundleIds) {
   }
 }
 
-const opened = run("open", ["-n", appPath]);
+const opened = run("open", ["-n", appPath], { env: desktopLaunchEnv });
 if (opened.status !== 0) {
   throw new Error(`Failed to open ${appPath}`);
 }
