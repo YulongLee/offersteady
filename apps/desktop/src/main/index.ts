@@ -33,6 +33,8 @@ let mainRealtimeSequences = new Map<"microphone" | "system", number>();
 let mainRealtimeEnsureInFlight = false;
 let mainRealtimeOwnsNativeAudio = false;
 let rendererOwnsNativeAudio = false;
+let desktopRegistrationInFlight = false;
+let remoteScreenshotPollInFlight = false;
 const SCREENSHOT_VISION_MAX_LONG_EDGE = 1600;
 const SCREENSHOT_VISION_JPEG_QUALITY = 72;
 
@@ -449,9 +451,18 @@ const syncDesktopRegistration = async () => {
 
 const startDesktopRegistrationLoop = () => {
   if (registrationInterval) clearInterval(registrationInterval);
-  void syncDesktopRegistration();
+  const run = async () => {
+    if (desktopRegistrationInFlight) return;
+    desktopRegistrationInFlight = true;
+    try {
+      await syncDesktopRegistration();
+    } finally {
+      desktopRegistrationInFlight = false;
+    }
+  };
+  void run();
   registrationInterval = setInterval(() => {
-    void syncDesktopRegistration();
+    void run();
   }, 10000);
 };
 
@@ -624,9 +635,20 @@ const pollRemoteScreenshotRequest = async () => {
 
 const startRemoteScreenshotRequestLoop = () => {
   if (screenshotRequestInterval) clearInterval(screenshotRequestInterval);
-  void pollRemoteScreenshotRequest().catch((error) => console.warn("[remote-screenshot] poll failed", error));
+  const run = async () => {
+    if (remoteScreenshotPollInFlight) return;
+    remoteScreenshotPollInFlight = true;
+    try {
+      await pollRemoteScreenshotRequest();
+    } catch (error) {
+      console.warn("[remote-screenshot] poll failed", error);
+    } finally {
+      remoteScreenshotPollInFlight = false;
+    }
+  };
+  void run();
   screenshotRequestInterval = setInterval(() => {
-    void pollRemoteScreenshotRequest().catch((error) => console.warn("[remote-screenshot] poll failed", error));
+    void run();
   }, 1200);
 };
 

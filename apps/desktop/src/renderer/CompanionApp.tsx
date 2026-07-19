@@ -628,23 +628,30 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
   useEffect(() => {
     if (!config || !pairingIdentity) return;
     let stopped = false;
+    let registrationInFlight = false;
     const syncRegistration = async (silent: boolean) => {
-      const ok = await registerDesktopDevice(pairingIdentity, config, {
-        ...capabilitiesFor(config),
-      }, { silent });
-      if (stopped) return;
-      if (!ok) {
-        if (!activeBinding) {
-          setState("reconnecting");
-          setConnectionNotice("未连接 | 后端登记失败");
-          setConnectionInfo("请确认后端服务已启动后重试。");
-          window.offersteady?.publishCaptureState("reconnecting");
+      if (registrationInFlight || stopped) return;
+      registrationInFlight = true;
+      try {
+        const ok = await registerDesktopDevice(pairingIdentity, config, {
+          ...capabilitiesFor(config),
+        }, { silent });
+        if (stopped) return;
+        if (!ok) {
+          if (!activeBinding) {
+            setState("reconnecting");
+            setConnectionNotice("未连接 | 后端登记失败");
+            setConnectionInfo("请确认后端服务已启动后重试。");
+            window.offersteady?.publishCaptureState("reconnecting");
+          }
+          return;
         }
-        return;
-      }
-      if (!activeBinding) {
-        setConnectionNotice("未连接");
-        setConnectionInfo(waitingConnectionInfo(config));
+        if (!activeBinding) {
+          setConnectionNotice("未连接");
+          setConnectionInfo(waitingConnectionInfo(config));
+        }
+      } finally {
+        registrationInFlight = false;
       }
     };
     void syncRegistration(true);
@@ -658,8 +665,10 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
   useEffect(() => {
     if (!config || !pairingIdentity) return;
     let stopped = false;
+    let screenshotPollInFlight = false;
     const pollRemoteScreenshotRequests = async () => {
-      if (processingScreenshotRequestIdRef.current) return;
+      if (screenshotPollInFlight || processingScreenshotRequestIdRef.current || stopped) return;
+      screenshotPollInFlight = true;
       try {
         const request = await fetchNextRemoteScreenshotCaptureRequest(config, pairingIdentity);
         if (stopped || !request) return;
@@ -688,6 +697,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
         }
       } finally {
         processingScreenshotRequestIdRef.current = null;
+        screenshotPollInFlight = false;
       }
     };
     void pollRemoteScreenshotRequests();
@@ -703,7 +713,10 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
   useEffect(() => {
     if (!config || !pairingIdentity) return;
     let stopped = false;
+    let bindingPollInFlight = false;
     const pollBindingAndPublishStatus = async () => {
+      if (bindingPollInFlight || stopped) return;
+      bindingPollInFlight = true;
       try {
         let pairingStatus: DesktopPairingStatus;
         try {
@@ -815,6 +828,8 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
         setState("not-connected");
         applyConnectionCopy("未连接", `绑定查询失败：${message}。请确认后端服务已启动后重试。`);
         window.offersteady?.publishCaptureState("not-connected");
+      } finally {
+        bindingPollInFlight = false;
       }
     };
     void pollBindingAndPublishStatus();
