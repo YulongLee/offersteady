@@ -4,6 +4,7 @@ set -euo pipefail
 COMPOSE_FILE="infra/compose/docker-compose.foundation.yml"
 ENV_FILE=".env.production"
 DEFAULT_PUBLIC_URL="http://101.133.147.212"
+DEPLOYED_COMMIT_FILE=".offersteady-deployed-commit"
 
 log() {
   printf '\n[offersteady-deploy] %s\n' "$*"
@@ -35,8 +36,36 @@ else
   git pull --ff-only || fail "git pull failed"
 fi
 
-log "Building and starting Docker Compose services"
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build
+CURRENT_COMMIT="$(git rev-parse HEAD)"
+LAST_DEPLOYED_COMMIT=""
+if [ -f "$DEPLOYED_COMMIT_FILE" ]; then
+  LAST_DEPLOYED_COMMIT="$(tr -d '[:space:]' < "$DEPLOYED_COMMIT_FILE")"
+fi
+
+declare -a BUILD_SERVICES=()
+if [ -n "$LAST_DEPLOYED_COMMIT" ] && git cat-file -e "${LAST_DEPLOYED_COMMIT}^{commit}" 2>/dev/null; then
+  CHANGED_FILES="$(git diff --name-only "$LAST_DEPLOYED_COMMIT" "$CURRENT_COMMIT")"
+  if printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(apps/backend/|ai/|infra/docker/backend\.Dockerfile$|infra/compose/docker-compose\.foundation\.yml$)'; then
+    BUILD_SERVICES+=(backend)
+  fi
+  if printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(apps/web/|packages/config/|packages/protocol/|infra/docker/web\.Dockerfile$|infra/nginx/|infra/compose/docker-compose\.foundation\.yml$|package(-lock)?\.json$|tsconfig\.base\.json$)'; then
+    BUILD_SERVICES+=(web)
+  fi
+else
+  BUILD_SERVICES=(backend web)
+fi
+
+if [ "${#BUILD_SERVICES[@]}" -gt 0 ]; then
+  log "Building changed services serially: ${BUILD_SERVICES[*]}"
+  for service in "${BUILD_SERVICES[@]}"; do
+    COMPOSE_PARALLEL_LIMIT=1 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build "$service"
+  done
+else
+  log "No server runtime changes detected; skipping image rebuild"
+fi
+
+log "Starting Docker Compose services"
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --no-build
 
 log "Current service status"
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps
@@ -57,6 +86,7 @@ else
 fi
 
 log "Deployment completed"
+printf '%s\n' "$CURRENT_COMMIT" > "$DEPLOYED_COMMIT_FILE"
 printf '\nFrontend: %s/\n' "${PUBLIC_WEB_BASE_URL%/}"
 printf 'Backend health: %s/healthz\n' "${PUBLIC_WEB_BASE_URL%/}"
 printf 'Billing status: %s/api/v1/billing/status\n\n' "${PUBLIC_WEB_BASE_URL%/}"

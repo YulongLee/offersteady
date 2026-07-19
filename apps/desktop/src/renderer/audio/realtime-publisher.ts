@@ -745,7 +745,12 @@ export class DesktopRealtimePublisher {
         tokenBySource.clear();
         return false;
       }
-      startWebAudioFallback("microphone", "原生麦克风采集暂不可用，已切换到浏览器麦克风采集。");
+      if (result.microphoneStarted === false) {
+        startWebAudioFallback("microphone", "原生麦克风采集暂不可用，已切换到浏览器麦克风采集。");
+      }
+      if (result.systemStarted === false) {
+        startWebAudioFallback("system", "原生电脑输出采集暂不可用，已切换到系统音频采集。");
+      }
     } catch {
       unsubscribe();
       tokenBySource.clear();
