@@ -141,6 +141,26 @@ const getNativeRuntimeHealth = async () => {
   });
 };
 
+const requestNativeScreenCaptureAccess = async () => {
+  if (process.platform !== "darwin") return true;
+  const helper = nativeRuntimePath();
+  if (!existsSync(helper)) return false;
+  return new Promise<boolean>((resolve) => {
+    execFile(helper, ["request-screen-permission"], { timeout: 30_000 }, (error, stdout) => {
+      if (error) {
+        resolve(false);
+        return;
+      }
+      try {
+        const result = JSON.parse(stdout.trim()) as { granted?: boolean };
+        resolve(result.granted === true);
+      } catch {
+        resolve(false);
+      }
+    });
+  });
+};
+
 const optimizeScreenshotForVision = (image: Electron.NativeImage) => {
   const size = image.getSize();
   const longest = Math.max(size.width, size.height);
@@ -912,6 +932,8 @@ ipcMain.handle("desktop:request-microphone-access", async () => {
   if (process.platform !== "darwin") return true;
   return systemPreferences.askForMediaAccess("microphone");
 });
+
+ipcMain.handle("desktop:request-screen-capture-access", async () => requestNativeScreenCaptureAccess());
 
 ipcMain.handle("desktop:open-permission-settings", async (_event, kind: "microphone" | "screen" | "camera" | "audio") => {
   await shell.openExternal(permissionSettingsUrl(kind));

@@ -109,6 +109,7 @@ declare global {
         readonly bodyText: string;
       }>;
       requestMicrophoneAccess: () => Promise<boolean>;
+      requestScreenCaptureAccess?: () => Promise<boolean>;
       resetPairingIdentity: () => Promise<boolean>;
       openPermissionSettings: (kind: "microphone" | "screen" | "camera" | "audio") => Promise<void>;
       requestClose: () => void;

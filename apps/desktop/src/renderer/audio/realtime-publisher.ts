@@ -579,6 +579,11 @@ export class DesktopRealtimePublisher {
 
   private async startNativeSystemCapture(): Promise<boolean> {
     if (!window.offersteady?.startNativeAudioStream || !window.offersteady?.onNativeAudioEvent) return false;
+    const screenPermissionGranted = await window.offersteady.requestScreenCaptureAccess?.().catch(() => false);
+    if (screenPermissionGranted === false) {
+      this.options.onFailure("电脑输出需要屏幕录制权限。请在系统设置中允许面试稳伴随程序录制屏幕，然后重新打开助手。");
+      return false;
+    }
     const segmenters = new Map<AudioSourceKind, SpeechSegmenter>([
       ["microphone", new SpeechSegmenter("microphone")],
       ["system", new SpeechSegmenter("system")],
@@ -604,6 +609,19 @@ export class DesktopRealtimePublisher {
     markNativeSourcePending("microphone");
     markNativeSourcePending("system");
 
+    let startupTimer: ReturnType<typeof setTimeout> | null = null;
+    let settleStartup: (started: boolean) => void = () => undefined;
+    const nativeStartup = new Promise<boolean>((resolve) => {
+      let settled = false;
+      settleStartup = (started) => {
+        if (settled) return;
+        settled = true;
+        if (startupTimer) clearTimeout(startupTimer);
+        resolve(started);
+      };
+      startupTimer = setTimeout(() => settleStartup(false), 8_000);
+    });
+
     const unsubscribe = window.offersteady.onNativeAudioEvent((event) => {
       if (this.stopped) return;
       if (event.sourceKind !== "microphone" && event.sourceKind !== "system") return;
@@ -611,6 +629,7 @@ export class DesktopRealtimePublisher {
       const sourceId = event.sourceId || sourceIds[sourceKind];
       if (event.type === "status") {
         if (event.errorCode) {
+          if (sourceKind === "system") settleStartup(false);
           this.updateHealth({
             sourceId,
             sourceKind,
@@ -624,6 +643,7 @@ export class DesktopRealtimePublisher {
           if (event.message) this.options.onFailure(event.message);
           return;
         }
+        if (sourceKind === "system") settleStartup(true);
         this.updateHealth({
           sourceId,
           sourceKind,
@@ -636,6 +656,7 @@ export class DesktopRealtimePublisher {
         return;
       }
       if (event.type !== "frame" || !event.audioBase64) return;
+      if (sourceKind === "system") settleStartup(true);
       const payloadBytes = base64ToBytes(event.audioBase64);
       if (payloadBytes.byteLength === 0) return;
       const capturedAtMs = event.capturedAtMs ?? Date.now();
@@ -712,6 +733,7 @@ export class DesktopRealtimePublisher {
         captureSystem: true,
       });
       if (!result.ok) {
+        settleStartup(false);
         unsubscribe();
         return false;
       }
@@ -720,7 +742,16 @@ export class DesktopRealtimePublisher {
       }
       systemStarted = result.systemStarted !== false;
     } catch {
+      settleStartup(false);
       unsubscribe();
+      return false;
+    }
+
+    if (systemStarted) systemStarted = await nativeStartup;
+    if (!systemStarted) {
+      unsubscribe();
+      await window.offersteady?.stopNativeAudioStream?.().catch(() => undefined);
+      segmenters.clear();
       return false;
     }
 

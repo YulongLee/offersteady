@@ -50,6 +50,12 @@ struct NativeAudioStreamEvent: Encodable {
     let message: String?
 }
 
+struct ScreenPermissionRequestResult: Encodable {
+    let granted: Bool
+    let permission: String
+    let message: String
+}
+
 func architectureName() -> String {
     #if arch(arm64)
     return "arm64"
@@ -80,6 +86,17 @@ func screenPermissionName() -> String {
         return "granted"
     }
     return "not-granted"
+}
+
+func requestScreenPermission() -> ScreenPermissionRequestResult {
+    let granted = CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess()
+    return ScreenPermissionRequestResult(
+        granted: granted,
+        permission: granted ? "granted" : "not-granted",
+        message: granted
+            ? "Screen capture/system audio permission is granted."
+            : "Screen capture/system audio permission was not granted. Enable it in System Settings, then restart OfferSteady Companion."
+    )
 }
 
 func runtimeHealth() -> RuntimeHealth {
@@ -855,6 +872,8 @@ case "probe-microphone":
     try writeJson(probeMicrophone(durationMs: durationMs))
 case "probe-system":
     try writeJson(probeSystemAudio(durationMs: durationMs))
+case "request-screen-permission":
+    try writeJson(requestScreenPermission())
 case "stream-microphone":
     try streamMicrophone(sourceId: firstValue)
 case "stream-system":

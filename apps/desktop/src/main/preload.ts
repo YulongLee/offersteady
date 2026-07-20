@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld("offersteady", {
   probeWebUrl: (url: string) => ipcRenderer.invoke("desktop:probe-web-url", url),
   apiRequest: (request: { url: string; method?: string; headers?: Record<string, string>; body?: string | null }) => ipcRenderer.invoke("desktop:api-request", request),
   requestMicrophoneAccess: () => ipcRenderer.invoke("desktop:request-microphone-access"),
+  requestScreenCaptureAccess: () => ipcRenderer.invoke("desktop:request-screen-capture-access"),
   openPermissionSettings: (kind: "microphone" | "screen" | "camera" | "audio") => ipcRenderer.invoke("desktop:open-permission-settings", kind),
   requestClose: () => ipcRenderer.send("app:close"),
 });
