@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "generatedAtMs": 1784568932119,
+  "entries": [
+    {
+      "id": "mac-arm64-local-dev",
+      "platform": "macos",
+      "architecture": "arm64",
+      "displayName": "macOS Apple Silicon 测试版",
+      "version": "0.1.0",
+      "minimumOs": "macOS 14.2+",
+      "fileName": "OfferSteady-Companion-0.1.0-macOS-arm64.zip",
+      "fileSizeBytes": 121379425,
+      "sha256": "6daecacb28b93a9d246486e32c695238ea0cbcc09a46cc106b3e2b3d0bee38ae",
+      "signingStatus": "local-development",
+      "notarized": false,
+      "publishedAtMs": 1784568932119,
+      "protocolVersion": "2.0",
+      "developmentOnly": true,
+      "objectKey": "desktop-releases/macos/arm64/0.1.0/OfferSteady-Companion-0.1.0-macOS-arm64.zip",
+      "capabilities": {
+        "microphone": true,
+        "systemAudio": true,
+        "manualInputFallback": true,
+        "screenshotFallback": true
+      }
+    }
+  ]
+}

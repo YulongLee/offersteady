@@ -22,6 +22,17 @@ A downloadable entry MUST include version, minimum OS, file size, SHA-256 checks
 - **WHEN** a user chooses a verified package
 - **THEN** the page presents the correct artifact plus checksum, minimum OS and installation help
 
+#### Scenario: Owner publishes an explicitly labeled prototype test build
+- **WHEN** an owner-authorized release workflow publishes an ad-hoc macOS arm64 artifact during the prototype stage
+- **THEN** the page MAY expose it as a clearly labeled test build with checksum and installation warning, and MUST NOT describe it as signed, notarized or production-ready
+
+### Requirement: Web download actions SHALL resolve through a server-controlled artifact URL
+The Web client MUST receive a same-origin download URL and MUST NOT receive localhost paths, OSS credentials or permanent private-bucket URLs. The backend SHALL resolve the selected manifest entry and issue a short-lived OSS download redirect.
+
+#### Scenario: User downloads the current macOS arm64 test build
+- **WHEN** the user clicks the active download action on `/app/devices`
+- **THEN** the browser requests the same-origin backend download endpoint and follows its short-lived OSS redirect to the exact manifest artifact
+
 ### Requirement: Runtime capability is distinct from package compatibility
 The desktop companion SHALL report actual microphone, system-audio and protocol capabilities after installation. The Web interface MUST degrade to available input modes when a platform capability is absent and MUST NOT infer capture support solely from the downloaded package name.
 
@@ -35,4 +46,3 @@ Only an authorized release workflow SHALL publish, replace or withdraw manifest 
 #### Scenario: Release is withdrawn after discovery
 - **WHEN** administrators withdraw a compromised or faulty artifact
 - **THEN** new download requests no longer receive its URL and existing clients receive an upgrade or safety notice according to policy
-

@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     oss_access_key_id: str | None = None
     oss_access_key_secret: str | None = None
     oss_upload_intent_ttl_seconds: int = 900
+    desktop_release_download_ttl_seconds: int = 600
 
     material_max_file_size_bytes: int = 50 * 1024 * 1024
     material_max_page_count: int = 50

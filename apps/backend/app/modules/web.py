@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import FileResponse, RedirectResponse
 
 from app.core.config import get_settings
 from app.core.logging import utc_now_iso
@@ -46,19 +47,54 @@ def _desktop_release_dir() -> Path:
     return Path(__file__).resolve().parents[4] / "apps" / "desktop" / "release"
 
 
+def _published_desktop_manifest_path() -> Path:
+    return Path(__file__).resolve().parents[1] / "desktop_release_manifest.json"
+
+
+def _published_desktop_manifest() -> dict[str, object] | None:
+    manifest_path = _published_desktop_manifest_path()
+    if not manifest_path.is_file():
+        return None
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) and isinstance(payload.get("entries"), list) else None
+
+
+def _published_desktop_entry(filename: str) -> dict[str, object] | None:
+    manifest = _published_desktop_manifest()
+    if manifest is None:
+        return None
+    return next((entry for entry in manifest["entries"] if isinstance(entry, dict) and entry.get("fileName") == filename), None)
+
+
 @router.get("/downloads/desktop/{filename}")
-async def download_desktop_artifact(filename: str) -> FileResponse:
+async def download_desktop_artifact(
+    filename: str,
+    storage: FileStoragePort = Depends(storage_port),
+) -> Response:
     if "/" in filename or "\\" in filename or not filename.startswith("OfferSteady-Companion-") or not filename.endswith((".zip", ".dmg")):
         raise HTTPException(status_code=404, detail="Desktop artifact not found")
     release_dir = _desktop_release_dir().resolve()
     artifact = (release_dir / filename).resolve()
-    if not artifact.is_file() or not artifact.is_relative_to(release_dir):
+    if artifact.is_file() and artifact.is_relative_to(release_dir):
+        return FileResponse(
+            path=str(artifact),
+            filename=artifact.name,
+            media_type="application/zip" if artifact.suffix == ".zip" else "application/x-apple-diskimage",
+        )
+    entry = _published_desktop_entry(filename)
+    object_key = entry.get("objectKey") if entry else None
+    if not isinstance(object_key, str) or not object_key:
         raise HTTPException(status_code=404, detail="Desktop artifact not found")
-    return FileResponse(
-        path=str(artifact),
-        filename=artifact.name,
-        media_type="application/zip" if artifact.suffix == ".zip" else "application/x-apple-diskimage",
+    signed_url = storage.create_signed_download_url(
+        object_key=object_key,
+        expires_seconds=get_settings().desktop_release_download_ttl_seconds,
     )
+    if not signed_url:
+        raise HTTPException(status_code=503, detail="Desktop artifact storage is unavailable")
+    return RedirectResponse(url=signed_url, status_code=307)
 
 
 def _account_payload(user: UserRecord | None) -> dict[str, object]:
@@ -97,6 +133,24 @@ def _account_payload(user: UserRecord | None) -> dict[str, object]:
 
 
 def _release_manifest() -> dict[str, object]:
+    published = _published_desktop_manifest()
+    if published is not None:
+        public_entries: list[dict[str, object]] = []
+        for raw_entry in published["entries"]:
+            if not isinstance(raw_entry, dict):
+                continue
+            entry = {key: value for key, value in raw_entry.items() if key != "objectKey"}
+            filename = entry.pop("fileName", None)
+            if isinstance(filename, str) and filename:
+                download_url = f"/api/v1/web/downloads/desktop/{filename}"
+                entry["downloadUrl"] = download_url
+                entry["localPath"] = download_url
+            public_entries.append(entry)
+        return {
+            "version": int(published.get("version", 1)),
+            "generatedAtMs": int(published.get("generatedAtMs", 0)),
+            "entries": public_entries,
+        }
     now_ms = 1_719_734_400_000
     desktop_release_dir = _desktop_release_dir()
     metadata_files = sorted(
@@ -119,8 +173,6 @@ def _release_manifest() -> dict[str, object]:
     local_filename = None
     local_version = "0.1.0-dev"
     if metadata_files:
-        import json
-
         metadata = json.loads(metadata_files[0].read_text(encoding="utf-8"))
         zip_path = Path(str(metadata.get("zipPath", "")))
         if zip_path.is_file() and zip_path.resolve().is_relative_to(desktop_release_dir.resolve()):
@@ -135,7 +187,7 @@ def _release_manifest() -> dict[str, object]:
             local_sha = hashlib.sha256(local_bytes).hexdigest()
             local_size = local_artifact.stat().st_size
             local_filename = local_artifact.name
-        local_path = f"http://127.0.0.1:8000/api/v1/web/downloads/desktop/{local_filename}"
+        local_path = f"/api/v1/web/downloads/desktop/{local_filename}"
     return {
         "version": 1,
         "generatedAtMs": now_ms,

@@ -76,12 +76,13 @@
 - [x] 7.2 Add macOS arm64, macOS x64 and Windows x64 build targets to the release pipeline
 - [ ] 7.3 Configure macOS Developer ID signing, notarization and artifact verification
 - [ ] 7.4 Configure Windows code signing, installer verification and safe uninstall metadata
-- [ ] 7.5 Generate file size, SHA-256, minimum OS, publication time and protocol compatibility metadata
+- [x] 7.5 Generate file size, SHA-256, minimum OS, publication time and protocol compatibility metadata
 - [x] 7.6 Build three explicit download cards with automatic recommendation and manual selection
 - [x] 7.7 Add “how to check your chip/architecture” and platform-specific installation help
 - [x] 7.8 Hide active download actions for unsigned, incomplete, withdrawn or incompatible artifacts
 - [x] 7.9 Drive post-install capture UI from runtime capabilities rather than package labels
 - [ ] 7.10 Add manifest authorization, checksum, withdrawal, wrong-architecture and capability-degradation tests
+- [x] 7.11 Publish the prototype macOS arm64 artifact to OSS and expose a same-origin direct-download action with a short-lived signed redirect
 
 ## 8. Windows Companion Foundation
 
