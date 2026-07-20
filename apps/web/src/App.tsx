@@ -541,6 +541,7 @@ function LivePage() {
     let stopped = false;
     let heartbeatBindingId: string | null = null;
     let reconnectTimer: number | null = null;
+    let realtimeLoadInFlight = false;
     const realtimeController = new AbortController();
     const applyRealtimeState = (realtime: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => {
       if (stopped) return;
@@ -562,11 +563,15 @@ function LivePage() {
       }
     };
     const loadRealtime = async () => {
+      if (realtimeLoadInFlight || stopped || document.visibilityState !== "visible") return;
+      realtimeLoadInFlight = true;
       try {
         const realtime = await runAdapterOperation(signal => interviewAppAdapter.loadRealtimeSession(id, signal));
         applyRealtimeState(realtime);
       } catch {
         // Keep manual question and screenshot flows available when realtime sync is temporarily unavailable.
+      } finally {
+        realtimeLoadInFlight = false;
       }
     };
     const scheduleReconnect = () => {
@@ -585,6 +590,7 @@ function LivePage() {
     };
     void sendHeartbeat();
     const heartbeatTimer = window.setInterval(() => void sendHeartbeat(), 3000);
+    const realtimePollTimer = window.setInterval(() => void loadRealtime(), 1500);
     const sendForegroundHeartbeat = () => {
       if (!stopped && document.visibilityState === "visible") void sendHeartbeat();
     };
@@ -598,6 +604,7 @@ function LivePage() {
       realtimeController.abort();
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       window.clearInterval(heartbeatTimer);
+      window.clearInterval(realtimePollTimer);
       document.removeEventListener("visibilitychange", sendForegroundHeartbeat);
       window.removeEventListener("focus", sendForegroundHeartbeat);
       window.removeEventListener("online", sendForegroundHeartbeat);
