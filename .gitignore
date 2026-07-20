@@ -41,6 +41,7 @@ apps/backend/artifacts/
 # Temporary files
 .cache/
 tmp/
+.offersteady-deployed-commit
 
 # Sensitive user-provided raw data
 uploads/
