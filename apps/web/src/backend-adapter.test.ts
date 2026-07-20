@@ -264,7 +264,7 @@ describe("backend preview adapter", () => {
     const updates: unknown[] = [];
     await adapter.subscribeRealtimeSession("session-1", state => updates.push(state));
     expect(fetchImpl).toHaveBeenCalledWith(
-      "http://localhost:8000/api/v1/realtime-speech/sessions/session-1/stream?userId=user-1",
+      "http://localhost:8000/api/v1/realtime-speech/sessions/session-1/stream?userId=user-1&cursor=0",
       expect.objectContaining({
         method: "GET",
         headers: expect.objectContaining({ Accept: "text/event-stream" }),

@@ -660,7 +660,10 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       stopped = true;
       window.clearInterval(interval);
     };
-  }, [config, pairingIdentity, microphoneSources, permissions, activeBinding, selectedMicrophoneId, selectedSystemAudioId]);
+    // Dynamic capability values are read when this stable loop runs. Keeping the
+    // loop independent from status updates prevents abandoned IPC requests.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config, pairingIdentity]);
 
   useEffect(() => {
     if (!config || !pairingIdentity) return;
@@ -838,7 +841,10 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       stopped = true;
       window.clearInterval(interval);
     };
-  }, [captureDiagnostic, config, pairingIdentity, selectedMicrophoneId, selectedSystemAudioId, microphoneSources, permissions, screenReady, nativeRuntimeReady, nativeRuntimeHealth]);
+    // Source health changes several times per second. They must not recreate the
+    // binding poller because an in-flight IPC request cannot be cancelled by React.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config, pairingIdentity]);
 
   useEffect(() => {
     if (nativeRuntimeHealth?.available !== false || publisherHasTakenOver || !selectedSystemAudioId) {

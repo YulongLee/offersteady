@@ -15,6 +15,9 @@ def test_log_redaction_removes_material_and_provider_sensitive_fields() -> None:
         "embedding": [0.1, 0.2],
         "nested": {"api_key": "sk-test", "safe_count": 2},
         "prompt_tokens": 42,
+        "audioBase64": "raw-pcm",
+        "transcriptText": "private interview content",
+        "token": "rt-secret",
     }
 
     redacted = redact_log_value(payload)
@@ -26,6 +29,9 @@ def test_log_redaction_removes_material_and_provider_sensitive_fields() -> None:
     assert redacted["nested"]["api_key"] == "[redacted]"
     assert redacted["nested"]["safe_count"] == 2
     assert redacted["prompt_tokens"] == 42
+    assert redacted["audioBase64"] == "[redacted]"
+    assert redacted["transcriptText"] == "[redacted]"
+    assert redacted["token"] == "[redacted]"
 
 
 def test_log_event_serializes_redacted_payload(caplog) -> None:

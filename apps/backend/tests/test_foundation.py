@@ -1405,7 +1405,7 @@ def test_realtime_speech_websocket_generates_transcript_question_and_answer() ->
             "type": "audio-frame",
             "deviceId": "device-realtime-1",
             "sourceId": "system-loopback",
-            "sequence": 1,
+            "sequence": 0,
             "sourceKind": "system",
             "segmentId": "seg-system-1",
             "revision": 1,
@@ -1470,7 +1470,6 @@ def test_realtime_speech_websocket_reports_asr_degraded_without_closing_stream()
             "type": "audio-frame",
             "deviceId": "device-realtime-recover",
             "sourceId": "mic-default",
-            "sequence": 1,
             "sourceKind": "microphone",
             "segmentId": "seg-mic-failed",
             "revision": 1,
@@ -1588,6 +1587,7 @@ def test_realtime_ingest_websocket_acknowledges_immediately_and_persists_transcr
             "capturedAtMs": 1000,
             "sentAtMs": 1010,
             "traceId": "trace-ingest-ws-1",
+            "sequence": 0,
             "startedAtMs": 1000,
             "endedAtMs": 1800,
             "durationMs": 800,
@@ -1599,7 +1599,7 @@ def test_realtime_ingest_websocket_acknowledges_immediately_and_persists_transcr
         })
         accepted = websocket.receive_json()
         assert accepted["kind"] == "frame-accepted"
-        assert accepted["payload"]["sequence"] == 1
+        assert accepted["payload"]["sequence"] == 0
         assert accepted["payload"]["traceId"] == "trace-ingest-ws-1"
 
     deadline = time() + 2.0

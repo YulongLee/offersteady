@@ -25,7 +25,7 @@ export const createAudioFrame = (
   input: CreateFrameInput,
 ): AudioFrame => ({
   ...input,
-  sequence: sequencer.next(input.sourceId),
+  sequence: sequencer.next(input.sourceKind),
   codec: "pcm-s16le",
   sampleRateHz: 16_000,
   channels: 1,

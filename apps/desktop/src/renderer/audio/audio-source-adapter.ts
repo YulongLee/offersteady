@@ -140,8 +140,9 @@ export class MicrophoneAudioAdapter implements AudioSourceAdapter {
       }
     }
     const audioTrack = stream.getAudioTracks()[0];
+    const trackSettings = audioTrack && typeof audioTrack.getSettings === "function" ? audioTrack.getSettings() : undefined;
     const descriptor: AudioSourceDescriptor = {
-      id: audioTrack?.getSettings().deviceId ?? normalizedSourceId ?? audioTrack?.id ?? "microphone-default",
+      id: trackSettings?.deviceId ?? normalizedSourceId ?? audioTrack?.id ?? "microphone-default",
       kind: this.kind,
       label: audioTrack?.label || "默认麦克风",
       available: true,
@@ -164,9 +165,9 @@ export class SystemAudioAdapter implements AudioSourceAdapter {
   }
 
   async open(): Promise<OpenAudioSource> {
-    const attempts: Array<{ readonly audio: DisplayMediaStreamOptions["audio"]; readonly video: DisplayMediaStreamOptions["video"] }> = [
+    const attempts: Array<{ readonly audio: Exclude<DisplayMediaStreamOptions["audio"], undefined>; readonly video: Exclude<DisplayMediaStreamOptions["video"], undefined> }> = [
       {
-        audio: { systemAudio: "include", suppressLocalAudioPlayback: false } as unknown as DisplayMediaStreamOptions["audio"],
+        audio: { systemAudio: "include", suppressLocalAudioPlayback: false } as unknown as Exclude<DisplayMediaStreamOptions["audio"], undefined>,
         video: { frameRate: 1, width: 2, height: 2 },
       },
       {
@@ -183,21 +184,22 @@ export class SystemAudioAdapter implements AudioSourceAdapter {
     let lastError: unknown;
     for (const attempt of attempts) {
       try {
-        stream = await this.mediaDevices.getDisplayMedia({
+        const candidate = await this.mediaDevices.getDisplayMedia({
           audio: attempt.audio,
           video: attempt.video,
         });
-        break;
+        if (candidate.getAudioTracks().length > 0) {
+          stream = candidate;
+          break;
+        }
+        closeStream(candidate);
+        lastError = new Error("system-audio-unavailable");
       } catch (error) {
         lastError = error;
       }
     }
     if (!stream) throw lastError ?? new Error("system-audio-unavailable");
 
-    if (stream.getAudioTracks().length === 0) {
-      closeStream(stream);
-      throw new Error("system-audio-unavailable: 请允许录屏与系统录音、仅系统录音；耳机播放也属于电脑输出");
-    }
     const descriptor: AudioSourceDescriptor = {
       id: "system-loopback",
       kind: this.kind,

@@ -261,6 +261,7 @@ interface BackendRealtimeRuntimeResponse {
 
 interface BackendRealtimeSessionStreamEvent {
   readonly type: "snapshot";
+  readonly cursor?: number;
   readonly transcripts: BackendRealtimeTranscriptListResponse;
   readonly candidates: BackendRealtimeQuestionCandidateListResponse;
   readonly events: BackendRealtimeEventListResponse;
@@ -690,6 +691,9 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   }
 
   async subscribeRealtimeSession(interviewId: string, onUpdate: (state: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => void, signal?: AbortSignal) {
+    const cursorKey = `offersteady:realtime-cursor:${interviewId}`;
+    const storedCursor = typeof window.sessionStorage?.getItem === "function" ? Number(window.sessionStorage.getItem(cursorKey) ?? "0") : 0;
+    const cursor = Number.isFinite(storedCursor) && storedCursor > 0 ? storedCursor : 0;
     const requestInit: RequestInit = {
       method: "GET",
       headers: {
@@ -698,7 +702,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       },
     };
     if (signal) requestInit.signal = signal;
-    const response = await this.fetchImpl(withBaseUrl(this.baseUrl, `/api/v1/realtime-speech/sessions/${interviewId}/stream?userId=${encodeURIComponent(requireUserId())}`), requestInit);
+    const response = await this.fetchImpl(withBaseUrl(this.baseUrl, `/api/v1/realtime-speech/sessions/${interviewId}/stream?userId=${encodeURIComponent(requireUserId())}&cursor=${cursor}`), requestInit);
     if (!response.ok) throw new AppError("validation", `实时对话订阅失败（${response.status}）`);
     if (!response.body) throw new AppError("network", "当前浏览器不支持实时对话订阅读取");
     const reader = response.body.getReader();
@@ -712,6 +716,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         const payload = pendingSnapshot;
         pendingSnapshot = null;
         if (!payload || payload.type !== "snapshot") return;
+        if (typeof payload.cursor === "number") window.sessionStorage?.setItem(cursorKey, String(payload.cursor));
         onUpdate(mapRealtimeState(interviewId, payload.transcripts, payload.candidates, payload.events, payload.runtime));
       };
       flushHandle = typeof requestAnimationFrame === "function"

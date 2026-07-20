@@ -1,4 +1,17 @@
 services:
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis-data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   postgres:
     image: pgvector/pgvector:pg16
     environment:
@@ -28,6 +41,10 @@ services:
     environment:
       OFFERSTEADY_ENV: ${OFFERSTEADY_ENV:-development}
       OFFERSTEADY_DATABASE_URL: ${OFFERSTEADY_DATABASE_URL:-postgresql://offersteady:offersteady@postgres:5432/offersteady}
+      OFFERSTEADY_REDIS_URL: ${OFFERSTEADY_REDIS_URL:-redis://redis:6379/0}
+      OFFERSTEADY_REDIS_REALTIME_REQUIRED: ${OFFERSTEADY_REDIS_REALTIME_REQUIRED:-true}
+      OFFERSTEADY_REALTIME_TRANSPORT_MODE: ${OFFERSTEADY_REALTIME_TRANSPORT_MODE:-websocket-v2}
+      OFFERSTEADY_REALTIME_LEGACY_HTTP_ENABLED: ${OFFERSTEADY_REALTIME_LEGACY_HTTP_ENABLED:-false}
       OFFERSTEADY_OSS_BUCKET: ${OFFERSTEADY_OSS_BUCKET:-local-materials}
       OFFERSTEADY_OSS_ENDPOINT: ${OFFERSTEADY_OSS_ENDPOINT:-https://oss-cn-hangzhou.aliyuncs.com}
       OFFERSTEADY_OSS_REGION: ${OFFERSTEADY_OSS_REGION:-cn-hangzhou}
@@ -35,6 +52,8 @@ services:
       OFFERSTEADY_OSS_ACCESS_KEY_SECRET: ${OFFERSTEADY_OSS_ACCESS_KEY_SECRET:-placeholder-access-secret}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       - "${BACKEND_PORT:-8000}:8000"
@@ -60,3 +79,4 @@ services:
 
 volumes:
   postgres-data:
+  redis-data:

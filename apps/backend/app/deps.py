@@ -76,6 +76,7 @@ from .services.screenshot_answer_service import (
     SyntheticVisionGateway,
 )
 from .services.realtime_speech_repository import InMemoryRealtimeSpeechRepository
+from .services.redis_realtime_speech_repository import RedisRealtimeSpeechRepository
 from .services.dashscope_realtime_asr_gateway import DashScopeRealtimeAsrGateway
 from .services.realtime_speech_service import RealtimeSpeechService, SyntheticRealtimeAsrGateway
 
@@ -361,6 +362,13 @@ def realtime_speech_repository() -> RealtimeSpeechRepository:
     settings = get_settings()
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return InMemoryRealtimeSpeechRepository()
+    if settings.redis_url:
+        try:
+            return RedisRealtimeSpeechRepository(settings)
+        except Exception:
+            if settings.environment == "production" or settings.redis_realtime_required:
+                raise
+            logger().warning("realtime_redis_unavailable_falling_back_to_local_state")
     state_file = settings.realtime_speech_state_file
     if not os.path.isabs(state_file):
         state_file = str((REPO_ROOT / state_file).resolve())

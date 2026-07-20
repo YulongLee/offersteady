@@ -571,7 +571,7 @@ function LivePage() {
     };
     const scheduleReconnect = () => {
       if (stopped || realtimeController.signal.aborted) return;
-      reconnectTimer = window.setTimeout(() => { void subscribeRealtime(); }, 240);
+      reconnectTimer = window.setTimeout(() => { void subscribeRealtime(); }, 1000);
     };
     const subscribeRealtime = async () => {
       try {

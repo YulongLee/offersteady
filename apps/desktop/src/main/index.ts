@@ -35,8 +35,48 @@ let mainRealtimeOwnsNativeAudio = false;
 let rendererOwnsNativeAudio = false;
 let desktopRegistrationInFlight = false;
 let remoteScreenshotPollInFlight = false;
+const activeDesktopRequestControllers = new Set<AbortController>();
+const desktopApiRequestsInFlight = new Map<string, Promise<DesktopApiRequestResult>>();
 const SCREENSHOT_VISION_MAX_LONG_EDGE = 1600;
 const SCREENSHOT_VISION_JPEG_QUALITY = 72;
+const DESKTOP_CONTROL_REQUEST_TIMEOUT_MS = 8_000;
+const DESKTOP_AUDIO_REQUEST_TIMEOUT_MS = 12_000;
+const DESKTOP_UPLOAD_REQUEST_TIMEOUT_MS = 30_000;
+
+interface DesktopApiRequestResult {
+  readonly ok: boolean;
+  readonly status: number;
+  readonly statusText: string;
+  readonly headers: Record<string, string>;
+  readonly bodyText: string;
+}
+
+const fetchWithTimeout = async (
+  input: string | URL,
+  init: RequestInit = {},
+  timeoutMs = DESKTOP_CONTROL_REQUEST_TIMEOUT_MS,
+) => {
+  const controller = new AbortController();
+  const callerSignal = init.signal;
+  const abortFromCaller = () => controller.abort(callerSignal?.reason);
+  if (callerSignal?.aborted) abortFromCaller();
+  else callerSignal?.addEventListener("abort", abortFromCaller, { once: true });
+  activeDesktopRequestControllers.add(controller);
+  const timeout = setTimeout(() => controller.abort(new Error("desktop_request_timeout")), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+    callerSignal?.removeEventListener("abort", abortFromCaller);
+    activeDesktopRequestControllers.delete(controller);
+  }
+};
+
+const abortPendingDesktopRequests = () => {
+  for (const controller of activeDesktopRequestControllers) controller.abort(new Error("desktop_app_quitting"));
+  activeDesktopRequestControllers.clear();
+  desktopApiRequestsInFlight.clear();
+};
 
 const emitNativeAudioEvent = (event: Record<string, unknown>) => {
   mainWindow?.webContents.send("desktop:native-audio-event", event);
@@ -217,7 +257,7 @@ const createMainRealtimePublisher = async (
   binding: { sessionId: string; ownerUserId: string; displayName?: string },
   sourceKind: "microphone" | "system",
 ) => {
-  const response = await fetch(desktopApiUrl("/realtime-speech/publishers"), {
+  const response = await fetchWithTimeout(desktopApiUrl("/realtime-speech/publishers"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -271,7 +311,7 @@ const ensureMainRealtimePublisher = async (sourceKind: "microphone" | "system", 
 const getLiveDesktopBinding = async () => {
   if (!pairingIdentityStore) return null;
   const identity = await pairingIdentityStore.loadOrCreate(`${app.getName()} · ${process.platform === "darwin" ? "Mac" : "Desktop"}`);
-  const response = await fetch(desktopApiUrl(`/realtime-speech/desktop-devices/pairing-status?manualCode=${encodeURIComponent(identity.manualCode)}&deviceId=${encodeURIComponent(identity.deviceId)}`));
+  const response = await fetchWithTimeout(desktopApiUrl(`/realtime-speech/desktop-devices/pairing-status?manualCode=${encodeURIComponent(identity.manualCode)}&deviceId=${encodeURIComponent(identity.deviceId)}`));
   if (!response.ok) return null;
   const envelope = await response.json() as {
     data?: {
@@ -338,7 +378,7 @@ const publishNativeAudioEventFromMain = async (event: Record<string, unknown>) =
   const durationMs = typeof event.durationMs === "number" ? event.durationMs : 20;
   const sampleRateHz = typeof event.sampleRateHz === "number" ? event.sampleRateHz : 16_000;
   const channels = event.channels === 2 ? 2 : 1;
-  const response = await fetch(desktopApiUrl("/realtime-speech/frames"), {
+  const response = await fetchWithTimeout(desktopApiUrl("/realtime-speech/frames"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -362,7 +402,7 @@ const publishNativeAudioEventFromMain = async (event: Record<string, unknown>) =
       sentAtMs: Date.now(),
       audioBase64: event.audioBase64,
     }),
-  });
+  }, DESKTOP_AUDIO_REQUEST_TIMEOUT_MS);
   if (!response.ok) {
     const message = await response.text().catch(() => "");
     throw new Error(`main_frame_publish_failed_${response.status}:${message.slice(0, 200)}`);
@@ -370,7 +410,11 @@ const publishNativeAudioEventFromMain = async (event: Record<string, unknown>) =
 };
 
 const startMainRealtimeAudioLoop = () => {
+  // Protocol v2 has one renderer transport fed by the native Swift runtime.
+  // Keep the legacy main-process HTTP publisher stopped to avoid duplicates.
   if (realtimeAudioInterval) clearInterval(realtimeAudioInterval);
+  realtimeAudioInterval = null;
+  if (process.env.OFFERSTEADY_ENABLE_LEGACY_MAIN_AUDIO !== "1") return;
   void ensureMainRealtimeAudioPublishing().catch((error) => console.warn("[main-realtime-audio] ensure failed", error));
   realtimeAudioInterval = setInterval(() => {
     void ensureMainRealtimeAudioPublishing().catch((error) => console.warn("[main-realtime-audio] ensure failed", error));
@@ -379,7 +423,7 @@ const startMainRealtimeAudioLoop = () => {
 
 const probeWebUrl = async (url: string) => {
   try {
-    const response = await fetch(url, { method: "GET", redirect: "manual" });
+    const response = await fetchWithTimeout(url, { method: "GET", redirect: "manual" }, 5_000);
     return response.status >= 200 && response.status < 500;
   } catch {
     return false;
@@ -427,7 +471,7 @@ const syncDesktopRegistration = async () => {
     const endpoint = hasRegisteredThisRun
       ? `${config.apiBaseUrl}/realtime-speech/desktop-devices/${encodeURIComponent(identity.deviceId)}/heartbeat`
       : `${config.apiBaseUrl}/realtime-speech/desktop-devices/register`;
-    const response = await fetch(endpoint, {
+    const response = await fetchWithTimeout(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -438,6 +482,7 @@ const syncDesktopRegistration = async () => {
       }),
     });
     if (!response.ok) {
+      if (hasRegisteredThisRun && response.status === 404) hasRegisteredThisRun = false;
       console.warn(`[desktop-registration] failed with status ${response.status}`);
       return false;
     }
@@ -569,10 +614,10 @@ const uploadScreenshotCapture = async (request: {
   form.append("deviceId", request.deviceId);
   form.append("manualCode", request.manualCode);
   form.append("screenshot", new Blob([binary], { type: mimeType }), request.filename);
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     method: "POST",
     body: form,
-  });
+  }, DESKTOP_UPLOAD_REQUEST_TIMEOUT_MS);
   return {
     ok: response.ok,
     status: response.status,
@@ -584,7 +629,7 @@ const uploadScreenshotCapture = async (request: {
 
 const reportRemoteScreenshotFailure = async (identity: { deviceId: string; manualCode: string }, requestId: string, message: string, stage = "capture-failed") => {
   try {
-    await fetch(desktopApiUrl(`/screenshot-answer/capture-requests/${encodeURIComponent(requestId)}/desktop-fail`), {
+    await fetchWithTimeout(desktopApiUrl(`/screenshot-answer/capture-requests/${encodeURIComponent(requestId)}/desktop-fail`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -602,7 +647,7 @@ const reportRemoteScreenshotFailure = async (identity: { deviceId: string; manua
 const pollRemoteScreenshotRequest = async () => {
   if (!pairingIdentityStore || processingRemoteScreenshotRequestId) return;
   const identity = await pairingIdentityStore.loadOrCreate(`${app.getName()} · ${process.platform === "darwin" ? "Mac" : "Desktop"}`);
-  const response = await fetch(desktopApiUrl(`/screenshot-answer/desktop-devices/${encodeURIComponent(identity.deviceId)}/capture-requests/next?manualCode=${encodeURIComponent(identity.manualCode)}`));
+  const response = await fetchWithTimeout(desktopApiUrl(`/screenshot-answer/desktop-devices/${encodeURIComponent(identity.deviceId)}/capture-requests/next?manualCode=${encodeURIComponent(identity.manualCode)}`));
   if (!response.ok) return;
   const envelope = await response.json() as { data?: { requestId: string; status: string } | null };
   const request = envelope.data;
@@ -819,18 +864,39 @@ ipcMain.handle("desktop:probe-web-url", async (_event, url: string) => probeWebU
 
 ipcMain.handle("desktop:api-request", async (_event, request: { url: string; method?: string; headers?: Record<string, string>; body?: string | null }) => {
   const url = assertOfferSteadyApiUrl(request.url);
-  const response = await fetch(url, {
-    method: request.method ?? "GET",
-    headers: request.headers,
-    body: request.body ?? undefined,
-  });
-  return {
-    ok: response.ok,
-    status: response.status,
-    statusText: response.statusText,
-    headers: Object.fromEntries(response.headers.entries()),
-    bodyText: await response.text(),
+  const method = (request.method ?? "GET").toUpperCase();
+  const isAudioFrame = new URL(url).pathname.endsWith("/realtime-speech/frames");
+  const canCoalesce = !isAudioFrame && (method === "GET"
+    || url.includes("/desktop-devices/register")
+    || url.includes("/desktop-devices/") && url.includes("/heartbeat")
+    || url.includes("/device-status"));
+  const requestKey = canCoalesce ? `${method}:${url}:${request.body ?? ""}` : null;
+  if (requestKey) {
+    const pending = desktopApiRequestsInFlight.get(requestKey);
+    if (pending) return pending;
+  }
+  const execute = async (): Promise<DesktopApiRequestResult> => {
+    const response = await fetchWithTimeout(url, {
+      method,
+      headers: request.headers,
+      body: request.body ?? undefined,
+    }, isAudioFrame ? DESKTOP_AUDIO_REQUEST_TIMEOUT_MS : DESKTOP_CONTROL_REQUEST_TIMEOUT_MS);
+    return {
+      ok: response.ok,
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries()),
+      bodyText: await response.text(),
+    };
   };
+  const promise = execute();
+  if (!requestKey) return promise;
+  desktopApiRequestsInFlight.set(requestKey, promise);
+  try {
+    return await promise;
+  } finally {
+    if (desktopApiRequestsInFlight.get(requestKey) === promise) desktopApiRequestsInFlight.delete(requestKey);
+  }
 });
 
 ipcMain.handle("desktop:request-microphone-access", async () => {
@@ -861,5 +927,6 @@ app.on("before-quit", () => {
     clearInterval(realtimeAudioInterval);
     realtimeAudioInterval = null;
   }
+  abortPendingDesktopRequests();
   stopMainRealtimeAudioPublishing();
 });

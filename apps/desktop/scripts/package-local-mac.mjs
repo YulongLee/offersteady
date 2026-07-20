@@ -210,7 +210,7 @@ const metadata = {
   signingStatus: signIdentity === "-" ? "local-development-ad-hoc" : "local-development-signed",
   signingIdentity: signIdentity,
   notarized: false,
-  protocolVersion: "1.0.0",
+  protocolVersion: "2.0",
   generatedAtMs: Date.now(),
   developmentOnly: true,
   capabilities: {

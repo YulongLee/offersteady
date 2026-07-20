@@ -178,6 +178,33 @@ class RealtimeSpeechService:
                 return dict(payload)
         return {}
 
+    def operational_metrics(self) -> dict[str, object]:
+        import os
+        import resource
+
+        descriptor_root = "/proc/self/fd" if os.path.isdir("/proc/self/fd") else "/dev/fd"
+        try:
+            file_descriptors = len(os.listdir(descriptor_root))
+        except OSError:
+            file_descriptors = -1
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        queues = {
+            f"{session_id}:{source_kind}": work_queue.qsize()
+            for (session_id, source_kind), work_queue in self._frame_queues.items()
+        }
+        return {
+            "activeQueueWorkers": sum(1 for worker in self._frame_workers.values() if worker.is_alive()),
+            "queueDepthByChannel": queues,
+            "queuedFrames": sum(queues.values()),
+            "fileDescriptors": file_descriptors,
+            "maxResidentSetKb": int(usage.ru_maxrss),
+            "asr": {
+                source_kind: self._gateway_diagnostics(source_kind=source_kind)  # type: ignore[arg-type]
+                for source_kind in ("microphone", "system")
+            },
+            "rawAudioPersisted": False,
+        }
+
     def register_desktop_device(self, *, device_id: str, manual_code: str, display_name: str, capabilities: dict[str, object]) -> DesktopDeviceRecord:
         code = manual_code.strip()
         if not code.isdigit() or len(code) != 6:
@@ -402,8 +429,6 @@ class RealtimeSpeechService:
             return False
         if not self._desktop_device_fresh(device):
             return False
-        if not self._web_heartbeat_fresh(user_id=binding.owner_user_id, session_id=binding.session_id) and (_now_ms() - binding.bound_at_ms) > 10_000:
-            return False
         try:
             session_status = self.session_service.get_session(user_id=binding.owner_user_id, session_id=binding.session_id).status
         except DomainRequestError:
@@ -417,8 +442,6 @@ class RealtimeSpeechService:
             return "desktop-generation-changed"
         if not self._desktop_device_fresh(device):
             return "desktop-heartbeat-stale"
-        if not self._web_heartbeat_fresh(user_id=binding.owner_user_id, session_id=binding.session_id) and (_now_ms() - binding.bound_at_ms) > 10_000:
-            return "web-heartbeat-missing"
         try:
             session_status = self.session_service.get_session(user_id=binding.owner_user_id, session_id=binding.session_id).status
         except DomainRequestError:
@@ -614,7 +637,7 @@ class RealtimeSpeechService:
             work_queue = self._frame_queues.get(key)
             worker = self._frame_workers.get(key)
             if work_queue is None:
-                work_queue = queue.Queue()
+                work_queue = queue.Queue(maxsize=max(8, self.settings.realtime_ingress_queue_max_frames))
                 self._frame_queues[key] = work_queue
             if worker is None or not worker.is_alive():
                 worker = threading.Thread(target=self._frame_worker_loop, args=(key, work_queue), daemon=True)
@@ -623,7 +646,15 @@ class RealtimeSpeechService:
             counter_bucket = prepared.get("counter_bucket")
             if isinstance(counter_bucket, dict):
                 counter_bucket["queueDepth"] = max(counter_bucket.get("queueDepth", 0), work_queue.qsize() + 1)
-        work_queue.put(prepared)
+        try:
+            work_queue.put_nowait(prepared)
+        except queue.Full:
+            counter_bucket = prepared.get("counter_bucket")
+            if isinstance(counter_bucket, dict):
+                counter_bucket["droppedPartialUpdates"] = int(counter_bucket.get("droppedPartialUpdates", 0)) + 1
+            frame = prepared.get("frame")
+            if isinstance(frame, AudioFrame) and frame.is_final:
+                work_queue.put(prepared, timeout=0.25)
         return []
 
     def _frame_worker_loop(self, key: tuple[str, RealtimeSourceKind], work_queue: "queue.Queue[dict[str, object]]") -> None:
@@ -1222,7 +1253,7 @@ class RealtimeSpeechService:
     def _transcribe_frame(self, *, publisher: RealtimePublisherRecord, frame: AudioFrame) -> tuple[TranscriptSegmentRecord | None, TranscriptResult]:
         role = "candidate" if frame.source_kind == "microphone" else "interviewer"
         last_error: Exception | None = None
-        asr_timeout_seconds = max(1.0, min(4.0, self.settings.realtime_asr_frame_timeout_seconds))
+        asr_timeout_seconds = self._asr_timeout_seconds(frame)
         for attempt in range(self.settings.realtime_asr_retry_max_attempts + 1):
             try:
                 self.repository.save_publisher(replace(publisher, status="transcribing"))
@@ -1302,6 +1333,15 @@ class RealtimeSpeechService:
         )
         error_code = str(last_error) if last_error and str(last_error).strip() else "asr-failed"
         raise DomainRequestError("realtime-speech", "transcribe", "实时语音转写失败。", 502, error_code=error_code)
+
+    def _asr_timeout_seconds(self, frame: AudioFrame) -> float:
+        configured = max(1.0, float(self.settings.realtime_asr_frame_timeout_seconds))
+        if frame.is_final:
+            configured = max(
+                configured,
+                float(self.settings.realtime_asr_finalize_timeout_seconds) + 1.0,
+            )
+        return min(30.0, configured)
 
     @staticmethod
     def _suppression_reason(text: str, *, frame: AudioFrame) -> str | None:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections import deque
 from time import time
 
 from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisconnect
@@ -34,6 +35,7 @@ from app.services.realtime_speech_service import RealtimeSpeechService
 
 
 router = APIRouter(prefix="/realtime-speech", tags=["realtime-speech"])
+_active_ingest_tokens: set[str] = set()
 descriptor = ModuleDescriptor(
     feature="realtime-speech",
     owningApp="apps/backend",
@@ -43,8 +45,9 @@ descriptor = ModuleDescriptor(
 )
 
 
-def _sse_frame(event: str, payload: dict[str, object]) -> str:
-    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}\n\n"
+def _sse_frame(event: str, payload: dict[str, object], *, cursor: int | None = None) -> str:
+    cursor_line = f"id: {cursor}\n" if cursor is not None else ""
+    return f"{cursor_line}event: {event}\ndata: {json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}\n\n"
 
 
 def _fast_desktop_binding_response(*, session_id: str, user_id: str, device_id: str | None = None, manual_code: str | None = None) -> DesktopDeviceBindingResponse:
@@ -65,10 +68,25 @@ def _fast_desktop_binding_response(*, session_id: str, user_id: str, device_id: 
 
 
 @router.get("/status", response_model=ApiEnvelope[dict[str, str]])
-async def status(request: Request) -> ApiEnvelope[dict[str, str]]:
+async def status(request: Request, service: RealtimeSpeechService = Depends(realtime_speech_service)) -> ApiEnvelope[dict[str, str]]:
+    readiness = getattr(service.repository, "readiness", None)
+    runtime_store = "redis" if callable(readiness) and readiness() else "local"
     return success_response(
         request=request,
-        data={"status": "active", "feature": "realtime-speech", "message": "Realtime Speech Service is available for session-bound streaming transcription and answer triggering."},
+        data={"status": "active", "feature": "realtime-speech", "runtimeStore": runtime_store, "protocolVersion": service.settings.realtime_protocol_version, "transport": service.settings.realtime_transport_mode},
+        timestamp=utc_now_iso(),
+    )
+
+
+@router.get("/metrics", response_model=ApiEnvelope[dict[str, object]])
+async def realtime_metrics(request: Request, service: RealtimeSpeechService = Depends(realtime_speech_service)) -> ApiEnvelope[dict[str, object]]:
+    return success_response(
+        request=request,
+        data={
+            **service.operational_metrics(),
+            "activeDesktopTransports": len(_active_ingest_tokens),
+            "protocolVersion": service.settings.realtime_protocol_version,
+        },
         timestamp=utc_now_iso(),
     )
 
@@ -249,15 +267,24 @@ async def stream_session_runtime(
     session_id: str,
     request: Request,
     user_id: str | None = Query(default=None, alias="userId"),
+    cursor: int = Query(default=0, ge=0),
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> StreamingResponse:
     resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
 
     async def event_stream():
+        last_cursor = cursor
+        initial = True
         while True:
             if await request.is_disconnected():
                 break
+            stream_cursor = getattr(service.repository, "get_event_stream_version", None)
+            current_cursor = stream_cursor(session_id=session_id) if callable(stream_cursor) else service.repository.get_session_activity_version(session_id=session_id)
+            if not initial and current_cursor <= last_cursor:
+                yield ": keepalive\n\n"
+                await asyncio.sleep(1)
+                continue
             runtime = service.get_runtime(user_id=resolved_user_id, session_id=session_id)
             transcripts = service.list_transcripts(user_id=resolved_user_id, session_id=session_id)
             candidates = service.list_candidates(user_id=resolved_user_id, session_id=session_id)
@@ -269,9 +296,12 @@ async def stream_session_runtime(
                 "events": [item.model_dump(by_alias=True) for item in events.events],
                 "runtime": runtime.model_dump(by_alias=True),
                 "ownerUserId": resolved_user_id,
+                "cursor": current_cursor,
             }
-            yield _sse_frame("snapshot", payload)
-            await asyncio.sleep(2)
+            yield _sse_frame("snapshot", payload, cursor=current_cursor)
+            last_cursor = current_cursor
+            initial = False
+            await asyncio.sleep(0.25)
 
     return StreamingResponse(
         event_stream(),
@@ -374,6 +404,8 @@ async def ingest_frame(
     request: RealtimeFrameIngestRequest,
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[list[dict[str, object]]]:
+    if not service.settings.realtime_legacy_http_enabled:
+        raise DomainRequestError("realtime-speech", "legacy-frame-ingest", "HTTP 逐帧发布已停用，请升级桌面助手使用 WebSocket v2。", 410, "legacy_realtime_transport_disabled")
     events = service.enqueue_audio_frame(
         token=request.token,
         device_id=request.device_id,
@@ -451,22 +483,58 @@ async def realtime_ws(websocket: WebSocket) -> None:
 @router.websocket("/ingest-ws")
 async def realtime_ingest_ws(websocket: WebSocket) -> None:
     token = websocket.query_params.get("token", "")
+    requested_protocol = websocket.query_params.get("protocol", "2.0")
     service = realtime_speech_service()
     await websocket.accept()
+    if token in _active_ingest_tokens:
+        await websocket.send_json({"kind": "connection-rejected", "payload": {"reason": "publisher-already-connected"}})
+        await websocket.close(code=1008)
+        return
+    _active_ingest_tokens.add(token)
     try:
         publisher = service.connect_publisher(token=token)
+        if requested_protocol != service.settings.realtime_protocol_version:
+            await websocket.send_json({"kind": "protocol-rejected", "payload": {"supported": service.settings.realtime_protocol_version}})
+            await websocket.close(code=1002)
+            return
+        previous_receipts = service.repository.list_frame_receipts_for_session(session_id=publisher.session_id)
+        expected_sequence: dict[str, int] = {"microphone": 0, "system": 0}
+        for receipt in previous_receipts:
+            if receipt.publisher_id == publisher.publisher_id and receipt.source_kind in expected_sequence:
+                expected_sequence[receipt.source_kind] = max(expected_sequence[receipt.source_kind], receipt.sequence + 1)
+        frame_arrivals: deque[float] = deque()
         await websocket.send_json({
             "kind": "connection-state",
             "payload": {
                 "publisherId": publisher.publisher_id,
                 "status": publisher.status,
                 "sourceKind": publisher.source_kind,
-                "transport": "websocket-frame-ingest",
+                "transport": "websocket-v2-multiplexed",
+                "protocolVersion": service.settings.realtime_protocol_version,
+                "channels": ["microphone", "system"],
+                "resumeOffsets": {channel: sequence - 1 for channel, sequence in expected_sequence.items()},
             },
         })
         while True:
             payload = RealtimeFrameRequest.model_validate(await websocket.receive_json())
             try:
+                now = time()
+                while frame_arrivals and now - frame_arrivals[0] >= 1:
+                    frame_arrivals.popleft()
+                if len(frame_arrivals) >= service.settings.realtime_ingress_max_frames_per_second:
+                    await websocket.send_json({"kind": "degraded", "payload": {"reason": "ingress-rate-limited", "retryAfterMs": 100}})
+                    continue
+                frame_arrivals.append(now)
+                if payload.source_kind not in {"microphone", "system"}:
+                    await websocket.send_json({"kind": "channel-rejected", "payload": {"sourceKind": payload.source_kind}})
+                    continue
+                expected = expected_sequence[payload.source_kind]
+                if payload.sequence < expected:
+                    await websocket.send_json({"kind": "frame-accepted", "payload": {"sourceKind": payload.source_kind, "sourceId": payload.source_id, "sequence": expected - 1, "duplicate": True}})
+                    continue
+                if payload.sequence > expected:
+                    await websocket.send_json({"kind": "sequence-gap", "payload": {"sourceKind": payload.source_kind, "expected": expected, "received": payload.sequence}})
+                    continue
                 service.enqueue_audio_frame(
                     token=token,
                     device_id=payload.device_id,
@@ -487,6 +555,7 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                     sent_at_ms=payload.sent_at_ms,
                     audio_base64=payload.audio_base64,
                 )
+                expected_sequence[payload.source_kind] = expected + 1
                 await websocket.send_json({
                     "kind": "frame-accepted",
                     "payload": {
@@ -497,6 +566,7 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                         "revision": payload.revision,
                         "traceId": payload.trace_id,
                         "acceptedAtMs": int(time() * 1000),
+                        "protocolVersion": service.settings.realtime_protocol_version,
                     },
                 })
             except DomainRequestError as exc:
@@ -516,3 +586,5 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
             service.disconnect_publisher(token=token, final_state="failed")
         finally:
             await websocket.close(code=1011)
+    finally:
+        _active_ingest_tokens.discard(token)

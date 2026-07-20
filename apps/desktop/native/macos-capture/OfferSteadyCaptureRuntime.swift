@@ -483,8 +483,9 @@ func probeMicrophone(durationMs: Int) -> AudioProbeResult {
 }
 
 func streamMicrophone(sourceId: String) throws -> Never {
-    let permission = microphonePermissionName()
-    if permission != "granted" {
+    var permissionNoticeSent = false
+    while microphonePermissionName() != "granted" {
+        if !permissionNoticeSent {
         try writeJson(NativeAudioStreamEvent(
             type: "status",
             sourceKind: "microphone",
@@ -499,7 +500,9 @@ func streamMicrophone(sourceId: String) throws -> Never {
             message: "Microphone permission is not granted for this app identity."
         ))
         fflush(stdout)
-        exit(65)
+            permissionNoticeSent = true
+        }
+        Thread.sleep(forTimeInterval: 2.0)
     }
 
     let source = sourceId.isEmpty ? "native-microphone" : sourceId
@@ -730,7 +733,7 @@ func streamSystemAudioWithScreenCaptureKit(sourceId: String) async throws -> Nev
             message: "Screen capture/system audio permission is not granted for this app identity."
         ))
         fflush(stdout)
-        exit(67)
+        throw NSError(domain: "OfferSteadyCaptureRuntime", code: 67, userInfo: [NSLocalizedDescriptionKey: "Screen capture permission is required."])
     }
     let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
     guard let display = content.displays.first else {
@@ -748,7 +751,7 @@ func streamSystemAudioWithScreenCaptureKit(sourceId: String) async throws -> Nev
             message: "No display is available for ScreenCaptureKit system audio capture."
         ))
         fflush(stdout)
-        exit(68)
+        throw NSError(domain: "OfferSteadyCaptureRuntime", code: 68, userInfo: [NSLocalizedDescriptionKey: "No display is available for capture."])
     }
     let filter = SCContentFilter(display: display, excludingWindows: [])
     let configuration = SCStreamConfiguration()
@@ -788,9 +791,10 @@ func streamSystemAudio(sourceId: String) throws -> Never {
     #if canImport(ScreenCaptureKit)
     if #available(macOS 12.3, *) {
         Task {
-            do {
+            while true {
+              do {
                 try await streamSystemAudioWithScreenCaptureKit(sourceId: sourceId)
-            } catch {
+              } catch {
                 try? writeJson(NativeAudioStreamEvent(
                     type: "status",
                     sourceKind: "system",
@@ -805,7 +809,8 @@ func streamSystemAudio(sourceId: String) throws -> Never {
                     message: error.localizedDescription
                 ))
                 fflush(stdout)
-                exit(69)
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+              }
             }
         }
         RunLoop.current.run()

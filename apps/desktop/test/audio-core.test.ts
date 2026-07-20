@@ -155,7 +155,7 @@ describe("system audio adapter diagnostics", () => {
     await new SystemAudioAdapter(mediaDevices).open();
     expect(receivedConstraints).toBeDefined();
     expect(receivedConstraints?.audio).not.toBe(false);
-    expect(receivedConstraints?.video).toBe(false);
+    expect(receivedConstraints?.video).toMatchObject({ frameRate: 1, width: 2, height: 2 });
   });
 
   it("keeps the fallback preview track alive when audio-only capture does not expose a system track", async () => {

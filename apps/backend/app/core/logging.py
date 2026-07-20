@@ -64,6 +64,8 @@ def utc_now_iso() -> str:
 
 def _is_sensitive_key(key: str) -> bool:
     normalized = key.replace("-", "_").lower()
+    if normalized in {"audio", "audio_base64", "audiobase64", "transcript", "transcript_text", "transcripttext", "text", "token", "access_token", "refresh_token"}:
+        return True
     return normalized in SENSITIVE_LOG_FIELD_NAMES or any(fragment in normalized for fragment in SENSITIVE_LOG_FIELD_FRAGMENTS)
 
 

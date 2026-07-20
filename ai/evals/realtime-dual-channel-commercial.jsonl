@@ -1,0 +1,4 @@
+{"id":"dual-channel-role-isolation","input":{"microphone":"我负责了检索服务的重构。","system":"请介绍这个项目最困难的部分。"},"expected":{"candidate":"我负责了检索服务的重构。","interviewer":"请介绍这个项目最困难的部分。","questionSource":"interviewer"}}
+{"id":"silent-frame-suppression","input":{"microphone":"<silence>","system":"<silence>"},"expected":{"transcriptCount":0,"answerTriggered":false}}
+{"id":"interim-final-revision","input":{"systemInterim":"如何保证系统","systemFinal":"如何保证系统的稳定性？"},"expected":{"renderedSegments":1,"isFinal":true,"question":"如何保证系统的稳定性？"}}
+{"id":"candidate-not-question","input":{"microphone":"我会从背景、方案和结果三个方面回答。"},"expected":{"role":"candidate","answerTriggered":false}}

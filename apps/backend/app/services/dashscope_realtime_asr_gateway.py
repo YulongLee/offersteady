@@ -91,6 +91,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             "completed_missing": self._completed_missing.get(source_kind, 0),
             "blank_partial_suppressed": self._blank_partial_suppressed.get(source_kind, 0),
             "vad_to_manual_fallbacks": self._vad_to_manual_fallbacks.get(source_kind, 0),
+            "active_provider_sessions": sum(1 for session in self._source_sessions.values() if session.source_kind == source_kind),
         }
 
     def runtime_status(self, source_kind: str) -> dict[str, str | int | None]:
@@ -330,7 +331,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         stale_session_keys = [
             source_session_key
             for source_session_key, session in self._source_sessions.items()
-            if now - session.updated_at_monotonic > 8
+            if now - session.updated_at_monotonic > max(30, self.settings.realtime_asr_session_idle_seconds)
         ]
         for source_session_key in stale_session_keys:
             session = self._source_sessions.pop(source_session_key, None)
