@@ -286,11 +286,11 @@ const extractLatestInterviewerQuestion = (speaker: WebAppState["speaker"]) => {
   const latestCandidateEndedAt = [...speaker.transcripts]
     .filter(segment => segment.role === "candidate" && segment.isFinal && segment.endedAtMs <= latest.startedAtMs)
     .sort((left, right) => right.endedAtMs - left.endedAtMs)[0]?.endedAtMs ?? -Infinity;
-  const latestFinal = interviewerSegments.find(segment => segment.isFinal);
+  const eligibleFinalSegments = interviewerSegments.filter(segment => segment.isFinal && segment.endedAtMs > latestCandidateEndedAt);
+  const latestFinal = eligibleFinalSegments[0];
   const newestPartial = !latest.isFinal && (!latestFinal || latest.endedAtMs > latestFinal.endedAtMs) ? latest : null;
-  const finalSegments = interviewerSegments.filter(segment => segment.isFinal);
   const merged = latestFinal ? [latestFinal] : [];
-  for (const segment of finalSegments.filter(segment => segment.id !== latestFinal?.id)) {
+  for (const segment of eligibleFinalSegments.filter(segment => segment.id !== latestFinal?.id)) {
     if (segment.endedAtMs <= latestCandidateEndedAt) break;
     const gap = (merged[merged.length - 1]?.startedAtMs ?? latest.startedAtMs) - segment.endedAtMs;
     if (gap > 12_000) break;
