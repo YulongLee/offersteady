@@ -279,6 +279,32 @@ const authHeaders = () => {
   return session ? { Authorization: `Bearer ${session.accessToken}` } : {};
 };
 
+export const createAuthRefreshingFetch = (
+  fetchImpl: typeof fetch,
+  refreshSession: () => Promise<void> = () => authClient.refresh().then(() => undefined),
+): typeof fetch => {
+  let refreshInFlight: Promise<void> | null = null;
+  return async (input, init) => {
+    const response = await fetchImpl(input, init);
+    if (response.status !== 401 || !authClient.readStoredSession()) return response;
+    try {
+      if (!refreshInFlight) {
+        refreshInFlight = refreshSession().finally(() => {
+          refreshInFlight = null;
+        });
+      }
+      await refreshInFlight;
+    } catch {
+      return response;
+    }
+    const session = authClient.readStoredSession();
+    if (!session) return response;
+    const headers = new Headers(init?.headers);
+    headers.set("Authorization", `Bearer ${session.accessToken}`);
+    return fetchImpl(input, { ...init, headers });
+  };
+};
+
 const requireUserId = () => {
   const session = authClient.readStoredSession();
   if (session) return session.account.id;
@@ -591,10 +617,9 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
 
   constructor(baseUrl: string, fetchImpl?: typeof fetch) {
     this.baseUrl = baseUrl;
-    this.fetchImpl = fetchImpl ?? ((input, init) => window.fetch(input, init));
-    this.client = fetchImpl
-      ? createJsonClient({ baseUrl, fetchImpl })
-      : createJsonClient({ baseUrl });
+    const rawFetch = fetchImpl ?? ((input, init) => window.fetch(input, init));
+    this.fetchImpl = createAuthRefreshingFetch(rawFetch);
+    this.client = createJsonClient({ baseUrl, fetchImpl: this.fetchImpl });
   }
 
   async probe(signal?: AbortSignal): Promise<FoundationIndexResponse> {

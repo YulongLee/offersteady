@@ -107,7 +107,7 @@ const desktopConfig = () => ({
   platform: process.platform === "darwin" ? "macos" : process.platform === "win32" ? "windows" : "unsupported",
   architecture: process.arch === "arm64" ? "arm64" : process.arch === "x64" ? "x64" : "unknown",
   platformVersion: process.getSystemVersion(),
-  protocolVersion: "1.0.0",
+  protocolVersion: "2.0",
   webWorkspaceUrl: process.env.OFFERSTEADY_DESKTOP_WEB_URL || defaultWebWorkspaceUrl(),
   apiBaseUrl: process.env.OFFERSTEADY_API_BASE_URL || defaultApiBaseUrl(),
 });
