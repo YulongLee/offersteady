@@ -347,22 +347,20 @@ export class DesktopRealtimePublisher {
       onState: state => this.options.onCaptureState(state === "failed" ? "error" : state === "connected" ? "capturing" : "reconnecting"),
     });
     await this.transport.start();
-    // AVAudioEngine can report an invalid default input format for Bluetooth
-    // headsets even though Electron can open the selected device by device ID.
-    // Keep ScreenCaptureKit for computer output and WebAudio for microphones.
-    const nativeSystemStarted = await this.startNativeSystemCapture().catch(() => false);
+    // Keep WebAudio for microphones because it follows Bluetooth device changes.
+    // Prefer Electron's app-owned loopback for computer output so macOS applies
+    // the permission granted to the companion app instead of a child executable.
+    const systemRuntime = await this.startSource({
+      sourceKind: "system",
+      sourceId: this.options.systemAudioId,
+      open: () => this.systemAudioAdapter.open(),
+    });
+    if (!systemRuntime) await this.startNativeSystemCapture().catch(() => false);
     const microphoneRuntime = await this.startSource({
       sourceKind: "microphone",
       sourceId: this.options.microphoneId,
       open: () => this.microphoneAdapter.open(this.options.microphoneId),
     });
-    const systemRuntime = nativeSystemStarted
-      ? null
-      : await this.startSource({
-        sourceKind: "system",
-        sourceId: this.options.systemAudioId,
-        open: () => this.systemAudioAdapter.open(),
-      });
     const runtimes = [microphoneRuntime, systemRuntime];
     this.runtimes.push(...runtimes.filter((runtime): runtime is WebAudioSourceRuntime => runtime !== null));
     if (this.runtimes.length > 0) {

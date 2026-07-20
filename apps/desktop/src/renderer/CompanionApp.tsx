@@ -191,21 +191,6 @@ const requestMicrophoneAccessInBackground = async () => {
   }
 };
 
-const requestScreenCaptureAccessInBackground = async () => {
-  if (!window.offersteady?.requestScreenCaptureAccess) return false;
-  let timeoutId: number | undefined;
-  try {
-    return await Promise.race([
-      window.offersteady.requestScreenCaptureAccess(),
-      new Promise<boolean>((resolve) => {
-        timeoutId = window.setTimeout(() => resolve(false), 30_000);
-      }),
-    ]);
-  } finally {
-    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
-  }
-};
-
 const buildRuntimeCaptureNotice = (
   live: boolean,
   runtimeStatus: DesktopRuntimeStatus | null,
@@ -601,7 +586,6 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       void requestMicrophoneAccessInBackground()
         .then(() => refreshMicrophoneSources())
         .catch(() => undefined);
-      void requestScreenCaptureAccessInBackground().catch(() => undefined);
     }).catch(() => {
       if (!mounted) return;
       setConnectionNotice("未连接 | 本机运行信息读取失败，请重新打开伴随程序");
