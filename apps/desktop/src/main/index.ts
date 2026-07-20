@@ -794,12 +794,21 @@ ipcMain.handle("credential:clear", async () => {
 
 ipcMain.handle("desktop:get-config", async () => desktopConfig());
 ipcMain.handle("desktop:get-native-runtime-health", async () => getNativeRuntimeHealth());
-ipcMain.handle("desktop:start-native-audio-stream", async (_event, options: { microphoneSourceId?: string; systemSourceId?: string }) => {
+ipcMain.handle("desktop:start-native-audio-stream", async (_event, options: {
+  microphoneSourceId?: string;
+  systemSourceId?: string;
+  captureMicrophone?: boolean;
+  captureSystem?: boolean;
+}) => {
   stopMainRealtimeAudioPublishing();
   stopNativeAudioStreams();
   rendererOwnsNativeAudio = true;
-  const microphoneStarted = startNativeAudioProcess("microphone", options.microphoneSourceId || "native-microphone");
-  const systemStarted = startNativeAudioProcess("system", options.systemSourceId || "native-system-output");
+  const microphoneStarted = options.captureMicrophone === false
+    ? false
+    : startNativeAudioProcess("microphone", options.microphoneSourceId || "native-microphone");
+  const systemStarted = options.captureSystem === false
+    ? false
+    : startNativeAudioProcess("system", options.systemSourceId || "native-system-output");
   if (!microphoneStarted && !systemStarted) rendererOwnsNativeAudio = false;
   return { ok: microphoneStarted || systemStarted, microphoneStarted, systemStarted };
 });

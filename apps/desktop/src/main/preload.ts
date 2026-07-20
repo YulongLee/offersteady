@@ -7,7 +7,12 @@ contextBridge.exposeInMainWorld("offersteady", {
   clearDeviceCredential: () => ipcRenderer.invoke("credential:clear"),
   getDesktopConfig: () => ipcRenderer.invoke("desktop:get-config"),
   getNativeRuntimeHealth: () => ipcRenderer.invoke("desktop:get-native-runtime-health"),
-  startNativeAudioStream: (options: { microphoneSourceId?: string; systemSourceId?: string }) => ipcRenderer.invoke("desktop:start-native-audio-stream", options),
+  startNativeAudioStream: (options: {
+    microphoneSourceId?: string;
+    systemSourceId?: string;
+    captureMicrophone?: boolean;
+    captureSystem?: boolean;
+  }) => ipcRenderer.invoke("desktop:start-native-audio-stream", options),
   stopNativeAudioStream: () => ipcRenderer.invoke("desktop:stop-native-audio-stream"),
   onNativeAudioEvent: (callback: (event: unknown) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);

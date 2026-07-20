@@ -347,31 +347,24 @@ export class DesktopRealtimePublisher {
       onState: state => this.options.onCaptureState(state === "failed" ? "error" : state === "connected" ? "capturing" : "reconnecting"),
     });
     await this.transport.start();
-    const nativeAvailable = Boolean(window.offersteady?.startNativeAudioStream && window.offersteady?.onNativeAudioEvent);
-    const nativeStarted = await this.startNativeCapture().catch(() => false);
-    if (nativeStarted) {
-      this.options.onCaptureState("capturing");
-      return;
-    }
-    if (nativeAvailable) {
-      this.options.onCaptureState("error");
-      this.options.onFailure("原生双通道采集没有成功启动。为避免重复采集，正式桌面版不会自动启动第二套 WebAudio 链路。请检查系统权限后重试。");
-      throw new Error("native_audio_capture_required");
-    }
-    const [microphoneRuntime, systemRuntime] = await Promise.all([
-      this.startSource({
-        sourceKind: "microphone",
-        sourceId: this.options.microphoneId,
-        open: () => this.microphoneAdapter.open(this.options.microphoneId),
-      }),
-      this.startSource({
+    // AVAudioEngine can report an invalid default input format for Bluetooth
+    // headsets even though Electron can open the selected device by device ID.
+    // Keep ScreenCaptureKit for computer output and WebAudio for microphones.
+    const nativeSystemStarted = await this.startNativeSystemCapture().catch(() => false);
+    const microphoneRuntime = await this.startSource({
+      sourceKind: "microphone",
+      sourceId: this.options.microphoneId,
+      open: () => this.microphoneAdapter.open(this.options.microphoneId),
+    });
+    const systemRuntime = nativeSystemStarted
+      ? null
+      : await this.startSource({
         sourceKind: "system",
         sourceId: this.options.systemAudioId,
         open: () => this.systemAudioAdapter.open(),
-      }),
-    ]);
+      });
     const runtimes = [microphoneRuntime, systemRuntime];
-    this.runtimes = runtimes.filter((runtime): runtime is WebAudioSourceRuntime => runtime !== null);
+    this.runtimes.push(...runtimes.filter((runtime): runtime is WebAudioSourceRuntime => runtime !== null));
     if (this.runtimes.length > 0) {
       this.options.onCaptureState("capturing");
       return;
@@ -584,7 +577,7 @@ export class DesktopRealtimePublisher {
     }
   }
 
-  private async startNativeCapture(): Promise<boolean> {
+  private async startNativeSystemCapture(): Promise<boolean> {
     if (!window.offersteady?.startNativeAudioStream || !window.offersteady?.onNativeAudioEvent) return false;
     const segmenters = new Map<AudioSourceKind, SpeechSegmenter>([
       ["microphone", new SpeechSegmenter("microphone")],
@@ -710,21 +703,22 @@ export class DesktopRealtimePublisher {
       }
     });
 
+    let systemStarted = false;
     try {
       const result = await window.offersteady.startNativeAudioStream({
         microphoneSourceId: sourceIds.microphone,
         systemSourceId: sourceIds.system,
+        captureMicrophone: false,
+        captureSystem: true,
       });
       if (!result.ok) {
         unsubscribe();
         return false;
       }
-      if (result.microphoneStarted === false) {
-        this.options.onFailure("原生麦克风采集暂不可用，请检查麦克风权限和当前默认输入设备。");
-      }
       if (result.systemStarted === false) {
         this.options.onFailure("原生电脑输出采集暂不可用，请检查屏幕录制权限后重试。");
       }
+      systemStarted = result.systemStarted !== false;
     } catch {
       unsubscribe();
       return false;
@@ -738,7 +732,7 @@ export class DesktopRealtimePublisher {
       },
     }];
     this.options.onServerEvent?.({ kind: "connection-state", payload: { transport: "native-jsonl-websocket-v2" } });
-    return true;
+    return systemStarted;
   }
 
   private async createPublisher(sourceKind: AudioSourceKind | "mixed"): Promise<PublisherTokenResponse> {

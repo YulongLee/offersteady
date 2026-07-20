@@ -58,7 +58,12 @@ declare global {
       clearDeviceCredential: () => Promise<void>;
       getDesktopConfig: () => Promise<DesktopRuntimeConfig>;
       getNativeRuntimeHealth?: () => Promise<DesktopNativeRuntimeHealth>;
-      startNativeAudioStream?: (options: { microphoneSourceId?: string; systemSourceId?: string }) => Promise<{ ok: boolean; microphoneStarted?: boolean; systemStarted?: boolean }>;
+      startNativeAudioStream?: (options: {
+        microphoneSourceId?: string;
+        systemSourceId?: string;
+        captureMicrophone?: boolean;
+        captureSystem?: boolean;
+      }) => Promise<{ ok: boolean; microphoneStarted?: boolean; systemStarted?: boolean }>;
       stopNativeAudioStream?: () => Promise<{ ok: boolean }>;
       onNativeAudioEvent?: (callback: (event: DesktopNativeAudioEvent) => void) => () => void;
       getPairingIdentity: () => Promise<DesktopPairingIdentity>;
