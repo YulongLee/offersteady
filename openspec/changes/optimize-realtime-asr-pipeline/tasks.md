@@ -6,16 +6,16 @@
 
 ## 2. Desktop Audio Pipeline Refactor
 
-- [ ] 2.1 Replace cumulative utterance payload generation with incremental PCM chunk streaming per source.
-- [ ] 2.2 Introduce source-scoped bounded buffering (RingBuffer or equivalent) and freshness-first backpressure rules for microphone and system audio.
+- [x] 2.1 Replace cumulative utterance payload generation with incremental PCM chunk streaming per source.
+- [x] 2.2 Introduce source-scoped bounded buffering (RingBuffer or equivalent) and freshness-first backpressure rules for microphone and system audio.
 - [ ] 2.3 Migrate capture callbacks toward AudioWorklet/native-producer-friendly boundaries and keep ScriptProcessor only as a fallback path.
 - [ ] 2.4 Recalibrate silence gating and empty-audio suppression separately for source health, utterance start, and transcript publish eligibility.
 
 ## 3. Backend Realtime ASR Pipeline Refactor
 
-- [ ] 3.1 Decouple ingest from transcription so audio receive paths return quickly after enqueueing work.
-- [ ] 3.2 Introduce persistent ASR sessions per `sessionId + sourceKind` with long-lived streaming workers.
-- [ ] 3.3 Implement source-local producer-consumer workers that send incremental audio, reconcile partial/final transcript events, and avoid synchronous request blocking.
+- [x] 3.1 Decouple ingest from transcription so audio receive paths return quickly after enqueueing work.
+- [x] 3.2 Introduce persistent ASR sessions per `sessionId + sourceKind` with long-lived streaming workers.
+- [x] 3.3 Implement source-local producer-consumer workers that send incremental audio, reconcile partial/final transcript events, and avoid synchronous request blocking.
 - [ ] 3.4 Add worker lifecycle, idle timeout, error recovery, and rollback-safe feature flags for the new pipeline.
 
 ## 4. Web Transcript Streaming and Overlay Efficiency
@@ -23,6 +23,7 @@
 - [ ] 4.1 Refactor live conversation state to reconcile partial and final transcripts by stable utterance identity instead of appending duplicate rows.
 - [ ] 4.2 Minimize UI update cost with incremental state updates, batching, and suppression of empty/phantom transcript renders.
 - [ ] 4.3 Preserve the current live workspace layout while updating diagnostics to reflect source-specific realtime latency and degradation states.
+- [x] 4.4 Assemble the latest interviewer turn for quick answer, including a newer partial revision without mixing candidate speech into the question.
 
 ## 5. Verification, Evals, and Rollout
 

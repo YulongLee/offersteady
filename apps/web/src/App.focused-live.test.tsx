@@ -232,6 +232,27 @@ describe("focused live interview workspace", () => {
     ));
   });
 
+  it("adds the newest partial interviewer fragment without mixing candidate speech into quick answer", async () => {
+    openLive(state => {
+      state.speaker = {
+        ...state.speaker,
+        pendingQuestion: null,
+        transcripts: [
+          ...state.speaker.transcripts,
+          { id: "candidate-turn", sessionId: "demo", revision: 1, sourceId: "mic", sourceKind: "microphone", speakerId: "candidate", role: "candidate", text: "这个项目由我负责。", transcriptConfidence: 0.96, startedAtMs: 9_000, endedAtMs: 10_000, isFinal: true, overlap: false },
+          { id: "interviewer-final", sessionId: "demo", revision: 1, sourceId: "system", sourceKind: "system", speakerId: "interviewer", role: "interviewer", text: "这个项目最大的难点是什么？", transcriptConfidence: 0.96, startedAtMs: 10_500, endedAtMs: 11_500, isFinal: true, overlap: false },
+          { id: "interviewer-partial", sessionId: "demo", revision: 2, sourceId: "system", sourceKind: "system", speakerId: "interviewer", role: "interviewer", text: "你是怎么解决的", transcriptConfidence: 0.82, startedAtMs: 11_600, endedAtMs: 12_200, isFinal: false, overlap: false },
+        ],
+      };
+    });
+    fireEvent.click(screen.getByRole("button", { name: "快答" }));
+    await waitFor(() => expect(interviewAppAdapter.submitManualAnswer).toHaveBeenCalledWith(
+      expect.objectContaining({ question: "这个项目最大的难点是什么？ 你是怎么解决的" }),
+      expect.any(AbortSignal),
+      expect.any(Function),
+    ));
+  });
+
   it("renders only the newest revision of one transcript segment", () => {
     openLive(state => {
       const original = state.speaker.transcripts[0]!;

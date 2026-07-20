@@ -70,9 +70,9 @@ interface SegmentSnapshot {
 
 const SPEECH_START_THRESHOLD = 0.003;
 const SPEECH_CONTINUE_THRESHOLD = 0.0018;
-const INTERIM_INTERVAL_MS = 200;
-const SILENCE_FINALIZE_MS = 320;
-const MIN_EMIT_SPEECH_MS = 120;
+const INTERIM_INTERVAL_MS = 120;
+const SILENCE_FINALIZE_MS = 220;
+const MIN_EMIT_SPEECH_MS = 80;
 const PRE_SPEECH_BUFFER_LIMIT = 4;
 const MAX_PENDING_AUDIO_BYTES = 64_000;
 const MAX_PENDING_UPLOAD_FRAMES = 64;
@@ -420,7 +420,7 @@ export class DesktopRealtimePublisher {
       const context = new AudioContext();
       await context.resume().catch(() => undefined);
       const node = context.createMediaStreamSource(openedMedia.stream);
-      const processor = context.createScriptProcessor(2048, 1, 1);
+      const processor = context.createScriptProcessor(1024, 1, 1);
       const sink = connectProcessor(context, processor);
       const segmenter = new SpeechSegmenter(input.sourceKind);
 

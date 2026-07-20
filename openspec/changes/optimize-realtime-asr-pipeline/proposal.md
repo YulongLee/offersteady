@@ -10,7 +10,8 @@
 - 引入面向低延迟的 Pipeline 架构，包括常驻长连接、增量音频发送、Producer-Consumer 队列、流式 Partial Transcript 与 Final Transcript 分离处理。
 - 将当前可能存在的同步等待、重复序列化、重复内存拷贝、频繁创建 WebSocket / 对象、过大 Chunk 和误触发静音识别等问题纳入统一性能分析与治理范围。
 - 增加实时语音链路的性能观测与诊断能力，覆盖 TTFT、Partial/Final Latency、Chunk 排队、ASR 往返耗时、UI 渲染滞后和异常静音触发。
-- 保持现有 Web 产品原型、外部 API 形态、ASR 模型、LLM、Prompt 和 RAG 逻辑不变，只重构实时语音处理链路的内部实现与系统边界。
+- 优化快答的问题选择：没有手动输入时，按当前轮次自动整理面试官最近的完整问题和最新未定稿片段，再提交既有回答模型。
+- 保持现有 Web 产品原型、外部 API 形态、ASR 模型、LLM、Prompt 和 RAG 逻辑不变；快答仅增加确定性的对话问题整理，不改变回答策略。
 
 ## Capabilities
 

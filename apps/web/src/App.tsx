@@ -272,24 +272,32 @@ const emptyLiveQuestion: InterviewQuestion = {
 const normalizeQuickAnswerText = (text: string) => text.replace(/\s+/g, " ").trim();
 
 const extractLatestInterviewerQuestion = (speaker: WebAppState["speaker"]) => {
-  const detectedQuestion = speaker.pendingQuestion?.text.trim();
-  if (detectedQuestion) return detectedQuestion;
-  const interviewerSegments = [...speaker.transcripts]
-    .filter(segment => segment.sourceKind === "system" && segment.isFinal && segment.text.trim())
+  const latestBySegment = new Map<string, WebAppState["speaker"]["transcripts"][number]>();
+  for (const segment of speaker.transcripts) {
+    const current = latestBySegment.get(segment.id);
+    if (!current || segment.revision > current.revision) latestBySegment.set(segment.id, segment);
+  }
+  const interviewerSegments = [...latestBySegment.values()]
+    .filter(segment => (segment.sourceKind === "system" || segment.role === "interviewer") && segment.text.trim())
     .sort((left, right) => right.endedAtMs - left.endedAtMs);
-  if (interviewerSegments.length === 0) return "";
+  const detectedQuestion = normalizeQuickAnswerText(speaker.pendingQuestion?.text ?? "");
+  if (interviewerSegments.length === 0) return detectedQuestion;
   const latest = interviewerSegments[0]!;
   const latestCandidateEndedAt = [...speaker.transcripts]
     .filter(segment => segment.role === "candidate" && segment.isFinal && segment.endedAtMs <= latest.startedAtMs)
     .sort((left, right) => right.endedAtMs - left.endedAtMs)[0]?.endedAtMs ?? -Infinity;
-  const merged = [latest];
-  for (const segment of interviewerSegments.slice(1)) {
+  const latestFinal = interviewerSegments.find(segment => segment.isFinal);
+  const newestPartial = !latest.isFinal && (!latestFinal || latest.endedAtMs > latestFinal.endedAtMs) ? latest : null;
+  const finalSegments = interviewerSegments.filter(segment => segment.isFinal);
+  const merged = latestFinal ? [latestFinal] : [];
+  for (const segment of finalSegments.filter(segment => segment.id !== latestFinal?.id)) {
     if (segment.endedAtMs <= latestCandidateEndedAt) break;
-    const gap = merged[merged.length - 1]!.startedAtMs - segment.endedAtMs;
+    const gap = (merged[merged.length - 1]?.startedAtMs ?? latest.startedAtMs) - segment.endedAtMs;
     if (gap > 12_000) break;
-    if (merged.length >= 3) break;
+    if (merged.length >= 4) break;
     merged.push(segment);
   }
+  if (newestPartial && newestPartial.endedAtMs > latestCandidateEndedAt) merged.unshift(newestPartial);
   const ordered = merged.sort((left, right) => left.startedAtMs - right.startedAtMs);
   const mergedTexts: string[] = [];
   for (const segment of ordered) {
@@ -301,6 +309,15 @@ const extractLatestInterviewerQuestion = (speaker: WebAppState["speaker"]) => {
       continue;
     }
     mergedTexts.push(text);
+  }
+  if (detectedQuestion) {
+    const duplicateIndex = mergedTexts.findIndex(text => text.includes(detectedQuestion) || detectedQuestion.includes(text));
+    if (duplicateIndex >= 0) {
+      const current = mergedTexts[duplicateIndex]!;
+      mergedTexts[duplicateIndex] = detectedQuestion.length >= current.length ? detectedQuestion : current;
+    } else {
+      mergedTexts.push(detectedQuestion);
+    }
   }
   return mergedTexts.join(" ").trim();
 };
@@ -576,7 +593,7 @@ function LivePage() {
     };
     const scheduleReconnect = () => {
       if (stopped || realtimeController.signal.aborted) return;
-      reconnectTimer = window.setTimeout(() => { void subscribeRealtime(); }, 1000);
+      reconnectTimer = window.setTimeout(() => { void subscribeRealtime(); }, 250);
     };
     const subscribeRealtime = async () => {
       try {
@@ -590,7 +607,7 @@ function LivePage() {
     };
     void sendHeartbeat();
     const heartbeatTimer = window.setInterval(() => void sendHeartbeat(), 3000);
-    const realtimePollTimer = window.setInterval(() => void loadRealtime(), 1500);
+    const realtimePollTimer = window.setInterval(() => void loadRealtime(), 1000);
     const sendForegroundHeartbeat = () => {
       if (!stopped && document.visibilityState === "visible") void sendHeartbeat();
     };

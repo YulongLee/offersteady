@@ -276,15 +276,20 @@ async def stream_session_runtime(
     async def event_stream():
         last_cursor = cursor
         initial = True
+        idle_polls = 0
         while True:
             if await request.is_disconnected():
                 break
             stream_cursor = getattr(service.repository, "get_event_stream_version", None)
             current_cursor = stream_cursor(session_id=session_id) if callable(stream_cursor) else service.repository.get_session_activity_version(session_id=session_id)
             if not initial and current_cursor <= last_cursor:
-                yield ": keepalive\n\n"
-                await asyncio.sleep(1)
+                idle_polls += 1
+                if idle_polls >= 100:
+                    yield ": keepalive\n\n"
+                    idle_polls = 0
+                await asyncio.sleep(0.1)
                 continue
+            idle_polls = 0
             runtime = service.get_runtime(user_id=resolved_user_id, session_id=session_id)
             transcripts = service.list_transcripts(user_id=resolved_user_id, session_id=session_id)
             candidates = service.list_candidates(user_id=resolved_user_id, session_id=session_id)
@@ -301,7 +306,7 @@ async def stream_session_runtime(
             yield _sse_frame("snapshot", payload, cursor=current_cursor)
             last_cursor = current_cursor
             initial = False
-            await asyncio.sleep(0.25)
+            await asyncio.sleep(0.05)
 
     return StreamingResponse(
         event_stream(),

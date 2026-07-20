@@ -26,3 +26,18 @@
 #### Scenario: Streaming content updates during drag
 - **WHEN** 用户调整分栏比例时对话修订或回答流式内容到达
 - **THEN** 系统保持同一对话、答案、草稿和截图任务状态，不卸载或重复创建业务组件
+### Requirement: Quick answer SHALL assemble the latest interviewer turn
+
+没有手动输入问题时，系统 MUST 根据当前 session 的实时双角色对话整理最近一轮面试官问题。系统 MUST 以候选人最近一次完整发言作为轮次边界，MUST 合并该边界后的面试官完整片段，MAY 补充比最新完整片段更新的未定稿片段，并 MUST NOT 把候选人发言正文作为待回答问题。
+
+#### Scenario: Interviewer asks one question across several transcript segments
+- **WHEN** 面试官在候选人最近一次发言后产生多个连续的完整转录片段，且用户未填写手动问题并点击快答
+- **THEN** 系统按时间顺序去重并合并这些面试官片段，再提交现有回答模型
+
+#### Scenario: Latest interviewer fragment is still partial
+- **WHEN** 已有完整问题片段，且存在时间更新的面试官未定稿片段
+- **THEN** 系统将最新未定稿片段补充到问题末尾，但不重复已经出现的文字
+
+#### Scenario: Candidate speech separates conversation turns
+- **WHEN** 候选人在两个面试官问题之间完成了一次发言
+- **THEN** 快答只整理该候选人发言之后的最新面试官轮次
