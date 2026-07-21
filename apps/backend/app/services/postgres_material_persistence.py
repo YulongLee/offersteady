@@ -208,6 +208,7 @@ class PostgresRuntimeVectorStore(VectorStorePort):
     def _ensure_table(self) -> None:
         with self._connect() as connection:
             with connection.cursor() as cursor:
+                cursor.execute("CREATE EXTENSION IF NOT EXISTS vector")
                 cursor.execute("CREATE TABLE IF NOT EXISTS material_runtime_vector_chunks (chunk_row_id TEXT PRIMARY KEY, owner_user_id TEXT NOT NULL, document_id TEXT NOT NULL, document_version_id TEXT NOT NULL, document_kind TEXT NOT NULL, knowledge_collection_id TEXT NULL, chunk_id TEXT NOT NULL, chunk_index INTEGER NOT NULL, content TEXT NOT NULL, vector_json JSONB NOT NULL, embedding_model TEXT NOT NULL, rebuild_version INTEGER NOT NULL, metadata_json JSONB NOT NULL, created_at_ms BIGINT NOT NULL)")
             connection.commit()
 

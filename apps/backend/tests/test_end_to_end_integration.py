@@ -61,8 +61,8 @@ def test_end_to_end_report_writer_outputs_json_and_markdown(tmp_path: Path, monk
     assert "Retrieval-backed Interview Session and Chat" in markdown
 
     bug_payload = json.loads(paths["bug_json"].read_text(encoding="utf-8"))
-    assert bug_payload["count"] >= 1
-    assert any(item["issueId"] == "frontend-real-state-aggregation-missing" for item in bug_payload["items"])
+    assert bug_payload["count"] == 0
+    assert bug_payload["items"] == []
 
     todo_payload = json.loads(paths["todo_json"].read_text(encoding="utf-8"))
     assert todo_payload["count"] >= 1

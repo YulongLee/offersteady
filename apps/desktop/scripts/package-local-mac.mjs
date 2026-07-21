@@ -106,7 +106,7 @@ const plistSet = (plistPath, key, value) => {
   }
 };
 const plist = join(appPath, "Contents/Info.plist");
-const appBundleId = "com.offersteady.companion.local";
+const appBundleId = "com.offersteady.companion";
 const helperBundleIds = [
   ["Electron Helper.app/Contents/Info.plist", `${appBundleId}.helper`],
   ["Electron Helper (Renderer).app/Contents/Info.plist", `${appBundleId}.helper.renderer`],

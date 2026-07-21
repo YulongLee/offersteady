@@ -9,7 +9,7 @@ const desktopDir = resolve(scriptDir, "..");
 const packagePath = join(desktopDir, "package.json");
 const desktopPackage = JSON.parse(readFileSync(packagePath, "utf8"));
 const arch = process.argv[2] || process.arch;
-const bundleId = "com.offersteady.companion.local";
+const bundleId = "com.offersteady.companion";
 const appPath = join(
   desktopDir,
   "release",

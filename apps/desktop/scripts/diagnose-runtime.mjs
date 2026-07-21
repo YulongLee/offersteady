@@ -32,7 +32,7 @@ const check = async (name, run) => {
   const startedAtMs = Date.now();
   try {
     const data = await run();
-    return { name, ok: !data?.failed, durationMs: Date.now() - startedAtMs, data };
+    return { name, ok: !data?.failed && data?.ok !== false, durationMs: Date.now() - startedAtMs, data };
   } catch (error) {
     return {
       name,

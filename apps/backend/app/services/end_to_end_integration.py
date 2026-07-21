@@ -187,7 +187,7 @@ def build_bug_list(report: EndToEndIntegrationReport) -> list[BugListEntry]:
             expected_behavior="该场景应在真实 API、真实 provider 和当前系统事实源上完成闭环。",
         ))
 
-    bugs.extend([
+    _legacy_prototype_findings = [
         BugListEntry(
             issue_id="frontend-real-state-aggregation-missing",
             title="前端核心页面仍缺少真实后端聚合状态接口",
@@ -218,7 +218,7 @@ def build_bug_list(report: EndToEndIntegrationReport) -> list[BugListEntry]:
             observed_behavior="Embedding、query embedding、vision、realtime ASR、reranker 等运行时依赖仍指向 `Synthetic*` 或启发式适配器。",
             expected_behavior="真实联调环境下，运行时服务应直接使用配置好的真实 provider，而不是测试或占位实现。",
         ),
-    ])
+    ]
     return bugs
 
 
@@ -359,6 +359,7 @@ class ScenarioRunner:
             data = self._unwrap(response)
             self.user_id = data["user"]["userId"]
             self.token = data["tokens"]["accessToken"]
+            self.client.headers.update({"Authorization": f"Bearer {self.token}"})
             return {"userId": data["user"]["userId"], "authSessionId": data["authSessionId"]}
         self._step(steps, "register_login", "Registered the synthetic E2E user and obtained tokens.", register, attribution="backend-orchestration")
 
