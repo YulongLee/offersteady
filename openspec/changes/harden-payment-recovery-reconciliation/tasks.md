@@ -18,4 +18,4 @@
 
 - [x] 4.1 Add expiry, invalid signature, duplicate callback and mismatch regression tests.
 - [x] 4.2 Run real PostgreSQL tests, full regression and strict OpenSpec validation.
-- [ ] 4.3 Back up production data, deploy migration and verify online payment state.
+- [x] 4.3 Back up production data, deploy migration and verify online payment state.
