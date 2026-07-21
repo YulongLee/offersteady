@@ -501,29 +501,13 @@ class ScenarioRunner:
             buffer = BytesIO()
             canvas.save(buffer, format="PNG")
             image = buffer.getvalue()
-            intent = self._unwrap(self.client.post("/api/v1/screenshot-answer/upload-intents", json={
-                "userId": self.user_id,
-                "sessionId": self.session_id,
-                "filename": "diagram.png",
-                "contentType": "image/png",
-                "sizeBytes": len(image),
-            }))
-            self._upload_via_oss(
-                upload_url=intent["uploadUrl"],
-                fields=intent["uploadFields"],
-                filename="diagram.png",
-                content_type="image/png",
-                payload=image,
+            upload = self._unwrap(
+                self.client.post(
+                    "/api/v1/screenshot-answer/uploads/direct",
+                    data={"userId": self.user_id, "sessionId": self.session_id},
+                    files={"screenshot": ("diagram.png", image, "image/png")},
+                )
             )
-            upload = self._unwrap(self.client.post("/api/v1/screenshot-answer/uploads/complete", json={
-                "userId": self.user_id,
-                "sessionId": self.session_id,
-                "intentId": intent["intentId"],
-                "objectKey": intent["objectKey"],
-                "contentType": "image/png",
-                "sizeBytes": len(image),
-                "etag": "e2e-shot",
-            }))
             task = self._unwrap(self.client.post("/api/v1/screenshot-answer/tasks", json={
                 "userId": self.user_id,
                 "sessionId": self.session_id,
