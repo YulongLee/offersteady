@@ -19,4 +19,4 @@
 
 - [x] 4.1 Run workspace tests, backend regression, database/provider/E2E tests and dependency audit.
 - [x] 4.2 Build Web and macOS ARM64 release artifacts and validate expected signing limitation.
-- [ ] 4.3 Back up production, deploy, enable pgvector and verify public security headers.
+- [x] 4.3 Back up production, deploy, enable pgvector and verify public security headers.
