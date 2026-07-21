@@ -130,8 +130,8 @@ OFFERSTEADY_CORS_ALLOWED_ORIGINS=["http://101.133.147.212"]
 VITE_APP_ENV=production
 VITE_API_BASE_URL=http://101.133.147.212
 VITE_PUBLIC_APP_VERSION=0.1.0
-OFFERSTEADY_MZFPAY_NOTIFY_URL=http://101.133.147.212/api/v1/billing/payment-providers/mzfpay/notify
-OFFERSTEADY_MZFPAY_RETURN_URL=http://101.133.147.212/app/billing
+OFFERSTEADY_MZFPAY_NOTIFY_URL=https://mianshiwen.cn/api/v1/billing/payment-providers/mzfpay/notify
+OFFERSTEADY_MZFPAY_RETURN_URL=https://mianshiwen.cn/app/billing
 ```
 
 如果后续绑定域名和 HTTPS，将上述 URL 统一替换为 `https://<domain>`。码支付真实自动到账必须使用公网可访问的 `OFFERSTEADY_MZFPAY_NOTIFY_URL`，不能使用 `127.0.0.1`、`localhost` 或局域网地址。

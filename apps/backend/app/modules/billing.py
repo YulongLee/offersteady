@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from hashlib import sha256
+from json import dumps
 from pydantic import BaseModel, ConfigDict, Field
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse
@@ -133,13 +135,16 @@ async def handle_mzfpay_notify(
         params = {key: value for key, value in request.query_params.items()}
     provider = MzfpayPaymentProvider(settings)
     notification = provider.parse_notification(params)
-    if not notification.verified or not notification.paid or not notification.order_id:
-        return PlainTextResponse("fail")
-    try:
-        service.confirm_checkout_paid(order_id=notification.order_id, amount_cents=notification.amount_cents, provider_trade_no=notification.provider_trade_no)
-    except KeyError:
-        return PlainTextResponse("fail")
-    return PlainTextResponse("success")
+    event_fingerprint = sha256(dumps(params, sort_keys=True, separators=(",", ":")).encode("utf8")).hexdigest()
+    outcome = service.process_payment_notification(
+        event_fingerprint=event_fingerprint,
+        order_id=notification.order_id,
+        provider_trade_no=notification.provider_trade_no,
+        amount_cents=notification.amount_cents,
+        verified=notification.verified,
+        paid=notification.paid,
+    )
+    return PlainTextResponse("success" if outcome == "paid" else "fail")
 
 
 @router.get("/payment-providers/mzfpay/return")

@@ -311,6 +311,8 @@ class BillingService:
         return updated
 
     def checkout_order_for_user(self, *, user_id: str, order_id: str) -> OfficialCheckoutOrderRecord:
+        if self.billing_repository is not None:
+            self.billing_repository.expire_checkout_orders(now_ms=_now_ms(), order_id=order_id)
         order = self._persisted_order(self.billing_repository.checkout_order(order_id=order_id)) if self.billing_repository is not None else self.checkout_orders_by_id[order_id]
         if order.user_id != user_id:
             raise PermissionError("Cannot access another user's checkout order.")
@@ -351,6 +353,64 @@ class BillingService:
         paid = OfficialCheckoutOrderRecord(**{**order.__dict__, "status": "paid", "updated_at_ms": paid_at_ms, "provider_trade_no": provider_trade_no, "paid_at_ms": paid_at_ms})
         self.checkout_orders_by_id[order_id] = paid
         return paid
+
+    def process_payment_notification(
+        self,
+        *,
+        event_fingerprint: str,
+        order_id: str,
+        provider_trade_no: str,
+        amount_cents: int,
+        verified: bool,
+        paid: bool,
+    ) -> str:
+        now_ms = _now_ms()
+        if self.billing_repository is not None:
+            self.billing_repository.record_payment_callback(event={
+                "event_fingerprint": event_fingerprint,
+                "provider": "mzfpay",
+                "order_id": order_id,
+                "provider_trade_no": provider_trade_no,
+                "amount_cents": amount_cents,
+                "signature_verified": verified,
+                "paid": paid,
+                "received_at_ms": now_ms,
+            })
+        if not verified:
+            outcome = "invalid_signature"
+        elif not paid:
+            outcome = "ignored_not_paid"
+        else:
+            try:
+                order = self.confirm_checkout_paid(
+                    order_id=order_id,
+                    amount_cents=amount_cents,
+                    provider_trade_no=provider_trade_no,
+                )
+                outcome = "paid" if order.status == "paid" else "amount_mismatch"
+            except KeyError:
+                outcome = "unknown_order"
+            except Exception:
+                outcome = "processing_failure"
+        if self.billing_repository is not None:
+            if outcome in {"unknown_order", "amount_mismatch", "processing_failure"}:
+                self.billing_repository.create_reconciliation_issue(
+                    issue_type=outcome,
+                    event_fingerprint=event_fingerprint,
+                    order_id=order_id,
+                    detected_at_ms=now_ms,
+                )
+            self.billing_repository.complete_payment_callback(
+                event_fingerprint=event_fingerprint,
+                outcome=outcome,
+                completed_at_ms=now_ms,
+            )
+        return outcome
+
+    def reconciliation_summary(self) -> dict[str, object]:
+        if self.billing_repository is None:
+            return {"generatedAtMs": _now_ms(), "orders": {}, "callbackEvents": 0, "callbackFailures": 0, "openIssues": 0, "issues": []}
+        return self.billing_repository.reconciliation_summary(now_ms=_now_ms())
 
     def catalog(self) -> list[BillingProductRecord]:
         return [
@@ -599,6 +659,7 @@ class BillingService:
 
     def _orders_for_user(self, *, user_id: str) -> list[OfficialCheckoutOrderRecord]:
         if self.billing_repository is not None:
+            self.billing_repository.expire_checkout_orders(now_ms=_now_ms(), user_id=user_id)
             return [self._persisted_order(item) for item in self.billing_repository.list_checkout_orders(user_id=user_id)]
         return [
             item for item in sorted(self.checkout_orders_by_id.values(), key=lambda order: order.created_at_ms, reverse=True)

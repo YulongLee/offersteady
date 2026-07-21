@@ -76,8 +76,8 @@ OFFERSTEADY_MZFPAY_BASE_URL=https://pay.mzfpay.com
 OFFERSTEADY_MZFPAY_PID=<merchant-id>
 OFFERSTEADY_MZFPAY_KEY=<merchant-key>
 OFFERSTEADY_MZFPAY_SUBMIT_PATH=/xpay/epay/submit.php
-OFFERSTEADY_MZFPAY_NOTIFY_URL=http://101.133.147.212/api/v1/billing/payment-providers/mzfpay/notify
-OFFERSTEADY_MZFPAY_RETURN_URL=http://101.133.147.212/app/billing
+OFFERSTEADY_MZFPAY_NOTIFY_URL=https://mianshiwen.cn/api/v1/billing/payment-providers/mzfpay/notify
+OFFERSTEADY_MZFPAY_RETURN_URL=https://mianshiwen.cn/app/billing
 OFFERSTEADY_MZFPAY_PAYMENT_TTL_SECONDS=900
 ```
 

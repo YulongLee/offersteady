@@ -59,3 +59,50 @@ def test_concurrent_index_reservations_cannot_overspend() -> None:
         ))
     assert sorted(item.status for item in reservations) == ["insufficient_balance", "reserved"]
 
+
+@pytest.mark.skipif(not DATABASE_URL, reason="OFFERSTEADY_TEST_DATABASE_URL is not configured")
+def test_payment_expiry_callback_audit_and_reconciliation() -> None:
+    user_id = f"billing-callback-{uuid4().hex}"
+    service = service_for_test()
+    service.state_for_user(user_id=user_id)
+    order = service.create_checkout_order(
+        user_id=user_id, product_id="points-300", channel="alipay",
+        idempotency_key="expiring-order", payment_url="#", expires_at_ms=1,
+    )
+    expired = service.checkout_order_for_user(user_id=user_id, order_id=order.id)
+    assert expired.status == "expired"
+
+    fingerprint = uuid4().hex
+    assert service.process_payment_notification(
+        event_fingerprint=fingerprint, order_id=order.id, provider_trade_no=f"trade-{uuid4().hex}",
+        amount_cents=order.amount_cents, verified=True, paid=True,
+    ) == "paid"
+    assert service.process_payment_notification(
+        event_fingerprint=fingerprint, order_id=order.id, provider_trade_no=f"trade-{uuid4().hex}",
+        amount_cents=order.amount_cents, verified=True, paid=True,
+    ) == "paid"
+    restarted = service_for_test()
+    assert restarted.state_for_user(user_id=user_id).balance == 500
+    assert len([item for item in restarted.state_for_user(user_id=user_id).ledger if item.kind == "purchase_credit"]) == 1
+
+    assert service.process_payment_notification(
+        event_fingerprint=uuid4().hex, order_id="unknown-order", provider_trade_no="unknown-trade",
+        amount_cents=100, verified=True, paid=True,
+    ) == "unknown_order"
+    mismatch_order = service.create_checkout_order(
+        user_id=user_id, product_id="points-800", channel="alipay",
+        idempotency_key="mismatch-order", payment_url="#", expires_at_ms=9999999999999,
+    )
+    assert service.process_payment_notification(
+        event_fingerprint=uuid4().hex, order_id=mismatch_order.id, provider_trade_no=f"mismatch-{uuid4().hex}",
+        amount_cents=mismatch_order.amount_cents - 1, verified=True, paid=True,
+    ) == "amount_mismatch"
+    assert service.process_payment_notification(
+        event_fingerprint=uuid4().hex, order_id=order.id, provider_trade_no="invalid-signature",
+        amount_cents=order.amount_cents, verified=False, paid=True,
+    ) == "invalid_signature"
+    report = restarted.reconciliation_summary()
+    assert report["callbackEvents"] >= 3
+    assert report["openIssues"] >= 1
+    assert any(item["issueType"] == "unknown_order" for item in report["issues"])
+    assert any(item["issueType"] == "amount_mismatch" for item in report["issues"])

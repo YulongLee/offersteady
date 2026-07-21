@@ -58,14 +58,15 @@ class PostgresBillingRepository:
                 """
                 INSERT INTO billing_checkout_orders (
                   order_id, user_id, idempotency_key, product_snapshot, amount_cents,
-                  currency, channel, status, action, created_at_ms, updated_at_ms
-                ) VALUES (%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s::jsonb,%s,%s)
+                  currency, channel, status, action, created_at_ms, updated_at_ms, expires_at_ms
+                ) VALUES (%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s::jsonb,%s,%s,%s)
                 RETURNING *
                 """,
                 (
                     order["id"], order["user_id"], idempotency_key, dumps(order["product"]),
                     order["amount_cents"], order["currency"], order["channel"], order["status"],
                     dumps(order["action"]), order["created_at_ms"], order["updated_at_ms"],
+                    int(dict(order["action"]).get("expiresAtMs") or 0),
                 ),
             )
             result = self._order(cursor.fetchone())
@@ -75,8 +76,8 @@ class PostgresBillingRepository:
     def replace_checkout_action(self, *, order_id: str, action: Mapping[str, object], updated_at_ms: int) -> dict[str, object]:
         with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
-                "UPDATE billing_checkout_orders SET action = %s::jsonb, updated_at_ms = %s WHERE order_id = %s RETURNING *",
-                (dumps(dict(action)), updated_at_ms, order_id),
+                "UPDATE billing_checkout_orders SET action = %s::jsonb, expires_at_ms = %s, updated_at_ms = %s WHERE order_id = %s RETURNING *",
+                (dumps(dict(action)), int(action.get("expiresAtMs") or 0), updated_at_ms, order_id),
             )
             row = cursor.fetchone()
             if row is None:
@@ -107,8 +108,8 @@ class PostgresBillingRepository:
                 return self._order(row)
             if int(row["amount_cents"]) != amount_cents:
                 cursor.execute(
-                    "UPDATE billing_checkout_orders SET status = 'failed', provider_trade_no = %s, updated_at_ms = %s WHERE order_id = %s RETURNING *",
-                    (provider_trade_no, paid_at_ms, order_id),
+                    "UPDATE billing_checkout_orders SET status = 'failed', failure_reason = 'amount_mismatch', provider_trade_no = %s, last_callback_at_ms = %s, updated_at_ms = %s WHERE order_id = %s RETURNING *",
+                    (provider_trade_no, paid_at_ms, paid_at_ms, order_id),
                 )
                 failed = self._order(cursor.fetchone())
                 connection.commit()
@@ -153,10 +154,11 @@ class PostgresBillingRepository:
             cursor.execute(
                 """
                 UPDATE billing_checkout_orders
-                SET status = 'paid', provider_trade_no = %s, paid_at_ms = %s, updated_at_ms = %s
+                SET status = 'paid', failure_reason = NULL, provider_trade_no = %s,
+                    paid_at_ms = %s, last_callback_at_ms = %s, updated_at_ms = %s
                 WHERE order_id = %s RETURNING *
                 """,
-                (provider_trade_no, paid_at_ms, paid_at_ms, order_id),
+                (provider_trade_no, paid_at_ms, paid_at_ms, paid_at_ms, order_id),
             )
             paid = self._order(cursor.fetchone())
             connection.commit()
@@ -287,6 +289,100 @@ class PostgresBillingRepository:
             cursor.execute("SELECT * FROM billing_time_pass_entitlements WHERE user_id = %s ORDER BY starts_at_ms", (user_id,))
             return [self._entitlement(row) for row in cursor.fetchall()]
 
+    def expire_checkout_orders(self, *, now_ms: int, user_id: str | None = None, order_id: str | None = None) -> int:
+        clauses = ["status = 'payment_pending'", "expires_at_ms <= %s"]
+        params: list[object] = [now_ms]
+        if user_id is not None:
+            clauses.append("user_id = %s")
+            params.append(user_id)
+        if order_id is not None:
+            clauses.append("order_id = %s")
+            params.append(order_id)
+        with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                f"UPDATE billing_checkout_orders SET status = 'expired', failure_reason = 'checkout_expired', updated_at_ms = %s WHERE {' AND '.join(clauses)}",
+                (now_ms, *params),
+            )
+            count = cursor.rowcount
+            connection.commit()
+            return count
+
+    def record_payment_callback(self, *, event: Mapping[str, object]) -> dict[str, object]:
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                INSERT INTO billing_payment_callback_events (
+                  event_fingerprint, provider, order_id, provider_trade_no, amount_cents,
+                  signature_verified, paid, outcome, first_received_at_ms, last_received_at_ms
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,'received',%s,%s)
+                ON CONFLICT (event_fingerprint) DO UPDATE SET
+                  delivery_count = billing_payment_callback_events.delivery_count + 1,
+                  last_received_at_ms = EXCLUDED.last_received_at_ms
+                RETURNING *
+                """,
+                (
+                    event["event_fingerprint"], event["provider"], event["order_id"], event["provider_trade_no"],
+                    event["amount_cents"], event["signature_verified"], event["paid"],
+                    event["received_at_ms"], event["received_at_ms"],
+                ),
+            )
+            row = dict(cursor.fetchone())
+            connection.commit()
+            return row
+
+    def complete_payment_callback(self, *, event_fingerprint: str, outcome: str, completed_at_ms: int) -> None:
+        with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE billing_payment_callback_events SET outcome = %s, completed_at_ms = %s WHERE event_fingerprint = %s",
+                (outcome, completed_at_ms, event_fingerprint),
+            )
+            connection.commit()
+
+    def create_reconciliation_issue(self, *, issue_type: str, event_fingerprint: str, order_id: str, detected_at_ms: int) -> None:
+        safe_reference = order_id[-12:] if order_id else "missing-order"
+        with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO billing_reconciliation_issues (
+                  issue_id, issue_type, event_fingerprint, order_id, safe_reference, status, detected_at_ms
+                ) VALUES (%s,%s,%s,%s,%s,'open',%s)
+                ON CONFLICT (issue_type, event_fingerprint) DO NOTHING
+                """,
+                (f"reconciliation-{uuid4().hex}", issue_type, event_fingerprint, order_id, safe_reference, detected_at_ms),
+            )
+            connection.commit()
+
+    def reconciliation_summary(self, *, now_ms: int) -> dict[str, object]:
+        self.expire_checkout_orders(now_ms=now_ms)
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute("SELECT status, COUNT(*) AS count FROM billing_checkout_orders GROUP BY status")
+            orders = {str(row["status"]): int(row["count"]) for row in cursor.fetchall()}
+            cursor.execute("SELECT COUNT(*) AS count FROM billing_payment_callback_events")
+            callback_events = int(cursor.fetchone()["count"])
+            cursor.execute("SELECT COUNT(*) AS count FROM billing_payment_callback_events WHERE outcome NOT IN ('paid', 'ignored_not_paid')")
+            callback_failures = int(cursor.fetchone()["count"])
+            cursor.execute(
+                "SELECT issue_type, safe_reference, detected_at_ms FROM billing_reconciliation_issues WHERE status = 'open' ORDER BY detected_at_ms DESC LIMIT 50"
+            )
+            issues = [
+                {
+                    "issueType": str(row["issue_type"]), "safeReference": str(row["safe_reference"]),
+                    "detectedAtMs": int(row["detected_at_ms"]),
+                }
+                for row in cursor.fetchall()
+            ]
+            return {
+                "generatedAtMs": now_ms,
+                "orders": {
+                    "paymentPending": orders.get("payment_pending", 0), "expired": orders.get("expired", 0),
+                    "paid": orders.get("paid", 0), "failed": orders.get("failed", 0),
+                },
+                "callbackEvents": callback_events,
+                "callbackFailures": callback_failures,
+                "openIssues": len(issues),
+                "issues": issues,
+            }
+
     @staticmethod
     def _ledger(row) -> dict[str, object]:
         return {
@@ -347,9 +443,10 @@ class PostgresBillingRepository:
         migrations = (
             Path(REPO_ROOT / "apps/backend/migrations/versions/0008_persistent_points_redemption.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0009_commercial_billing_persistence.sql"),
+            Path(REPO_ROOT / "apps/backend/migrations/versions/0010_payment_recovery_reconciliation.sql"),
         )
         with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ("offersteady:billing-migrations",))
             for migration in migrations:
                 cursor.execute(migration.read_text(encoding="utf8"))
             connection.commit()
-
