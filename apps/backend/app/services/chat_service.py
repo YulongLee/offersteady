@@ -567,6 +567,10 @@ class ChatService:
         last_error: Exception | None = None
         for attempt in range(self.settings.chat_retry_max_attempts + 1):
             try:
+                if self._is_task_cancelled(current_task.task_id):
+                    cancelled = self.repository.get_task(current_task.task_id) or current_task
+                    yield {"type": "cancelled", "task": cancelled}
+                    return
                 for seed_text in ["简单回答\n"]:
                     normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=seed_text, is_final=False)
                     chunks.append(normalized)
@@ -588,6 +592,10 @@ class ChatService:
                     )
                     yield {"type": "chunk", "task": current_task, "chunk": normalized}
                 retrieval = self._retrieve_context(user_id=user_id, session=session, question=question)
+                if self._is_task_cancelled(current_task.task_id):
+                    cancelled = self.repository.get_task(current_task.task_id) or current_task
+                    yield {"type": "cancelled", "task": cancelled}
+                    return
                 material_context_text, material_assembly, material_provenance = self._assemble_material_context(session=session, retrieval=retrieval)
                 current_task = self.repository.save_task(
                     replace(

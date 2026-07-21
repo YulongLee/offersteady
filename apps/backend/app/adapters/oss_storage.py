@@ -29,6 +29,8 @@ class AliyunOssStorageAdapter(FileStoragePort):
     uploaded_objects: dict[str, bytes] = field(default_factory=dict)
 
     def _has_real_oss_config(self) -> bool:
+        if os.environ.get("PYTEST_CURRENT_TEST"):
+            return False
         return bool(
             self.settings.oss_access_key_id
             and self.settings.oss_access_key_secret

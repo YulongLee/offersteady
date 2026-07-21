@@ -28,12 +28,21 @@ const isDevicePairingFile = (value: unknown): value is DevicePairingFile => {
 
 export class DevicePairingIdentityStore {
   private readonly identityPath: string;
+  private loadOrCreateInFlight: Promise<DevicePairingIdentity> | null = null;
 
   constructor(userDataDirectory: string) {
     this.identityPath = path.join(userDataDirectory, "device-pairing.json");
   }
 
   async loadOrCreate(defaultDisplayName: string): Promise<DevicePairingIdentity> {
+    if (this.loadOrCreateInFlight) return this.loadOrCreateInFlight;
+    this.loadOrCreateInFlight = this.initialize(defaultDisplayName).finally(() => {
+      this.loadOrCreateInFlight = null;
+    });
+    return this.loadOrCreateInFlight;
+  }
+
+  private async initialize(defaultDisplayName: string): Promise<DevicePairingIdentity> {
     const existing = await this.load();
     if (existing) return existing;
     const identityFile: DevicePairingFile = {

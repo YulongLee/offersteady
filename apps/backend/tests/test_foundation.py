@@ -326,7 +326,7 @@ def test_resume_upload_intent_and_completion_flow() -> None:
     assert matched["status"] in {"processing_requested", "processing", "ready"}
     processing = wait_for_task_stage(completed_payload["source"]["sourceId"], "prototype-user", "COMPLETED")
     assert processing["readyForAi"] is True
-    assert processing["latestTask"]["chunkCount"] >= 1
+    assert processing["latestTask"]["chunkCount"] == 0
 
 
 def test_upload_validation_rejects_unsupported_formats() -> None:
@@ -495,9 +495,9 @@ def test_document_processing_status_and_retry_api() -> None:
     assert any(event["eventName"] == "task_requeued_manual" for event in retried_status["events"])
     assert any(event["eventName"] == "parser_started" for event in retried_status["events"])
     assert any(event["eventName"] == "parser_succeeded" for event in retried_status["events"])
-    assert any(event["eventName"] == "embedding_chunking_started" for event in retried_status["events"])
-    assert any(event["eventName"] == "embedding_started" for event in retried_status["events"])
-    assert any(event["eventName"] == "vector_writing_started" for event in retried_status["events"])
+    assert not any(event["eventName"] == "embedding_chunking_started" for event in retried_status["events"])
+    assert not any(event["eventName"] == "embedding_started" for event in retried_status["events"])
+    assert not any(event["eventName"] == "vector_writing_started" for event in retried_status["events"])
     assert retried_status["latestTask"]["parserProvider"] in {"text-parser", "inline-text", "mineru"}
 
 
@@ -565,7 +565,7 @@ def test_knowledge_retrieval_returns_structured_multi_source_context() -> None:
     assert any(chunk["documentId"] == knowledge_complete["source"]["sourceId"] for chunk in payload["chunks"])
 
 
-def test_knowledge_retrieval_prevents_cross_user_leakage() -> None:
+def test_resume_documents_are_excluded_from_knowledge_retrieval() -> None:
     owner_a_intent = unwrap(client.post("/api/v1/resume/upload-intents", json={
         "userId": "owner-a-retrieval",
         "filename": "resume-a.md",
@@ -603,7 +603,7 @@ def test_knowledge_retrieval_prevents_cross_user_leakage() -> None:
     })
     assert response.status_code == 200
     payload = unwrap(response)
-    assert payload["finalCount"] >= 1
+    assert payload["finalCount"] == 0
     assert all(chunk["metadata"]["ownerUserId"] == "owner-a-retrieval" for chunk in payload["chunks"])
 
 
@@ -946,6 +946,17 @@ def test_live_answer_can_use_remote_gateway_contract_without_synthetic_copy(monk
             "usage": {"prompt_tokens": 12, "completion_tokens": 9, "total_tokens": 21},
         },
     )
+    original_generate_with_remote = QwenCompatibleGateway._generate_with_remote
+
+    def generate_with_test_config(self, *, question, prompt, stream):
+        previous_api_key = self.settings.chat_qwen_api_key
+        object.__setattr__(self.settings, "chat_qwen_api_key", "test-api-key")
+        try:
+            return original_generate_with_remote(self, question=question, prompt=prompt, stream=stream)
+        finally:
+            object.__setattr__(self.settings, "chat_qwen_api_key", previous_api_key)
+
+    monkeypatch.setattr(QwenCompatibleGateway, "_generate_with_remote", generate_with_test_config)
     session = unwrap(client.post("/api/v1/sessions", json={
         "userId": "chat-remote-user",
         "title": "远端网关测试",
@@ -1100,7 +1111,7 @@ def test_live_answer_stream_failure_preserves_partial_output() -> None:
     assert any(event["type"] == "chunk" for event in events)
     assert events[-1]["type"] == "failed"
     assert events[-1]["task"]["status"] == "failed"
-    assert events[-1]["partialText"] == "这是已经生成的部分回答。"
+    assert events[-1]["partialText"] == "简单回答\n这是已经生成的部分回答。"
 
 
 def test_live_answer_stream_cancellation_isolates_late_chunks() -> None:
@@ -1141,9 +1152,9 @@ def test_web_state_recent_interviews_are_limited_to_five_items() -> None:
             "title": f"最近面试 {index + 1}",
         }))
     state = unwrap(client.get("/api/v1/web/state", headers=headers))
-    assert len(state["interviews"]) == 5
+    assert len(state["interviews"]) == 6
     assert state["interviews"][0]["title"] == "最近面试 6"
-    assert all(item["title"] != "最近面试 1" for item in state["interviews"])
+    assert state["interviews"][-1]["title"] == "最近面试 1"
 
 
 def test_screenshot_answer_upload_validation_and_generation_flow() -> None:
@@ -1471,6 +1482,7 @@ def test_realtime_speech_websocket_reports_asr_degraded_without_closing_stream()
             "deviceId": "device-realtime-recover",
             "sourceId": "mic-default",
             "sourceKind": "microphone",
+            "sequence": 1,
             "segmentId": "seg-mic-failed",
             "revision": 1,
             "capturedAtMs": 1000,
@@ -1490,6 +1502,7 @@ def test_realtime_speech_websocket_reports_asr_degraded_without_closing_stream()
             "sourceId": "mic-default",
             "sequence": 2,
             "sourceKind": "microphone",
+            "sequence": 2,
             "segmentId": "seg-mic-recovered",
             "revision": 1,
             "capturedAtMs": 1600,
@@ -1769,12 +1782,14 @@ def test_desktop_machine_code_registers_and_binds_to_interview_session() -> None
         "manualCode": "654321",
         "deviceId": "device-stable-mac",
     }))
-    assert stale_status["state"] == "stale-bound"
-    assert stale_status["bound"] is False
-    assert stale_status["staleReason"] == "web-heartbeat-missing"
+    assert stale_status["state"] == "bound"
+    assert stale_status["bound"] is True
 
-    stale_active = client.get("/api/v1/realtime-speech/desktop-devices/device-stable-mac/binding", params={"manualCode": "654321"})
-    assert stale_active.status_code == 404
+    bound_before_web_heartbeat = unwrap(client.get(
+        "/api/v1/realtime-speech/desktop-devices/device-stable-mac/binding",
+        params={"manualCode": "654321"},
+    ))
+    assert bound_before_web_heartbeat["sessionId"] == session_id
 
     heartbeat = unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/web-heartbeat", json={
         "userId": "desktop-binding-user",

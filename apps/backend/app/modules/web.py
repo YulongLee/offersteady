@@ -528,13 +528,12 @@ async def get_web_state(
     billing_state = billing.state_for_user(user_id=user_id)
     document_items = documents.list_documents(user_id=user_id, include_deleted=False)
     session_items = sessions.list_sessions(user_id=user_id) if auth_context else []
-    recent_session_items = session_items[:5]
     chat_questions: list[dict[str, object]] = []
     screenshot_questions: list[dict[str, object]] = []
     review_screenshots: list[dict[str, object]] = []
     resources = [_prepared_resource_payload(item) for item in document_items[:3]]
     state = {
-        "interviews": [_session_payload(item) for item in recent_session_items],
+        "interviews": [_session_payload(item) for item in session_items],
         "preparation": {"resources": resources, "device": None},
         "questions": [*chat_questions, *screenshot_questions],
         "review": {

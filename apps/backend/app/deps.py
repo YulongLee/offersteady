@@ -45,6 +45,7 @@ from .services.document_processing_repository import InMemoryProcessingTaskRepos
 from .services.chat_repository import InMemoryChatRepository
 from .services.chat_service import ChatService, FilePromptTemplateAdapter, InterviewPromptBuilder, QwenCompatibleGateway
 from .services.authentication_repository import InMemoryAuthenticationRepository
+from .services.postgres_authentication_repository import PostgresAuthenticationRepository
 from .services.authentication_service import AuthenticationService, CompatibleWechatLoginProvider, JWTAccessTokenCodec, PBKDF2PasswordHasher
 from .services.sms_verification_provider import AliyunDypnsSmsVerificationProvider, FakeSmsVerificationProvider
 from .services.billing_service import BillingService
@@ -131,6 +132,8 @@ def _fallback_to_memory_repository(*,
 @lru_cache(maxsize=1)
 def document_repository() -> DocumentRepository:
     settings = get_settings()
+    if settings.environment == "production" and not settings.database_url:
+        raise RuntimeError("OFFERSTEADY_DATABASE_URL is required for production material persistence")
     if settings.database_url and not os.environ.get("PYTEST_CURRENT_TEST"):
         return _fallback_to_memory_repository(
             logger_key="document_repository",
@@ -144,6 +147,8 @@ def document_repository() -> DocumentRepository:
 @lru_cache(maxsize=1)
 def knowledge_collection_store() -> InMemoryKnowledgeCollectionStore:
     settings = get_settings()
+    if settings.environment == "production" and not settings.database_url:
+        raise RuntimeError("OFFERSTEADY_DATABASE_URL is required for production knowledge persistence")
     if settings.database_url and not os.environ.get("PYTEST_CURRENT_TEST"):
         return _fallback_to_memory_repository(
             logger_key="knowledge_collection_store",
@@ -203,6 +208,8 @@ def document_read_service() -> DocumentService:
 @lru_cache(maxsize=1)
 def interview_session_repository() -> InterviewSessionRepository:
     settings = get_settings()
+    if settings.environment == "production" and not settings.database_url:
+        raise RuntimeError("OFFERSTEADY_DATABASE_URL is required for production interview persistence")
     if settings.database_url and not os.environ.get("PYTEST_CURRENT_TEST"):
         return _fallback_to_memory_repository(
             logger_key="interview_session_repository",
@@ -260,6 +267,16 @@ def chat_service() -> ChatService:
 
 @lru_cache(maxsize=1)
 def authentication_repository() -> AuthenticationRepository:
+    settings = get_settings()
+    if settings.environment == "production" and not settings.database_url:
+        raise RuntimeError("OFFERSTEADY_DATABASE_URL is required for production authentication persistence")
+    if settings.database_url and not os.environ.get("PYTEST_CURRENT_TEST"):
+        return _fallback_to_memory_repository(
+            logger_key="authentication_repository",
+            environment=settings.environment,
+            build_postgres=lambda: PostgresAuthenticationRepository(settings),
+            fallback=lambda: InMemoryAuthenticationRepository(),
+        )
     return InMemoryAuthenticationRepository()
 
 

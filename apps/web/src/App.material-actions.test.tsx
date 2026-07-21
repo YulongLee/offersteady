@@ -32,6 +32,9 @@ const open = (path: string, mutate?: (state: WebAppState) => void) => {
       lastSeenAtMs: Date.now(),
     }));
   }
+  if (!vi.isMockFunction(interviewAppAdapter.confirmInterviewMaterials)) {
+    vi.spyOn(interviewAppAdapter, "confirmInterviewMaterials").mockImplementation(async selection => structuredClone(selection));
+  }
   if (!vi.isMockFunction(interviewAppAdapter.submitManualAnswer)) {
     vi.spyOn(interviewAppAdapter, "submitManualAnswer").mockImplementation(async command => {
       const taskId = `answer-${command.idempotencyKey.replace(/[^a-zA-Z0-9-]/g, "-")}`;
@@ -88,9 +91,10 @@ describe("categorized materials and reachable live actions", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "添加并解析" }));
     expect(await screen.findByText(/尚未授权给任何面试/)).toBeInTheDocument();
     expect(screen.getByText("新增合成简历.pdf")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: "完成模拟解析" }).at(-1)!);
     window.history.pushState({}, "", "/app/interviews/demo/prepare"); window.dispatchEvent(new PopStateEvent("popstate"));
-    expect(await screen.findByRole("radio", { name: /新增合成简历.pdf/ })).not.toBeChecked();
+    const uploadedResume = await screen.findByRole("radio", { name: /新增合成简历.pdf/ });
+    expect(uploadedResume).not.toBeChecked();
+    expect(uploadedResume).toBeDisabled();
   });
 
   it("hides foreign material sources from categorized management", () => {
@@ -120,7 +124,8 @@ describe("categorized materials and reachable live actions", () => {
     fireEvent.change(within(dialog).getByLabelText("选择简历文件"), { target: { files: [file] } });
     fireEvent.click(within(dialog).getByRole("button", { name: "添加并解析" }));
     expect(await screen.findByText(/仅支持 PDF、DOCX、DOC、TXT、MD/)).toBeInTheDocument();
-    expect(screen.queryByText("avatar.png")).not.toBeInTheDocument();
+    const failedUpload = screen.getByText("avatar.png").closest("article")!;
+    expect(within(failedUpload).getByText("资料暂不可用，请刷新状态。")).toBeInTheDocument();
   });
 
   it("keeps newly uploaded knowledge materials unavailable in preparation until processing is complete", async () => {
@@ -145,22 +150,22 @@ describe("categorized materials and reachable live actions", () => {
     expect(screen.getByRole("link", { name: "前往面试资料处理" })).toHaveAttribute("href", "/app/library");
   });
 
-  it("supports replacing, reprocessing and deleting a resume", () => {
+  it("keeps a reusable resume when backend deletion fails and exposes no prototype replacement actions", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     open("/app/library"); const tabs = screen.getByRole("navigation", { name: "资料类型" }); fireEvent.click(within(tabs).getByRole("button", { name: /简历/ }));
     const row = screen.getByText("高级前端工程师简历（合成）").closest("article")!;
-    fireEvent.click(within(row).getByRole("button", { name: "替换" }));
-    expect(within(row).getByText("解析中")).toBeInTheDocument();
-    fireEvent.click(within(row).getByRole("button", { name: "完成模拟解析" }));
+    expect(within(row).queryByRole("button", { name: "替换" })).not.toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: "完成模拟解析" })).not.toBeInTheDocument();
     fireEvent.click(within(row).getByRole("button", { name: "删除" }));
-    expect(screen.queryByText("高级前端工程师简历（合成）")).not.toBeInTheDocument();
+    expect(await screen.findByText("无法连接后端基础服务")).toBeInTheDocument();
+    expect(screen.getByText("高级前端工程师简历（合成）")).toBeInTheDocument();
   });
 
-  it("allows an explicitly confirmed empty selection to start", () => {
+  it("allows an explicitly confirmed empty selection to start", async () => {
     open("/app/interviews/demo/prepare");
     fireEvent.click(screen.getByRole("button", { name: "本场不使用资料" }));
     fireEvent.click(screen.getByRole("button", { name: "确认空资料并继续" }));
-    expect(screen.getByText("已确认不使用个人资料")).toBeInTheDocument();
+    expect(await screen.findByText("已确认不使用个人资料")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /开始面试/ })).toBeEnabled();
     expect(screen.queryByRole("checkbox", { name: /数据用途/ })).not.toBeInTheDocument();
   });
