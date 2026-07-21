@@ -683,10 +683,11 @@ h1, h2, h3, p { margin-top: 0; }
 .guide-support { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 30px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); padding: 24px; margin-top: 18px; }
 .guide-support h2 { margin: 8px 0; font-size: 18px; }
 .guide-support p { color: var(--muted); font-size: 9px; }
-.support-assets { display: flex; gap: 10px; }
-.support-assets figure { margin: 0; text-align: center; }
-.support-assets img { width: 92px; height: 92px; border-radius: 8px; }
-.support-assets figcaption { color: var(--muted); margin-top: 5px; font-size: 7px; }
+.support-contacts { display: grid; grid-template-columns: repeat(2, minmax(180px, 1fr)); gap: 10px; }
+.support-contacts article { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; min-width: 210px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-strong); padding: 15px; }
+.support-contacts small { color: var(--muted); font-size: 8px; }
+.support-contacts strong { font-size: 11px; }
+.support-contacts button, .support-contacts a { border: 0; background: transparent; color: var(--brand); padding: 0; font-size: 8px; text-decoration: none; cursor: pointer; }
 
 @media (max-width: 1050px) {
   .landing-hero { grid-template-columns: 1fr; gap: 20px; padding: 70px 0; }
@@ -774,7 +775,8 @@ h1, h2, h3, p { margin-top: 0; }
   .collection-head, .release-detail { flex-direction: column; align-items: stretch; }
   .guide-layout, .guide-support { grid-template-columns: 1fr; }
   .guide-toc { position: static; }
-  .support-assets { justify-content: center; }
+  .support-contacts { grid-template-columns: 1fr; }
+  .support-contacts article { min-width: 0; }
   .collection-head > div:last-child { flex-wrap: wrap; }
   .price-grid { grid-template-columns: repeat(2, 1fr); }
   .context-tools { grid-template-columns: 1fr 1fr; }

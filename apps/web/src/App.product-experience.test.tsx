@@ -52,6 +52,6 @@ describe("optimized product experience", () => {
   });
 
   it("provides a protected searchable guide with support fallbacks", () => {
-    open("/app/guide"); expect(screen.getByRole("heading", { name: "使用说明" })).toBeInTheDocument(); fireEvent.change(screen.getByPlaceholderText(/Windows、支付未到账/), { target: { value: "支付未到账" } }); expect(screen.getByRole("button", { name: /积分、会员与支付/ })).toBeInTheDocument(); fireEvent.click(screen.getByRole("button", { name: /积分、会员与支付/ })); expect(screen.getByText(/不要重复付款/)).toBeInTheDocument(); expect(screen.getByAltText(/客服群二维码/)).toBeInTheDocument();
+    open("/app/guide"); expect(screen.getByRole("heading", { name: "使用说明" })).toBeInTheDocument(); fireEvent.change(screen.getByPlaceholderText(/Windows、支付未到账/), { target: { value: "支付未到账" } }); expect(screen.getByRole("button", { name: /积分、会员与支付/ })).toBeInTheDocument(); fireEvent.click(screen.getByRole("button", { name: /积分、会员与支付/ })); expect(screen.getByText(/不要重复付款/)).toBeInTheDocument(); expect(screen.getByText("OneShowAILab")).toBeInTheDocument(); expect(screen.getByRole("link", { name: "发送邮件" })).toHaveAttribute("href", "mailto:contact@oneshowailab.com");
   });
 });
