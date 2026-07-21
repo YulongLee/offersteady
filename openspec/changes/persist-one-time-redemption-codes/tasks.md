@@ -13,4 +13,4 @@
 
 - [x] 3.1 Add regression coverage for one-time, replay, privacy, restart, and concurrency behavior.
 - [x] 3.2 Run backend tests and strict OpenSpec validation.
-- [ ] 3.3 Commit, push, deploy, and verify configured inventory on the production server.
+- [x] 3.3 Commit, push, deploy, and verify configured inventory on the production server.
