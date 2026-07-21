@@ -49,6 +49,7 @@ from .services.postgres_authentication_repository import PostgresAuthenticationR
 from .services.authentication_service import AuthenticationService, CompatibleWechatLoginProvider, JWTAccessTokenCodec, PBKDF2PasswordHasher
 from .services.sms_verification_provider import AliyunDypnsSmsVerificationProvider, FakeSmsVerificationProvider
 from .services.billing_service import BillingService
+from .services.postgres_billing_repository import PostgresBillingRepository
 from .services.postgres_points_redemption_repository import PostgresPointsRedemptionRepository
 from .services.document_repository import InMemoryDocumentRepository
 from .services.postgres_material_persistence import PostgresDocumentRepository, PostgresKnowledgeCollectionStore, PostgresRuntimeVectorStore
@@ -341,6 +342,8 @@ def authentication_service() -> AuthenticationService:
 @lru_cache(maxsize=1)
 def billing_service() -> BillingService:
     settings = get_settings()
+    if settings.environment == "production" and not settings.database_url:
+        raise RuntimeError("OFFERSTEADY_DATABASE_URL is required for production billing persistence")
     if settings.environment == "production" and settings.redemption_code_points:
         if not settings.database_url:
             raise RuntimeError("OFFERSTEADY_DATABASE_URL is required for production redemption persistence")
@@ -354,7 +357,15 @@ def billing_service() -> BillingService:
             build_postgres=lambda: PostgresPointsRedemptionRepository(settings),
             fallback=lambda: None,
         )
-    return BillingService(settings, redemption_repository=repository)
+    billing_repository = None
+    if settings.database_url and not os.environ.get("PYTEST_CURRENT_TEST"):
+        billing_repository = _fallback_to_memory_repository(
+            logger_key="billing_repository",
+            environment=settings.environment,
+            build_postgres=lambda: PostgresBillingRepository(settings),
+            fallback=lambda: None,
+        )
+    return BillingService(settings, redemption_repository=repository, billing_repository=billing_repository)
 
 
 @lru_cache(maxsize=1)

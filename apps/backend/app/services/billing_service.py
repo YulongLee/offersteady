@@ -5,6 +5,7 @@ from time import time
 from uuid import uuid4
 
 from app.core.config import Settings
+from app.ports.billing_persistence import BillingPersistencePort
 from app.ports.points_redemption import PersistedPointsLedgerEntry, PersistedPointsRedemption, PointsRedemptionRepository
 
 
@@ -122,13 +123,19 @@ class OfficialCheckoutOrderRecord:
 
 
 class BillingService:
-    def __init__(self, settings: Settings | None = None, redemption_repository: PointsRedemptionRepository | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        redemption_repository: PointsRedemptionRepository | None = None,
+        billing_repository: BillingPersistencePort | None = None,
+    ) -> None:
         configured_codes = settings.redemption_code_points if settings is not None else {}
         self.redemption_code_points: dict[str, int] = {
-            **DEFAULT_REDEMPTION_CODE_POINTS,
+            **(DEFAULT_REDEMPTION_CODE_POINTS if settings is None or settings.environment != "production" else {}),
             **{code.strip().upper(): int(points) for code, points in configured_codes.items() if code.strip() and int(points) > 0},
         }
         self.redemption_repository = redemption_repository
+        self.billing_repository = billing_repository
         self.support = {
             "wechatId": settings.support_wechat_id if settings is not None else "OneShowAILab",
             "email": settings.support_email if settings is not None else "contact@oneshowailab.com",
@@ -164,11 +171,7 @@ class BillingService:
             active_pass=self._active_pass_payload(user_id=user_id),
             queued_passes=self._queued_pass_payloads(user_id=user_id),
             orders=[],
-            official_orders=[
-                self._official_order_payload(item)
-                for item in sorted(self.checkout_orders_by_id.values(), key=lambda order: order.created_at_ms, reverse=True)
-                if item.user_id == user_id
-            ],
+            official_orders=[self._official_order_payload(item) for item in self._orders_for_user(user_id=user_id)],
             support=dict(self.support),
         )
 
@@ -286,23 +289,41 @@ class BillingService:
             created_at_ms=now,
             updated_at_ms=now,
         )
+        if self.billing_repository is not None:
+            return self._persisted_order(self.billing_repository.create_checkout_order(
+                order={**order.__dict__, "product": order.product.__dict__},
+                idempotency_key=idempotency_key,
+            ))
         self.checkout_orders_by_id[order.id] = order
         self.checkout_orders_by_user_and_key[(user_id, idempotency_key)] = order.id
         return order
 
     def replace_checkout_action(self, *, order_id: str, payment_url: str, expires_at_ms: int) -> OfficialCheckoutOrderRecord:
+        if self.billing_repository is not None:
+            return self._persisted_order(self.billing_repository.replace_checkout_action(
+                order_id=order_id,
+                action={"kind": "redirect", "url": payment_url, "expiresAtMs": expires_at_ms},
+                updated_at_ms=_now_ms(),
+            ))
         order = self.checkout_orders_by_id[order_id]
         updated = OfficialCheckoutOrderRecord(**{**order.__dict__, "action": {"kind": "redirect", "url": payment_url, "expiresAtMs": expires_at_ms}})
         self.checkout_orders_by_id[order_id] = updated
         return updated
 
     def checkout_order_for_user(self, *, user_id: str, order_id: str) -> OfficialCheckoutOrderRecord:
-        order = self.checkout_orders_by_id[order_id]
+        order = self._persisted_order(self.billing_repository.checkout_order(order_id=order_id)) if self.billing_repository is not None else self.checkout_orders_by_id[order_id]
         if order.user_id != user_id:
             raise PermissionError("Cannot access another user's checkout order.")
         return order
 
     def confirm_checkout_paid(self, *, order_id: str, amount_cents: int, provider_trade_no: str) -> OfficialCheckoutOrderRecord:
+        if self.billing_repository is not None:
+            return self._persisted_order(self.billing_repository.confirm_checkout_paid(
+                order_id=order_id,
+                amount_cents=amount_cents,
+                provider_trade_no=provider_trade_no,
+                paid_at_ms=_now_ms(),
+            ))
         order = self.checkout_orders_by_id[order_id]
         if order.status == "paid":
             return order
@@ -374,11 +395,20 @@ class BillingService:
             projected_balance=balance - points_required,
             created_at_ms=_now_ms(),
         )
+        if self.billing_repository is not None:
+            return KnowledgeIndexQuoteRecord(**self.billing_repository.create_index_quote(
+                quote=quote.__dict__, idempotency_key=idempotency_key,
+            ))
         self.index_quotes_by_user_and_key[request_key] = quote
         self.index_quotes_by_id[quote.quote_id] = quote
         return quote
 
     def reserve_knowledge_index(self, *, user_id: str, quote_id: str) -> KnowledgeIndexReservationRecord:
+        if self.billing_repository is not None:
+            quote = KnowledgeIndexQuoteRecord(**self.billing_repository.index_quote(quote_id=quote_id))
+            if quote.user_id != user_id:
+                raise PermissionError("Cannot reserve another user's knowledge index quote.")
+            return KnowledgeIndexReservationRecord(**self.billing_repository.reserve_index_quote(quote_id=quote_id, created_at_ms=_now_ms()))
         quote = self.index_quotes_by_id[quote_id]
         if quote.user_id != user_id:
             raise PermissionError("Cannot reserve another user's knowledge index quote.")
@@ -409,6 +439,9 @@ class BillingService:
         return reservation
 
     def settle_knowledge_index(self, *, quote_id: str, reference_id: str) -> KnowledgeIndexReservationRecord | None:
+        if self.billing_repository is not None:
+            item = self.billing_repository.settle_index_quote(quote_id=quote_id, reference_id=reference_id, settled_at_ms=_now_ms())
+            return KnowledgeIndexReservationRecord(**item) if item is not None else None
         reservation = self.index_reservations_by_quote.get(quote_id)
         if reservation is None or reservation.status != "reserved":
             return reservation
@@ -431,6 +464,9 @@ class BillingService:
         return settled
 
     def release_knowledge_index(self, *, quote_id: str) -> KnowledgeIndexReservationRecord | None:
+        if self.billing_repository is not None:
+            item = self.billing_repository.release_index_quote(quote_id=quote_id, released_at_ms=_now_ms())
+            return KnowledgeIndexReservationRecord(**item) if item is not None else None
         reservation = self.index_reservations_by_quote.get(quote_id)
         if reservation is None or reservation.status != "reserved":
             return reservation
@@ -439,6 +475,9 @@ class BillingService:
         return released
 
     def _ensure_welcome_grant(self, *, user_id: str) -> None:
+        if self.billing_repository is not None:
+            self.billing_repository.ensure_welcome_grant(user_id=user_id, points=WELCOME_GRANT_POINTS, created_at_ms=_now_ms())
+            return
         ledger = self.ledger_by_user.setdefault(user_id, [])
         if any(item.kind == "welcome_grant" for item in ledger):
             return
@@ -455,12 +494,16 @@ class BillingService:
         )
 
     def _ledger_for_user(self, *, user_id: str) -> list[PointsLedgerRecord]:
+        if self.billing_repository is not None:
+            return [PointsLedgerRecord(**item) for item in self.billing_repository.list_ledger(user_id=user_id)]
         ledger = list(self.ledger_by_user.get(user_id, []))
         if self.redemption_repository is not None:
             ledger.extend(self._persistent_ledger_record(item) for item in self.redemption_repository.list_ledger(user_id=user_id))
         return sorted(ledger, key=lambda item: (item.created_at_ms, item.id), reverse=True)
 
     def _balance_for_user(self, *, user_id: str) -> int:
+        if self.billing_repository is not None:
+            return self.billing_repository.balance(user_id=user_id)
         transient_balance = sum(item.points for item in self.ledger_by_user.get(user_id, []))
         persistent_balance = self.redemption_repository.balance(user_id=user_id) if self.redemption_repository is not None else 0
         return transient_balance + persistent_balance
@@ -542,12 +585,31 @@ class BillingService:
 
     def _active_pass_payload(self, *, user_id: str) -> dict[str, object] | None:
         now = _now_ms()
-        active = next((item for item in sorted(self.pass_entitlements_by_user.get(user_id, []), key=lambda pass_item: pass_item.starts_at_ms) if item.starts_at_ms <= now < item.ends_at_ms), None)
+        active = next((item for item in self._passes_for_user(user_id=user_id) if item.starts_at_ms <= now < item.ends_at_ms), None)
         return self._pass_payload(active) if active else None
 
     def _queued_pass_payloads(self, *, user_id: str) -> list[dict[str, object]]:
         now = _now_ms()
-        return [self._pass_payload(item) for item in sorted(self.pass_entitlements_by_user.get(user_id, []), key=lambda pass_item: pass_item.starts_at_ms) if item.starts_at_ms > now]
+        return [self._pass_payload(item) for item in self._passes_for_user(user_id=user_id) if item.starts_at_ms > now]
+
+    def _passes_for_user(self, *, user_id: str) -> list[TimePassEntitlementRecord]:
+        if self.billing_repository is not None:
+            return [TimePassEntitlementRecord(**item) for item in self.billing_repository.list_entitlements(user_id=user_id)]
+        return sorted(self.pass_entitlements_by_user.get(user_id, []), key=lambda item: item.starts_at_ms)
+
+    def _orders_for_user(self, *, user_id: str) -> list[OfficialCheckoutOrderRecord]:
+        if self.billing_repository is not None:
+            return [self._persisted_order(item) for item in self.billing_repository.list_checkout_orders(user_id=user_id)]
+        return [
+            item for item in sorted(self.checkout_orders_by_id.values(), key=lambda order: order.created_at_ms, reverse=True)
+            if item.user_id == user_id
+        ]
+
+    @staticmethod
+    def _persisted_order(item: dict[str, object]) -> OfficialCheckoutOrderRecord:
+        values = dict(item)
+        values["product"] = BillingProductRecord(**dict(values["product"]))
+        return OfficialCheckoutOrderRecord(**values)
 
     def _product_payload(self, item: BillingProductRecord) -> dict[str, object]:
         return {
