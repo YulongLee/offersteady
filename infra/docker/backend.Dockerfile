@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir /app/apps/backend
 
 COPY apps/backend /app/apps/backend
 COPY ai /app/ai
+COPY packages/protocol/src/material-upload-formats.json /app/packages/protocol/src/material-upload-formats.json
 
 EXPOSE 8000
 
