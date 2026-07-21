@@ -7,6 +7,7 @@
 - [x] 2.1 Add idempotent pgvector extension migration and repository initialization.
 - [x] 2.2 Fix E2E token inheritance and remove stale static findings.
 - [x] 2.3 Add realtime ASR verification dependency to the production image.
+- [x] 2.4 Correct Aliyun OSS POST upload host and policy expiration generation.
 
 ## 3. Web and desktop
 

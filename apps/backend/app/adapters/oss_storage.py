@@ -7,7 +7,9 @@ import json
 import os
 import re
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from time import sleep, time
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from app.core.config import Settings
@@ -94,9 +96,17 @@ class AliyunOssStorageAdapter(FileStoragePort):
     def _upload_url(self) -> str:
         bucket = (self.settings.oss_bucket or "offersteady-materials").strip()
         endpoint = (self.settings.oss_endpoint or "https://oss-cn-hangzhou.aliyuncs.com").rstrip("/")
-        if "://" in endpoint and not endpoint.startswith("https://") and not endpoint.startswith("http://"):
+        if "://" not in endpoint:
             endpoint = f"https://{endpoint}"
-        return f"{endpoint}/{bucket}"
+        parsed = urlsplit(endpoint)
+        hostname = parsed.hostname or ""
+        port = f":{parsed.port}" if parsed.port else ""
+        origin = f"{parsed.scheme}://{hostname}{port}"
+        if hostname == bucket or hostname.startswith(f"{bucket}."):
+            return origin
+        if hostname.startswith("oss-") and hostname.endswith(".aliyuncs.com"):
+            return f"{parsed.scheme}://{bucket}.{hostname}{port}"
+        return origin
 
     def _object_key(
         self,
@@ -120,7 +130,7 @@ class AliyunOssStorageAdapter(FileStoragePort):
 
     def _sign_policy(self, *, key: str, content_type: str, expires_at_ms: int) -> tuple[str, str]:
         policy = {
-            "expiration": f"{expires_at_ms // 1000}",
+            "expiration": datetime.fromtimestamp(expires_at_ms / 1000, tz=UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
             "conditions": [
                 {"bucket": self.settings.oss_bucket or "offersteady-materials"},
                 {"key": key},
