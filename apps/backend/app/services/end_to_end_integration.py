@@ -343,6 +343,12 @@ class ScenarioRunner:
                 latest = last_payload.get("latestTask")
                 if latest and latest.get("currentStage") == expected_stage:
                     return last_payload
+                if latest and latest.get("currentStage") == "FAILED":
+                    raise RuntimeError(
+                        f"Processing for {document_id} failed with "
+                        f"{latest.get('errorCode') or 'unknown_error'}: "
+                        f"{latest.get('errorMessage') or 'No safe error message was recorded.'}"
+                    )
             sleep(0.2)
         raise RuntimeError(f"Processing for {document_id} did not reach {expected_stage}. Last payload: {json.dumps(last_payload, ensure_ascii=False)[:400]}")
 
@@ -374,19 +380,19 @@ class ScenarioRunner:
         self._step(steps, "knowledge_collection", "Created a synthetic knowledge collection.", create_collection)
 
         def upload_resume():
-            content = b"%PDF-1.4\n%Synthetic resume for OfferSteady E2E integration\n"
+            content = b"Synthetic Resume\nOfferSteady E2E integration engineer\nPython FastAPI PostgreSQL\n"
             intent = self._unwrap(self.client.post("/api/v1/resume/upload-intents", json={
                 "userId": self.user_id,
-                "filename": "resume.pdf",
-                "contentType": "application/pdf",
+                "filename": "resume.txt",
+                "contentType": "text/plain",
                 "sizeBytes": len(content),
             }))
-            self._upload_via_oss(upload_url=intent["uploadUrl"], fields=intent["uploadFields"], filename="resume.pdf", content_type="application/pdf", payload=content)
+            self._upload_via_oss(upload_url=intent["uploadUrl"], fields=intent["uploadFields"], filename="resume.txt", content_type="text/plain", payload=content)
             completed = self._unwrap(self.client.post("/api/v1/resume/uploads/complete", json={
                 "userId": self.user_id,
                 "intentId": intent["intentId"],
                 "objectKey": intent["objectKey"],
-                "contentType": "application/pdf",
+                "contentType": "text/plain",
                 "sizeBytes": len(content),
                 "etag": "e2e-resume",
             }))
