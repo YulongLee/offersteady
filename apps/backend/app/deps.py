@@ -49,6 +49,7 @@ from .services.postgres_authentication_repository import PostgresAuthenticationR
 from .services.authentication_service import AuthenticationService, CompatibleWechatLoginProvider, JWTAccessTokenCodec, PBKDF2PasswordHasher
 from .services.sms_verification_provider import AliyunDypnsSmsVerificationProvider, FakeSmsVerificationProvider
 from .services.billing_service import BillingService
+from .services.postgres_points_redemption_repository import PostgresPointsRedemptionRepository
 from .services.document_repository import InMemoryDocumentRepository
 from .services.postgres_material_persistence import PostgresDocumentRepository, PostgresKnowledgeCollectionStore, PostgresRuntimeVectorStore
 from .services.commercial_hardening import InMemoryCommercialHardeningRepository, PostgresCommercialHardeningRepository
@@ -318,7 +319,21 @@ def authentication_service() -> AuthenticationService:
 
 @lru_cache(maxsize=1)
 def billing_service() -> BillingService:
-    return BillingService(get_settings())
+    settings = get_settings()
+    if settings.environment == "production" and settings.redemption_code_points:
+        if not settings.database_url:
+            raise RuntimeError("OFFERSTEADY_DATABASE_URL is required for production redemption persistence")
+        if not settings.redemption_code_pepper:
+            raise RuntimeError("OFFERSTEADY_REDEMPTION_CODE_PEPPER is required for production redemption persistence")
+    repository = None
+    if settings.database_url and settings.redemption_code_pepper and not os.environ.get("PYTEST_CURRENT_TEST"):
+        repository = _fallback_to_memory_repository(
+            logger_key="points_redemption_repository",
+            environment=settings.environment,
+            build_postgres=lambda: PostgresPointsRedemptionRepository(settings),
+            fallback=lambda: None,
+        )
+    return BillingService(settings, redemption_repository=repository)
 
 
 @lru_cache(maxsize=1)

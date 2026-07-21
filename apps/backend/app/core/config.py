@@ -172,6 +172,7 @@ class Settings(BaseSettings):
     mzfpay_return_url: str | None = None
     mzfpay_payment_ttl_seconds: int = 900
     redemption_code_points: dict[str, int] = Field(default_factory=dict)
+    redemption_code_pepper: str | None = None
     realtime_speech_state_file: str = "artifacts/runtime/realtime-speech-state.json"
 
     integration_environment_label: str = "local"

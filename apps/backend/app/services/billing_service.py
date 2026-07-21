@@ -5,6 +5,7 @@ from time import time
 from uuid import uuid4
 
 from app.core.config import Settings
+from app.ports.points_redemption import PersistedPointsLedgerEntry, PersistedPointsRedemption, PointsRedemptionRepository
 
 
 WELCOME_GRANT_POINTS = 200
@@ -121,12 +122,19 @@ class OfficialCheckoutOrderRecord:
 
 
 class BillingService:
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(self, settings: Settings | None = None, redemption_repository: PointsRedemptionRepository | None = None) -> None:
         configured_codes = settings.redemption_code_points if settings is not None else {}
         self.redemption_code_points: dict[str, int] = {
             **DEFAULT_REDEMPTION_CODE_POINTS,
             **{code.strip().upper(): int(points) for code, points in configured_codes.items() if code.strip() and int(points) > 0},
         }
+        self.redemption_repository = redemption_repository
+        if self.redemption_repository is not None:
+            self.redemption_repository.sync_configured_codes({
+                code: points
+                for code, points in self.redemption_code_points.items()
+                if code not in DEFAULT_REDEMPTION_CODE_POINTS
+            })
         self.ledger_by_user: dict[str, list[PointsLedgerRecord]] = {}
         self.redemptions_by_user_and_key: dict[tuple[str, str], dict[str, object]] = {}
         self.redemptions_by_user_and_code: dict[tuple[str, str], PointsRedemptionRecord] = {}
@@ -140,7 +148,7 @@ class BillingService:
 
     def state_for_user(self, *, user_id: str) -> BillingStateRecord:
         self._ensure_welcome_grant(user_id=user_id)
-        ledger = sorted(self.ledger_by_user.get(user_id, []), key=lambda item: item.created_at_ms, reverse=True)
+        ledger = self._ledger_for_user(user_id=user_id)
         return BillingStateRecord(
             catalog=self.catalog(),
             rates=self.rates(),
@@ -199,6 +207,18 @@ class BillingService:
             result = {"outcome": "code-unavailable"}
             self.redemptions_by_user_and_key[request_key] = result
             return result
+        if normalized_code not in DEFAULT_REDEMPTION_CODE_POINTS and self.redemption_repository is not None:
+            persisted = self.redemption_repository.redeem(
+                user_id=user_id,
+                code=normalized_code,
+                idempotency_key=idempotency_key,
+            )
+            if persisted.redemption is None:
+                return {"outcome": persisted.outcome}
+            redemption = self._persistent_redemption_record(persisted.redemption)
+            payload = self._redemption_payload(redemption)
+            payload["newBalance"] = self._balance_for_user(user_id=user_id)
+            return {"outcome": persisted.outcome, "data": payload}
         code_key = (user_id, normalized_code)
         existing = self.redemptions_by_user_and_code.get(code_key)
         if existing is not None:
@@ -221,7 +241,7 @@ class BillingService:
             description="兑换码积分入账",
         )
         self.ledger_by_user.setdefault(user_id, []).append(ledger_entry)
-        new_balance = sum(item.points for item in self.ledger_by_user[user_id])
+        new_balance = self._balance_for_user(user_id=user_id)
         redemption = PointsRedemptionRecord(
             redemption_id=f"redemption-{uuid4().hex}",
             points=points,
@@ -345,7 +365,7 @@ class BillingService:
         points_per_5000 = int(rates["knowledgeIndexPointsPer1000Tokens"]) * 5
         minimum = int(rates["knowledgeIndexMinimumPoints"])
         points_required = max(minimum, ((max(1, token_estimate) + 4999) // 5000) * points_per_5000)
-        balance = sum(item.points for item in self.ledger_by_user.get(user_id, []))
+        balance = self._balance_for_user(user_id=user_id)
         quote = KnowledgeIndexQuoteRecord(
             quote_id=f"index-quote-{uuid4().hex}",
             user_id=user_id,
@@ -368,7 +388,7 @@ class BillingService:
         existing = self.index_reservations_by_quote.get(quote_id)
         if existing is not None:
             return existing
-        balance = sum(item.points for item in self.ledger_by_user.get(user_id, []))
+        balance = self._balance_for_user(user_id=user_id)
         if balance < quote.points_required:
             return KnowledgeIndexReservationRecord(
                 reservation_id=f"index-reservation-{uuid4().hex}",
@@ -435,6 +455,39 @@ class BillingService:
                 reference_id=f"welcome:{user_id}",
                 description="新用户赠送积分",
             )
+        )
+
+    def _ledger_for_user(self, *, user_id: str) -> list[PointsLedgerRecord]:
+        ledger = list(self.ledger_by_user.get(user_id, []))
+        if self.redemption_repository is not None:
+            ledger.extend(self._persistent_ledger_record(item) for item in self.redemption_repository.list_ledger(user_id=user_id))
+        return sorted(ledger, key=lambda item: (item.created_at_ms, item.id), reverse=True)
+
+    def _balance_for_user(self, *, user_id: str) -> int:
+        transient_balance = sum(item.points for item in self.ledger_by_user.get(user_id, []))
+        persistent_balance = self.redemption_repository.balance(user_id=user_id) if self.redemption_repository is not None else 0
+        return transient_balance + persistent_balance
+
+    @staticmethod
+    def _persistent_ledger_record(item: PersistedPointsLedgerEntry) -> PointsLedgerRecord:
+        return PointsLedgerRecord(
+            id=item.id,
+            user_id=item.user_id,
+            kind=item.kind,
+            points=item.points,
+            created_at_ms=item.created_at_ms,
+            reference_id=item.reference_id,
+            description=item.description,
+        )
+
+    def _persistent_redemption_record(self, item: PersistedPointsRedemption) -> PointsRedemptionRecord:
+        return PointsRedemptionRecord(
+            redemption_id=item.redemption_id,
+            points=item.points,
+            new_balance=item.persisted_balance,
+            public_hint=item.public_hint,
+            redeemed_at_ms=item.redeemed_at_ms,
+            ledger_entry=self._persistent_ledger_record(item.ledger_entry),
         )
 
     def _redemption_payload(self, redemption: PointsRedemptionRecord) -> dict[str, object]:
