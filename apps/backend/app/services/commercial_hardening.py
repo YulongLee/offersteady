@@ -126,6 +126,7 @@ class InMemoryCommercialHardeningRepository(CommercialHardeningRepository):
 class PostgresCommercialHardeningRepository(CommercialHardeningRepository):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        self._ensure_tables()
 
     def save_artifact(self, artifact: MaterialArtifactRecord) -> MaterialArtifactRecord:
         with self._connect() as connection:
