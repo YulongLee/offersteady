@@ -76,6 +76,7 @@ export interface BillingOrder {
 
 export interface BillingSupportConfig {
   readonly wechatId: string;
+  readonly email: string;
   readonly qrAssetPath: string;
   readonly serviceHours: string;
   readonly refundSummary: string;

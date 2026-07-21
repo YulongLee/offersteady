@@ -129,6 +129,13 @@ class BillingService:
             **{code.strip().upper(): int(points) for code, points in configured_codes.items() if code.strip() and int(points) > 0},
         }
         self.redemption_repository = redemption_repository
+        self.support = {
+            "wechatId": settings.support_wechat_id if settings is not None else "OneShowAILab",
+            "email": settings.support_email if settings is not None else "contact@oneshowailab.com",
+            "qrAssetPath": "",
+            "serviceHours": "工作日 10:00-18:00",
+            "refundSummary": "退款按订单状态和未使用权益审核",
+        }
         if self.redemption_repository is not None:
             self.redemption_repository.sync_configured_codes({
                 code: points
@@ -162,12 +169,7 @@ class BillingService:
                 for item in sorted(self.checkout_orders_by_id.values(), key=lambda order: order.created_at_ms, reverse=True)
                 if item.user_id == user_id
             ],
-            support={
-                "wechatId": "offersteady_support",
-                "qrAssetPath": "/support/wechat-placeholder.png",
-                "serviceHours": "工作日 10:00-18:00",
-                "refundSummary": "退款按订单状态和未使用权益审核",
-            },
+            support=dict(self.support),
         )
 
     def public_state(self) -> BillingStateRecord:
@@ -180,12 +182,7 @@ class BillingService:
             queued_passes=[],
             orders=[],
             official_orders=[],
-            support={
-                "wechatId": "offersteady_support",
-                "qrAssetPath": "/support/wechat-placeholder.png",
-                "serviceHours": "工作日 10:00-18:00",
-                "refundSummary": "退款按订单状态和未使用权益审核",
-            },
+            support=dict(self.support),
         )
 
     def redeem_points(self, *, user_id: str, code: str, idempotency_key: str) -> dict[str, object]:

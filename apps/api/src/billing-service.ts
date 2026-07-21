@@ -33,7 +33,7 @@ export class BillingService {
   private proofFingerprints = new Set<string>();
   private counter = 0;
 
-  constructor(products: readonly BillingProduct[] = defaultBillingProducts, readonly rates: UsageRates = defaultUsageRates, readonly support: BillingSupportConfig = { wechatId: "offersteady_support", qrAssetPath: "/support/wechat-placeholder.png", serviceHours: "工作日 10:00–18:00", refundSummary: "退款按订单状态和未使用权益人工审核" }) { products.forEach(product => this.products.set(product.id, product)); }
+  constructor(products: readonly BillingProduct[] = defaultBillingProducts, readonly rates: UsageRates = defaultUsageRates, readonly support: BillingSupportConfig = { wechatId: "OneShowAILab", email: "contact@oneshowailab.com", qrAssetPath: "", serviceHours: "工作日 10:00–18:00", refundSummary: "退款按订单状态和未使用权益人工审核" }) { products.forEach(product => this.products.set(product.id, product)); }
 
   catalog() { return [...this.products.values()].filter(product => product.published); }
   publish(product: BillingProduct, projectedMargin: number, minimumMargin = .6) {

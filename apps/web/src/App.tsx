@@ -151,7 +151,7 @@ function LandingPage() {
       </section>
       <section id="pricing-value" className="public-section pricing-value"><div className="section-intro"><span className="kicker">FLEXIBLE & FAIR</span><h2>按你的面试节奏选择</h2><p>偶尔使用按点结算，面试密集期选择按天会员。新用户赠送 200 点体验额度，再按实际面试节奏购买。</p></div><div className="public-pricing-grid"><article><span>灵活按次</span><h3>积分使用</h3><strong>回答 5 点起</strong><p>知识材料 20 点起，完整 Token 规则可在积分页查看。</p><Link to={routes.login}>免费开始 →</Link></article><article className="featured"><span>短期高频</span><h3>按天会员</h3><strong>3 天 ¥{((passes.find(item => item.durationDays === 3)?.priceCents ?? 0) / 100).toFixed(2)} 起</strong><p>{passes.map(item => `${item.durationDays}天`).join(" / ")}；15 天和 30 天各含 2 份知识材料额度。</p><Link to={routes.login}>领取 200 点 →</Link></article></div></section>
       <section id="value-proof" className="public-section value-proof"><div className="section-intro"><span className="kicker">WHY OFFERSTEADY</span><h2>从听懂问题，到组织答案，现场更从容。</h2><p>结合你的简历、目标岗位和知识材料，快速抓住问题重点，生成清晰、贴合你的回答思路。</p></div><div className="value-proof-grid"><article><span>01</span><h3>实时抓住问题重点</h3><p>区分面试官与候选人的对话，让你把注意力放在真正需要回答的问题上。</p></article><article><span>02</span><h3>回答更贴合你的经历</h3><p>按场选择简历、JD 和知识材料，快速整理更相关的表达结构。</p></article><article><span>03</span><h3>按求职节奏灵活使用</h3><p>偶尔面试按点使用，密集面试选择短期会员，不必承担长期订阅。</p></article></div><div id="privacy" className="value-trust"><p>AI 内容为回答建议，重要经历请以真实情况为准；资料和会话记录可管理、可删除。</p><details><summary>查看使用与隐私说明</summary><p>原始音频默认不保存；简历、JD、截图和会话记录提供删除入口。请遵守面试规则并以真实经历作答。</p></details></div></section>
-      <footer className="public-footer"><Logo /><span>原型使用合成数据 · 不鼓励违反面试规则的隐蔽使用</span></footer>
+      <footer className="public-footer"><Logo /><span>© 2026 面试稳 · OneShow AI Lab</span></footer>
     </main>
   );
 }

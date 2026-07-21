@@ -173,6 +173,8 @@ class Settings(BaseSettings):
     mzfpay_payment_ttl_seconds: int = 900
     redemption_code_points: dict[str, int] = Field(default_factory=dict)
     redemption_code_pepper: str | None = None
+    support_wechat_id: str = "OneShowAILab"
+    support_email: str = "contact@oneshowailab.com"
     realtime_speech_state_file: str = "artifacts/runtime/realtime-speech-state.json"
 
     integration_environment_label: str = "local"

@@ -136,7 +136,7 @@ export const syntheticState: WebAppState = {
     queuedPasses: [],
     orders: [],
     officialOrders: [],
-    support: { wechatId: "offersteady_support", qrAssetPath: "/support/wechat-placeholder.png", serviceHours: "工作日 10:00–18:00", refundSummary: "退款按订单状态和未使用权益人工审核" },
+    support: { wechatId: "OneShowAILab", email: "contact@oneshowailab.com", qrAssetPath: "", serviceHours: "工作日 10:00–18:00", refundSummary: "退款按订单状态和未使用权益人工审核" },
   },
   speaker: {
     mode: "dual-channel",
