@@ -6,6 +6,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import perf_counter, sleep, time
@@ -14,6 +15,7 @@ from uuid import uuid4
 
 import httpx
 from fastapi.testclient import TestClient
+from PIL import Image, ImageDraw
 from starlette.websockets import WebSocketDisconnect
 
 from app.core.config import Settings, get_settings
@@ -494,7 +496,11 @@ class ScenarioRunner:
             raise RuntimeError("Session scenario must succeed before screenshot/realtime scenario.")
 
         def screenshot_answer():
-            image = b"\x89PNG\r\n\x1a\nsynthetic-screenshot"
+            canvas = Image.new("RGB", (800, 320), color="white")
+            ImageDraw.Draw(canvas).text((48, 120), "Coding question: What is 2 + 2?", fill="black")
+            buffer = BytesIO()
+            canvas.save(buffer, format="PNG")
+            image = buffer.getvalue()
             intent = self._unwrap(self.client.post("/api/v1/screenshot-answer/upload-intents", json={
                 "userId": self.user_id,
                 "sessionId": self.session_id,
@@ -502,6 +508,13 @@ class ScenarioRunner:
                 "contentType": "image/png",
                 "sizeBytes": len(image),
             }))
+            self._upload_via_oss(
+                upload_url=intent["uploadUrl"],
+                fields=intent["uploadFields"],
+                filename="diagram.png",
+                content_type="image/png",
+                payload=image,
+            )
             upload = self._unwrap(self.client.post("/api/v1/screenshot-answer/uploads/complete", json={
                 "userId": self.user_id,
                 "sessionId": self.session_id,
@@ -515,14 +528,20 @@ class ScenarioRunner:
                 "userId": self.user_id,
                 "sessionId": self.session_id,
                 "imageIds": [upload["imageId"]],
-                "instruction": "请根据截图回答这道系统设计题，并优先结合本场资料。",
+                "instruction": "请仅根据截图识别题目并给出直接、完整的答案；如果是代码题，必须给出可运行代码。",
                 "stream": True,
             }))
+            answer_task = task["task"]
+            if answer_task["status"] != "completed":
+                raise RuntimeError(
+                    f"Screenshot answer failed with {answer_task.get('errorCode') or 'unknown_error'}: "
+                    f"{answer_task.get('errorMessage') or 'No safe error message was recorded.'}"
+                )
             return {
                 "imageId": upload["imageId"],
-                "taskId": task["task"]["taskId"],
-                "taskStatus": task["task"]["status"],
-                "answerPreview": task["task"]["answerText"][:80],
+                "taskId": answer_task["taskId"],
+                "taskStatus": answer_task["status"],
+                "answerPreview": answer_task["answerText"][:80],
             }
         self._step(steps, "screenshot_answer", "Completed a screenshot upload and answer task.", screenshot_answer, attribution="provider-or-infrastructure")
 
