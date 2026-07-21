@@ -16,4 +16,4 @@
 
 - [x] 4.1 Add restart, duplicate callback and concurrent reservation regression tests.
 - [x] 4.2 Run backend regression tests and strict OpenSpec validation.
-- [ ] 4.3 Deploy migration and backend, then verify online health and persisted billing behavior.
+- [x] 4.3 Deploy migration and backend, then verify online health and persisted billing behavior.
