@@ -130,6 +130,14 @@ def _fallback_to_memory_repository(*,
         return fallback()
 
 
+def _require_production_provider(settings: Settings, capability: str, required: dict[str, object]) -> None:
+    if settings.environment != "production":
+        return
+    missing = [name for name, value in required.items() if value is None or (isinstance(value, str) and not value.strip())]
+    if missing:
+        raise RuntimeError(f"{capability} production configuration is incomplete; missing: {', '.join(missing)}")
+
+
 @lru_cache(maxsize=1)
 def document_repository() -> DocumentRepository:
     settings = get_settings()
@@ -248,7 +256,12 @@ def prompt_builder_port() -> PromptBuilderPort:
 
 @lru_cache(maxsize=1)
 def llm_gateway_port() -> LLMGatewayPort:
-    return QwenCompatibleGateway(get_settings())
+    settings = get_settings()
+    _require_production_provider(settings, "chat", {
+        "OFFERSTEADY_CHAT_QWEN_BASE_URL": settings.chat_qwen_base_url,
+        "OFFERSTEADY_CHAT_QWEN_API_KEY": settings.chat_qwen_api_key,
+    })
+    return QwenCompatibleGateway(settings)
 
 
 @lru_cache(maxsize=1)
@@ -300,7 +313,15 @@ def wechat_login_provider():
 def sms_verification_provider() -> SmsVerificationProviderPort:
     settings = get_settings()
     if settings.auth_sms_provider_mode == "aliyun":
+        _require_production_provider(settings, "sms", {
+            "OFFERSTEADY_AUTH_SMS_ALIYUN_ACCESS_KEY_ID": settings.auth_sms_aliyun_access_key_id,
+            "OFFERSTEADY_AUTH_SMS_ALIYUN_ACCESS_KEY_SECRET": settings.auth_sms_aliyun_access_key_secret,
+            "OFFERSTEADY_AUTH_SMS_ALIYUN_SIGN_NAME": settings.auth_sms_aliyun_sign_name,
+            "OFFERSTEADY_AUTH_SMS_ALIYUN_TEMPLATE_CODE": settings.auth_sms_aliyun_template_code,
+        })
         return AliyunDypnsSmsVerificationProvider(settings)
+    if settings.environment == "production":
+        raise RuntimeError("sms production configuration requires OFFERSTEADY_AUTH_SMS_PROVIDER_MODE=aliyun")
     return FakeSmsVerificationProvider(settings)
 
 
@@ -354,6 +375,10 @@ def screenshot_preprocessor() -> ScreenshotPreprocessor:
 @lru_cache(maxsize=1)
 def screenshot_vision_gateway() -> VisionGatewayPort:
     settings = get_settings()
+    _require_production_provider(settings, "screenshot-vision", {
+        "OFFERSTEADY_SCREENSHOT_VISION_BASE_URL": settings.screenshot_vision_base_url,
+        "OFFERSTEADY_SCREENSHOT_VISION_API_KEY": settings.screenshot_vision_api_key,
+    })
     if settings.screenshot_vision_base_url and settings.screenshot_vision_api_key and (
         not os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("OFFERSTEADY_TEST_USE_REMOTE_SCREENSHOT_VISION") == "1"
     ):
@@ -410,6 +435,9 @@ def realtime_speech_repository() -> RealtimeSpeechRepository:
 @lru_cache(maxsize=1)
 def realtime_asr_gateway() -> RealtimeAsrGatewayPort:
     settings = get_settings()
+    _require_production_provider(settings, "realtime-asr", {
+        "OFFERSTEADY_REALTIME_ASR_API_KEY": settings.realtime_asr_api_key,
+    })
     if settings.realtime_asr_api_key and (not os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("OFFERSTEADY_TEST_USE_REMOTE_REALTIME_ASR") == "1"):
         return DashScopeRealtimeAsrGateway(settings, logger())
     return SyntheticRealtimeAsrGateway(settings)
@@ -434,7 +462,12 @@ def processing_task_repository() -> ProcessingTaskRepository:
 
 @lru_cache(maxsize=1)
 def document_parser_adapter() -> MineruDocumentParserAdapter:
-    return MineruDocumentParserAdapter(get_settings())
+    settings = get_settings()
+    _require_production_provider(settings, "mineru", {
+        "OFFERSTEADY_INTEGRATION_MINERU_BASE_URL": settings.integration_mineru_base_url,
+        "OFFERSTEADY_INTEGRATION_MINERU_API_KEY": settings.integration_mineru_api_key,
+    })
+    return MineruDocumentParserAdapter(settings)
 
 
 @lru_cache(maxsize=1)
@@ -460,6 +493,10 @@ def chunk_metadata_builder_adapter() -> ChunkMetadataBuilderAdapter:
 @lru_cache(maxsize=1)
 def embedding_adapter() -> SyntheticEmbeddingAdapter:
     settings = get_settings()
+    _require_production_provider(settings, "embedding", {
+        "OFFERSTEADY_EMBEDDING_BASE_URL": settings.embedding_base_url,
+        "OFFERSTEADY_EMBEDDING_API_KEY": settings.embedding_api_key,
+    })
     if settings.embedding_base_url and settings.embedding_api_key and (not os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("OFFERSTEADY_TEST_USE_REMOTE_EMBEDDING") == "1"):
         return DashScopeCompatibleEmbeddingAdapter(settings)  # type: ignore[return-value]
     return SyntheticEmbeddingAdapter(get_settings())
@@ -481,6 +518,10 @@ def vector_store_adapter() -> VectorStorePort:
 @lru_cache(maxsize=1)
 def query_embedding_adapter() -> SyntheticQueryEmbeddingAdapter:
     settings = get_settings()
+    _require_production_provider(settings, "query-embedding", {
+        "OFFERSTEADY_EMBEDDING_BASE_URL": settings.embedding_base_url,
+        "OFFERSTEADY_EMBEDDING_API_KEY": settings.embedding_api_key,
+    })
     if settings.embedding_base_url and settings.embedding_api_key and (not os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("OFFERSTEADY_TEST_USE_REMOTE_EMBEDDING") == "1"):
         return DashScopeCompatibleQueryEmbeddingAdapter(settings)  # type: ignore[return-value]
     return SyntheticQueryEmbeddingAdapter(get_settings())
@@ -489,6 +530,10 @@ def query_embedding_adapter() -> SyntheticQueryEmbeddingAdapter:
 @lru_cache(maxsize=1)
 def reranker_adapter() -> HeuristicRerankerAdapter:
     settings = get_settings()
+    _require_production_provider(settings, "rerank", {
+        "OFFERSTEADY_RERANK_BASE_URL": settings.rerank_base_url,
+        "OFFERSTEADY_RERANK_API_KEY": settings.rerank_api_key,
+    })
     if settings.rerank_base_url and settings.rerank_api_key and (not os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("OFFERSTEADY_TEST_USE_REMOTE_RERANK") == "1"):
         return DashScopeRerankerAdapter(settings)  # type: ignore[return-value]
     return HeuristicRerankerAdapter()
@@ -619,6 +664,8 @@ def optional_authenticated_context(authorization: str | None = Header(default=No
 
 def resolve_owned_user_id(*, explicit_user_id: str | None, auth_context: AuthenticatedRequestContext | None) -> str:
     if auth_context is None:
+        if get_settings().environment == "production":
+            raise DomainRequestError("authentication", "resolve-owner", "请先登录后再继续操作。", 401)
         if explicit_user_id is None or not explicit_user_id.strip():
             raise DomainRequestError("authentication", "resolve-owner", "缺少用户身份。", 401)
         return explicit_user_id
