@@ -13,4 +13,4 @@
 - [x] 3.1 Add production rejection and development compatibility tests.
 - [x] 3.2 Run backend regression tests and strict OpenSpec validation.
 - [x] 3.3 Verify production variable presence without exposing values.
-- [ ] 3.4 Commit, push, deploy and verify the online backend.
+- [x] 3.4 Commit, push, deploy and verify the online backend.
