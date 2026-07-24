@@ -477,6 +477,17 @@ h1, h2, h3, p { margin-top: 0; }
 .answer-workspace .advice-card { margin-bottom: 18px; }
 .answer-body { display: grid; gap: 12px; margin-top: 12px; }
 .answer-body p { margin: 0; color: #e7edf4; font-size: 15px; line-height: 1.8; white-space: pre-wrap; }
+.answer-markdown { min-width: 0; color: #e7edf4; }
+.answer-markdown > :first-child { margin-top: 0; }
+.answer-markdown > :last-child { margin-bottom: 0; }
+.answer-markdown p { margin: 0 0 10px; }
+.answer-markdown ul, .answer-markdown ol { margin: 0 0 10px; padding-left: 22px; color: #dbe5ef; line-height: 1.8; }
+.answer-markdown li + li { margin-top: 4px; }
+.answer-markdown code { font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace; }
+.answer-markdown pre { max-width: 100%; overflow-x: auto; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(0, 0, 0, .22); }
+.answer-markdown .katex { font-size: 1em; color: inherit; }
+.answer-markdown .katex-display { max-width: 100%; margin: 10px 0; padding: 4px 0 8px; overflow-x: auto; overflow-y: hidden; }
+.answer-markdown .katex-display > .katex { min-width: max-content; text-align: left; }
 .structured-answer { gap: 0; }
 .answer-section { display: grid; gap: 10px; padding: 2px 0 18px; }
 .answer-section + .answer-section { border-top: 1px dashed rgba(151, 166, 185, .36); padding-top: 18px; }
