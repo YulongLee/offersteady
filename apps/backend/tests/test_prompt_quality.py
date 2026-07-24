@@ -44,6 +44,15 @@ def test_vision_gateway_loads_v2_policy() -> None:
     policy = OpenAICompatibleVisionGateway(Settings(_env_file=None, screenshot_prompt_version="v2"))._load_system_prompt()
     assert "完整可运行代码" in policy
     assert "不使用简历、JD、知识库" in policy
+    assert "只输出最终Markdown答案" in policy
+
+def test_vision_gateway_extracts_direct_and_legacy_json_answers() -> None:
+    direct = "简要回答\n使用哈希表。\n\n---\n\n详细回答\n```python\nprint('ok')\n```"
+    legacy = json.dumps({"title": "算法题", "final_answer": direct}, ensure_ascii=False)
+    fenced_legacy = f"```json\n{legacy}\n```"
+    assert OpenAICompatibleVisionGateway._extract_final_answer(direct) == direct
+    assert OpenAICompatibleVisionGateway._extract_final_answer(legacy) == direct
+    assert OpenAICompatibleVisionGateway._extract_final_answer(fenced_legacy) == direct
 
 def test_eval_fixtures_are_synthetic() -> None:
     paths = [ROOT / "ai/evals/interview-answer-quality-v4.jsonl", ROOT / "ai/evals/screenshot-answer-quality-v2.jsonl"]

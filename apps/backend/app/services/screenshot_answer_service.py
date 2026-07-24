@@ -353,9 +353,9 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
             {
                 "type": "text",
                 "text": (
-                    "请分析截图并返回JSON对象，字段固定为title、summary、derived_question、final_answer。"
-                    "title不超过12个汉字；summary只记录可见题型、输入输出、约束、代码、表格或报错；"
-                    "derived_question为一句话题目；final_answer严格执行系统策略。"
+                    "请直接识别并回答截图中的题目。只输出最终 Markdown 答案，不要输出 JSON、字段名、"
+                    "识别过程、OCR 摘要或额外前言。答案必须严格执行系统策略；代码题必须给出完整可运行代码，"
+                    "不要只描述解题框架。"
                     f"\n<user_instruction>{instruction.strip() or '无'}</user_instruction>"
                 ),
             }
@@ -393,15 +393,13 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
         if not text:
             raise NonRetryableVisionError("截图识别模型没有返回可读取的内容。")
         title = "截图题目理解"
-        summary_text = text.strip()
+        summary_text = instruction.strip() or "已根据当前截图识别题目并生成回答。"
         derived_question = instruction.strip() or "请根据截图内容直接给出本题的回答。"
-        final_answer = text.strip()
+        final_answer = self._extract_final_answer(text)
         try:
             parsed = self._parse_json_object(text)
             title = str(parsed.get("title") or title).strip() or title
-            summary_text = str(parsed.get("summary") or summary_text).strip() or summary_text
             derived_question = str(parsed.get("derived_question") or derived_question).strip() or derived_question
-            final_answer = str(parsed.get("final_answer") or final_answer).strip() or final_answer
         except ValueError:
             pass
         usage_payload = body.get("usage", {}) if isinstance(body, dict) else {}
@@ -464,6 +462,18 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
         if not isinstance(parsed, dict):
             raise ValueError("vision_json_invalid")
         return parsed
+
+    @classmethod
+    def _extract_final_answer(cls, text: str) -> str:
+        stripped = text.strip()
+        try:
+            parsed = cls._parse_json_object(stripped)
+        except ValueError:
+            return stripped
+        final_answer = parsed.get("final_answer")
+        if isinstance(final_answer, str) and final_answer.strip():
+            return final_answer.strip()
+        return stripped
 
 
 class ScreenshotAnswerService:
