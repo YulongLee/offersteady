@@ -130,12 +130,14 @@ class Settings(BaseSettings):
     redis_url: str | None = None
     redis_socket_timeout_seconds: float = 2.0
     redis_realtime_required: bool = False
+    realtime_redis_snapshot_reload_on_access: bool = False
     realtime_desktop_heartbeat_ttl_seconds: int = 45
     realtime_web_heartbeat_ttl_seconds: int = 60
     realtime_asr_frame_timeout_seconds: float = 12.0
-    realtime_asr_partial_timeout_seconds: float = 0.08
+    realtime_asr_partial_timeout_seconds: float = 0.03
     realtime_asr_finalize_timeout_seconds: float = 8.0
     realtime_asr_retry_max_attempts: int = 1
+    realtime_asr_persistent_sessions_enabled: bool = True
     realtime_asr_provider: str = "qwen-realtime-asr-compatible"
     realtime_asr_model: str = "qwen-realtime"
     realtime_question_auto_confirm_threshold: float = 0.85

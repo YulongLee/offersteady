@@ -9,6 +9,7 @@ interface DesktopBinding {
   readonly sessionId: string;
   readonly ownerUserId: string;
   readonly deviceId: string;
+  readonly manualCode: string;
   readonly displayName: string;
 }
 
@@ -70,7 +71,7 @@ interface SegmentSnapshot {
 
 const SPEECH_START_THRESHOLD = 0.003;
 const SPEECH_CONTINUE_THRESHOLD = 0.0018;
-const INTERIM_INTERVAL_MS = 120;
+const INTERIM_INTERVAL_MS = 300;
 const SILENCE_FINALIZE_MS = 220;
 const MIN_EMIT_SPEECH_MS = 80;
 const PRE_SPEECH_BUFFER_LIMIT = 4;
@@ -339,15 +340,36 @@ export class DesktopRealtimePublisher {
   async start() {
     this.stopped = false;
     this.options.onCaptureState("reconnecting");
-    const transportPublisher = await this.createPublisher("mixed");
-    this.transport = new MultiplexedRealtimeTransport({
-      apiBaseUrl: this.options.apiBaseUrl,
-      token: transportPublisher.token,
-      onEvent: event => this.options.onServerEvent?.(event),
-      onState: state => this.options.onCaptureState(state === "failed" ? "error" : state === "connected" ? "capturing" : "reconnecting"),
+    try {
+      const transportPublisher = await this.createPublisher("mixed");
+      const transport = new MultiplexedRealtimeTransport({
+        apiBaseUrl: this.options.apiBaseUrl,
+        token: transportPublisher.token,
+        onEvent: event => this.options.onServerEvent?.(event),
+        onState: state => this.options.onCaptureState(state === "failed" ? "error" : state === "connected" ? "capturing" : "reconnecting"),
+      });
+      this.transport = transport;
+      await transport.start();
+    } catch (error) {
+      this.transport?.stop();
+      this.transport = null;
+      const diagnostic = publisherFailureDiagnostic("microphone", error);
+      this.options.onServerEvent?.({
+        kind: "degraded",
+        payload: {
+          reason: diagnostic.errorCode,
+          message: "实时长连接暂不可用，已自动切换到兼容传输，收音将继续工作。",
+          transport: "http-frame-ingest",
+        },
+      });
+    }
+    // Start the microphone first so a pending ScreenCaptureKit picker or missing
+    // screen permission can never block candidate audio.
+    const microphoneRuntime = await this.startSource({
+      sourceKind: "microphone",
+      sourceId: this.options.microphoneId,
+      open: () => this.microphoneAdapter.open(this.options.microphoneId),
     });
-    await this.transport.start();
-    // Keep WebAudio for microphones because it follows Bluetooth device changes.
     // Prefer Electron's app-owned loopback for computer output so macOS applies
     // the permission granted to the companion app instead of a child executable.
     const systemRuntime = await this.startSource({
@@ -356,11 +378,6 @@ export class DesktopRealtimePublisher {
       open: () => this.systemAudioAdapter.open(),
     });
     if (!systemRuntime) await this.startNativeSystemCapture().catch(() => false);
-    const microphoneRuntime = await this.startSource({
-      sourceKind: "microphone",
-      sourceId: this.options.microphoneId,
-      open: () => this.microphoneAdapter.open(this.options.microphoneId),
-    });
     const runtimes = [microphoneRuntime, systemRuntime];
     this.runtimes.push(...runtimes.filter((runtime): runtime is WebAudioSourceRuntime => runtime !== null));
     if (this.runtimes.length > 0) {
@@ -660,7 +677,10 @@ export class DesktopRealtimePublisher {
       const capturedAtMs = event.capturedAtMs ?? Date.now();
       const durationMs = event.durationMs ?? 20;
       const level = Number((event.level ?? 0).toFixed(3));
-      const snapshots = segmenters.get(sourceKind)?.push(payloadBytes, capturedAtMs, event.level ?? 0) ?? [];
+      // Native capture can flush buffered callbacks in a burst. Pace segment
+      // emission by wall-clock time so historical audio timestamps cannot
+      // flood the backend ingress queue.
+      const snapshots = segmenters.get(sourceKind)?.push(payloadBytes, Date.now(), event.level ?? 0) ?? [];
       this.updateHealth({
         sourceId,
         sourceKind,
@@ -773,6 +793,8 @@ export class DesktopRealtimePublisher {
         sessionId: this.options.binding.sessionId,
         sourceKind,
         clientName: `${this.options.binding.displayName} · ${sourceKind}`,
+        deviceId: this.options.binding.deviceId,
+        manualCode: this.options.binding.manualCode,
       }),
     });
     if (!response.ok) throw new Error(`publisher_create_failed_${sourceKind}`);

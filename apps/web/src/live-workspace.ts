@@ -1,4 +1,4 @@
-import type { InterviewQuestion, LiveWorkspaceViewState } from "./domain";
+import type { InterviewQuestion, LiveWorkspaceViewState, SpeakerPresentationState } from "./domain";
 
 export interface AnswerPage {
   readonly answer: InterviewQuestion;
@@ -55,3 +55,29 @@ export const answerPage = (answers: readonly InterviewQuestion[], viewingAnswerI
 export const noteNewAnswer = (view: LiveWorkspaceViewState, previousLatestId: string | undefined, nextLatestId: string | undefined): LiveWorkspaceViewState => previousLatestId && nextLatestId && previousLatestId !== nextLatestId && view.viewingAnswerId
   ? { ...view, newAnswerAvailable: true }
   : view;
+
+const hasVisibleTranscriptText = (text: string) => text.replace(/\s+/g, "").length > 0;
+
+export const reconcileRealtimeSpeaker = (
+  current: SpeakerPresentationState,
+  incoming: SpeakerPresentationState,
+): SpeakerPresentationState => {
+  const latestById = new Map(current.transcripts.filter(segment => hasVisibleTranscriptText(segment.text)).map(segment => [segment.id, segment]));
+  for (const segment of incoming.transcripts) {
+    if (!hasVisibleTranscriptText(segment.text)) continue;
+    const existing = latestById.get(segment.id);
+    if (
+      !existing
+      || segment.revision > existing.revision
+      || (segment.revision === existing.revision && segment.isFinal && !existing.isFinal)
+    ) {
+      latestById.set(segment.id, segment);
+    }
+  }
+  return {
+    ...incoming,
+    transcripts: [...latestById.values()].sort((left, right) => (
+      left.startedAtMs - right.startedAtMs || left.revision - right.revision
+    )),
+  };
+};

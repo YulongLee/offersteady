@@ -17,7 +17,7 @@ import { ConversationMonitor } from "./ConversationMonitor";
 import { AnswerWorkspace } from "./AnswerWorkspace";
 import { ManualQuestionComposer } from "./ManualQuestionComposer";
 import { AnswerActionBar } from "./AnswerActionBar";
-import { ABSOLUTE_MAX_SPLIT_RATIO, ABSOLUTE_MIN_SPLIT_RATIO, clampSplitRatio, initialLiveWorkspaceView, noteNewAnswer, parseStoredSplitRatio, serializeSplitRatio, splitRatioBounds, splitRatioStorageKey } from "./live-workspace";
+import { ABSOLUTE_MAX_SPLIT_RATIO, ABSOLUTE_MIN_SPLIT_RATIO, clampSplitRatio, initialLiveWorkspaceView, noteNewAnswer, parseStoredSplitRatio, reconcileRealtimeSpeaker, serializeSplitRatio, splitRatioBounds, splitRatioStorageKey } from "./live-workspace";
 import { WorkspaceDivider } from "./WorkspaceDivider";
 import { authClient } from "./auth-client";
 import "./styles.css";
@@ -563,15 +563,27 @@ function LivePage() {
     let stopped = false;
     let heartbeatBindingId: string | null = null;
     let reconnectTimer: number | null = null;
+    let realtimeRenderFrame: number | null = null;
+    let pendingRealtime: (Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) | null = null;
     let realtimeLoadInFlight = false;
     const realtimeController = new AbortController();
     const applyRealtimeState = (realtime: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => {
       if (stopped) return;
-      setState(current => ({
-        ...current,
-        speaker: realtime.speaker,
-        ...(realtime.captureState ? { captureState: realtime.captureState } : {}),
-      }));
+      pendingRealtime = pendingRealtime?.captureState && !realtime.captureState
+        ? { ...realtime, captureState: pendingRealtime.captureState }
+        : realtime;
+      if (realtimeRenderFrame !== null) return;
+      realtimeRenderFrame = window.requestAnimationFrame(() => {
+        realtimeRenderFrame = null;
+        const next = pendingRealtime;
+        pendingRealtime = null;
+        if (!next || stopped) return;
+        setState(current => ({
+          ...current,
+          speaker: reconcileRealtimeSpeaker(current.speaker, next.speaker),
+          ...(next.captureState ? { captureState: next.captureState } : {}),
+        }));
+      });
     };
     const sendHeartbeat = async () => {
       try {
@@ -612,7 +624,7 @@ function LivePage() {
     };
     void sendHeartbeat();
     const heartbeatTimer = window.setInterval(() => void sendHeartbeat(), 3000);
-    const realtimePollTimer = window.setInterval(() => void loadRealtime(), 1000);
+    const realtimePollTimer = window.setInterval(() => void loadRealtime(), 10_000);
     const sendForegroundHeartbeat = () => {
       if (!stopped && document.visibilityState === "visible") void sendHeartbeat();
     };
@@ -625,6 +637,7 @@ function LivePage() {
       stopped = true;
       realtimeController.abort();
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+      if (realtimeRenderFrame !== null) window.cancelAnimationFrame(realtimeRenderFrame);
       window.clearInterval(heartbeatTimer);
       window.clearInterval(realtimePollTimer);
       document.removeEventListener("visibilitychange", sendForegroundHeartbeat);

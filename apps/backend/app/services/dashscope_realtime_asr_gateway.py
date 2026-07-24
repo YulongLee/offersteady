@@ -41,6 +41,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         self._completed_missing: dict[str, int] = {}
         self._blank_partial_suppressed: dict[str, int] = {}
         self._vad_to_manual_fallbacks: dict[str, int] = {}
+        self._idle_session_closures: dict[str, int] = {}
         self._mode_by_source: dict[str, str] = {}
         self._connection_state_by_source: dict[str, str] = {}
         self._last_error_by_source: dict[str, str] = {}
@@ -68,7 +69,11 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         normalized_frame = frame
         if frame.codec != normalized_codec:
             normalized_frame = replace(frame, codec=normalized_codec)
-        text, first_text_at_ms, completed_at_ms = self._roundtrip(normalized_frame)
+        try:
+            text, first_text_at_ms, completed_at_ms = self._roundtrip(normalized_frame)
+        finally:
+            if not self.settings.realtime_asr_persistent_sessions_enabled:
+                self._close_source_session(self._source_session_key(normalized_frame))
         cleaned = text.strip()
         return TranscriptResult(
             text=cleaned,
@@ -84,6 +89,10 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         )
 
     def diagnostics(self, source_kind: str) -> dict[str, int]:
+        with self._source_sessions_lock:
+            active_provider_sessions = sum(
+                1 for session in self._source_sessions.values() if session.source_kind == source_kind
+            )
         return {
             "connection_recreations": self._connection_recreations.get(source_kind, 0),
             "session_created_missing": self._session_created_missing.get(source_kind, 0),
@@ -91,7 +100,8 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             "completed_missing": self._completed_missing.get(source_kind, 0),
             "blank_partial_suppressed": self._blank_partial_suppressed.get(source_kind, 0),
             "vad_to_manual_fallbacks": self._vad_to_manual_fallbacks.get(source_kind, 0),
-            "active_provider_sessions": sum(1 for session in self._source_sessions.values() if session.source_kind == source_kind),
+            "idle_session_closures": self._idle_session_closures.get(source_kind, 0),
+            "active_provider_sessions": active_provider_sessions,
         }
 
     def runtime_status(self, source_kind: str) -> dict[str, str | int | None]:
@@ -108,7 +118,11 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             with session.lock:
                 self._prepare_segment_state(session, frame)
                 if frame.audio_bytes:
-                    self._send_audio_chunks(session.connection, frame.audio_bytes)
+                    self._send_audio_chunks(
+                        session.connection,
+                        frame.audio_bytes,
+                        event_id_prefix=f"{frame.segment_id}-{frame.revision}",
+                    )
                     session.updated_at_monotonic = time.monotonic()
                 transcript_text, transcript_events, first_text_at_ms, completed_at_ms = self._drain_events(
                     session.connection,
@@ -174,8 +188,18 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             self._sweep_stale_sessions_locked()
             existing = self._source_sessions.get(key)
             if existing is not None:
-                existing.updated_at_monotonic = time.monotonic()
-                return existing
+                reusable = (
+                    self.settings.realtime_asr_persistent_sessions_enabled
+                    and existing.sample_rate_hz == frame.sample_rate_hz
+                )
+                if reusable:
+                    existing.updated_at_monotonic = time.monotonic()
+                    return existing
+                self._source_sessions.pop(key, None)
+                try:
+                    existing.connection.close()
+                except Exception:
+                    pass
             connection, mode = self._open_connection(frame)
             self._connection_recreations[frame.source_kind] = self._connection_recreations.get(frame.source_kind, 0) + 1
             session = _SourceRealtimeSession(
@@ -337,6 +361,8 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             session = self._source_sessions.pop(source_session_key, None)
             if session is None:
                 continue
+            self._idle_session_closures[session.source_kind] = self._idle_session_closures.get(session.source_kind, 0) + 1
+            self._connection_state_by_source[session.source_kind] = "idle"
             try:
                 session.connection.close()
             except Exception:
@@ -360,13 +386,15 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         self._last_error_by_source[source_kind] = code
 
     @staticmethod
-    def _send_audio_chunks(websocket, audio_bytes: bytes) -> None:
+    def _send_audio_chunks(websocket, audio_bytes: bytes, *, event_id_prefix: str = "audio") -> None:
         if not audio_bytes:
             return
-        for index in range(0, len(audio_bytes), 1600):
-            chunk = audio_bytes[index : index + 1600]
+        # 6,400 bytes is 200 ms of 16 kHz mono PCM16. It keeps partial
+        # transcripts responsive without multiplying synchronous WS writes.
+        for index in range(0, len(audio_bytes), 6400):
+            chunk = audio_bytes[index : index + 6400]
             websocket.send(json.dumps({
-                "event_id": f"rt-audio-{index}",
+                "event_id": f"rt-audio-{event_id_prefix}-{index // 6400}",
                 "type": "input_audio_buffer.append",
                 "audio": base64.b64encode(chunk).decode("ascii"),
             }))

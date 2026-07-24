@@ -36,6 +36,8 @@ def create_live_binding():
         "sessionId": session_id,
         "sourceKind": "mixed",
         "clientName": "Synthetic multiplexed transport",
+        "deviceId": device_id,
+        "manualCode": manual_code,
     }))
     return user_id, session_id, device_id, publisher
 

@@ -11,6 +11,8 @@ class CreateRealtimePublisherRequest(BaseModel):
     session_id: str = Field(min_length=1, alias="sessionId")
     source_kind: RealtimeSourceKind = Field(alias="sourceKind")
     client_name: str = Field(min_length=1, alias="clientName")
+    device_id: str | None = Field(default=None, min_length=1, alias="deviceId")
+    manual_code: str | None = Field(default=None, min_length=6, max_length=6, alias="manualCode")
 
 
 class RealtimePublisherResponse(BaseModel):

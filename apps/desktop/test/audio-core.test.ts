@@ -64,9 +64,9 @@ describe("speech segmenter", () => {
     const firstPartial = segmenter.push(speech, 130, 0.010);
     expect(firstPartial).toHaveLength(1);
     expect(segmenter.push(new Uint8Array([0]), 260, 0.001)).toEqual([]);
-    const secondPartial = segmenter.push(speech, 340, 0.009);
+    const secondPartial = segmenter.push(speech, 440, 0.009);
     expect(secondPartial).toHaveLength(1);
-    const finalized = segmenter.push(new Uint8Array([0]), 760, 0.001);
+    const finalized = segmenter.push(new Uint8Array([0]), 860, 0.001);
 
     expect(finalized).toHaveLength(1);
     expect(finalized[0]?.isFinal).toBe(true);

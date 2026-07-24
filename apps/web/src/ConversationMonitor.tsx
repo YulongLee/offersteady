@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { WebAppState } from "./domain";
 
 interface Props {
@@ -7,8 +7,45 @@ interface Props {
   readonly onDismissQuestion: () => void;
 }
 
-const relativeTime = (milliseconds: number) => `${String(Math.floor(milliseconds / 60_000)).padStart(2, "0")}:${String(Math.floor(milliseconds / 1_000) % 60).padStart(2, "0")}`;
+export const formatTranscriptTimestamp = (milliseconds: number) => {
+  if (milliseconds >= 1_000_000_000_000) {
+    const timestamp = new Date(milliseconds);
+    return `[${String(timestamp.getHours()).padStart(2, "0")}:${String(timestamp.getMinutes()).padStart(2, "0")}:${String(timestamp.getSeconds()).padStart(2, "0")}]`;
+  }
+  return `[${String(Math.floor(milliseconds / 60_000)).padStart(2, "0")}:${String(Math.floor(milliseconds / 1_000) % 60).padStart(2, "0")}]`;
+};
 const normalizeTranscriptText = (text: string) => text.replace(/\s+/g, "").replace(/[，。！？、；：,.!?;:~～…·]/g, "");
+
+export const nextProgressiveTranscriptText = (current: string, target: string, step = 2) => {
+  if (current === target) return current;
+  if (target.startsWith(current)) return target.slice(0, current.length + Math.max(1, step));
+  let commonPrefixLength = 0;
+  while (
+    commonPrefixLength < current.length
+    && commonPrefixLength < target.length
+    && current[commonPrefixLength] === target[commonPrefixLength]
+  ) commonPrefixLength += 1;
+  return target.slice(0, Math.min(target.length, commonPrefixLength + Math.max(1, step)));
+};
+
+function ProgressiveTranscriptText({ text, isFinal }: { readonly text: string; readonly isFinal: boolean }) {
+  const [visibleText, setVisibleText] = useState(text);
+  const targetText = useRef(text);
+  targetText.current = text;
+
+  useEffect(() => {
+    if (isFinal) {
+      setVisibleText(text);
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setVisibleText(current => nextProgressiveTranscriptText(current, targetText.current));
+    }, 32);
+    return () => window.clearInterval(timer);
+  }, [isFinal, text]);
+
+  return <p className={isFinal ? "is-final" : "is-streaming"}>{visibleText}{!isFinal ? <span className="transcript-caret" aria-hidden="true" /> : null}</p>;
+}
 
 export function ConversationMonitor({ state, onConfirmQuestion, onDismissQuestion }: Props) {
   const viewport = useRef<HTMLDivElement>(null);
@@ -70,7 +107,7 @@ export function ConversationMonitor({ state, onConfirmQuestion, onDismissQuestio
       {transcripts.length === 0 ? <div className="conversation-empty"><strong>等待当前面试的实时对话</strong><span>{state.speaker.runtimeNotice?.message ?? "桌面伴随助手连上当前 session 后，这里会按“面试官 / 我”实时显示转录。"}</span></div> : null}
       {transcripts.map(segment => {
         const role = segment.role;
-        return <article key={segment.id} className={`conversation-turn ${role}`}><time>{relativeTime(segment.startedAtMs)}</time><div><div className="conversation-turn-meta"><strong>{role === "candidate" ? "我" : "面试官"}</strong><small>{segment.isFinal ? "已确认" : "转写中"}{segment.overlap ? " · 声音重叠" : ""}</small></div><p>{segment.text}</p>{pendingSegmentIds.has(segment.id) && state.speaker.pendingQuestion ? <div className="inline-question-confirm"><span>问题内容不清晰</span><strong>{state.speaker.pendingQuestion.text}</strong><small>确认文本后才会生成回答，与角色判断无关。</small><div><button onClick={onDismissQuestion}>忽略</button><button className="confirm" onClick={onConfirmQuestion}>确认问题</button></div></div> : null}</div></article>;
+        return <article key={segment.id} className={`conversation-turn ${role}`}><time>{formatTranscriptTimestamp(segment.startedAtMs)}</time><div><div className="conversation-turn-meta"><strong>{role === "candidate" ? "我" : "面试官"}</strong><small>{segment.isFinal ? "已确认" : "转写中"}{segment.overlap ? " · 声音重叠" : ""}</small></div><ProgressiveTranscriptText text={segment.text} isFinal={segment.isFinal} />{pendingSegmentIds.has(segment.id) && state.speaker.pendingQuestion ? <div className="inline-question-confirm"><span>问题内容不清晰</span><strong>{state.speaker.pendingQuestion.text}</strong><small>确认文本后才会生成回答，与角色判断无关。</small><div><button onClick={onDismissQuestion}>忽略</button><button className="confirm" onClick={onConfirmQuestion}>确认问题</button></div></div> : null}</div></article>;
       })}
     </div>
   </section>;

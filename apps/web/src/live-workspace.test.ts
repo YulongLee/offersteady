@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { syntheticState } from "./test-state";
-import { DEFAULT_SPLIT_RATIO, answerPage, clampSplitRatio, initialLiveWorkspaceView, noteNewAnswer, parseStoredSplitRatio, serializeSplitRatio, splitRatioBounds, splitRatioStorageKey } from "./live-workspace";
+import { DEFAULT_SPLIT_RATIO, answerPage, clampSplitRatio, initialLiveWorkspaceView, noteNewAnswer, parseStoredSplitRatio, reconcileRealtimeSpeaker, serializeSplitRatio, splitRatioBounds, splitRatioStorageKey } from "./live-workspace";
 
 describe("live workspace answer pagination", () => {
   const answers = syntheticState.questions;
@@ -40,5 +40,33 @@ describe("live workspace answer pagination", () => {
     expect(bounds.max).toBeLessThanOrEqual(75);
     expect(clampSplitRatio(5, bounds)).toBe(bounds.min);
     expect(clampSplitRatio(95, bounds)).toBe(bounds.max);
+  });
+
+  it("keeps only the newest visible revision for a realtime utterance", () => {
+    const current = syntheticState.speaker;
+    const original = current.transcripts[0]!;
+    const reconciled = reconcileRealtimeSpeaker(current, {
+      ...current,
+      transcripts: [
+        { ...original, revision: original.revision + 1, text: "更新后的实时文本", isFinal: false },
+        { ...original, revision: original.revision + 2, text: "最终实时文本", isFinal: true },
+        { ...original, id: "blank-segment", text: "   ", revision: 1 },
+      ],
+    });
+    expect(reconciled.transcripts.filter(segment => segment.id === original.id)).toEqual([
+      expect.objectContaining({ revision: original.revision + 2, text: "最终实时文本", isFinal: true }),
+    ]);
+    expect(reconciled.transcripts.some(segment => segment.id === "blank-segment")).toBe(false);
+  });
+
+  it("does not let a stale snapshot overwrite a newer partial revision", () => {
+    const current = syntheticState.speaker;
+    const original = current.transcripts[0]!;
+    const newer = { ...original, revision: original.revision + 3, text: "本地已收到的新版本" };
+    const reconciled = reconcileRealtimeSpeaker(
+      { ...current, transcripts: [newer] },
+      { ...current, transcripts: [original] },
+    );
+    expect(reconciled.transcripts).toEqual([newer]);
   });
 });

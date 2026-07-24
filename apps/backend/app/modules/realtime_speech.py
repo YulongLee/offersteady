@@ -98,8 +98,24 @@ async def create_publisher(
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[RealtimePublisherResponse]:
+    if request.device_id is not None and request.manual_code is not None:
+        binding = service.get_desktop_active_binding(
+            device_id=request.device_id,
+            manual_code=request.manual_code,
+        )
+        if binding.session_id != request.session_id or binding.owner_user_id != request.user_id:
+            raise DomainRequestError(
+                "realtime-speech",
+                "create-publisher",
+                "桌面设备与当前面试绑定不一致，请重新输入机器码。",
+                403,
+                "desktop_binding_mismatch",
+            )
+        resolved_user_id = binding.owner_user_id
+    else:
+        resolved_user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
     publisher = service.create_publisher(
-        user_id=resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context),
+        user_id=resolved_user_id,
         session_id=request.session_id,
         source_kind=request.source_kind,
         client_name=request.client_name,
@@ -272,6 +288,7 @@ async def stream_session_runtime(
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> StreamingResponse:
     resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
+    service.get_runtime(user_id=resolved_user_id, session_id=session_id)
 
     async def event_stream():
         last_cursor = cursor

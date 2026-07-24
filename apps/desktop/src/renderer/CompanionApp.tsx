@@ -304,6 +304,7 @@ const waitingConnectionInfo = (_runtime?: DesktopRuntimeConfig) =>
 const fetchRuntimeStatus = async (runtime: DesktopRuntimeConfig, binding: DesktopActiveBinding) => {
   const query = new URLSearchParams({ userId: binding.ownerUserId });
   const response = await desktopBackendFetch(runtime, `/realtime-speech/sessions/${encodeURIComponent(binding.sessionId)}/runtime?${query.toString()}`);
+  if (response.status === 401 || response.status === 403) return null;
   if (!response.ok) throw new Error(await readBackendError(response));
   const envelope = await response.json() as ApiEnvelope<DesktopRuntimeStatus>;
   return envelope.data;
@@ -907,6 +908,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
         sessionId: activeBinding.sessionId,
         ownerUserId: activeBinding.ownerUserId,
         deviceId: pairingIdentity.deviceId,
+        manualCode: activeBinding.manualCode,
         displayName: pairingIdentity.displayName,
       },
       microphoneId: effectiveMicrophoneId,
