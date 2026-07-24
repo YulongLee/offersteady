@@ -68,6 +68,20 @@ class FilePromptTemplateAdapter(PromptTemplatePort):
             include_retrieval_context=True,
         )
 
+    def load_stage_prompt(self, stage: str) -> tuple[str, PromptConfig]:
+        if stage not in {"quick", "detail"}:
+            raise ValueError(f"unsupported_prompt_stage:{stage}")
+        prompt_path = Path(self.settings.chat_prompt_template_path)
+        if not prompt_path.is_absolute():
+            prompt_path = Path(__file__).resolve().parents[4] / self.settings.chat_prompt_template_path
+        text = prompt_path.with_name(f"{stage}.md").read_text(encoding="utf-8").strip()
+        return text, PromptConfig(
+            template_id=f"interview-chat-{stage}",
+            version=self.settings.chat_prompt_version,
+            max_history_entries=self.settings.chat_max_history_entries,
+            include_retrieval_context=stage == "detail",
+        )
+
 
 class InterviewPromptBuilder(PromptBuilderPort):
     def build(
@@ -81,19 +95,24 @@ class InterviewPromptBuilder(PromptBuilderPort):
         retrieval_context_text: str,
         prompt_config: PromptConfig,
     ) -> PromptBuildResult:
-        history_text = "\n".join(conversation_history[-prompt_config.max_history_entries :])
+        selected_history = conversation_history[-prompt_config.max_history_entries :]
+        answer_anchors = [item.removeprefix("本轮简要回答锚点：").strip() for item in selected_history if item.startswith("本轮简要回答锚点：")]
+        history_text = "\n".join(item for item in selected_history if not item.startswith("本轮简要回答锚点："))
         sections = [
-            f"会话标题：{session_title}",
-            f"用户问题：{question}",
+            "<authoritative_request>",
+            f"会话标题：{session_title}\n当前问题：{question}",
+            "</authoritative_request>",
         ]
         if history_text:
-            sections.append(f"多轮上下文：\n{history_text}")
+            sections.append(f"<untrusted_conversation_evidence>\n{history_text}\n</untrusted_conversation_evidence>")
         if session_material_context_text.strip():
-            sections.append(f"本场固定资料（简历/JD，不作为 RAG 检索来源）：\n{session_material_context_text.strip()}")
+            sections.append(f"<untrusted_fixed_material_evidence>\n{session_material_context_text.strip()}\n</untrusted_fixed_material_evidence>")
         if prompt_config.include_retrieval_context and retrieval_context_text.strip():
-            sections.append(f"知识库检索依据：\n{retrieval_context_text.strip()}")
+            sections.append(f"<untrusted_knowledge_evidence>\n{retrieval_context_text.strip()}\n</untrusted_knowledge_evidence>")
         elif prompt_config.include_retrieval_context:
-            sections.append("知识库检索依据：本次未命中已确认知识库。回答时可结合本场固定简历/JD和用户问题，但不能编造候选人的项目、公司、职责、结果或数字。")
+            sections.append("<knowledge_status>本次未命中已确认知识库。</knowledge_status>")
+        if answer_anchors:
+            sections.append(f"<authoritative_answer_anchor>\n{answer_anchors[-1]}\n</authoritative_answer_anchor>")
         user_prompt = "\n\n".join(sections)
         return PromptBuildResult(
             system_prompt=system_prompt,
@@ -386,6 +405,29 @@ class ChatService:
         self.prompt_builder = prompt_builder
         self.llm_gateway = llm_gateway
 
+    def _load_stage_prompt(self, stage: str) -> tuple[str, PromptConfig]:
+        loader = getattr(self.prompt_template, "load_stage_prompt", None)
+        return loader(stage) if callable(loader) else self.prompt_template.load_system_prompt()
+
+    def _conversation_history(self, *, user_id: str, session_id: str, question: str) -> list[str]:
+        entries = self.session_service.get_context_window(
+            user_id=user_id,
+            session_id=session_id,
+            limit=self.settings.chat_max_history_entries + 1,
+        )
+        history = [f"{item.role}:{item.content}" for item in entries]
+        if history and history[-1] == f"manual-question:{question.strip()}":
+            history.pop()
+        return history[-self.settings.chat_max_history_entries :]
+
+    @staticmethod
+    def _prompt_metadata(provenance: dict[str, object], *, stages: dict[str, str]) -> dict[str, object]:
+        return {**provenance, "promptStrategyMode": "adaptive-evidence-first", "promptStages": stages}
+
+    @staticmethod
+    def _size_bucket(length: int) -> str:
+        return "xs" if length <= 256 else "sm" if length <= 1000 else "md" if length <= 4000 else "lg"
+
     def answer_question(self, *, user_id: str, session_id: str, question: str, stream: bool) -> tuple[ChatAnswerTaskRecord, RetrievalResponse]:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         if session.status != "live":
@@ -414,6 +456,7 @@ class ChatService:
             visibility="session",
             related_task_id=task.task_id,
         )
+        conversation_history = self._conversation_history(user_id=user_id, session_id=session_id, question=question)
         retrieval = self._retrieve_context(user_id=user_id, session=session, question=question)
         material_context_text, material_assembly, material_provenance = self._assemble_material_context(session=session, retrieval=retrieval)
         system_prompt, prompt_config = self.prompt_template.load_system_prompt()
@@ -528,18 +571,18 @@ class ChatService:
             strategy="filtered-first",
         )
         material_context_text, material_assembly, material_provenance = self._assemble_material_context(session=session, retrieval=quick_retrieval)
-        _, prompt_config = self.prompt_template.load_system_prompt()
-        simple_system_prompt = (
-            "你是实时面试回答助手。只输出简单回答正文，不要输出标题。"
-            "用120字以内给出可直接口播的答案，先回答结论，再给最关键依据。"
-            "只使用给定简历/JD摘要和用户问题；资料不足就保守表达，不能编造经历、项目、公司、数字。"
+        quick_system_prompt, prompt_config = self._load_stage_prompt("quick")
+        material_context_text = material_context_text[:min(2400, int(getattr(self.settings, "rag_context_max_characters", 6000)))]
+        conversation_history = self._conversation_history(
+            user_id=user_id,
+            session_id=session_id,
+            question=question,
         )
-        material_context_text = material_context_text[:450]
         prompt = self.prompt_builder.build(
             question=question,
             session_title=session.title,
-            system_prompt=simple_system_prompt,
-            conversation_history=[],
+            system_prompt=quick_system_prompt,
+            conversation_history=conversation_history,
             session_material_context_text=material_context_text,
             retrieval_context_text="",
             prompt_config=prompt_config,
@@ -556,7 +599,10 @@ class ChatService:
                 material_context_status=material_assembly.status,
                 fixed_source_count=material_assembly.fixed_source_count,
                 retrieved_source_count=material_assembly.retrieved_source_count,
-                material_provenance=material_provenance,
+                material_provenance=self._prompt_metadata(
+                    material_provenance,
+                    stages={"quick": f"{prompt.prompt_config.template_id}:{prompt.prompt_config.version}"},
+                ),
                 unavailable_material_sources=[self._material_source_payload(item) for item in material_assembly.unavailable_sources],
                 updated_at_ms=_now_ms(),
             )
@@ -565,6 +611,8 @@ class ChatService:
         chunks: list[ChatAnswerChunk] = []
         answer_parts: list[str] = []
         last_error: Exception | None = None
+        stream_started_at_ms = _now_ms()
+        first_token_at_ms: int | None = None
         for attempt in range(self.settings.chat_retry_max_attempts + 1):
             try:
                 if self._is_task_cancelled(current_task.task_id):
@@ -584,6 +632,8 @@ class ChatService:
                         cancelled = self.repository.get_task(current_task.task_id) or current_task
                         yield {"type": "cancelled", "task": cancelled}
                         return
+                    if first_token_at_ms is None:
+                        first_token_at_ms = _now_ms()
                     normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=chunk.text, is_final=False)
                     chunks.append(normalized)
                     answer_parts.append(normalized.text)
@@ -597,14 +647,33 @@ class ChatService:
                     yield {"type": "cancelled", "task": cancelled}
                     return
                 material_context_text, material_assembly, material_provenance = self._assemble_material_context(session=session, retrieval=retrieval)
+                detail_system_prompt, detail_prompt_config = self._load_stage_prompt("detail")
+                quick_answer_anchor = "".join(answer_parts).removeprefix("简单回答\n").strip()
+                detail_prompt = self.prompt_builder.build(
+                    question=question,
+                    session_title=session.title,
+                    system_prompt=detail_system_prompt,
+                    conversation_history=[*conversation_history, f"本轮简要回答锚点：{quick_answer_anchor}"],
+                    session_material_context_text=material_context_text[:int(getattr(self.settings, "rag_context_max_characters", 6000))],
+                    retrieval_context_text=retrieval.context_text,
+                    prompt_config=detail_prompt_config,
+                )
                 current_task = self.repository.save_task(
                     replace(
                         current_task,
+                        prompt_template_id="interview-chat-quick+detail",
+                        prompt_version=detail_prompt.prompt_config.version,
                         retrieval_excerpt_count=retrieval.final_count,
                         material_context_status=material_assembly.status,
                         fixed_source_count=material_assembly.fixed_source_count,
                         retrieved_source_count=material_assembly.retrieved_source_count,
-                        material_provenance=material_provenance,
+                        material_provenance=self._prompt_metadata(
+                            material_provenance,
+                            stages={
+                                "quick": f"{prompt.prompt_config.template_id}:{prompt.prompt_config.version}",
+                                "detail": f"{detail_prompt.prompt_config.template_id}:{detail_prompt.prompt_config.version}",
+                            },
+                        ),
                         unavailable_material_sources=[self._material_source_payload(item) for item in material_assembly.unavailable_sources],
                         updated_at_ms=_now_ms(),
                     )
@@ -617,37 +686,12 @@ class ChatService:
                     replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
                 )
                 yield {"type": "chunk", "task": current_task, "chunk": normalized}
-                if retrieval.final_count > 0:
-                    detail_system_prompt = (
-                        "你是实时面试回答助手。只输出详细回答正文，不要输出标题。"
-                        "必须优先使用知识库检索依据补充回答，同时结合简历/JD摘要。"
-                        "给出2-4段自然口语化展开，适合用户在追问时继续说。"
-                        "不能编造知识库、简历或JD中不存在的经历、项目、公司、职责、结果或数字。"
-                    )
-                    detail_prompt = self.prompt_builder.build(
-                        question=question,
-                        session_title=session.title,
-                        system_prompt=detail_system_prompt,
-                        conversation_history=[],
-                        session_material_context_text=material_context_text[:900],
-                        retrieval_context_text=retrieval.context_text,
-                        prompt_config=prompt_config,
-                    )
-                    for chunk in self.llm_gateway.stream_generate(question=question, prompt=detail_prompt, attempt=attempt):
-                        if self._is_task_cancelled(current_task.task_id):
-                            cancelled = self.repository.get_task(current_task.task_id) or current_task
-                            yield {"type": "cancelled", "task": cancelled}
-                            return
-                        normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=chunk.text, is_final=False)
-                        chunks.append(normalized)
-                        answer_parts.append(normalized.text)
-                        current_task = self.repository.save_task(
-                            replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
-                        )
-                        yield {"type": "chunk", "task": current_task, "chunk": normalized}
-                else:
-                    fallback_detail = "本次没有命中可引用的知识库片段，详细回答暂不补充资料扩展；建议只按上面的简要回答，并结合你能核对的真实经历继续展开。"
-                    normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=fallback_detail, is_final=False)
+                for chunk in self.llm_gateway.stream_generate(question=question, prompt=detail_prompt, attempt=attempt):
+                    if self._is_task_cancelled(current_task.task_id):
+                        cancelled = self.repository.get_task(current_task.task_id) or current_task
+                        yield {"type": "cancelled", "task": cancelled}
+                        return
+                    normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=chunk.text, is_final=False)
                     chunks.append(normalized)
                     answer_parts.append(normalized.text)
                     current_task = self.repository.save_task(
@@ -661,9 +705,9 @@ class ChatService:
                     last = chunks[-1]
                     chunks[-1] = ChatAnswerChunk(sequence=last.sequence, text=last.text, is_final=True)
                 usage = UsageReport(
-                    prompt_tokens=max(1, len(prompt.rendered_prompt) // 4),
+                    prompt_tokens=max(1, (len(prompt.rendered_prompt) + len(detail_prompt.rendered_prompt)) // 4),
                     completion_tokens=max(1, len(final_text) // 4),
-                    total_tokens=max(1, len(prompt.rendered_prompt) // 4) + max(1, len(final_text) // 4),
+                    total_tokens=max(1, (len(prompt.rendered_prompt) + len(detail_prompt.rendered_prompt)) // 4) + max(1, len(final_text) // 4),
                     provider_name="qwen-compatible",
                     model_name=self.settings.chat_qwen_model,
                 )
@@ -698,6 +742,17 @@ class ChatService:
                     provider_name=usage.provider_name,
                     model_name=usage.model_name,
                     related_task_id=completed.task_id,
+                )
+                log_event(
+                    self.logger, logging.INFO, settings=self.settings,
+                    event="chat.prompt_quality_completed", feature="live-answer", action="prompt-quality",
+                    session_id=session_id, task_id=completed.task_id,
+                    prompt_template_id=completed.prompt_template_id, prompt_version=completed.prompt_version,
+                    prompt_strategy_mode="adaptive-evidence-first",
+                    fixed_source_count=completed.fixed_source_count, retrieved_source_count=completed.retrieved_source_count,
+                    question_size_bucket=self._size_bucket(len(question)), answer_size_bucket=self._size_bucket(len(completed.answer_text)),
+                    first_token_ms=(first_token_at_ms - stream_started_at_ms) if first_token_at_ms is not None else None,
+                    completion_ms=_now_ms() - stream_started_at_ms, status=completed.status,
                 )
                 self._log(logging.INFO, "chat.stream_completed", task=completed, session_id=session_id, question=question, retry_count=attempt)
                 yield {"type": "completed", "task": completed, "retrieval": self._to_retrieval_response(retrieval)}

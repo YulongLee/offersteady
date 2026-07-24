@@ -1,0 +1,7 @@
+{"id":"algorithm-complete","problem_type":"algorithm","must_include":["完整代码","时间复杂度","空间复杂度"],"synthetic":true}
+{"id":"sql-complete","problem_type":"sql","must_include":["SQL","PARTITION BY"],"synthetic":true}
+{"id":"system-design-complete","problem_type":"system-design","must_cover":["架构","数据流","存储","一致性","故障处理"],"synthetic":true}
+{"id":"debugging-safe","problem_type":"debugging","must_include":["根因","验证","修复"],"must_not_invent_hidden_logs":true,"synthetic":true}
+{"id":"missing-options","problem_type":"multiple-choice","must_not_claim_definitive_letter":true,"synthetic":true}
+{"id":"unreadable-schema","problem_type":"sql","must_not_invent_schema":true,"must_request_recapture":true,"synthetic":true}
+{"id":"no-personal-material","session_materials":["resume","jd","knowledge"],"must_report_no_personal_material":true,"synthetic":true}

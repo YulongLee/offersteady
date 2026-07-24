@@ -122,6 +122,8 @@ class PromptBuilderPort(Protocol):
 class PromptTemplatePort(Protocol):
     def load_system_prompt(self) -> tuple[str, PromptConfig]: ...
 
+    def load_stage_prompt(self, stage: str) -> tuple[str, PromptConfig]: ...
+
 
 class LLMGatewayPort(Protocol):
     def generate(

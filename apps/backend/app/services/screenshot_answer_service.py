@@ -104,18 +104,16 @@ class ScreenshotPromptBuilder(ScreenshotPromptBuilderPort):
         )
         history_text = "\n".join(conversation_history[-typed_prompt_config.max_history_entries :])
         sections = [
-            f"会话标题：{session_title}",
-            f"截图摘要：{vision_summary.title}",
-            f"图像理解：\n{vision_summary.summary_text}",
+            "<authoritative_screenshot_request>",
+            f"会话标题：{session_title}\n截图摘要：{vision_summary.title}",
+            "</authoritative_screenshot_request>",
+            f"<untrusted_screenshot_evidence>\n{vision_summary.summary_text}\n</untrusted_screenshot_evidence>",
         ]
         if instruction.strip():
-            sections.append(f"用户补充说明：{instruction.strip()}")
+            sections.append(f"<user_instruction>{instruction.strip()}</user_instruction>")
         if history_text:
-            sections.append(f"多轮上下文：\n{history_text}")
-        if session_material_context_text.strip():
-            sections.append(f"本场固定资料（简历/JD，不作为 RAG 检索来源）：\n{session_material_context_text.strip()}")
-        if typed_prompt_config.include_retrieval_context and retrieval_context_text.strip():
-            sections.append(f"知识库检索依据：\n{retrieval_context_text.strip()}")
+            sections.append(f"<untrusted_screenshot_conversation>\n{history_text}\n</untrusted_screenshot_conversation>")
+        _ = session_material_context_text, retrieval_context_text
         user_prompt = "\n\n".join(sections)
         return PromptBuildResult(
             system_prompt=system_prompt,
@@ -333,6 +331,12 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
+    def _load_system_prompt(self) -> str:
+        prompt_path = Path(self.settings.screenshot_prompt_template_path)
+        if not prompt_path.is_absolute():
+            prompt_path = Path(__file__).resolve().parents[4] / self.settings.screenshot_prompt_template_path
+        return prompt_path.read_text(encoding="utf-8").strip()
+
     def analyze(
         self,
         *,
@@ -349,16 +353,10 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
             {
                 "type": "text",
                 "text": (
-                    "你是面试稳的截图直答助手。请直接识别截图中的线上笔试题、代码题、算法题、SQL题、系统设计题、选择题或报错排查题，并返回 JSON。"
-                    "字段固定为 title、summary、derived_question、final_answer。"
-                    "title 是 12 字内标题；summary 是对截图题目、输入输出、约束、已有代码或报错的结构化理解；"
-                    "derived_question 是一句话题目；final_answer 是最终可直接使用的答案。"
-                    "final_answer 必须使用以下格式：简要回答\\n...\\n\\n---\\n\\n详细回答\\n..."
-                    "如果是代码题、算法题或 SQL 题，详细回答必须包含完整可运行代码或 SQL，不要只讲思路；"
-                    "如果是系统设计题，详细回答必须包含架构、组件、数据流和关键权衡；"
-                    "如果截图信息不完整，也要给出最可能答案，并明确需要用户核对的缺失条件。"
-                    "不要使用知识库、简历、JD 或候选人经历；本功能只基于截图作答。"
-                    f"用户补充说明：{instruction.strip() or '无'}"
+                    "请分析截图并返回JSON对象，字段固定为title、summary、derived_question、final_answer。"
+                    "title不超过12个汉字；summary只记录可见题型、输入输出、约束、代码、表格或报错；"
+                    "derived_question为一句话题目；final_answer严格执行系统策略。"
+                    f"\n<user_instruction>{instruction.strip() or '无'}</user_instruction>"
                 ),
             }
         ]
@@ -373,7 +371,10 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
             "model": self.settings.screenshot_vision_model,
             "stream": False,
             "temperature": 0.1,
-            "messages": [{"role": "user", "content": content}],
+            "messages": [
+                {"role": "system", "content": self._load_system_prompt()},
+                {"role": "user", "content": content},
+            ],
         }
         try:
             with httpx.Client(timeout=max(self.settings.integration_http_timeout_seconds, 60.0)) as client:

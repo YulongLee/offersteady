@@ -901,7 +901,7 @@ def test_live_answer_chat_service_generates_history_and_usage() -> None:
     assert answer["task"]["status"] == "completed"
     assert answer["task"]["providerName"] == "qwen-compatible"
     assert answer["task"]["promptTemplateId"] == "interview-chat-system"
-    assert answer["task"]["promptVersion"] == "v3"
+    assert answer["task"]["promptVersion"] == "v4"
     assert answer["task"]["retrievalExcerptCount"] >= 0
     assert len(answer["task"]["chunks"]) >= 2
     assert answer["task"]["chunks"][-1]["isFinal"] is True

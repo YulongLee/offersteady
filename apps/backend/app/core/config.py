@@ -94,7 +94,7 @@ class Settings(BaseSettings):
     retrieval_reranker_enabled: bool = True
     retrieval_strategy: str = "filtered-first"
     chat_prompt_template_path: str = "ai/prompts/chat-service/system.md"
-    chat_prompt_version: str = "v3"
+    chat_prompt_version: str = "v4"
     chat_max_history_entries: int = 6
     chat_retry_max_attempts: int = 1
     chat_stream_chunk_chars: int = 32
@@ -103,7 +103,7 @@ class Settings(BaseSettings):
     chat_qwen_api_key: str | None = None
     chat_qwen_base_url: str | None = None
     screenshot_prompt_template_path: str = "ai/prompts/screenshot-answer/system.md"
-    screenshot_prompt_version: str = "v1"
+    screenshot_prompt_version: str = "v2"
     screenshot_max_history_entries: int = 4
     screenshot_retry_max_attempts: int = 1
     screenshot_max_images_per_task: int = 4
