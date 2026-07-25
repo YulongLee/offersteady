@@ -26,6 +26,15 @@
 #### Scenario: Streaming content updates during drag
 - **WHEN** 用户调整分栏比例时对话修订或回答流式内容到达
 - **THEN** 系统保持同一对话、答案、草稿和截图任务状态，不卸载或重复创建业务组件
+
+#### Scenario: User creates or enters a different interview session
+- **WHEN** 用户新建面试或从另一场面试进入当前实时工作台
+- **THEN** 实时对话、待确认问题和当前回答任务只显示当前 `sessionId` 的内容，不继承或合并上一场面试的临时状态
+
+#### Scenario: Current session has no realtime transcript yet
+- **WHEN** 新面试 session 尚未收到任何 Partial 或 Final Transcript
+- **THEN** 实时对话区显示当前 session 的等待状态，而不是继续展示上一场面试的转录
+
 ### Requirement: Quick answer SHALL assemble the latest interviewer turn
 
 没有手动输入问题时，系统 MUST 根据当前 session 的实时双角色对话整理最近一轮面试官问题。系统 MUST 以候选人最近一次完整发言作为轮次边界，MUST 合并该边界后的面试官完整片段，MAY 补充比最新完整片段更新的未定稿片段，并 MUST NOT 把候选人发言正文作为待回答问题。

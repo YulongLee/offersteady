@@ -1,4 +1,4 @@
-import type { InterviewQuestion, LiveWorkspaceViewState, SpeakerPresentationState } from "./domain";
+import type { InterviewQuestion, LiveWorkspaceViewState, SpeakerPresentationState, WebAppState } from "./domain";
 
 export interface AnswerPage {
   readonly answer: InterviewQuestion;
@@ -58,12 +58,45 @@ export const noteNewAnswer = (view: LiveWorkspaceViewState, previousLatestId: st
 
 const hasVisibleTranscriptText = (text: string) => text.replace(/\s+/g, "").length > 0;
 
+export const isolateRealtimeSpeakerSession = (
+  speaker: SpeakerPresentationState,
+  sessionId: string,
+): SpeakerPresentationState => {
+  const hasForeignSessionState = speaker.transcripts.some(segment => segment.sessionId !== sessionId)
+    || Boolean(speaker.pendingQuestion && speaker.pendingQuestion.sessionId !== sessionId)
+    || Boolean(speaker.degradation && speaker.degradation.sessionId !== sessionId);
+  return {
+    ...speaker,
+    transcripts: speaker.transcripts.filter(segment => segment.sessionId === sessionId),
+    pendingQuestion: speaker.pendingQuestion?.sessionId === sessionId ? speaker.pendingQuestion : null,
+    degradation: speaker.degradation?.sessionId === sessionId ? speaker.degradation : null,
+    runtimeNotice: hasForeignSessionState ? null : speaker.runtimeNotice,
+  };
+};
+
+export const resetTransientInterviewState = (state: WebAppState): WebAppState => ({
+  ...state,
+  questions: [],
+  captureState: "ready",
+  speaker: {
+    mode: "dual-channel",
+    transcripts: [],
+    pendingQuestion: null,
+    degradation: null,
+    runtimeNotice: null,
+  },
+  activeAnswerTask: null,
+});
+
 export const reconcileRealtimeSpeaker = (
   current: SpeakerPresentationState,
   incoming: SpeakerPresentationState,
+  sessionId?: string,
 ): SpeakerPresentationState => {
-  const latestById = new Map(current.transcripts.filter(segment => hasVisibleTranscriptText(segment.text)).map(segment => [segment.id, segment]));
-  for (const segment of incoming.transcripts) {
+  const scopedCurrent = sessionId ? isolateRealtimeSpeakerSession(current, sessionId) : current;
+  const scopedIncoming = sessionId ? isolateRealtimeSpeakerSession(incoming, sessionId) : incoming;
+  const latestById = new Map(scopedCurrent.transcripts.filter(segment => hasVisibleTranscriptText(segment.text)).map(segment => [segment.id, segment]));
+  for (const segment of scopedIncoming.transcripts) {
     if (!hasVisibleTranscriptText(segment.text)) continue;
     const existing = latestById.get(segment.id);
     if (
@@ -75,7 +108,7 @@ export const reconcileRealtimeSpeaker = (
     }
   }
   return {
-    ...incoming,
+    ...scopedIncoming,
     transcripts: [...latestById.values()].sort((left, right) => (
       left.startedAtMs - right.startedAtMs || left.revision - right.revision
     )),

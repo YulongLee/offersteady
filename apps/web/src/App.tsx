@@ -17,7 +17,7 @@ import { ConversationMonitor } from "./ConversationMonitor";
 import { AnswerWorkspace } from "./AnswerWorkspace";
 import { ManualQuestionComposer } from "./ManualQuestionComposer";
 import { AnswerActionBar } from "./AnswerActionBar";
-import { ABSOLUTE_MAX_SPLIT_RATIO, ABSOLUTE_MIN_SPLIT_RATIO, clampSplitRatio, initialLiveWorkspaceView, noteNewAnswer, parseStoredSplitRatio, reconcileRealtimeSpeaker, serializeSplitRatio, splitRatioBounds, splitRatioStorageKey } from "./live-workspace";
+import { ABSOLUTE_MAX_SPLIT_RATIO, ABSOLUTE_MIN_SPLIT_RATIO, clampSplitRatio, initialLiveWorkspaceView, isolateRealtimeSpeakerSession, noteNewAnswer, parseStoredSplitRatio, reconcileRealtimeSpeaker, resetTransientInterviewState, serializeSplitRatio, splitRatioBounds, splitRatioStorageKey } from "./live-workspace";
 import { WorkspaceDivider } from "./WorkspaceDivider";
 import { authClient } from "./auth-client";
 import "./styles.css";
@@ -389,7 +389,14 @@ function NewInterviewPage() {
     setSaving(true);
     try {
       const draft = await runAdapterOperation(signal => interviewAppAdapter.createDraft(form, signal));
-      setState(current => ({ ...current, interviews: [draft, ...current.interviews.filter(item => item.id !== draft.id)].slice(0, 5), contextSelections: { ...current.contextSelections, [draft.id]: { sessionId: draft.id, resumeSourceId: null, jobDescriptionSourceId: null, knowledgeSourceIds: [], revision: 0, confirmedAtMs: null } } }));
+      setState(current => {
+        const reset = resetTransientInterviewState(current);
+        return {
+          ...reset,
+          interviews: [draft, ...current.interviews.filter(item => item.id !== draft.id)].slice(0, 5),
+          contextSelections: { ...current.contextSelections, [draft.id]: { sessionId: draft.id, resumeSourceId: null, jobDescriptionSourceId: null, knowledgeSourceIds: [], revision: 0, confirmedAtMs: null } },
+        };
+      });
       if (typeof window.sessionStorage?.setItem === "function") window.sessionStorage.setItem("offersteady.last-draft", JSON.stringify(form));
       navigate(routes.prepare(draft.id));
     } catch (nextError) {
@@ -562,6 +569,13 @@ function LivePage() {
   useEffect(() => { const nextLatestId = state.questions[0]?.id; setView(current => noteNewAnswer(current, previousLatestId.current, nextLatestId)); previousLatestId.current = nextLatestId; }, [state.questions]);
   useEffect(() => () => { screenshotController.current?.abort(); manualAnswerController.current?.abort(); }, []);
   useEffect(() => {
+    setState(current => ({
+      ...current,
+      speaker: isolateRealtimeSpeakerSession(current.speaker, id),
+      activeAnswerTask: current.activeAnswerTask?.interviewId === id ? current.activeAnswerTask : null,
+    }));
+  }, [id, setState]);
+  useEffect(() => {
     let stopped = false;
     let heartbeatBindingId: string | null = null;
     let lastBindingRefreshAt = 0;
@@ -595,7 +609,7 @@ function LivePage() {
         if (!next || stopped) return;
         setState(current => ({
           ...current,
-          speaker: reconcileRealtimeSpeaker(current.speaker, next.speaker),
+          speaker: reconcileRealtimeSpeaker(current.speaker, next.speaker, id),
           ...(next.captureState ? { captureState: next.captureState } : {}),
         }));
       });

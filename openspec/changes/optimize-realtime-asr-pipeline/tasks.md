@@ -27,9 +27,11 @@
 - [x] 4.4 Assemble the latest interviewer turn for quick answer, including a newer partial revision without mixing candidate speech into the question.
 - [x] 4.5 Add bounded SSE reconnect backoff, stop healthy-stream polling, and prevent invalid-session retry storms.
 - [x] 4.6 Make desktop registration startup-only in the renderer and heartbeat-only in the main process.
+- [x] 4.7 Reset transient live state for newly created sessions and enforce session-scoped transcript reconciliation.
 
 ## 5. Verification, Evals, and Rollout
 
 - [x] 5.1 Add regression tests for non-blocking ingest, persistent ASR reuse, partial overwrite behavior, and silence/empty-result suppression.
+- [x] 5.4 Add regression coverage proving a new interview cannot inherit transcripts, pending questions, or answer tasks from a prior session.
 - [ ] 5.2 Add or update evals / performance checks for TTFT, final transcript latency, dropped-partial policy, and transcript stability under burst traffic.
 - [ ] 5.3 Run end-to-end validation with the desktop companion, backend, and web live page; compare against the recorded baseline and document rollout / rollback guidance.

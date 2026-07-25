@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { syntheticState } from "./test-state";
-import { DEFAULT_SPLIT_RATIO, answerPage, clampSplitRatio, initialLiveWorkspaceView, noteNewAnswer, parseStoredSplitRatio, reconcileRealtimeSpeaker, serializeSplitRatio, splitRatioBounds, splitRatioStorageKey } from "./live-workspace";
+import { DEFAULT_SPLIT_RATIO, answerPage, clampSplitRatio, initialLiveWorkspaceView, isolateRealtimeSpeakerSession, noteNewAnswer, parseStoredSplitRatio, reconcileRealtimeSpeaker, resetTransientInterviewState, serializeSplitRatio, splitRatioBounds, splitRatioStorageKey } from "./live-workspace";
 
 describe("live workspace answer pagination", () => {
   const answers = syntheticState.questions;
@@ -68,5 +68,34 @@ describe("live workspace answer pagination", () => {
       { ...current, transcripts: [original] },
     );
     expect(reconciled.transcripts).toEqual([newer]);
+  });
+
+  it("drops realtime content from another interview session instead of merging it", () => {
+    const current = syntheticState.speaker;
+    const incoming = {
+      ...current,
+      transcripts: [],
+      pendingQuestion: null,
+      runtimeNotice: { stage: "waiting-audio", message: "等待新面试的实时语音" },
+    };
+    const isolated = isolateRealtimeSpeakerSession(current, "new-session");
+    const reconciled = reconcileRealtimeSpeaker(current, incoming, "new-session");
+
+    expect(isolated.transcripts).toEqual([]);
+    expect(isolated.pendingQuestion).toBeNull();
+    expect(reconciled.transcripts).toEqual([]);
+    expect(reconciled.pendingQuestion).toBeNull();
+    expect(reconciled.runtimeNotice?.message).toBe("等待新面试的实时语音");
+  });
+
+  it("resets transient conversation and answer state for a newly created interview", () => {
+    const reset = resetTransientInterviewState(syntheticState);
+
+    expect(reset.interviews).toEqual(syntheticState.interviews);
+    expect(reset.questions).toEqual([]);
+    expect(reset.speaker.transcripts).toEqual([]);
+    expect(reset.speaker.pendingQuestion).toBeNull();
+    expect(reset.activeAnswerTask).toBeNull();
+    expect(reset.captureState).toBe("ready");
   });
 });

@@ -150,6 +150,10 @@ Alternative considered: 只继续调一个全局 RMS 阈值。缺点是不同设
 
 桌面设备生命周期由主进程统一负责：启动后首次登记设备，后续只发送 heartbeat。渲染进程可以在首次加载时上报完整设备能力，但不得以定时任务重复调用登记接口。
 
+### Decision 11: Enforce session boundaries for transient live workspace state
+
+实时字幕、待确认问题、当前回答任务和新建面试时的回答列表属于单场面试运行态，不得跨 session 合并。创建新草稿时前端清空上一场临时运行态；实时字幕 reconciliation 只允许合并相同 `sessionId` 的 partial/final，目标 session 变化时先过滤旧 session 内容。该清理只作用于前端当前工作区，不删除后端历史面试记录。
+
 ## Risks / Trade-offs
 
 - [Risk] 引入 source worker、持久连接和有界队列后，系统状态机会更复杂 → Mitigation: 按 source/session 明确状态图，并增加可重复的单元测试与集成测试。
