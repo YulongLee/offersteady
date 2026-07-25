@@ -528,7 +528,7 @@ const startDesktopRegistrationLoop = () => {
   void run();
   registrationInterval = setInterval(() => {
     void run();
-  }, 10000);
+  }, 15000);
 };
 
 const desktopApiUrl = (pathName: string) => {

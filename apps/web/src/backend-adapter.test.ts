@@ -285,6 +285,23 @@ describe("backend preview adapter", () => {
     expect(JSON.stringify(updates[0])).not.toContain("旧 session 的问题不应出现");
   });
 
+  it("preserves the realtime stream status so callers can stop invalid-session reconnect storms", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ detail: "session not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    }));
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+
+    await expect(adapter.subscribeRealtimeSession("missing-session", () => undefined)).rejects.toMatchObject({
+      status: 404,
+      message: "实时对话订阅失败（404）",
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it("starts an interview session through the backend session API", async () => {
     window.localStorage.setItem("offersteady.auth.access_token", "access-token");
     window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");

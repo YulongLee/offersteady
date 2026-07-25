@@ -728,7 +728,13 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     };
     if (signal) requestInit.signal = signal;
     const response = await this.fetchImpl(withBaseUrl(this.baseUrl, `/api/v1/realtime-speech/sessions/${interviewId}/stream?userId=${encodeURIComponent(requireUserId())}&cursor=${cursor}`), requestInit);
-    if (!response.ok) throw new AppError("validation", `实时对话订阅失败（${response.status}）`);
+    if (!response.ok) {
+      const error = new AppError("validation", `实时对话订阅失败（${response.status}）`) as AppError & {
+        status: number;
+      };
+      error.status = response.status;
+      throw error;
+    }
     if (!response.body) throw new AppError("network", "当前浏览器不支持实时对话订阅读取");
     const reader = response.body.getReader();
     const decoder = new TextDecoder();

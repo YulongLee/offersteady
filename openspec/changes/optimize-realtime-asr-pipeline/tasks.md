@@ -10,6 +10,7 @@
 - [x] 2.2 Introduce source-scoped bounded buffering (RingBuffer or equivalent) and freshness-first backpressure rules for microphone and system audio.
 - [ ] 2.3 Migrate capture callbacks toward AudioWorklet/native-producer-friendly boundaries and keep ScriptProcessor only as a fallback path.
 - [ ] 2.4 Recalibrate silence gating and empty-audio suppression separately for source health, utterance start, and transcript publish eligibility.
+- [x] 2.5 Reduce partial transcript chunk cadence to 150 ms and extend default persistent ASR idle reuse to 300 seconds.
 
 ## 3. Backend Realtime ASR Pipeline Refactor
 
@@ -24,6 +25,8 @@
 - [x] 4.2 Minimize UI update cost with incremental state updates, batching, and suppression of empty/phantom transcript renders.
 - [x] 4.3 Preserve the current live workspace layout while updating diagnostics to reflect source-specific realtime latency and degradation states.
 - [x] 4.4 Assemble the latest interviewer turn for quick answer, including a newer partial revision without mixing candidate speech into the question.
+- [x] 4.5 Add bounded SSE reconnect backoff, stop healthy-stream polling, and prevent invalid-session retry storms.
+- [x] 4.6 Make desktop registration startup-only in the renderer and heartbeat-only in the main process.
 
 ## 5. Verification, Evals, and Rollout
 

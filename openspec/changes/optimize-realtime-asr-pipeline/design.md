@@ -55,6 +55,8 @@ Alternative considered: 继续沿用“每帧 HTTP / WS 请求立即做转写”
 
 每个 `sessionId + sourceKind` 维护一个长生命周期 ASR 会话，麦克风和系统音频各自独立。source worker 只向各自的持久化连接发送新增 PCM chunk，并读取 partial/final 事件。
 
+当前低延迟基线将桌面 partial 提交周期设为 `150ms`，ASR source 会话默认空闲复用窗口设为 `300s`。前者优先改善连续字幕的更新颗粒度，后者降低面试自然停顿后重复握手导致的首字抖动；final 仍由既有静音结句规则控制。
+
 这样做的收益：
 
 - 避免重复握手和频繁 `session.update`
@@ -142,6 +144,12 @@ Alternative considered: 只继续调一个全局 RMS 阈值。缺点是不同设
 
 没有手动输入时，快答按稳定 segment revision 去重实时字幕，以候选人最近一次完整发言作为轮次边界，合并边界后的面试官 final 片段，并仅在它比 final 更新时补充最新 partial。该整理过程不调用额外模型，不把候选人的回答正文误作为问题，也不改变既有回答 Prompt。
 
+### Decision 10: Separate realtime stream recovery from polling and device registration
+
+网页端将 SSE 作为唯一实时字幕主通道。连接成功时停止全量轮询；普通网络中断采用有上限的指数退避，`401/403/404` 等身份或 session 错误进入低频恢复探测，禁止固定短间隔重连。页面切换 session 或卸载时必须取消旧订阅。
+
+桌面设备生命周期由主进程统一负责：启动后首次登记设备，后续只发送 heartbeat。渲染进程可以在首次加载时上报完整设备能力，但不得以定时任务重复调用登记接口。
+
 ## Risks / Trade-offs
 
 - [Risk] 引入 source worker、持久连接和有界队列后，系统状态机会更复杂 → Mitigation: 按 source/session 明确状态图，并增加可重复的单元测试与集成测试。
@@ -150,6 +158,7 @@ Alternative considered: 只继续调一个全局 RMS 阈值。缺点是不同设
 - [Risk] 长连接会话泄漏导致资源累积 → Mitigation: 为 source session 设置 heartbeat、idle timeout 和显式 close 逻辑。
 - [Risk] 更多性能指标可能增加日志量 → Mitigation: 只保留摘要计数、采样指标和聚合窗口，不记录高频原始媒体内容。
 - [Risk] “保持 API 不变”限制了大规模接口重构 → Mitigation: 在现有 API 之下增加兼容的内部队列、事件模型和诊断字段，对外保持主要入口不变。
+- [Risk] 对无效 session 降低 SSE 重试频率后，短暂创建延迟可能延后恢复 → Mitigation: 页面前台恢复、网络恢复和低频状态探测成功时立即重建订阅。
 
 ## Migration Plan
 

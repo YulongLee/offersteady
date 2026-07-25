@@ -564,11 +564,24 @@ function LivePage() {
   useEffect(() => {
     let stopped = false;
     let heartbeatBindingId: string | null = null;
+    let lastBindingRefreshAt = 0;
     let reconnectTimer: number | null = null;
+    let reconnectAttempt = 0;
+    let realtimeSubscribeInFlight = false;
+    let realtimeStreamHealthy = false;
     let realtimeRenderFrame: number | null = null;
     let pendingRealtime: (Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) | null = null;
     let realtimeLoadInFlight = false;
     const realtimeController = new AbortController();
+    const realtimeErrorStatus = (error: unknown) => {
+      if (typeof error === "object" && error !== null && "status" in error && typeof error.status === "number") return error.status;
+      const match = error instanceof Error ? error.message.match(/[（(](\d{3})[）)]/) : null;
+      return match ? Number(match[1]) : null;
+    };
+    const retryDelayMs = (status: number | null) => {
+      if (status === 401 || status === 403 || status === 404) return 15_000;
+      return Math.min(15_000, 1_000 * 2 ** Math.min(reconnectAttempt, 4));
+    };
     const applyRealtimeState = (realtime: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => {
       if (stopped) return;
       pendingRealtime = pendingRealtime?.captureState && !realtime.captureState
@@ -589,50 +602,88 @@ function LivePage() {
     };
     const sendHeartbeat = async () => {
       try {
-        if (!heartbeatBindingId || document.visibilityState === "visible") {
+        const now = Date.now();
+        if (!heartbeatBindingId || now - lastBindingRefreshAt >= 30_000) {
           const binding = await runAdapterOperation(signal => interviewAppAdapter.getDesktopDeviceBinding(id, signal));
           if (binding?.bindingId) heartbeatBindingId = binding.bindingId;
+          lastBindingRefreshAt = now;
         }
         await runAdapterOperation(signal => interviewAppAdapter.sendDesktopSessionHeartbeat({ interviewId: id, bindingId: heartbeatBindingId, page: "live" }, signal));
       } catch {
+        heartbeatBindingId = null;
         // Realtime polling below will continue to surface backend connectivity issues without blocking manual answers.
       }
     };
     const loadRealtime = async () => {
-      if (realtimeLoadInFlight || stopped || document.visibilityState !== "visible") return;
+      if (realtimeLoadInFlight || stopped || document.visibilityState !== "visible") return false;
       realtimeLoadInFlight = true;
       try {
         const realtime = await runAdapterOperation(signal => interviewAppAdapter.loadRealtimeSession(id, signal));
         applyRealtimeState(realtime);
+        return true;
       } catch {
         // Keep manual question and screenshot flows available when realtime sync is temporarily unavailable.
+        return false;
       } finally {
         realtimeLoadInFlight = false;
       }
     };
-    const scheduleReconnect = () => {
+    const scheduleReconnect = (status: number | null = null) => {
       if (stopped || realtimeController.signal.aborted) return;
-      reconnectTimer = window.setTimeout(() => { void subscribeRealtime(); }, 250);
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+      const delay = retryDelayMs(status);
+      reconnectAttempt += 1;
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = null;
+        void subscribeRealtime();
+      }, delay);
     };
     const subscribeRealtime = async () => {
+      if (realtimeSubscribeInFlight || stopped || realtimeController.signal.aborted) return;
+      realtimeSubscribeInFlight = true;
       try {
-        await runAdapterOperation(signal => interviewAppAdapter.subscribeRealtimeSession(id, applyRealtimeState, signal), realtimeController.signal);
+        await runAdapterOperation(signal => interviewAppAdapter.subscribeRealtimeSession(id, realtime => {
+          realtimeStreamHealthy = true;
+          reconnectAttempt = 0;
+          applyRealtimeState(realtime);
+        }, signal), realtimeController.signal);
+        realtimeStreamHealthy = false;
         if (!stopped && !realtimeController.signal.aborted) scheduleReconnect();
-      } catch {
+      } catch (error) {
         if (stopped || realtimeController.signal.aborted) return;
+        realtimeStreamHealthy = false;
         await loadRealtime();
-        scheduleReconnect();
+        scheduleReconnect(realtimeErrorStatus(error));
+      } finally {
+        realtimeSubscribeInFlight = false;
       }
     };
     void sendHeartbeat();
-    const heartbeatTimer = window.setInterval(() => void sendHeartbeat(), 3000);
-    const realtimePollTimer = window.setInterval(() => void loadRealtime(), 10_000);
-    const sendForegroundHeartbeat = () => {
-      if (!stopped && document.visibilityState === "visible") void sendHeartbeat();
+    const heartbeatTimer = window.setInterval(() => void sendHeartbeat(), 15_000);
+    const realtimePollTimer = window.setInterval(() => {
+      if (realtimeStreamHealthy) return;
+      void loadRealtime().then(loaded => {
+        if (loaded && !realtimeSubscribeInFlight && reconnectTimer === null) {
+          reconnectAttempt = 0;
+          void subscribeRealtime();
+        }
+      });
+    }, 15_000);
+    const resumeRealtime = () => {
+      if (stopped || document.visibilityState !== "visible") return;
+      void sendHeartbeat();
+      if (!realtimeStreamHealthy && !realtimeSubscribeInFlight) {
+        if (reconnectTimer !== null) {
+          window.clearTimeout(reconnectTimer);
+          reconnectTimer = null;
+        }
+        reconnectAttempt = 0;
+        void subscribeRealtime();
+      }
     };
-    document.addEventListener("visibilitychange", sendForegroundHeartbeat);
-    window.addEventListener("focus", sendForegroundHeartbeat);
-    window.addEventListener("online", sendForegroundHeartbeat);
+    document.addEventListener("visibilitychange", resumeRealtime);
+    window.addEventListener("focus", resumeRealtime);
+    window.addEventListener("online", resumeRealtime);
     void loadRealtime();
     void subscribeRealtime();
     return () => {
@@ -642,9 +693,9 @@ function LivePage() {
       if (realtimeRenderFrame !== null) window.cancelAnimationFrame(realtimeRenderFrame);
       window.clearInterval(heartbeatTimer);
       window.clearInterval(realtimePollTimer);
-      document.removeEventListener("visibilitychange", sendForegroundHeartbeat);
-      window.removeEventListener("focus", sendForegroundHeartbeat);
-      window.removeEventListener("online", sendForegroundHeartbeat);
+      document.removeEventListener("visibilitychange", resumeRealtime);
+      window.removeEventListener("focus", resumeRealtime);
+      window.removeEventListener("online", resumeRealtime);
     };
   }, [id, setState]);
   const scopedAdvice = {

@@ -126,7 +126,7 @@ class Settings(BaseSettings):
     realtime_runtime_ttl_seconds: int = 7200
     realtime_transcript_persistence_enabled: bool = False
     realtime_transcript_retention_days: int = 30
-    realtime_asr_session_idle_seconds: int = 180
+    realtime_asr_session_idle_seconds: int = 300
     redis_url: str | None = None
     redis_socket_timeout_seconds: float = 2.0
     redis_realtime_required: bool = False

@@ -65,3 +65,21 @@
 #### Scenario: ASR returns an empty or whitespace-only partial result
 - **WHEN** ASR 返回空白、仅空格或无有效文本的 partial/final 结果
 - **THEN** 系统丢弃该结果，不更新实时对话区
+
+### Requirement: Realtime subscription recovery SHALL avoid retry storms
+网页端 MUST 在当前 session 的 SSE 通道健康时停止全量降级轮询，并 MUST 在连接中断时采用有上限的退避策略。身份失效或 session 不存在时，系统 MUST NOT 使用亚秒级固定间隔持续重试。
+
+#### Scenario: Current realtime stream remains healthy
+- **WHEN** 当前 session 的 SSE 通道持续收到有效快照
+- **THEN** 网页不再执行周期性全量实时状态轮询
+
+#### Scenario: Stream returns an authentication or missing-session response
+- **WHEN** SSE 请求返回 `401`、`403` 或 `404`
+- **THEN** 网页进入低频恢复探测，并在登录态、网络或有效 session 恢复后重建单一订阅
+
+### Requirement: Desktop device registration SHALL be stable and idempotent
+桌面助手 MUST 为同一安装实例复用稳定设备身份。设备首次登记成功后，后续在线维持 MUST 使用 heartbeat，渲染进程 MUST NOT 周期性重复调用设备登记接口。
+
+#### Scenario: Registered desktop remains open
+- **WHEN** 已登记桌面助手持续运行并保持后端可达
+- **THEN** 主进程周期性发送 heartbeat，设备登记事件不随 heartbeat 周期重复产生

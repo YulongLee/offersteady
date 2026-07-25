@@ -629,46 +629,6 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
   useEffect(() => {
     if (!config || !pairingIdentity) return;
     let stopped = false;
-    let registrationInFlight = false;
-    const syncRegistration = async (silent: boolean) => {
-      if (registrationInFlight || stopped) return;
-      registrationInFlight = true;
-      try {
-        const ok = await registerDesktopDevice(pairingIdentity, config, {
-          ...capabilitiesFor(config),
-        }, { silent });
-        if (stopped) return;
-        if (!ok) {
-          if (!activeBinding) {
-            setState("reconnecting");
-            setConnectionNotice("未连接 | 后端登记失败");
-            setConnectionInfo("请确认后端服务已启动后重试。");
-            window.offersteady?.publishCaptureState("reconnecting");
-          }
-          return;
-        }
-        if (!activeBinding) {
-          setConnectionNotice("未连接");
-          setConnectionInfo(waitingConnectionInfo(config));
-        }
-      } finally {
-        registrationInFlight = false;
-      }
-    };
-    void syncRegistration(true);
-    const interval = window.setInterval(() => { void syncRegistration(true); }, 10000);
-    return () => {
-      stopped = true;
-      window.clearInterval(interval);
-    };
-    // Dynamic capability values are read when this stable loop runs. Keeping the
-    // loop independent from status updates prevents abandoned IPC requests.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config, pairingIdentity]);
-
-  useEffect(() => {
-    if (!config || !pairingIdentity) return;
-    let stopped = false;
     let screenshotPollInFlight = false;
     const pollRemoteScreenshotRequests = async () => {
       if (screenshotPollInFlight || processingScreenshotRequestIdRef.current || stopped) return;
