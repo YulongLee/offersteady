@@ -183,7 +183,7 @@ describe("OfferSteady web application", () => {
     fireEvent.change(screen.getByLabelText("面试名称"), { target: { value: "前端架构师终面" } });
     fireEvent.change(screen.getByLabelText("目标岗位"), { target: { value: "前端架构师" } });
     fireEvent.click(screen.getByRole("button", { name: /保存并准备/ }));
-    expect(await screen.findByRole("heading", { name: "高级前端工程师面试" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "前端架构师终面" })).toBeInTheDocument();
   });
 
   it("shows the backend reason when creating an interview draft fails", async () => {
