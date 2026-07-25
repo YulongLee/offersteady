@@ -17,6 +17,14 @@ describe("billing points redemption", () => {
     open(); expect(screen.getByRole("button", { name: "立即兑换" })).toBeDisabled(); expect(screen.getByText(/输入 16 位兑换码/)).toBeInTheDocument(); expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("keeps support contacts and an empty official order state compact and accessible", () => {
+    open();
+    expect(screen.getByRole("heading", { name: "支付保障与售后" })).toBeInTheDocument();
+    expect(screen.getByText("暂无支付订单")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "复制微信号" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "发送邮件" })).toHaveAttribute("href", "mailto:contact@oneshowailab.com");
+  });
+
   it("submits only code and generated idempotency metadata from the form keyboard path", async () => {
     const redeem = vi.spyOn(interviewAppAdapter, "redeemPoints").mockResolvedValue(success()); open(); inputCode(); fireEvent.submit(screen.getByLabelText("积分兑换码").closest("form")!);
     await waitFor(() => expect(redeem).toHaveBeenCalledOnce()); const request = redeem.mock.calls[0]![0]; expect(Object.keys(request).sort()).toEqual(["code", "idempotencyKey"]); expect(request).not.toHaveProperty("points");
