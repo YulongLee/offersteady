@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { hasPublisherTakenOver, mergeDisplayedSourceHealth } from "../src/renderer/CompanionApp";
+import { BINDING_STATUS_POLL_MS, desktopBindingLeaseIdentity, hasPublisherTakenOver, mergeDisplayedSourceHealth } from "../src/renderer/CompanionApp";
 import { publisherFailureDiagnostic, publisherFailureIsTerminal } from "../src/renderer/audio/realtime-publisher";
 
 describe("companion displayed source health", () => {
@@ -71,5 +71,22 @@ describe("companion displayed source health", () => {
     expect(publisherFailureIsTerminal(new Error("publisher_create_failed_microphone_410"))).toBe(true);
     expect(publisherFailureIsTerminal(new Error("publisher_create_failed_microphone_401"))).toBe(true);
     expect(publisherFailureIsTerminal(new Error("publisher_websocket_failed"))).toBe(false);
+  });
+
+  it("follows backend binding leases on a realtime cadence", () => {
+    expect(BINDING_STATUS_POLL_MS).toBe(1_000);
+    expect(desktopBindingLeaseIdentity({
+      bindingId: "binding-new",
+      bindingGeneration: 4,
+      sessionId: "session-new",
+      ownerUserId: "user",
+      deviceId: "device",
+      manualCode: "123456",
+      displayName: "Mac",
+      capabilities: {},
+      status: "bound",
+      boundAtMs: 1,
+      lastSeenAtMs: 1,
+    })).toBe("binding-new:4");
   });
 });

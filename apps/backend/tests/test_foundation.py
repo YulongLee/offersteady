@@ -1869,10 +1869,18 @@ def test_desktop_machine_code_registers_and_binds_to_interview_session() -> None
     }))
     assert live_status["state"] == "bound"
     assert live_status["sessionStatus"] == "live"
+    active_connection = unwrap(client.get(
+        "/api/v1/realtime-speech/desktop-devices/device-new-generation/active-connection",
+        params={"manualCode": "654321"},
+    ))
+    assert active_connection["authoritative"] is True
+    assert active_connection["binding"]["sessionId"] == session_id
+    assert active_connection["leaseVersion"].startswith(binding["bindingId"])
+    assert active_connection["refreshAfterMs"] == 1000
 
     status = unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/device-status", json={
-        "userId": "desktop-binding-user",
         "deviceId": "device-new-generation",
+        "manualCode": "654321",
         "captureState": "capturing",
         "sourceHealth": [
             {"sourceId": "mic-default", "sourceKind": "microphone", "label": "Mac 麦克风", "state": "silent", "stage": "track-live", "level": 0},
@@ -1957,6 +1965,13 @@ def test_new_device_binding_becomes_the_users_only_active_realtime_interview() -
         "reuseLastDevice": True,
     }))
     assert reused["deviceId"] == "single-live-device-b"
+
+    current_connection = unwrap(client.get(
+        "/api/v1/realtime-speech/desktop-devices/single-live-device-b/active-connection",
+        params={"manualCode": "310002"},
+    ))
+    assert current_connection["binding"]["sessionId"] == second["sessionId"]
+    assert current_connection["leaseVersion"].startswith(reused["bindingId"])
 
 
 def test_realtime_runtime_tracks_frame_receipts_and_asr_status() -> None:

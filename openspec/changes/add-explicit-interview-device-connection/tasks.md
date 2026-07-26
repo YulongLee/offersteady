@@ -20,3 +20,11 @@
 - [x] 4.1 Add backend regression coverage for one active realtime interview per user.
 - [x] 4.2 Add web coverage for both device selection paths and current-session readiness.
 - [x] 4.3 Add desktop coverage for terminal publisher errors and validate the OpenSpec change.
+
+## 5. Backend-authoritative realtime lease
+
+- [x] 5.1 Add a lightweight device active-connection endpoint with binding lease identity.
+- [x] 5.2 Authenticate desktop status reports through the active device binding instead of a web access token.
+- [x] 5.3 Make the desktop follow the authoritative lease and remove session runtime polling from the hot path.
+- [x] 5.4 Close duplicate source publishers and circuit-break replaced web sessions including HTTP 410.
+- [x] 5.5 Add backend, desktop, and web regression coverage for the optimized lifecycle.

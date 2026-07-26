@@ -27,7 +27,7 @@ const systemAudioOptions: readonly AudioSourceDescriptor[] = [
 ];
 
 const DEFAULT_MICROPHONE_ID = "default";
-const BINDING_STATUS_POLL_MS = 2500;
+export const BINDING_STATUS_POLL_MS = 1_000;
 
 interface ApiEnvelope<T> {
   readonly data: T;
@@ -57,8 +57,14 @@ interface DesktopPairingStatus {
   readonly sessionStatus?: "preparing" | "live" | "ended" | "missing" | "unknown" | string;
   readonly message: string;
   readonly staleReason?: string | null;
+  readonly authoritative?: boolean;
+  readonly leaseVersion?: string | null;
+  readonly refreshAfterMs?: number;
   readonly binding?: DesktopActiveBinding | null;
 }
+
+export const desktopBindingLeaseIdentity = (binding: DesktopActiveBinding | null) =>
+  binding ? `${binding.bindingId}:${binding.bindingGeneration ?? 1}` : "";
 
 interface DesktopRuntimeStatus {
   readonly sessionId: string;
@@ -293,7 +299,10 @@ const fetchPairingStatus = async (runtime: DesktopRuntimeConfig, identity: Deskt
     manualCode: identity.manualCode,
     deviceId: identity.deviceId,
   });
-  const response = await desktopBackendFetch(runtime, `/realtime-speech/desktop-devices/pairing-status?${query.toString()}`);
+  let response = await desktopBackendFetch(runtime, `/realtime-speech/desktop-devices/${encodeURIComponent(identity.deviceId)}/active-connection?manualCode=${encodeURIComponent(identity.manualCode)}`);
+  if (response.status === 404) {
+    response = await desktopBackendFetch(runtime, `/realtime-speech/desktop-devices/pairing-status?${query.toString()}`);
+  }
   if (!response.ok) throw new Error(await readBackendError(response));
   const envelope = await response.json() as ApiEnvelope<DesktopPairingStatus>;
   return envelope.data;
@@ -301,15 +310,6 @@ const fetchPairingStatus = async (runtime: DesktopRuntimeConfig, identity: Deskt
 
 const waitingConnectionInfo = (_runtime?: DesktopRuntimeConfig) =>
   "请打开面试首页，进入面试后输入右侧连接码绑定这台电脑。";
-
-const fetchRuntimeStatus = async (runtime: DesktopRuntimeConfig, binding: DesktopActiveBinding) => {
-  const query = new URLSearchParams({ userId: binding.ownerUserId });
-  const response = await desktopBackendFetch(runtime, `/realtime-speech/sessions/${encodeURIComponent(binding.sessionId)}/runtime?${query.toString()}`);
-  if (response.status === 401 || response.status === 403) return null;
-  if (!response.ok) throw new Error(await readBackendError(response));
-  const envelope = await response.json() as ApiEnvelope<DesktopRuntimeStatus>;
-  return envelope.data;
-};
 
 const fetchNextRemoteScreenshotCaptureRequest = async (runtime: DesktopRuntimeConfig, identity: DesktopPairingIdentity) => {
   const query = new URLSearchParams({ manualCode: identity.manualCode });
@@ -721,12 +721,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
           return;
         }
         const binding = pairingStatus.binding;
-        let runtimeStatus: DesktopRuntimeStatus | null = null;
-        try {
-          runtimeStatus = await fetchRuntimeStatus(config, binding);
-        } catch {
-          runtimeStatus = null;
-        }
+        const runtimeStatus = null as DesktopRuntimeStatus | null;
         const sessionStatus = runtimeStatus?.sessionStatus ?? pairingStatus.sessionStatus ?? "unknown";
         const live = sessionStatus === "live";
         if (stopped) return;
@@ -775,6 +770,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
           body: JSON.stringify({
             userId: binding.ownerUserId,
             deviceId: pairingIdentity.deviceId,
+            manualCode: pairingIdentity.manualCode,
             captureState: live ? "capturing" : "connected",
             sourceHealth: sourceHealthRef.current,
             capabilities: {
@@ -938,7 +934,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       if (publisherRef.current === publisher) publisherRef.current = null;
       void publisher.stop();
     };
-  }, [activeBinding?.bindingId, activeBinding?.sessionId, activeBinding?.ownerUserId, activeBinding?.bindingGeneration, bindingSessionStatus, config, pairingIdentity, effectiveMicrophoneId, selectedSystemAudioId, publisherRetryNonce]);
+  }, [desktopBindingLeaseIdentity(activeBinding), activeBinding?.sessionId, activeBinding?.ownerUserId, bindingSessionStatus, config, pairingIdentity, effectiveMicrophoneId, selectedSystemAudioId, publisherRetryNonce]);
 
   useEffect(() => {
     const video = previewRef.current;

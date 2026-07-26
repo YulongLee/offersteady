@@ -11,6 +11,7 @@ describe("realtime recovery policy", () => {
     expect(realtimeRetryDelayMs(404, 0)).toBe(INVALID_REALTIME_SESSION_RETRY_MS);
     expect(realtimeRetryDelayMs(401, 8)).toBe(INVALID_REALTIME_SESSION_RETRY_MS);
     expect(isInvalidRealtimeSessionStatus(403)).toBe(true);
+    expect(isInvalidRealtimeSessionStatus(410)).toBe(true);
   });
 
   it("keeps bounded exponential recovery for transient network failures", () => {

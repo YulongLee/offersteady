@@ -10,6 +10,7 @@
 - 两个入口复用同一个服务端绑定方法，并为本场创建新 binding。
 - 新绑定原子使同一用户或同一设备的其他 binding 与 publisher 失效。
 - 桌面助手在 binding 变化或 publisher 永久失效时停止旧连接并重建。
+- 桌面助手通过轻量设备租约自动发现当前 binding，不轮询需要网页登录身份的 session runtime。
 - 旧网页 session 收到替换信号后停止订阅。
 
 **Non-Goals:**
@@ -39,6 +40,14 @@ WebSocket `1008` 和服务端 `401/403/404/409/410` 不得使用旧 token 重连
 ### Decision 5: Use binding identity as the desktop effect boundary
 
 桌面端 publisher 生命周期依赖 `bindingId + sessionId + bindingGeneration`，而不是只依赖 sessionId。任何字段变化都销毁旧 publisher，避免同 session 重绑后仍复用旧 token。
+
+### Decision 6: Backend owns a lightweight active-connection lease
+
+桌面助手以稳定的 `deviceId + machineCode` 查询 active-connection。后端返回当前 binding、session 状态和由 `bindingId + bindingGeneration` 组成的 leaseVersion。助手以一秒周期跟随该租约，不再高频调用需要网页登录身份且包含多组 Redis 聚合的 runtime 接口。设备状态上报同样由当前 active binding 校验，不依赖网页 access token。
+
+### Decision 7: Publisher creation is single-flight per source
+
+后端为同一用户、session、source 和客户端创建新 publisher 前关闭旧 publisher，避免网络抖动或客户端重建留下并行发布通道。旧 token 返回永久失效，不允许音频跨 binding 路由。
 
 ## Risks / Trade-offs
 

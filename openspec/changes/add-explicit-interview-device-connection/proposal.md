@@ -7,6 +7,7 @@
 - 准备页提供“一键连接上次设备”和“输入新的机器码”两个用户可选入口。
 - 两个入口统一创建本场的新设备绑定，不复用上一场 publisher token。
 - 后端在新绑定时使该用户和该设备的其他绑定及 publisher 失效，保证单用户单 active realtime interview。
+- 后端提供设备权威 active-connection 租约，桌面助手不再依赖网页登录身份或历史 session 推断当前面试。
 - 桌面助手检测 binding session 变化后停止旧 publisher；旧 token 永久失效时停止重连并等待当前 binding 建立新 publisher。
 - 网页只允许当前 session 的实时订阅继续运行，并在 session 被替换时立即退出旧工作台。
 
@@ -24,6 +25,7 @@
 
 - Web：面试准备页、设备连接状态、Backend Adapter 和恢复提示。
 - Backend：Realtime Speech 设备查询、绑定切换、旧 publisher 吊销和单用户 active binding 约束。
+- Backend：设备状态上报使用设备凭据鉴权，避免桌面端调用用户 runtime 接口产生 401 和高频聚合查询。
 - Desktop：binding 切换检测、publisher 终止错误分类和重建策略。
 - Protocol/API：增加当前用户最近设备查询，不在客户端保存服务端密钥。
 - Privacy：不新增音频、转录或设备敏感数据保存；只复用当前账号已绑定设备的安全摘要。

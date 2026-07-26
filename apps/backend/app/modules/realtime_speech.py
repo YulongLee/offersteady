@@ -278,6 +278,17 @@ async def get_desktop_pairing_status(
     return success_response(request=request, data=status, timestamp=utc_now_iso())
 
 
+@router.get("/desktop-devices/{device_id}/active-connection", response_model=ApiEnvelope[dict[str, object]])
+async def get_desktop_active_connection(
+    device_id: str,
+    request: Request,
+    manual_code: str = Query(alias="manualCode"),
+    service: RealtimeSpeechService = Depends(realtime_speech_service),
+) -> ApiEnvelope[dict[str, object]]:
+    connection = service.get_desktop_active_connection(device_id=device_id, manual_code=manual_code)
+    return success_response(request=request, data=connection, timestamp=utc_now_iso())
+
+
 @router.get("/sessions/{session_id}/runtime", response_model=ApiEnvelope[RealtimeSessionRuntimeResponse])
 async def get_runtime(
     session_id: str,
@@ -427,8 +438,21 @@ async def publish_device_status(
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[dict[str, object]]:
+    if request.manual_code is not None:
+        binding = service.get_desktop_active_binding(device_id=request.device_id, manual_code=request.manual_code)
+        if binding.session_id != session_id:
+            raise DomainRequestError(
+                "realtime-speech",
+                "device-status",
+                "该设备已连接到另一场面试，请刷新当前连接。",
+                410,
+                "desktop_binding_replaced",
+            )
+        resolved_user_id = binding.owner_user_id
+    else:
+        resolved_user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
     event = service.publish_device_status(
-        user_id=resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context),
+        user_id=resolved_user_id,
         session_id=session_id,
         device_id=request.device_id,
         capture_state=str(request.capture_state),

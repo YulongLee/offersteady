@@ -473,6 +473,19 @@ class RealtimeSpeechService:
             "message": "后端尚未登记这台电脑，请保持伴随程序打开。",
         }
 
+    def get_desktop_active_connection(self, *, device_id: str, manual_code: str) -> dict[str, object]:
+        status = self.get_desktop_pairing_status(manual_code=manual_code, device_id=device_id)
+        binding = status.get("binding")
+        lease_version = None
+        if status.get("bound") is True and isinstance(binding, dict):
+            lease_version = f"{binding.get('bindingId', '')}:{binding.get('bindingGeneration', 1)}"
+        return {
+            **status,
+            "authoritative": True,
+            "leaseVersion": lease_version,
+            "refreshAfterMs": 1_000,
+        }
+
     def _desktop_device_fresh(self, device: DesktopDeviceRecord) -> bool:
         return (_now_ms() - device.last_seen_at_ms) <= self.settings.realtime_desktop_heartbeat_ttl_seconds * 1000
 
@@ -563,13 +576,22 @@ class RealtimeSpeechService:
         if session.status != "live":
             raise DomainRequestError("realtime-speech", "create-publisher", "只有进行中的面试会话才能创建实时语音发布者。", 400)
         now_ms = _now_ms()
+        safe_client_name = client_name.strip()
+        for previous in self.repository.list_publishers_for_session(session_id=session_id):
+            if (
+                previous.owner_user_id == user_id
+                and previous.source_kind == source_kind
+                and previous.client_name == safe_client_name
+                and previous.status not in {"closed", "failed"}
+            ):
+                self.repository.save_publisher(replace(previous, disconnected_at_ms=now_ms, status="closed"))
         publisher = RealtimePublisherRecord(
             publisher_id=f"publisher-{uuid4().hex}",
             token=f"rt-{uuid4().hex}",
             session_id=session_id,
             owner_user_id=user_id,
             source_kind=source_kind,
-            client_name=client_name.strip(),
+            client_name=safe_client_name,
             issued_at_ms=now_ms,
             expires_at_ms=now_ms + self.settings.realtime_publisher_ttl_seconds * 1000,
             status="connected",

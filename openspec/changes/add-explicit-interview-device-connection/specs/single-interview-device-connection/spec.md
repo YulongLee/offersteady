@@ -43,3 +43,18 @@
 #### Scenario: Another interview replaces the current session
 - **WHEN** 旧面试实时订阅收到 `401`、`403`、`404` 或 session-replaced 响应
 - **THEN** 页面停止旧订阅并返回面试入口，不再持续请求该 session
+
+### Requirement: Backend provides the authoritative device connection lease
+后端 SHALL 允许已登记设备使用稳定设备身份查询当前唯一 active binding，而不要求桌面助手持有网页登录 token。响应 MUST 包含 binding identity、session 状态和 leaseVersion，且 MUST NOT 将历史 stale binding 返回为可发布连接。
+
+#### Scenario: Device follows a newly selected interview
+- **WHEN** 网页为同一设备绑定新的面试
+- **THEN** 设备下一次租约查询返回新 binding 和新的 leaseVersion，助手停止旧 publisher 并连接新 session
+
+#### Scenario: Device reports status without a web access token
+- **WHEN** 已登记设备使用匹配的 deviceId 和 machineCode 上报当前 active session 状态
+- **THEN** 后端从 active binding 解析 owner，并接受状态事件而不要求网页登录 token
+
+#### Scenario: A duplicate publisher is created
+- **WHEN** 同一 session、source 和客户端因重连创建新 publisher
+- **THEN** 后端关闭旧 publisher，使新 publisher 成为该来源唯一可用发布通道

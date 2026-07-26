@@ -185,9 +185,10 @@ class RealtimeCandidateCommandRequest(BaseModel):
 
 class RealtimeDeviceStatusRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
-    user_id: str = Field(min_length=1, alias="userId")
+    user_id: str | None = Field(default=None, min_length=1, alias="userId")
     capture_state: RealtimeConnectionState | str = Field(alias="captureState")
     device_id: str = Field(min_length=1, alias="deviceId")
+    manual_code: str | None = Field(default=None, min_length=6, max_length=6, alias="manualCode")
     source_health: list[dict[str, object]] = Field(default_factory=list, alias="sourceHealth")
     capabilities: dict[str, object] = Field(default_factory=dict)
 
