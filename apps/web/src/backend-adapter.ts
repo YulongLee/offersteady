@@ -139,6 +139,9 @@ interface BackendRecentDesktopDeviceResponse {
   readonly capabilities: Record<string, unknown>;
   readonly online: boolean;
   readonly lastSeenAtMs: number;
+  readonly accountBound?: boolean;
+  readonly devicePresence?: "online" | "offline";
+  readonly permissionStatus?: Record<string, unknown>;
 }
 
 interface BackendRealtimeTranscriptListResponse {
@@ -759,6 +762,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let pendingSnapshot: BackendRealtimeSessionStreamEvent | null = null;
+    let terminalStatus: number | null = null;
     let flushHandle: number | null = null;
     const scheduleFlush = () => {
       if (flushHandle !== null) return;
@@ -775,8 +779,14 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         : window.setTimeout(flush, 16);
     };
     const parser = createSseParser((event) => {
-      const payload = event as unknown as BackendRealtimeSessionStreamEvent;
-      if (payload.type !== "snapshot") return;
+      const realtimeEvent = event as unknown as { type?: string };
+      if (realtimeEvent.type === "revoked") {
+        terminalStatus = 410;
+        pendingSnapshot = null;
+        return;
+      }
+      if (realtimeEvent.type !== "snapshot") return;
+      const payload = realtimeEvent as BackendRealtimeSessionStreamEvent;
       pendingSnapshot = payload;
       scheduleFlush();
     });
@@ -796,6 +806,12 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(flushHandle);
       else window.clearTimeout(flushHandle);
       flushHandle = null;
+    }
+    if (terminalStatus !== null) {
+      window.sessionStorage?.removeItem(cursorKey);
+      const error = new AppError("validation", "当前面试已被新的面试接管") as AppError & { status: number };
+      error.status = terminalStatus;
+      throw error;
     }
   }
 

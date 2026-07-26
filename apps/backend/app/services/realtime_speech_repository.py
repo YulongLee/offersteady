@@ -5,6 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from app.ports.realtime_speech import (
+    AccountDesktopDeviceRecord,
     DesktopDeviceRecord,
     QuestionCandidateRecord,
     RealtimeFrameReceiptRecord,
@@ -28,6 +29,7 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
         self.session_activity_versions: dict[str, int] = {}
         self.desktop_devices_by_id: dict[str, DesktopDeviceRecord] = {}
         self.desktop_devices_by_code: dict[str, str] = {}
+        self.account_desktop_devices: dict[tuple[str, str], AccountDesktopDeviceRecord] = {}
         self.session_bindings: dict[tuple[str, str], SessionDesktopBindingRecord] = {}
         self.web_session_heartbeats: dict[tuple[str, str], WebSessionHeartbeatRecord] = {}
         self.state_file = Path(state_file).expanduser() if state_file else None
@@ -44,6 +46,22 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
         device_id = self.desktop_devices_by_code.get(manual_code)
         record = self.desktop_devices_by_id.get(device_id or "")
         return replace(record) if record else None
+
+    def save_account_desktop_device(self, association: AccountDesktopDeviceRecord) -> AccountDesktopDeviceRecord:
+        stored = replace(association)
+        self.account_desktop_devices[(stored.owner_user_id, stored.device_id)] = stored
+        self._persist_state()
+        return replace(stored)
+
+    def get_account_desktop_device(self, *, user_id: str, device_id: str) -> AccountDesktopDeviceRecord | None:
+        record = self.account_desktop_devices.get((user_id, device_id))
+        return replace(record) if record else None
+
+    def get_last_account_desktop_device(self, *, user_id: str) -> AccountDesktopDeviceRecord | None:
+        records = [item for item in self.account_desktop_devices.values() if item.owner_user_id == user_id]
+        if not records:
+            return None
+        return replace(max(records, key=lambda item: (item.last_used_at_ms, item.device_id)))
 
     def save_session_desktop_binding(self, binding: SessionDesktopBindingRecord) -> SessionDesktopBindingRecord:
         stored = replace(binding)
@@ -211,6 +229,31 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
             except (KeyError, TypeError, ValueError):
                 continue
             self.session_bindings[(binding.owner_user_id, binding.session_id)] = binding
+        for raw in payload.get("accountDesktopDevices", []):
+            try:
+                association = AccountDesktopDeviceRecord(
+                    owner_user_id=str(raw["owner_user_id"]),
+                    device_id=str(raw["device_id"]),
+                    manual_code=str(raw["manual_code"]),
+                    linked_at_ms=int(raw["linked_at_ms"]),
+                    last_used_at_ms=int(raw["last_used_at_ms"]),
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+            self.account_desktop_devices[(association.owner_user_id, association.device_id)] = association
+        if not self.account_desktop_devices:
+            for binding in self.session_bindings.values():
+                key = (binding.owner_user_id, binding.device_id)
+                current = self.account_desktop_devices.get(key)
+                linked_at_ms = min(current.linked_at_ms, binding.bound_at_ms) if current else binding.bound_at_ms
+                last_used_at_ms = max(current.last_used_at_ms, binding.bound_at_ms) if current else binding.bound_at_ms
+                self.account_desktop_devices[key] = AccountDesktopDeviceRecord(
+                    owner_user_id=binding.owner_user_id,
+                    device_id=binding.device_id,
+                    manual_code=binding.manual_code,
+                    linked_at_ms=linked_at_ms,
+                    last_used_at_ms=last_used_at_ms,
+                )
 
     def _persist_state(self) -> None:
         if not self.state_file:
@@ -245,6 +288,16 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
                     "binding_generation": item.binding_generation,
                 }
                 for item in sorted(self.session_bindings.values(), key=lambda entry: (entry.bound_at_ms, entry.session_id))
+            ],
+            "accountDesktopDevices": [
+                {
+                    "owner_user_id": item.owner_user_id,
+                    "device_id": item.device_id,
+                    "manual_code": item.manual_code,
+                    "linked_at_ms": item.linked_at_ms,
+                    "last_used_at_ms": item.last_used_at_ms,
+                }
+                for item in sorted(self.account_desktop_devices.values(), key=lambda entry: (entry.owner_user_id, entry.last_used_at_ms, entry.device_id))
             ],
         }
         self.state_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

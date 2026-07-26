@@ -399,7 +399,7 @@ function NewInterviewPage() {
         };
       });
       if (typeof window.sessionStorage?.setItem === "function") window.sessionStorage.setItem("offersteady.last-draft", JSON.stringify(form));
-      navigate(routes.prepare(draft.id));
+      navigate(routes.prepare(draft.id), { state: { newlyCreatedInterview: true } });
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "创建面试失败，请稍后重试。");
     } finally {
@@ -413,6 +413,8 @@ function PreparationPage() {
   const { id = "demo" } = useParams();
   const { state, setState } = usePrototype();
   const navigate = useNavigate();
+  const location = useLocation();
+  const newlyCreatedInterview = (location.state as { newlyCreatedInterview?: boolean } | null)?.newlyCreatedInterview === true;
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState("");
   const [materialConfirmError, setMaterialConfirmError] = useState("");
@@ -458,7 +460,7 @@ function PreparationPage() {
     const controller = new AbortController();
     void Promise.all([
       runAdapterOperation(signal => interviewAppAdapter.getDesktopDeviceBinding(id, signal), controller.signal),
-      interviewAppAdapter.getLastDesktopDevice
+      !newlyCreatedInterview && interviewAppAdapter.getLastDesktopDevice
         ? runAdapterOperation(signal => interviewAppAdapter.getLastDesktopDevice!(signal), controller.signal).catch(() => null)
         : Promise.resolve(null),
     ]).then(([binding, recent]) => {
@@ -469,7 +471,7 @@ function PreparationPage() {
       })
       .catch(() => undefined);
     return () => controller.abort();
-  }, [id]);
+  }, [id, newlyCreatedInterview]);
   useEffect(() => {
     if (!deviceBinding) return;
     let stopped = false;
@@ -526,17 +528,17 @@ function PreparationPage() {
       <aside className="panel check-panel"><div className="panel-heading"><h2>开始前检查</h2><span>{canStart ? "可进入" : !selectionReady ? "待确认资料" : "待绑定机器"}</span></div><ul className="check-list"><li className={selectionReady ? "done" : ""}><i>{selectionReady ? "✓" : "1"}</i><div><strong>本场资料</strong><span>{validity === "unconfirmed" ? "请选择资料或确认不使用资料" : validity === "attention-required" ? "所选资料已失效，请处理" : level === "none" ? "已确认不使用个人资料" : level === "personalized" ? "简历与 JD 已选择" : "已确认使用部分资料"}</span></div></li><li className={machineReady ? "done" : ""}><i>{machineReady ? "✓" : "2"}</i><div><strong>收音机器</strong><span>{inputDiagnostic}</span></div></li></ul>
         <div className="machine-code-panel">
           <strong className="connection-choice-title">连接桌面助手</strong>
-          {lastDevice ? <div className={`last-device-choice ${lastDevice.online ? "online" : "offline"}`}><span><b>{lastDevice.displayName}</b><small>{lastDevice.online ? `设备在线 · ${lastDevice.maskedManualCode}` : "设备离线，请先打开助手"}</small></span><button className="button primary" disabled={binding || !lastDevice.online || deviceBinding?.deviceId === lastDevice.deviceId} onClick={() => void connectDesktopDevice(true)}>{deviceBinding?.deviceId === lastDevice.deviceId ? "已连接本场" : "一键连接"}</button></div> : null}
-          <div className="connection-divider"><span>或使用其他设备</span></div>
-          <label><span>输入新的机器码</span><input inputMode="numeric" maxLength={6} value={machineCode} onChange={event => setMachineCode(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="输入 6 位机器码" /></label>
+          {!newlyCreatedInterview && lastDevice ? <div className={`last-device-choice ${lastDevice.online ? "online" : "offline"}`}><span><b>{lastDevice.displayName}</b><small>{lastDevice.online ? `设备在线 · ${lastDevice.maskedManualCode}` : "设备离线，请先打开助手"}</small></span><button className="button primary" disabled={binding || !lastDevice.online || deviceBinding?.deviceId === lastDevice.deviceId} onClick={() => void connectDesktopDevice(true)}>{deviceBinding?.deviceId === lastDevice.deviceId ? "已连接本场" : "一键连接上次设备"}</button></div> : null}
+          {!newlyCreatedInterview && lastDevice ? <div className="connection-divider"><span>或重新输入机器码</span></div> : null}
+          <label><span>{newlyCreatedInterview ? "输入机器码连接本场" : "重新输入机器码"}</span><input inputMode="numeric" maxLength={6} value={machineCode} onChange={event => setMachineCode(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="输入 6 位机器码" /></label>
           <button className="button ghost" disabled={binding || machineReady && machineCode === deviceBinding?.manualCode} onClick={() => void connectDesktopDevice(false)}>{binding ? "连接中…" : "验证并连接"}</button>
-          <small>{deviceBinding ? `本场已连接：${deviceBinding.displayName}` : "每场面试都需要选择设备；继续连接会结束该账号其他面试的实时连接。"}</small>
+          <small>{deviceBinding ? `本场已连接：${deviceBinding.displayName}` : newlyCreatedInterview ? "输入助手显示的固定机器码，本场连接不会改变系统授权。" : "可复用上次设备或重新输入机器码；新连接会接管该账号上一场实时连接。"}</small>
           {bindingError ? <div className="inline-error" role="alert">{bindingError}</div> : null}
         </div>
-        <div className="device-mini"><span className="device-glyph">⌘</span><div><strong>{deviceBinding?.displayName ?? state.preparation.device?.displayName ?? "电脑伴随程序"}</strong><small>{deviceBinding ? "已绑定到本场面试；进入后会同步本机音频和屏幕监控状态" : "未绑定前不能开始面试，避免收音机器和面试场次不一致"}</small></div><Link to={routes.devices}>管理</Link></div>
-        <div className="privacy-confirm preparation-disclosure"><span><strong>本场数据说明</strong><small>已选资料和转录仅用于生成回答建议；原始音频默认不保存，会话记录可在复盘中删除。启用音频或上传截图时会分别确认。</small></span></div>
+        <div className="device-mini"><span className="device-glyph">⌘</span><div><strong>{deviceBinding?.displayName ?? state.preparation.device?.displayName ?? "电脑伴随程序"}</strong><small>{deviceBinding ? "本场设备已连接；系统权限沿用助手首次授权结果" : "当前仅缺少本场设备连接，不代表助手系统权限失效"}</small></div><Link to={routes.devices}>管理</Link></div>
+        <div className="privacy-confirm preparation-disclosure"><span><strong>本场数据说明</strong><small>已选资料和转录仅用于生成回答建议；原始音频默认不保存，会话记录可在复盘中删除。麦克风和屏幕权限只由桌面助手首次申请，网页不会再次申请。</small></span></div>
         <div className="points-mini"><strong>{state.billing.balance} 点</strong><span>回答 5 点 · 截图 15 点</span><Link to={routes.billing}>查看收费说明</Link><Link to={`${routes.guide}#quick-start`}>准备流程说明</Link></div>
-        {startError ? <div className="inline-error" role="alert">{startError}</div> : null}<button className="button primary full" disabled={!canStart || starting} onClick={() => void startInterview()}>{starting ? "正在开始面试…" : "开始面试 →"}</button>{!selectionReady ? <small className="blocked-help">确认本场资料选择（可以为空）后继续。</small> : !machineReady ? <small className="blocked-help">请选择上次设备或输入机器码，为本场面试建立新的收音连接。</small> : level === "none" ? <small className="blocked-help context-disclosure">本场未使用个人资料，回答将更通用，也不会自动读取其他资料。进入面试不会自动开始收音。</small> : <small className="blocked-help context-disclosure">本地端会在连接后检查音频与问题检测；进入面试后，实时对话会按“面试官 / 我”展示双通道转录。</small>}
+        {startError ? <div className="inline-error" role="alert">{startError}</div> : null}<button className="button primary full" disabled={!canStart || starting} onClick={() => void startInterview()}>{starting ? "正在开始面试…" : "开始面试 →"}</button>{!selectionReady ? <small className="blocked-help">确认本场资料选择（可以为空）后继续。</small> : !machineReady ? <small className="blocked-help">{newlyCreatedInterview ? "请输入助手机器码，为新面试建立设备连接。" : "请选择上次设备或重新输入机器码，为本场恢复设备连接。"}</small> : level === "none" ? <small className="blocked-help context-disclosure">本场未使用个人资料，回答将更通用，也不会自动读取其他资料。助手会沿用已授予的系统权限。</small> : <small className="blocked-help context-disclosure">本地端会沿用首次授权并检查音频与问题检测；进入面试后，实时对话会按“面试官 / 我”展示双通道转录。</small>}
       </aside></div>
   </main>;
 }

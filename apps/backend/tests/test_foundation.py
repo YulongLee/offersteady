@@ -1766,6 +1766,9 @@ def test_desktop_machine_code_registers_and_binds_to_interview_session() -> None
     assert registered_status["state"] == "registered"
     assert registered_status["registered"] is True
     assert registered_status["bound"] is False
+    assert registered_status["devicePresence"] == "online"
+    assert registered_status["sessionConnection"] == "idle"
+    assert registered_status["permissionStatus"]["microphone"] is True
 
     binding = unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/desktop-binding", json={
         "userId": "desktop-binding-user",
@@ -1774,6 +1777,14 @@ def test_desktop_machine_code_registers_and_binds_to_interview_session() -> None
     assert binding["deviceId"] == "device-stable-mac"
     assert binding["manualCode"] == "654321"
     assert binding["capabilities"]["screenCapture"] is True
+    assert binding["accountBound"] is True
+    assert binding["sessionConnection"] == "connected"
+
+    duplicate_binding = unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/desktop-binding", json={
+        "userId": "desktop-binding-user",
+        "manualCode": "654321",
+    }))
+    assert duplicate_binding["bindingId"] == binding["bindingId"]
 
     loaded = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/desktop-binding", params={"userId": "desktop-binding-user"}))
     assert loaded["bindingId"] == binding["bindingId"]
@@ -1960,6 +1971,9 @@ def test_new_device_binding_becomes_the_users_only_active_realtime_interview() -
     ))
     assert recent["deviceId"] == "single-live-device-b"
     assert recent["maskedManualCode"] == "••••02"
+    assert recent["accountBound"] is True
+    assert recent["devicePresence"] == "online"
+    assert recent["permissionStatus"]["microphone"] is True
     reused = unwrap(client.post(f"/api/v1/realtime-speech/sessions/{second['sessionId']}/desktop-binding", json={
         "userId": "single-live-user",
         "reuseLastDevice": True,
@@ -1972,6 +1986,11 @@ def test_new_device_binding_becomes_the_users_only_active_realtime_interview() -
     ))
     assert current_connection["binding"]["sessionId"] == second["sessionId"]
     assert current_connection["leaseVersion"].startswith(reused["bindingId"])
+    stale_stream = client.get(
+        f"/api/v1/realtime-speech/sessions/{first['sessionId']}/stream",
+        params={"userId": "single-live-user"},
+    )
+    assert stale_stream.status_code == 410
 
 
 def test_realtime_runtime_tracks_frame_receipts_and_asr_status() -> None:

@@ -132,6 +132,15 @@ class DesktopDeviceRecord:
 
 
 @dataclass(frozen=True)
+class AccountDesktopDeviceRecord:
+    owner_user_id: str
+    device_id: str
+    manual_code: str
+    linked_at_ms: int
+    last_used_at_ms: int
+
+
+@dataclass(frozen=True)
 class SessionDesktopBindingRecord:
     binding_id: str
     session_id: str
@@ -174,6 +183,12 @@ class RealtimeSpeechRepository(Protocol):
     def save_desktop_device(self, device: DesktopDeviceRecord) -> DesktopDeviceRecord: ...
 
     def get_desktop_device_by_code(self, manual_code: str) -> DesktopDeviceRecord | None: ...
+
+    def save_account_desktop_device(self, association: AccountDesktopDeviceRecord) -> AccountDesktopDeviceRecord: ...
+
+    def get_account_desktop_device(self, *, user_id: str, device_id: str) -> AccountDesktopDeviceRecord | None: ...
+
+    def get_last_account_desktop_device(self, *, user_id: str) -> AccountDesktopDeviceRecord | None: ...
 
     def save_session_desktop_binding(self, binding: SessionDesktopBindingRecord) -> SessionDesktopBindingRecord: ...
 

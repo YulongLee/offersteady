@@ -7,9 +7,9 @@ import { DesktopRealtimePublisher, publisherFailureIsTerminal } from "./audio/re
 import appIconUrl from "./assets/app-icon.png";
 
 export const companionStatusCopy: Record<CaptureState, { title: string; detail: string }> = {
-  "not-connected": { title: "未连接", detail: "请打开面试稳网页，开始面试后输入连接码。" },
-  "permission-required": { title: "等待连接", detail: "选择麦克风、系统音频和屏幕捕捉后，在网页端输入连接码。" },
-  ready: { title: "等待网页连接", detail: "连接码已生成。网页或手机端输入后，会绑定这台收音电脑。" },
+  "not-connected": { title: "设备离线", detail: "助手尚未完成服务登记，请检查网络后重试。" },
+  "permission-required": { title: "需要系统权限", detail: "请在本助手或 macOS 系统设置中完成麦克风与屏幕录制授权。" },
+  ready: { title: "设备在线", detail: "系统授权与本场连接相互独立，输入固定机器码即可连接面试。" },
   capturing: { title: "已连接", detail: "这台电脑正在作为面试伴随终端工作。" },
   paused: { title: "已暂停", detail: "当前没有发送新的音频或屏幕数据。" },
   reconnecting: { title: "正在重连", detail: "请保持网页和伴随程序在线。" },
@@ -539,8 +539,8 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       }
       if (!options?.silent) {
         setState("ready");
-        setConnectionNotice("未连接");
-        setConnectionInfo(waitingConnectionInfo(runtime));
+        setConnectionNotice("设备在线");
+        setConnectionInfo("系统权限已独立保存，等待网页连接本场面试。");
         window.offersteady?.publishCaptureState("ready");
       }
       return true;
@@ -586,7 +586,15 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
         ],
       });
       void requestMicrophoneAccessInBackground()
-        .then(() => refreshMicrophoneSources())
+        .then(async microphoneGranted => {
+          const screenGranted = await window.offersteady?.requestScreenCaptureAccess?.().catch(() => false) ?? false;
+          if (!mounted) return;
+          setPermissions({
+            microphone: microphoneGranted ? "granted" : "denied",
+            systemAudio: screenGranted ? "granted" : "denied",
+          });
+          return refreshMicrophoneSources();
+        })
         .catch(() => undefined);
     }).catch(() => {
       if (!mounted) return;
@@ -715,7 +723,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
               : pairingStatus.staleReason === "desktop-heartbeat-stale"
                 ? "本地助手心跳过期，正在重新登记这台电脑。"
                 : pairingStatus.message ?? waitingConnectionInfo(config);
-            applyConnectionCopy(staleBinding ? "已绑定 | 等待网页实时连接" : "未连接", staleBinding ? staleCopy : waitingConnectionInfo(config));
+            applyConnectionCopy(staleBinding ? "已绑定 | 等待网页实时连接" : "设备在线 | 等待面试连接", staleBinding ? staleCopy : "系统权限状态保持不变，请在网页输入固定连接码。");
             window.offersteady?.publishCaptureState(displayState);
           }
           return;
@@ -989,19 +997,22 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
     setConnectionInfo("连接码已复制");
   };
 
-  const resetAuthorization = async () => {
+  const refreshAuthorization = async () => {
     try {
       setState("permission-required");
-      setDesktopNotice("正在重置授权并重新生成设备码…");
-      setConnectionNotice("未连接");
-      setConnectionInfo("正在重置本机授权，请稍候");
-      await window.offersteady?.requestMicrophoneAccess().catch(() => false);
-      await window.offersteady?.resetPairingIdentity?.();
-      window.location.reload();
+      setDesktopNotice("正在检查系统权限，机器码和设备身份不会改变…");
+      const microphoneGranted = await window.offersteady?.requestMicrophoneAccess().catch(() => false) ?? false;
+      const screenGranted = await window.offersteady?.requestScreenCaptureAccess?.().catch(() => false) ?? false;
+      setPermissions({
+        microphone: microphoneGranted ? "granted" : "denied",
+        systemAudio: screenGranted ? "granted" : "denied",
+      });
+      setDesktopNotice(microphoneGranted && screenGranted ? "麦克风和屏幕录制权限已就绪。" : "部分权限尚未开启，请在 macOS 系统设置中允许后重新检查。");
+      setState(activeBinding ? (bindingSessionStatus === "live" ? "capturing" : "ready") : "ready");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "重新授权失败";
-      setDesktopNotice(`重新授权失败：${message}`);
-      setConnectionInfo(`重新授权失败：${message}`);
+      const message = error instanceof Error ? error.message : "权限检查失败";
+      setDesktopNotice(`权限检查失败：${message}`);
+      setConnectionInfo(`权限检查失败：${message}`);
       setState("error");
     }
   };
@@ -1137,13 +1148,18 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
             <div className="connection-status">
               {desktopNotice ? <p className="desktop-notice">{desktopNotice}</p> : null}
               <p>
-                <strong>连接状态：</strong>
+                <strong>设备状态：</strong>
+                <span className={config && pairingIdentity ? "status-light green" : "status-light red"} />
+                <span>{config && pairingIdentity ? "在线 | 固定机器码已登记" : "离线 | 正在登记设备"}</span>
+              </p>
+              <p>
+                <strong>系统权限：</strong>
+                <span>{`麦克风 ${permissions.microphone === "granted" ? "已授权" : "待授权"} · 屏幕录制 ${permissions.systemAudio === "granted" ? "已授权" : "待授权"}`}</span>
+              </p>
+              <p>
+                <strong>本场连接：</strong>
                 <span className={activeBinding ? "status-light green" : "status-light red"} />
-                {activeBinding ? (
-                  <span>已连接 | 网页端已绑定本机</span>
-                ) : (
-                  <span>{connectionNotice || "未连接"}</span>
-                )}
+                <span>{activeBinding ? "已连接当前面试" : connectionNotice || "等待网页输入机器码"}</span>
               </p>
               <p>
                 <strong>连接信息：</strong>
@@ -1153,14 +1169,12 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
                     打开面试首页
                   </button>
                 ) : null}
-                <button type="button" className="inline-web-link" onClick={() => { void resetAuthorization(); }}>
-                  重新授权
+                <button type="button" className="inline-web-link" onClick={() => { void refreshAuthorization(); }}>
+                  检查系统权限
                 </button>
-                {activeBinding ? null : (
-                  <button type="button" className="inline-web-link" onClick={() => { void window.offersteady?.openPermissionSettings("microphone"); }}>
-                    打开麦克风权限设置
-                  </button>
-                )}
+                <button type="button" className="inline-web-link" onClick={() => { void window.offersteady?.openPermissionSettings("microphone"); }}>
+                  打开麦克风权限设置
+                </button>
               </p>
               <p className="route-copy">
                 当前路由：我的声音来自麦克风/耳机；面试官声音来自电脑输出音频，也就是微信、会议或网页面试在这台电脑上播放出来的声音；屏幕捕捉用于截图回答。

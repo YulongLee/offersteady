@@ -74,6 +74,9 @@ export interface RecentDesktopDevice {
   readonly capabilities: Record<string, unknown>;
   readonly online: boolean;
   readonly lastSeenAtMs: number;
+  readonly accountBound?: boolean;
+  readonly devicePresence?: "online" | "offline";
+  readonly permissionStatus?: Record<string, unknown>;
 }
 
 export interface WebAppState {

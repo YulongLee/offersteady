@@ -268,3 +268,7 @@ class DesktopDeviceBindingResponse(BaseModel):
     bound_at_ms: int = Field(alias="boundAtMs")
     last_seen_at_ms: int = Field(alias="lastSeenAtMs")
     binding_generation: int = Field(alias="bindingGeneration")
+    permission_status: dict[str, object] = Field(default_factory=dict, alias="permissionStatus")
+    device_presence: str = Field(default="online", alias="devicePresence")
+    account_bound: bool = Field(default=True, alias="accountBound")
+    session_connection: str = Field(default="connected", alias="sessionConnection")

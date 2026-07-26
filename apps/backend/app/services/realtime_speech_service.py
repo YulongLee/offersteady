@@ -16,6 +16,7 @@ from app.core.config import Settings
 from app.core.errors import DomainRequestError
 from app.core.logging import log_event
 from app.ports.realtime_speech import (
+    AccountDesktopDeviceRecord,
     AsrUsageReport,
     AudioFrame,
     DesktopDeviceRecord,
@@ -226,11 +227,10 @@ class RealtimeSpeechService:
         return stored
 
     def get_last_desktop_device_for_user(self, *, user_id: str) -> dict[str, object] | None:
-        bindings = self.repository.list_session_desktop_bindings_for_user(user_id=user_id)
-        if not bindings:
+        association = self.repository.get_last_account_desktop_device(user_id=user_id)
+        if association is None:
             return None
-        latest = bindings[-1]
-        device = self.repository.get_desktop_device_by_code(latest.manual_code)
+        device = self.repository.get_desktop_device_by_code(association.manual_code)
         if device is None:
             return None
         online = self._desktop_device_fresh(device)
@@ -241,6 +241,9 @@ class RealtimeSpeechService:
             "capabilities": device.capabilities,
             "online": online,
             "lastSeenAtMs": device.last_seen_at_ms,
+            "accountBound": True,
+            "devicePresence": "online" if online else "offline",
+            "permissionStatus": self._permission_status(device),
         }
 
     def bind_desktop_device(
@@ -253,10 +256,10 @@ class RealtimeSpeechService:
     ) -> SessionDesktopBindingRecord:
         self.session_service.get_session(user_id=user_id, session_id=session_id)
         if reuse_last_device:
-            user_bindings = self.repository.list_session_desktop_bindings_for_user(user_id=user_id)
-            if not user_bindings:
+            association = self.repository.get_last_account_desktop_device(user_id=user_id)
+            if association is None:
                 raise DomainRequestError("realtime-speech", "bind-device", "没有可复用的历史设备，请输入助手中的机器码。", 404)
-            code = user_bindings[-1].manual_code
+            code = association.manual_code
         else:
             code = (manual_code or "").strip()
             if not code.isdigit() or len(code) != 6:
@@ -267,6 +270,17 @@ class RealtimeSpeechService:
         if not self._desktop_device_fresh(device):
             raise DomainRequestError("realtime-speech", "bind-device", "上次使用的设备当前离线，请打开助手或输入其他机器码。", 409)
         now_ms = _now_ms()
+        previous_association = self.repository.get_account_desktop_device(user_id=user_id, device_id=device.device_id)
+        self.repository.save_account_desktop_device(AccountDesktopDeviceRecord(
+            owner_user_id=user_id,
+            device_id=device.device_id,
+            manual_code=device.manual_code,
+            linked_at_ms=previous_association.linked_at_ms if previous_association else now_ms,
+            last_used_at_ms=now_ms,
+        ))
+        current_binding = self.repository.get_session_desktop_binding(user_id=user_id, session_id=session_id)
+        if current_binding is not None and current_binding.device_id == device.device_id and self._binding_is_active(binding=current_binding, device=device):
+            return current_binding
         previous_bindings = {
             (item.owner_user_id, item.session_id): item
             for item in self.repository.list_session_desktop_bindings_for_user(user_id=user_id)
@@ -327,6 +341,17 @@ class RealtimeSpeechService:
             seen_at_ms=_now_ms(),
         ))
         return heartbeat
+
+    def require_active_realtime_session(self, *, user_id: str, session_id: str) -> None:
+        session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        if session.status != "live":
+            raise DomainRequestError(
+                "realtime-speech",
+                "stream-session",
+                "当前面试已结束或已被新的面试接管。",
+                410,
+                "realtime_session_replaced",
+            )
 
     def record_desktop_device_heartbeat(self, *, device_id: str, manual_code: str, display_name: str | None, capabilities: dict[str, object]) -> DesktopDeviceRecord:
         device = self.repository.get_desktop_device_by_code(manual_code.strip())
@@ -421,6 +446,8 @@ class RealtimeSpeechService:
                 "message": "机器码必须是 6 位数字。",
             }
         device = self.repository.get_desktop_device_by_code(code)
+        device_presence = "online" if device is not None and self._desktop_device_fresh(device) else "offline"
+        permission_status = self._permission_status(device)
         binding = self.repository.get_latest_session_desktop_binding_by_code(manual_code=code)
         if binding is not None:
             session_status = "unknown"
@@ -438,6 +465,9 @@ class RealtimeSpeechService:
                     "registered": device is not None and self._desktop_device_fresh(device),
                     "registeredDeviceId": device.device_id if device else binding.device_id,
                     "bound": False,
+                    "devicePresence": device_presence,
+                    "permissionStatus": permission_status,
+                    "sessionConnection": "disconnected",
                     "sessionStatus": session_status,
                     "staleReason": stale_reason,
                     "message": self._stale_binding_message(stale_reason),
@@ -450,6 +480,9 @@ class RealtimeSpeechService:
                 "registered": device is not None,
                 "registeredDeviceId": device.device_id if device else binding.device_id,
                 "bound": True,
+                "devicePresence": device_presence,
+                "permissionStatus": permission_status,
+                "sessionConnection": "connected",
                 "sessionStatus": session_status,
                 "message": "网页端已绑定本机。",
                 "binding": self.desktop_binding_response(binding).model_dump(by_alias=True),
@@ -462,6 +495,9 @@ class RealtimeSpeechService:
                 "registered": True,
                 "registeredDeviceId": device.device_id,
                 "bound": False,
+                "devicePresence": device_presence,
+                "permissionStatus": permission_status,
+                "sessionConnection": "idle",
                 "message": "这台电脑已登记，网页端尚未绑定该机器码。",
             }
         return {
@@ -470,6 +506,9 @@ class RealtimeSpeechService:
             "requestedDeviceId": device_id,
             "registered": False,
             "bound": False,
+            "devicePresence": "offline",
+            "permissionStatus": {},
+            "sessionConnection": "disconnected",
             "message": "后端尚未登记这台电脑，请保持伴随程序打开。",
         }
 
@@ -488,6 +527,17 @@ class RealtimeSpeechService:
 
     def _desktop_device_fresh(self, device: DesktopDeviceRecord) -> bool:
         return (_now_ms() - device.last_seen_at_ms) <= self.settings.realtime_desktop_heartbeat_ttl_seconds * 1000
+
+    @staticmethod
+    def _permission_status(device: DesktopDeviceRecord | None) -> dict[str, object]:
+        if device is None:
+            return {}
+        capabilities = device.capabilities
+        return {
+            "microphone": capabilities.get("microphone", "unknown"),
+            "systemAudio": capabilities.get("systemAudio", "unknown"),
+            "screenCapture": capabilities.get("screenCapture", "unknown"),
+        }
 
     def _web_heartbeat_fresh(self, *, user_id: str, session_id: str) -> bool:
         heartbeat = self.repository.get_web_session_heartbeat(user_id=user_id, session_id=session_id)
@@ -1707,6 +1757,14 @@ class RealtimeSpeechService:
             boundAtMs=record.bound_at_ms,
             lastSeenAtMs=record.last_seen_at_ms,
             bindingGeneration=record.binding_generation,
+            permissionStatus={
+                "microphone": record.capabilities.get("microphone", "unknown"),
+                "systemAudio": record.capabilities.get("systemAudio", "unknown"),
+                "screenCapture": record.capabilities.get("screenCapture", "unknown"),
+            },
+            devicePresence="online",
+            accountBound=True,
+            sessionConnection="connected" if record.status == "bound" else "disconnected",
         )
 
     @staticmethod

@@ -312,7 +312,7 @@ async def stream_session_runtime(
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> StreamingResponse:
     resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
-    await asyncio.to_thread(service.get_runtime, user_id=resolved_user_id, session_id=session_id)
+    await asyncio.to_thread(service.require_active_realtime_session, user_id=resolved_user_id, session_id=session_id)
 
     async def event_stream():
         last_cursor = cursor
@@ -320,6 +320,19 @@ async def stream_session_runtime(
         idle_polls = 0
         while True:
             if await request.is_disconnected():
+                break
+            try:
+                await asyncio.to_thread(
+                    service.require_active_realtime_session,
+                    user_id=resolved_user_id,
+                    session_id=session_id,
+                )
+            except DomainRequestError:
+                yield _sse_frame("revoked", {
+                    "type": "revoked",
+                    "sessionId": session_id,
+                    "reason": "session-replaced",
+                })
                 break
             stream_cursor = getattr(service.repository, "get_event_stream_version", None)
             current_cursor = await asyncio.to_thread(

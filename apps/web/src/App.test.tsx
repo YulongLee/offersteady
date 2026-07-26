@@ -192,6 +192,8 @@ describe("OfferSteady web application", () => {
     fireEvent.change(screen.getByLabelText("目标岗位"), { target: { value: "前端架构师" } });
     fireEvent.click(screen.getByRole("button", { name: /保存并准备/ }));
     expect(await screen.findByRole("heading", { name: "前端架构师终面" })).toBeInTheDocument();
+    expect(screen.getByText("输入机器码连接本场")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "一键连接上次设备" })).not.toBeInTheDocument();
   });
 
   it("shows the backend reason when creating an interview draft fails", async () => {
@@ -234,12 +236,12 @@ describe("OfferSteady web application", () => {
     await login();
     window.history.pushState({}, "", "/app/interviews/demo/prepare");
     window.dispatchEvent(new PopStateEvent("popstate"));
-    fireEvent.click(await screen.findByRole("button", { name: "一键连接" }));
+    fireEvent.click(await screen.findByRole("button", { name: "一键连接上次设备" }));
     const start = await screen.findByRole("button", { name: /开始面试/ });
     expect(start).toBeEnabled();
     expect(screen.queryByRole("checkbox", { name: /数据用途/ })).not.toBeInTheDocument();
-    expect(screen.getByText(/本地端会在连接后检查音频与问题检测/)).toBeInTheDocument();
-    expect(screen.getByText(/启用音频或上传截图时会分别确认/)).toBeInTheDocument();
+    expect(screen.getByText(/本地端会沿用首次授权并检查音频与问题检测/)).toBeInTheDocument();
+    expect(screen.getByText(/麦克风和屏幕权限只由桌面助手首次申请/)).toBeInTheDocument();
     fireEvent.click(start);
     await waitFor(() => expect(interviewAppAdapter.startInterviewSession).toHaveBeenCalledWith("demo", expect.any(AbortSignal)));
     expect((await screen.findAllByText("请介绍一个你负责过的、最有挑战的前端项目。")).length).toBeGreaterThan(0);
@@ -252,7 +254,7 @@ describe("OfferSteady web application", () => {
     await login();
     window.history.pushState({}, "", "/app/interviews/demo/prepare");
     window.dispatchEvent(new PopStateEvent("popstate"));
-    fireEvent.click(await screen.findByRole("button", { name: "一键连接" }));
+    fireEvent.click(await screen.findByRole("button", { name: "一键连接上次设备" }));
     fireEvent.click(await screen.findByRole("button", { name: /开始面试/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent("后端会话启动失败，请重试");
     expect(screen.getByRole("heading", { name: "高级前端工程师面试" })).toBeInTheDocument();
@@ -343,7 +345,7 @@ describe("OfferSteady web application", () => {
     window.history.pushState({}, "", "/app");
     render(<App initialAuthenticated initialState={clonedState()} />);
     fireEvent.click(await screen.findByRole("link", { name: "继续面试" }));
-    fireEvent.click(await screen.findByRole("button", { name: "一键连接" }));
+    fireEvent.click(await screen.findByRole("button", { name: "一键连接上次设备" }));
     const startInterview = screen.getByRole("button", { name: /开始面试/ });
     await waitFor(() => expect(startInterview).toBeEnabled());
     fireEvent.click(startInterview);

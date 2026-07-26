@@ -11,6 +11,7 @@ import psycopg
 
 from app.core.config import Settings
 from app.ports.realtime_speech import (
+    AccountDesktopDeviceRecord,
     AsrUsageReport,
     DesktopDeviceRecord,
     QuestionCandidateRecord,
@@ -65,6 +66,7 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
             "events": [],
             "activity": self.session_activity_versions,
             "devices": [asdict(item) for item in self.desktop_devices_by_id.values()],
+            "accountDevices": [asdict(item) for item in self.account_desktop_devices.values()],
             "bindings": [asdict(item) for item in self.session_bindings.values()],
             "heartbeats": [asdict(item) for item in self.web_session_heartbeats.values()],
         }
@@ -106,10 +108,25 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
             record = DesktopDeviceRecord(**item)
             self.desktop_devices_by_id[record.device_id] = record
             self.desktop_devices_by_code[record.manual_code] = record.device_id
+        self.account_desktop_devices = {}
+        for item in payload.get("accountDevices", []):
+            record = AccountDesktopDeviceRecord(**item)
+            self.account_desktop_devices[(record.owner_user_id, record.device_id)] = record
         self.session_bindings = {}
         for item in payload.get("bindings", []):
             record = SessionDesktopBindingRecord(**item)
             self.session_bindings[(record.owner_user_id, record.session_id)] = record
+        if not self.account_desktop_devices:
+            for binding in self.session_bindings.values():
+                key = (binding.owner_user_id, binding.device_id)
+                current = self.account_desktop_devices.get(key)
+                self.account_desktop_devices[key] = AccountDesktopDeviceRecord(
+                    owner_user_id=binding.owner_user_id,
+                    device_id=binding.device_id,
+                    manual_code=binding.manual_code,
+                    linked_at_ms=min(current.linked_at_ms, binding.bound_at_ms) if current else binding.bound_at_ms,
+                    last_used_at_ms=max(current.last_used_at_ms, binding.bound_at_ms) if current else binding.bound_at_ms,
+                )
         self.web_session_heartbeats = {}
         for item in payload.get("heartbeats", []):
             record = WebSessionHeartbeatRecord(**item)
@@ -133,6 +150,9 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
 
     def save_desktop_device(self, device): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_desktop_device(device))
     def get_desktop_device_by_code(self, manual_code): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_desktop_device_by_code(manual_code))
+    def save_account_desktop_device(self, association): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_account_desktop_device(association))
+    def get_account_desktop_device(self, *, user_id, device_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_account_desktop_device(user_id=user_id, device_id=device_id))
+    def get_last_account_desktop_device(self, *, user_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_last_account_desktop_device(user_id=user_id))
     def save_session_desktop_binding(self, binding): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_session_desktop_binding(binding))
     def get_session_desktop_binding(self, *, user_id, session_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_session_desktop_binding(user_id=user_id, session_id=session_id))
     def get_latest_session_desktop_binding_for_device(self, *, device_id, manual_code): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_latest_session_desktop_binding_for_device(device_id=device_id, manual_code=manual_code))

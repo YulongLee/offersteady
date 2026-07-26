@@ -302,6 +302,30 @@ describe("backend preview adapter", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("treats a revoked realtime stream as terminal and clears its cursor", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    window.sessionStorage.setItem("offersteady:realtime-cursor:session-1", "27");
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("event: revoked\ndata: {\"type\":\"revoked\",\"sessionId\":\"session-1\",\"reason\":\"session-replaced\"}\n\n"));
+        controller.close();
+      },
+    });
+    const fetchImpl = vi.fn(async () => new Response(stream, {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+    }));
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+
+    await expect(adapter.subscribeRealtimeSession("session-1", () => undefined)).rejects.toMatchObject({
+      status: 410,
+      message: "当前面试已被新的面试接管",
+    });
+    expect(window.sessionStorage.getItem("offersteady:realtime-cursor:session-1")).toBeNull();
+  });
+
   it("starts an interview session through the backend session API", async () => {
     window.localStorage.setItem("offersteady.auth.access_token", "access-token");
     window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
