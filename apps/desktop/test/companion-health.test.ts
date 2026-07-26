@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { hasPublisherTakenOver, mergeDisplayedSourceHealth } from "../src/renderer/CompanionApp";
-import { publisherFailureDiagnostic } from "../src/renderer/audio/realtime-publisher";
+import { publisherFailureDiagnostic, publisherFailureIsTerminal } from "../src/renderer/audio/realtime-publisher";
 
 describe("companion displayed source health", () => {
   it("falls back to monitor health when live health is present but not active", () => {
@@ -65,5 +65,11 @@ describe("companion displayed source health", () => {
       stage: "unsupported",
       errorCode: "adapter-required",
     });
+  });
+
+  it("stops retrying publisher creation after permanent session failures", () => {
+    expect(publisherFailureIsTerminal(new Error("publisher_create_failed_microphone_410"))).toBe(true);
+    expect(publisherFailureIsTerminal(new Error("publisher_create_failed_microphone_401"))).toBe(true);
+    expect(publisherFailureIsTerminal(new Error("publisher_websocket_failed"))).toBe(false);
   });
 });

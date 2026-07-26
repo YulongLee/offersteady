@@ -90,6 +90,10 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
         ]
         return [replace(item) for item in sorted(items, key=lambda item: (item.bound_at_ms, item.session_id))]
 
+    def list_session_desktop_bindings_for_user(self, *, user_id: str) -> list[SessionDesktopBindingRecord]:
+        items = [item for item in self.session_bindings.values() if item.owner_user_id == user_id]
+        return [replace(item) for item in sorted(items, key=lambda item: (item.bound_at_ms, item.session_id))]
+
     def save_publisher(self, publisher: RealtimePublisherRecord) -> RealtimePublisherRecord:
         stored = replace(publisher)
         self.publishers_by_id[stored.publisher_id] = stored

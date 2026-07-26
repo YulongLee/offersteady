@@ -250,7 +250,8 @@ class WebSessionHeartbeatRequest(BaseModel):
 class BindDesktopDeviceRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
     user_id: str = Field(min_length=1, alias="userId")
-    manual_code: str = Field(min_length=6, max_length=6, alias="manualCode")
+    manual_code: str | None = Field(default=None, min_length=6, max_length=6, alias="manualCode")
+    reuse_last_device: bool = Field(default=False, alias="reuseLastDevice")
 
 
 class DesktopDeviceBindingResponse(BaseModel):

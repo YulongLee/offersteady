@@ -1897,6 +1897,68 @@ def test_desktop_machine_code_registers_and_binds_to_interview_session() -> None
     assert ended_status["staleReason"] == "session-not-active"
 
 
+def test_new_device_binding_becomes_the_users_only_active_realtime_interview() -> None:
+    first = unwrap(client.post("/api/v1/sessions", json={
+        "userId": "single-live-user",
+        "title": "第一场实时面试",
+    }))
+    second = unwrap(client.post("/api/v1/sessions", json={
+        "userId": "single-live-user",
+        "title": "第二场实时面试",
+    }))
+    unwrap(client.post("/api/v1/realtime-speech/desktop-devices/register", json={
+        "deviceId": "single-live-device-a",
+        "manualCode": "310001",
+        "displayName": "第一台 Mac",
+        "capabilities": {"microphone": True, "systemAudio": True},
+    }))
+    unwrap(client.post("/api/v1/realtime-speech/desktop-devices/register", json={
+        "deviceId": "single-live-device-b",
+        "manualCode": "310002",
+        "displayName": "第二台 Mac",
+        "capabilities": {"microphone": True, "systemAudio": True},
+    }))
+    unwrap(client.post(f"/api/v1/realtime-speech/sessions/{first['sessionId']}/desktop-binding", json={
+        "userId": "single-live-user",
+        "manualCode": "310001",
+    }))
+    unwrap(client.post(f"/api/v1/sessions/{first['sessionId']}/start", json={"userId": "single-live-user"}))
+    first_publisher = unwrap(client.post("/api/v1/realtime-speech/publishers", json={
+        "userId": "single-live-user",
+        "sessionId": first["sessionId"],
+        "sourceKind": "microphone",
+        "clientName": "first-publisher",
+    }))
+
+    second_binding = unwrap(client.post(f"/api/v1/realtime-speech/sessions/{second['sessionId']}/desktop-binding", json={
+        "userId": "single-live-user",
+        "manualCode": "310002",
+    }))
+
+    assert second_binding["status"] == "bound"
+    previous_binding = unwrap(client.get(
+        f"/api/v1/realtime-speech/sessions/{first['sessionId']}/desktop-binding",
+        params={"userId": "single-live-user"},
+    ))
+    assert previous_binding["status"] == "stale"
+    previous_runtime = unwrap(client.get(
+        f"/api/v1/realtime-speech/sessions/{first['sessionId']}/runtime",
+        params={"userId": "single-live-user"},
+    ))
+    assert next(item for item in previous_runtime["publishers"] if item["publisherId"] == first_publisher["publisherId"])["status"] == "closed"
+    recent = unwrap(client.get(
+        "/api/v1/realtime-speech/desktop-devices/last-used",
+        params={"userId": "single-live-user"},
+    ))
+    assert recent["deviceId"] == "single-live-device-b"
+    assert recent["maskedManualCode"] == "••••02"
+    reused = unwrap(client.post(f"/api/v1/realtime-speech/sessions/{second['sessionId']}/desktop-binding", json={
+        "userId": "single-live-user",
+        "reuseLastDevice": True,
+    }))
+    assert reused["deviceId"] == "single-live-device-b"
+
+
 def test_realtime_runtime_tracks_frame_receipts_and_asr_status() -> None:
     session = unwrap(client.post("/api/v1/sessions", json={
         "userId": "runtime-status-user",

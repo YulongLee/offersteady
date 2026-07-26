@@ -19,12 +19,22 @@ const open = (path: string, mutate?: (state: WebAppState) => void) => {
   if (!vi.isMockFunction(interviewAppAdapter.getDesktopDeviceBinding)) {
     vi.spyOn(interviewAppAdapter, "getDesktopDeviceBinding").mockResolvedValue(null);
   }
+  if (!vi.isMockFunction(interviewAppAdapter.getLastDesktopDevice)) {
+    vi.spyOn(interviewAppAdapter, "getLastDesktopDevice").mockResolvedValue({
+      deviceId: "fixture-last-device",
+      displayName: "上次使用的 Mac",
+      maskedManualCode: "••••56",
+      capabilities: { microphone: true, systemAudio: true },
+      online: true,
+      lastSeenAtMs: Date.now(),
+    });
+  }
   if (!vi.isMockFunction(interviewAppAdapter.bindDesktopDevice)) {
     vi.spyOn(interviewAppAdapter, "bindDesktopDevice").mockImplementation(async command => ({
       bindingId: `fixture-binding-${command.manualCode}`,
       sessionId: command.interviewId,
       deviceId: `fixture-device-${command.manualCode}`,
-      manualCode: command.manualCode,
+      manualCode: command.manualCode ?? "••••56",
       displayName: "面试稳伴随程序 · Mac",
       capabilities: { microphone: true, systemAudio: true, screenCapture: true },
       status: "bound",
@@ -166,7 +176,9 @@ describe("categorized materials and reachable live actions", () => {
     fireEvent.click(screen.getByRole("button", { name: "本场不使用资料" }));
     fireEvent.click(screen.getByRole("button", { name: "确认空资料并继续" }));
     expect(await screen.findByText("已确认不使用个人资料")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /开始面试/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /开始面试/ })).toBeDisabled();
+    fireEvent.click(await screen.findByRole("button", { name: "一键连接" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /开始面试/ })).toBeEnabled());
     expect(screen.queryByRole("checkbox", { name: /数据用途/ })).not.toBeInTheDocument();
   });
 
@@ -176,8 +188,9 @@ describe("categorized materials and reachable live actions", () => {
       state.preparation = { ...state.preparation, device: { ...device, capabilities: { ...device.capabilities, systemAudio: "denied" } } };
     });
     expect(screen.getByText("本地端会继续检查收音、系统音频和问题检测")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "一键连接" }));
     const start = screen.getByRole("button", { name: /开始面试/ });
-    expect(start).toBeEnabled();
+    await waitFor(() => expect(start).toBeEnabled());
     fireEvent.click(start);
     expect(await screen.findByText("等待开始面试")).toBeInTheDocument();
     expect(screen.getByText("这台 Mac · 已连接，未采集")).toBeInTheDocument();
@@ -192,12 +205,23 @@ describe("categorized materials and reachable live actions", () => {
     expect(screen.getByText("请输入桌面伴随程序中的 6 位机器码，绑定本场收音机器")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /开始面试/ })).toBeDisabled();
     fireEvent.change(screen.getByPlaceholderText("输入 6 位机器码"), { target: { value: "123456" } });
-    fireEvent.click(screen.getByRole("button", { name: "验证并绑定" }));
-    expect(await screen.findByText(/已绑定：面试稳伴随程序 · Mac/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "验证并连接" }));
+    expect(await screen.findByText(/本场已连接：面试稳伴随程序 · Mac/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /开始面试/ }));
     expect(await screen.findByText("等待开始面试")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "手动输入面试官的问题" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /截屏回答/ })).toBeInTheDocument();
+  });
+
+  it("lets the user explicitly connect the last online device for this interview", async () => {
+    open("/app/interviews/demo/prepare", state => {
+      const device = state.preparation.device!;
+      state.preparation = { ...state.preparation, device: { ...device, connected: false, captureState: "not-connected" } };
+    });
+    const connect = await screen.findByRole("button", { name: "一键连接" });
+    fireEvent.click(connect);
+    expect(await screen.findByText(/本场已连接：/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /开始面试/ })).toBeEnabled();
   });
 
   it("keeps confirmation, screenshot and manual input in the focused workspace", () => {

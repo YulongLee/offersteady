@@ -132,6 +132,15 @@ interface BackendDesktopBindingResponse {
   readonly lastSeenAtMs: number;
 }
 
+interface BackendRecentDesktopDeviceResponse {
+  readonly deviceId: string;
+  readonly displayName: string;
+  readonly maskedManualCode: string;
+  readonly capabilities: Record<string, unknown>;
+  readonly online: boolean;
+  readonly lastSeenAtMs: number;
+}
+
 interface BackendRealtimeTranscriptListResponse {
   readonly sessionId: string;
   readonly transcripts: readonly {
@@ -676,9 +685,20 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     const binding = await this.client.request<BackendDesktopBindingResponse>(`/api/v1/realtime-speech/sessions/${command.interviewId}/desktop-binding`, {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ userId: requireUserId(), manualCode: command.manualCode.trim() }),
+      body: JSON.stringify({
+        userId: requireUserId(),
+        manualCode: command.manualCode?.trim() || null,
+        reuseLastDevice: command.reuseLastDevice === true,
+      }),
     }, signal);
     return toDesktopDeviceBinding(binding);
+  }
+
+  async getLastDesktopDevice(signal?: AbortSignal) {
+    const device = await this.client.request<BackendRecentDesktopDeviceResponse | null>(`/api/v1/realtime-speech/desktop-devices/last-used?userId=${encodeURIComponent(requireUserId())}`, {
+      headers: authHeaders(),
+    }, signal);
+    return device;
   }
 
   async getDesktopDeviceBinding(interviewId: string, signal?: AbortSignal) {
@@ -686,7 +706,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       const binding = await this.client.request<BackendDesktopBindingResponse>(`/api/v1/realtime-speech/sessions/${interviewId}/desktop-binding?userId=${encodeURIComponent(requireUserId())}`, {
         headers: authHeaders(),
       }, signal);
-      return toDesktopDeviceBinding(binding);
+      return binding.status === "bound" ? toDesktopDeviceBinding(binding) : null;
     } catch (error) {
       if (error instanceof Error && (error.message.includes("404") || error.message.includes("尚未绑定"))) return null;
       return null;

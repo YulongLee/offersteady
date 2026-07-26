@@ -225,29 +225,75 @@ class RealtimeSpeechService:
         self._log(logging.INFO, "realtime_speech.desktop_device_registered", session_id="desktop-registration", publisher_id=stored.device_id, state=stored.status)
         return stored
 
-    def bind_desktop_device(self, *, user_id: str, session_id: str, manual_code: str) -> SessionDesktopBindingRecord:
+    def get_last_desktop_device_for_user(self, *, user_id: str) -> dict[str, object] | None:
+        bindings = self.repository.list_session_desktop_bindings_for_user(user_id=user_id)
+        if not bindings:
+            return None
+        latest = bindings[-1]
+        device = self.repository.get_desktop_device_by_code(latest.manual_code)
+        if device is None:
+            return None
+        online = self._desktop_device_fresh(device)
+        return {
+            "deviceId": device.device_id,
+            "displayName": device.display_name,
+            "maskedManualCode": f"••••{device.manual_code[-2:]}",
+            "capabilities": device.capabilities,
+            "online": online,
+            "lastSeenAtMs": device.last_seen_at_ms,
+        }
+
+    def bind_desktop_device(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        manual_code: str | None,
+        reuse_last_device: bool = False,
+    ) -> SessionDesktopBindingRecord:
         self.session_service.get_session(user_id=user_id, session_id=session_id)
-        code = manual_code.strip()
+        if reuse_last_device:
+            user_bindings = self.repository.list_session_desktop_bindings_for_user(user_id=user_id)
+            if not user_bindings:
+                raise DomainRequestError("realtime-speech", "bind-device", "没有可复用的历史设备，请输入助手中的机器码。", 404)
+            code = user_bindings[-1].manual_code
+        else:
+            code = (manual_code or "").strip()
+            if not code.isdigit() or len(code) != 6:
+                raise DomainRequestError("realtime-speech", "bind-device", "请输入电脑伴随程序显示的 6 位机器码。", 400)
         device = self.repository.get_desktop_device_by_code(code)
         if device is None:
             raise DomainRequestError("realtime-speech", "bind-device", "未找到对应机器码。请确认电脑伴随程序已打开，并输入 6 位验证码。", 404)
+        if not self._desktop_device_fresh(device):
+            raise DomainRequestError("realtime-speech", "bind-device", "上次使用的设备当前离线，请打开助手或输入其他机器码。", 409)
         now_ms = _now_ms()
-        previous_bindings = self.repository.list_session_desktop_bindings_for_device(
+        previous_bindings = {
+            (item.owner_user_id, item.session_id): item
+            for item in self.repository.list_session_desktop_bindings_for_user(user_id=user_id)
+        }
+        previous_bindings.update({
+            (item.owner_user_id, item.session_id): item
+            for item in self.repository.list_session_desktop_bindings_for_device(
             device_id=device.device_id,
             manual_code=device.manual_code,
-        )
-        for previous in previous_bindings:
-            if previous.session_id == session_id or previous.status != "bound":
+            )
+        })
+        for previous in previous_bindings.values():
+            if previous.status != "bound":
                 continue
-            self.repository.save_session_desktop_binding(replace(previous, status="stale"))
+            if previous.session_id != session_id:
+                self.repository.save_session_desktop_binding(replace(previous, status="stale"))
             for publisher in self.repository.list_publishers_for_session(session_id=previous.session_id):
-                if publisher.owner_user_id != user_id or publisher.status in {"closed", "failed"}:
+                if publisher.status in {"closed", "failed"}:
                     continue
                 self.repository.save_publisher(replace(
                     publisher,
                     disconnected_at_ms=now_ms,
                     status="closed",
                 ))
+        for active_session in self.session_service.list_sessions(user_id=user_id, status="live"):
+            if active_session.session_id != session_id:
+                self.session_service.end_session(user_id=user_id, session_id=active_session.session_id)
         binding = self.repository.save_session_desktop_binding(SessionDesktopBindingRecord(
             binding_id=f"desktop-binding-{uuid4().hex}",
             session_id=session_id,
@@ -552,7 +598,11 @@ class RealtimeSpeechService:
         return connected
 
     def disconnect_publisher(self, *, token: str, final_state: str = "closed") -> RealtimePublisherRecord:
-        publisher = self._require_publisher_token(token)
+        publisher = self.repository.get_publisher_by_token(token)
+        if publisher is None:
+            raise DomainRequestError("realtime-speech", "publisher-token", "实时语音发布令牌无效。", 404)
+        if publisher.status in {"closed", "failed"}:
+            return publisher
         updated = self.repository.save_publisher(replace(publisher, disconnected_at_ms=_now_ms(), status=final_state))  # type: ignore[arg-type]
         self._save_event(
             session_id=updated.session_id,

@@ -34,11 +34,19 @@ describe("OfferSteady web application", () => {
       updatedAt: "刚刚",
     }));
     vi.spyOn(interviewAppAdapter, "getDesktopDeviceBinding").mockResolvedValue(null);
+    vi.spyOn(interviewAppAdapter, "getLastDesktopDevice").mockResolvedValue({
+      deviceId: "fixture-last-device",
+      displayName: "上次使用的 Mac",
+      maskedManualCode: "••••56",
+      capabilities: { microphone: true, systemAudio: true },
+      online: true,
+      lastSeenAtMs: Date.now(),
+    });
     vi.spyOn(interviewAppAdapter, "bindDesktopDevice").mockImplementation(async command => ({
       bindingId: `fixture-binding-${command.manualCode}`,
       sessionId: command.interviewId,
       deviceId: `fixture-device-${command.manualCode}`,
-      manualCode: command.manualCode,
+      manualCode: command.manualCode ?? "••••56",
       displayName: "面试稳伴随程序 · Mac",
       capabilities: { microphone: true, systemAudio: true, screenCapture: true },
       status: "bound",
@@ -226,6 +234,7 @@ describe("OfferSteady web application", () => {
     await login();
     window.history.pushState({}, "", "/app/interviews/demo/prepare");
     window.dispatchEvent(new PopStateEvent("popstate"));
+    fireEvent.click(await screen.findByRole("button", { name: "一键连接" }));
     const start = await screen.findByRole("button", { name: /开始面试/ });
     expect(start).toBeEnabled();
     expect(screen.queryByRole("checkbox", { name: /数据用途/ })).not.toBeInTheDocument();
@@ -243,6 +252,7 @@ describe("OfferSteady web application", () => {
     await login();
     window.history.pushState({}, "", "/app/interviews/demo/prepare");
     window.dispatchEvent(new PopStateEvent("popstate"));
+    fireEvent.click(await screen.findByRole("button", { name: "一键连接" }));
     fireEvent.click(await screen.findByRole("button", { name: /开始面试/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent("后端会话启动失败，请重试");
     expect(screen.getByRole("heading", { name: "高级前端工程师面试" })).toBeInTheDocument();
@@ -333,7 +343,10 @@ describe("OfferSteady web application", () => {
     window.history.pushState({}, "", "/app");
     render(<App initialAuthenticated initialState={clonedState()} />);
     fireEvent.click(await screen.findByRole("link", { name: "继续面试" }));
-    fireEvent.click(screen.getByRole("button", { name: /开始面试/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "一键连接" }));
+    const startInterview = screen.getByRole("button", { name: /开始面试/ });
+    await waitFor(() => expect(startInterview).toBeEnabled());
+    fireEvent.click(startInterview);
     fireEvent.click(await screen.findByRole("button", { name: "开始面试" }));
     const input = await screen.findByPlaceholderText("输入面试官的问题");
     fireEvent.change(input, { target: { value: "完整旅程测试问题" } });

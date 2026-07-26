@@ -67,6 +67,15 @@ export interface DesktopDeviceBinding {
   readonly lastSeenAtMs: number;
 }
 
+export interface RecentDesktopDevice {
+  readonly deviceId: string;
+  readonly displayName: string;
+  readonly maskedManualCode: string;
+  readonly capabilities: Record<string, unknown>;
+  readonly online: boolean;
+  readonly lastSeenAtMs: number;
+}
+
 export interface WebAppState {
   interviews: InterviewSummary[];
   preparation: PreparationState;
@@ -146,7 +155,8 @@ export interface InterviewAppAdapter {
   createDraft(input: { title: string; role: string; company?: string }, signal?: AbortSignal): Promise<InterviewSummary>;
   confirmInterviewMaterials(selection: SessionContextSelection, signal?: AbortSignal): Promise<SessionContextSelection>;
   startInterviewSession(id: string, signal?: AbortSignal): Promise<InterviewSummary>;
-  bindDesktopDevice(command: { interviewId: string; manualCode: string }, signal?: AbortSignal): Promise<DesktopDeviceBinding>;
+  bindDesktopDevice(command: { interviewId: string; manualCode?: string; reuseLastDevice?: boolean }, signal?: AbortSignal): Promise<DesktopDeviceBinding>;
+  getLastDesktopDevice?(signal?: AbortSignal): Promise<RecentDesktopDevice | null>;
   getDesktopDeviceBinding(interviewId: string, signal?: AbortSignal): Promise<DesktopDeviceBinding | null>;
   sendDesktopSessionHeartbeat(command: { interviewId: string; bindingId?: string | null; page: "preparation" | "live" }, signal?: AbortSignal): Promise<void>;
   loadRealtimeSession(interviewId: string, signal?: AbortSignal): Promise<Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>>;

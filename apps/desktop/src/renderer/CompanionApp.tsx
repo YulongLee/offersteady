@@ -3,7 +3,7 @@ import type { AudioPermission, AudioSourceDescriptor, AudioSourceHealth, Capture
 import type { DesktopNativeRuntimeHealth, DesktopPairingIdentity, DesktopRuntimeConfig, DesktopScreenSource } from "./global";
 import { MicrophoneAudioAdapter, SystemAudioAdapter, describeMediaError } from "./audio/audio-source-adapter";
 import { LocalSourceMonitor } from "./audio/local-source-monitor";
-import { DesktopRealtimePublisher } from "./audio/realtime-publisher";
+import { DesktopRealtimePublisher, publisherFailureIsTerminal } from "./audio/realtime-publisher";
 import appIconUrl from "./assets/app-icon.png";
 
 export const companionStatusCopy: Record<CaptureState, { title: string; detail: string }> = {
@@ -34,6 +34,7 @@ interface ApiEnvelope<T> {
 }
 
 interface DesktopActiveBinding {
+  readonly bindingGeneration?: number;
   readonly bindingId: string;
   readonly sessionId: string;
   readonly ownerUserId: string;
@@ -924,6 +925,10 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       setConnectionInfo(message);
       if (publisherRef.current === publisher) publisherRef.current = null;
       void publisher.stop();
+      if (publisherFailureIsTerminal(error)) {
+        setConnectionInfo("本场发布通道已失效，正在等待网页重新连接当前设备。");
+        return;
+      }
       window.setTimeout(() => {
         if (!cancelled) setPublisherRetryNonce((value) => value + 1);
       }, 3_000);
@@ -933,7 +938,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       if (publisherRef.current === publisher) publisherRef.current = null;
       void publisher.stop();
     };
-  }, [activeBinding?.sessionId, activeBinding?.ownerUserId, bindingSessionStatus, config, pairingIdentity, effectiveMicrophoneId, selectedSystemAudioId, publisherRetryNonce]);
+  }, [activeBinding?.bindingId, activeBinding?.sessionId, activeBinding?.ownerUserId, activeBinding?.bindingGeneration, bindingSessionStatus, config, pairingIdentity, effectiveMicrophoneId, selectedSystemAudioId, publisherRetryNonce]);
 
   useEffect(() => {
     const video = previewRef.current;

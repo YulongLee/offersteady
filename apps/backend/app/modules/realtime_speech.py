@@ -188,8 +188,21 @@ async def bind_desktop_device(
         user_id=resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context),
         session_id=session_id,
         manual_code=request.manual_code,
+        reuse_last_device=request.reuse_last_device,
     )
     return success_response(request=request_context, data=service.desktop_binding_response(binding), timestamp=utc_now_iso())
+
+
+@router.get("/desktop-devices/last-used", response_model=ApiEnvelope[dict[str, object] | None])
+async def get_last_used_desktop_device(
+    request: Request,
+    user_id: str | None = Query(default=None, alias="userId"),
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: RealtimeSpeechService = Depends(realtime_speech_service),
+) -> ApiEnvelope[dict[str, object] | None]:
+    resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
+    device = service.get_last_desktop_device_for_user(user_id=resolved_user_id)
+    return success_response(request=request, data=device, timestamp=utc_now_iso())
 
 
 @router.post("/sessions/{session_id}/web-heartbeat", response_model=ApiEnvelope[dict[str, object]])

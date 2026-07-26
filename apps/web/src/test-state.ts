@@ -199,7 +199,7 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
       bindingId: `fixture-binding-${command.manualCode}`,
       sessionId: command.interviewId,
       deviceId: `fixture-device-${command.manualCode}`,
-      manualCode: command.manualCode,
+      manualCode: command.manualCode ?? "••••56",
       displayName: "面试稳伴随程序 · Mac",
       capabilities: { microphone: true, systemAudio: true, screenCapture: true },
       status: "bound",

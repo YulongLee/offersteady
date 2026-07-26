@@ -233,6 +233,15 @@ h1, h2, h3, p { margin-top: 0; }
 .device-mini small, .paired-device small { color: var(--muted); font-size: 8px; }
 .device-mini a { color: var(--brand); font-size: 8px; }
 .machine-code-panel { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; border: 1px solid var(--line); border-radius: 13px; background: rgba(110,231,189,.05); padding: 13px; margin: 0 0 12px; }
+.connection-choice-title, .last-device-choice, .connection-divider { grid-column: 1 / -1; }
+.connection-choice-title { font-size: 11px; }
+.last-device-choice { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid rgba(110,231,189,.22); border-radius: 10px; background: rgba(110,231,189,.05); padding: 11px; }
+.last-device-choice.offline { border-color: var(--line); background: rgba(255,255,255,.02); }
+.last-device-choice > span { display: grid; gap: 4px; }
+.last-device-choice b { font-size: 9px; }
+.last-device-choice small { color: var(--muted); font-size: 8px; }
+.connection-divider { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 7px; }
+.connection-divider::before, .connection-divider::after { content: ""; height: 1px; flex: 1; background: var(--line); }
 .machine-code-panel label { display: grid; gap: 7px; color: #cbd5e2; font-size: 10px; }
 .machine-code-panel input { width: 100%; border: 1px solid var(--line-strong); border-radius: 10px; outline: 0; background: #0b1119; color: var(--brand); padding: 11px 12px; font-size: 18px; font-weight: 800; letter-spacing: .18em; }
 .machine-code-panel small { grid-column: 1 / -1; color: var(--muted); font-size: 9px; line-height: 1.5; }

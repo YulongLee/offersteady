@@ -155,6 +155,9 @@ export const publisherFailureDiagnostic = (sourceKind: AudioSourceKind, error: u
   };
 };
 
+export const publisherFailureIsTerminal = (error: unknown) =>
+  error instanceof Error && /publisher_create_failed_[^_]+_(401|403|404|409|410)$/.test(error.message);
+
 const connectProcessor = (context: AudioContext, processor: ScriptProcessorNode) => {
   const sink = context.createGain();
   sink.gain.value = 0;
@@ -797,7 +800,7 @@ export class DesktopRealtimePublisher {
         manualCode: this.options.binding.manualCode,
       }),
     });
-    if (!response.ok) throw new Error(`publisher_create_failed_${sourceKind}`);
+    if (!response.ok) throw new Error(`publisher_create_failed_${sourceKind}_${response.status}`);
     const payload = await response.json() as { data: PublisherTokenResponse };
     return payload.data;
   }
