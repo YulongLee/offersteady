@@ -1,7 +1,7 @@
 import type { AudioSourceHealth, AudioSourceKind } from "@offersteady/protocol";
 
 import { BoundedAudioFrameBuffer, createAudioFrame, SourceFrameSequencer } from "./audio-frame-buffer";
-import { MicrophoneAudioAdapter, SystemAudioAdapter, describeMediaError, type OpenAudioSource } from "./audio-source-adapter";
+import { MicrophoneAudioAdapter, describeMediaError, type OpenAudioSource } from "./audio-source-adapter";
 import { calculateRms } from "./signal-diagnostics";
 import { MultiplexedRealtimeTransport } from "./multiplexed-realtime-transport";
 
@@ -41,6 +41,11 @@ interface RealtimePublisherOptions extends RealtimePublisherCallbacks {
   readonly systemAudioId: string;
   readonly fetchImpl?: typeof fetch;
 }
+
+export const sessionCapturePermissionPolicy = {
+  requestPermissionOnSessionStart: false,
+  systemAudioCapture: "native-preauthorized",
+} as const;
 
 interface RuntimeHandle {
   readonly stop: () => Promise<void>;
@@ -322,7 +327,6 @@ export class DesktopRealtimePublisher {
   private readonly fetchImpl: typeof fetch;
   private readonly sequencer = new SourceFrameSequencer();
   private readonly microphoneAdapter = new MicrophoneAudioAdapter();
-  private readonly systemAudioAdapter = new SystemAudioAdapter();
   private runtimes: RuntimeHandle[] = [];
   private latestHealth = new Map<AudioSourceKind, HealthSnapshot>();
   private frameCounts = new Map<AudioSourceKind, number>();
@@ -373,15 +377,11 @@ export class DesktopRealtimePublisher {
       sourceId: this.options.microphoneId,
       open: () => this.microphoneAdapter.open(this.options.microphoneId),
     });
-    // Prefer Electron's app-owned loopback for computer output so macOS applies
-    // the permission granted to the companion app instead of a child executable.
-    const systemRuntime = await this.startSource({
-      sourceKind: "system",
-      sourceId: this.options.systemAudioId,
-      open: () => this.systemAudioAdapter.open(),
-    });
-    if (!systemRuntime) await this.startNativeSystemCapture().catch(() => false);
-    const runtimes = [microphoneRuntime, systemRuntime];
+    // Starting an interview must not call getDisplayMedia or request macOS
+    // permissions again. The assistant obtains permissions during its own
+    // startup flow, then sessions reuse the pre-authorized native channel.
+    await this.startNativeSystemCapture().catch(() => false);
+    const runtimes = [microphoneRuntime];
     this.runtimes.push(...runtimes.filter((runtime): runtime is WebAudioSourceRuntime => runtime !== null));
     if (this.runtimes.length > 0) {
       this.options.onCaptureState("capturing");
@@ -421,8 +421,7 @@ export class DesktopRealtimePublisher {
         sourceId: input.sourceId,
         sourceKind: input.sourceKind,
         label: sourceLabel(input.sourceKind),
-        state: "permission-required",
-        stage: "permission-required",
+        state: "reconnecting",
         level: 0,
         active: false,
       });
@@ -597,11 +596,6 @@ export class DesktopRealtimePublisher {
 
   private async startNativeSystemCapture(): Promise<boolean> {
     if (!window.offersteady?.startNativeAudioStream || !window.offersteady?.onNativeAudioEvent) return false;
-    const screenPermissionGranted = await window.offersteady.requestScreenCaptureAccess?.().catch(() => false);
-    if (screenPermissionGranted === false) {
-      this.options.onFailure("电脑输出需要屏幕录制权限。请在系统设置中允许面试稳伴随程序录制屏幕，然后重新打开助手。");
-      return false;
-    }
     const segmenters = new Map<AudioSourceKind, SpeechSegmenter>([
       ["microphone", new SpeechSegmenter("microphone")],
       ["system", new SpeechSegmenter("system")],
@@ -617,8 +611,7 @@ export class DesktopRealtimePublisher {
         sourceId,
         sourceKind,
         label: sourceLabel(sourceKind),
-        state: "permission-required",
-        stage: "permission-required",
+        state: "reconnecting",
         level: 0,
         active: false,
       });

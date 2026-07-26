@@ -50,12 +50,15 @@ describe("web application states", () => {
 
   it.each([
     ["reconnecting", "设备正在重连"],
-    ["permission-required", "需要麦克风与系统音频权限"],
+    ["permission-required", "助手采集能力不可用"],
     ["error", "桌面设备连接异常"],
   ] as const)("provides recovery for desktop state %s", (captureState, message) => {
     renderState("/app/interviews/demo/live", state => { state.captureState = captureState; });
     expect(screen.getAllByText(message).length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("button", { name: captureState === "permission-required" ? "已完成授权" : "重新诊断" }));
+    if (captureState === "permission-required") {
+      expect(screen.getByText(/网页不会申请麦克风或屏幕权限/)).toBeInTheDocument();
+    }
+    fireEvent.click(screen.getByRole("button", { name: captureState === "permission-required" ? "关闭提示" : "重新诊断" }));
     expect(screen.getByText("等待开始面试")).toBeInTheDocument();
   });
 

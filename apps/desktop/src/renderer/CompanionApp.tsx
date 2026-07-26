@@ -547,10 +547,10 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
     } catch (error) {
       if (!options?.silent) {
         const message = error instanceof Error ? error.message : "后端登记失败";
-        setState("permission-required");
+        setState("not-connected");
         setConnectionNotice("未连接");
         setConnectionInfo(`登记失败：${message}。请确认后端服务已启动后重试。`);
-        window.offersteady?.publishCaptureState("permission-required");
+        window.offersteady?.publishCaptureState("not-connected");
       }
       return false;
     }
