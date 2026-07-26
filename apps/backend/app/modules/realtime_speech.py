@@ -288,7 +288,7 @@ async def stream_session_runtime(
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> StreamingResponse:
     resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
-    service.get_runtime(user_id=resolved_user_id, session_id=session_id)
+    await asyncio.to_thread(service.get_runtime, user_id=resolved_user_id, session_id=session_id)
 
     async def event_stream():
         last_cursor = cursor
@@ -298,7 +298,10 @@ async def stream_session_runtime(
             if await request.is_disconnected():
                 break
             stream_cursor = getattr(service.repository, "get_event_stream_version", None)
-            current_cursor = stream_cursor(session_id=session_id) if callable(stream_cursor) else service.repository.get_session_activity_version(session_id=session_id)
+            current_cursor = await asyncio.to_thread(
+                stream_cursor if callable(stream_cursor) else service.repository.get_session_activity_version,
+                session_id=session_id,
+            )
             if not initial and current_cursor <= last_cursor:
                 idle_polls += 1
                 if idle_polls >= 100:
@@ -307,10 +310,12 @@ async def stream_session_runtime(
                 await asyncio.sleep(0.1)
                 continue
             idle_polls = 0
-            runtime = service.get_runtime(user_id=resolved_user_id, session_id=session_id)
-            transcripts = service.list_transcripts(user_id=resolved_user_id, session_id=session_id)
-            candidates = service.list_candidates(user_id=resolved_user_id, session_id=session_id)
-            events = service.list_events(user_id=resolved_user_id, session_id=session_id)
+            runtime, transcripts, candidates, events = await asyncio.gather(
+                asyncio.to_thread(service.get_runtime, user_id=resolved_user_id, session_id=session_id),
+                asyncio.to_thread(service.list_transcripts, user_id=resolved_user_id, session_id=session_id),
+                asyncio.to_thread(service.list_candidates, user_id=resolved_user_id, session_id=session_id),
+                asyncio.to_thread(service.list_events, user_id=resolved_user_id, session_id=session_id),
+            )
             payload = {
                 "type": "snapshot",
                 "transcripts": transcripts.model_dump(by_alias=True),

@@ -83,6 +83,13 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
             return None
         return replace(sorted(items, key=lambda item: (item.bound_at_ms, item.session_id))[-1])
 
+    def list_session_desktop_bindings_for_device(self, *, device_id: str, manual_code: str) -> list[SessionDesktopBindingRecord]:
+        items = [
+            item for item in self.session_bindings.values()
+            if item.device_id == device_id and item.manual_code == manual_code
+        ]
+        return [replace(item) for item in sorted(items, key=lambda item: (item.bound_at_ms, item.session_id))]
+
     def save_publisher(self, publisher: RealtimePublisherRecord) -> RealtimePublisherRecord:
         stored = replace(publisher)
         self.publishers_by_id[stored.publisher_id] = stored

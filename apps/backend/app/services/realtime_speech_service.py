@@ -232,6 +232,22 @@ class RealtimeSpeechService:
         if device is None:
             raise DomainRequestError("realtime-speech", "bind-device", "未找到对应机器码。请确认电脑伴随程序已打开，并输入 6 位验证码。", 404)
         now_ms = _now_ms()
+        previous_bindings = self.repository.list_session_desktop_bindings_for_device(
+            device_id=device.device_id,
+            manual_code=device.manual_code,
+        )
+        for previous in previous_bindings:
+            if previous.session_id == session_id or previous.status != "bound":
+                continue
+            self.repository.save_session_desktop_binding(replace(previous, status="stale"))
+            for publisher in self.repository.list_publishers_for_session(session_id=previous.session_id):
+                if publisher.owner_user_id != user_id or publisher.status in {"closed", "failed"}:
+                    continue
+                self.repository.save_publisher(replace(
+                    publisher,
+                    disconnected_at_ms=now_ms,
+                    status="closed",
+                ))
         binding = self.repository.save_session_desktop_binding(SessionDesktopBindingRecord(
             binding_id=f"desktop-binding-{uuid4().hex}",
             session_id=session_id,
@@ -1577,6 +1593,8 @@ class RealtimeSpeechService:
         publisher = self.repository.get_publisher_by_token(token)
         if publisher is None:
             raise DomainRequestError("realtime-speech", "publisher-token", "实时语音发布令牌无效。", 404)
+        if publisher.status in {"closed", "failed"}:
+            raise DomainRequestError("realtime-speech", "publisher-token", "该发布通道已被新的面试会话替换。", 410)
         return publisher
 
     def _require_candidate(self, *, user_id: str, candidate_id: str) -> QuestionCandidateRecord:

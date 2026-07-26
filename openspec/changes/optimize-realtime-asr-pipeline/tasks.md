@@ -19,6 +19,7 @@
 - [x] 3.3 Implement source-local producer-consumer workers that send incremental audio, reconcile partial/final transcript events, and avoid synchronous request blocking.
 - [x] 3.4 Add worker lifecycle, idle timeout, error recovery, and rollback-safe feature flags for the new pipeline.
 - [x] 3.5 Coalesce adjacent incremental PCM frames under backlog while preserving all audio bytes and final delivery.
+- [x] 3.6 Atomically supersede stale device bindings and publisher tokens when the same desktop moves to a new interview.
 
 ## 4. Web Transcript Streaming and Overlay Efficiency
 
@@ -30,6 +31,7 @@
 - [x] 4.6 Make desktop registration startup-only in the renderer and heartbeat-only in the main process.
 - [x] 4.7 Reset transient live state for newly created sessions and enforce session-scoped transcript reconciliation.
 - [x] 4.8 Circuit-break invalid-session SSE recovery so polling, focus events, and reconnect timers cannot form a retry storm.
+- [x] 4.9 Exit invalid live routes immediately and move synchronous Redis SSE reads off the FastAPI event loop.
 
 ## 5. Verification, Evals, and Rollout
 

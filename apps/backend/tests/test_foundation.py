@@ -1817,6 +1817,27 @@ def test_desktop_machine_code_registers_and_binds_to_interview_session() -> None
     assert bound_status["sessionStatus"] == "preparing"
     assert bound_status["binding"]["sessionId"] == session_id
 
+    next_session = unwrap(client.post("/api/v1/sessions", json={
+        "userId": "desktop-binding-user",
+        "title": "新的机器码绑定测试",
+    }))
+    next_binding = unwrap(client.post(f"/api/v1/realtime-speech/sessions/{next_session['sessionId']}/desktop-binding", json={
+        "userId": "desktop-binding-user",
+        "manualCode": "654321",
+    }))
+    assert next_binding["status"] == "bound"
+    assert next_binding["sessionId"] == next_session["sessionId"]
+    previous_binding = unwrap(client.get(
+        f"/api/v1/realtime-speech/sessions/{session_id}/desktop-binding",
+        params={"userId": "desktop-binding-user"},
+    ))
+    assert previous_binding["status"] == "stale"
+    current_binding = unwrap(client.get(
+        "/api/v1/realtime-speech/desktop-devices/device-stable-mac/binding",
+        params={"manualCode": "654321"},
+    ))
+    assert current_binding["sessionId"] == next_session["sessionId"]
+
     next_device = unwrap(client.post("/api/v1/realtime-speech/desktop-devices/register", json={
         "deviceId": "device-new-generation",
         "manualCode": "654321",

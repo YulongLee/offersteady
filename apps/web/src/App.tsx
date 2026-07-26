@@ -668,7 +668,13 @@ function LivePage() {
         if (stopped || realtimeController.signal.aborted) return;
         realtimeStreamHealthy = false;
         const status = realtimeErrorStatus(error);
-        if (!isInvalidRealtimeSessionStatus(status)) await loadRealtime();
+        if (isInvalidRealtimeSessionStatus(status)) {
+          window.sessionStorage?.removeItem(`offersteady:realtime-cursor:${id}`);
+          setNotice("当前面试会话已失效，已退出旧实时页面。请从面试首页进入当前面试。");
+          navigate(routes.app, { replace: true });
+          return;
+        }
+        await loadRealtime();
         scheduleReconnect(status);
       } finally {
         realtimeSubscribeInFlight = false;
@@ -714,7 +720,7 @@ function LivePage() {
       window.removeEventListener("focus", resumeRealtime);
       window.removeEventListener("online", resumeRealtime);
     };
-  }, [id, setState]);
+  }, [id, navigate, setState]);
   const scopedAdvice = {
     ...active.advice,
     detail: selectedContextSources.length ? active.advice.detail : "当前没有选择个人资料。请使用通用结构组织回答，并只补充你能够核对的真实经历、职责和结果。",

@@ -137,6 +137,7 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
     def get_session_desktop_binding(self, *, user_id, session_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_session_desktop_binding(user_id=user_id, session_id=session_id))
     def get_latest_session_desktop_binding_for_device(self, *, device_id, manual_code): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_latest_session_desktop_binding_for_device(device_id=device_id, manual_code=manual_code))
     def get_latest_session_desktop_binding_by_code(self, *, manual_code): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_latest_session_desktop_binding_by_code(manual_code=manual_code))
+    def list_session_desktop_bindings_for_device(self, *, device_id, manual_code): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_session_desktop_bindings_for_device(device_id=device_id, manual_code=manual_code))
     def save_web_session_heartbeat(self, heartbeat): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_web_session_heartbeat(heartbeat))
     def get_web_session_heartbeat(self, *, user_id, session_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_web_session_heartbeat(user_id=user_id, session_id=session_id))
     def save_publisher(self, publisher): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_publisher(publisher))
