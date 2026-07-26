@@ -20,6 +20,7 @@ import { AnswerActionBar } from "./AnswerActionBar";
 import { ABSOLUTE_MAX_SPLIT_RATIO, ABSOLUTE_MIN_SPLIT_RATIO, clampSplitRatio, initialLiveWorkspaceView, isolateRealtimeSpeakerSession, noteNewAnswer, parseStoredSplitRatio, reconcileRealtimeSpeaker, resetTransientInterviewState, serializeSplitRatio, splitRatioBounds, splitRatioStorageKey } from "./live-workspace";
 import { WorkspaceDivider } from "./WorkspaceDivider";
 import { authClient } from "./auth-client";
+import { isInvalidRealtimeSessionStatus, realtimeRetryDelayMs } from "./realtime-recovery";
 import "./styles.css";
 
 interface PrototypeContextValue {
@@ -581,6 +582,7 @@ function LivePage() {
     let lastBindingRefreshAt = 0;
     let reconnectTimer: number | null = null;
     let reconnectAttempt = 0;
+    let invalidSessionSuspended = false;
     let realtimeSubscribeInFlight = false;
     let realtimeStreamHealthy = false;
     let realtimeRenderFrame: number | null = null;
@@ -591,10 +593,6 @@ function LivePage() {
       if (typeof error === "object" && error !== null && "status" in error && typeof error.status === "number") return error.status;
       const match = error instanceof Error ? error.message.match(/[（(](\d{3})[）)]/) : null;
       return match ? Number(match[1]) : null;
-    };
-    const retryDelayMs = (status: number | null) => {
-      if (status === 401 || status === 403 || status === 404) return 15_000;
-      return Math.min(15_000, 1_000 * 2 ** Math.min(reconnectAttempt, 4));
     };
     const applyRealtimeState = (realtime: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => {
       if (stopped) return;
@@ -645,10 +643,12 @@ function LivePage() {
     const scheduleReconnect = (status: number | null = null) => {
       if (stopped || realtimeController.signal.aborted) return;
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
-      const delay = retryDelayMs(status);
+      invalidSessionSuspended = isInvalidRealtimeSessionStatus(status);
+      const delay = realtimeRetryDelayMs(status, reconnectAttempt);
       reconnectAttempt += 1;
       reconnectTimer = window.setTimeout(() => {
         reconnectTimer = null;
+        invalidSessionSuspended = false;
         void subscribeRealtime();
       }, delay);
     };
@@ -658,6 +658,7 @@ function LivePage() {
       try {
         await runAdapterOperation(signal => interviewAppAdapter.subscribeRealtimeSession(id, realtime => {
           realtimeStreamHealthy = true;
+          invalidSessionSuspended = false;
           reconnectAttempt = 0;
           applyRealtimeState(realtime);
         }, signal), realtimeController.signal);
@@ -666,8 +667,9 @@ function LivePage() {
       } catch (error) {
         if (stopped || realtimeController.signal.aborted) return;
         realtimeStreamHealthy = false;
-        await loadRealtime();
-        scheduleReconnect(realtimeErrorStatus(error));
+        const status = realtimeErrorStatus(error);
+        if (!isInvalidRealtimeSessionStatus(status)) await loadRealtime();
+        scheduleReconnect(status);
       } finally {
         realtimeSubscribeInFlight = false;
       }
@@ -675,7 +677,7 @@ function LivePage() {
     void sendHeartbeat();
     const heartbeatTimer = window.setInterval(() => void sendHeartbeat(), 15_000);
     const realtimePollTimer = window.setInterval(() => {
-      if (realtimeStreamHealthy) return;
+      if (realtimeStreamHealthy || invalidSessionSuspended) return;
       void loadRealtime().then(loaded => {
         if (loaded && !realtimeSubscribeInFlight && reconnectTimer === null) {
           reconnectAttempt = 0;
@@ -686,6 +688,7 @@ function LivePage() {
     const resumeRealtime = () => {
       if (stopped || document.visibilityState !== "visible") return;
       void sendHeartbeat();
+      if (invalidSessionSuspended) return;
       if (!realtimeStreamHealthy && !realtimeSubscribeInFlight) {
         if (reconnectTimer !== null) {
           window.clearTimeout(reconnectTimer);

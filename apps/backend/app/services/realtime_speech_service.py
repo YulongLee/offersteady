@@ -668,12 +668,56 @@ class RealtimeSpeechService:
                         self._frame_queues.pop(key, None)
                         return
                     continue
+            jobs = [job]
+            for _ in range(max(0, self.settings.realtime_ingress_coalesce_max_frames - 1)):
+                try:
+                    jobs.append(work_queue.get_nowait())
+                except queue.Empty:
+                    break
             try:
-                self._process_prepared_audio_frame(job)
-            except DomainRequestError:
-                pass
+                for prepared in self._coalesce_prepared_frame_jobs(jobs):
+                    try:
+                        self._process_prepared_audio_frame(prepared)
+                    except DomainRequestError:
+                        pass
             finally:
-                work_queue.task_done()
+                for _ in jobs:
+                    work_queue.task_done()
+                self._counter_bucket(session_id=key[0], source_kind=key[1])["queueDepth"] = work_queue.qsize()
+
+    @staticmethod
+    def _coalesce_prepared_frame_jobs(jobs: list[dict[str, object]]) -> list[dict[str, object]]:
+        """Combine adjacent incremental PCM frames without dropping their audio."""
+        coalesced: list[dict[str, object]] = []
+        for job in jobs:
+            frame = job.get("frame")
+            if not isinstance(frame, AudioFrame) or not coalesced:
+                coalesced.append(job)
+                continue
+            previous = coalesced[-1]
+            previous_frame = previous.get("frame")
+            can_merge = (
+                isinstance(previous_frame, AudioFrame)
+                and not previous_frame.is_final
+                and previous_frame.segment_id == frame.segment_id
+                and previous_frame.source_kind == frame.source_kind
+                and previous_frame.codec == frame.codec
+                and previous_frame.sample_rate_hz == frame.sample_rate_hz
+                and previous_frame.channels == frame.channels
+            )
+            if not can_merge:
+                coalesced.append(job)
+                continue
+            merged = dict(job)
+            merged["frame"] = replace(
+                frame,
+                started_at_ms=min(previous_frame.started_at_ms, frame.started_at_ms),
+                duration_ms=max(20, frame.ended_at_ms - min(previous_frame.started_at_ms, frame.started_at_ms)),
+                audio_bytes=previous_frame.audio_bytes + frame.audio_bytes,
+            )
+            merged["coalesced_frame_count"] = int(previous.get("coalesced_frame_count", 1)) + 1
+            coalesced[-1] = merged
+        return coalesced
 
     def _prepare_audio_frame(
         self,

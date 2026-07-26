@@ -122,6 +122,7 @@ class Settings(BaseSettings):
     realtime_legacy_http_enabled: bool = True
     realtime_ingress_queue_max_frames: int = 64
     realtime_ingress_max_frames_per_second: int = 120
+    realtime_ingress_coalesce_max_frames: int = 4
     realtime_event_retention: int = 1000
     realtime_runtime_ttl_seconds: int = 7200
     realtime_transcript_persistence_enabled: bool = False

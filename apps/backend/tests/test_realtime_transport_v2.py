@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import base64
+from dataclasses import replace
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
 from app.main import create_app
+from app.ports.realtime_speech import AudioFrame
+from app.services.realtime_speech_service import RealtimeSpeechService
 
 
 client = TestClient(create_app())
@@ -93,3 +96,58 @@ def test_realtime_metrics_are_privacy_safe():
     serialized = str(metrics).lower()
     assert "audiobase64" not in serialized
     assert "transcripttext" not in serialized
+
+
+def test_realtime_worker_coalesces_backlogged_incremental_pcm_and_preserves_final():
+    first = AudioFrame(
+        publisher_id="publisher-1",
+        session_id="session-1",
+        device_id="device-1",
+        source_id="mic-1",
+        source_kind="microphone",
+        segment_id="segment-1",
+        revision=1,
+        sequence=0,
+        captured_at_ms=100,
+        started_at_ms=100,
+        ended_at_ms=250,
+        duration_ms=150,
+        codec="pcm-s16le",
+        sample_rate_hz=16000,
+        channels=1,
+        is_final=False,
+        audio_bytes=b"first",
+    )
+    partial = replace(
+        first,
+        revision=2,
+        sequence=1,
+        captured_at_ms=250,
+        ended_at_ms=400,
+        audio_bytes=b"second",
+    )
+    final = replace(
+        first,
+        revision=3,
+        sequence=2,
+        captured_at_ms=400,
+        ended_at_ms=520,
+        is_final=True,
+        audio_bytes=b"final",
+    )
+
+    coalesced = RealtimeSpeechService._coalesce_prepared_frame_jobs([
+        {"frame": first},
+        {"frame": partial},
+        {"frame": final},
+    ])
+
+    assert len(coalesced) == 1
+    merged = coalesced[0]["frame"]
+    assert isinstance(merged, AudioFrame)
+    assert merged.audio_bytes == b"firstsecondfinal"
+    assert merged.sequence == 2
+    assert merged.revision == 3
+    assert merged.is_final is True
+    assert merged.started_at_ms == 100
+    assert merged.ended_at_ms == 520
