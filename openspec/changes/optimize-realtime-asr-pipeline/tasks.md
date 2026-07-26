@@ -37,5 +37,6 @@
 
 - [x] 5.1 Add regression tests for non-blocking ingest, persistent ASR reuse, partial overwrite behavior, and silence/empty-result suppression.
 - [x] 5.4 Add regression coverage proving a new interview cannot inherit transcripts, pending questions, or answer tasks from a prior session.
+- [x] 5.5 Restrict filler suppression to pure vocal fillers and preserve meaningful short Chinese responses.
 - [ ] 5.2 Add or update evals / performance checks for TTFT, final transcript latency, dropped-partial policy, and transcript stability under burst traffic.
 - [ ] 5.3 Run end-to-end validation with the desktop companion, backend, and web live page; compare against the recorded baseline and document rollout / rollback guidance.

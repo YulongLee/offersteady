@@ -733,25 +733,13 @@ var retainedSystemAudioOutput: SystemAudioStreamOutput?
 
 @available(macOS 12.3, *)
 func streamSystemAudioWithScreenCaptureKit(sourceId: String) async throws -> Never {
-    let screen = screenPermissionName()
     let source = sourceId.isEmpty ? "native-system-output" : sourceId
-    if screen != "granted" {
-        try writeJson(NativeAudioStreamEvent(
-            type: "status",
-            sourceKind: "system",
-            sourceId: source,
-            capturedAtMs: nil,
-            durationMs: nil,
-            sampleRateHz: nil,
-            channels: nil,
-            level: 0,
-            audioBase64: nil,
-            errorCode: "screen-capture-permission-required",
-            message: "Screen capture/system audio permission is not granted for this app identity."
-        ))
-        fflush(stdout)
-        throw NSError(domain: "OfferSteadyCaptureRuntime", code: 67, userInfo: [NSLocalizedDescriptionKey: "Screen capture permission is required."])
-    }
+    // Do not gate ScreenCaptureKit with CGPreflightScreenCaptureAccess().
+    // The capture runtime is an embedded child process, while macOS records
+    // screen-capture consent against the responsible application. The helper
+    // preflight can therefore report false even when the parent app is
+    // authorized. Starting the real stream is the authoritative permission
+    // check and returns an actionable error when access is actually denied.
     let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
     guard let display = content.displays.first else {
         try writeJson(NativeAudioStreamEvent(

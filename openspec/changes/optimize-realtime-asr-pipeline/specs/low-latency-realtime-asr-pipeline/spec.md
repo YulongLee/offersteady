@@ -66,6 +66,10 @@
 - **WHEN** ASR 返回空白、仅空格或无有效文本的 partial/final 结果
 - **THEN** 系统丢弃该结果，不更新实时对话区
 
+#### Scenario: ASR returns a meaningful short Chinese response
+- **WHEN** ASR 返回“好的”“是的”“对”“行”等具有明确语义的中文短句
+- **THEN** 系统将该短句作为有效实时字幕发布，不得仅因字数较短或属于常见回答而抑制
+
 ### Requirement: Realtime subscription recovery SHALL avoid retry storms
 网页端 MUST 在当前 session 的 SSE 通道健康时停止全量降级轮询，并 MUST 在连接中断时采用有上限的退避策略。身份失效或 session 不存在时，系统 MUST NOT 使用亚秒级固定间隔持续重试。
 

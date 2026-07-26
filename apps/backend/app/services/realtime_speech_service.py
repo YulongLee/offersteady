@@ -1028,7 +1028,7 @@ class RealtimeSpeechService:
                     payload={
                         "reason": "filler-transcript-suppressed",
                         "sourceKind": source_kind,
-                        "message": "检测到口头语或极短碎片发言，系统已忽略本段结果。",
+                        "message": "检测到纯语气音，系统已忽略本段结果。",
                     },
                 )))
             if transcript_result.suppressed_reason == "repetitive-transcript":
@@ -1547,18 +1547,15 @@ class RealtimeSpeechService:
         if not compact:
             return True
         filler_tokens = (
-            "嗯", "啊", "呃", "额", "唉", "诶", "欸", "哦", "喔", "哎",
-            "那个", "这个", "就是", "然后", "对", "是的", "好的", "行", "好", "哈", "嘿",
+            "嗯", "啊", "呃", "额", "唉", "诶", "欸", "哦", "喔", "哎", "哈", "嘿",
         )
-        if len(compact) <= 4 and compact in filler_tokens:
+        if compact in filler_tokens:
             return True
         if compact.lower() in {"system", "assistant", "test"}:
             return True
         filler_pattern = "|".join(sorted((re.escape(item) for item in filler_tokens), key=len, reverse=True))
         stripped = re.sub(f"({filler_pattern})+", "", compact)
         if not stripped and len(compact) <= 12:
-            return True
-        if source_kind == "microphone" and len(compact) <= 8 and re.fullmatch(r"(.)\1{1,}", compact):
             return True
         return False
 

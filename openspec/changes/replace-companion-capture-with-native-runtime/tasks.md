@@ -13,6 +13,7 @@
 - [ ] 2.3 Implement computer-output capture using ScreenCaptureKit or an approved native path and emit level/PCM frame events.
 - [ ] 2.4 Implement selected-display screen preview frame capture using the same runtime boundary.
 - [x] 2.5 Add runtime process health checks and packaging validation so a package missing the native helper is marked invalid.
+- [x] 2.6 Use the real ScreenCaptureKit stream result as the system-audio permission authority instead of blocking capture on a child-process preflight result.
 
 ## 3. Fresh Binding and Heartbeats
 
