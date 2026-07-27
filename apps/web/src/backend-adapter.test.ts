@@ -121,7 +121,11 @@ describe("backend preview adapter", () => {
         const encoder = new TextEncoder();
         controller.enqueue(encoder.encode(`event: task-started\ndata: ${JSON.stringify({
           type: "task-started",
-          task: { taskId: "task-stream", sessionId: "session-1", ownerUserId: "user-1", question: "如何设计流式回答？", answerText: "", status: "streaming", updatedAtMs: 1, chunks: [] },
+          task: { taskId: "task-stream", sessionId: "session-1", ownerUserId: "user-1", question: "你说流式 然后怎么设计", rawQuestion: "你说流式 然后怎么设计", questionNormalizationStatus: "pending", answerText: "", status: "streaming", updatedAtMs: 1, chunks: [] },
+        })}\n\n`));
+        controller.enqueue(encoder.encode(`event: question-normalized\ndata: ${JSON.stringify({
+          type: "question-normalized",
+          task: { taskId: "task-stream", sessionId: "session-1", ownerUserId: "user-1", question: "如何设计流式回答？", rawQuestion: "你说流式 然后怎么设计", normalizedQuestion: "如何设计流式回答？", questionNormalizationStatus: "completed", answerText: "", status: "streaming", updatedAtMs: 2, chunks: [] },
         })}\n\n`));
         controller.enqueue(encoder.encode(`event: chunk\ndata: ${JSON.stringify({
           type: "chunk",
@@ -141,16 +145,21 @@ describe("backend preview adapter", () => {
     }));
     const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
     const updates: string[] = [];
+    const questionUpdates: string[] = [];
     const result = await adapter.submitManualAnswer(
       { interviewId: "session-1", question: "如何设计流式回答？", idempotencyKey: "manual:stream" },
       undefined,
-      update => updates.push(update.result.question.advice.detail),
+      update => {
+        updates.push(update.result.question.advice.detail);
+        questionUpdates.push(update.result.question.text);
+      },
     );
     expect(fetchImpl).toHaveBeenCalledWith("http://localhost:8000/api/v1/live-answer/questions/stream", expect.objectContaining({
       method: "POST",
       headers: expect.objectContaining({ Accept: "text/event-stream" }),
     }));
     expect(updates).toContain("先展示首段。");
+    expect(questionUpdates).toContain("如何设计流式回答？");
     expect(result.task.status).toBe("completed");
     expect(result.question.advice.detail).toBe("先展示首段。再补充细节。");
   });

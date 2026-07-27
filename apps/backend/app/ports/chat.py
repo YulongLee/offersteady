@@ -7,6 +7,7 @@ from typing import Literal, Protocol
 
 AnswerTaskStatus = Literal["queued", "streaming", "completed", "failed", "cancelled"]
 ChatFinishReason = Literal["completed", "failed", "cancelled", "retry-exhausted"]
+QuestionNormalizationStatus = Literal["pending", "completed", "fallback", "not-requested"]
 
 
 @dataclass(frozen=True)
@@ -86,6 +87,9 @@ class ChatAnswerTaskRecord:
     answer_text: str
     status: AnswerTaskStatus
     stream_mode: bool
+    raw_question: str | None = None
+    normalized_question: str | None = None
+    question_normalization_status: QuestionNormalizationStatus = "not-requested"
     provider_name: str | None = None
     model_name: str | None = None
     prompt_template_id: str | None = None

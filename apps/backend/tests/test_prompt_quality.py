@@ -55,8 +55,25 @@ def test_vision_gateway_extracts_direct_and_legacy_json_answers() -> None:
     assert OpenAICompatibleVisionGateway._extract_final_answer(fenced_legacy) == direct
 
 def test_eval_fixtures_are_synthetic() -> None:
-    paths = [ROOT / "ai/evals/interview-answer-quality-v4.jsonl", ROOT / "ai/evals/screenshot-answer-quality-v2.jsonl"]
+    paths = [ROOT / "ai/evals/interview-answer-quality-v4.jsonl", ROOT / "ai/evals/screenshot-answer-quality-v2.jsonl", ROOT / "ai/evals/question-normalization-v1.jsonl"]
     records = [json.loads(line) for path in paths for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
     assert all(item["synthetic"] is True for item in records)
     ids = {item["id"] for item in records}
-    assert {"quick-detail-consistent", "resume-injection", "algorithm-complete", "unreadable-schema"} <= ids
+    assert {"quick-detail-consistent", "resume-injection", "algorithm-complete", "unreadable-schema", "fragmented-rag-question", "referential-follow-up"} <= ids
+
+
+def test_quick_question_envelope_parser_preserves_raw_fallback() -> None:
+    from app.services.chat_service import _resolve_normalized_question
+
+    normalized, answer, status = _resolve_normalized_question(
+        "<normalized_question>资料很多时，如何保证 RAG 的召回率和准确率？</normalized_question>\n从检索评测开始。",
+        "资料很多 召回准确率 怎么保证",
+    )
+    assert normalized == "资料很多时，如何保证 RAG 的召回率和准确率？"
+    assert answer == "从检索评测开始。"
+    assert status == "completed"
+
+    normalized, answer, status = _resolve_normalized_question("直接回答原始内容。", "资料很多 召回准确率 怎么保证")
+    assert normalized == "资料很多 召回准确率 怎么保证"
+    assert answer == "直接回答原始内容。"
+    assert status == "fallback"

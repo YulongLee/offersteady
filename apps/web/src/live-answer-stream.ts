@@ -1,6 +1,6 @@
 import type { SubmitManualAnswerResult } from "./domain";
 
-export type LiveAnswerStreamEventType = "task-started" | "chunk" | "completed" | "failed" | "cancelled";
+export type LiveAnswerStreamEventType = "task-started" | "question-normalized" | "chunk" | "completed" | "failed" | "cancelled";
 
 export interface LiveAnswerStreamEvent {
   readonly type: LiveAnswerStreamEventType;

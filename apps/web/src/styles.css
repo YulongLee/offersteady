@@ -324,6 +324,9 @@ h1, h2, h3, p { margin-top: 0; }
 .question-state { display: flex; align-items: center; gap: 8px; color: var(--brand); font-size: 9px; font-weight: 700; }
 .question-state i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .question-block small { color: var(--muted); font-size: 8px; }
+.normalized-question-label { display: inline-flex; margin-top: 15px; color: var(--brand); font-size: 8px; font-weight: 800; letter-spacing: .12em; }
+.normalized-question-label.pending { color: var(--warning); }
+.normalized-question-label.fallback { color: var(--muted); }
 .question-block h1 { overflow-wrap: anywhere; margin: 15px 0 0; font-size: clamp(23px, 3vw, 34px); line-height: 1.38; letter-spacing: -.025em; }
 .recovery-banner { display: flex; justify-content: space-between; align-items: center; gap: 14px; border: 1px solid rgba(243,189,96,.2); border-radius: 11px; background: rgba(243,189,96,.06); padding: 12px; margin-bottom: 13px; }
 .recovery-banner div { display: flex; flex-direction: column; gap: 4px; }

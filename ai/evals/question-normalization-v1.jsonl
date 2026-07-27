@@ -1,0 +1,5 @@
+{"id":"fragmented-rag-question","raw_question":"你刚才说用了 RAG 那资料很多的时候 召回准确率 你们怎么保证","recent_context":[],"expected_normalized_question":"当资料量较大时，如何保证 RAG 检索的召回率和准确率？","must_preserve":["RAG","召回率","准确率"],"must_not_invent":[],"synthetic":true}
+{"id":"repeated-partial-question","raw_question":"你是怎么监控的 具体怎么监控 这个系统具体怎么监控","recent_context":["面试官正在询问前端监控系统。"],"expected_normalized_question":"这个前端监控系统具体是如何监控的？","must_preserve":["监控系统"],"must_not_invent":["告警平台"],"synthetic":true}
+{"id":"referential-follow-up","raw_question":"那这个方案有什么缺点","recent_context":["上一轮讨论的是使用消息队列削峰。"],"expected_normalized_question":"使用消息队列削峰的方案有什么缺点？","must_preserve":["消息队列","缺点"],"must_not_invent":["Kafka"],"synthetic":true}
+{"id":"multiple-subquestions","raw_question":"为什么选这个模型 然后你们怎么评估 上线后怎么监控","recent_context":["上一轮讨论的是推荐系统排序模型。"],"expected_normalized_question":"为什么选择这个推荐系统排序模型，如何评估效果，以及上线后如何监控？","must_preserve":["为什么选择","评估","监控"],"must_not_invent":[],"synthetic":true}
+{"id":"ambiguous-reference-preserved","raw_question":"这个你当时具体怎么处理的","recent_context":[],"expected_normalized_question":"这个问题你当时具体是怎么处理的？","must_preserve":["这个","怎么处理"],"must_not_invent":["项目","故障"],"synthetic":true}

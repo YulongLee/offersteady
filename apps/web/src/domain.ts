@@ -38,6 +38,8 @@ export interface InterviewQuestion {
   readonly id: string;
   readonly askedAt: string;
   readonly text: string;
+  readonly rawText?: string;
+  readonly questionNormalizationStatus?: "pending" | "completed" | "fallback" | "not-requested";
   readonly input: "desktop-audio" | "manual" | "screenshot";
   readonly status: QuestionStatus;
   readonly advice: AnswerAdvice;

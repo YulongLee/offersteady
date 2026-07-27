@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from typing import Literal
 
-from app.ports.chat import AnswerTaskStatus
+from app.ports.chat import AnswerTaskStatus, QuestionNormalizationStatus
 from app.schemas.retrieval import RetrievalResponse
 
 
@@ -29,6 +29,9 @@ class LiveAnswerTaskResponse(BaseModel):
     session_id: str = Field(alias="sessionId")
     owner_user_id: str = Field(alias="ownerUserId")
     question: str
+    raw_question: str | None = Field(default=None, alias="rawQuestion")
+    normalized_question: str | None = Field(default=None, alias="normalizedQuestion")
+    question_normalization_status: QuestionNormalizationStatus = Field(default="not-requested", alias="questionNormalizationStatus")
     answer_text: str = Field(alias="answerText")
     status: AnswerTaskStatus
     stream_mode: bool = Field(alias="streamMode")
@@ -57,7 +60,7 @@ class LiveAnswerResponse(BaseModel):
     retrieval: RetrievalResponse
 
 
-LiveAnswerStreamEventType = Literal["task-started", "chunk", "completed", "failed", "cancelled"]
+LiveAnswerStreamEventType = Literal["task-started", "question-normalized", "chunk", "completed", "failed", "cancelled"]
 
 
 class LiveAnswerStreamEvent(BaseModel):

@@ -40,6 +40,29 @@ def _now_ms() -> int:
     return int(time() * 1000)
 
 
+_NORMALIZED_QUESTION_OPEN = "<normalized_question>"
+_NORMALIZED_QUESTION_CLOSE = "</normalized_question>"
+_NORMALIZATION_BUFFER_LIMIT = 800
+
+
+def _clean_question_text(value: str) -> str:
+    return " ".join(value.replace("\x00", " ").split()).strip(" `\"'")
+
+
+def _resolve_normalized_question(payload: str, fallback_question: str) -> tuple[str, str, str]:
+    fallback = _clean_question_text(fallback_question)
+    start = payload.find(_NORMALIZED_QUESTION_OPEN)
+    end = payload.find(_NORMALIZED_QUESTION_CLOSE)
+    if start < 0 or end < start:
+        visible = payload.replace(_NORMALIZED_QUESTION_OPEN, "").replace(_NORMALIZED_QUESTION_CLOSE, "").lstrip()
+        return fallback, visible, "fallback"
+    candidate = _clean_question_text(payload[start + len(_NORMALIZED_QUESTION_OPEN):end])
+    visible = payload[end + len(_NORMALIZED_QUESTION_CLOSE):].lstrip()
+    if not candidate or len(candidate) > 500:
+        return fallback, visible, "fallback"
+    return candidate, visible, "completed"
+
+
 class RetryableChatError(Exception):
     def __init__(self, message: str, *, code: str = "chat_provider_unavailable") -> None:
         self.code = code
@@ -180,7 +203,15 @@ class QwenCompatibleGateway(LLMGatewayPort):
         if "__retry_once__" in lowered and attempt == 0:
             raise RetryableChatError("forced_retryable_failure", code="forced_retryable_failure")
         if "__stream_fail_after_chunk__" in lowered:
-            yield ChatAnswerChunk(sequence=1, text="这是已经生成的部分回答。", is_final=False)
+            normalized_question = _clean_question_text(question.replace("__stream_fail_after_chunk__", ""))
+            yield ChatAnswerChunk(
+                sequence=1,
+                text=(
+                    f"{_NORMALIZED_QUESTION_OPEN}{normalized_question}{_NORMALIZED_QUESTION_CLOSE}\n"
+                    "这是已经生成的部分回答。"
+                ),
+                is_final=False,
+            )
             raise RetryableChatError("forced_stream_failure", code="forced_stream_failure")
         if self._should_use_remote_gateway():
             yield from self._stream_with_remote(prompt=prompt)
@@ -368,6 +399,12 @@ class QwenCompatibleGateway(LLMGatewayPort):
         return chunks or [ChatAnswerChunk(sequence=1, text=answer, is_final=True)]
 
     def _compose_answer(self, *, question: str, prompt: PromptBuildResult) -> str:
+        if prompt.prompt_config.template_id == "interview-chat-quick":
+            return (
+                f"{_NORMALIZED_QUESTION_OPEN}{_clean_question_text(question)}"
+                f"{_NORMALIZED_QUESTION_CLOSE}\n"
+                "我会先直接回答核心结论，再用一到两个关键依据说明实现方式和取舍。"
+            )
         evidence_hint = "已结合本场资料和检索依据。" if prompt.retrieval_excerpt_count > 0 else "当前可用资料有限，建议结合你的真实经历补充。"
         return (
             "简要回答\n"
@@ -548,6 +585,8 @@ class ChatService:
                 answer_text="",
                 status="queued",
                 stream_mode=True,
+                raw_question=question.strip(),
+                question_normalization_status="pending",
                 created_at_ms=now_ms,
                 updated_at_ms=now_ms,
             )
@@ -610,6 +649,9 @@ class ChatService:
         yield {"type": "task-started", "task": current_task, "retrieval": self._to_retrieval_response(quick_retrieval)}
         chunks: list[ChatAnswerChunk] = []
         answer_parts: list[str] = []
+        normalization_buffer = ""
+        normalization_resolved = False
+        normalized_question = question.strip()
         last_error: Exception | None = None
         stream_started_at_ms = _now_ms()
         first_token_at_ms: int | None = None
@@ -619,14 +661,6 @@ class ChatService:
                     cancelled = self.repository.get_task(current_task.task_id) or current_task
                     yield {"type": "cancelled", "task": cancelled}
                     return
-                for seed_text in ["简单回答\n"]:
-                    normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=seed_text, is_final=False)
-                    chunks.append(normalized)
-                    answer_parts.append(normalized.text)
-                    current_task = self.repository.save_task(
-                        replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
-                    )
-                    yield {"type": "chunk", "task": current_task, "chunk": normalized}
                 for chunk in self.llm_gateway.stream_generate(question=question, prompt=prompt, attempt=attempt):
                     if self._is_task_cancelled(current_task.task_id):
                         cancelled = self.repository.get_task(current_task.task_id) or current_task
@@ -634,14 +668,64 @@ class ChatService:
                         return
                     if first_token_at_ms is None:
                         first_token_at_ms = _now_ms()
-                    normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=chunk.text, is_final=False)
+                    visible_text = chunk.text
+                    if not normalization_resolved:
+                        normalization_buffer += chunk.text
+                        envelope_complete = _NORMALIZED_QUESTION_CLOSE in normalization_buffer
+                        force_fallback = len(normalization_buffer) >= _NORMALIZATION_BUFFER_LIMIT
+                        if not envelope_complete and not force_fallback:
+                            continue
+                        normalized_question, visible_text, normalization_status = _resolve_normalized_question(
+                            normalization_buffer,
+                            question,
+                        )
+                        normalization_resolved = True
+                        current_task = self.repository.save_task(
+                            replace(
+                                current_task,
+                                question=normalized_question,
+                                raw_question=question.strip(),
+                                normalized_question=normalized_question,
+                                question_normalization_status=normalization_status,
+                                updated_at_ms=_now_ms(),
+                            )
+                        )
+                        yield {"type": "question-normalized", "task": current_task}
+                        visible_text = f"简单回答\n{visible_text}"
+                    if not visible_text:
+                        continue
+                    normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=visible_text, is_final=False)
                     chunks.append(normalized)
                     answer_parts.append(normalized.text)
                     current_task = self.repository.save_task(
                         replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
                     )
                     yield {"type": "chunk", "task": current_task, "chunk": normalized}
-                retrieval = self._retrieve_context(user_id=user_id, session=session, question=question)
+                if not normalization_resolved:
+                    normalized_question, visible_text, normalization_status = _resolve_normalized_question(
+                        normalization_buffer,
+                        question,
+                    )
+                    normalization_resolved = True
+                    current_task = self.repository.save_task(
+                        replace(
+                            current_task,
+                            question=normalized_question,
+                            raw_question=question.strip(),
+                            normalized_question=normalized_question,
+                            question_normalization_status=normalization_status,
+                            updated_at_ms=_now_ms(),
+                        )
+                    )
+                    yield {"type": "question-normalized", "task": current_task}
+                    normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=f"简单回答\n{visible_text}", is_final=False)
+                    chunks.append(normalized)
+                    answer_parts.append(normalized.text)
+                    current_task = self.repository.save_task(
+                        replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
+                    )
+                    yield {"type": "chunk", "task": current_task, "chunk": normalized}
+                retrieval = self._retrieve_context(user_id=user_id, session=session, question=normalized_question)
                 if self._is_task_cancelled(current_task.task_id):
                     cancelled = self.repository.get_task(current_task.task_id) or current_task
                     yield {"type": "cancelled", "task": cancelled}
@@ -650,7 +734,7 @@ class ChatService:
                 detail_system_prompt, detail_prompt_config = self._load_stage_prompt("detail")
                 quick_answer_anchor = "".join(answer_parts).removeprefix("简单回答\n").strip()
                 detail_prompt = self.prompt_builder.build(
-                    question=question,
+                    question=normalized_question,
                     session_title=session.title,
                     system_prompt=detail_system_prompt,
                     conversation_history=[*conversation_history, f"本轮简要回答锚点：{quick_answer_anchor}"],
@@ -686,7 +770,7 @@ class ChatService:
                     replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
                 )
                 yield {"type": "chunk", "task": current_task, "chunk": normalized}
-                for chunk in self.llm_gateway.stream_generate(question=question, prompt=detail_prompt, attempt=attempt):
+                for chunk in self.llm_gateway.stream_generate(question=normalized_question, prompt=detail_prompt, attempt=attempt):
                     if self._is_task_cancelled(current_task.task_id):
                         cancelled = self.repository.get_task(current_task.task_id) or current_task
                         yield {"type": "cancelled", "task": cancelled}

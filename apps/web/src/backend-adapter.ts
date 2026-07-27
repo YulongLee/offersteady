@@ -26,6 +26,9 @@ interface BackendLiveAnswerTaskResponse {
   readonly sessionId: string;
   readonly ownerUserId: string;
   readonly question: string;
+  readonly rawQuestion?: string | null;
+  readonly normalizedQuestion?: string | null;
+  readonly questionNormalizationStatus?: "pending" | "completed" | "fallback" | "not-requested";
   readonly answerText: string;
   readonly status: "queued" | "streaming" | "completed" | "failed" | "cancelled";
   readonly errorMessage?: string | null;
@@ -547,7 +550,9 @@ const toSubmitManualAnswerResult = (task: BackendLiveAnswerTaskResponse): Submit
   question: {
     id: task.taskId,
     askedAt: "刚刚",
-    text: task.question,
+    text: task.normalizedQuestion?.trim() || task.question,
+    ...(task.rawQuestion ? { rawText: task.rawQuestion } : {}),
+    ...(task.questionNormalizationStatus ? { questionNormalizationStatus: task.questionNormalizationStatus } : {}),
     input: "manual",
     status: questionStatusFromTask(task),
     advice: adviceFromLiveAnswerTask(task),
@@ -560,7 +565,7 @@ const toSubmitManualAnswerResult = (task: BackendLiveAnswerTaskResponse): Submit
     questionId: task.taskId,
     revision: 1,
     status: taskStatus(task),
-    question: task.question,
+    question: task.normalizedQuestion?.trim() || task.question,
     ...(task.status === "completed" ? { completedText: answerTextFromTask(task) } : { partialText: answerTextFromTask(task) || "正在调用当前对话模型生成回答…" }),
     provenance: provenanceFromTask(task),
     ...(task.materialContextStatus ? { materialContextStatus: task.materialContextStatus } : {}),
