@@ -162,6 +162,9 @@ class WebSessionHeartbeatRecord:
     page: Literal["preparation", "live"]
     seen_at_ms: int
     binding_id: str | None = None
+    page_instance_id: str | None = None
+    lease_generation: int = 0
+    lease_expires_at_ms: int = 0
 
 
 @dataclass(frozen=True)
@@ -205,6 +208,10 @@ class RealtimeSpeechRepository(Protocol):
     def save_web_session_heartbeat(self, heartbeat: WebSessionHeartbeatRecord) -> WebSessionHeartbeatRecord: ...
 
     def get_web_session_heartbeat(self, *, user_id: str, session_id: str) -> WebSessionHeartbeatRecord | None: ...
+
+    def claim_live_web_session(self, heartbeat: WebSessionHeartbeatRecord) -> WebSessionHeartbeatRecord: ...
+
+    def get_active_live_web_session(self, *, user_id: str) -> WebSessionHeartbeatRecord | None: ...
 
     def save_publisher(self, publisher: RealtimePublisherRecord) -> RealtimePublisherRecord: ...
 

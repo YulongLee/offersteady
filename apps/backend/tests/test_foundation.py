@@ -2067,6 +2067,61 @@ def test_realtime_runtime_tracks_frame_receipts_and_asr_status() -> None:
     assert transcripts["transcripts"][0]["performance"]["traceId"] == "trace-runtime-mic-1"
 
 
+def test_new_live_page_lease_replaces_the_previous_page_instance() -> None:
+    user_id = "single-active-page-user"
+    session = unwrap(client.post("/api/v1/sessions", json={
+        "userId": user_id,
+        "title": "单活页面租约测试",
+    }))
+    session_id = session["sessionId"]
+    unwrap(client.post("/api/v1/realtime-speech/desktop-devices/register", json={
+        "deviceId": "single-active-page-device",
+        "manualCode": "319901",
+        "displayName": "单活页面测试 Mac",
+        "capabilities": {"microphone": True, "systemAudio": True},
+    }))
+    unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/desktop-binding", json={
+        "userId": user_id,
+        "manualCode": "319901",
+    }))
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": user_id}))
+
+    first = unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/web-heartbeat", json={
+        "userId": user_id,
+        "page": "live",
+        "pageInstanceId": "page-instance-first",
+    }))
+    renewed = unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/web-heartbeat", json={
+        "userId": user_id,
+        "page": "live",
+        "pageInstanceId": "page-instance-first",
+    }))
+    unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/web-heartbeat", json={
+        "userId": user_id,
+        "page": "preparation",
+    }))
+    second = unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/web-heartbeat", json={
+        "userId": user_id,
+        "page": "live",
+        "pageInstanceId": "page-instance-second",
+    }))
+
+    assert first["leaseGeneration"] == 1
+    assert renewed["leaseGeneration"] == 1
+    assert second["leaseGeneration"] == 2
+    assert second["pageInstanceId"] == "page-instance-second"
+    stale_stream = client.get(
+        f"/api/v1/realtime-speech/sessions/{session_id}/stream",
+        params={
+            "userId": user_id,
+            "cursor": 0,
+            "pageInstanceId": "page-instance-first",
+            "leaseGeneration": first["leaseGeneration"],
+        },
+    )
+    assert stale_stream.status_code == 409
+
+
 def test_realtime_publisher_replacement_keeps_one_authoritative_channel() -> None:
     user_id = "publisher-replacement-user"
     session = unwrap(client.post("/api/v1/sessions", json={

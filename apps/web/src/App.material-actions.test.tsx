@@ -177,7 +177,7 @@ describe("categorized materials and reachable live actions", () => {
     fireEvent.click(screen.getByRole("button", { name: "确认空资料并继续" }));
     expect(await screen.findByText("已确认不使用个人资料")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /开始面试/ })).toBeDisabled();
-    fireEvent.click(await screen.findByRole("button", { name: "一键连接" }));
+    fireEvent.click(await screen.findByRole("button", { name: "一键连接上次设备" }));
     await waitFor(() => expect(screen.getByRole("button", { name: /开始面试/ })).toBeEnabled());
     expect(screen.queryByRole("checkbox", { name: /数据用途/ })).not.toBeInTheDocument();
   });
@@ -188,7 +188,7 @@ describe("categorized materials and reachable live actions", () => {
       state.preparation = { ...state.preparation, device: { ...device, capabilities: { ...device.capabilities, systemAudio: "denied" } } };
     });
     expect(screen.getByText("本地端会继续检查收音、系统音频和问题检测")).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("button", { name: "一键连接" }));
+    fireEvent.click(await screen.findByRole("button", { name: "一键连接上次设备" }));
     const start = screen.getByRole("button", { name: /开始面试/ });
     await waitFor(() => expect(start).toBeEnabled());
     fireEvent.click(start);
@@ -218,7 +218,7 @@ describe("categorized materials and reachable live actions", () => {
       const device = state.preparation.device!;
       state.preparation = { ...state.preparation, device: { ...device, connected: false, captureState: "not-connected" } };
     });
-    const connect = await screen.findByRole("button", { name: "一键连接" });
+    const connect = await screen.findByRole("button", { name: "一键连接上次设备" });
     fireEvent.click(connect);
     expect(await screen.findByText(/本场已连接：/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /开始面试/ })).toBeEnabled();

@@ -219,6 +219,7 @@ async def web_session_heartbeat(
         session_id=session_id,
         binding_id=request.binding_id,
         page=request.page,
+        page_instance_id=request.page_instance_id,
     )
     return success_response(
         request=request_context,
@@ -228,6 +229,9 @@ async def web_session_heartbeat(
             "bindingId": heartbeat.binding_id,
             "page": heartbeat.page,
             "seenAtMs": heartbeat.seen_at_ms,
+            "pageInstanceId": heartbeat.page_instance_id,
+            "leaseGeneration": heartbeat.lease_generation,
+            "leaseExpiresAtMs": heartbeat.lease_expires_at_ms,
         },
         timestamp=utc_now_iso(),
     )
@@ -308,11 +312,19 @@ async def stream_session_runtime(
     request: Request,
     user_id: str | None = Query(default=None, alias="userId"),
     cursor: int = Query(default=0, ge=0),
+    page_instance_id: str | None = Query(default=None, alias="pageInstanceId"),
+    lease_generation: int | None = Query(default=None, ge=1, alias="leaseGeneration"),
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> StreamingResponse:
     resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
-    await asyncio.to_thread(service.require_active_realtime_session, user_id=resolved_user_id, session_id=session_id)
+    await asyncio.to_thread(
+        service.require_active_realtime_session,
+        user_id=resolved_user_id,
+        session_id=session_id,
+        page_instance_id=page_instance_id,
+        lease_generation=lease_generation,
+    )
 
     async def event_stream():
         last_cursor = cursor
@@ -326,6 +338,8 @@ async def stream_session_runtime(
                     service.require_active_realtime_session,
                     user_id=resolved_user_id,
                     session_id=session_id,
+                    page_instance_id=page_instance_id,
+                    lease_generation=lease_generation,
                 )
             except DomainRequestError:
                 yield _sse_frame("revoked", {

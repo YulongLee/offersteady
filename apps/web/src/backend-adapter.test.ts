@@ -302,6 +302,56 @@ describe("backend preview adapter", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("carries the active page lease through heartbeat and realtime stream requests", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.close();
+      },
+    });
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("/web-heartbeat")) {
+        return new Response(JSON.stringify(envelope({
+          pageInstanceId: "page-instance-1",
+          leaseGeneration: 3,
+          leaseExpiresAtMs: 10_000,
+        })), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(stream, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+    });
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+
+    const lease = await adapter.sendDesktopSessionHeartbeat({
+      interviewId: "session-1",
+      page: "live",
+      pageInstanceId: "page-instance-1",
+    });
+    await adapter.subscribeRealtimeSession("session-1", () => undefined, undefined, {
+      pageInstanceId: lease.pageInstanceId!,
+      leaseGeneration: lease.leaseGeneration,
+    });
+
+    expect(fetchImpl).toHaveBeenNthCalledWith(1,
+      "http://localhost:8000/api/v1/realtime-speech/sessions/session-1/web-heartbeat",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          userId: "user-1",
+          bindingId: null,
+          page: "live",
+          pageInstanceId: "page-instance-1",
+        }),
+      }),
+    );
+    expect(fetchImpl).toHaveBeenNthCalledWith(2,
+      "http://localhost:8000/api/v1/realtime-speech/sessions/session-1/stream?userId=user-1&cursor=0&pageInstanceId=page-instance-1&leaseGeneration=3",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("treats a revoked realtime stream as terminal and clears its cursor", async () => {
     window.localStorage.setItem("offersteady.auth.access_token", "access-token");
     window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");

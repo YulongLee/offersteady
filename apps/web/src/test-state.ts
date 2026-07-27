@@ -215,6 +215,7 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
 
   async sendDesktopSessionHeartbeat(_command: Parameters<InterviewAppAdapter["sendDesktopSessionHeartbeat"]>[0], signal?: AbortSignal) {
     await delay(signal);
+    return { pageInstanceId: _command.pageInstanceId ?? null, leaseGeneration: _command.page === "live" ? 1 : 0, leaseExpiresAtMs: Date.now() + 30_000 };
   }
 
   async loadRealtimeSession(_interviewId: string, signal?: AbortSignal) {
@@ -222,7 +223,7 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
     return { speaker: structuredClone(syntheticState.speaker) };
   }
 
-  async subscribeRealtimeSession(_interviewId: string, onUpdate: (state: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => void, signal?: AbortSignal) {
+  async subscribeRealtimeSession(_interviewId: string, onUpdate: (state: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => void, signal?: AbortSignal, _lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }) {
     await delay(signal);
     onUpdate({ speaker: structuredClone(syntheticState.speaker) });
   }

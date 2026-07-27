@@ -553,6 +553,7 @@ function LivePage() {
   const [notice, setNotice] = useState("");
   const [cancellingAnswer, setCancellingAnswer] = useState(false);
   const [cancelAnswerError, setCancelAnswerError] = useState("");
+  const [pageLeaseStatus, setPageLeaseStatus] = useState<"claiming" | "active" | "replaced">("claiming");
   const [splitBounds, setSplitBounds] = useState({ min: ABSOLUTE_MIN_SPLIT_RATIO, max: ABSOLUTE_MAX_SPLIT_RATIO });
   const workspaceRef = useRef<HTMLDivElement>(null);
   const desktopLayout = useDesktopLiveLayout();
@@ -560,6 +561,7 @@ function LivePage() {
   const previousLatestId = useRef(state.questions[0]?.id);
   const screenshotController = useRef<AbortController | null>(null);
   const manualAnswerController = useRef<AbortController | null>(null);
+  const pageInstanceId = useRef(globalThis.crypto?.randomUUID?.() ?? `page-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const interviewTitle = state.interviews.find(item => item.id === id)?.title ?? "本场面试";
   const active = state.questions[0] ?? emptyLiveQuestion;
   const screenshot = actionState.screenshotTask;
@@ -583,7 +585,10 @@ function LivePage() {
   }, [id, setState]);
   useEffect(() => {
     let stopped = false;
+    let heartbeatTimer: number | null = null;
+    let realtimePollTimer: number | null = null;
     let heartbeatBindingId: string | null = null;
+    let leaseGeneration: number | null = null;
     let lastBindingRefreshAt = 0;
     let reconnectTimer: number | null = null;
     let reconnectAttempt = 0;
@@ -594,11 +599,29 @@ function LivePage() {
     let pendingRealtime: (Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) | null = null;
     let realtimeLoadInFlight = false;
     const realtimeController = new AbortController();
+    const channel = typeof BroadcastChannel === "function" ? new BroadcastChannel(`offersteady:live-page:${state.account.id}`) : null;
     const realtimeErrorStatus = (error: unknown) => {
       if (typeof error === "object" && error !== null && "status" in error && typeof error.status === "number") return error.status;
       const match = error instanceof Error ? error.message.match(/[（(](\d{3})[）)]/) : null;
       return match ? Number(match[1]) : null;
     };
+    const pauseReplacedPage = () => {
+      if (stopped) return;
+      stopped = true;
+      setPageLeaseStatus("replaced");
+      setNotice("");
+      realtimeController.abort();
+      manualAnswerController.current?.abort();
+      screenshotController.current?.abort();
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+      if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);
+      if (realtimePollTimer !== null) window.clearInterval(realtimePollTimer);
+    };
+    channel?.addEventListener("message", event => {
+      const claim = event.data as { type?: string; pageInstanceId?: string };
+      if (claim.type === "claim" && claim.pageInstanceId && claim.pageInstanceId !== pageInstanceId.current) pauseReplacedPage();
+    });
+    channel?.postMessage({ type: "claim", sessionId: id, pageInstanceId: pageInstanceId.current });
     const applyRealtimeState = (realtime: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => {
       if (stopped) return;
       pendingRealtime = pendingRealtime?.captureState && !realtime.captureState
@@ -625,10 +648,22 @@ function LivePage() {
           if (binding?.bindingId) heartbeatBindingId = binding.bindingId;
           lastBindingRefreshAt = now;
         }
-        await runAdapterOperation(signal => interviewAppAdapter.sendDesktopSessionHeartbeat({ interviewId: id, bindingId: heartbeatBindingId, page: "live" }, signal));
-      } catch {
+        const lease = await runAdapterOperation(signal => interviewAppAdapter.sendDesktopSessionHeartbeat({ interviewId: id, bindingId: heartbeatBindingId, page: "live", pageInstanceId: pageInstanceId.current }, signal));
+        if (lease.pageInstanceId !== pageInstanceId.current || lease.leaseGeneration < 1) {
+          pauseReplacedPage();
+          return false;
+        }
+        leaseGeneration = lease.leaseGeneration;
+        setPageLeaseStatus("active");
+        return true;
+      } catch (error) {
+        if (isInvalidRealtimeSessionStatus(realtimeErrorStatus(error))) {
+          pauseReplacedPage();
+          return false;
+        }
         heartbeatBindingId = null;
         // Realtime polling below will continue to surface backend connectivity issues without blocking manual answers.
+        return false;
       }
     };
     const loadRealtime = async () => {
@@ -658,7 +693,8 @@ function LivePage() {
       }, delay);
     };
     const subscribeRealtime = async () => {
-      if (realtimeSubscribeInFlight || stopped || realtimeController.signal.aborted) return;
+      if (realtimeSubscribeInFlight || stopped || realtimeController.signal.aborted || leaseGeneration === null) return;
+      const activeLeaseGeneration = leaseGeneration;
       realtimeSubscribeInFlight = true;
       try {
         await runAdapterOperation(signal => interviewAppAdapter.subscribeRealtimeSession(id, realtime => {
@@ -666,7 +702,7 @@ function LivePage() {
           invalidSessionSuspended = false;
           reconnectAttempt = 0;
           applyRealtimeState(realtime);
-        }, signal), realtimeController.signal);
+        }, signal, { pageInstanceId: pageInstanceId.current, leaseGeneration: activeLeaseGeneration }), realtimeController.signal);
         realtimeStreamHealthy = false;
         if (!stopped && !realtimeController.signal.aborted) scheduleReconnect();
       } catch (error) {
@@ -675,8 +711,11 @@ function LivePage() {
         const status = realtimeErrorStatus(error);
         if (isInvalidRealtimeSessionStatus(status)) {
           window.sessionStorage?.removeItem(`offersteady:realtime-cursor:${id}`);
-          setNotice("当前面试会话已失效，已退出旧实时页面。请从面试首页进入当前面试。");
-          navigate(routes.app, { replace: true });
+          if (status === 409 || status === 410) pauseReplacedPage();
+          else {
+            setNotice("当前面试会话已失效，请从面试首页重新进入。");
+            navigate(routes.app, { replace: true });
+          }
           return;
         }
         await loadRealtime();
@@ -685,9 +724,8 @@ function LivePage() {
         realtimeSubscribeInFlight = false;
       }
     };
-    void sendHeartbeat();
-    const heartbeatTimer = window.setInterval(() => void sendHeartbeat(), 15_000);
-    const realtimePollTimer = window.setInterval(() => {
+    heartbeatTimer = window.setInterval(() => void sendHeartbeat(), 15_000);
+    realtimePollTimer = window.setInterval(() => {
       if (realtimeStreamHealthy || invalidSessionSuspended) return;
       void loadRealtime().then(loaded => {
         if (loaded && !realtimeSubscribeInFlight && reconnectTimer === null) {
@@ -712,20 +750,24 @@ function LivePage() {
     document.addEventListener("visibilitychange", resumeRealtime);
     window.addEventListener("focus", resumeRealtime);
     window.addEventListener("online", resumeRealtime);
-    void loadRealtime();
-    void subscribeRealtime();
+    void sendHeartbeat().then(claimed => {
+      if (!claimed || stopped) return;
+      void loadRealtime();
+      void subscribeRealtime();
+    });
     return () => {
       stopped = true;
       realtimeController.abort();
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       if (realtimeRenderFrame !== null) window.cancelAnimationFrame(realtimeRenderFrame);
-      window.clearInterval(heartbeatTimer);
-      window.clearInterval(realtimePollTimer);
+      if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);
+      if (realtimePollTimer !== null) window.clearInterval(realtimePollTimer);
+      channel?.close();
       document.removeEventListener("visibilitychange", resumeRealtime);
       window.removeEventListener("focus", resumeRealtime);
       window.removeEventListener("online", resumeRealtime);
     };
-  }, [id, navigate, setState]);
+  }, [id, navigate, setState, state.account.id]);
   const scopedAdvice = {
     ...active.advice,
     detail: selectedContextSources.length ? active.advice.detail : "当前没有选择个人资料。请使用通用结构组织回答，并只补充你能够核对的真实经历、职责和结果。",
@@ -1006,10 +1048,11 @@ function LivePage() {
     });
   };
   const billingNotice = notice.includes("积分") || notice.includes("会员") || notice.toLowerCase().includes("billing");
-  return <main className="live-page focused-live-page"><header className="live-top"><Link to={routes.app}><Logo /></Link><div><strong>{interviewTitle}</strong><span><i className={state.captureState === "capturing" ? "recording-dot" : "online-dot"} /> {state.captureState === "capturing" ? "这台 Mac · 正在收音" : state.captureState === "paused" ? "收音已暂停" : state.captureState === "reconnecting" ? "Mac 正在重连" : state.captureState === "permission-required" ? "助手采集能力不可用" : state.captureState === "error" ? "设备连接异常" : "这台 Mac · 已连接，未采集"}</span></div><div className="live-top-actions"><Link className="live-balance" to={routes.billing}>积分</Link><span>18:24</span>{state.captureState === "capturing" ? <button className="button warning live-session-control" onClick={() => setCapture("paused", "paused")}>暂停收音</button> : <button className="button primary live-session-control" disabled={state.captureState !== "ready" && state.captureState !== "paused"} onClick={() => setCapture("capturing", "active")}>{state.captureState === "paused" ? "恢复收音" : "开始面试"}</button>}<button className="button danger live-session-control" onClick={() => { if (window.confirm("确认结束本场面试？结束后将停止采集并进入复盘。")) { setCapture("ready", "ended"); navigate(routes.review(id)); } }}>结束面试</button></div></header>
+  return <main className="live-page focused-live-page"><header className="live-top"><Link to={routes.app}><Logo /></Link><div><strong>{interviewTitle}</strong><span><i className={state.captureState === "capturing" ? "recording-dot" : "online-dot"} /> {pageLeaseStatus === "replaced" ? "已在其他页面继续" : state.captureState === "capturing" ? "这台 Mac · 正在收音" : state.captureState === "paused" ? "收音已暂停" : state.captureState === "reconnecting" ? "Mac 正在重连" : state.captureState === "permission-required" ? "助手采集能力不可用" : state.captureState === "error" ? "设备连接异常" : "这台 Mac · 已连接，未采集"}</span></div><div className="live-top-actions"><Link className="live-balance" to={routes.billing}>积分</Link><span>18:24</span>{state.captureState === "capturing" ? <button className="button warning live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => setCapture("paused", "paused")}>暂停收音</button> : <button className="button primary live-session-control" disabled={pageLeaseStatus === "replaced" || (state.captureState !== "ready" && state.captureState !== "paused")} onClick={() => setCapture("capturing", "active")}>{state.captureState === "paused" ? "恢复收音" : "开始面试"}</button>}<button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => { if (window.confirm("确认结束本场面试？结束后将停止采集并进入复盘。")) { setCapture("ready", "ended"); navigate(routes.review(id)); } }}>结束面试</button></div></header>
+    {pageLeaseStatus === "replaced" ? <div className="global-live-alert replaced-page-alert" role="status"><strong>本场面试已在其他页面继续</strong><span>当前页面已停止收音同步、实时订阅和回答请求；已显示内容仍可查看。关闭此页或返回面试首页即可。</span><Link className="button primary" to={routes.app}>返回面试首页</Link></div> : null}
     {state.captureState === "reconnecting" || state.captureState === "permission-required" || state.captureState === "error" ? <div className="global-live-alert" role="status"><strong>{state.captureState === "reconnecting" ? "设备正在重连" : state.captureState === "permission-required" ? "助手采集能力不可用" : "桌面设备连接异常"}</strong><span>{state.captureState === "reconnecting" ? "恢复前可能存在音频缺口，不会伪装为持续同步。" : state.captureState === "permission-required" ? "请在桌面助手中检查首次授权状态；网页不会申请麦克风或屏幕权限，手动输入仍可使用。" : "可以运行诊断，当前仍可使用手动问题和截图。"}</span><button onClick={() => setCapture("ready", "ready")}>{state.captureState === "permission-required" ? "关闭提示" : "重新诊断"}</button></div> : null}
     {notice ? <div className="global-live-alert" role="status"><strong>{notice}</strong><span>{billingNotice ? "当前任务未启动，请检查积分或会员权益。" : "当前回答没有成功启动，请根据上方原因重试。"}</span>{billingNotice ? <Link className="button primary" to={routes.billing}>前往积分页</Link> : null}</div> : null}
-    <div ref={workspaceRef} className="live-grid focused-live-grid" style={desktopLayout ? { gridTemplateColumns: `minmax(320px, ${view.splitRatio}fr) 12px minmax(420px, ${100 - view.splitRatio}fr)` } : undefined}><section className="conversation-column"><ConversationMonitor state={state} onConfirmQuestion={confirmPending} onDismissQuestion={dismissPending} /><ManualQuestionComposer manualDraft={actionState.manualDraft} onChange={value => setActionState(current => ({ ...current, manualDraft: value }))} /></section>{desktopLayout ? <WorkspaceDivider containerRef={workspaceRef} ratio={view.splitRatio} bounds={splitBounds} onChange={splitRatio => setView(current => ({ ...current, splitRatio }))} /> : null}<section className="answer-column"><AnswerWorkspace answers={state.questions} viewingAnswerId={view.viewingAnswerId} newAnswerAvailable={view.newAnswerAvailable} activeTask={state.activeAnswerTask} cancelling={cancellingAnswer} cancelError={cancelAnswerError} onStop={() => void stopAnswer()} onView={answerId => setView(current => ({ ...current, viewingAnswerId: answerId, newAnswerAvailable: answerId ? current.newAnswerAvailable : false }))} onRetry={updateQuestionStatus} /><AnswerActionBar manualDraft={actionState.manualDraft} latestInterviewerQuestion={latestInterviewerText} screenshotTask={actionState.screenshotTask} onQuickAnswer={submitManual} onScreenshot={beginInstantScreenshot} /></section></div>{screenshot ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="screenshot-dialog-title"><section className="sheet"><h2 id="screenshot-dialog-title">{screenshotStageTitle(screenshot)}</h2><p>{screenshotStageDetail(screenshot)}</p>{screenshot.stage === "failed" ? <div className="sheet-actions split-actions"><button className="button ghost full" onClick={dismissScreenshotFailure}>删除本次失败</button><button className="button primary full" onClick={beginInstantScreenshot}>重新截屏</button></div> : <button className="button primary full" onClick={cancelScreenshot}>取消</button>}</section></div> : null}
+    <div ref={workspaceRef} className={`live-grid focused-live-grid${pageLeaseStatus === "replaced" ? " live-grid-readonly" : ""}`} style={desktopLayout ? { gridTemplateColumns: `minmax(320px, ${view.splitRatio}fr) 12px minmax(420px, ${100 - view.splitRatio}fr)` } : undefined}><section className="conversation-column"><ConversationMonitor state={state} onConfirmQuestion={pageLeaseStatus === "replaced" ? dismissPending : confirmPending} onDismissQuestion={dismissPending} /><ManualQuestionComposer manualDraft={actionState.manualDraft} disabled={pageLeaseStatus === "replaced"} onChange={value => setActionState(current => ({ ...current, manualDraft: value }))} /></section>{desktopLayout ? <WorkspaceDivider containerRef={workspaceRef} ratio={view.splitRatio} bounds={splitBounds} onChange={splitRatio => setView(current => ({ ...current, splitRatio }))} /> : null}<section className="answer-column"><AnswerWorkspace answers={state.questions} viewingAnswerId={view.viewingAnswerId} newAnswerAvailable={view.newAnswerAvailable} activeTask={state.activeAnswerTask} cancelling={cancellingAnswer} cancelError={cancelAnswerError} onStop={() => void stopAnswer()} onView={answerId => setView(current => ({ ...current, viewingAnswerId: answerId, newAnswerAvailable: answerId ? current.newAnswerAvailable : false }))} onRetry={updateQuestionStatus} /><AnswerActionBar manualDraft={actionState.manualDraft} latestInterviewerQuestion={latestInterviewerText} screenshotTask={actionState.screenshotTask} disabled={pageLeaseStatus === "replaced"} onQuickAnswer={submitManual} onScreenshot={beginInstantScreenshot} /></section></div>{screenshot && pageLeaseStatus !== "replaced" ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="screenshot-dialog-title"><section className="sheet"><h2 id="screenshot-dialog-title">{screenshotStageTitle(screenshot)}</h2><p>{screenshotStageDetail(screenshot)}</p>{screenshot.stage === "failed" ? <div className="sheet-actions split-actions"><button className="button ghost full" onClick={dismissScreenshotFailure}>删除本次失败</button><button className="button primary full" onClick={beginInstantScreenshot}>重新截屏</button></div> : <button className="button primary full" onClick={cancelScreenshot}>取消</button>}</section></div> : null}
     <footer className="session-bar"><div><i className={state.captureState === "capturing" ? "recording-dot" : "online-dot"} /><strong>{state.captureState === "capturing" ? "面试进行中" : state.captureState === "paused" ? "面试已暂停" : "等待开始面试"}</strong></div><div><small>{state.captureState === "capturing" ? "正在持续接收面试官与我的实时对话" : "开始面试后会在头部右侧管理本场状态"}</small></div></footer>
   </main>;
 }

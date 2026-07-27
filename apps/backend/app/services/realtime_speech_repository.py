@@ -79,6 +79,27 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
         record = self.web_session_heartbeats.get((user_id, session_id))
         return replace(record) if record else None
 
+    def get_active_live_web_session(self, *, user_id: str) -> WebSessionHeartbeatRecord | None:
+        records = [
+            item for item in self.web_session_heartbeats.values()
+            if item.owner_user_id == user_id and item.page == "live" and item.page_instance_id
+        ]
+        if not records:
+            return None
+        return replace(max(records, key=lambda item: (item.lease_generation, item.seen_at_ms)))
+
+    def claim_live_web_session(self, heartbeat: WebSessionHeartbeatRecord) -> WebSessionHeartbeatRecord:
+        active = self.get_active_live_web_session(user_id=heartbeat.owner_user_id)
+        same_owner = (
+            active is not None
+            and active.session_id == heartbeat.session_id
+            and active.page_instance_id == heartbeat.page_instance_id
+        )
+        generation = active.lease_generation if same_owner else (active.lease_generation + 1 if active else 1)
+        stored = replace(heartbeat, lease_generation=generation)
+        self.web_session_heartbeats[(stored.owner_user_id, stored.session_id)] = stored
+        return replace(stored)
+
     def get_session_desktop_binding(self, *, user_id: str, session_id: str) -> SessionDesktopBindingRecord | None:
         record = self.session_bindings.get((user_id, session_id))
         return replace(record) if record else None

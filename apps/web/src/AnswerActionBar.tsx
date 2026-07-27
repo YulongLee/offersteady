@@ -6,6 +6,7 @@ interface Props {
   readonly screenshotTask: ScreenshotTask | null;
   readonly onQuickAnswer: () => void;
   readonly onScreenshot: () => void;
+  readonly disabled?: boolean;
 }
 
 const screenshotStatus = (task: ScreenshotTask | null) => {
@@ -21,14 +22,14 @@ const screenshotStatus = (task: ScreenshotTask | null) => {
   return task.errorMessage || "截屏回答失败，可重新发起";
 };
 
-export function AnswerActionBar({ manualDraft, latestInterviewerQuestion = "", screenshotTask, onQuickAnswer, onScreenshot }: Props) {
+export function AnswerActionBar({ manualDraft, latestInterviewerQuestion = "", screenshotTask, onQuickAnswer, onScreenshot, disabled = false }: Props) {
   const canQuickAnswer = Boolean(manualDraft.trim() || latestInterviewerQuestion.trim());
   return <section className="answer-action-bar" aria-label="面试操作">
     <div className="answer-action-buttons">
       <button
         className="button primary action-tile"
         aria-label="快答"
-        disabled={!canQuickAnswer}
+        disabled={disabled || !canQuickAnswer}
         title={manualDraft.trim() ? "根据左侧输入的问题立即回答" : latestInterviewerQuestion.trim() ? "根据最近一条面试官问题立即回答" : "请先输入问题或等待面试官对话同步"}
         onClick={onQuickAnswer}
       >
@@ -38,6 +39,7 @@ export function AnswerActionBar({ manualDraft, latestInterviewerQuestion = "", s
       <button
         className="button ghost action-tile"
         aria-label="截屏回答"
+        disabled={disabled}
         title="直接截取你选择的共享屏幕并回答"
         onClick={onScreenshot}
       >

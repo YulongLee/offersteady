@@ -717,13 +717,14 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   }
 
   async sendDesktopSessionHeartbeat(command: Parameters<InterviewAppAdapter["sendDesktopSessionHeartbeat"]>[0], signal?: AbortSignal) {
-    await this.client.request<Record<string, unknown>>(`/api/v1/realtime-speech/sessions/${command.interviewId}/web-heartbeat`, {
+    return this.client.request<{ pageInstanceId: string | null; leaseGeneration: number; leaseExpiresAtMs: number }>(`/api/v1/realtime-speech/sessions/${command.interviewId}/web-heartbeat`, {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({
         userId: requireUserId(),
         bindingId: command.bindingId ?? null,
         page: command.page,
+        pageInstanceId: command.pageInstanceId ?? null,
       }),
     }, signal);
   }
@@ -738,7 +739,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     return mapRealtimeState(interviewId, transcripts, candidates, events, runtime);
   }
 
-  async subscribeRealtimeSession(interviewId: string, onUpdate: (state: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => void, signal?: AbortSignal) {
+  async subscribeRealtimeSession(interviewId: string, onUpdate: (state: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => void, signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }) {
     const cursorKey = `offersteady:realtime-cursor:${interviewId}`;
     const storedCursor = typeof window.sessionStorage?.getItem === "function" ? Number(window.sessionStorage.getItem(cursorKey) ?? "0") : 0;
     const cursor = Number.isFinite(storedCursor) && storedCursor > 0 ? storedCursor : 0;
@@ -750,7 +751,8 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       },
     };
     if (signal) requestInit.signal = signal;
-    const response = await this.fetchImpl(withBaseUrl(this.baseUrl, `/api/v1/realtime-speech/sessions/${interviewId}/stream?userId=${encodeURIComponent(requireUserId())}&cursor=${cursor}`), requestInit);
+    const leaseQuery = lease ? `&pageInstanceId=${encodeURIComponent(lease.pageInstanceId)}&leaseGeneration=${lease.leaseGeneration}` : "";
+    const response = await this.fetchImpl(withBaseUrl(this.baseUrl, `/api/v1/realtime-speech/sessions/${interviewId}/stream?userId=${encodeURIComponent(requireUserId())}&cursor=${cursor}${leaseQuery}`), requestInit);
     if (!response.ok) {
       const error = new AppError("validation", `实时对话订阅失败（${response.status}）`) as AppError & {
         status: number;

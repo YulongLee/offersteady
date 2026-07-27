@@ -828,3 +828,15 @@ h1, h2, h3, p { margin-top: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+.live-grid-readonly {
+  filter: saturate(.72);
+}
+
+.live-grid-readonly button:not([aria-label]),
+.live-grid-readonly textarea {
+  cursor: not-allowed;
+}
+
+.replaced-page-alert {
+  border-color: rgba(248, 191, 74, .42);
+}

@@ -246,6 +246,7 @@ class WebSessionHeartbeatRequest(BaseModel):
     user_id: str = Field(min_length=1, alias="userId")
     binding_id: str | None = Field(default=None, alias="bindingId")
     page: str = "preparation"
+    page_instance_id: str | None = Field(default=None, min_length=8, max_length=128, alias="pageInstanceId")
 
 
 class BindDesktopDeviceRequest(BaseModel):

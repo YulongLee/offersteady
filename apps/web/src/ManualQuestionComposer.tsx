@@ -1,9 +1,10 @@
 interface Props {
   readonly manualDraft: string;
   readonly onChange: (value: string) => void;
+  readonly disabled?: boolean;
 }
 
-export function ManualQuestionComposer({ manualDraft, onChange }: Props) {
+export function ManualQuestionComposer({ manualDraft, onChange, disabled = false }: Props) {
   return <section className="manual-question-composer" aria-label="手动问题输入">
     <div className="manual-question-head">
       <div>
@@ -17,6 +18,7 @@ export function ManualQuestionComposer({ manualDraft, onChange }: Props) {
       <textarea
         aria-label="手动输入面试官的问题"
         value={manualDraft}
+        disabled={disabled}
         onChange={event => onChange(event.target.value)}
         placeholder="输入面试官的问题"
         rows={2}

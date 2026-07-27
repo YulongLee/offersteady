@@ -161,6 +161,8 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
     def list_session_desktop_bindings_for_user(self, *, user_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_session_desktop_bindings_for_user(user_id=user_id))
     def save_web_session_heartbeat(self, heartbeat): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_web_session_heartbeat(heartbeat))
     def get_web_session_heartbeat(self, *, user_id, session_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_web_session_heartbeat(user_id=user_id, session_id=session_id))
+    def claim_live_web_session(self, heartbeat): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).claim_live_web_session(heartbeat))
+    def get_active_live_web_session(self, *, user_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_active_live_web_session(user_id=user_id))
     def save_publisher(self, publisher): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_publisher(publisher))
     def get_publisher_by_token(self, token): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_publisher_by_token(token))
     def get_publisher(self, publisher_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_publisher(publisher_id))

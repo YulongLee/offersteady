@@ -330,19 +330,32 @@ class RealtimeSpeechService:
         self._log(logging.INFO, "realtime_speech.desktop_device_bound", session_id=session_id, publisher_id=binding.device_id, state=binding.status)
         return binding
 
-    def record_web_session_heartbeat(self, *, user_id: str, session_id: str, binding_id: str | None, page: str) -> WebSessionHeartbeatRecord:
+    def record_web_session_heartbeat(self, *, user_id: str, session_id: str, binding_id: str | None, page: str, page_instance_id: str | None = None) -> WebSessionHeartbeatRecord:
         self.session_service.get_session(user_id=user_id, session_id=session_id)
         safe_page = "live" if page == "live" else "preparation"
-        heartbeat = self.repository.save_web_session_heartbeat(WebSessionHeartbeatRecord(
+        now_ms = _now_ms()
+        heartbeat_record = WebSessionHeartbeatRecord(
             session_id=session_id,
             owner_user_id=user_id,
             page=safe_page,  # type: ignore[arg-type]
             binding_id=binding_id,
-            seen_at_ms=_now_ms(),
-        ))
-        return heartbeat
+            seen_at_ms=now_ms,
+            page_instance_id=page_instance_id.strip() if page_instance_id else None,
+            lease_expires_at_ms=now_ms + self.settings.realtime_web_heartbeat_ttl_seconds * 1000,
+        )
+        if safe_page == "live" and heartbeat_record.page_instance_id:
+            return self.repository.claim_live_web_session(heartbeat_record)
+        active_live = self.repository.get_active_live_web_session(user_id=user_id)
+        if (
+            safe_page == "preparation"
+            and active_live is not None
+            and active_live.session_id == session_id
+            and active_live.lease_expires_at_ms >= now_ms
+        ):
+            return active_live
+        return self.repository.save_web_session_heartbeat(heartbeat_record)
 
-    def require_active_realtime_session(self, *, user_id: str, session_id: str) -> None:
+    def require_active_realtime_session(self, *, user_id: str, session_id: str, page_instance_id: str | None = None, lease_generation: int | None = None) -> None:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         if session.status != "live":
             raise DomainRequestError(
@@ -351,6 +364,23 @@ class RealtimeSpeechService:
                 "当前面试已结束或已被新的面试接管。",
                 410,
                 "realtime_session_replaced",
+            )
+        active_page = self.repository.get_active_live_web_session(user_id=user_id)
+        if active_page is None or active_page.lease_expires_at_ms < _now_ms():
+            return
+        if (
+            not page_instance_id
+            or lease_generation is None
+            or active_page.session_id != session_id
+            or active_page.page_instance_id != page_instance_id
+            or active_page.lease_generation != lease_generation
+        ):
+            raise DomainRequestError(
+                "realtime-speech",
+                "stream-page-lease",
+                "当前实时页面已被其他页面接管。",
+                409,
+                "realtime_page_replaced",
             )
 
     def record_desktop_device_heartbeat(self, *, device_id: str, manual_code: str, display_name: str | None, capabilities: dict[str, object]) -> DesktopDeviceRecord:
