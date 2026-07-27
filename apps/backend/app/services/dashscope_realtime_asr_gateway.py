@@ -120,6 +120,18 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             **self.diagnostics(source_kind),
         }
 
+    def close_session(self, *, session_id: str) -> int:
+        prefix = f"{session_id}:"
+        with self._source_sessions_lock:
+            source_session_keys = [
+                source_session_key
+                for source_session_key in self._source_sessions
+                if source_session_key.startswith(prefix)
+            ]
+        for source_session_key in source_session_keys:
+            self._close_source_session(source_session_key)
+        return len(source_session_keys)
+
     def _roundtrip(self, frame: AudioFrame) -> tuple[str, int | None, int | None]:
         session = self._get_or_create_source_session(frame)
         try:

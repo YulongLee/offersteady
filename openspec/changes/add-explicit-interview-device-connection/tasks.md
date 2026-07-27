@@ -28,3 +28,4 @@
 - [x] 5.3 Make the desktop follow the authoritative lease and remove session runtime polling from the hot path.
 - [x] 5.4 Close duplicate source publishers and circuit-break replaced web sessions including HTTP 410.
 - [x] 5.5 Add backend, desktop, and web regression coverage for the optimized lifecycle.
+- [x] 5.6 Retire old provider ASR sessions and queued partial work when the authoritative binding changes.

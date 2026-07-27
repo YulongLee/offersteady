@@ -35,3 +35,34 @@ def test_stale_provider_session_is_closed_and_reported(monkeypatch) -> None:
     assert connection.closed is True
     assert gateway._idle_session_closures["microphone"] == 1
     assert gateway._connection_state_by_source["microphone"] == "idle"
+
+
+def test_close_session_only_closes_provider_connections_for_target_session() -> None:
+    gateway = object.__new__(DashScopeRealtimeAsrGateway)
+    gateway._source_sessions = {}
+    gateway._source_sessions_lock = __import__("threading").Lock()
+    gateway._connection_state_by_source = {}
+    target_microphone = FakeConnection()
+    target_system = FakeConnection()
+    other_microphone = FakeConnection()
+    for key, source_kind, connection in (
+        ("session-target:microphone", "microphone", target_microphone),
+        ("session-target:system", "system", target_system),
+        ("session-other:microphone", "microphone", other_microphone),
+    ):
+        gateway._source_sessions[key] = _SourceRealtimeSession(
+            connection=connection,
+            sample_rate_hz=16_000,
+            created_at_monotonic=1.0,
+            updated_at_monotonic=1.0,
+            source_session_key=key,
+            source_kind=source_kind,
+        )
+
+    closed_count = gateway.close_session(session_id="session-target")
+
+    assert closed_count == 2
+    assert target_microphone.closed is True
+    assert target_system.closed is True
+    assert other_microphone.closed is False
+    assert list(gateway._source_sessions) == ["session-other:microphone"]

@@ -95,6 +95,9 @@ class SyntheticRealtimeAsrGateway(RealtimeAsrGatewayPort):
             completed_at_ms=completed_at_ms,
         )
 
+    def close_session(self, *, session_id: str) -> int:
+        return 0
+
 
 class RealtimeSpeechService:
     def __init__(
@@ -120,6 +123,7 @@ class RealtimeSpeechService:
         self._frame_worker_lock = threading.Lock()
         self._frame_workers: dict[tuple[str, RealtimeSourceKind], threading.Thread] = {}
         self._frame_queues: dict[tuple[str, RealtimeSourceKind], "queue.Queue[dict[str, object]]"] = {}
+        self._retired_session_ids: set[str] = set()
 
     @staticmethod
     def _session_source_key(session_id: str, source_kind: RealtimeSourceKind) -> tuple[str, RealtimeSourceKind]:
@@ -255,6 +259,8 @@ class RealtimeSpeechService:
         reuse_last_device: bool = False,
     ) -> SessionDesktopBindingRecord:
         self.session_service.get_session(user_id=user_id, session_id=session_id)
+        with self._frame_worker_lock:
+            self._retired_session_ids.discard(session_id)
         if reuse_last_device:
             association = self.repository.get_last_account_desktop_device(user_id=user_id)
             if association is None:
@@ -292,11 +298,16 @@ class RealtimeSpeechService:
             manual_code=device.manual_code,
             )
         })
+        reset_current_session = False
+        retired_session_ids: set[str] = set()
         for previous in previous_bindings.values():
             if previous.status != "bound":
                 continue
             if previous.session_id != session_id:
                 self.repository.save_session_desktop_binding(replace(previous, status="stale"))
+                retired_session_ids.add(previous.session_id)
+            else:
+                reset_current_session = True
             for publisher in self.repository.list_publishers_for_session(session_id=previous.session_id):
                 if publisher.status in {"closed", "failed"}:
                     continue
@@ -308,6 +319,11 @@ class RealtimeSpeechService:
         for active_session in self.session_service.list_sessions(user_id=user_id, status="live"):
             if active_session.session_id != session_id:
                 self.session_service.end_session(user_id=user_id, session_id=active_session.session_id)
+                retired_session_ids.add(active_session.session_id)
+        for retired_session_id in retired_session_ids:
+            self._reset_realtime_session(session_id=retired_session_id, retired=True)
+        if reset_current_session:
+            self._reset_realtime_session(session_id=session_id, retired=False)
         binding = self.repository.save_session_desktop_binding(SessionDesktopBindingRecord(
             binding_id=f"desktop-binding-{uuid4().hex}",
             session_id=session_id,
@@ -852,6 +868,9 @@ class RealtimeSpeechService:
                     break
             try:
                 for prepared in self._coalesce_prepared_frame_jobs(jobs):
+                    with self._frame_worker_lock:
+                        if key[0] in self._retired_session_ids:
+                            continue
                     try:
                         self._process_prepared_audio_frame(prepared)
                     except DomainRequestError:
@@ -1481,6 +1500,7 @@ class RealtimeSpeechService:
                     result = future.result(timeout=asr_timeout_seconds)
                 except concurrent.futures.TimeoutError as exc:
                     future.cancel()
+                    self.asr_gateway.close_session(session_id=frame.session_id)
                     self._log(logging.WARNING, "realtime_speech.transcribe_timeout", session_id=publisher.session_id, publisher_id=publisher.publisher_id, state="transcribe-timeout", error_code="realtime_asr_frame_timeout")
                     raise RetryableAsrError("realtime_asr_frame_timeout") from exc
                 suppression_reason = self._suppression_reason(result.text, frame=frame)
@@ -1534,6 +1554,8 @@ class RealtimeSpeechService:
             except RetryableAsrError as exc:
                 self._log(logging.WARNING, "realtime_speech.transcribe_retry", session_id=publisher.session_id, publisher_id=publisher.publisher_id, state="transcribe-retry", error_code=str(exc))
                 last_error = exc
+                if str(exc) == "realtime_asr_frame_timeout":
+                    break
                 continue
             except NonRetryableAsrError as exc:
                 self._log(logging.WARNING, "realtime_speech.transcribe_non_retryable", session_id=publisher.session_id, publisher_id=publisher.publisher_id, state="transcribe-failed", error_code=str(exc))
@@ -1552,6 +1574,40 @@ class RealtimeSpeechService:
         )
         error_code = str(last_error) if last_error and str(last_error).strip() else "asr-failed"
         raise DomainRequestError("realtime-speech", "transcribe", "实时语音转写失败。", 502, error_code=error_code)
+
+    def _reset_realtime_session(self, *, session_id: str, retired: bool) -> None:
+        self.asr_gateway.close_session(session_id=session_id)
+        with self._frame_worker_lock:
+            if retired:
+                self._retired_session_ids.add(session_id)
+            else:
+                self._retired_session_ids.discard(session_id)
+            queues = [
+                (key, work_queue)
+                for key, work_queue in self._frame_queues.items()
+                if key[0] == session_id
+            ]
+            for key, work_queue in queues:
+                self._frame_queues.pop(key, None)
+                self._frame_workers.pop(key, None)
+                while True:
+                    try:
+                        work_queue.get_nowait()
+                    except queue.Empty:
+                        break
+                    else:
+                        work_queue.task_done()
+                self._counter_bucket(session_id=key[0], source_kind=key[1])["queueDepth"] = 0
+            self._active_requests_by_session_source = {
+                key: value
+                for key, value in self._active_requests_by_session_source.items()
+                if key[0] != session_id
+            }
+            self._latest_timings_by_session_source = {
+                key: value
+                for key, value in self._latest_timings_by_session_source.items()
+                if key[0] != session_id
+            }
 
     def _asr_timeout_seconds(self, frame: AudioFrame) -> float:
         configured = max(1.0, float(self.settings.realtime_asr_frame_timeout_seconds))

@@ -49,6 +49,10 @@ WebSocket `1008` 和服务端 `401/403/404/409/410` 不得使用旧 token 重连
 
 后端为同一用户、session、source 和客户端创建新 publisher 前关闭旧 publisher，避免网络抖动或客户端重建留下并行发布通道。旧 token 返回永久失效，不允许音频跨 binding 路由。
 
+### Decision 8: Binding replacement retires the provider ASR pipeline
+
+新 binding 不只关闭旧 publisher，还必须立即关闭旧 session 的麦克风与系统音频 Provider ASR 长连接，清空其待处理 partial 队列，并阻止已经取出的旧任务继续发布。当前 session 更换设备时重置 Provider 连接但不退休 session。外层 ASR 超时必须主动关闭故障连接，且不得再次等待同样的长超时；后续新音频由当前 binding 建立干净连接。
+
 ## Risks / Trade-offs
 
 - [Risk] 一键连接暴露机器码可能增加肩窥风险 → 页面只显示设备名称、在线状态和掩码机器码，提交时使用后端返回值。
