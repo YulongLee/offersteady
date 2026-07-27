@@ -57,6 +57,8 @@ Alternative considered: 继续沿用“每帧 HTTP / WS 请求立即做转写”
 
 当前低延迟基线将桌面 partial 提交周期设为 `150ms`，ASR source 会话默认空闲复用窗口设为 `300s`。前者优先改善连续字幕的更新颗粒度，后者降低面试自然停顿后重复握手导致的首字抖动；final 仍由既有静音结句规则控制。
 
+持续流的发送与接收必须并行：source worker 只负责顺序追加新增 PCM 和发送句末 commit；每个 provider source session 使用独立常驻接收器持续读取 partial/completed 事件，并通过 condition/revision 快照交给业务 worker。不得在每次 append 后由发送线程直接调用 `recv`，否则 partial 等待时间会阻塞下一批音频，而过短等待又会稳定漏掉供应商事件。桌面 partial 目标周期进一步收紧为约 `100ms`，以减少主线程回调量化后形成的额外等待。
+
 这样做的收益：
 
 - 避免重复握手和频繁 `session.update`

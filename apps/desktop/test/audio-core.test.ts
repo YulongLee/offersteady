@@ -74,6 +74,24 @@ describe("speech segmenter", () => {
     expect(secondPartial[0]?.segmentId).toBe(finalized[0]?.segmentId);
   });
 
+  it("streams only newly captured PCM in ordered partial revisions", () => {
+    const segmenter = new SpeechSegmenter("microphone");
+    const first = new Uint8Array([1, 2]);
+    const second = new Uint8Array([3, 4]);
+    const third = new Uint8Array([5, 6]);
+
+    expect(segmenter.push(first, 0, 0.013)).toEqual([]);
+    const firstPartial = segmenter.push(second, 70, 0.013);
+    const secondPartial = segmenter.push(third, 180, 0.013);
+
+    expect(firstPartial[0]?.revision).toBe(1);
+    expect(firstPartial[0]?.isFinal).toBe(false);
+    expect(Array.from(firstPartial[0]?.payload ?? [])).toEqual([1, 2, 3, 4]);
+    expect(secondPartial[0]?.revision).toBe(2);
+    expect(secondPartial[0]?.segmentId).toBe(firstPartial[0]?.segmentId);
+    expect(Array.from(secondPartial[0]?.payload ?? [])).toEqual([5, 6]);
+  });
+
   it("drops very short noise bursts instead of emitting broken transcript segments", () => {
     const segmenter = new SpeechSegmenter("system");
     const burst = new Uint8Array([9, 9]);

@@ -18,6 +18,10 @@
 - **WHEN** 同一麦克风 source 在一次连续发言中产生多个 Partial Transcript 更新
 - **THEN** 系统复用该 source 对应的持久化 ASR 连接，而不是为每次更新新建连接
 
+#### Scenario: Provider emits a partial while the next audio chunk is being produced
+- **WHEN** ASR 供应商在桌面端继续采集和发送后续增量音频期间返回 Partial Transcript
+- **THEN** source 常驻接收器并行消费该事件并发布新 revision，音频发送线程不因等待 `recv` 而停止追加 PCM
+
 #### Scenario: Interruption ends a source stream
 - **WHEN** source 结束、会话结束或连接超时
 - **THEN** 系统优雅关闭对应 ASR 长连接并释放该 source 的流式资源
@@ -28,6 +32,10 @@
 #### Scenario: Partial updates are emitted during continuous speech
 - **WHEN** 用户持续说话并产生多个 Partial Transcript
 - **THEN** 每次发送的音频负载只包含自上次成功发送后新增的音频数据，而不重复发送之前已发送的部分
+
+#### Scenario: Continuous speech reaches the first partial boundary
+- **WHEN** 任一有效 source 持续产生可识别语音
+- **THEN** 桌面端约每 `100ms` 提交一次新增 PCM，并保持同一 utterance 的稳定 segment identity 与递增 revision
 
 #### Scenario: Final transcript closes the utterance
 - **WHEN** 一段话结束并产生 Final Transcript

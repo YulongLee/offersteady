@@ -11,6 +11,7 @@
 - [ ] 2.3 Migrate capture callbacks toward AudioWorklet/native-producer-friendly boundaries and keep ScriptProcessor only as a fallback path.
 - [ ] 2.4 Recalibrate silence gating and empty-audio suppression separately for source health, utterance start, and transcript publish eligibility.
 - [x] 2.5 Reduce partial transcript chunk cadence to 150 ms and extend default persistent ASR idle reuse to 300 seconds.
+- [x] 2.6 Tighten active-speech incremental PCM cadence to approximately 100 ms without resending prior audio bytes.
 
 ## 3. Backend Realtime ASR Pipeline Refactor
 
@@ -20,6 +21,7 @@
 - [x] 3.4 Add worker lifecycle, idle timeout, error recovery, and rollback-safe feature flags for the new pipeline.
 - [x] 3.5 Coalesce adjacent incremental PCM frames under backlog while preserving all audio bytes and final delivery.
 - [x] 3.6 Atomically supersede stale device bindings and publisher tokens when the same desktop moves to a new interview.
+- [x] 3.7 Decouple provider WebSocket receive from PCM append with one persistent event receiver per session source.
 
 ## 4. Web Transcript Streaming and Overlay Efficiency
 
@@ -40,3 +42,4 @@
 - [x] 5.5 Restrict filler suppression to pure vocal fillers and preserve meaningful short Chinese responses.
 - [ ] 5.2 Add or update evals / performance checks for TTFT, final transcript latency, dropped-partial policy, and transcript stability under burst traffic.
 - [ ] 5.3 Run end-to-end validation with the desktop companion, backend, and web live page; compare against the recorded baseline and document rollout / rollback guidance.
+- [x] 5.6 Add regression coverage for ordered incremental desktop revisions and background partial/final provider event delivery.
