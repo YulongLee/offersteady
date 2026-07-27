@@ -1,10 +1,11 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-export const DEFAULT_SCREENSHOT_SHORTCUT = "CommandOrControl+Shift+Space";
+const LEGACY_SCREENSHOT_SHORTCUT = "CommandOrControl+Shift+Space";
+export const DEFAULT_SCREENSHOT_SHORTCUT = "Control+Shift+Space";
 
 export const SCREENSHOT_SHORTCUT_OPTIONS = [
-  { accelerator: DEFAULT_SCREENSHOT_SHORTCUT, label: "⌘/Ctrl + Shift + Space" },
+  { accelerator: DEFAULT_SCREENSHOT_SHORTCUT, label: "Control + Shift + Space" },
   { accelerator: "CommandOrControl+Option+S", label: "⌘/Ctrl + Option + S" },
   { accelerator: "CommandOrControl+Shift+S", label: "⌘/Ctrl + Shift + S" },
   { accelerator: "", label: "关闭快捷键" },
@@ -23,6 +24,7 @@ export class ScreenshotShortcutStore {
   async load(): Promise<string> {
     try {
       const parsed = JSON.parse(await readFile(this.settingsPath, "utf8")) as { accelerator?: unknown };
+      if (parsed.accelerator === LEGACY_SCREENSHOT_SHORTCUT) return DEFAULT_SCREENSHOT_SHORTCUT;
       return isSupportedScreenshotShortcut(parsed.accelerator) ? parsed.accelerator : DEFAULT_SCREENSHOT_SHORTCUT;
     } catch {
       return DEFAULT_SCREENSHOT_SHORTCUT;

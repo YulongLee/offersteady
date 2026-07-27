@@ -429,8 +429,8 @@ export function CompanionApp() {
   const [previewNotice, setPreviewNotice] = useState("选择要捕捉的屏幕");
   const [desktopNotice, setDesktopNotice] = useState("");
   const [screenshotShortcut, setScreenshotShortcut] = useState<DesktopScreenshotShortcutSettings>({
-    accelerator: "CommandOrControl+Shift+Space",
-    options: [{ accelerator: "CommandOrControl+Shift+Space", label: "⌘/Ctrl + Shift + Space" }],
+    accelerator: "Control+Shift+Space",
+    options: [{ accelerator: "Control+Shift+Space", label: "Control + Shift + Space" }],
   });
   const [screenshotShortcutNotice, setScreenshotShortcutNotice] = useState("仅在已连接并开始面试后生效");
   const [showScreenshotShortcutSettings, setShowScreenshotShortcutSettings] = useState(false);

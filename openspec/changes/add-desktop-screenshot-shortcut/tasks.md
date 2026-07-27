@@ -3,6 +3,7 @@
 - [x] 1.1 Add supported shortcut presets and local preference persistence
 - [x] 1.2 Register and replace Electron global shortcuts with conflict rollback
 - [x] 1.3 Add shortcut selection and status feedback beside screen capture controls
+- [x] 1.4 Align the desktop and live-page default shortcut to Control + Shift + Space
 
 ## 2. Authorized screenshot trigger
 
@@ -18,3 +19,4 @@
 - [x] 3.3 Add pure regression coverage for supported shortcut validation
 - [x] 3.4 Display shortcut screenshot progress and terminal failure state immediately
 - [x] 3.5 Display the operating system's actual shortcut registration state
+- [x] 3.6 Reuse the existing screenshot-answer action when the live page receives the shortcut

@@ -3,6 +3,11 @@
 ### Requirement: User can configure a screenshot-answer shortcut
 The desktop companion SHALL display a screenshot-answer shortcut setting beside screen capture controls and SHALL persist the selected preset across restarts.
 
+#### Scenario: Existing macOS user receives the new default shortcut
+- **WHEN** the companion loads the legacy CommandOrControl + Shift + Space setting
+- **THEN** it migrates the setting to Control + Shift + Space
+- **AND** the live web page listens for the same Control + Shift + Space combination
+
 #### Scenario: User selects an available shortcut
 - **WHEN** the user selects a supported shortcut preset
 - **THEN** the companion registers it globally, persists it locally, and displays that it is active
@@ -39,6 +44,11 @@ The system SHALL process shortcut screenshots through the existing capture, vali
 
 ### Requirement: Live page receives shortcut-generated answers
 The web live interview page SHALL merge completed shortcut-generated screenshot answers for the current session into the existing answer workspace.
+
+#### Scenario: Live page is focused when shortcut is pressed
+- **WHEN** the active live interview page receives the configured screenshot shortcut
+- **THEN** it invokes the existing screenshot-answer action directly
+- **AND** capture progress, failure recovery, and the final answer use the same interface as clicking screenshot answer
 
 #### Scenario: Shortcut task is still processing
 - **WHEN** a shortcut-generated screenshot request has been accepted but its answer is not complete

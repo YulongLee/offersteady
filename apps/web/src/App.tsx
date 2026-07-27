@@ -597,6 +597,7 @@ function LivePage() {
   const previousLatestId = useRef(state.questions[0]?.id);
   const screenshotController = useRef<AbortController | null>(null);
   const manualAnswerController = useRef<AbortController | null>(null);
+  const beginInstantScreenshotRef = useRef<() => void>(() => undefined);
   const activeShortcutScreenshotRequest = useRef<string | null>(null);
   const terminalShortcutScreenshotRequests = useRef(new Set<string>());
   const pageInstanceId = useRef(globalThis.crypto?.randomUUID?.() ?? `page-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -1063,6 +1064,27 @@ function LivePage() {
         });
     }, 0);
   };
+  beginInstantScreenshotRef.current = beginInstantScreenshot;
+  useEffect(() => {
+    const handleScreenshotShortcut = (event: KeyboardEvent) => {
+      if (
+        pageLeaseStatus === "replaced" ||
+        event.repeat ||
+        event.altKey ||
+        event.metaKey ||
+        !event.ctrlKey ||
+        !event.shiftKey ||
+        event.code !== "Space"
+      ) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      beginInstantScreenshotRef.current();
+    };
+    window.addEventListener("keydown", handleScreenshotShortcut, { capture: true });
+    return () => window.removeEventListener("keydown", handleScreenshotShortcut, { capture: true });
+  }, [pageLeaseStatus]);
   const dismissPending = () => setState(current => ({ ...current, speaker: { ...current.speaker, pendingQuestion: null } }));
   const confirmPending = () => {
     const candidate = state.speaker.pendingQuestion; if (!candidate || !charge(state.billing.rates.answerPoints, candidate.id)) return;
