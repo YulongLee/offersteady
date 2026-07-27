@@ -148,6 +148,12 @@ class CreateRemoteScreenshotCaptureRequest(BaseModel):
     instruction: str = ""
 
 
+class CreateDesktopShortcutCaptureRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    device_id: str = Field(min_length=1, alias="deviceId")
+    manual_code: str = Field(min_length=6, max_length=6, alias="manualCode")
+
+
 class RemoteScreenshotCaptureRequestResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
     request_id: str = Field(alias="requestId")

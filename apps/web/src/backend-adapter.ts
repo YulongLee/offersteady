@@ -776,6 +776,15 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     return mapRealtimeState(interviewId, transcripts, candidates, events, runtime);
   }
 
+  async loadDesktopShortcutScreenshotAnswers(interviewId: string, signal?: AbortSignal) {
+    const tasks = await this.client.request<readonly BackendScreenshotAnswerTaskResponse[]>(`/api/v1/screenshot-answer/sessions/${interviewId}/history?userId=${encodeURIComponent(requireUserId())}`, {
+      headers: authHeaders(),
+    }, signal);
+    return tasks
+      .filter(task => task.status === "completed" && task.instruction.includes("[来源:助手快捷键]"))
+      .map(task => toSubmitScreenshotAnswerResult(task, task.visionSummaryTitle?.trim() || "请根据当前截图直接回答"));
+  }
+
   async subscribeRealtimeSession(interviewId: string, onUpdate: (state: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => void, signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }) {
     const cursorKey = `offersteady:realtime-cursor:${interviewId}`;
     const storedCursor = typeof window.sessionStorage?.getItem === "function" ? Number(window.sessionStorage.getItem(cursorKey) ?? "0") : 0;

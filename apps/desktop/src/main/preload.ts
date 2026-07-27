@@ -7,6 +7,13 @@ contextBridge.exposeInMainWorld("offersteady", {
   clearDeviceCredential: () => ipcRenderer.invoke("credential:clear"),
   getDesktopConfig: () => ipcRenderer.invoke("desktop:get-config"),
   getNativeRuntimeHealth: () => ipcRenderer.invoke("desktop:get-native-runtime-health"),
+  getScreenshotShortcut: () => ipcRenderer.invoke("desktop:get-screenshot-shortcut"),
+  setScreenshotShortcut: (accelerator: string) => ipcRenderer.invoke("desktop:set-screenshot-shortcut", accelerator),
+  onScreenshotShortcutNotice: (listener: (message: string) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, message: string) => listener(message);
+    ipcRenderer.on("desktop:screenshot-shortcut-notice", handler);
+    return () => ipcRenderer.removeListener("desktop:screenshot-shortcut-notice", handler);
+  },
   getPairingIdentity: () => ipcRenderer.invoke("desktop:get-pairing-identity"),
   resetPairingIdentity: () => ipcRenderer.invoke("desktop:reset-pairing-identity"),
   listScreens: () => ipcRenderer.invoke("desktop:list-screens"),

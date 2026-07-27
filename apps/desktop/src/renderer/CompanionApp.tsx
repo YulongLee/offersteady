@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AudioPermission, AudioSourceDescriptor, AudioSourceHealth, CaptureState, CompanionCapabilities } from "@offersteady/protocol";
-import type { DesktopNativeRuntimeHealth, DesktopPairingIdentity, DesktopRuntimeConfig, DesktopScreenSource } from "./global";
+import type { DesktopNativeRuntimeHealth, DesktopPairingIdentity, DesktopRuntimeConfig, DesktopScreenSource, DesktopScreenshotShortcutSettings } from "./global";
 import { MicrophoneAudioAdapter, SystemAudioAdapter, describeMediaError } from "./audio/audio-source-adapter";
 import { LocalSourceMonitor } from "./audio/local-source-monitor";
 import { DesktopRealtimePublisher, publisherFailureIsTerminal } from "./audio/realtime-publisher";
@@ -428,6 +428,12 @@ export function CompanionApp() {
   const bindingFailureCountRef = useRef(0);
   const [previewNotice, setPreviewNotice] = useState("选择要捕捉的屏幕");
   const [desktopNotice, setDesktopNotice] = useState("");
+  const [screenshotShortcut, setScreenshotShortcut] = useState<DesktopScreenshotShortcutSettings>({
+    accelerator: "CommandOrControl+Shift+Space",
+    options: [{ accelerator: "CommandOrControl+Shift+Space", label: "⌘/Ctrl + Shift + Space" }],
+  });
+  const [screenshotShortcutNotice, setScreenshotShortcutNotice] = useState("仅在已连接并开始面试后生效");
+  const [showScreenshotShortcutSettings, setShowScreenshotShortcutSettings] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [screenCaptureReady, setScreenCaptureReady] = useState(false);
   const [screenPreviewUrl, setScreenPreviewUrl] = useState<string | null>(null);
@@ -463,6 +469,17 @@ export function CompanionApp() {
     () => bindingSessionStatus === "live" && hasPublisherTakenOver(liveSourceHealthState),
     [bindingSessionStatus, liveSourceHealthState],
   );
+
+  useEffect(() => {
+    void window.offersteady?.getScreenshotShortcut?.()
+      .then(settings => setScreenshotShortcut(settings))
+      .catch(() => setScreenshotShortcutNotice("快捷键设置读取失败，请重启助手。"));
+    const unsubscribe = window.offersteady?.onScreenshotShortcutNotice?.(message => {
+      setScreenshotShortcutNotice(message);
+      setDesktopNotice(message);
+    });
+    return () => unsubscribe?.();
+  }, []);
 
   useEffect(() => {
     liveSourceHealthRef.current = liveSourceHealthState;
@@ -513,6 +530,7 @@ export function CompanionApp() {
   const currentMicrophoneLabel = microphoneSources.find(source => source.id === selectedMicrophoneId)?.label ?? "Default - 当前默认麦克风";
   const currentScreenLabel = screenSources.find(source => source.id === selectedScreenId)?.label ?? "显示器 1";
   const currentScreenPreview = screenSources.find(source => source.id === selectedScreenId)?.thumbnailDataUrl ?? null;
+  const activeScreenshotShortcutLabel = screenshotShortcut.options.find(option => option.accelerator === screenshotShortcut.accelerator)?.label ?? "快捷键设置";
   const microphoneHealth = sourceHealthState.find(item => item.sourceKind === "microphone");
   const systemAudioHealth = sourceHealthState.find(item => item.sourceKind === "system");
   const microphoneMeterLevel = useSmoothedMeterPercent(microphoneHealth?.level);
@@ -1032,6 +1050,17 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
     }
   };
 
+  const updateScreenshotShortcut = async (accelerator: string) => {
+    const result = await window.offersteady?.setScreenshotShortcut?.(accelerator);
+    if (!result) {
+      setScreenshotShortcutNotice("快捷键设置通道不可用，请重启助手。");
+      return;
+    }
+    setScreenshotShortcut(current => ({ ...current, accelerator: result.accelerator }));
+    setScreenshotShortcutNotice(result.message);
+    setDesktopNotice(result.message);
+  };
+
   const copyConnectionCode = async () => {
     const code = pairingIdentity?.manualCode;
     if (!code) return;
@@ -1153,8 +1182,40 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
                 ))}
               </select>
               <button type="button" className="secondary-button" onClick={() => { void previewScreen(); }}>预览</button>
+              <button type="button" className="secondary-button shortcut-settings-button" onClick={() => setShowScreenshotShortcutSettings(true)}>
+                <span>快捷键</span>
+                <small>{activeScreenshotShortcutLabel}</small>
+              </button>
             </div>
           </TerminalRow>
+          {showScreenshotShortcutSettings ? (
+            <div className="shortcut-settings-backdrop" role="dialog" aria-modal="true" aria-labelledby="shortcut-settings-title">
+              <section className="shortcut-settings-sheet">
+                <div className="shortcut-settings-head">
+                  <div>
+                    <span>SCREEN CAPTURE</span>
+                    <h2 id="shortcut-settings-title">截屏回答快捷键</h2>
+                  </div>
+                  <button type="button" aria-label="关闭快捷键设置" onClick={() => setShowScreenshotShortcutSettings(false)}>×</button>
+                </div>
+                <p>进入并连接正在进行的面试后，即使网页不在前台，也可以直接触发整屏截取和回答。</p>
+                <label>
+                  <span>快捷键组合</span>
+                  <select
+                    aria-label="设置截屏回答快捷键"
+                    value={screenshotShortcut.accelerator}
+                    onChange={event => { void updateScreenshotShortcut(event.target.value); }}
+                  >
+                    {screenshotShortcut.options.map(option => (
+                      <option key={option.accelerator || "disabled"} value={option.accelerator}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="shortcut-settings-notice">{screenshotShortcutNotice}</div>
+                <button type="button" className="primary-button" onClick={() => setShowScreenshotShortcutSettings(false)}>完成</button>
+              </section>
+            </div>
+          ) : null}
 
           <section className="preview-row" aria-label="屏幕捕捉预览">
             <div>

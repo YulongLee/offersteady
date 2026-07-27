@@ -309,9 +309,111 @@ select:focus {
 .screen-control {
   width: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 86px;
+  grid-template-columns: minmax(0, 1fr) 72px 112px;
   gap: 10px;
   align-items: center;
+}
+
+.shortcut-settings-button {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
+  text-align: left;
+}
+
+.shortcut-settings-button span {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.shortcut-settings-button small {
+  width: 100%;
+  overflow: hidden;
+  color: var(--brand);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shortcut-settings-backdrop {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(4, 8, 14, .78);
+  backdrop-filter: blur(8px);
+  padding: 24px;
+}
+
+.shortcut-settings-sheet {
+  width: min(440px, 100%);
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: #101721;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .5);
+  padding: 22px;
+}
+
+.shortcut-settings-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.shortcut-settings-head span {
+  color: var(--brand);
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: .18em;
+}
+
+.shortcut-settings-head h2 {
+  margin: 6px 0 0;
+  font-size: 20px;
+}
+
+.shortcut-settings-head button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .04);
+  font-size: 20px;
+}
+
+.shortcut-settings-sheet > p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.65;
+  margin: 16px 0;
+}
+
+.shortcut-settings-sheet > label {
+  display: grid;
+  gap: 8px;
+}
+
+.shortcut-settings-sheet > label > span {
+  color: #cbd5e2;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.shortcut-settings-notice {
+  min-height: 36px;
+  margin: 12px 0;
+  border: 1px solid rgba(110, 231, 189, .18);
+  border-radius: 10px;
+  color: var(--brand);
+  background: rgba(110, 231, 189, .05);
+  padding: 10px 12px;
+  font-size: 9px;
+  line-height: 1.5;
 }
 
 .secondary-button {
@@ -705,8 +807,16 @@ select {
 }
 
 .screen-control {
-  grid-template-columns: minmax(0, 1fr) 58px;
+  grid-template-columns: minmax(0, 1fr) 52px 92px;
   gap: 7px;
+}
+
+.shortcut-settings-button span {
+  font-size: 9px;
+}
+
+.shortcut-settings-button small {
+  font-size: 7px;
 }
 
 .secondary-button {

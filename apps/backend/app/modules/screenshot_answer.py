@@ -22,6 +22,7 @@ from app.schemas.screenshot_answer import (
     ScreenshotValidationPolicyResponse,
     StartScreenshotAnswerRequest,
     CreateRemoteScreenshotCaptureRequest,
+    CreateDesktopShortcutCaptureRequest,
     FailRemoteScreenshotCaptureRequest,
 )
 from app.services.screenshot_answer_service import ScreenshotAnswerService
@@ -297,6 +298,36 @@ async def create_remote_capture_request(
         device_id=binding.device_id,
         manual_code=binding.manual_code,
         instruction=request.instruction,
+    )
+    return success_response(request=request_context, data=_to_remote_capture_request_response(capture_request), timestamp=utc_now_iso())
+
+
+@router.post("/desktop-devices/{device_id}/shortcut-capture-requests", response_model=ApiEnvelope[RemoteScreenshotCaptureRequestResponse])
+async def create_desktop_shortcut_capture_request(
+    device_id: str,
+    request_context: Request,
+    request: CreateDesktopShortcutCaptureRequest,
+    service: ScreenshotAnswerService = Depends(screenshot_answer_service),
+    realtime: RealtimeSpeechService = Depends(realtime_speech_service),
+) -> ApiEnvelope[RemoteScreenshotCaptureRequestResponse]:
+    if request.device_id != device_id:
+        from app.core.errors import DomainRequestError
+        raise DomainRequestError("screenshot-answer", "desktop-shortcut", "设备标识不匹配。", 403)
+    binding = realtime.get_desktop_capture_binding(device_id=device_id, manual_code=request.manual_code)
+    session = realtime.session_service.get_session(user_id=binding.owner_user_id, session_id=binding.session_id)
+    if session.status != "live":
+        from app.core.errors import DomainRequestError
+        raise DomainRequestError("screenshot-answer", "desktop-shortcut", "当前设备没有连接正在进行的面试。", 409)
+    existing = service.get_next_remote_capture_request(device_id=device_id, manual_code=request.manual_code)
+    if existing is not None:
+        from app.core.errors import DomainRequestError
+        raise DomainRequestError("screenshot-answer", "desktop-shortcut", "上一笔截屏回答仍在处理中，请稍候。", 409)
+    capture_request = service.create_remote_capture_request(
+        user_id=binding.owner_user_id,
+        session_id=binding.session_id,
+        device_id=device_id,
+        manual_code=request.manual_code,
+        instruction="请直接识别当前截图中的题目、代码或系统设计内容，并给出可直接使用的中文回答。[来源:助手快捷键]",
     )
     return success_response(request=request_context, data=_to_remote_capture_request_response(capture_request), timestamp=utc_now_iso())
 

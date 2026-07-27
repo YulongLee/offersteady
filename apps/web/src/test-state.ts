@@ -233,6 +233,11 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
     return { speaker: structuredClone(syntheticState.speaker) };
   }
 
+  async loadDesktopShortcutScreenshotAnswers(_interviewId: string, signal?: AbortSignal) {
+    await delay(signal);
+    return [];
+  }
+
   async subscribeRealtimeSession(_interviewId: string, onUpdate: (state: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => void, signal?: AbortSignal, _lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }) {
     await delay(signal);
     onUpdate({ speaker: structuredClone(syntheticState.speaker) });

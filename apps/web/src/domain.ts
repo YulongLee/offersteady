@@ -172,6 +172,7 @@ export interface InterviewAppAdapter {
   getDesktopDeviceBinding(interviewId: string, signal?: AbortSignal): Promise<DesktopDeviceBinding | null>;
   sendDesktopSessionHeartbeat(command: { interviewId: string; bindingId?: string | null; page: "preparation" | "live"; pageInstanceId?: string }, signal?: AbortSignal): Promise<{ pageInstanceId: string | null; leaseGeneration: number; leaseExpiresAtMs: number }>;
   loadRealtimeSession(interviewId: string, signal?: AbortSignal): Promise<Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>>;
+  loadDesktopShortcutScreenshotAnswers(interviewId: string, signal?: AbortSignal): Promise<readonly SubmitManualAnswerResult[]>;
   subscribeRealtimeSession(interviewId: string, onUpdate: (state: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => void, signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }): Promise<void>;
   deleteInterview(id: string, signal?: AbortSignal): Promise<void>;
   deleteScreenshot(id: string, signal?: AbortSignal): Promise<void>;

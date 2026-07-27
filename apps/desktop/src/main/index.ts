@@ -1,10 +1,11 @@
-import { app, BrowserWindow, Menu, Tray, desktopCapturer, ipcMain, nativeImage, safeStorage, session, shell, systemPreferences } from "electron";
+import { app, BrowserWindow, Menu, Tray, desktopCapturer, globalShortcut, ipcMain, nativeImage, safeStorage, session, shell, systemPreferences } from "electron";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import type { CaptureState } from "@offersteady/protocol" with { "resolution-mode": "import" };
 import { DeviceCredentialVault } from "./credential-vault";
 import { DevicePairingIdentityStore } from "./device-pairing";
+import { DEFAULT_SCREENSHOT_SHORTCUT, SCREENSHOT_SHORTCUT_OPTIONS, ScreenshotShortcutStore, isSupportedScreenshotShortcut } from "./screenshot-shortcut";
 
 // Local ad-hoc builds cannot reliably retain Apple's separate Audio Capture
 // grant across rebuilds. Reuse the Screen & System Audio Recording grant,
@@ -19,6 +20,10 @@ let captureState: CaptureState = "not-connected";
 let isQuitting = false;
 let credentialVault: DeviceCredentialVault | null = null;
 let pairingIdentityStore: DevicePairingIdentityStore | null = null;
+let screenshotShortcutStore: ScreenshotShortcutStore | null = null;
+let activeScreenshotShortcut = "";
+let screenshotShortcutTriggerInFlight = false;
+let lastScreenshotShortcutTriggerAt = 0;
 let registrationInterval: NodeJS.Timeout | null = null;
 let screenshotRequestInterval: NodeJS.Timeout | null = null;
 let realtimeAudioInterval: NodeJS.Timeout | null = null;
@@ -696,6 +701,71 @@ const pollRemoteScreenshotRequest = async () => {
   }
 };
 
+const shortcutNotice = (message: string) => {
+  mainWindow?.webContents.send("desktop:screenshot-shortcut-notice", message);
+};
+
+const triggerScreenshotShortcut = async () => {
+  const now = Date.now();
+  if (screenshotShortcutTriggerInFlight || now - lastScreenshotShortcutTriggerAt < 1500) {
+    shortcutNotice("上一笔快捷键截屏仍在处理中，请稍候。");
+    return;
+  }
+  screenshotShortcutTriggerInFlight = true;
+  lastScreenshotShortcutTriggerAt = now;
+  try {
+    if (!pairingIdentityStore) throw new Error("助手设备身份尚未初始化。");
+    const identity = await pairingIdentityStore.loadOrCreate(`${app.getName()} · ${process.platform === "darwin" ? "Mac" : "Desktop"}`);
+    const binding = await getLiveDesktopBinding();
+    if (!binding) {
+      shortcutNotice("当前没有已连接且正在进行的面试，本次没有截取屏幕。");
+      return;
+    }
+    const response = await fetchWithTimeout(desktopApiUrl(`/screenshot-answer/desktop-devices/${encodeURIComponent(identity.deviceId)}/shortcut-capture-requests`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        deviceId: identity.deviceId,
+        manualCode: identity.manualCode,
+      }),
+    });
+    if (!response.ok) {
+      let message = `快捷键截屏请求失败：${response.status}`;
+      try {
+        const payload = await response.json() as { error?: { message?: string } };
+        if (payload.error?.message) message = payload.error.message;
+      } catch {
+        // Keep the status-based fallback.
+      }
+      throw new Error(message);
+    }
+    shortcutNotice("快捷键已触发，正在截取当前选择的屏幕。");
+    await pollRemoteScreenshotRequest();
+  } catch (error) {
+    shortcutNotice(error instanceof Error ? error.message : "快捷键截屏失败，请稍后重试。");
+  } finally {
+    screenshotShortcutTriggerInFlight = false;
+  }
+};
+
+const registerScreenshotShortcut = async (accelerator: string) => {
+  if (!isSupportedScreenshotShortcut(accelerator)) {
+    return { ok: false, accelerator: activeScreenshotShortcut, message: "不支持该快捷键组合，请选择列表中的预设。" };
+  }
+  const previous = activeScreenshotShortcut;
+  if (previous === accelerator && (!accelerator || globalShortcut.isRegistered(accelerator))) {
+    return { ok: true, accelerator, message: accelerator ? "截屏回答快捷键已启用。" : "截屏回答快捷键已关闭。" };
+  }
+  if (previous) globalShortcut.unregister(previous);
+  if (accelerator && !globalShortcut.register(accelerator, () => { void triggerScreenshotShortcut(); })) {
+    if (previous) globalShortcut.register(previous, () => { void triggerScreenshotShortcut(); });
+    return { ok: false, accelerator: previous, message: "该快捷键已被其他应用占用，请选择其他组合。" };
+  }
+  activeScreenshotShortcut = accelerator;
+  await screenshotShortcutStore?.save(accelerator);
+  return { ok: true, accelerator, message: accelerator ? "截屏回答快捷键已启用。" : "截屏回答快捷键已关闭。" };
+};
+
 const startRemoteScreenshotRequestLoop = () => {
   if (screenshotRequestInterval) clearInterval(screenshotRequestInterval);
   const run = async () => {
@@ -747,6 +817,7 @@ app.whenReady().then(() => {
   captureState = "not-connected";
   credentialVault = new DeviceCredentialVault(app.getPath("userData"), safeStorage);
   pairingIdentityStore = new DevicePairingIdentityStore(app.getPath("userData"));
+  screenshotShortcutStore = new ScreenshotShortcutStore(app.getPath("userData"));
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
     callback(allowedRuntimePermissions.has(permission));
   });
@@ -798,6 +869,9 @@ app.whenReady().then(() => {
   createWindow();
   startDesktopRegistrationLoop();
   startRemoteScreenshotRequestLoop();
+  void screenshotShortcutStore.load()
+    .then(accelerator => registerScreenshotShortcut(accelerator))
+    .then(result => shortcutNotice(result.message));
 
   app.on("activate", () => mainWindow?.show());
 });
@@ -823,6 +897,11 @@ ipcMain.handle("credential:clear", async () => {
 
 ipcMain.handle("desktop:get-config", async () => desktopConfig());
 ipcMain.handle("desktop:get-native-runtime-health", async () => getNativeRuntimeHealth());
+ipcMain.handle("desktop:get-screenshot-shortcut", async () => ({
+  accelerator: activeScreenshotShortcut || await screenshotShortcutStore?.load() || DEFAULT_SCREENSHOT_SHORTCUT,
+  options: SCREENSHOT_SHORTCUT_OPTIONS,
+}));
+ipcMain.handle("desktop:set-screenshot-shortcut", async (_event, accelerator: string) => registerScreenshotShortcut(accelerator));
 
 ipcMain.handle("desktop:get-pairing-identity", async () => {
   if (!pairingIdentityStore) pairingIdentityStore = new DevicePairingIdentityStore(app.getPath("userData"));
@@ -946,4 +1025,5 @@ app.on("before-quit", () => {
   }
   abortPendingDesktopRequests();
   stopMainRealtimeAudioPublishing();
+  globalShortcut.unregisterAll();
 });

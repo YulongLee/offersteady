@@ -37,6 +37,14 @@ export interface DesktopNativeRuntimeHealth {
   readonly errors?: readonly string[];
 }
 
+export interface DesktopScreenshotShortcutSettings {
+  readonly accelerator: string;
+  readonly options: readonly {
+    readonly accelerator: string;
+    readonly label: string;
+  }[];
+}
+
 declare global {
   interface Window {
     offersteady: {
@@ -45,6 +53,9 @@ declare global {
       clearDeviceCredential: () => Promise<void>;
       getDesktopConfig: () => Promise<DesktopRuntimeConfig>;
       getNativeRuntimeHealth?: () => Promise<DesktopNativeRuntimeHealth>;
+      getScreenshotShortcut?: () => Promise<DesktopScreenshotShortcutSettings>;
+      setScreenshotShortcut?: (accelerator: string) => Promise<{ ok: boolean; accelerator: string; message: string }>;
+      onScreenshotShortcutNotice?: (listener: (message: string) => void) => () => void;
       getPairingIdentity: () => Promise<DesktopPairingIdentity>;
       listScreens?: () => Promise<readonly DesktopScreenSource[]>;
       setPreferredScreen?: (screenSourceId: string | null) => Promise<{ ok: boolean }>;

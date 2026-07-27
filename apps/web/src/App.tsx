@@ -620,6 +620,45 @@ function LivePage() {
     }));
   }, [id, setState]);
   useEffect(() => {
+    if (pageLeaseStatus === "replaced") return;
+    const controller = new AbortController();
+    let stopped = false;
+    let inFlight = false;
+    const syncShortcutAnswers = async () => {
+      if (stopped || inFlight || document.visibilityState !== "visible") return;
+      inFlight = true;
+      try {
+        const results = await runAdapterOperation(
+          signal => interviewAppAdapter.loadDesktopShortcutScreenshotAnswers(id, signal),
+          controller.signal,
+        );
+        if (stopped || results.length === 0) return;
+        setState(current => {
+          const existingIds = new Set(current.questions.map(question => question.id));
+          const unseen = results.filter(result => !existingIds.has(result.question.id));
+          if (unseen.length === 0) return current;
+          const newest = unseen[unseen.length - 1]!;
+          return {
+            ...current,
+            questions: [...unseen.map(result => result.question).reverse(), ...current.questions],
+            activeAnswerTask: current.activeAnswerTask?.status === "generating" ? current.activeAnswerTask : newest.task,
+          };
+        });
+      } catch {
+        // Shortcut result synchronization is best-effort and must not interrupt live audio or manual answers.
+      } finally {
+        inFlight = false;
+      }
+    };
+    void syncShortcutAnswers();
+    const timer = window.setInterval(() => void syncShortcutAnswers(), 1500);
+    return () => {
+      stopped = true;
+      controller.abort();
+      window.clearInterval(timer);
+    };
+  }, [id, pageLeaseStatus, setState]);
+  useEffect(() => {
     let stopped = false;
     let heartbeatTimer: number | null = null;
     let realtimePollTimer: number | null = null;
