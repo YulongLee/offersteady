@@ -16,19 +16,19 @@ const open = (path: string, mutate?: (state: WebAppState) => void) => {
       updatedAt: "刚刚",
     }));
   }
-  if (!vi.isMockFunction(interviewAppAdapter.getDesktopDeviceBinding)) {
-    vi.spyOn(interviewAppAdapter, "getDesktopDeviceBinding").mockResolvedValue(null);
-  }
-  if (!vi.isMockFunction(interviewAppAdapter.getLastDesktopDevice)) {
-    vi.spyOn(interviewAppAdapter, "getLastDesktopDevice").mockResolvedValue({
-      deviceId: "fixture-last-device",
-      displayName: "上次使用的 Mac",
-      maskedManualCode: "••••56",
-      capabilities: { microphone: true, systemAudio: true },
-      online: true,
-      lastSeenAtMs: Date.now(),
-    });
-  }
+  vi.spyOn(interviewAppAdapter, "getDesktopDeviceBinding").mockResolvedValue(null);
+  vi.spyOn(interviewAppAdapter, "getActiveInterviewConflict").mockResolvedValue({
+    currentInterviewId: "demo",
+    activeInterview: null,
+  });
+  vi.spyOn(interviewAppAdapter, "getLastDesktopDevice").mockResolvedValue({
+    deviceId: "fixture-last-device",
+    displayName: "上次使用的 Mac",
+    maskedManualCode: "••••56",
+    capabilities: { microphone: true, systemAudio: true },
+    online: true,
+    lastSeenAtMs: Date.now(),
+  });
   if (!vi.isMockFunction(interviewAppAdapter.bindDesktopDevice)) {
     vi.spyOn(interviewAppAdapter, "bindDesktopDevice").mockImplementation(async command => ({
       bindingId: `fixture-binding-${command.manualCode}`,
@@ -82,6 +82,19 @@ const open = (path: string, mutate?: (state: WebAppState) => void) => {
   const state = structuredClone(syntheticState); mutate?.(state);
   window.history.pushState({}, "", path);
   return render(<App initialAuthenticated initialState={state} />);
+};
+
+const connectWithMachineCode = async () => {
+  const endPrevious = screen.queryByRole("button", { name: "结束上一场，准备当前面试" });
+  if (endPrevious) {
+    fireEvent.click(endPrevious);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  }
+  fireEvent.change(screen.getByPlaceholderText("输入 6 位机器码"), { target: { value: "123456" } });
+  const connect = screen.getByRole("button", { name: "验证并连接" });
+  await waitFor(() => expect(connect).toBeEnabled());
+  fireEvent.click(connect);
+  await screen.findByText(/本场已连接：面试稳伴随程序 · Mac/);
 };
 
 describe("categorized materials and reachable live actions", () => {
@@ -177,7 +190,7 @@ describe("categorized materials and reachable live actions", () => {
     fireEvent.click(screen.getByRole("button", { name: "确认空资料并继续" }));
     expect(await screen.findByText("已确认不使用个人资料")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /开始面试/ })).toBeDisabled();
-    fireEvent.click(await screen.findByRole("button", { name: "一键连接上次设备" }));
+    await connectWithMachineCode();
     await waitFor(() => expect(screen.getByRole("button", { name: /开始面试/ })).toBeEnabled());
     expect(screen.queryByRole("checkbox", { name: /数据用途/ })).not.toBeInTheDocument();
   });
@@ -188,7 +201,7 @@ describe("categorized materials and reachable live actions", () => {
       state.preparation = { ...state.preparation, device: { ...device, capabilities: { ...device.capabilities, systemAudio: "denied" } } };
     });
     expect(screen.getByText("本地端会继续检查收音、系统音频和问题检测")).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("button", { name: "一键连接上次设备" }));
+    await connectWithMachineCode();
     const start = screen.getByRole("button", { name: /开始面试/ });
     await waitFor(() => expect(start).toBeEnabled());
     fireEvent.click(start);
@@ -204,22 +217,19 @@ describe("categorized materials and reachable live actions", () => {
     });
     expect(screen.getByText("请输入桌面伴随程序中的 6 位机器码，绑定本场收音机器")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /开始面试/ })).toBeDisabled();
-    fireEvent.change(screen.getByPlaceholderText("输入 6 位机器码"), { target: { value: "123456" } });
-    fireEvent.click(screen.getByRole("button", { name: "验证并连接" }));
-    expect(await screen.findByText(/本场已连接：面试稳伴随程序 · Mac/)).toBeInTheDocument();
+    await connectWithMachineCode();
     fireEvent.click(screen.getByRole("button", { name: /开始面试/ }));
     expect(await screen.findByText("等待开始面试")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "手动输入面试官的问题" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /截屏回答/ })).toBeInTheDocument();
   });
 
-  it("lets the user explicitly connect the last online device for this interview", async () => {
+  it("lets the user explicitly connect a device for this interview", async () => {
     open("/app/interviews/demo/prepare", state => {
       const device = state.preparation.device!;
       state.preparation = { ...state.preparation, device: { ...device, connected: false, captureState: "not-connected" } };
     });
-    const connect = await screen.findByRole("button", { name: "一键连接上次设备" });
-    fireEvent.click(connect);
+    await connectWithMachineCode();
     expect(await screen.findByText(/本场已连接：/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /开始面试/ })).toBeEnabled();
   });

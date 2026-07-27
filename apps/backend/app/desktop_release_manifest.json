@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAtMs": 1785177698192,
+  "generatedAtMs": 1785179069887,
   "entries": [
     {
       "id": "mac-arm64-local-dev",
@@ -11,10 +11,10 @@
       "minimumOs": "macOS 14.2+",
       "fileName": "OfferSteady-Companion-0.1.0-macOS-arm64.zip",
       "fileSizeBytes": 121276654,
-      "sha256": "b89686202eb5053a00ed566ce99d1bc6b059b3ac69a406f30a891db47d7d3086",
+      "sha256": "7fc2402d643efc7a36b19406bea58a3c44c64d5434851283fd3b7cd037645d9a",
       "signingStatus": "local-development",
       "notarized": false,
-      "publishedAtMs": 1785177698192,
+      "publishedAtMs": 1785179069887,
       "protocolVersion": "2.0",
       "captureRuntime": "electron-single-owner",
       "developmentOnly": true,
