@@ -22,6 +22,10 @@
 - **WHEN** ASR 供应商在桌面端继续采集和发送后续增量音频期间返回 Partial Transcript
 - **THEN** source 常驻接收器并行消费该事件并发布新 revision，音频发送线程不因等待 `recv` 而停止追加 PCM
 
+#### Scenario: Partial arrives between two source worker calls
+- **WHEN** provider partial 在上一批音频处理返回后、下一批音频任务开始前到达
+- **THEN** 系统通过独立 delivered revision 游标在下一次交付中发布该 partial，且不得将它误判为已消费事件
+
 #### Scenario: Interruption ends a source stream
 - **WHEN** source 结束、会话结束或连接超时
 - **THEN** 系统优雅关闭对应 ASR 长连接并释放该 source 的流式资源
@@ -84,6 +88,10 @@
 #### Scenario: Current realtime stream remains healthy
 - **WHEN** 当前 session 的 SSE 通道持续收到有效快照
 - **THEN** 网页不再执行周期性全量实时状态轮询
+
+#### Scenario: Several partial revisions arrive within two seconds
+- **WHEN** 当前 utterance 在两秒内产生多个 partial revision
+- **THEN** SSE 继续及时推送字幕快照，但复用最近 runtime 诊断，不为每个 partial 重复执行完整运行态聚合
 
 #### Scenario: Stream returns an authentication or missing-session response
 - **WHEN** SSE 请求返回 `401`、`403` 或 `404`

@@ -93,3 +93,27 @@ def test_gateway_receives_partial_on_background_pump_and_reuses_connection(monke
     assert gateway.diagnostics("microphone")["connection_recreations"] == 1
     assert [item["type"] for item in socket.sent].count("input_audio_buffer.commit") == 1
     gateway._close_source_session("session-stream:microphone")
+
+
+def test_gateway_delivers_partial_that_arrives_between_audio_frames(monkeypatch) -> None:
+    socket = _StreamingFakeWebSocket()
+    monkeypatch.setattr(
+        "app.services.dashscope_realtime_asr_gateway.connect",
+        lambda *args, **kwargs: socket,
+    )
+    gateway = DashScopeRealtimeAsrGateway(
+        Settings(
+            realtime_asr_api_key="test-key",
+            realtime_asr_partial_timeout_seconds=0.001,
+            realtime_asr_finalize_timeout_seconds=0.5,
+        ),
+        logging.getLogger("test-between-frame-partial"),
+    )
+
+    first = gateway.transcribe(frame=_frame(revision=1, is_final=False, audio=b"first"), attempt=0)
+    assert first.text == ""
+    time.sleep(0.03)
+    second = gateway.transcribe(frame=_frame(revision=2, is_final=False, audio=b"second"), attempt=0)
+
+    assert second.text == "持续流式识别"
+    gateway._close_source_session("session-stream:microphone")

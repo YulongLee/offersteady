@@ -59,6 +59,10 @@ Alternative considered: 继续沿用“每帧 HTTP / WS 请求立即做转写”
 
 持续流的发送与接收必须并行：source worker 只负责顺序追加新增 PCM 和发送句末 commit；每个 provider source session 使用独立常驻接收器持续读取 partial/completed 事件，并通过 condition/revision 快照交给业务 worker。不得在每次 append 后由发送线程直接调用 `recv`，否则 partial 等待时间会阻塞下一批音频，而过短等待又会稳定漏掉供应商事件。桌面 partial 目标周期进一步收紧为约 `100ms`，以减少主线程回调量化后形成的额外等待。
 
+provider event revision 与业务已发布 revision 必须使用两个独立游标。接收器在两批 PCM 之间收到的 partial 不能因为下一批任务开始时重新读取当前 event revision 而被视为旧事件；业务 worker 必须交付每个尚未发布的新 revision 一次，并抑制没有新 revision 时重复发布相同文本。
+
+网页 SSE 的高频字幕快照不得在每个 partial 上重新构建完整 runtime 诊断。runtime 诊断按最多每两秒刷新并在中间字幕事件中复用，transcript/candidate/event 仍按活动 cursor 更新，从而避免诊断聚合与 ASR worker 争用 Redis 和运行态锁。
+
 这样做的收益：
 
 - 避免重复握手和频繁 `session.update`

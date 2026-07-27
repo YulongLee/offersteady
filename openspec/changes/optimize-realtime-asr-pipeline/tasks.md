@@ -22,6 +22,7 @@
 - [x] 3.5 Coalesce adjacent incremental PCM frames under backlog while preserving all audio bytes and final delivery.
 - [x] 3.6 Atomically supersede stale device bindings and publisher tokens when the same desktop moves to a new interview.
 - [x] 3.7 Decouple provider WebSocket receive from PCM append with one persistent event receiver per session source.
+- [x] 3.8 Track provider event and delivered revisions independently so between-frame partials are not skipped or duplicated.
 
 ## 4. Web Transcript Streaming and Overlay Efficiency
 
@@ -34,6 +35,7 @@
 - [x] 4.7 Reset transient live state for newly created sessions and enforce session-scoped transcript reconciliation.
 - [x] 4.8 Circuit-break invalid-session SSE recovery so polling, focus events, and reconnect timers cannot form a retry storm.
 - [x] 4.9 Exit invalid live routes immediately and move synchronous Redis SSE reads off the FastAPI event loop.
+- [x] 4.10 Reuse runtime diagnostics for two seconds during high-frequency SSE partial updates.
 
 ## 5. Verification, Evals, and Rollout
 
@@ -43,3 +45,4 @@
 - [ ] 5.2 Add or update evals / performance checks for TTFT, final transcript latency, dropped-partial policy, and transcript stability under burst traffic.
 - [ ] 5.3 Run end-to-end validation with the desktop companion, backend, and web live page; compare against the recorded baseline and document rollout / rollback guidance.
 - [x] 5.6 Add regression coverage for ordered incremental desktop revisions and background partial/final provider event delivery.
+- [x] 5.7 Remove synchronous per-chunk runtime aggregation from the real-provider latency profiler.

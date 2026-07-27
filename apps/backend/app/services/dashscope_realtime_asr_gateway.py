@@ -29,6 +29,7 @@ class _SourceRealtimeSession:
     lock: threading.Lock = field(default_factory=threading.Lock)
     event_condition: threading.Condition = field(default_factory=threading.Condition)
     event_revision: int = 0
+    delivered_revision: int = 0
     first_text_at_ms: int | None = None
     completed_at_ms: int | None = None
     receiver_error: Exception | None = None
@@ -124,8 +125,6 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         try:
             with session.lock:
                 self._prepare_segment_state(session, frame)
-                with session.event_condition:
-                    baseline_revision = session.event_revision
                 if frame.audio_bytes:
                     self._send_audio_chunks(
                         session.connection,
@@ -140,7 +139,6 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                     }))
                 transcript_text, first_text_at_ms, completed_at_ms = self._wait_for_transcript(
                     session,
-                    baseline_revision=baseline_revision,
                     finalize=frame.is_final,
                 )
                 if frame.is_final:
@@ -176,6 +174,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             session.first_text_at_ms = None
             session.completed_at_ms = None
             session.receiver_error = None
+            session.delivered_revision = session.event_revision
 
     def _get_or_create_source_session(self, frame: AudioFrame) -> _SourceRealtimeSession:
         key = self._source_session_key(frame)
@@ -295,7 +294,6 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         self,
         session: _SourceRealtimeSession,
         *,
-        baseline_revision: int,
         finalize: bool,
     ) -> tuple[str, int | None, int | None]:
         wait_seconds = (
@@ -310,15 +308,18 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                     raise RetryableAsrError("realtime_asr_connection_failed") from session.receiver_error
                 if finalize and session.completed_at_ms is not None:
                     break
-                if not finalize and session.event_revision > baseline_revision:
+                if not finalize and session.event_revision > session.delivered_revision:
                     break
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     break
                 session.event_condition.wait(timeout=remaining)
-            transcript_text = session.transcript_text
+            has_new_revision = session.event_revision > session.delivered_revision
+            transcript_text = session.transcript_text if finalize or has_new_revision else ""
             first_text_at_ms = session.first_text_at_ms
             completed_at_ms = session.completed_at_ms
+            if has_new_revision:
+                session.delivered_revision = session.event_revision
         if finalize and completed_at_ms is None and not transcript_text.strip():
             self._completed_missing[session.source_kind] = self._completed_missing.get(session.source_kind, 0) + 1
             raise RetryableAsrError("realtime_asr_transcript_missing")

@@ -212,14 +212,12 @@ def run_remote_paced_probe(*, turn_detection_mode: str, text: str) -> dict[str, 
                     final_wall = int(time.time() * 1000)
                     break
             time.sleep(0.01)
-        runtime = _unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/runtime", params={"userId": f"latency-remote-{turn_detection_mode}"}))
         history.append({
             "chunk": idx,
             "isFinalChunk": is_final,
-            "timing": (runtime.get("performance") or {}).get("latestBySource", {}).get("microphone"),
-            "dominantBottleneck": runtime.get("dominantBottleneck"),
-            "stage": runtime.get("stage"),
-            "transcriptCount": runtime.get("transcriptCount"),
+            "capturedAtMs": captured_at,
+            "sentAtMs": sent_at,
+            "sendDelayMs": max(0, sent_at - captured_at),
         })
         if final_wall is not None:
             break
