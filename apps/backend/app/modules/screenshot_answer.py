@@ -302,6 +302,23 @@ async def create_remote_capture_request(
     return success_response(request=request_context, data=_to_remote_capture_request_response(capture_request), timestamp=utc_now_iso())
 
 
+@router.get("/sessions/{session_id}/remote-capture-requests", response_model=ApiEnvelope[list[RemoteScreenshotCaptureRequestResponse]])
+async def list_session_remote_capture_requests(
+    session_id: str,
+    request: Request,
+    user_id: str | None = Query(default=None, alias="userId"),
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: ScreenshotAnswerService = Depends(screenshot_answer_service),
+) -> ApiEnvelope[list[RemoteScreenshotCaptureRequestResponse]]:
+    resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
+    capture_requests = service.list_session_remote_capture_requests(user_id=resolved_user_id, session_id=session_id)
+    responses = []
+    for capture_request in capture_requests:
+        task = service.get_task(user_id=resolved_user_id, task_id=capture_request.answer_task_id) if capture_request.answer_task_id else None
+        responses.append(_to_remote_capture_request_response(capture_request, task))
+    return success_response(request=request, data=responses, timestamp=utc_now_iso())
+
+
 @router.post("/desktop-devices/{device_id}/shortcut-capture-requests", response_model=ApiEnvelope[RemoteScreenshotCaptureRequestResponse])
 async def create_desktop_shortcut_capture_request(
     device_id: str,

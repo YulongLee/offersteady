@@ -1311,6 +1311,15 @@ def test_remote_screenshot_capture_request_runs_through_bound_desktop_device() -
     assert created["status"] == "requested"
     assert created["deviceId"] == "device-remote-shot"
 
+    pending_requests = unwrap(client.get(
+        f"/api/v1/screenshot-answer/sessions/{session_id}/remote-capture-requests",
+        params={"userId": "remote-screenshot-user"},
+    ))
+    assert len(pending_requests) == 1
+    assert pending_requests[0]["requestId"] == created["requestId"]
+    assert pending_requests[0]["status"] == "requested"
+    assert pending_requests[0]["answerTask"] is None
+
     queued = unwrap(client.get("/api/v1/screenshot-answer/desktop-devices/device-remote-shot/capture-requests/next", params={
         "manualCode": "998877",
     }))
@@ -1334,6 +1343,14 @@ def test_remote_screenshot_capture_request_runs_through_bound_desktop_device() -
     assert loaded["answerTask"]["status"] == "completed"
     assert loaded["answerTask"]["visionProviderName"] == "qwen-vision-compatible"
     assert loaded["answerTaskId"] == loaded["answerTask"]["taskId"]
+
+    completed_requests = unwrap(client.get(
+        f"/api/v1/screenshot-answer/sessions/{session_id}/remote-capture-requests",
+        params={"userId": "remote-screenshot-user"},
+    ))
+    assert len(completed_requests) == 1
+    assert completed_requests[0]["status"] == "completed"
+    assert completed_requests[0]["answerTask"]["taskId"] == loaded["answerTask"]["taskId"]
 
     history = unwrap(client.get(f"/api/v1/screenshot-answer/sessions/{session_id}/history", params={
         "userId": "remote-screenshot-user",

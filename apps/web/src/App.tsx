@@ -597,6 +597,8 @@ function LivePage() {
   const previousLatestId = useRef(state.questions[0]?.id);
   const screenshotController = useRef<AbortController | null>(null);
   const manualAnswerController = useRef<AbortController | null>(null);
+  const activeShortcutScreenshotRequest = useRef<string | null>(null);
+  const terminalShortcutScreenshotRequests = useRef(new Set<string>());
   const pageInstanceId = useRef(globalThis.crypto?.randomUUID?.() ?? `page-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const interviewTitle = state.interviews.find(item => item.id === id)?.title ?? "本场面试";
   const active = state.questions[0] ?? emptyLiveQuestion;
@@ -628,11 +630,23 @@ function LivePage() {
       if (stopped || inFlight || document.visibilityState !== "visible") return;
       inFlight = true;
       try {
-        const results = await runAdapterOperation(
-          signal => interviewAppAdapter.loadDesktopShortcutScreenshotAnswers(id, signal),
+        const updates = await runAdapterOperation(
+          signal => interviewAppAdapter.loadDesktopShortcutScreenshotUpdates(id, signal),
           controller.signal,
         );
-        if (stopped || results.length === 0) return;
+        if (stopped || updates.length === 0) return;
+        const latest = updates[updates.length - 1]!;
+        if (latest.status === "requested" || latest.status === "processing") {
+          activeShortcutScreenshotRequest.current = latest.requestId;
+          setScreenshot(latest.screenshotTask);
+        } else if (!terminalShortcutScreenshotRequests.current.has(latest.requestId)) {
+          terminalShortcutScreenshotRequests.current.add(latest.requestId);
+          if (activeShortcutScreenshotRequest.current === latest.requestId) {
+            activeShortcutScreenshotRequest.current = null;
+          }
+          setScreenshot(latest.status === "completed" ? null : latest.screenshotTask);
+        }
+        const results = updates.flatMap(update => update.result ? [update.result] : []);
         setState(current => {
           const existingIds = new Set(current.questions.map(question => question.id));
           const unseen = results.filter(result => !existingIds.has(result.question.id));

@@ -160,6 +160,13 @@ export interface SubmitManualAnswerResult {
   readonly task: AnswerTaskSnapshot;
 }
 
+export interface DesktopShortcutScreenshotUpdate {
+  readonly requestId: string;
+  readonly status: "requested" | "processing" | "completed" | "failed" | "cancelled";
+  readonly screenshotTask: ScreenshotTask;
+  readonly result?: SubmitManualAnswerResult;
+}
+
 export interface InterviewAppAdapter {
   loadState(signal?: AbortSignal, options?: { readonly auth?: boolean }): Promise<WebAppState>;
   createDraft(input: { title: string; role: string; company?: string }, signal?: AbortSignal): Promise<InterviewSummary>;
@@ -172,7 +179,7 @@ export interface InterviewAppAdapter {
   getDesktopDeviceBinding(interviewId: string, signal?: AbortSignal): Promise<DesktopDeviceBinding | null>;
   sendDesktopSessionHeartbeat(command: { interviewId: string; bindingId?: string | null; page: "preparation" | "live"; pageInstanceId?: string }, signal?: AbortSignal): Promise<{ pageInstanceId: string | null; leaseGeneration: number; leaseExpiresAtMs: number }>;
   loadRealtimeSession(interviewId: string, signal?: AbortSignal): Promise<Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>>;
-  loadDesktopShortcutScreenshotAnswers(interviewId: string, signal?: AbortSignal): Promise<readonly SubmitManualAnswerResult[]>;
+  loadDesktopShortcutScreenshotUpdates(interviewId: string, signal?: AbortSignal): Promise<readonly DesktopShortcutScreenshotUpdate[]>;
   subscribeRealtimeSession(interviewId: string, onUpdate: (state: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => void, signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }): Promise<void>;
   deleteInterview(id: string, signal?: AbortSignal): Promise<void>;
   deleteScreenshot(id: string, signal?: AbortSignal): Promise<void>;

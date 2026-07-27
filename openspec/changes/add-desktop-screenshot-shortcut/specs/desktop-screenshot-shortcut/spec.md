@@ -40,6 +40,11 @@ The system SHALL process shortcut screenshots through the existing capture, vali
 ### Requirement: Live page receives shortcut-generated answers
 The web live interview page SHALL merge completed shortcut-generated screenshot answers for the current session into the existing answer workspace.
 
+#### Scenario: Shortcut task is still processing
+- **WHEN** a shortcut-generated screenshot request has been accepted but its answer is not complete
+- **THEN** the live page immediately displays the current capture, upload, recognition, or generation stage
+- **AND** the user does not need to press the shortcut repeatedly to confirm that it worked
+
 #### Scenario: Shortcut task completes while live page is open
 - **WHEN** a shortcut-generated screenshot task completes for the current session
 - **THEN** the live page displays it once as a screenshot answer without replacing or duplicating unrelated answers

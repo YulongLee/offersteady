@@ -889,6 +889,14 @@ class ScreenshotAnswerService:
             raise DomainRequestError("screenshot-answer", "remote-capture", "不能查看其他用户的截图回答请求。", 403)
         return request
 
+    def list_session_remote_capture_requests(self, *, user_id: str, session_id: str) -> list[RemoteScreenshotCaptureRequest]:
+        self.session_service.get_session(user_id=user_id, session_id=session_id)
+        return [
+            request
+            for request in self.repository.list_remote_capture_requests_for_session(session_id=session_id)
+            if request.owner_user_id == user_id
+        ]
+
     def cancel_remote_capture_request(self, *, user_id: str, request_id: str) -> RemoteScreenshotCaptureRequest:
         request = self.get_remote_capture_request(user_id=user_id, request_id=request_id)
         if request.status in {"completed", "failed", "cancelled"}:

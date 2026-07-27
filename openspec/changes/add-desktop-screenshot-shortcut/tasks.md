@@ -15,3 +15,4 @@
 - [x] 3.1 Synchronize completed shortcut screenshot answers into the current live workspace
 - [x] 3.2 Deduplicate task IDs and stop synchronization for inactive pages
 - [x] 3.3 Add pure regression coverage for supported shortcut validation
+- [x] 3.4 Display shortcut screenshot progress and terminal failure state immediately

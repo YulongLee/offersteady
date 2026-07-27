@@ -46,6 +46,14 @@ class InMemoryScreenshotAnswerRepository(ScreenshotAnswerRepository):
         record = self.remote_capture_requests.get(request_id)
         return replace(record) if record else None
 
+    def list_remote_capture_requests_for_session(self, *, session_id: str) -> list[RemoteScreenshotCaptureRequest]:
+        items = [
+            request
+            for request in self.remote_capture_requests.values()
+            if request.session_id == session_id
+        ]
+        return [replace(item) for item in sorted(items, key=lambda item: item.created_at_ms)]
+
     def get_next_pending_remote_capture_request(self, *, device_id: str, manual_code: str) -> RemoteScreenshotCaptureRequest | None:
         matches = [
             request for request in self.remote_capture_requests.values()
