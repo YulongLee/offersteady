@@ -26,5 +26,5 @@
 ## 5. Release
 
 - [x] 5.1 Update the desktop release manifest and downloadable package
-- [ ] 5.2 Commit and push the completed change to Git
-- [ ] 5.3 Deploy the updated production services and verify public health endpoints
+- [x] 5.2 Commit and push the completed change to Git
+- [x] 5.3 Deploy the updated production services and verify public health endpoints
