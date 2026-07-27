@@ -46,3 +46,5 @@
 - [ ] 5.3 Run end-to-end validation with the desktop companion, backend, and web live page; compare against the recorded baseline and document rollout / rollback guidance.
 - [x] 5.6 Add regression coverage for ordered incremental desktop revisions and background partial/final provider event delivery.
 - [x] 5.7 Remove synchronous per-chunk runtime aggregation from the real-provider latency profiler.
+- [x] Persist transcript activity revisions independently from operational events so SSE consumers wake immediately.
+- [x] Reduce unhealthy-stream fallback synchronization to one second and stop it after the stream becomes healthy.

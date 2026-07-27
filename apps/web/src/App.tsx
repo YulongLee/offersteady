@@ -733,7 +733,7 @@ function LivePage() {
           void subscribeRealtime();
         }
       });
-    }, 15_000);
+    }, 1_000);
     const resumeRealtime = () => {
       if (stopped || document.visibilityState !== "visible") return;
       void sendHeartbeat();

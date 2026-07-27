@@ -50,6 +50,7 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         self._lock_key = f"{self._snapshot_key}:lock"
         self._receipt_key = f"{self._snapshot_key}:receipts"
         self._transcript_key = f"{self._snapshot_key}:transcripts"
+        self._activity_key = f"{self._snapshot_key}:activity"
         self._runtime_lock = threading.RLock()
         self._event_retention = max(100, settings.realtime_event_retention)
         self._runtime_ttl_seconds = max(300, settings.realtime_runtime_ttl_seconds)
@@ -102,6 +103,11 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
             record = RealtimeEvent(**item)
             self.events.setdefault(record.session_id, []).append(record)
         self.session_activity_versions = {str(key): int(value) for key, value in payload.get("activity", {}).items()}
+        for session_id, version in self._redis.hgetall(self._activity_key).items():
+            self.session_activity_versions[session_id] = max(
+                self.session_activity_versions.get(session_id, 0),
+                int(version),
+            )
         self.desktop_devices_by_id = {}
         self.desktop_devices_by_code = {}
         for item in payload.get("devices", []):
@@ -146,6 +152,9 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
                 result = operation()
                 self._redis.set(self._snapshot_key, json.dumps(self._snapshot(), ensure_ascii=True, separators=(",", ":")))
                 self._redis.expire(self._snapshot_key, self._runtime_ttl_seconds)
+                if self.session_activity_versions:
+                    self._redis.hset(self._activity_key, mapping=self.session_activity_versions)
+                    self._redis.expire(self._activity_key, self._runtime_ttl_seconds)
                 return result
 
     def save_desktop_device(self, device): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_desktop_device(device))
@@ -186,10 +195,19 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
 
     def save_transcript(self, segment):
         with self._runtime_lock:
+            persisted_version = self._redis.hget(self._activity_key, segment.session_id)
+            if persisted_version is not None:
+                self.session_activity_versions[segment.session_id] = max(
+                    self.session_activity_versions.get(segment.session_id, 0),
+                    int(persisted_version),
+                )
             stored = super().save_transcript(segment)
+            activity_version = self.session_activity_versions.get(stored.session_id, 0)
         field = f"{stored.session_id}:{stored.segment_id}"
         self._redis.hset(self._transcript_key, field, json.dumps(asdict(stored), ensure_ascii=True, separators=(",", ":")))
         self._redis.expire(self._transcript_key, self._runtime_ttl_seconds)
+        self._redis.hset(self._activity_key, stored.session_id, activity_version)
+        self._redis.expire(self._activity_key, self._runtime_ttl_seconds)
         if stored.is_final and self._settings.realtime_transcript_persistence_enabled and self._settings.database_url:
             expires_at_ms = int(time.time() * 1000) + self._settings.realtime_transcript_retention_days * 86_400_000
             with psycopg.connect(self._settings.database_url) as connection:
@@ -248,14 +266,13 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         return records
 
     def get_session_activity_version(self, *, session_id):
+        activity_version = int(self._redis.hget(self._activity_key, session_id) or 0)
         items = self._redis.xrevrange(f"offersteady:realtime:events:{session_id}", count=1)
-        return int(items[0][1].get("cursor", "0")) if items else 0
+        event_version = int(items[0][1].get("cursor", "0")) if items else 0
+        return max(activity_version, event_version)
 
     def get_event_stream_version(self, *, session_id: str) -> int:
-        items = self._redis.xrevrange(f"offersteady:realtime:events:{session_id}", count=1)
-        if not items:
-            return self.get_session_activity_version(session_id=session_id)
-        return int(items[0][1].get("cursor", "0"))
+        return self.get_session_activity_version(session_id=session_id)
 
     def readiness(self) -> bool:
         return bool(self._redis.ping())
