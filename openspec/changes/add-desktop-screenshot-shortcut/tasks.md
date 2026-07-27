@@ -9,6 +9,7 @@
 - [x] 2.1 Add a device-scoped backend endpoint guarded by the active live binding
 - [x] 2.2 Reuse the existing remote capture, upload, vision answer, and failure pipeline
 - [x] 2.3 Prevent overlapping shortcut requests in desktop and backend layers
+- [x] 2.4 Stop returning processing requests to the desktop capture loop
 
 ## 3. Live page integration
 
@@ -16,3 +17,4 @@
 - [x] 3.2 Deduplicate task IDs and stop synchronization for inactive pages
 - [x] 3.3 Add pure regression coverage for supported shortcut validation
 - [x] 3.4 Display shortcut screenshot progress and terminal failure state immediately
+- [x] 3.5 Display the operating system's actual shortcut registration state

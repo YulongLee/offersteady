@@ -39,6 +39,8 @@ export interface DesktopNativeRuntimeHealth {
 
 export interface DesktopScreenshotShortcutSettings {
   readonly accelerator: string;
+  readonly registered?: boolean;
+  readonly message?: string;
   readonly options: readonly {
     readonly accelerator: string;
     readonly label: string;

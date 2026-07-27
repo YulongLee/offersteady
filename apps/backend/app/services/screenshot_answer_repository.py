@@ -59,7 +59,7 @@ class InMemoryScreenshotAnswerRepository(ScreenshotAnswerRepository):
             request for request in self.remote_capture_requests.values()
             if request.device_id == device_id
             and request.manual_code == manual_code
-            and request.status in {"requested", "processing"}
+            and request.status == "requested"
         ]
         if not matches:
             return None

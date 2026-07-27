@@ -22,6 +22,11 @@ let credentialVault: DeviceCredentialVault | null = null;
 let pairingIdentityStore: DevicePairingIdentityStore | null = null;
 let screenshotShortcutStore: ScreenshotShortcutStore | null = null;
 let activeScreenshotShortcut = "";
+let screenshotShortcutRegistration = {
+  ok: false,
+  accelerator: "",
+  message: "截屏回答快捷键尚未注册。",
+};
 let screenshotShortcutTriggerInFlight = false;
 let lastScreenshotShortcutTriggerAt = 0;
 let registrationInterval: NodeJS.Timeout | null = null;
@@ -674,7 +679,7 @@ const pollRemoteScreenshotRequest = async () => {
   if (!response.ok) return;
   const envelope = await response.json() as { data?: { requestId: string; status: string } | null };
   const request = envelope.data;
-  if (!request || request.status === "completed" || request.status === "failed") return;
+  if (!request || request.status !== "requested") return;
   processingRemoteScreenshotRequestId = request.requestId;
   try {
     mainWindow?.webContents.send("desktop:remote-screenshot-notice", "网页端已请求截图回答，本地助手正在截取当前屏幕。");
@@ -750,20 +755,24 @@ const triggerScreenshotShortcut = async () => {
 
 const registerScreenshotShortcut = async (accelerator: string) => {
   if (!isSupportedScreenshotShortcut(accelerator)) {
-    return { ok: false, accelerator: activeScreenshotShortcut, message: "不支持该快捷键组合，请选择列表中的预设。" };
+    screenshotShortcutRegistration = { ok: false, accelerator: activeScreenshotShortcut, message: "不支持该快捷键组合，请选择列表中的预设。" };
+    return screenshotShortcutRegistration;
   }
   const previous = activeScreenshotShortcut;
   if (previous === accelerator && (!accelerator || globalShortcut.isRegistered(accelerator))) {
-    return { ok: true, accelerator, message: accelerator ? "截屏回答快捷键已启用。" : "截屏回答快捷键已关闭。" };
+    screenshotShortcutRegistration = { ok: true, accelerator, message: accelerator ? "快捷键已在系统中生效。" : "截屏回答快捷键已关闭。" };
+    return screenshotShortcutRegistration;
   }
   if (previous) globalShortcut.unregister(previous);
   if (accelerator && !globalShortcut.register(accelerator, () => { void triggerScreenshotShortcut(); })) {
     if (previous) globalShortcut.register(previous, () => { void triggerScreenshotShortcut(); });
-    return { ok: false, accelerator: previous, message: "该快捷键已被其他应用占用，请选择其他组合。" };
+    screenshotShortcutRegistration = { ok: false, accelerator: previous, message: "快捷键未生效：该组合已被系统或其他应用占用，请选择其他组合。" };
+    return screenshotShortcutRegistration;
   }
   activeScreenshotShortcut = accelerator;
   await screenshotShortcutStore?.save(accelerator);
-  return { ok: true, accelerator, message: accelerator ? "截屏回答快捷键已启用。" : "截屏回答快捷键已关闭。" };
+  screenshotShortcutRegistration = { ok: true, accelerator, message: accelerator ? "快捷键已在系统中生效。" : "截屏回答快捷键已关闭。" };
+  return screenshotShortcutRegistration;
 };
 
 const startRemoteScreenshotRequestLoop = () => {
@@ -897,10 +906,16 @@ ipcMain.handle("credential:clear", async () => {
 
 ipcMain.handle("desktop:get-config", async () => desktopConfig());
 ipcMain.handle("desktop:get-native-runtime-health", async () => getNativeRuntimeHealth());
-ipcMain.handle("desktop:get-screenshot-shortcut", async () => ({
-  accelerator: activeScreenshotShortcut || await screenshotShortcutStore?.load() || DEFAULT_SCREENSHOT_SHORTCUT,
-  options: SCREENSHOT_SHORTCUT_OPTIONS,
-}));
+ipcMain.handle("desktop:get-screenshot-shortcut", async () => {
+  const configuredAccelerator = activeScreenshotShortcut || await screenshotShortcutStore?.load() || DEFAULT_SCREENSHOT_SHORTCUT;
+  const registration = await registerScreenshotShortcut(configuredAccelerator);
+  return {
+    accelerator: registration.accelerator,
+    options: SCREENSHOT_SHORTCUT_OPTIONS,
+    registered: registration.ok && Boolean(registration.accelerator) && globalShortcut.isRegistered(registration.accelerator),
+    message: registration.message,
+  };
+});
 ipcMain.handle("desktop:set-screenshot-shortcut", async (_event, accelerator: string) => registerScreenshotShortcut(accelerator));
 
 ipcMain.handle("desktop:get-pairing-identity", async () => {

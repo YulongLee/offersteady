@@ -13,7 +13,7 @@ The desktop companion SHALL display a screenshot-answer shortcut setting beside 
 
 #### Scenario: Shortcut is already occupied
 - **WHEN** the operating system rejects the selected shortcut because another application owns it
-- **THEN** the companion preserves the previous working shortcut and displays an actionable conflict message
+- **THEN** the companion preserves the previous working shortcut and displays the actual registration state with an actionable conflict message
 
 ### Requirement: Shortcut capture requires an active live binding
 The system MUST validate the invoking desktop device against the authoritative active capture binding before capturing the screen.
@@ -59,3 +59,8 @@ The desktop companion MUST prevent overlapping shortcut-triggered capture reques
 #### Scenario: User presses shortcut repeatedly
 - **WHEN** a shortcut capture is already being created or processed
 - **THEN** subsequent presses are ignored with a busy notice and do not create additional billable tasks
+
+#### Scenario: Desktop has uploaded the requested screenshot
+- **WHEN** a remote screenshot request changes from requested to processing
+- **THEN** the companion stops returning it as the next capture request
+- **AND** the same screen image is not uploaded repeatedly while model processing continues

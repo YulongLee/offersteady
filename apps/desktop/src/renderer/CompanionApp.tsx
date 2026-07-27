@@ -472,7 +472,10 @@ export function CompanionApp() {
 
   useEffect(() => {
     void window.offersteady?.getScreenshotShortcut?.()
-      .then(settings => setScreenshotShortcut(settings))
+      .then(settings => {
+        setScreenshotShortcut(settings);
+        setScreenshotShortcutNotice(settings.message ?? (settings.registered ? "快捷键已在系统中生效。" : "快捷键当前未生效，请重新选择。"));
+      })
       .catch(() => setScreenshotShortcutNotice("快捷键设置读取失败，请重启助手。"));
     const unsubscribe = window.offersteady?.onScreenshotShortcutNotice?.(message => {
       setScreenshotShortcutNotice(message);
@@ -1184,7 +1187,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
               <button type="button" className="secondary-button" onClick={() => { void previewScreen(); }}>预览</button>
               <button type="button" className="secondary-button shortcut-settings-button" onClick={() => setShowScreenshotShortcutSettings(true)}>
                 <span>快捷键</span>
-                <small>{activeScreenshotShortcutLabel}</small>
+                <small>{screenshotShortcut.registered ? activeScreenshotShortcutLabel : "未生效 · 点击设置"}</small>
               </button>
             </div>
           </TerminalRow>
