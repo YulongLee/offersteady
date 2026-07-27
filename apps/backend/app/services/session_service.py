@@ -147,6 +147,19 @@ class SessionService:
         session = self.get_session(user_id=user_id, session_id=session_id)
         if session.status == "ended":
             raise DomainRequestError("session", "start", "已结束的会话不能直接开始，请重新开始一场新的面试。", 400)
+        active_conflicts = [
+            active
+            for active in self.list_sessions(user_id=user_id, status="live")
+            if active.session_id != session_id
+        ]
+        if active_conflicts:
+            raise DomainRequestError(
+                "session",
+                "start",
+                "当前账号已有一场进行中的面试，请先继续或结束上一场面试。",
+                409,
+                error_code="active_interview_conflict",
+            )
         now_ms = _now_ms()
         return self._save_session(
             session,

@@ -340,6 +340,8 @@ const getLiveDesktopBinding = async () => {
       bound?: boolean;
       sessionStatus?: string;
       binding?: {
+        bindingId?: string;
+        bindingGeneration?: number;
         sessionId: string;
         ownerUserId: string;
         deviceId: string;
@@ -365,7 +367,7 @@ const ensureMainRealtimeAudioPublishing = async () => {
       if (mainRealtimeBindingKey) stopMainRealtimeAudioPublishing();
       return;
     }
-    const bindingKey = `${binding.sessionId}:${binding.ownerUserId}:${binding.deviceId}:${binding.manualCode}`;
+    const bindingKey = `${binding.sessionId}:${binding.ownerUserId}:${binding.deviceId}:${binding.manualCode}:${binding.bindingId ?? ""}:${binding.bindingGeneration ?? 1}`;
     if (mainRealtimeBindingKey !== bindingKey) {
       stopMainRealtimeAudioPublishing();
       mainRealtimeEnsureInFlight = true;

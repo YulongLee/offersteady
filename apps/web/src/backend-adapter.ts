@@ -2,7 +2,7 @@ import type { CaptureState, FoundationIndexResponse } from "@offersteady/protoco
 
 import type { AnswerProvenance, AnswerSourceReference, AnswerTaskSnapshot, CancelAnswerResult, OfficialCheckoutOrder, PointsRedemptionResult } from "@offersteady/protocol";
 import { AppError } from "./domain";
-import type { AnswerAdvice, DesktopDeviceBinding, InterviewAppAdapter, InterviewQuestion, InterviewSummary, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
+import type { ActiveInterviewConflict, AnswerAdvice, DesktopDeviceBinding, InterviewAppAdapter, InterviewQuestion, InterviewSummary, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
 import { createJsonClient, withBaseUrl } from "./api-client";
 import { authClient } from "./auth-client";
 import { createSseParser, type LiveAnswerStreamEvent, type ManualAnswerStreamUpdate } from "./live-answer-stream";
@@ -19,6 +19,16 @@ interface BackendSessionResponse {
     readonly knowledgeDocumentIds: readonly string[];
     readonly confirmedAtMs: number | null;
   };
+}
+
+interface BackendActiveSessionConflictResponse {
+  readonly currentSessionId: string;
+  readonly activeSession: BackendSessionResponse | null;
+}
+
+interface BackendSupersedeActiveSessionResponse {
+  readonly currentSessionId: string;
+  readonly retiredSessionIds: readonly string[];
 }
 
 interface BackendLiveAnswerTaskResponse {
@@ -678,6 +688,28 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       revision: confirmed.materialBinding.revision,
       confirmedAtMs: confirmed.materialBinding.confirmedAtMs,
     };
+  }
+
+  async getActiveInterviewConflict(id: string, signal?: AbortSignal): Promise<ActiveInterviewConflict> {
+    const conflict = await this.client.request<BackendActiveSessionConflictResponse>(`/api/v1/sessions/${id}/active-conflict?userId=${encodeURIComponent(requireUserId())}`, {
+      headers: authHeaders(),
+    }, signal);
+    return {
+      currentInterviewId: conflict.currentSessionId,
+      activeInterview: conflict.activeSession ? toInterviewSummary(conflict.activeSession) : null,
+    };
+  }
+
+  async supersedeActiveInterview(command: Parameters<InterviewAppAdapter["supersedeActiveInterview"]>[0], signal?: AbortSignal) {
+    const result = await this.client.request<BackendSupersedeActiveSessionResponse>(`/api/v1/sessions/${command.interviewId}/supersede-active`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        userId: requireUserId(),
+        expectedPreviousSessionId: command.expectedPreviousInterviewId,
+      }),
+    }, signal);
+    return result.retiredSessionIds;
   }
 
   async startInterviewSession(id: string, signal?: AbortSignal) {

@@ -187,6 +187,16 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
     return structuredClone(selection);
   }
 
+  async getActiveInterviewConflict(id: string, signal?: AbortSignal) {
+    await delay(signal);
+    return { currentInterviewId: id, activeInterview: null };
+  }
+
+  async supersedeActiveInterview(_command: Parameters<InterviewAppAdapter["supersedeActiveInterview"]>[0], signal?: AbortSignal) {
+    await delay(signal);
+    return [];
+  }
+
   async startInterviewSession(id: string, signal?: AbortSignal): Promise<InterviewSummary> {
     await delay(signal);
     const interview = syntheticState.interviews.find(item => item.id === id) ?? syntheticState.interviews[0]!;

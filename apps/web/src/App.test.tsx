@@ -33,6 +33,8 @@ describe("OfferSteady web application", () => {
       status: "active",
       updatedAt: "刚刚",
     }));
+    vi.spyOn(interviewAppAdapter, "getActiveInterviewConflict").mockImplementation(async id => ({ currentInterviewId: id, activeInterview: null }));
+    vi.spyOn(interviewAppAdapter, "supersedeActiveInterview").mockResolvedValue([]);
     vi.spyOn(interviewAppAdapter, "getDesktopDeviceBinding").mockResolvedValue(null);
     vi.spyOn(interviewAppAdapter, "getLastDesktopDevice").mockResolvedValue({
       deviceId: "fixture-last-device",
@@ -259,6 +261,27 @@ describe("OfferSteady web application", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("后端会话启动失败，请重试");
     expect(screen.getByRole("heading", { name: "高级前端工程师面试" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "实时对话" })).not.toBeInTheDocument();
+  });
+
+  it("requires explicit takeover before binding a new interview to the desktop device", async () => {
+    vi.mocked(interviewAppAdapter.getActiveInterviewConflict).mockResolvedValueOnce({
+      currentInterviewId: "demo",
+      activeInterview: { ...syntheticState.interviews[0]!, id: "previous-live", title: "上一场算法面试", status: "active" },
+    });
+    vi.mocked(interviewAppAdapter.supersedeActiveInterview).mockResolvedValueOnce(["previous-live"]);
+    await login();
+    window.history.pushState({}, "", "/app/interviews/demo/prepare");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    const dialog = await screen.findByRole("dialog", { name: "已有一场面试正在进行" });
+    expect(within(dialog).getByText("上一场算法面试")).toBeInTheDocument();
+    expect(interviewAppAdapter.bindDesktopDevice).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "结束上一场，准备当前面试" }));
+    await waitFor(() => expect(interviewAppAdapter.supersedeActiveInterview).toHaveBeenCalledWith({
+      interviewId: "demo",
+      expectedPreviousInterviewId: "previous-live",
+    }, expect.any(AbortSignal)));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "已有一场面试正在进行" })).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "一键连接上次设备" })).toBeEnabled();
   });
 
   it("shows a manually submitted question as the latest answer", async () => {

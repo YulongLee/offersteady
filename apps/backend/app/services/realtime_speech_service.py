@@ -48,6 +48,7 @@ from app.schemas.realtime_speech import (
     RealtimeTranscriptListResponse,
     TranscriptSegmentResponse,
 )
+from app.ports.interview_session import InterviewSessionRecord
 from app.services.chat_service import ChatService
 from app.services.session_service import SessionService
 
@@ -259,6 +260,14 @@ class RealtimeSpeechService:
         reuse_last_device: bool = False,
     ) -> SessionDesktopBindingRecord:
         self.session_service.get_session(user_id=user_id, session_id=session_id)
+        if self.get_active_interview_conflict(user_id=user_id, session_id=session_id) is not None:
+            raise DomainRequestError(
+                "realtime-speech",
+                "bind-device",
+                "当前账号已有一场进行中的面试，请先继续或结束上一场面试。",
+                409,
+                error_code="active_interview_conflict",
+            )
         with self._frame_worker_lock:
             self._retired_session_ids.discard(session_id)
         if reuse_last_device:
@@ -316,10 +325,6 @@ class RealtimeSpeechService:
                     disconnected_at_ms=now_ms,
                     status="closed",
                 ))
-        for active_session in self.session_service.list_sessions(user_id=user_id, status="live"):
-            if active_session.session_id != session_id:
-                self.session_service.end_session(user_id=user_id, session_id=active_session.session_id)
-                retired_session_ids.add(active_session.session_id)
         for retired_session_id in retired_session_ids:
             self._reset_realtime_session(session_id=retired_session_id, retired=True)
         if reset_current_session:
@@ -346,8 +351,69 @@ class RealtimeSpeechService:
         self._log(logging.INFO, "realtime_speech.desktop_device_bound", session_id=session_id, publisher_id=binding.device_id, state=binding.status)
         return binding
 
-    def record_web_session_heartbeat(self, *, user_id: str, session_id: str, binding_id: str | None, page: str, page_instance_id: str | None = None) -> WebSessionHeartbeatRecord:
+    def get_active_interview_conflict(self, *, user_id: str, session_id: str) -> InterviewSessionRecord | None:
         self.session_service.get_session(user_id=user_id, session_id=session_id)
+        conflicts = [
+            session
+            for session in self.session_service.list_sessions(user_id=user_id, status="live")
+            if session.session_id != session_id
+        ]
+        if not conflicts:
+            return None
+        return max(conflicts, key=lambda session: (session.last_activity_at_ms, session.updated_at_ms))
+
+    def supersede_active_interviews(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        expected_previous_session_id: str,
+    ) -> list[str]:
+        self.session_service.get_session(user_id=user_id, session_id=session_id)
+        conflicts = [
+            session
+            for session in self.session_service.list_sessions(user_id=user_id, status="live")
+            if session.session_id != session_id
+        ]
+        if not conflicts:
+            return []
+        conflict_ids = {session.session_id for session in conflicts}
+        if expected_previous_session_id not in conflict_ids:
+            raise DomainRequestError(
+                "realtime-speech",
+                "supersede-session",
+                "进行中的面试已发生变化，请刷新后重新选择。",
+                409,
+                error_code="active_interview_changed",
+            )
+        now_ms = _now_ms()
+        for conflict in conflicts:
+            self.session_service.end_session(user_id=user_id, session_id=conflict.session_id)
+            for binding in self.repository.list_session_desktop_bindings_for_user(user_id=user_id):
+                if binding.session_id == conflict.session_id and binding.status == "bound":
+                    self.repository.save_session_desktop_binding(replace(binding, status="stale"))
+            for publisher in self.repository.list_publishers_for_session(session_id=conflict.session_id):
+                if publisher.status not in {"closed", "failed"}:
+                    self.repository.save_publisher(replace(publisher, disconnected_at_ms=now_ms, status="closed"))
+            self._reset_realtime_session(session_id=conflict.session_id, retired=True)
+            self._save_event(
+                session_id=conflict.session_id,
+                owner_user_id=user_id,
+                kind="connection-state",
+                payload={"status": "superseded", "replacementSessionId": session_id},
+            )
+        return sorted(conflict_ids)
+
+    def record_web_session_heartbeat(self, *, user_id: str, session_id: str, binding_id: str | None, page: str, page_instance_id: str | None = None) -> WebSessionHeartbeatRecord:
+        session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        if session.status == "ended":
+            raise DomainRequestError(
+                "realtime-speech",
+                "web-heartbeat",
+                "该面试已结束，实时页面连接已停止。",
+                409,
+                error_code="realtime_session_ended",
+            )
         safe_page = "live" if page == "live" else "preparation"
         now_ms = _now_ms()
         heartbeat_record = WebSessionHeartbeatRecord(

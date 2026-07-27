@@ -4,10 +4,11 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from app.core.logging import utc_now_iso
 from app.core.responses import success_response
-from app.deps import optional_authenticated_context, resolve_owned_user_id, session_service
+from app.deps import optional_authenticated_context, realtime_speech_service, resolve_owned_user_id, session_service
 from app.ports.authentication import AuthenticatedRequestContext
 from app.schemas.foundation import ApiEnvelope, ModuleDescriptor
 from app.schemas.session import (
+    ActiveSessionConflictResponse,
     ConfirmSessionMaterialsRequest,
     ContinueInterviewSessionResponse,
     ConversationContextEntryResponse,
@@ -19,7 +20,10 @@ from app.schemas.session import (
     SessionContextWindowResponse,
     SessionUsageRecordResponse,
     SessionUsageResponse,
+    SupersedeActiveSessionRequest,
+    SupersedeActiveSessionResponse,
 )
+from app.services.realtime_speech_service import RealtimeSpeechService
 from app.services.session_service import SessionService
 
 
@@ -147,6 +151,47 @@ async def delete_session(
 ) -> ApiEnvelope[dict[str, str]]:
     service.delete_session(user_id=resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context), session_id=session_id)
     return success_response(request=request, data={"sessionId": session_id, "status": "deleted"}, timestamp=utc_now_iso())
+
+
+@router.get("/{session_id}/active-conflict", response_model=ApiEnvelope[ActiveSessionConflictResponse])
+async def get_active_session_conflict(
+    session_id: str,
+    request: Request,
+    user_id: str | None = Query(default=None, alias="userId"),
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: RealtimeSpeechService = Depends(realtime_speech_service),
+) -> ApiEnvelope[ActiveSessionConflictResponse]:
+    resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
+    active_session = service.get_active_interview_conflict(user_id=resolved_user_id, session_id=session_id)
+    return success_response(
+        request=request,
+        data=ActiveSessionConflictResponse(
+            currentSessionId=session_id,
+            activeSession=_to_session_response(active_session) if active_session else None,
+        ),
+        timestamp=utc_now_iso(),
+    )
+
+
+@router.post("/{session_id}/supersede-active", response_model=ApiEnvelope[SupersedeActiveSessionResponse])
+async def supersede_active_sessions(
+    session_id: str,
+    request_context: Request,
+    request: SupersedeActiveSessionRequest,
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: RealtimeSpeechService = Depends(realtime_speech_service),
+) -> ApiEnvelope[SupersedeActiveSessionResponse]:
+    user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
+    retired_session_ids = service.supersede_active_interviews(
+        user_id=user_id,
+        session_id=session_id,
+        expected_previous_session_id=request.expected_previous_session_id,
+    )
+    return success_response(
+        request=request_context,
+        data=SupersedeActiveSessionResponse(currentSessionId=session_id, retiredSessionIds=retired_session_ids),
+        timestamp=utc_now_iso(),
+    )
 
 
 @router.post("/{session_id}/continue", response_model=ApiEnvelope[ContinueInterviewSessionResponse])

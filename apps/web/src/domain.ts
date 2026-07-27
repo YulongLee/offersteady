@@ -150,6 +150,11 @@ export interface SubmitScreenshotAnswerCommand {
   readonly instruction: string;
 }
 
+export interface ActiveInterviewConflict {
+  readonly currentInterviewId: string;
+  readonly activeInterview: InterviewSummary | null;
+}
+
 export interface SubmitManualAnswerResult {
   readonly question: InterviewQuestion;
   readonly task: AnswerTaskSnapshot;
@@ -159,6 +164,8 @@ export interface InterviewAppAdapter {
   loadState(signal?: AbortSignal, options?: { readonly auth?: boolean }): Promise<WebAppState>;
   createDraft(input: { title: string; role: string; company?: string }, signal?: AbortSignal): Promise<InterviewSummary>;
   confirmInterviewMaterials(selection: SessionContextSelection, signal?: AbortSignal): Promise<SessionContextSelection>;
+  getActiveInterviewConflict(id: string, signal?: AbortSignal): Promise<ActiveInterviewConflict>;
+  supersedeActiveInterview(command: { interviewId: string; expectedPreviousInterviewId: string }, signal?: AbortSignal): Promise<readonly string[]>;
   startInterviewSession(id: string, signal?: AbortSignal): Promise<InterviewSummary>;
   bindDesktopDevice(command: { interviewId: string; manualCode?: string; reuseLastDevice?: boolean }, signal?: AbortSignal): Promise<DesktopDeviceBinding>;
   getLastDesktopDevice?(signal?: AbortSignal): Promise<RecentDesktopDevice | null>;

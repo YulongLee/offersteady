@@ -118,6 +118,24 @@ class SessionCommandRequest(BaseModel):
     user_id: str = Field(min_length=1, alias="userId")
 
 
+class SupersedeActiveSessionRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    user_id: str = Field(min_length=1, alias="userId")
+    expected_previous_session_id: str = Field(min_length=1, alias="expectedPreviousSessionId")
+
+
+class ActiveSessionConflictResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    current_session_id: str = Field(alias="currentSessionId")
+    active_session: InterviewSessionResponse | None = Field(default=None, alias="activeSession")
+
+
+class SupersedeActiveSessionResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    current_session_id: str = Field(alias="currentSessionId")
+    retired_session_ids: list[str] = Field(default_factory=list, alias="retiredSessionIds")
+
+
 class ConfirmSessionMaterialsRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
     user_id: str = Field(min_length=1, alias="userId")
