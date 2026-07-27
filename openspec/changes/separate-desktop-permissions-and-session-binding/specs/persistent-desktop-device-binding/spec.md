@@ -18,6 +18,14 @@
 - **WHEN** 同一代码身份的助手再次启动且 macOS 仍报告权限已授权
 - **THEN** 助手直接复用该权限且网页不再展示授权操作
 
+#### Scenario: Local companion is rebuilt during development
+- **WHEN** 本地开发版主应用或原生采集 helper 被重新构建
+- **THEN** 两者保持稳定 Bundle ID 和指定代码要求，macOS 不因构建产物哈希变化而把同一安装识别为随机新程序
+
+#### Scenario: Companion connection management is displayed
+- **WHEN** 用户打开助手并查看固定连接码
+- **THEN** 连接码旁直接提供打开或进入当前面试的操作，不再展示重复的设备状态、权限状态、连接详情和音频路由说明面板
+
 #### Scenario: Session is not connected
 - **WHEN** 助手权限已授权但当前面试尚未建立连接
 - **THEN** Web 展示“尚未连接本场面试”而不是“麦克风未授权”或“截图未授权”

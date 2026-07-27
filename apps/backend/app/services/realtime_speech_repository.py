@@ -132,6 +132,15 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
         items = [item for item in self.publishers_by_id.values() if item.session_id == session_id]
         return [replace(item) for item in sorted(items, key=lambda item: item.issued_at_ms)]
 
+    def prune_publishers_for_session(self, *, session_id: str, keep_publisher_ids: set[str]) -> None:
+        removable = [
+            item for item in self.publishers_by_id.values()
+            if item.session_id == session_id and item.publisher_id not in keep_publisher_ids
+        ]
+        for item in removable:
+            self.publishers_by_id.pop(item.publisher_id, None)
+            self.publishers_by_token.pop(item.token, None)
+
     def save_frame_receipt(self, receipt: RealtimeFrameReceiptRecord) -> RealtimeFrameReceiptRecord:
         stored = replace(receipt)
         self.frame_receipts.setdefault(stored.session_id, {})[(stored.source_kind, stored.source_id)] = stored

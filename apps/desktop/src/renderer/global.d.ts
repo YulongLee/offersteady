@@ -6,6 +6,7 @@ export interface DesktopRuntimeConfig {
   readonly architecture: DesktopArchitecture;
   readonly platformVersion: string;
   readonly protocolVersion: string;
+  readonly captureRuntime: "electron-single-owner";
   readonly webWorkspaceUrl: string;
   readonly apiBaseUrl: string;
 }
@@ -36,20 +37,6 @@ export interface DesktopNativeRuntimeHealth {
   readonly errors?: readonly string[];
 }
 
-export interface DesktopNativeAudioEvent {
-  readonly type: "frame" | "status";
-  readonly sourceKind: "microphone" | "system";
-  readonly sourceId: string;
-  readonly capturedAtMs?: number | null;
-  readonly durationMs?: number | null;
-  readonly sampleRateHz?: number | null;
-  readonly channels?: 1 | 2 | number | null;
-  readonly level?: number | null;
-  readonly audioBase64?: string | null;
-  readonly errorCode?: string | null;
-  readonly message?: string | null;
-}
-
 declare global {
   interface Window {
     offersteady: {
@@ -58,14 +45,6 @@ declare global {
       clearDeviceCredential: () => Promise<void>;
       getDesktopConfig: () => Promise<DesktopRuntimeConfig>;
       getNativeRuntimeHealth?: () => Promise<DesktopNativeRuntimeHealth>;
-      startNativeAudioStream?: (options: {
-        microphoneSourceId?: string;
-        systemSourceId?: string;
-        captureMicrophone?: boolean;
-        captureSystem?: boolean;
-      }) => Promise<{ ok: boolean; microphoneStarted?: boolean; systemStarted?: boolean }>;
-      stopNativeAudioStream?: () => Promise<{ ok: boolean }>;
-      onNativeAudioEvent?: (callback: (event: DesktopNativeAudioEvent) => void) => () => void;
       getPairingIdentity: () => Promise<DesktopPairingIdentity>;
       listScreens?: () => Promise<readonly DesktopScreenSource[]>;
       setPreferredScreen?: (screenSourceId: string | null) => Promise<{ ok: boolean }>;

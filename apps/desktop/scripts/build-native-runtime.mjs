@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const desktopDir = resolve(scriptDir, "..");
 const source = join(desktopDir, "native/macos-capture/OfferSteadyCaptureRuntime.swift");
+const infoPlist = join(desktopDir, "native/macos-capture/Info.plist");
 const buildDir = join(desktopDir, "native/macos-capture/build");
 const output = join(buildDir, "OfferSteadyCaptureRuntime");
 const distDir = join(desktopDir, "dist/native/macos-capture");
@@ -18,6 +19,9 @@ if (process.platform !== "darwin") {
 if (!existsSync(source)) {
   throw new Error(`Native runtime source not found: ${source}`);
 }
+if (!existsSync(infoPlist)) {
+  throw new Error(`Native runtime Info.plist not found: ${infoPlist}`);
+}
 
 rmSync(buildDir, { recursive: true, force: true });
 mkdirSync(buildDir, { recursive: true });
@@ -28,6 +32,10 @@ const result = spawnSync("swiftc", [
   "-framework", "AVFoundation",
   "-framework", "CoreGraphics",
   "-framework", "ScreenCaptureKit",
+  "-Xlinker", "-sectcreate",
+  "-Xlinker", "__TEXT",
+  "-Xlinker", "__info_plist",
+  "-Xlinker", infoPlist,
   "-o", output,
 ], { encoding: "utf8" });
 

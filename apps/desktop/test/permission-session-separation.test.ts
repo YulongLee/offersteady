@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { companionStatusCopy, desktopBindingLeaseIdentity } from "../src/renderer/CompanionApp";
-import { sessionCapturePermissionPolicy } from "../src/renderer/audio/realtime-publisher";
+import { desktopCaptureArchitecture, sessionCapturePermissionPolicy } from "../src/renderer/audio/realtime-publisher";
 
 describe("desktop permission and interview connection states", () => {
   it("keeps an idle registered device distinct from a missing permission", () => {
@@ -29,6 +29,8 @@ describe("desktop permission and interview connection states", () => {
 
   it("reuses assistant-owned permissions instead of requesting them when a session starts", () => {
     expect(sessionCapturePermissionPolicy.requestPermissionOnSessionStart).toBe(false);
-    expect(sessionCapturePermissionPolicy.systemAudioCapture).toBe("native-preauthorized");
+    expect(sessionCapturePermissionPolicy.systemAudioCapture).toBe("electron-display-loopback");
+    expect(sessionCapturePermissionPolicy.captureOwner).toBe("electron-single-owner");
+    expect(desktopCaptureArchitecture).toBe("electron-single-owner");
   });
 });

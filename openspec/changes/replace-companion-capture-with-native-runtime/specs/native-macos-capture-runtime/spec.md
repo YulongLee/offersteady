@@ -22,6 +22,14 @@ The desktop companion SHALL capture the computer output audio that the candidate
 - **WHEN** the runtime cannot capture computer output due to unsupported macOS version, permission or missing native capability
 - **THEN** the companion reports the output source as unavailable and does not show a successful interviewer-audio state
 
+#### Scenario: Embedded native helper cannot reuse the parent application TCC grant
+- **WHEN** screen capture works in the authorized Electron application but macOS denies the embedded native helper's computer-output stream
+- **THEN** the companion automatically falls back to the parent application's loopback capture and only reports unavailable if both capture paths fail
+
+#### Scenario: CoreAudio Tap returns a permanently silent loopback track
+- **WHEN** the Electron macOS loopback API creates a track but CoreAudio Tap cannot produce audio under the local application identity
+- **THEN** the companion uses the ScreenCaptureKit-backed compatibility path associated with the existing Screen & System Audio Recording grant
+
 ### Requirement: macOS capture runtime MUST provide selected-display screen frames
 The desktop companion SHALL capture preview frames from the selected display through the same runtime path that will support screenshot answering.
 

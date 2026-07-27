@@ -2067,6 +2067,69 @@ def test_realtime_runtime_tracks_frame_receipts_and_asr_status() -> None:
     assert transcripts["transcripts"][0]["performance"]["traceId"] == "trace-runtime-mic-1"
 
 
+def test_realtime_publisher_replacement_keeps_one_authoritative_channel() -> None:
+    user_id = "publisher-replacement-user"
+    session = unwrap(client.post("/api/v1/sessions", json={
+        "userId": user_id,
+        "title": "发布通道替换测试",
+    }))
+    session_id = session["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": user_id}))
+
+    first = unwrap(client.post("/api/v1/realtime-speech/publishers", json={
+        "userId": user_id,
+        "sessionId": session_id,
+        "sourceKind": "mixed",
+        "clientName": "首次连接",
+    }))
+    second = unwrap(client.post("/api/v1/realtime-speech/publishers", json={
+        "userId": user_id,
+        "sessionId": session_id,
+        "sourceKind": "mixed",
+        "clientName": "重连后的客户端名称",
+    }))
+
+    assert first["publisherId"] != second["publisherId"]
+    runtime = unwrap(client.get(
+        f"/api/v1/realtime-speech/sessions/{session_id}/runtime",
+        params={"userId": user_id},
+    ))
+    assert [item["publisherId"] for item in runtime["publishers"]] == [second["publisherId"]]
+    assert runtime["publishers"][0]["status"] == "connected"
+
+
+def test_realtime_publisher_replacement_preserves_other_logical_channels() -> None:
+    user_id = "publisher-channel-isolation-user"
+    session = unwrap(client.post("/api/v1/sessions", json={
+        "userId": user_id,
+        "title": "发布声道隔离测试",
+    }))
+    session_id = session["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": user_id}))
+
+    system = unwrap(client.post("/api/v1/realtime-speech/publishers", json={
+        "userId": user_id,
+        "sessionId": session_id,
+        "sourceKind": "system",
+        "clientName": "系统输出",
+    }))
+    mixed = unwrap(client.post("/api/v1/realtime-speech/publishers", json={
+        "userId": user_id,
+        "sessionId": session_id,
+        "sourceKind": "mixed",
+        "clientName": "双通道传输",
+    }))
+
+    runtime = unwrap(client.get(
+        f"/api/v1/realtime-speech/sessions/{session_id}/runtime",
+        params={"userId": user_id},
+    ))
+    assert {item["publisherId"] for item in runtime["publishers"]} == {
+        system["publisherId"],
+        mixed["publisherId"],
+    }
+
+
 def test_realtime_runtime_reports_desktop_no_audio_frames_anomaly() -> None:
     session = unwrap(client.post("/api/v1/sessions", json={
         "userId": "runtime-anomaly-user",

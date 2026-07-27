@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAtMs": 1785082763645,
+  "generatedAtMs": 1785161372197,
   "entries": [
     {
       "id": "mac-arm64-local-dev",
@@ -10,17 +10,19 @@
       "version": "0.1.0",
       "minimumOs": "macOS 14.2+",
       "fileName": "OfferSteady-Companion-0.1.0-macOS-arm64.zip",
-      "fileSizeBytes": 121378705,
-      "sha256": "4785007ccb8a25082b950277501d43883514578228bb986d281c9d023ffb42cf",
+      "fileSizeBytes": 121271084,
+      "sha256": "73211ab700b22141dfa8f38c8dc8fa6105d1e1d691dfbf64f16690fcb6297c06",
       "signingStatus": "local-development",
       "notarized": false,
-      "publishedAtMs": 1785082763645,
+      "publishedAtMs": 1785161372197,
       "protocolVersion": "2.0",
+      "captureRuntime": "electron-single-owner",
       "developmentOnly": true,
       "objectKey": "desktop-releases/macos/arm64/0.1.0/OfferSteady-Companion-0.1.0-macOS-arm64.zip",
       "capabilities": {
         "microphone": true,
         "systemAudio": true,
+        "screenCapture": true,
         "manualInputFallback": true,
         "screenshotFallback": true
       }

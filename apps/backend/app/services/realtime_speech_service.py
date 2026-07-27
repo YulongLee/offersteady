@@ -631,7 +631,6 @@ class RealtimeSpeechService:
             if (
                 previous.owner_user_id == user_id
                 and previous.source_kind == source_kind
-                and previous.client_name == safe_client_name
                 and previous.status not in {"closed", "failed"}
             ):
                 self.repository.save_publisher(replace(previous, disconnected_at_ms=now_ms, status="closed"))
@@ -647,6 +646,15 @@ class RealtimeSpeechService:
             status="connected",
         )
         stored = self.repository.save_publisher(publisher)
+        active_publisher_ids = {
+            item.publisher_id
+            for item in self.repository.list_publishers_for_session(session_id=session_id)
+            if item.owner_user_id == user_id and item.status not in {"closed", "failed"}
+        }
+        self.repository.prune_publishers_for_session(
+            session_id=session_id,
+            keep_publisher_ids=active_publisher_ids | {stored.publisher_id},
+        )
         self._save_event(
             session_id=session_id,
             owner_user_id=user_id,
@@ -915,7 +923,6 @@ class RealtimeSpeechService:
             audio_bytes=audio_bytes,
         )
         if not frame.audio_bytes:
-            self.repository.save_publisher(replace(publisher, status="receiving-audio"))
             degraded = self._save_event(
                 session_id=publisher.session_id,
                 owner_user_id=publisher.owner_user_id,
@@ -1506,12 +1513,12 @@ class RealtimeSpeechService:
                 self._log(logging.ERROR, "realtime_speech.transcribe_error", session_id=publisher.session_id, publisher_id=publisher.publisher_id, state="transcribe-error", error_code=str(exc))
                 last_error = exc
                 break
-        failed = self.repository.save_publisher(replace(publisher, status="failed"))
+        degraded = self.repository.save_publisher(replace(publisher, status="degraded"))
         self._save_event(
-            session_id=failed.session_id,
-            owner_user_id=failed.owner_user_id,
+            session_id=degraded.session_id,
+            owner_user_id=degraded.owner_user_id,
             kind="degraded",
-            payload={"publisherId": failed.publisher_id, "reason": "asr-failed", "errorCode": last_error.__class__.__name__ if last_error else "asr_failed"},
+            payload={"publisherId": degraded.publisher_id, "reason": "asr-failed", "errorCode": last_error.__class__.__name__ if last_error else "asr_failed"},
         )
         error_code = str(last_error) if last_error and str(last_error).strip() else "asr-failed"
         raise DomainRequestError("realtime-speech", "transcribe", "实时语音转写失败。", 502, error_code=error_code)

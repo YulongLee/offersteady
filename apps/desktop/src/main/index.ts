@@ -6,6 +6,13 @@ import type { CaptureState } from "@offersteady/protocol" with { "resolution-mod
 import { DeviceCredentialVault } from "./credential-vault";
 import { DevicePairingIdentityStore } from "./device-pairing";
 
+// Local ad-hoc builds cannot reliably retain Apple's separate Audio Capture
+// grant across rebuilds. Reuse the Screen & System Audio Recording grant,
+// which is also required by screenshot capture and is stable for this app.
+if (process.platform === "darwin") {
+  app.commandLine.appendSwitch("disable-features", "MacCatapLoopbackAudioForScreenShare");
+}
+
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let captureState: CaptureState = "not-connected";
@@ -35,6 +42,7 @@ let mainRealtimeOwnsNativeAudio = false;
 let rendererOwnsNativeAudio = false;
 let desktopRegistrationInFlight = false;
 let remoteScreenshotPollInFlight = false;
+let displayMediaFailureBackoffUntil = 0;
 const activeDesktopRequestControllers = new Set<AbortController>();
 const desktopApiRequestsInFlight = new Map<string, Promise<DesktopApiRequestResult>>();
 const SCREENSHOT_VISION_MAX_LONG_EDGE = 1600;
@@ -108,6 +116,7 @@ const desktopConfig = () => ({
   architecture: process.arch === "arm64" ? "arm64" : process.arch === "x64" ? "x64" : "unknown",
   platformVersion: process.getSystemVersion(),
   protocolVersion: "2.0",
+  captureRuntime: "electron-single-owner",
   webWorkspaceUrl: process.env.OFFERSTEADY_DESKTOP_WEB_URL || defaultWebWorkspaceUrl(),
   apiBaseUrl: process.env.OFFERSTEADY_API_BASE_URL || defaultApiBaseUrl(),
 });
@@ -120,45 +129,37 @@ const nativeRuntimePath = () => {
 
 const getNativeRuntimeHealth = async () => {
   if (process.platform !== "darwin") {
-    return { available: false, ready: false, errorCode: "unsupported-platform", message: "当前 native capture runtime 仅支持 macOS。" };
+    return { available: false, ready: false, errorCode: "unsupported-platform", message: "当前 Electron 系统音频采集仅支持 macOS。" };
   }
-  const helper = nativeRuntimePath();
-  if (!existsSync(helper)) {
-    return { available: false, ready: false, errorCode: "native-runtime-missing", message: "缺少 macOS 原生采集运行时，请重新打包安装伴随程序。" };
-  }
-  return new Promise((resolve) => {
-    execFile(helper, [], { timeout: 5000 }, (error, stdout, stderr) => {
-      if (error) {
-        resolve({ available: true, ready: false, errorCode: "native-runtime-health-failed", message: stderr || error.message });
-        return;
-      }
-      try {
-        resolve({ available: true, ...JSON.parse(stdout.trim()) });
-      } catch {
-        resolve({ available: true, ready: false, errorCode: "native-runtime-invalid-output", message: stdout.trim() || "原生采集运行时没有返回有效健康状态。" });
-      }
-    });
-  });
+  const screenPermission = systemPreferences.getMediaAccessStatus("screen");
+  return {
+    available: true,
+    ready: screenPermission === "granted",
+    runtime: "electron-single-owner",
+    version: "2.0",
+    microphonePermission: systemPreferences.getMediaAccessStatus("microphone"),
+    screenPermission,
+    screenCaptureKitAvailable: true,
+    computerOutputCapturePath: "electron-display-loopback",
+    message: screenPermission === "granted"
+      ? "Electron 主助手统一负责麦克风、电脑输出和屏幕采集。"
+      : "请向面试稳伴随程序授予屏幕与系统音频录制权限。",
+    errors: [],
+  };
 };
 
-const requestNativeScreenCaptureAccess = async () => {
+const requestElectronScreenCaptureAccess = async () => {
   if (process.platform !== "darwin") return true;
-  const helper = nativeRuntimePath();
-  if (!existsSync(helper)) return false;
-  return new Promise<boolean>((resolve) => {
-    execFile(helper, ["request-screen-permission"], { timeout: 30_000 }, (error, stdout) => {
-      if (error) {
-        resolve(false);
-        return;
-      }
-      try {
-        const result = JSON.parse(stdout.trim()) as { granted?: boolean };
-        resolve(result.granted === true);
-      } catch {
-        resolve(false);
-      }
+  if (systemPreferences.getMediaAccessStatus("screen") === "granted") return true;
+  try {
+    const sources = await desktopCapturer.getSources({
+      types: ["screen"],
+      thumbnailSize: { width: 1, height: 1 },
     });
-  });
+    return sources.length > 0;
+  } catch {
+    return false;
+  }
 };
 
 const optimizeScreenshotForVision = (image: Electron.NativeImage) => {
@@ -430,15 +431,10 @@ const publishNativeAudioEventFromMain = async (event: Record<string, unknown>) =
 };
 
 const startMainRealtimeAudioLoop = () => {
-  // Protocol v2 has one renderer transport fed by the native Swift runtime.
-  // Keep the legacy main-process HTTP publisher stopped to avoid duplicates.
+  // Electron renderer is the only production capture and transport owner.
+  // The legacy main-process publisher remains permanently disabled.
   if (realtimeAudioInterval) clearInterval(realtimeAudioInterval);
   realtimeAudioInterval = null;
-  if (process.env.OFFERSTEADY_ENABLE_LEGACY_MAIN_AUDIO !== "1") return;
-  void ensureMainRealtimeAudioPublishing().catch((error) => console.warn("[main-realtime-audio] ensure failed", error));
-  realtimeAudioInterval = setInterval(() => {
-    void ensureMainRealtimeAudioPublishing().catch((error) => console.warn("[main-realtime-audio] ensure failed", error));
-  }, 2500);
 };
 
 const probeWebUrl = async (url: string) => {
@@ -720,9 +716,9 @@ const startRemoteScreenshotRequestLoop = () => {
 const createWindow = () => {
   mainWindow = new BrowserWindow({
     width: 780,
-    height: 760,
+    height: 650,
     minWidth: 700,
-    minHeight: 680,
+    minHeight: 610,
     title: "面试稳伴随程序",
     backgroundColor: "#080d18",
     show: false,
@@ -754,6 +750,16 @@ app.whenReady().then(() => {
   });
   session.defaultSession.setPermissionCheckHandler((_webContents, permission) => allowedRuntimePermissions.has(permission));
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+    if (Date.now() < displayMediaFailureBackoffUntil) {
+      try {
+        callback({});
+      } catch {
+        // Electron rejects an empty response when video was requested. The
+        // renderer receives the rejection while the expensive source lookup
+        // remains in backoff.
+      }
+      return;
+    }
     void desktopCapturer.getSources({
         types: ["screen"],
         thumbnailSize: { width: 0, height: 0 },
@@ -776,6 +782,7 @@ app.whenReady().then(() => {
       });
       })
       .catch((error) => {
+        displayMediaFailureBackoffUntil = Date.now() + 5_000;
         console.warn("[desktop-capture] display media source unavailable", error);
         try {
           callback({});
@@ -814,29 +821,6 @@ ipcMain.handle("credential:clear", async () => {
 
 ipcMain.handle("desktop:get-config", async () => desktopConfig());
 ipcMain.handle("desktop:get-native-runtime-health", async () => getNativeRuntimeHealth());
-ipcMain.handle("desktop:start-native-audio-stream", async (_event, options: {
-  microphoneSourceId?: string;
-  systemSourceId?: string;
-  captureMicrophone?: boolean;
-  captureSystem?: boolean;
-}) => {
-  stopMainRealtimeAudioPublishing();
-  stopNativeAudioStreams();
-  rendererOwnsNativeAudio = true;
-  const microphoneStarted = options.captureMicrophone === false
-    ? false
-    : startNativeAudioProcess("microphone", options.microphoneSourceId || "native-microphone");
-  const systemStarted = options.captureSystem === false
-    ? false
-    : startNativeAudioProcess("system", options.systemSourceId || "native-system-output");
-  if (!microphoneStarted && !systemStarted) rendererOwnsNativeAudio = false;
-  return { ok: microphoneStarted || systemStarted, microphoneStarted, systemStarted };
-});
-ipcMain.handle("desktop:stop-native-audio-stream", async () => {
-  rendererOwnsNativeAudio = false;
-  stopNativeAudioStreams();
-  return { ok: true };
-});
 
 ipcMain.handle("desktop:get-pairing-identity", async () => {
   if (!pairingIdentityStore) pairingIdentityStore = new DevicePairingIdentityStore(app.getPath("userData"));
@@ -933,7 +917,7 @@ ipcMain.handle("desktop:request-microphone-access", async () => {
   return systemPreferences.askForMediaAccess("microphone");
 });
 
-ipcMain.handle("desktop:request-screen-capture-access", async () => requestNativeScreenCaptureAccess());
+ipcMain.handle("desktop:request-screen-capture-access", async () => requestElectronScreenCaptureAccess());
 
 ipcMain.handle("desktop:open-permission-settings", async (_event, kind: "microphone" | "screen" | "camera" | "audio") => {
   await shell.openExternal(permissionSettingsUrl(kind));

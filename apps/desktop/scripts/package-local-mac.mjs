@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -51,6 +51,7 @@ if (copyBundle.status !== 0) {
 }
 mkdirSync(resourcesAppDir, { recursive: true });
 cpSync(join(desktopDir, "dist"), join(resourcesAppDir, "dist"), { recursive: true });
+rmSync(join(resourcesAppDir, "dist/native"), { recursive: true, force: true });
 if (existsSync(sourceIconPng)) {
   const iconset = join(archDir, "offersteady.iconset");
   rmSync(iconset, { recursive: true, force: true });
@@ -78,12 +79,6 @@ if (existsSync(sourceIconPng)) {
     throw new Error(`Failed to generate macOS icns: ${iconutil.stderr || iconutil.stdout}`);
   }
 }
-const nativeRuntimePath = join(desktopDir, "dist/native/macos-capture/OfferSteadyCaptureRuntime");
-if (!existsSync(nativeRuntimePath)) {
-  throw new Error("macOS native capture runtime is missing. Run npm run build:native -w @offersteady/desktop before packaging.");
-}
-mkdirSync(join(resourcesAppDir, "native/macos-capture"), { recursive: true });
-copyFileSync(nativeRuntimePath, join(resourcesAppDir, "native/macos-capture/OfferSteadyCaptureRuntime"));
 writeFileSync(
   join(resourcesAppDir, "package.json"),
   JSON.stringify(
@@ -145,7 +140,19 @@ const findCodesignIdentity = () => {
   return preferred || "-";
 };
 const signIdentity = findCodesignIdentity();
-const sign = spawnSync("codesign", ["--force", "--deep", "--sign", signIdentity, "--entitlements", entitlements, appPath], {
+const deepSign = spawnSync("codesign", ["--force", "--deep", "--sign", signIdentity, "--entitlements", entitlements, appPath], {
+  encoding: "utf8",
+});
+if (deepSign.status !== 0) {
+  throw new Error(`Failed to deep-sign app with identity "${signIdentity}": ${deepSign.stderr || deepSign.stdout}`);
+}
+
+const appSignArgs = ["--force", "--sign", signIdentity, "--entitlements", entitlements];
+if (signIdentity === "-") {
+  appSignArgs.push("--requirements", '=designated => identifier "com.offersteady.companion"');
+}
+appSignArgs.push(appPath);
+const sign = spawnSync("codesign", appSignArgs, {
   encoding: "utf8",
 });
 if (sign.status !== 0) {
@@ -172,7 +179,7 @@ writeFileSync(
     "3. 首次使用需要按提示授权麦克风、屏幕/系统音频权限。",
     "4. 如果系统设置里已经授权，但程序内测试仍失败，请先退出 App，再到“系统设置 → 隐私与安全性”中移除旧授权后重新打开；也可以在项目根目录执行：",
     "   npm run desktop:reset-privacy-open",
-    "5. 系统音频测试需要选择可共享音频的屏幕/窗口，并播放一段会议声音或网页声音；若提示没有系统音频轨道，说明屏幕流拿到了但系统音频没有被 macOS 提供。",
+    "5. 系统音频由主助手通过屏幕与系统音频录制权限采集。请播放一段会议或网页声音；若提示没有系统音频轨道，请重新检查主助手授权。",
     signIdentity === "-"
       ? "6. 这是本机开发版，当前使用 ad-hoc 签名；每次重新构建后 macOS 隐私权限可能需要重置。"
       : `6. 这是本机开发版，当前使用代码签名身份：${signIdentity}`,
@@ -211,6 +218,7 @@ const metadata = {
   signingIdentity: signIdentity,
   notarized: false,
   protocolVersion: "2.0",
+  captureRuntime: "electron-single-owner",
   generatedAtMs: Date.now(),
   developmentOnly: true,
   capabilities: {

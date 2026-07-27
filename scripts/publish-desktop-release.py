@@ -30,7 +30,7 @@ def main() -> int:
     if not all((settings.oss_access_key_id, settings.oss_access_key_secret, settings.oss_endpoint, settings.oss_bucket)):
         raise SystemExit("Real OSS credentials are required in .env to publish a desktop release.")
 
-    from oss2 import Auth, Bucket
+    from oss2 import Auth, Bucket, resumable_upload
 
     endpoint = str(settings.oss_endpoint)
     if not endpoint.startswith(("http://", "https://")):
@@ -38,7 +38,15 @@ def main() -> int:
     bucket = Bucket(Auth(settings.oss_access_key_id, settings.oss_access_key_secret), endpoint, settings.oss_bucket)
     version = str(metadata["version"])
     object_key = f"desktop-releases/macos/arm64/{version}/{artifact.name}"
-    result = bucket.put_object_from_file(object_key, str(artifact), headers={"Content-Type": "application/zip"})
+    result = resumable_upload(
+        bucket,
+        object_key,
+        str(artifact),
+        headers={"Content-Type": "application/zip"},
+        multipart_threshold=8 * 1024 * 1024,
+        part_size=4 * 1024 * 1024,
+        num_threads=4,
+    )
     if result.status not in {200, 201, 204}:
         raise SystemExit(f"OSS upload failed with status {result.status}")
 
@@ -60,11 +68,13 @@ def main() -> int:
             "notarized": bool(metadata.get("notarized", False)),
             "publishedAtMs": published_at_ms,
             "protocolVersion": metadata["protocolVersion"],
+            "captureRuntime": metadata.get("captureRuntime", "electron-single-owner"),
             "developmentOnly": True,
             "objectKey": object_key,
             "capabilities": {
                 "microphone": True,
                 "systemAudio": True,
+                "screenCapture": True,
                 "manualInputFallback": True,
                 "screenshotFallback": True,
             },

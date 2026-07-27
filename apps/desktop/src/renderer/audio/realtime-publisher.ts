@@ -1,7 +1,7 @@
 import type { AudioSourceHealth, AudioSourceKind } from "@offersteady/protocol";
 
 import { BoundedAudioFrameBuffer, createAudioFrame, SourceFrameSequencer } from "./audio-frame-buffer";
-import { MicrophoneAudioAdapter, describeMediaError, type OpenAudioSource } from "./audio-source-adapter";
+import { MicrophoneAudioAdapter, SystemAudioAdapter, describeMediaError, type OpenAudioSource } from "./audio-source-adapter";
 import { calculateRms } from "./signal-diagnostics";
 import { MultiplexedRealtimeTransport } from "./multiplexed-realtime-transport";
 
@@ -44,8 +44,11 @@ interface RealtimePublisherOptions extends RealtimePublisherCallbacks {
 
 export const sessionCapturePermissionPolicy = {
   requestPermissionOnSessionStart: false,
-  systemAudioCapture: "native-preauthorized",
+  systemAudioCapture: "electron-display-loopback",
+  captureOwner: "electron-single-owner",
 } as const;
+
+export const desktopCaptureArchitecture = "electron-single-owner" as const;
 
 interface RuntimeHandle {
   readonly stop: () => Promise<void>;
@@ -74,8 +77,10 @@ interface SegmentSnapshot {
   readonly payload: Uint8Array;
 }
 
-const SPEECH_START_THRESHOLD = 0.003;
-const SPEECH_CONTINUE_THRESHOLD = 0.0018;
+const MICROPHONE_SPEECH_START_THRESHOLD = 0.003;
+const MICROPHONE_SPEECH_CONTINUE_THRESHOLD = 0.0018;
+const SYSTEM_SPEECH_START_THRESHOLD = 0.0008;
+const SYSTEM_SPEECH_CONTINUE_THRESHOLD = 0.0005;
 const INTERIM_INTERVAL_MS = 150;
 const SILENCE_FINALIZE_MS = 220;
 const MIN_EMIT_SPEECH_MS = 80;
@@ -194,13 +199,6 @@ const bytesToBase64 = (payload: Uint8Array): string => {
   return btoa(binary);
 };
 
-const base64ToBytes = (payload: string): Uint8Array => {
-  const binary = atob(payload);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  return bytes;
-};
-
 const toWebSocketEndpoint = (apiBaseUrl: string, path: string) => {
   const url = new URL(apiBaseUrl);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
@@ -249,12 +247,18 @@ export class SpeechSegmenter {
   constructor(private readonly sourceKind: AudioSourceKind) {}
 
   push(payload: Uint8Array, nowMs: number, rms: number): SegmentSnapshot[] {
+    const startThreshold = this.sourceKind === "system"
+      ? SYSTEM_SPEECH_START_THRESHOLD
+      : MICROPHONE_SPEECH_START_THRESHOLD;
+    const continueThreshold = this.sourceKind === "system"
+      ? SYSTEM_SPEECH_CONTINUE_THRESHOLD
+      : MICROPHONE_SPEECH_CONTINUE_THRESHOLD;
     if (!this.segmentId) {
       if (payload.byteLength > 0) {
         this.preSpeechChunks.push(payload);
         while (this.preSpeechChunks.length > PRE_SPEECH_BUFFER_LIMIT) this.preSpeechChunks.shift();
       }
-      if (rms < SPEECH_START_THRESHOLD) return [];
+      if (rms < startThreshold) return [];
       this.segmentId = `${this.sourceKind}-${nowMs}-${Math.random().toString(36).slice(2, 8)}`;
       this.startedAtMs = nowMs;
       this.lastSpeechAtMs = nowMs;
@@ -265,7 +269,7 @@ export class SpeechSegmenter {
       return [];
     }
 
-    const speaking = rms >= SPEECH_CONTINUE_THRESHOLD;
+    const speaking = rms >= continueThreshold;
     if (payload.byteLength > 0) this.unsentChunks.push(payload);
     if (speaking) {
       this.lastSpeechAtMs = nowMs;
@@ -327,6 +331,7 @@ export class DesktopRealtimePublisher {
   private readonly fetchImpl: typeof fetch;
   private readonly sequencer = new SourceFrameSequencer();
   private readonly microphoneAdapter = new MicrophoneAudioAdapter();
+  private readonly systemAudioAdapter = new SystemAudioAdapter();
   private runtimes: RuntimeHandle[] = [];
   private latestHealth = new Map<AudioSourceKind, HealthSnapshot>();
   private frameCounts = new Map<AudioSourceKind, number>();
@@ -370,20 +375,26 @@ export class DesktopRealtimePublisher {
         },
       });
     }
-    // Start the microphone first so a pending ScreenCaptureKit picker or missing
-    // screen permission can never block candidate audio.
+    // Electron is the single media owner for the unsigned beta. Start the
+    // microphone first so a pending display-media permission cannot block the
+    // candidate channel, then open the system loopback on the same app identity.
     const microphoneRuntime = await this.startSource({
       sourceKind: "microphone",
       sourceId: this.options.microphoneId,
       open: () => this.microphoneAdapter.open(this.options.microphoneId),
     });
-    // Starting an interview must not call getDisplayMedia or request macOS
-    // permissions again. The assistant obtains permissions during its own
-    // startup flow, then sessions reuse the pre-authorized native channel.
-    await this.startNativeSystemCapture().catch(() => false);
-    const runtimes = [microphoneRuntime];
+    const systemRuntime = await this.startSource({
+      sourceKind: "system",
+      sourceId: this.options.systemAudioId || "system-loopback",
+      open: () => this.systemAudioAdapter.open(),
+    });
+    const runtimes = [microphoneRuntime, systemRuntime];
     this.runtimes.push(...runtimes.filter((runtime): runtime is WebAudioSourceRuntime => runtime !== null));
     if (this.runtimes.length > 0) {
+      this.options.onServerEvent?.({
+        kind: "connection-state",
+        payload: { captureOwner: desktopCaptureArchitecture, transport: this.transport ? "websocket-v2" : "http-frame-ingest" },
+      });
       this.options.onCaptureState("capturing");
       return;
     }
@@ -454,10 +465,10 @@ export class DesktopRealtimePublisher {
           sourceId: openedMedia.descriptor.id || input.sourceId,
           sourceKind: input.sourceKind,
           label: openedMedia.descriptor.label,
-          state: rms >= SPEECH_CONTINUE_THRESHOLD ? "receiving" : "silent",
-          stage: rms >= SPEECH_CONTINUE_THRESHOLD ? "signal-detected" : "track-live",
+          state: rms >= (input.sourceKind === "system" ? SYSTEM_SPEECH_CONTINUE_THRESHOLD : MICROPHONE_SPEECH_CONTINUE_THRESHOLD) ? "receiving" : "silent",
+          stage: rms >= (input.sourceKind === "system" ? SYSTEM_SPEECH_CONTINUE_THRESHOLD : MICROPHONE_SPEECH_CONTINUE_THRESHOLD) ? "signal-detected" : "track-live",
           level: Number(rms.toFixed(3)),
-          ...(rms >= SPEECH_CONTINUE_THRESHOLD ? { lastSignalAtMs: nowMs } : {}),
+          ...(rms >= (input.sourceKind === "system" ? SYSTEM_SPEECH_CONTINUE_THRESHOLD : MICROPHONE_SPEECH_CONTINUE_THRESHOLD) ? { lastSignalAtMs: nowMs } : {}),
           active: true,
         });
         const pcm16 = downsampleToPcm16(channel, context.sampleRate);
@@ -592,192 +603,6 @@ export class DesktopRealtimePublisher {
       this.options.onFailure(diagnostic.displayMessage);
       return null;
     }
-  }
-
-  private async startNativeSystemCapture(): Promise<boolean> {
-    if (!window.offersteady?.startNativeAudioStream || !window.offersteady?.onNativeAudioEvent) return false;
-    const segmenters = new Map<AudioSourceKind, SpeechSegmenter>([
-      ["microphone", new SpeechSegmenter("microphone")],
-      ["system", new SpeechSegmenter("system")],
-    ]);
-    const sourceIds: Record<AudioSourceKind, string> = {
-      microphone: "native-microphone",
-      system: "native-system-output",
-    };
-
-    const markNativeSourcePending = (sourceKind: AudioSourceKind) => {
-      const sourceId = sourceIds[sourceKind];
-      this.updateHealth({
-        sourceId,
-        sourceKind,
-        label: sourceLabel(sourceKind),
-        state: "reconnecting",
-        level: 0,
-        active: false,
-      });
-    };
-
-    markNativeSourcePending("microphone");
-    markNativeSourcePending("system");
-
-    let startupTimer: ReturnType<typeof setTimeout> | null = null;
-    let settleStartup: (started: boolean) => void = () => undefined;
-    const nativeStartup = new Promise<boolean>((resolve) => {
-      let settled = false;
-      settleStartup = (started) => {
-        if (settled) return;
-        settled = true;
-        if (startupTimer) clearTimeout(startupTimer);
-        resolve(started);
-      };
-      startupTimer = setTimeout(() => settleStartup(false), 8_000);
-    });
-
-    const unsubscribe = window.offersteady.onNativeAudioEvent((event) => {
-      if (this.stopped) return;
-      if (event.sourceKind !== "microphone" && event.sourceKind !== "system") return;
-      const sourceKind = event.sourceKind;
-      const sourceId = event.sourceId || sourceIds[sourceKind];
-      if (event.type === "status") {
-        if (event.errorCode) {
-          if (sourceKind === "system") settleStartup(false);
-          this.updateHealth({
-            sourceId,
-            sourceKind,
-            label: sourceLabel(sourceKind),
-            state: sourceKind === "system" ? "unsupported" : "error",
-            stage: sourceKind === "system" ? "unsupported" : "failed",
-            level: 0,
-            active: false,
-            errorCode: sourceKind === "system" ? "adapter-required" : "source-unavailable",
-          });
-          if (event.message) this.options.onFailure(event.message);
-          return;
-        }
-        if (sourceKind === "system") settleStartup(true);
-        this.updateHealth({
-          sourceId,
-          sourceKind,
-          label: sourceLabel(sourceKind),
-          state: "silent",
-          stage: "track-live",
-          level: Number((event.level ?? 0).toFixed(3)),
-          active: true,
-        });
-        return;
-      }
-      if (event.type !== "frame" || !event.audioBase64) return;
-      if (sourceKind === "system") settleStartup(true);
-      const payloadBytes = base64ToBytes(event.audioBase64);
-      if (payloadBytes.byteLength === 0) return;
-      const capturedAtMs = event.capturedAtMs ?? Date.now();
-      const durationMs = event.durationMs ?? 20;
-      const level = Number((event.level ?? 0).toFixed(3));
-      // Native capture can flush buffered callbacks in a burst. Pace segment
-      // emission by wall-clock time so historical audio timestamps cannot
-      // flood the backend ingress queue.
-      const snapshots = segmenters.get(sourceKind)?.push(payloadBytes, Date.now(), event.level ?? 0) ?? [];
-      this.updateHealth({
-        sourceId,
-        sourceKind,
-        label: sourceLabel(sourceKind),
-        state: level >= SPEECH_CONTINUE_THRESHOLD ? "receiving" : "silent",
-        stage: level >= SPEECH_CONTINUE_THRESHOLD ? "signal-detected" : "track-live",
-        level,
-        ...(level >= SPEECH_CONTINUE_THRESHOLD ? { lastSignalAtMs: capturedAtMs } : {}),
-        active: true,
-      });
-      if (snapshots.length === 0) return;
-      {
-        if (this.stopped) return;
-        for (const snapshot of snapshots) {
-          if (snapshot.payload.byteLength === 0) continue;
-          const frame = createAudioFrame(this.sequencer, {
-            sessionId: this.options.binding.sessionId,
-            deviceId: this.options.binding.deviceId,
-            sourceId,
-            sourceKind,
-            capturedAtMs: snapshot.capturedAtMs,
-            durationMs: snapshot.durationMs,
-            payload: snapshot.payload,
-          });
-          const frameCount = (this.frameCounts.get(sourceKind) ?? 0) + 1;
-          this.frameCounts.set(sourceKind, frameCount);
-          this.updateHealth({
-            sourceId,
-            sourceKind,
-            label: sourceLabel(sourceKind),
-            state: "receiving",
-            stage: "frames-produced",
-            level,
-            lastSignalAtMs: capturedAtMs,
-            frameCount,
-            lastFrameAtMs: capturedAtMs,
-            active: true,
-          });
-          this.sendFrameHttp(sourceKind, {
-            type: "audio-frame",
-            deviceId: frame.deviceId,
-            sourceId: frame.sourceId,
-            sourceKind: frame.sourceKind,
-            sequence: frame.sequence,
-            segmentId: snapshot.segmentId,
-            revision: snapshot.revision,
-            capturedAtMs: frame.capturedAtMs,
-            startedAtMs: snapshot.startedAtMs,
-            endedAtMs: snapshot.endedAtMs,
-            durationMs: snapshot.durationMs || durationMs,
-            codec: "pcm-s16le",
-            sampleRateHz: event.sampleRateHz ?? 16_000,
-            channels: event.channels === 2 ? 2 : 1,
-            isFinal: snapshot.isFinal,
-            traceId: `${sourceKind}:native:${snapshot.segmentId}:${snapshot.revision}:${frame.sequence}`,
-            audioBase64: bytesToBase64(snapshot.payload),
-          }, frame, sourceId);
-        }
-      }
-    });
-
-    let systemStarted = false;
-    try {
-      const result = await window.offersteady.startNativeAudioStream({
-        microphoneSourceId: sourceIds.microphone,
-        systemSourceId: sourceIds.system,
-        captureMicrophone: false,
-        captureSystem: true,
-      });
-      if (!result.ok) {
-        settleStartup(false);
-        unsubscribe();
-        return false;
-      }
-      if (result.systemStarted === false) {
-        this.options.onFailure("原生电脑输出采集暂不可用，请检查屏幕录制权限后重试。");
-      }
-      systemStarted = result.systemStarted !== false;
-    } catch {
-      settleStartup(false);
-      unsubscribe();
-      return false;
-    }
-
-    if (systemStarted) systemStarted = await nativeStartup;
-    if (!systemStarted) {
-      unsubscribe();
-      await window.offersteady?.stopNativeAudioStream?.().catch(() => undefined);
-      segmenters.clear();
-      return false;
-    }
-
-    this.runtimes = [{
-      stop: async () => {
-        unsubscribe();
-        await window.offersteady?.stopNativeAudioStream?.().catch(() => undefined);
-        segmenters.clear();
-      },
-    }];
-    this.options.onServerEvent?.({ kind: "connection-state", payload: { transport: "native-jsonl-websocket-v2" } });
-    return systemStarted;
   }
 
   private async createPublisher(sourceKind: AudioSourceKind | "mixed"): Promise<PublisherTokenResponse> {

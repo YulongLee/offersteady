@@ -7,18 +7,6 @@ contextBridge.exposeInMainWorld("offersteady", {
   clearDeviceCredential: () => ipcRenderer.invoke("credential:clear"),
   getDesktopConfig: () => ipcRenderer.invoke("desktop:get-config"),
   getNativeRuntimeHealth: () => ipcRenderer.invoke("desktop:get-native-runtime-health"),
-  startNativeAudioStream: (options: {
-    microphoneSourceId?: string;
-    systemSourceId?: string;
-    captureMicrophone?: boolean;
-    captureSystem?: boolean;
-  }) => ipcRenderer.invoke("desktop:start-native-audio-stream", options),
-  stopNativeAudioStream: () => ipcRenderer.invoke("desktop:stop-native-audio-stream"),
-  onNativeAudioEvent: (callback: (event: unknown) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
-    ipcRenderer.on("desktop:native-audio-event", listener);
-    return () => ipcRenderer.removeListener("desktop:native-audio-event", listener);
-  },
   getPairingIdentity: () => ipcRenderer.invoke("desktop:get-pairing-identity"),
   resetPairingIdentity: () => ipcRenderer.invoke("desktop:reset-pairing-identity"),
   listScreens: () => ipcRenderer.invoke("desktop:list-screens"),

@@ -296,7 +296,7 @@ select:focus {
   border-radius: inherit;
   background: linear-gradient(90deg, rgba(110, 231, 189, .35), rgba(110, 231, 189, .95));
   box-shadow: 0 0 18px rgba(110, 231, 189, .28);
-  transition: width .12s ease;
+  transition: width .2s cubic-bezier(.22, .7, .28, 1);
 }
 
 .inline-meter-panel span {
@@ -434,13 +434,19 @@ select:focus {
 
 .connection-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 18px;
-  margin-bottom: 16px;
+}
+
+.connection-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
 }
 
 .code-box {
+  min-width: 270px;
   min-height: 72px;
   border: 1px solid rgba(110, 231, 189, .24);
   border-radius: 14px;
@@ -464,6 +470,27 @@ select:focus {
   font-size: 25px;
   font-weight: 850;
   letter-spacing: .16em;
+}
+
+.interview-link-button {
+  min-width: 150px;
+  min-height: 72px;
+  border: 1px solid rgba(110, 231, 189, .24);
+  border-radius: 14px;
+  background: rgba(110, 231, 189, .08);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.interview-link-button:hover {
+  border-color: rgba(110, 231, 189, .48);
+  background: rgba(110, 231, 189, .14);
 }
 
 .connection-status {
@@ -725,12 +752,12 @@ select {
 }
 
 .connection-head {
-  grid-template-columns: minmax(0, 1fr) 204px;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
-  margin-bottom: 8px;
 }
 
 .code-box {
+  min-width: 204px;
   min-height: 50px;
   border-radius: 12px;
   gap: 8px;
@@ -743,6 +770,14 @@ select {
 
 .code-box strong {
   font-size: 18px;
+}
+
+.interview-link-button {
+  min-width: 112px;
+  min-height: 50px;
+  border-radius: 12px;
+  padding: 0 10px;
+  font-size: 10px;
 }
 
 .connection-status {
@@ -795,6 +830,19 @@ select {
   }
 
   .connection-head {
-    grid-template-columns: minmax(0, 1fr) 180px;
+    grid-template-columns: 1fr;
+  }
+
+  .connection-actions {
+    width: 100%;
+  }
+
+  .code-box,
+  .interview-link-button {
+    min-width: 0;
+  }
+
+  .code-box {
+    flex: 1;
   }
 }

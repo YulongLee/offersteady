@@ -8,7 +8,7 @@
   "main": "dist/main/index.js",
   "scripts": {
     "dev": "npm run build && electron .",
-    "build": "npm run build:native && npm run build:main && npm run build:renderer",
+    "build": "npm run build:main && npm run build:renderer",
     "build:native": "node scripts/build-native-runtime.mjs",
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "vite build -c vite.config.mts",

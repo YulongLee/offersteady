@@ -165,6 +165,7 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
     def get_publisher_by_token(self, token): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_publisher_by_token(token))
     def get_publisher(self, publisher_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_publisher(publisher_id))
     def list_publishers_for_session(self, *, session_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_publishers_for_session(session_id=session_id))
+    def prune_publishers_for_session(self, *, session_id, keep_publisher_ids): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).prune_publishers_for_session(session_id=session_id, keep_publisher_ids=keep_publisher_ids))
     def save_frame_receipt(self, receipt):
         with self._runtime_lock:
             stored = super().save_frame_receipt(receipt)

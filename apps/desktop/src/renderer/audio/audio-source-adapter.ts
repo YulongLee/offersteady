@@ -165,40 +165,28 @@ export class SystemAudioAdapter implements AudioSourceAdapter {
   }
 
   async open(): Promise<OpenAudioSource> {
-    const attempts: Array<{ readonly audio: Exclude<DisplayMediaStreamOptions["audio"], undefined>; readonly video: Exclude<DisplayMediaStreamOptions["video"], undefined> }> = [
-      {
-        audio: { systemAudio: "include", suppressLocalAudioPlayback: false } as unknown as Exclude<DisplayMediaStreamOptions["audio"], undefined>,
-        video: { frameRate: 1, width: 2, height: 2 },
-      },
-      {
+    const openStandardCapture = () => this.mediaDevices.getDisplayMedia({
+      audio: true,
+      video: true,
+    });
+    let stream: MediaStream;
+    try {
+      stream = await this.mediaDevices.getDisplayMedia({
         audio: true,
         video: { frameRate: 1, width: 2, height: 2 },
-      },
-      {
-        audio: true,
-        video: false,
-      },
-    ];
-
-    let stream: MediaStream | undefined;
-    let lastError: unknown;
-    for (const attempt of attempts) {
-      try {
-        const candidate = await this.mediaDevices.getDisplayMedia({
-          audio: attempt.audio,
-          video: attempt.video,
-        });
-        if (candidate.getAudioTracks().length > 0) {
-          stream = candidate;
-          break;
-        }
-        closeStream(candidate);
-        lastError = new Error("system-audio-unavailable");
-      } catch (error) {
-        lastError = error;
+      });
+    } catch {
+      stream = await openStandardCapture();
+    }
+    if (stream.getAudioTracks().length === 0) {
+      closeStream(stream);
+      stream = await openStandardCapture();
+      if (stream.getAudioTracks().length === 0) {
+        closeStream(stream);
+        throw new Error("system-audio-unavailable");
       }
     }
-    if (!stream) throw lastError ?? new Error("system-audio-unavailable");
+    stream.getVideoTracks().forEach((track) => track.stop());
 
     const descriptor: AudioSourceDescriptor = {
       id: "system-loopback",

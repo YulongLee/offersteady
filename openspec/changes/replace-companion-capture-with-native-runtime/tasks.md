@@ -14,6 +14,8 @@
 - [ ] 2.4 Implement selected-display screen preview frame capture using the same runtime boundary.
 - [x] 2.5 Add runtime process health checks and packaging validation so a package missing the native helper is marked invalid.
 - [x] 2.6 Use the real ScreenCaptureKit stream result as the system-audio permission authority instead of blocking capture on a child-process preflight result.
+- [x] 2.7 Fall back to the authorized Electron loopback path when macOS TCC rejects the embedded system-audio helper identity.
+- [x] 2.8 Force Electron's ScreenCaptureKit-backed loopback path on macOS so a failed CoreAudio Tap cannot expose a permanently silent track.
 
 ## 3. Fresh Binding and Heartbeats
 
@@ -29,6 +31,12 @@
 - [x] 4.2 Add actionable error codes for permission missing, unsupported macOS, native runtime missing, no signal and no frame.
 - [x] 4.3 Ensure the UI never shows “已连接/正在收音/捕捉屏幕” unless validation and fresh binding are both true.
 - [x] 4.4 Preserve the current companion visual style while changing only state and behavior.
+- [x] 4.5 Keep the local system-output level monitor active before realtime publishing instead of disabling it merely because the native helper file exists.
+- [x] 4.6 Fit the default companion window to its controls without a large unused area below the footer.
+- [x] 4.7 Smooth and decibel-map the displayed audio levels without changing capture or ASR thresholds.
+- [x] 4.8 Use Electron's parent-app CoreAudio Tap path for computer output when the separately signed native helper does not inherit the app's TCC grant.
+- [x] 4.9 Prevent repeated failed system-audio source lookups from starving microphone capture and realtime publishing.
+- [x] 4.10 Reuse the authorized Screen & System Audio Recording path for local ad-hoc macOS builds.
 
 ## 5. Realtime Bridge Verification
 
@@ -45,3 +53,4 @@
 - [ ] 6.4 On the user's Mac, validate selected-display preview frame.
 - [ ] 6.5 On the user's Mac, bind from Web, start interview, and verify realtime transcripts appear on the Web page.
 - [ ] 6.6 Update desktop distribution docs with minimum macOS version, permissions and known fallback path.
+- [x] 回归修复：统一原生采集 helper 与主助手的 designated identity，复用同一 macOS 屏幕与系统音频授权

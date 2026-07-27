@@ -137,7 +137,29 @@ export const hasPublisherTakenOver = (live: readonly AudioSourceHealth[]) =>
 
 const meterPercent = (level: number | undefined) => {
   if (!level || level <= 0) return 0;
-  return Math.max(4, Math.min(100, Math.round((level / 0.04) * 100)));
+  const decibels = 20 * Math.log10(Math.max(level, 0.0001));
+  const normalized = (decibels + 54) / 36;
+  return Math.max(0, Math.min(100, Math.round(normalized * 100)));
+};
+
+const useSmoothedMeterPercent = (level: number | undefined) => {
+  const targetRef = useRef(0);
+  const [displayLevel, setDisplayLevel] = useState(0);
+  targetRef.current = meterPercent(level);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setDisplayLevel(current => {
+        const target = targetRef.current;
+        const smoothing = target > current ? 0.28 : 0.1;
+        const next = current + ((target - current) * smoothing);
+        return Math.abs(next - target) < 0.5 ? target : next;
+      });
+    }, 50);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return Math.round(displayLevel);
 };
 
 const hasMeaningfulAudioHealth = (health: readonly AudioSourceHealth[]) => health.some((item) =>
@@ -147,9 +169,9 @@ const hasMeaningfulAudioHealth = (health: readonly AudioSourceHealth[]) => healt
   || (item.backendFrameCount ?? 0) > 0,
 );
 
-const healthCopy = (health: AudioSourceHealth | undefined, label: string) => {
+const healthCopy = (health: AudioSourceHealth | undefined, label: string, displayLevel?: number) => {
   if (!health) return `${label}等待检测`;
-  if (health.state === "receiving") return `${label}收音正常 ${meterPercent(health.level)}%`;
+  if (health.state === "receiving") return `${label}收音正常 ${displayLevel ?? meterPercent(health.level)}%`;
   if (health.state === "silent") {
     return label.includes("面试官")
       ? "输出通道已接入，未检测到播放声音"
@@ -493,6 +515,8 @@ export function CompanionApp() {
   const currentScreenPreview = screenSources.find(source => source.id === selectedScreenId)?.thumbnailDataUrl ?? null;
   const microphoneHealth = sourceHealthState.find(item => item.sourceKind === "microphone");
   const systemAudioHealth = sourceHealthState.find(item => item.sourceKind === "system");
+  const microphoneMeterLevel = useSmoothedMeterPercent(microphoneHealth?.level);
+  const systemAudioMeterLevel = useSmoothedMeterPercent(systemAudioHealth?.level);
 const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
   state === "receiving" || state === "silent";
   const microphoneReady = isCaptureSourceReady(microphoneHealth?.state);
@@ -813,10 +837,10 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
   }, [config, pairingIdentity]);
 
   useEffect(() => {
-    if (nativeRuntimeHealth?.available !== false || publisherHasTakenOver || !selectedSystemAudioId) {
+    if (bindingSessionStatus === "live" || publisherHasTakenOver || !selectedSystemAudioId) {
       void localMonitorRef.current?.stop();
       localMonitorRef.current = null;
-      if (nativeRuntimeReady || publisherHasTakenOver) setMonitorSourceHealthState([]);
+      if (bindingSessionStatus === "live" || publisherHasTakenOver) setMonitorSourceHealthState([]);
       return;
     }
     let cancelled = false;
@@ -854,7 +878,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       if (localMonitorRef.current === monitor) localMonitorRef.current = null;
       void monitor.stop();
     };
-  }, [bindingSessionStatus, nativeRuntimeHealth, nativeRuntimeReady, publisherHasTakenOver, effectiveMicrophoneId, selectedSystemAudioId]);
+  }, [bindingSessionStatus, publisherHasTakenOver, effectiveMicrophoneId, selectedSystemAudioId]);
 
   useEffect(() => {
     if (!config || !pairingIdentity || !activeBinding || bindingSessionStatus !== "live") {
@@ -923,26 +947,44 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       },
     });
     publisherRef.current = publisher;
-    void publisher.start().catch((error) => {
+    void (async () => {
+      const monitor = localMonitorRef.current;
+      localMonitorRef.current = null;
+      await monitor?.stop();
       if (cancelled) return;
-      const message = error instanceof Error ? error.message : "采集链路启动失败";
-      setConnectionInfo(message);
-      if (publisherRef.current === publisher) publisherRef.current = null;
-      void publisher.stop();
-      if (publisherFailureIsTerminal(error)) {
-        setConnectionInfo("本场发布通道已失效，正在等待网页重新连接当前设备。");
-        return;
-      }
-      window.setTimeout(() => {
-        if (!cancelled) setPublisherRetryNonce((value) => value + 1);
-      }, 3_000);
-    });
+      await publisher.start();
+    })().catch((error) => {
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : "采集链路启动失败";
+        setConnectionInfo(message);
+        if (publisherRef.current === publisher) publisherRef.current = null;
+        void publisher.stop();
+        if (publisherFailureIsTerminal(error)) {
+          setConnectionInfo("本场发布通道已失效，正在等待网页重新连接当前设备。");
+          return;
+        }
+        window.setTimeout(() => {
+          if (!cancelled) setPublisherRetryNonce((value) => value + 1);
+        }, 3_000);
+      });
     return () => {
       cancelled = true;
       if (publisherRef.current === publisher) publisherRef.current = null;
       void publisher.stop();
     };
-  }, [desktopBindingLeaseIdentity(activeBinding), activeBinding?.sessionId, activeBinding?.ownerUserId, bindingSessionStatus, config, pairingIdentity, effectiveMicrophoneId, selectedSystemAudioId, publisherRetryNonce]);
+  }, [
+    desktopBindingLeaseIdentity(activeBinding),
+    activeBinding?.sessionId,
+    activeBinding?.ownerUserId,
+    activeBinding?.manualCode,
+    bindingSessionStatus,
+    config?.apiBaseUrl,
+    pairingIdentity?.deviceId,
+    pairingIdentity?.displayName,
+    effectiveMicrophoneId,
+    selectedSystemAudioId,
+    publisherRetryNonce,
+  ]);
 
   useEffect(() => {
     const video = previewRef.current;
@@ -1059,8 +1101,8 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
             subtitle="识别你的声音"
             statusLabel="我的声音"
             ready={microphoneReady}
-            meterLevel={meterPercent(microphoneHealth?.level)}
-            meterCopy={healthCopy(microphoneHealth, "我的声音")}
+            meterLevel={microphoneMeterLevel}
+            meterCopy={healthCopy(microphoneHealth, "我的声音", microphoneMeterLevel)}
           >
             <select
               aria-label="选择麦克风"
@@ -1085,8 +1127,8 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
             subtitle="识别你能听到的面试官声音"
             statusLabel="面试官声音"
             ready={systemAudioReady}
-            meterLevel={meterPercent(systemAudioHealth?.level)}
-            meterCopy={healthCopy(systemAudioHealth, "面试官声音")}
+            meterLevel={systemAudioMeterLevel}
+            meterCopy={healthCopy(systemAudioHealth, "面试官声音", systemAudioMeterLevel)}
           >
             <select
               aria-label="选择系统音频"
@@ -1137,49 +1179,22 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
             <div className="connection-head">
               <div>
                 <h2>连接管理</h2>
-                <p>管理设备连接和状态</p>
+                <p>使用固定连接码绑定网页面试</p>
               </div>
-              <button type="button" className="code-box" onClick={() => { void copyConnectionCode(); }} aria-label="复制连接码">
-                <span>连接码：</span>
-                <strong>{pairingIdentity?.manualCode ?? "------"}</strong>
-              </button>
-            </div>
-
-            <div className="connection-status">
-              {desktopNotice ? <p className="desktop-notice">{desktopNotice}</p> : null}
-              <p>
-                <strong>设备状态：</strong>
-                <span className={config && pairingIdentity ? "status-light green" : "status-light red"} />
-                <span>{config && pairingIdentity ? "在线 | 固定机器码已登记" : "离线 | 正在登记设备"}</span>
-              </p>
-              <p>
-                <strong>系统权限：</strong>
-                <span>{`麦克风 ${permissions.microphone === "granted" ? "已授权" : "待授权"} · 屏幕录制 ${permissions.systemAudio === "granted" ? "已授权" : "待授权"}`}</span>
-              </p>
-              <p>
-                <strong>本场连接：</strong>
-                <span className={activeBinding ? "status-light green" : "status-light red"} />
-                <span>{activeBinding ? "已连接当前面试" : connectionNotice || "等待网页输入机器码"}</span>
-              </p>
-              <p>
-                <strong>连接信息：</strong>
-                <span className="muted-chip">{connectionInfo}</span>
-                {!activeBinding ? (
-                  <button type="button" className="inline-web-link" onClick={() => { void openResolvedUrl("home"); }}>
-                    打开面试首页
-                  </button>
-                ) : null}
-                <button type="button" className="inline-web-link" onClick={() => { void refreshAuthorization(); }}>
-                  检查系统权限
+              <div className="connection-actions">
+                <button type="button" className="code-box" onClick={() => { void copyConnectionCode(); }} aria-label="复制连接码">
+                  <span>连接码：</span>
+                  <strong>{pairingIdentity?.manualCode ?? "------"}</strong>
                 </button>
-                <button type="button" className="inline-web-link" onClick={() => { void window.offersteady?.openPermissionSettings("microphone"); }}>
-                  打开麦克风权限设置
+                <button
+                  type="button"
+                  className="interview-link-button"
+                  onClick={() => { void openResolvedUrl(activeBinding ? "workspace" : "home"); }}
+                >
+                  <span className={activeBinding ? "status-light green" : "status-light red"} />
+                  <span>{activeBinding ? "进入当前面试" : "打开面试"}</span>
                 </button>
-              </p>
-              <p className="route-copy">
-                当前路由：我的声音来自麦克风/耳机；面试官声音来自电脑输出音频，也就是微信、会议或网页面试在这台电脑上播放出来的声音；屏幕捕捉用于截图回答。
-              </p>
-              {webOpenNotice ? <p className="route-copy">{webOpenNotice}</p> : null}
+              </div>
             </div>
           </section>
         </div>

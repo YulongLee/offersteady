@@ -17,6 +17,8 @@
 - [x] 3.1 Keep stable device identity and report macOS permission status independently from the active interview binding
 - [x] 3.2 Update assistant status presentation so granted permissions remain visible while the assistant waits for an interview connection
 - [x] 3.3 Ensure a new session lease starts one capture supervisor and an ended or replaced lease stops only session capture
+- [x] 3.4 Simplify connection management to a fixed code plus direct interview action and remove the redundant status-detail panel
+- [x] 3.5 Give the main app and native capture helper stable local code requirements and bind permission usage metadata to the helper executable
 
 ## 4. Verification and release
 

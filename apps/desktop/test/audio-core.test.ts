@@ -79,9 +79,20 @@ describe("speech segmenter", () => {
     const burst = new Uint8Array([9, 9]);
 
     expect(segmenter.push(burst, 0, 0.013)).toEqual([]);
-    const finalized = segmenter.push(new Uint8Array([0]), 500, 0.001);
+    const finalized = segmenter.push(new Uint8Array([0]), 500, 0.0001);
 
     expect(finalized).toEqual([]);
+  });
+
+  it("publishes low-level computer output that is visible on the system meter", () => {
+    const system = new SpeechSegmenter("system");
+    const microphone = new SpeechSegmenter("microphone");
+    const digitalAudio = new Uint8Array([1, 2, 3, 4]);
+
+    expect(system.push(digitalAudio, 0, 0.001)).toEqual([]);
+    expect(system.push(digitalAudio, 100, 0.001)).toHaveLength(1);
+    expect(microphone.push(digitalAudio, 0, 0.001)).toEqual([]);
+    expect(microphone.push(digitalAudio, 100, 0.001)).toEqual([]);
   });
 });
 
@@ -158,7 +169,7 @@ describe("system audio adapter diagnostics", () => {
     expect(receivedConstraints?.video).toMatchObject({ frameRate: 1, width: 2, height: 2 });
   });
 
-  it("keeps the fallback preview track alive when audio-only capture does not expose a system track", async () => {
+  it("stops the unneeded video track after system loopback is established", async () => {
     const stopped = { value: false };
     const audioTrack = { stop: () => undefined };
     const videoTrack = { stop: () => { stopped.value = true; } };
@@ -183,7 +194,7 @@ describe("system audio adapter diagnostics", () => {
     } as unknown as MediaDevicesLike;
     const opened = await new SystemAudioAdapter(mediaDevices).open();
     expect(opened.stream).toBe(fallbackStream);
-    expect(stopped.value).toBe(false);
+    expect(stopped.value).toBe(true);
     opened.close();
     expect(stopped.value).toBe(true);
   });

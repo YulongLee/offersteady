@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.offersteady.companion</string>
+    <key>CFBundleName</key>
+    <string>面试稳伴随程序</string>
+    <key>CFBundleDisplayName</key>
+    <string>面试稳伴随程序</string>
+    <key>CFBundleVersion</key>
+    <string>0.1.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>面试稳仅在面试期间采集你选择的麦克风输入。</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>面试稳仅在面试期间采集电脑播放的面试官声音，不保存屏幕录像。</string>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>面试稳仅在面试期间采集电脑播放的面试官声音。</string>
+  </dict>
+</plist>
