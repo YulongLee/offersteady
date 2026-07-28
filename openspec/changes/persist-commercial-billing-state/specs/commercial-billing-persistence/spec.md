@@ -52,3 +52,10 @@
 #### Scenario: Production database is unavailable
 - **WHEN** 账务仓储无法连接数据库
 - **THEN** 服务启动或依赖初始化失败并报告账务持久化不可用
+
+### Requirement: Present compact consumption history without changing the ledger
+系统 SHALL 在用户积分明细中按业务消费类型聚合负向流水，并 MUST 保留 PostgreSQL 中每一笔不可变原始流水。
+
+#### Scenario: User has repeated answer charges
+- **WHEN** 同一用户存在多笔普通回答、截图回答或知识材料制作消费
+- **THEN** 页面每类消费只展示一项，包含消费次数、累计积分和最近消费时间，余额与原始流水保持不变

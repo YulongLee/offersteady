@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { PointsRedemptionResult } from "@offersteady/protocol";
+import type { PointsLedgerEntry, PointsRedemptionResult } from "@offersteady/protocol";
 import { App } from "./App";
+import { summarizePointsLedger } from "./BillingPage";
 import { interviewAppAdapter } from "./app-adapter";
 import { syntheticState } from "./test-state";
 
@@ -13,6 +14,25 @@ const inputCode = (value = "SYNTHETIC-DEMO") => fireEvent.change(screen.getByLab
 afterEach(() => vi.restoreAllMocks());
 
 describe("billing points redemption", () => {
+  it("groups repeated consumption by business category without changing source ledger rows", () => {
+    const ledger: PointsLedgerEntry[] = [
+      { id: "answer-2", userId: "prototype-user", kind: "usage_settle", points: -5, createdAtMs: 30, referenceId: "answer-2", description: "面试回答积分结算" },
+      { id: "screenshot-1", userId: "prototype-user", kind: "usage_settle", points: -15, createdAtMs: 20, referenceId: "screenshot-1", description: "截图回答积分结算" },
+      { id: "answer-1", userId: "prototype-user", kind: "usage_settle", points: -5, createdAtMs: 10, referenceId: "answer-1", description: "面试回答积分结算" },
+      { id: "welcome", userId: "prototype-user", kind: "welcome_grant", points: 200, createdAtMs: 1, referenceId: "welcome", description: "新用户赠送积分" },
+    ];
+
+    const display = summarizePointsLedger(ledger);
+
+    expect(ledger).toHaveLength(4);
+    expect(display).toHaveLength(3);
+    expect(display).toEqual(expect.arrayContaining([
+      expect.objectContaining({ description: "普通回答消费", count: 2, points: -10 }),
+      expect.objectContaining({ description: "截图回答消费", count: 1, points: -15 }),
+      expect.objectContaining({ description: "新用户赠送积分", count: 1, points: 200 }),
+    ]));
+  });
+
   it("starts empty with an accessible disabled action and no checkout", () => {
     open(); expect(screen.getByRole("button", { name: "立即兑换" })).toBeDisabled(); expect(screen.getByText(/输入 16 位兑换码/)).toBeInTheDocument(); expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });

@@ -17,3 +17,9 @@
 - [x] 4.1 Add restart, duplicate callback and concurrent reservation regression tests.
 - [x] 4.2 Run backend regression tests and strict OpenSpec validation.
 - [x] 4.3 Deploy migration and backend, then verify online health and persisted billing behavior.
+
+## 5. Compact Points History
+
+- [x] 5.1 Group negative ledger entries by business consumption category in the Web presentation layer.
+- [x] 5.2 Preserve immutable backend ledger rows and positive credit history.
+- [ ] 5.3 Run regression tests, deploy the Web application, and verify the production billing page.
