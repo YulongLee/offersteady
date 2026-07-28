@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAtMs": 1785179069887,
+  "generatedAtMs": 1785220517300,
   "entries": [
     {
       "id": "mac-arm64-local-dev",
@@ -19,6 +19,56 @@
       "captureRuntime": "electron-single-owner",
       "developmentOnly": true,
       "objectKey": "desktop-releases/macos/arm64/0.1.0/OfferSteady-Companion-0.1.0-macOS-arm64.zip",
+      "capabilities": {
+        "microphone": true,
+        "systemAudio": true,
+        "screenCapture": true,
+        "manualInputFallback": true,
+        "screenshotFallback": true
+      }
+    },
+    {
+      "id": "mac-x64-local-dev",
+      "platform": "macos",
+      "architecture": "x64",
+      "displayName": "macOS Intel 本机开发版",
+      "version": "0.1.0",
+      "minimumOs": "macOS 14.2+",
+      "fileName": "OfferSteady-Companion-0.1.0-macOS-x64.zip",
+      "fileSizeBytes": 125024031,
+      "sha256": "74350cd95a9c3bd89815549e9cec66a56a10a0c488b11d82d7603f406abfb2bd",
+      "signingStatus": "local-development",
+      "notarized": false,
+      "publishedAtMs": 1785220466078,
+      "protocolVersion": "2.0",
+      "captureRuntime": "electron-single-owner",
+      "developmentOnly": true,
+      "objectKey": "desktop-releases/macos/x64/0.1.0/OfferSteady-Companion-0.1.0-macOS-x64.zip",
+      "capabilities": {
+        "microphone": true,
+        "systemAudio": true,
+        "screenCapture": true,
+        "manualInputFallback": true,
+        "screenshotFallback": true
+      }
+    },
+    {
+      "id": "win-x64-local-dev",
+      "platform": "windows",
+      "architecture": "x64",
+      "displayName": "Windows 10/11 测试版",
+      "version": "0.1.0",
+      "minimumOs": "Windows 10 22H2+",
+      "fileName": "OfferSteady-Companion-0.1.0-Windows-x64.zip",
+      "fileSizeBytes": 149226962,
+      "sha256": "1744fd63ee05c13eb525cc3af2113c523059f0b0c0b921a4910935d5eaae757c",
+      "signingStatus": "local-development",
+      "notarized": false,
+      "publishedAtMs": 1785220517300,
+      "protocolVersion": "2.0",
+      "captureRuntime": "electron-wasapi-loopback",
+      "developmentOnly": true,
+      "objectKey": "desktop-releases/windows/x64/0.1.0/OfferSteady-Companion-0.1.0-Windows-x64.zip",
       "capabilities": {
         "microphone": true,
         "systemAudio": true,

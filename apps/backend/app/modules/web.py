@@ -74,7 +74,7 @@ async def download_desktop_artifact(
     filename: str,
     storage: FileStoragePort = Depends(storage_port),
 ) -> Response:
-    if "/" in filename or "\\" in filename or not filename.startswith("OfferSteady-Companion-") or not filename.endswith((".zip", ".dmg")):
+    if "/" in filename or "\\" in filename or not filename.startswith("OfferSteady-Companion-") or not filename.endswith((".zip", ".dmg", ".exe")):
         raise HTTPException(status_code=404, detail="Desktop artifact not found")
     release_dir = _desktop_release_dir().resolve()
     artifact = (release_dir / filename).resolve()
@@ -82,7 +82,7 @@ async def download_desktop_artifact(
         return FileResponse(
             path=str(artifact),
             filename=artifact.name,
-            media_type="application/zip" if artifact.suffix == ".zip" else "application/x-apple-diskimage",
+            media_type="application/zip" if artifact.suffix == ".zip" else "application/x-apple-diskimage" if artifact.suffix == ".dmg" else "application/vnd.microsoft.portable-executable",
         )
     entry = _published_desktop_entry(filename)
     object_key = entry.get("objectKey") if entry else None
@@ -154,15 +154,12 @@ def _release_manifest() -> dict[str, object]:
     now_ms = 1_719_734_400_000
     desktop_release_dir = _desktop_release_dir()
     metadata_files = sorted(
-        desktop_release_dir.glob("OfferSteady-Companion-*-macOS-arm64.json"),
+        desktop_release_dir.glob("OfferSteady-Companion-*.json"),
         key=lambda item: item.stat().st_mtime if item.exists() else 0,
         reverse=True,
     )
     local_artifacts = sorted(
-        [
-            *desktop_release_dir.glob("OfferSteady-Companion-*-macOS-arm64.dmg"),
-            *desktop_release_dir.glob("OfferSteady-Companion-*-macOS-arm64.zip"),
-        ],
+        [*desktop_release_dir.glob("OfferSteady-Companion-*.dmg"), *desktop_release_dir.glob("OfferSteady-Companion-*.zip"), *desktop_release_dir.glob("OfferSteady-Companion-*.exe")],
         key=lambda item: item.stat().st_mtime if item.exists() else 0,
         reverse=True,
     )

@@ -138,8 +138,22 @@ const nativeRuntimePath = () => {
 };
 
 const getNativeRuntimeHealth = async () => {
+  if (process.platform === "win32") {
+    return {
+      available: true,
+      ready: true,
+      runtime: "electron-wasapi-loopback",
+      version: "2.0",
+      microphonePermission: "managed-by-windows",
+      screenPermission: "managed-by-windows",
+      screenCaptureKitAvailable: false,
+      computerOutputCapturePath: "electron-display-loopback",
+      message: "Windows 由主助手统一负责麦克风、电脑输出和屏幕采集。",
+      errors: [],
+    };
+  }
   if (process.platform !== "darwin") {
-    return { available: false, ready: false, errorCode: "unsupported-platform", message: "当前 Electron 系统音频采集仅支持 macOS。" };
+    return { available: false, ready: false, errorCode: "unsupported-platform", message: "当前系统暂不支持桌面采集。" };
   }
   const screenPermission = systemPreferences.getMediaAccessStatus("screen");
   return {
@@ -365,6 +379,10 @@ const getLiveDesktopBinding = async () => {
 };
 
 const ensureMainRealtimeAudioPublishing = async () => {
+  if (process.platform !== "darwin") {
+    if (mainRealtimeBindingKey || mainRealtimePublisherTokens.size > 0) stopMainRealtimeAudioPublishing();
+    return;
+  }
   if (mainRealtimeEnsureInFlight) return;
   mainRealtimeEnsureInFlight = true;
   try {
@@ -920,7 +938,7 @@ ipcMain.handle("desktop:set-screenshot-shortcut", async (_event, accelerator: st
 
 ipcMain.handle("desktop:get-pairing-identity", async () => {
   if (!pairingIdentityStore) pairingIdentityStore = new DevicePairingIdentityStore(app.getPath("userData"));
-  return pairingIdentityStore.loadOrCreate(`${app.getName()} · ${process.platform === "darwin" ? "Mac" : "Desktop"}`);
+  return pairingIdentityStore.loadOrCreate(`${app.getName()} · ${process.platform === "darwin" ? "Mac" : process.platform === "win32" ? "Windows" : "Desktop"}`);
 });
 
 ipcMain.handle("desktop:reset-pairing-identity", async () => {

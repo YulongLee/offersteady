@@ -8,7 +8,7 @@ import appIconUrl from "./assets/app-icon.png";
 
 export const companionStatusCopy: Record<CaptureState, { title: string; detail: string }> = {
   "not-connected": { title: "设备离线", detail: "助手尚未完成服务登记，请检查网络后重试。" },
-  "permission-required": { title: "需要系统权限", detail: "请在本助手或 macOS 系统设置中完成麦克风与屏幕录制授权。" },
+  "permission-required": { title: "需要系统权限", detail: "请在本助手或操作系统隐私设置中完成麦克风与屏幕录制授权。" },
   ready: { title: "设备在线", detail: "系统授权与本场连接相互独立，输入固定机器码即可连接面试。" },
   capturing: { title: "已连接", detail: "这台电脑正在作为面试伴随终端工作。" },
   paused: { title: "已暂停", detail: "当前没有发送新的音频或屏幕数据。" },
@@ -544,6 +544,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
   const systemAudioReady = isCaptureSourceReady(systemAudioHealth?.state);
   const screenReady = screenCaptureReady;
   const nativeRuntimeReady = nativeRuntimeHealth?.ready === true;
+  const isWindows = config?.platform === "windows";
 
   const capabilitiesFor = (runtime: DesktopRuntimeConfig): CompanionCapabilities => ({
     protocolVersion: runtime.protocolVersion,
@@ -1081,7 +1082,13 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
         microphone: microphoneGranted ? "granted" : "denied",
         systemAudio: screenGranted ? "granted" : "denied",
       });
-      setDesktopNotice(microphoneGranted && screenGranted ? "麦克风和屏幕录制权限已就绪。" : "部分权限尚未开启，请在 macOS 系统设置中允许后重新检查。");
+      setDesktopNotice(
+        microphoneGranted && screenGranted
+          ? "麦克风和屏幕录制权限已就绪。"
+          : isWindows
+            ? "部分权限尚未开启，请在 Windows 设置 → 隐私和安全性中允许麦克风和屏幕捕捉后重试。"
+            : "部分权限尚未开启，请在 macOS 系统设置 → 隐私与安全性中允许后重新检查。",
+      );
       setState(activeBinding ? (bindingSessionStatus === "live" ? "capturing" : "ready") : "ready");
     } catch (error) {
       const message = error instanceof Error ? error.message : "权限检查失败";

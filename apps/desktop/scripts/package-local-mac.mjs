@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -18,10 +19,24 @@ if (arch !== "arm64" && arch !== "x64") {
   throw new Error(`Unsupported macOS architecture: ${arch}`);
 }
 
-const electronApp = join(repoRoot, "node_modules/electron/dist/Electron.app");
-if (!existsSync(electronApp)) {
-  throw new Error(`Electron.app was not found at ${electronApp}. Run npm install first.`);
+let electronApp = join(repoRoot, "node_modules/electron/dist/Electron.app");
+let downloadedElectronDir = null;
+if (arch !== process.arch) {
+  const { downloadArtifact } = await import("@electron/get");
+  const archive = await downloadArtifact({
+    version: desktopPackage.devDependencies.electron,
+    artifactName: "electron",
+    platform: "darwin",
+    arch,
+  });
+  downloadedElectronDir = mkdtempSync(join(tmpdir(), `offersteady-electron-${arch}-`));
+  const extract = spawnSync("ditto", ["-x", "-k", archive, downloadedElectronDir], { encoding: "utf8" });
+  if (extract.status !== 0) {
+    throw new Error(`Failed to extract ${arch} Electron: ${extract.stderr || extract.stdout}`);
+  }
+  electronApp = join(downloadedElectronDir, "Electron.app");
 }
+if (!existsSync(electronApp)) throw new Error(`Electron.app was not found at ${electronApp}. Run npm install first.`);
 
 const releaseDir = join(desktopDir, "release");
 const archDir = join(releaseDir, `mac-${arch}`);
@@ -51,6 +66,9 @@ if (copyBundle.status !== 0) {
 }
 mkdirSync(resourcesAppDir, { recursive: true });
 cpSync(join(desktopDir, "dist"), join(resourcesAppDir, "dist"), { recursive: true });
+if (existsSync(join(resourcesAppDir, "dist/native"))) {
+  cpSync(join(resourcesAppDir, "dist/native"), join(resourcesAppDir, "native"), { recursive: true });
+}
 rmSync(join(resourcesAppDir, "dist/native"), { recursive: true, force: true });
 if (existsSync(sourceIconPng)) {
   const iconset = join(archDir, "offersteady.iconset");
@@ -214,7 +232,7 @@ const metadata = {
   fileName: basename(zipPath),
   fileSizeBytes: statSync(zipPath).size,
   sha256: fileHash(zipPath),
-  signingStatus: signIdentity === "-" ? "local-development-ad-hoc" : "local-development-signed",
+  signingStatus: "local-development",
   signingIdentity: signIdentity,
   notarized: false,
   protocolVersion: "2.0",
@@ -235,3 +253,4 @@ writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
 console.log(`Created ${appPath}`);
 console.log(`Created ${zipPath}`);
 console.log(`SHA-256 ${metadata.sha256}`);
+if (downloadedElectronDir) rmSync(downloadedElectronDir, { recursive: true, force: true });

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const desktopDir = resolve(scriptDir, "..");
+const targetArch = process.argv[2] || process.arch;
 const source = join(desktopDir, "native/macos-capture/OfferSteadyCaptureRuntime.swift");
 const infoPlist = join(desktopDir, "native/macos-capture/Info.plist");
 const buildDir = join(desktopDir, "native/macos-capture/build");
@@ -14,6 +15,10 @@ const distDir = join(desktopDir, "dist/native/macos-capture");
 if (process.platform !== "darwin") {
   console.log("Skipping macOS native capture runtime build on non-macOS host.");
   process.exit(0);
+}
+
+if (targetArch !== "arm64" && targetArch !== "x64") {
+  throw new Error(`Unsupported macOS native runtime architecture: ${targetArch}`);
 }
 
 if (!existsSync(source)) {
@@ -28,6 +33,7 @@ mkdirSync(buildDir, { recursive: true });
 
 const result = spawnSync("swiftc", [
   source,
+  "-target", `${targetArch === "x64" ? "x86_64" : "arm64"}-apple-macos14.2`,
   "-O",
   "-framework", "AVFoundation",
   "-framework", "CoreGraphics",
@@ -47,4 +53,4 @@ rmSync(distDir, { recursive: true, force: true });
 mkdirSync(distDir, { recursive: true });
 cpSync(output, join(distDir, "OfferSteadyCaptureRuntime"));
 
-console.log(`Built native capture runtime: ${output}`);
+console.log(`Built ${targetArch} native capture runtime: ${output}`);

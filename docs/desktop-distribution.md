@@ -4,7 +4,7 @@
 
 macOS 发布包必须完成 Developer ID 签名、公证和安装验证；Windows 发布包必须完成代码签名和安装/卸载验证。发布清单包含版本、最低系统版本、大小、SHA-256、协议版本、签名状态和实际能力。签名失败、校验值缺失、被撤回或协议不兼容的包不能显示下载按钮。
 
-当前原型中的两个 macOS 条目使用合成清单，Windows 条目明确显示“签名验证中”，不提供真实下载。取得证书并产出安装包后，发布负责人才能把对应条目切换为 verified。
+未签名或 ad-hoc 包只允许标记为 `local-development` 测试版。取得证书并通过真实设备验证后，发布负责人才能把对应条目切换为 `verified`。
 
 ## 本机开发版下载
 
@@ -13,6 +13,20 @@ macOS 发布包必须完成 Developer ID 签名、公证和安装验证；Window
 ```bash
 npm run package:mac:arm64 -w @offersteady/desktop
 ```
+
+macOS Intel x64 测试包：
+
+```bash
+npm run package:mac:x64 -w @offersteady/desktop
+```
+
+Windows 10/11 x64 免安装测试包：
+
+```bash
+CSC_IDENTITY_AUTO_DISCOVERY=false npm run package:win:x64 -w @offersteady/desktop
+```
+
+Intel 命令会显式编译 x86_64 Swift 采集运行时并下载 x64 Electron，Windows 命令使用 Electron/Chromium 的 WASAPI loopback 捕获电脑输出。Windows 正式 NSIS 安装包使用 `package:win:installer:x64`，但在取得 Windows 代码签名证书前不得标记为正式验证版。
 
 该命令会生成：
 
@@ -26,6 +40,15 @@ npm run package:mac:arm64 -w @offersteady/desktop
 ```text
 http://127.0.0.1:8000/api/v1/web/downloads/desktop/OfferSteady-Companion-0.1.0-macOS-arm64.zip
 ```
+
+发布任意平台包时传入对应元数据文件：
+
+```bash
+python3 scripts/publish-desktop-release.py \
+  --metadata apps/desktop/release/OfferSteady-Companion-0.1.0-Windows-x64.json
+```
+
+OSS 路径统一为 `desktop-releases/{platform}/{architecture}/{version}/{filename}`。发布器只替换相同平台和架构的条目，不会覆盖已经发布的其他系统版本。
 
 本机开发版会进行 ad-hoc 签名，保证包结构和本机启动可用，但它不是 Apple Developer ID 正式签名/公证发行版。若 macOS 提示无法验证开发者，可在“系统设置 → 隐私与安全性”中允许打开，或右键 App 选择“打开”。如果从 Codex/某些终端环境直接启动，需要确保没有设置 `ELECTRON_RUN_AS_NODE=1`；普通双击和页面下载后的打开不应携带该变量。
 
