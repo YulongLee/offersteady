@@ -40,3 +40,10 @@
 - [x] 7.1 Resolve the active session live route from the authoritative desktop binding
 - [x] 7.2 Add regression coverage for current-interview navigation
 - [x] 7.3 Build, publish, and verify the Windows 0.1.2 companion through the production download flow
+
+## 8. Windows Browser Compatibility
+
+- [x] 8.1 Compile the Web application for the Chromium 86 syntax baseline
+- [x] 8.2 Install required legacy runtime APIs before React starts
+- [x] 8.3 Add regression coverage for the live workspace compatibility layer
+- [ ] 8.4 Build, deploy, and verify the production live route

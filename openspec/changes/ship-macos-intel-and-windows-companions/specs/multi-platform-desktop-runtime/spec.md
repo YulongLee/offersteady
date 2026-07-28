@@ -18,6 +18,10 @@ The Windows x64 companion SHALL use the existing device-pairing protocol and SHA
 - **WHEN** the companion has an authoritative active binding and the user selects "进入当前面试"
 - **THEN** the system opens the bound session's live route and, if authentication is required, returns to that route after login
 
+#### Scenario: Render the live workspace in the supported Windows browser baseline
+- **WHEN** a Windows companion opens the live route in a Chromium 86-compatible browser
+- **THEN** the Web application loads the realtime workspace without a blank screen caused by unsupported syntax or missing runtime APIs
+
 ### Requirement: Platform diagnostics are truthful
 The companion SHALL describe permissions and unavailable capture sources using instructions for the current operating system and SHALL NOT report an unavailable source as ready.
 

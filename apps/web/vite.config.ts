@@ -3,6 +3,9 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    target: "chrome86",
+  },
   server: {
     host: "127.0.0.1",
     port: 5173,
