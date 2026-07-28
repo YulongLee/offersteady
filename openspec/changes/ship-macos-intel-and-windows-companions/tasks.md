@@ -33,4 +33,4 @@
 
 - [x] 6.1 Pin the Windows executable name so NSIS shortcuts and the packaged application target the same file
 - [x] 6.2 Add a regression test and packaging-time validation for the Windows executable and installer
-- [ ] 6.3 Rebuild, publish, and verify the Windows 0.1.1 installer through the production download flow
+- [x] 6.3 Rebuild, publish, and verify the Windows 0.1.1 installer through the production download flow
