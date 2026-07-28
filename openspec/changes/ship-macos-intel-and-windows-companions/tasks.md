@@ -22,3 +22,9 @@
 - [x] 4.2 Build the shared desktop application
 - [x] 4.3 Package and inspect macOS Intel x64 artifact architecture
 - [x] 4.4 Package and inspect Windows x64 archive contents
+
+## 5. Windows Installer
+
+- [x] 5.1 Build the verified portable directory into a single NSIS setup executable
+- [x] 5.2 Add desktop, Start Menu, installation-directory, and uninstall behavior
+- [x] 5.3 Publish installer-aware metadata and download-center guidance

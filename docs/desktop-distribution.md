@@ -26,7 +26,13 @@ Windows 10/11 x64 免安装测试包：
 CSC_IDENTITY_AUTO_DISCOVERY=false npm run package:win:x64 -w @offersteady/desktop
 ```
 
-Intel 命令会显式编译 x86_64 Swift 采集运行时并下载 x64 Electron，Windows 命令使用 Electron/Chromium 的 WASAPI loopback 捕获电脑输出。Windows 正式 NSIS 安装包使用 `package:win:installer:x64`，但在取得 Windows 代码签名证书前不得标记为正式验证版。
+面向用户的 Windows NSIS 安装包：
+
+```bash
+npm run package:win:installer:x64 -w @offersteady/desktop
+```
+
+安装版是单个 `OfferSteady-Companion-Setup-<version>-Windows-x64.exe`，支持安装目录选择、桌面快捷方式、开始菜单和系统卸载入口。Intel 命令会显式编译 x86_64 Swift 采集运行时并下载 x64 Electron，Windows 使用 Electron/Chromium 的 WASAPI loopback 捕获电脑输出。在取得 Windows 代码签名证书前，安装程序仍必须标记为未签名测试版。
 
 该命令会生成：
 

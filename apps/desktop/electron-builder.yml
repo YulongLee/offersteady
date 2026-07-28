@@ -29,10 +29,13 @@ win:
     - target: nsis
       arch:
         - x64
-  artifactName: OfferSteady-Companion-${version}-Windows-${arch}.${ext}
+  artifactName: OfferSteady-Companion-Setup-${version}-Windows-${arch}.${ext}
   verifyUpdateCodeSignature: true
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 面试稳伴随程序
+  uninstallDisplayName: 面试稳伴随程序
   deleteAppDataOnUninstall: false

@@ -1,11 +1,11 @@
 ## ADDED Requirements
 
 ### Requirement: Reproducible target packages
-The project SHALL provide explicit build commands for macOS arm64, macOS x64, and Windows x64 and SHALL emit a package plus metadata containing platform, architecture, version, size, SHA-256, signing status, and capabilities.
+The project SHALL provide explicit build commands for macOS arm64, macOS x64, and Windows x64 and SHALL emit a package plus metadata containing platform, architecture, version, size, SHA-256, signing status, and capabilities. The user-facing Windows package SHALL be a single NSIS installer with desktop and Start Menu shortcuts and an uninstall entry.
 
 #### Scenario: Build unsigned Windows test package
 - **WHEN** a maintainer runs the Windows x64 test packaging command
-- **THEN** the release directory contains a Windows x64 archive and matching metadata marked as local development
+- **THEN** the release directory contains a Windows x64 installer and matching metadata marked as local development
 
 ### Requirement: Platform-scoped OSS storage
 Desktop artifacts SHALL be stored under `desktop-releases/{platform}/{architecture}/{version}/` and the publisher SHALL preserve entries for other platform and architecture pairs.

@@ -46,7 +46,7 @@ def main() -> int:
         bucket,
         object_key,
         str(artifact),
-        headers={"Content-Type": "application/zip"},
+        headers={"Content-Type": "application/vnd.microsoft.portable-executable" if artifact.suffix.lower() == ".exe" else "application/zip"},
         multipart_threshold=8 * 1024 * 1024,
         part_size=4 * 1024 * 1024,
         num_threads=4,
