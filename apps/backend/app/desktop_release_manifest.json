@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAtMs": 1785227218571,
+  "generatedAtMs": 1785250684220,
   "entries": [
     {
       "id": "mac-arm64-local-dev",
@@ -57,18 +57,18 @@
       "platform": "windows",
       "architecture": "x64",
       "displayName": "Windows 10/11 安装版",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "minimumOs": "Windows 10 22H2+",
-      "fileName": "OfferSteady-Companion-Setup-0.1.0-Windows-x64.exe",
-      "fileSizeBytes": 102985142,
-      "sha256": "2455e4757b7ccc70524e46b780a78880d314bdfa8d775d12f91fc28987d0bc88",
+      "fileName": "OfferSteady-Companion-Setup-0.1.1-Windows-x64.exe",
+      "fileSizeBytes": 102985186,
+      "sha256": "b3173bad47a28f10b43b69d4193adbbaa7fd603b2d51c5357c1cdcb2b6d454e3",
       "signingStatus": "local-development",
       "notarized": false,
-      "publishedAtMs": 1785227218571,
+      "publishedAtMs": 1785250684220,
       "protocolVersion": "2.0",
       "captureRuntime": "electron-wasapi-loopback",
       "developmentOnly": true,
-      "objectKey": "desktop-releases/windows/x64/0.1.0/OfferSteady-Companion-Setup-0.1.0-Windows-x64.exe",
+      "objectKey": "desktop-releases/windows/x64/0.1.1/OfferSteady-Companion-Setup-0.1.1-Windows-x64.exe",
       "capabilities": {
         "microphone": true,
         "systemAudio": true,

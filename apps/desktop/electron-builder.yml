@@ -25,6 +25,7 @@ mac:
   artifactName: OfferSteady-Companion-${version}-macOS-${arch}.${ext}
 win:
   icon: build/app-icon.png
+  executableName: OfferSteady
   target:
     - target: nsis
       arch:

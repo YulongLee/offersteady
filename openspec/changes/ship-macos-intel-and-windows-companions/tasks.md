@@ -28,3 +28,9 @@
 - [x] 5.1 Build the verified portable directory into a single NSIS setup executable
 - [x] 5.2 Add desktop, Start Menu, installation-directory, and uninstall behavior
 - [x] 5.3 Publish installer-aware metadata and download-center guidance
+
+## 6. Windows Installer Shortcut Repair
+
+- [x] 6.1 Pin the Windows executable name so NSIS shortcuts and the packaged application target the same file
+- [x] 6.2 Add a regression test and packaging-time validation for the Windows executable and installer
+- [ ] 6.3 Rebuild, publish, and verify the Windows 0.1.1 installer through the production download flow
