@@ -105,7 +105,7 @@ describe("backend preview adapter", () => {
     expect(fetchImpl).toHaveBeenCalledWith("http://localhost:8000/api/v1/live-answer/questions", expect.objectContaining({
       method: "POST",
       headers: expect.objectContaining({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ userId: "user-1", sessionId: "session-1", question: "如何设计前端监控？", stream: true }),
+      body: JSON.stringify({ userId: "user-1", sessionId: "session-1", question: "如何设计前端监控？", stream: true, idempotencyKey: "manual:test" }),
     }));
     expect(result.question).toMatchObject({ id: "task-1", text: "如何设计前端监控？", input: "manual", status: "confirmed" });
     expect(result.question.advice.detail).toBe("先讲指标，再讲采集，最后讲告警闭环。");

@@ -214,8 +214,13 @@ class PostgresBillingRepository:
             cursor.execute("SELECT COALESCE(SUM(points), 0) AS balance FROM points_redemption_ledger WHERE user_id = %s", (user_id,))
             balance = int(cursor.fetchone()["balance"])
             cursor.execute(
-                "SELECT COALESCE(SUM(points_reserved), 0) AS reserved FROM billing_index_reservations WHERE user_id = %s AND status = 'reserved'",
-                (user_id,),
+                """
+                SELECT
+                  COALESCE((SELECT SUM(points_reserved) FROM billing_index_reservations WHERE user_id = %s AND status = 'reserved'), 0)
+                  + COALESCE((SELECT SUM(points_reserved) FROM billing_usage_reservations WHERE user_id = %s AND status = 'reserved'), 0)
+                  AS reserved
+                """,
+                (user_id, user_id),
             )
             available = balance - int(cursor.fetchone()["reserved"])
             if available < int(quote["points_required"]):
@@ -281,6 +286,109 @@ class PostgresBillingRepository:
                 (released_at_ms, quote_id),
             )
             result = self._reservation(cursor.fetchone())
+            connection.commit()
+            return result
+
+    def reserve_usage(self, *, usage: Mapping[str, object], created_at_ms: int) -> dict[str, object]:
+        user_id = str(usage["user_id"])
+        usage_id = str(usage["usage_id"])
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (f"billing-user:{user_id}",))
+            cursor.execute("SELECT * FROM billing_usage_reservations WHERE usage_id = %s", (usage_id,))
+            existing = cursor.fetchone()
+            if existing:
+                if str(existing["user_id"]) != user_id or str(existing["usage_kind"]) != str(usage["usage_kind"]):
+                    raise PermissionError("Billing usage id belongs to a different operation.")
+                return self._usage_reservation(existing)
+            cursor.execute(
+                """
+                SELECT 1 FROM billing_time_pass_entitlements
+                WHERE user_id = %s AND starts_at_ms <= %s AND ends_at_ms > %s
+                LIMIT 1
+                """,
+                (user_id, created_at_ms, created_at_ms),
+            )
+            has_active_pass = cursor.fetchone() is not None
+            points_reserved = 0 if has_active_pass else int(usage["points_reserved"])
+            if points_reserved:
+                cursor.execute("SELECT COALESCE(SUM(points), 0) AS balance FROM points_redemption_ledger WHERE user_id = %s", (user_id,))
+                balance = int(cursor.fetchone()["balance"])
+                cursor.execute(
+                    """
+                    SELECT
+                      COALESCE((SELECT SUM(points_reserved) FROM billing_index_reservations WHERE user_id = %s AND status = 'reserved'), 0)
+                      + COALESCE((SELECT SUM(points_reserved) FROM billing_usage_reservations WHERE user_id = %s AND status = 'reserved'), 0)
+                      AS reserved
+                    """,
+                    (user_id, user_id),
+                )
+                if balance - int(cursor.fetchone()["reserved"]) < points_reserved:
+                    return {
+                        **dict(usage), "billing_source": "points", "status": "insufficient_balance",
+                        "created_at_ms": created_at_ms, "settled_at_ms": None, "released_at_ms": None,
+                    }
+            cursor.execute(
+                """
+                INSERT INTO billing_usage_reservations (
+                  reservation_id, usage_id, user_id, usage_kind, points_reserved,
+                  billing_source, status, created_at_ms
+                ) VALUES (%s,%s,%s,%s,%s,%s,'reserved',%s)
+                RETURNING *
+                """,
+                (
+                    usage["reservation_id"], usage_id, user_id, usage["usage_kind"], points_reserved,
+                    "time_pass" if has_active_pass else "points", created_at_ms,
+                ),
+            )
+            result = self._usage_reservation(cursor.fetchone())
+            connection.commit()
+            return result
+
+    def settle_usage(self, *, usage_id: str, settled_at_ms: int) -> dict[str, object] | None:
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute("SELECT * FROM billing_usage_reservations WHERE usage_id = %s FOR UPDATE", (usage_id,))
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            if row["status"] != "reserved":
+                return self._usage_reservation(row)
+            ledger_kind = "pass_usage" if row["billing_source"] == "time_pass" else f"{row['usage_kind']}_settlement"
+            description = "会员权益回答使用" if row["billing_source"] == "time_pass" else (
+                "截图回答积分结算" if row["usage_kind"] == "screenshot_answer" else "面试回答积分结算"
+            )
+            cursor.execute(
+                """
+                INSERT INTO points_redemption_ledger (
+                  ledger_entry_id, user_id, kind, points, created_at_ms, reference_id, description
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (reference_id) DO NOTHING
+                """,
+                (
+                    f"ledger-{uuid4().hex}", row["user_id"], ledger_kind, -int(row["points_reserved"]),
+                    settled_at_ms, f"usage:{usage_id}", description,
+                ),
+            )
+            cursor.execute(
+                "UPDATE billing_usage_reservations SET status = 'settled', settled_at_ms = %s WHERE usage_id = %s RETURNING *",
+                (settled_at_ms, usage_id),
+            )
+            result = self._usage_reservation(cursor.fetchone())
+            connection.commit()
+            return result
+
+    def release_usage(self, *, usage_id: str, released_at_ms: int) -> dict[str, object] | None:
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute("SELECT * FROM billing_usage_reservations WHERE usage_id = %s FOR UPDATE", (usage_id,))
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            if row["status"] != "reserved":
+                return self._usage_reservation(row)
+            cursor.execute(
+                "UPDATE billing_usage_reservations SET status = 'released', released_at_ms = %s WHERE usage_id = %s RETURNING *",
+                (released_at_ms, usage_id),
+            )
+            result = self._usage_reservation(cursor.fetchone())
             connection.commit()
             return result
 
@@ -423,6 +531,17 @@ class PostgresBillingRepository:
         }
 
     @staticmethod
+    def _usage_reservation(row) -> dict[str, object]:
+        return {
+            "reservation_id": str(row["reservation_id"]), "usage_id": str(row["usage_id"]),
+            "user_id": str(row["user_id"]), "usage_kind": str(row["usage_kind"]),
+            "points_reserved": int(row["points_reserved"]), "billing_source": str(row["billing_source"]),
+            "status": str(row["status"]), "created_at_ms": int(row["created_at_ms"]),
+            "settled_at_ms": int(row["settled_at_ms"]) if row["settled_at_ms"] is not None else None,
+            "released_at_ms": int(row["released_at_ms"]) if row["released_at_ms"] is not None else None,
+        }
+
+    @staticmethod
     def _entitlement(row) -> dict[str, object]:
         return {
             "id": str(row["entitlement_id"]), "user_id": str(row["user_id"]), "product_id": str(row["product_id"]),
@@ -445,6 +564,7 @@ class PostgresBillingRepository:
             Path(REPO_ROOT / "apps/backend/migrations/versions/0009_commercial_billing_persistence.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0010_payment_recovery_reconciliation.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0011_enable_pgvector_extension.sql"),
+            Path(REPO_ROOT / "apps/backend/migrations/versions/0012_billable_interview_usage.sql"),
         )
         with self._connect() as connection, connection.cursor() as cursor:
             cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ("offersteady:billing-migrations",))

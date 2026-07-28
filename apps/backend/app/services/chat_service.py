@@ -34,6 +34,7 @@ from app.ports.retrieval import RetrievalContext, RetrievalFilter, RetrievalPort
 from app.ports.storage import FileStoragePort
 from app.schemas.retrieval import RetrievalResponse, RetrievedChunkResponse
 from app.services.session_service import SessionService
+from app.services.billing_service import BillingService
 
 
 def _now_ms() -> int:
@@ -431,6 +432,7 @@ class ChatService:
         prompt_template: PromptTemplatePort,
         prompt_builder: PromptBuilderPort,
         llm_gateway: LLMGatewayPort,
+        billing_service: BillingService | None = None,
     ) -> None:
         self.settings = settings
         self.logger = logger
@@ -441,6 +443,15 @@ class ChatService:
         self.prompt_template = prompt_template
         self.prompt_builder = prompt_builder
         self.llm_gateway = llm_gateway
+        self.billing_service = billing_service
+        self.billing_usage_by_task: dict[str, str] = {}
+
+    def _reserve_answer_usage(self, *, user_id: str, usage_id: str) -> None:
+        if self.billing_service is None:
+            return
+        reservation = self.billing_service.reserve_usage(user_id=user_id, usage_id=usage_id, usage_kind="answer")
+        if reservation.status == "insufficient_balance":
+            raise DomainRequestError("billing", "reserve-answer", "积分不足，请先购买积分或开通会员。", 409)
 
     def _load_stage_prompt(self, stage: str) -> tuple[str, PromptConfig]:
         loader = getattr(self.prompt_template, "load_stage_prompt", None)
@@ -465,14 +476,20 @@ class ChatService:
     def _size_bucket(length: int) -> str:
         return "xs" if length <= 256 else "sm" if length <= 1000 else "md" if length <= 4000 else "lg"
 
-    def answer_question(self, *, user_id: str, session_id: str, question: str, stream: bool) -> tuple[ChatAnswerTaskRecord, RetrievalResponse]:
+    def answer_question(
+        self, *, user_id: str, session_id: str, question: str, stream: bool, usage_id: str | None = None
+    ) -> tuple[ChatAnswerTaskRecord, RetrievalResponse]:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         if session.status != "live":
             raise DomainRequestError("live-answer", "start", "只有进行中的面试会话才能发起实时回答。", 400)
         now_ms = _now_ms()
+        task_id = f"answer-{uuid4().hex}"
+        billing_usage_id = usage_id or f"live-answer:{task_id}"
+        self._reserve_answer_usage(user_id=user_id, usage_id=billing_usage_id)
+        self.billing_usage_by_task[task_id] = billing_usage_id
         task = self.repository.save_task(
             ChatAnswerTaskRecord(
-                task_id=f"answer-{uuid4().hex}",
+                task_id=task_id,
                 session_id=session_id,
                 owner_user_id=user_id,
                 question=question.strip(),
@@ -548,6 +565,8 @@ class ChatService:
                         related_task_id=completed.task_id,
                     )
                 self._log(logging.INFO, "chat.completed", task=completed, session_id=session_id, question=question, retry_count=attempt)
+                if self.billing_service is not None:
+                    self.billing_service.settle_usage(usage_id=billing_usage_id)
                 return completed, self._to_retrieval_response(retrieval)
             except RetryableChatError as exc:
                 last_error = exc
@@ -568,17 +587,25 @@ class ChatService:
                 completed_at_ms=_now_ms(),
             )
         )
+        if self.billing_service is not None:
+            self.billing_service.release_usage(usage_id=billing_usage_id)
         self._log(logging.WARNING, "chat.failed", task=failed, session_id=session_id, question=question, retry_count=failed.retry_count, error_code=error_code)
         return failed, self._to_retrieval_response(retrieval)
 
-    def stream_answer_question(self, *, user_id: str, session_id: str, question: str) -> Iterator[dict]:
+    def stream_answer_question(
+        self, *, user_id: str, session_id: str, question: str, usage_id: str | None = None
+    ) -> Iterator[dict]:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         if session.status != "live":
             raise DomainRequestError("live-answer", "start-stream", "只有进行中的面试会话才能发起实时回答。", 400)
         now_ms = _now_ms()
+        task_id = f"answer-{uuid4().hex}"
+        billing_usage_id = usage_id or f"live-answer:{task_id}"
+        self._reserve_answer_usage(user_id=user_id, usage_id=billing_usage_id)
+        self.billing_usage_by_task[task_id] = billing_usage_id
         task = self.repository.save_task(
             ChatAnswerTaskRecord(
-                task_id=f"answer-{uuid4().hex}",
+                task_id=task_id,
                 session_id=session_id,
                 owner_user_id=user_id,
                 question=question.strip(),
@@ -839,6 +866,8 @@ class ChatService:
                     completion_ms=_now_ms() - stream_started_at_ms, status=completed.status,
                 )
                 self._log(logging.INFO, "chat.stream_completed", task=completed, session_id=session_id, question=question, retry_count=attempt)
+                if self.billing_service is not None:
+                    self.billing_service.settle_usage(usage_id=billing_usage_id)
                 yield {"type": "completed", "task": completed, "retrieval": self._to_retrieval_response(retrieval)}
                 return
             except RetryableChatError as exc:
@@ -864,6 +893,8 @@ class ChatService:
                 completed_at_ms=_now_ms(),
             )
         )
+        if self.billing_service is not None:
+            self.billing_service.release_usage(usage_id=billing_usage_id)
         self._log(logging.WARNING, "chat.stream_failed", task=failed, session_id=session_id, question=question, retry_count=failed.retry_count, error_code=error_code)
         yield {"type": "failed", "task": failed, "error_code": error_code, "error_message": failed.error_message, "partial_text": failed.answer_text}
 
@@ -885,6 +916,10 @@ class ChatService:
         if task.status not in {"queued", "streaming"}:
             return "not-cancellable", task
         cancelled = self.repository.save_task(replace(task, status="cancelled", updated_at_ms=_now_ms(), completed_at_ms=_now_ms()))
+        if self.billing_service is not None:
+            self.billing_service.release_usage(
+                usage_id=self.billing_usage_by_task.get(task.task_id, f"live-answer:{task.task_id}")
+            )
         return "cancelled", cancelled
 
     def _is_task_cancelled(self, task_id: str) -> bool:

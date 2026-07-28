@@ -94,6 +94,20 @@ class KnowledgeIndexReservationRecord:
 
 
 @dataclass(frozen=True)
+class UsageReservationRecord:
+    reservation_id: str
+    usage_id: str
+    user_id: str
+    usage_kind: str
+    points_reserved: int
+    billing_source: str
+    status: str
+    created_at_ms: int
+    settled_at_ms: int | None = None
+    released_at_ms: int | None = None
+
+
+@dataclass(frozen=True)
 class TimePassEntitlementRecord:
     id: str
     user_id: str
@@ -156,6 +170,7 @@ class BillingService:
         self.index_quotes_by_user_and_key: dict[tuple[str, str], KnowledgeIndexQuoteRecord] = {}
         self.index_quotes_by_id: dict[str, KnowledgeIndexQuoteRecord] = {}
         self.index_reservations_by_quote: dict[str, KnowledgeIndexReservationRecord] = {}
+        self.usage_reservations_by_id: dict[str, UsageReservationRecord] = {}
         self.checkout_orders_by_id: dict[str, OfficialCheckoutOrderRecord] = {}
         self.checkout_orders_by_user_and_key: dict[tuple[str, str], str] = {}
         self.pass_entitlements_by_user: dict[str, list[TimePassEntitlementRecord]] = {}
@@ -532,6 +547,91 @@ class BillingService:
             return reservation
         released = KnowledgeIndexReservationRecord(**{**reservation.__dict__, "status": "released", "released_at_ms": _now_ms()})
         self.index_reservations_by_quote[quote_id] = released
+        return released
+
+    def reserve_usage(self, *, user_id: str, usage_id: str, usage_kind: str) -> UsageReservationRecord:
+        if usage_kind not in {"answer", "screenshot_answer"}:
+            raise ValueError(f"Unsupported billable usage kind: {usage_kind}")
+        self._ensure_welcome_grant(user_id=user_id)
+        points = int(self.rates()["answerPoints" if usage_kind == "answer" else "screenshotAnswerPoints"])
+        created_at_ms = _now_ms()
+        usage = {
+            "reservation_id": f"usage-reservation-{uuid4().hex}",
+            "usage_id": usage_id,
+            "user_id": user_id,
+            "usage_kind": usage_kind,
+            "points_reserved": points,
+        }
+        if self.billing_repository is not None:
+            return UsageReservationRecord(**self.billing_repository.reserve_usage(usage=usage, created_at_ms=created_at_ms))
+        existing = self.usage_reservations_by_id.get(usage_id)
+        if existing is not None:
+            if existing.user_id != user_id or existing.usage_kind != usage_kind:
+                raise PermissionError("Billing usage id belongs to a different operation.")
+            return existing
+        active_pass = self._active_pass_payload(user_id=user_id)
+        points_reserved = 0 if active_pass is not None else points
+        reserved_points = sum(
+            item.points_reserved
+            for item in self.usage_reservations_by_id.values()
+            if item.user_id == user_id and item.status == "reserved"
+        ) + sum(
+            item.points_reserved
+            for item in self.index_reservations_by_quote.values()
+            if item.user_id == user_id and item.status == "reserved"
+        )
+        if points_reserved and self._balance_for_user(user_id=user_id) - reserved_points < points_reserved:
+            return UsageReservationRecord(
+                **usage,
+                billing_source="points",
+                status="insufficient_balance",
+                created_at_ms=created_at_ms,
+            )
+        reservation = UsageReservationRecord(
+            **{**usage, "points_reserved": points_reserved},
+            billing_source="time_pass" if active_pass is not None else "points",
+            status="reserved",
+            created_at_ms=created_at_ms,
+        )
+        self.usage_reservations_by_id[usage_id] = reservation
+        return reservation
+
+    def settle_usage(self, *, usage_id: str) -> UsageReservationRecord | None:
+        if self.billing_repository is not None:
+            item = self.billing_repository.settle_usage(usage_id=usage_id, settled_at_ms=_now_ms())
+            return UsageReservationRecord(**item) if item is not None else None
+        reservation = self.usage_reservations_by_id.get(usage_id)
+        if reservation is None or reservation.status != "reserved":
+            return reservation
+        settled_at_ms = _now_ms()
+        reference_id = f"usage:{usage_id}"
+        if not any(item.reference_id == reference_id for item in self.ledger_by_user.get(reservation.user_id, [])):
+            self.ledger_by_user.setdefault(reservation.user_id, []).append(
+                PointsLedgerRecord(
+                    id=f"ledger-{uuid4().hex}",
+                    user_id=reservation.user_id,
+                    kind="pass_usage" if reservation.billing_source == "time_pass" else f"{reservation.usage_kind}_settlement",
+                    points=-reservation.points_reserved,
+                    created_at_ms=settled_at_ms,
+                    reference_id=reference_id,
+                    description="会员权益回答使用" if reservation.billing_source == "time_pass" else (
+                        "截图回答积分结算" if reservation.usage_kind == "screenshot_answer" else "面试回答积分结算"
+                    ),
+                )
+            )
+        settled = UsageReservationRecord(**{**reservation.__dict__, "status": "settled", "settled_at_ms": settled_at_ms})
+        self.usage_reservations_by_id[usage_id] = settled
+        return settled
+
+    def release_usage(self, *, usage_id: str) -> UsageReservationRecord | None:
+        if self.billing_repository is not None:
+            item = self.billing_repository.release_usage(usage_id=usage_id, released_at_ms=_now_ms())
+            return UsageReservationRecord(**item) if item is not None else None
+        reservation = self.usage_reservations_by_id.get(usage_id)
+        if reservation is None or reservation.status != "reserved":
+            return reservation
+        released = UsageReservationRecord(**{**reservation.__dict__, "status": "released", "released_at_ms": _now_ms()})
+        self.usage_reservations_by_id[usage_id] = released
         return released
 
     def _ensure_welcome_grant(self, *, user_id: str) -> None:

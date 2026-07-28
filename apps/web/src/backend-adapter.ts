@@ -899,6 +899,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         sessionId: command.interviewId,
         question: command.question,
         stream: true,
+        idempotencyKey: command.idempotencyKey,
       }),
     }, signal);
     return toSubmitManualAnswerResult(result.task);
@@ -928,6 +929,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         sessionId: command.interviewId,
         question: command.question,
         stream: true,
+        idempotencyKey: command.idempotencyKey,
       }),
     };
     if (signal) requestInit.signal = signal;

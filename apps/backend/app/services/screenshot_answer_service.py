@@ -49,6 +49,7 @@ from app.schemas.retrieval import RetrievalResponse, RetrievedChunkResponse
 from app.services.chat_service import NonRetryableChatError, RetryableChatError
 from app.services.material_object_keys import MaterialObjectKeyFactory
 from app.services.session_service import SessionService
+from app.services.billing_service import BillingService
 
 
 def _now_ms() -> int:
@@ -495,6 +496,7 @@ class ScreenshotAnswerService:
         prompt_template: ScreenshotPromptTemplatePort,
         prompt_builder: ScreenshotPromptBuilderPort,
         llm_gateway: LLMGatewayPort,
+        billing_service: BillingService | None = None,
     ) -> None:
         self.settings = settings
         self.logger = logger
@@ -508,6 +510,7 @@ class ScreenshotAnswerService:
         self.prompt_template = prompt_template
         self.prompt_builder = prompt_builder
         self.llm_gateway = llm_gateway
+        self.billing_service = billing_service
 
     def validation_policy(self) -> dict[str, object]:
         return {
@@ -704,9 +707,27 @@ class ScreenshotAnswerService:
             )
         uploads = [self._require_upload(user_id=user_id, session_id=session_id, image_id=image_id) for image_id in image_ids]
         now_ms = _now_ms()
+        task_id = f"screenshot-answer-{uuid4().hex}"
+        billing_usage_id = f"screenshot-answer:{session_id}:{':'.join(sorted(image_ids))}"
+        prepare_started = perf_counter()
+        prepared = self.preprocessor.preprocess(
+            uploads=uploads,
+            upload_port=self.upload_port,
+            object_storage=self.object_storage,
+            signed_url_ttl_seconds=self.settings.screenshot_signed_url_ttl_seconds,
+            use_signed_url=self.settings.screenshot_use_signed_url_for_vision,
+        )
+        if telemetry is not None:
+            telemetry["signed_url_ms"] = _elapsed_ms(prepare_started)
+        if self.billing_service is not None:
+            reservation = self.billing_service.reserve_usage(
+                user_id=user_id, usage_id=billing_usage_id, usage_kind="screenshot_answer"
+            )
+            if reservation.status == "insufficient_balance":
+                raise DomainRequestError("billing", "reserve-screenshot-answer", "积分不足，请先购买积分或开通会员。", 409)
         task = self.repository.save_task(
             ScreenshotAnswerTaskRecord(
-                task_id=f"screenshot-answer-{uuid4().hex}",
+                task_id=task_id,
                 session_id=session_id,
                 owner_user_id=user_id,
                 instruction=instruction.strip(),
@@ -720,16 +741,6 @@ class ScreenshotAnswerService:
             )
         )
         self._log(logging.INFO, "screenshot_answer.started", task=task, session_id=session_id, image_count=len(image_ids), retry_count=0)
-        prepare_started = perf_counter()
-        prepared = self.preprocessor.preprocess(
-            uploads=uploads,
-            upload_port=self.upload_port,
-            object_storage=self.object_storage,
-            signed_url_ttl_seconds=self.settings.screenshot_signed_url_ttl_seconds,
-            use_signed_url=self.settings.screenshot_use_signed_url_for_vision,
-        )
-        if telemetry is not None:
-            telemetry["signed_url_ms"] = _elapsed_ms(prepare_started)
         current = self.repository.save_task(replace(task, status="processing-images", updated_at_ms=_now_ms()))
         last_error: Exception | None = None
         retrieval_context = RetrievalContext(
@@ -801,6 +812,8 @@ class ScreenshotAnswerService:
                 if telemetry is not None:
                     telemetry["answer_persist_ms"] = _elapsed_ms(persist_started)
                     completed = self.repository.save_task(replace(completed, telemetry=self._telemetry_from_metrics(telemetry)))
+                if self.billing_service is not None:
+                    self.billing_service.settle_usage(usage_id=billing_usage_id)
                 return completed, self._to_retrieval_response(retrieval_context)
             except (RetryableVisionError, RetryableChatError) as exc:
                 last_error = exc
@@ -833,6 +846,8 @@ class ScreenshotAnswerService:
                 completed_at_ms=_now_ms(),
             )
         )
+        if self.billing_service is not None:
+            self.billing_service.release_usage(usage_id=billing_usage_id)
         self._log(logging.WARNING, "screenshot_answer.failed", task=failed, session_id=session_id, image_count=len(image_ids), retry_count=failed.retry_count, error_code=failed.error_code)
         return failed, self._to_retrieval_response(retrieval_context)
 
@@ -848,7 +863,14 @@ class ScreenshotAnswerService:
         task = self.get_task(user_id=user_id, task_id=task_id)
         if task.status == "cancelled":
             return task
-        return self.repository.save_task(replace(task, status="cancelled", updated_at_ms=_now_ms(), completed_at_ms=_now_ms()))
+        cancelled = self.repository.save_task(replace(task, status="cancelled", updated_at_ms=_now_ms(), completed_at_ms=_now_ms()))
+        if self.billing_service is not None:
+            for usage_id in (
+                f"screenshot-answer:{task.session_id}:{':'.join(sorted(task.image_ids))}",
+                f"screenshot-answer:{task.task_id}",
+            ):
+                self.billing_service.release_usage(usage_id=usage_id)
+        return cancelled
 
     def list_session_history(self, *, user_id: str, session_id: str) -> list[ScreenshotAnswerTaskRecord]:
         self.session_service.get_session(user_id=user_id, session_id=session_id)

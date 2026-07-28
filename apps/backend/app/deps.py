@@ -277,6 +277,7 @@ def chat_service() -> ChatService:
         prompt_template=prompt_template_port(),
         prompt_builder=prompt_builder_port(),
         llm_gateway=llm_gateway_port(),
+        billing_service=billing_service(),
     )
 
 
@@ -422,6 +423,7 @@ def screenshot_answer_service() -> ScreenshotAnswerService:
         prompt_template=screenshot_prompt_template_port(),
         prompt_builder=screenshot_prompt_builder_port(),
         llm_gateway=llm_gateway_port(),
+        billing_service=billing_service(),
     )
 
 

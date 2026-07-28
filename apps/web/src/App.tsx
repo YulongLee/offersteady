@@ -866,13 +866,13 @@ function LivePage() {
     uncertain: selectedContextSources.length === 0,
     provenance: { selectionRevision: contextSelection.revision, usedSources: selectedContextSources.map(source => ({ sourceId: source.id, sourceVersion: source.version, displayName: source.displayName, kind: source.kind })) },
   };
-  const charge = (points: number, reference: string) => {
-    if (submittedCommands.current.has(reference)) return false;
-    if (state.billing.activePass) { submittedCommands.current.add(reference); return true; }
-    if (state.billing.balance < points) { setNotice("积分不足，请先购买积分或开通会员"); return false; }
-    submittedCommands.current.add(reference);
-    setState(current => ({ ...current, billing: { ...current.billing, balance: current.billing.balance - points, ledger: [{ id: `usage-${reference}`, userId: current.account.id, kind: "usage_reserve", points: -points, createdAtMs: Date.now(), referenceId: reference, description: "回答积分预留" }, ...current.billing.ledger] } }));
-    return true;
+  const syncBilling = async () => {
+    try {
+      const refreshed = await interviewAppAdapter.loadState();
+      setState(current => ({ ...current, billing: refreshed.billing }));
+    } catch {
+      // The completed task remains usable; the next state refresh will reconcile billing.
+    }
   };
   const activeTaskFor = (question: InterviewQuestion, usageId: string): AnswerTaskSnapshot => ({ id: `answer:${question.id}:${Date.now()}`, interviewId: id, userId: state.account.id, billingUsageId: usageId, questionId: question.id, question: question.text, revision: 1, status: "generating", partialText: "正在整理回答结构…", updatedAtMs: Date.now() });
   const pendingManualQuestion = (text: string, questionId: string): InterviewQuestion => ({
@@ -923,6 +923,7 @@ function LivePage() {
         }));
       }), controller.signal);
       setState(current => ({ ...current, questions: [result.question, ...current.questions.filter(item => item.id !== pendingId && item.id !== result.question.id)], activeAnswerTask: result.task }));
+      if (result.task.status === "completed") void syncBilling();
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       if (error instanceof Error && error.message === "请求已取消") return;
@@ -948,7 +949,7 @@ function LivePage() {
     if (!question) return;
     if (question.status === "cancelled" && status === "generating") {
       if (question.input === "manual") { void submitManualText(question.text, questionId); return; }
-      const usageId = `retry:${questionId}:${Date.now()}`; if (!charge(state.billing.rates.answerPoints, usageId)) return;
+      const usageId = `retry:${questionId}:${Date.now()}`;
       const task: AnswerTaskSnapshot = { id: `answer:${questionId}:${Date.now()}`, interviewId: id, userId: state.account.id, billingUsageId: usageId, questionId, question: question.text, revision: 1, status: "generating", partialText: "正在重新整理回答…", updatedAtMs: Date.now() };
       setState(current => ({ ...current, questions: current.questions.map(item => item.id === questionId ? { ...item, status } : item), activeAnswerTask: task }));
       return;
@@ -959,7 +960,7 @@ function LivePage() {
     ? `请结合当前截图，直接回答这道题。如果截图内容与问题存在差异，以截图内容为准。面试官最近的问题是：${latestQuestion.trim()}`
     : "请直接识别当前截图中的题目、代码或系统设计内容，并给出可直接使用的中文回答。";
   const submitScreenshot = async () => {
-    const usageId = `screenshot:remote:${Date.now()}`; if (!charge(state.billing.rates.screenshotAnswerPoints, usageId)) return;
+    const usageId = `screenshot:remote:${Date.now()}`;
     const latestQuestion = latestInterviewerQuestion();
     const instruction = screenshotInstruction(latestQuestion);
     const placeholderId = `shot-pending-${Date.now()}`;
@@ -986,6 +987,7 @@ function LivePage() {
       }));
       setActionState(current => ({ ...current, screenshotTask: null }));
       setView(current => current.viewingAnswerId ? { ...current, newAnswerAvailable: true } : current);
+      if (result.task.status === "completed") void syncBilling();
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       if (error instanceof Error && error.message === "请求已取消") return;
@@ -1087,7 +1089,7 @@ function LivePage() {
   }, [pageLeaseStatus]);
   const dismissPending = () => setState(current => ({ ...current, speaker: { ...current.speaker, pendingQuestion: null } }));
   const confirmPending = () => {
-    const candidate = state.speaker.pendingQuestion; if (!candidate || !charge(state.billing.rates.answerPoints, candidate.id)) return;
+    const candidate = state.speaker.pendingQuestion; if (!candidate) return;
     const question: InterviewQuestion = { ...active, id: candidate.id, text: candidate.text, askedAt: "刚刚", input: "desktop-audio", status: "generating", advice: scopedAdvice };
     const task = activeTaskFor(question, candidate.id);
     setState(current => ({ ...current, questions: current.questions.some(item => item.id === candidate.id) ? current.questions : [question, ...current.questions], speaker: { ...current.speaker, pendingQuestion: null }, activeAnswerTask: task }));

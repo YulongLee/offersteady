@@ -100,6 +100,7 @@ async def start_live_answer(
         session_id=request.session_id,
         question=request.question,
         stream=request.stream,
+        usage_id=request.idempotency_key,
     )
     return success_response(
         request=request_context,
@@ -117,7 +118,9 @@ async def stream_live_answer(
     user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
 
     def events() -> Iterator[str]:
-        for payload in service.stream_answer_question(user_id=user_id, session_id=request.session_id, question=request.question):
+        for payload in service.stream_answer_question(
+            user_id=user_id, session_id=request.session_id, question=request.question, usage_id=request.idempotency_key
+        ):
             yield _sse_frame(_to_stream_event(payload))
 
     return StreamingResponse(

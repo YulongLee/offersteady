@@ -14,6 +14,7 @@ class LiveAnswerQuestionRequest(BaseModel):
     session_id: str = Field(min_length=1, alias="sessionId")
     question: str = Field(min_length=1)
     stream: bool = True
+    idempotency_key: str | None = Field(default=None, min_length=1, alias="idempotencyKey")
 
 
 class LiveAnswerChunkResponse(BaseModel):
