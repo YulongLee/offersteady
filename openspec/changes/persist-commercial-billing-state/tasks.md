@@ -22,4 +22,4 @@
 
 - [x] 5.1 Group negative ledger entries by business consumption category in the Web presentation layer.
 - [x] 5.2 Preserve immutable backend ledger rows and positive credit history.
-- [ ] 5.3 Run regression tests, deploy the Web application, and verify the production billing page.
+- [x] 5.3 Run regression tests, deploy the Web application, and verify the production billing page.
