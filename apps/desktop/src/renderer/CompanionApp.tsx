@@ -271,6 +271,19 @@ function guideUrl(url: string | undefined) {
   }
 }
 
+export function liveInterviewUrl(url: string | undefined, sessionId: string) {
+  const workspaceUrl = normalizeWorkspaceUrl(url);
+  try {
+    const parsed = new URL(workspaceUrl);
+    parsed.pathname = `/app/interviews/${encodeURIComponent(sessionId)}/live`;
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return `http://localhost:5173/app/interviews/${encodeURIComponent(sessionId)}/live`;
+  }
+}
+
 const desktopApiUrl = (runtime: DesktopRuntimeConfig, path: string) => `${runtime.apiBaseUrl.replace(/\/+$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
 
 const desktopBackendFetch = async (runtime: DesktopRuntimeConfig, input: string, init?: RequestInit): Promise<Response> => {
@@ -1098,15 +1111,26 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
     }
   };
 
-  const openResolvedUrl = async (target: "home" | "workspace" | "guide") => {
+  const openResolvedUrl = async (target: "home" | "workspace" | "guide" | "current-interview") => {
     const configuredWorkspace = normalizeWorkspaceUrl(config?.webWorkspaceUrl);
     const configuredHome = homeUrl(config?.webWorkspaceUrl);
     const configuredGuide = guideUrl(config?.webWorkspaceUrl);
+    const configuredCurrentInterview = activeBinding
+      ? liveInterviewUrl(config?.webWorkspaceUrl, activeBinding.sessionId)
+      : configuredWorkspace;
     const candidates = target === "home"
       ? [configuredHome, "http://localhost:5173/", "http://localhost:4173/", "http://127.0.0.1:5173/", "http://127.0.0.1:4173/"]
       : target === "guide"
         ? [configuredGuide, "http://localhost:5173/app/guide", "http://localhost:4173/app/guide", "http://127.0.0.1:5173/app/guide", "http://127.0.0.1:4173/app/guide"]
-        : [configuredWorkspace, "http://localhost:5173/app", "http://localhost:4173/app", "http://127.0.0.1:5173/app", "http://127.0.0.1:4173/app"];
+        : target === "current-interview" && activeBinding
+          ? [
+              configuredCurrentInterview,
+              liveInterviewUrl("http://localhost:5173/app", activeBinding.sessionId),
+              liveInterviewUrl("http://localhost:4173/app", activeBinding.sessionId),
+              liveInterviewUrl("http://127.0.0.1:5173/app", activeBinding.sessionId),
+              liveInterviewUrl("http://127.0.0.1:4173/app", activeBinding.sessionId),
+            ]
+          : [configuredWorkspace, "http://localhost:5173/app", "http://localhost:4173/app", "http://127.0.0.1:5173/app", "http://127.0.0.1:4173/app"];
     for (const candidate of candidates) {
       const ok = await window.offersteady?.probeWebUrl(candidate).catch(() => false);
       if (ok) {
@@ -1260,7 +1284,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
                 <button
                   type="button"
                   className="interview-link-button"
-                  onClick={() => { void openResolvedUrl(activeBinding ? "workspace" : "home"); }}
+                  onClick={() => { void openResolvedUrl(activeBinding ? "current-interview" : "home"); }}
                 >
                   <span className={activeBinding ? "status-light green" : "status-light red"} />
                   <span>{activeBinding ? "进入当前面试" : "打开面试"}</span>

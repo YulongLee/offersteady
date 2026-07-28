@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { companionPrimaryAction, companionStatusCopy } from "../src/renderer/CompanionApp";
+import { companionPrimaryAction, companionStatusCopy, liveInterviewUrl } from "../src/renderer/CompanionApp";
 
 describe("companion interview wording", () => {
   it("uses concise pairing-terminal wording", () => {
@@ -8,5 +8,11 @@ describe("companion interview wording", () => {
     expect(companionStatusCopy["permission-required"].detail).toContain("完成麦克风与屏幕录制授权");
     expect(companionPrimaryAction("permission-required")).toBe("复制连接码");
     expect(companionPrimaryAction("capturing")).toBe("已连接");
+  });
+
+  it("opens the authoritative live interview instead of the workspace home", () => {
+    expect(liveInterviewUrl("https://mianshiwen.cn/app", "session-current")).toBe(
+      "https://mianshiwen.cn/app/interviews/session-current/live",
+    );
   });
 });

@@ -14,6 +14,10 @@ The Windows x64 companion SHALL use the existing device-pairing protocol and SHA
 - **WHEN** a Windows 10/11 x64 user pairs the companion and starts an interview
 - **THEN** the companion publishes available candidate and interviewer audio channels and can submit a shortcut-triggered screenshot through the existing backend protocol
 
+#### Scenario: Open the bound interview from the companion
+- **WHEN** the companion has an authoritative active binding and the user selects "进入当前面试"
+- **THEN** the system opens the bound session's live route and, if authentication is required, returns to that route after login
+
 ### Requirement: Platform diagnostics are truthful
 The companion SHALL describe permissions and unavailable capture sources using instructions for the current operating system and SHALL NOT report an unavailable source as ready.
 

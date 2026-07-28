@@ -34,3 +34,9 @@
 - [x] 6.1 Pin the Windows executable name so NSIS shortcuts and the packaged application target the same file
 - [x] 6.2 Add a regression test and packaging-time validation for the Windows executable and installer
 - [x] 6.3 Rebuild, publish, and verify the Windows 0.1.1 installer through the production download flow
+
+## 7. Bound Interview Navigation
+
+- [x] 7.1 Resolve the active session live route from the authoritative desktop binding
+- [x] 7.2 Add regression coverage for current-interview navigation
+- [ ] 7.3 Build, publish, and verify the Windows 0.1.2 companion through the production download flow
