@@ -46,4 +46,4 @@
 - [x] 8.1 Compile the Web application for the Chromium 86 syntax baseline
 - [x] 8.2 Install required legacy runtime APIs before React starts
 - [x] 8.3 Add regression coverage for the live workspace compatibility layer
-- [ ] 8.4 Build, deploy, and verify the production live route
+- [x] 8.4 Build, deploy, and verify the production live route
