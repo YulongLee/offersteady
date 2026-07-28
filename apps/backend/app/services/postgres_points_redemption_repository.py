@@ -190,5 +190,6 @@ class PostgresPointsRedemptionRepository(PointsRedemptionRepository):
     def _ensure_tables(self) -> None:
         migration = REPO_ROOT / "apps" / "backend" / "migrations" / "versions" / "0008_persistent_points_redemption.sql"
         with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ("offersteady:billing-migrations",))
             cursor.execute(migration.read_text(encoding="utf8"))
             connection.commit()
