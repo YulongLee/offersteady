@@ -31,3 +31,13 @@ OFFERSTEADY_MZFPAY_RETURN_URL=http(s)://<host>/app/billing
 ```
 
 本地 `127.0.0.1` 地址只能用于开发，不能用于平台回调。
+
+切换支付宝开放平台官方支付时配置：
+
+```text
+OFFERSTEADY_CHECKOUT_PROVIDER=alipay
+OFFERSTEADY_ALIPAY_NOTIFY_URL=https://<host>/api/v1/billing/payment-providers/alipay/notify
+OFFERSTEADY_ALIPAY_RETURN_URL=https://<host>/app/billing
+```
+
+支付宝应用私钥、支付宝公钥、APPID 和卖家 PID 通过服务器密钥环境注入。切换只影响新订单，历史 MZFPay 订单不会迁移或重算。

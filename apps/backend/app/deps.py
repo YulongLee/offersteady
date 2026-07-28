@@ -287,12 +287,7 @@ def authentication_repository() -> AuthenticationRepository:
     if settings.environment == "production" and not settings.database_url:
         raise RuntimeError("OFFERSTEADY_DATABASE_URL is required for production authentication persistence")
     if settings.database_url and not os.environ.get("PYTEST_CURRENT_TEST"):
-        return _fallback_to_memory_repository(
-            logger_key="authentication_repository",
-            environment=settings.environment,
-            build_postgres=lambda: PostgresAuthenticationRepository(settings),
-            fallback=lambda: InMemoryAuthenticationRepository(),
-        )
+        return PostgresAuthenticationRepository(settings)
     return InMemoryAuthenticationRepository()
 
 
@@ -360,12 +355,7 @@ def billing_service() -> BillingService:
         )
     billing_repository = None
     if settings.database_url and not os.environ.get("PYTEST_CURRENT_TEST"):
-        billing_repository = _fallback_to_memory_repository(
-            logger_key="billing_repository",
-            environment=settings.environment,
-            build_postgres=lambda: PostgresBillingRepository(settings),
-            fallback=lambda: None,
-        )
+        billing_repository = PostgresBillingRepository(settings)
     return BillingService(settings, redemption_repository=repository, billing_repository=billing_repository)
 
 

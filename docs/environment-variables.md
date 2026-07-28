@@ -19,6 +19,8 @@
 - `OFFERSTEADY_AUTH_JWT_SECRET`
 - `OFFERSTEADY_MZFPAY_KEY`
 - `OFFERSTEADY_MZFPAY_PID`
+- `OFFERSTEADY_ALIPAY_APP_PRIVATE_KEY`
+- `OFFERSTEADY_ALIPAY_PUBLIC_KEY`
 
 这些变量只能进入后端运行环境、CI 密钥或部署平台密钥管理系统，不能出现在浏览器、前端源码常量或测试快照里。
 
@@ -96,6 +98,32 @@
 - `OFFERSTEADY_MZFPAY_NOTIFY_URL`
 - `OFFERSTEADY_MZFPAY_RETURN_URL`
 - `OFFERSTEADY_MZFPAY_PAYMENT_TTL_SECONDS`
+- `OFFERSTEADY_CHECKOUT_PROVIDER`
+- `OFFERSTEADY_ALIPAY_GATEWAY_URL`
+- `OFFERSTEADY_ALIPAY_APP_ID`
+- `OFFERSTEADY_ALIPAY_SELLER_ID`
+- `OFFERSTEADY_ALIPAY_NOTIFY_URL`
+- `OFFERSTEADY_ALIPAY_RETURN_URL`
+- `OFFERSTEADY_ALIPAY_PAYMENT_TTL_SECONDS`
+
+## 支付宝官方支付
+
+取得个体工商户资质、支付宝商家认证、网页应用审核和电脑网站支付签约后，将生产配置切换为：
+
+```bash
+OFFERSTEADY_CHECKOUT_PROVIDER=alipay
+OFFERSTEADY_ALIPAY_GATEWAY_URL=https://openapi.alipay.com/gateway.do
+OFFERSTEADY_ALIPAY_APP_ID=<开放平台应用 APPID>
+OFFERSTEADY_ALIPAY_APP_PRIVATE_KEY=<RSA2 应用私钥>
+OFFERSTEADY_ALIPAY_PUBLIC_KEY=<支付宝公钥>
+OFFERSTEADY_ALIPAY_SELLER_ID=<签约商户 PID>
+OFFERSTEADY_ALIPAY_NOTIFY_URL=https://mianshiwen.cn/api/v1/billing/payment-providers/alipay/notify
+OFFERSTEADY_ALIPAY_RETURN_URL=https://mianshiwen.cn/app/billing
+```
+
+应用私钥和支付宝公钥只能注入后端密钥环境。浏览器返回地址只负责回到收费页，不能确认到账；权益发放必须以异步通知 RSA2 验签、应用与卖家身份、金额和交易状态全部通过为准。切换只影响新订单，历史 MZFPay 订单继续按其 `provider` 处理；需要回滚时只将 `OFFERSTEADY_CHECKOUT_PROVIDER` 恢复为 `mzfpay`。
+
+审批完成前保持 `OFFERSTEADY_CHECKOUT_PROVIDER=` 为空。此时商品、积分、会员和历史订单仍可查询，但系统不会创建新的支付订单。
 
 ## 前端公开变量
 
@@ -111,6 +139,8 @@
 2. 补齐本地 PostgreSQL 与 OSS 测试配置
 3. 如果联调微信兼容登录，再补齐 `OFFERSTEADY_ACCESS_TOKEN_SECRET`、`OFFERSTEADY_AUTH_WECHAT_APP_ID`、`OFFERSTEADY_AUTH_WECHAT_CALLBACK_URL`
 4. Web 与 Backend 使用同一份环境语义，但前端只消费 `VITE_` 变量
+
+认证用户和积分账本以PostgreSQL为唯一权威数据源。只要配置了 `OFFERSTEADY_DATABASE_URL`，认证和计费模块连接失败时会明确失败，不会退回内存仓库；这可以避免后端重启后用户身份变化、余额回到200点或重复发放新用户积分。纯单元测试可以直接构造内存服务，但不得将其作为已配置数据库环境的故障降级方案。
 
 ## v0.1 服务器部署补充
 

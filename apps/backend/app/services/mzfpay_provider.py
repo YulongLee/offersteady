@@ -20,12 +20,18 @@ class MzfpayNotification:
 class MzfpayPaymentProvider:
     """Small EPay-compatible adapter for mzfpay checkout and notify signing."""
 
+    provider_name = "mzfpay"
+
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
     @property
     def enabled(self) -> bool:
         return bool(self.settings.mzfpay_pid and self.settings.mzfpay_key)
+
+    @property
+    def payment_ttl_seconds(self) -> int:
+        return self.settings.mzfpay_payment_ttl_seconds
 
     def payment_url(self, *, order_id: str, product_name: str, amount_cents: int, channel: str, client_ip: str | None = None) -> str:
         if not self.settings.mzfpay_pid or not self.settings.mzfpay_key:

@@ -160,6 +160,8 @@ docker compose --env-file .env.production -f infra/compose/docker-compose.founda
 docker compose --env-file .env.production -f infra/compose/docker-compose.foundation.yml down -v
 ```
 
+PostgreSQL数据卷保存用户身份、积分流水、会员权益和订单状态。日常更新、重启和回滚均不得执行 `down -v`；数据库不可用时认证和积分接口会故障关闭，不会创建临时内存用户或重新发放200点。
+
 ## 8. Rollback
 
 ```bash

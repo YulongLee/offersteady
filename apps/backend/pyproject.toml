@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "FastAPI foundation for OfferSteady MVP phase one."
 requires-python = ">=3.13"
 dependencies = [
+  "cryptography>=45.0.0",
   "fastapi>=0.116.1",
   "httpx>=0.28.1",
   "oss2>=2.18.5",

@@ -128,6 +128,7 @@ class OfficialCheckoutOrderRecord:
     amount_cents: int
     currency: str
     channel: str
+    provider: str
     status: str
     action: dict[str, object]
     created_at_ms: int
@@ -278,6 +279,7 @@ class BillingService:
         user_id: str,
         product_id: str,
         channel: str,
+        provider: str = "mzfpay",
         idempotency_key: str,
         payment_url: str,
         expires_at_ms: int,
@@ -291,6 +293,8 @@ class BillingService:
             raise ValueError("商品不可购买或已下架")
         if channel not in {"wechat", "alipay"}:
             raise ValueError("支付渠道不可用")
+        if provider not in {"mzfpay", "alipay"}:
+            raise ValueError("支付提供方不可用")
         now = _now_ms()
         order = OfficialCheckoutOrderRecord(
             id=f"official-order-{uuid4().hex}",
@@ -299,6 +303,7 @@ class BillingService:
             amount_cents=product.price_cents,
             currency="CNY",
             channel=channel,
+            provider=provider,
             status="payment_pending",
             action={"kind": "redirect", "url": payment_url, "expiresAtMs": expires_at_ms},
             created_at_ms=now,
@@ -378,12 +383,13 @@ class BillingService:
         amount_cents: int,
         verified: bool,
         paid: bool,
+        provider: str = "mzfpay",
     ) -> str:
         now_ms = _now_ms()
         if self.billing_repository is not None:
             self.billing_repository.record_payment_callback(event={
                 "event_fingerprint": event_fingerprint,
-                "provider": "mzfpay",
+                "provider": provider,
                 "order_id": order_id,
                 "provider_trade_no": provider_trade_no,
                 "amount_cents": amount_cents,
@@ -397,18 +403,26 @@ class BillingService:
             outcome = "ignored_not_paid"
         else:
             try:
-                order = self.confirm_checkout_paid(
-                    order_id=order_id,
-                    amount_cents=amount_cents,
-                    provider_trade_no=provider_trade_no,
+                order = (
+                    self._persisted_order(self.billing_repository.checkout_order(order_id=order_id))
+                    if self.billing_repository is not None
+                    else self.checkout_orders_by_id[order_id]
                 )
-                outcome = "paid" if order.status == "paid" else "amount_mismatch"
+                if order.provider != provider:
+                    outcome = "provider_mismatch"
+                else:
+                    order = self.confirm_checkout_paid(
+                        order_id=order_id,
+                        amount_cents=amount_cents,
+                        provider_trade_no=provider_trade_no,
+                    )
+                    outcome = "paid" if order.status == "paid" else "amount_mismatch"
             except KeyError:
                 outcome = "unknown_order"
             except Exception:
                 outcome = "processing_failure"
         if self.billing_repository is not None:
-            if outcome in {"unknown_order", "amount_mismatch", "processing_failure"}:
+            if outcome in {"unknown_order", "amount_mismatch", "provider_mismatch", "processing_failure"}:
                 self.billing_repository.create_reconciliation_issue(
                     issue_type=outcome,
                     event_fingerprint=event_fingerprint,
@@ -793,6 +807,7 @@ class BillingService:
             "amountCents": item.amount_cents,
             "currency": item.currency,
             "channel": item.channel,
+            "provider": item.provider,
             "status": item.status,
             "action": item.action,
             "createdAtMs": item.created_at_ms,

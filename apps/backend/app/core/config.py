@@ -167,6 +167,7 @@ class Settings(BaseSettings):
     auth_sms_test_phone_number: str | None = None
 
     public_web_base_url: str = "http://127.0.0.1:5173"
+    checkout_provider: str = ""
     mzfpay_base_url: str = "https://pay.mzfpay.com"
     mzfpay_pid: str | None = None
     mzfpay_key: str | None = None
@@ -174,6 +175,14 @@ class Settings(BaseSettings):
     mzfpay_notify_url: str | None = None
     mzfpay_return_url: str | None = None
     mzfpay_payment_ttl_seconds: int = 900
+    alipay_gateway_url: str = "https://openapi.alipay.com/gateway.do"
+    alipay_app_id: str | None = None
+    alipay_app_private_key: str | None = None
+    alipay_public_key: str | None = None
+    alipay_seller_id: str | None = None
+    alipay_notify_url: str | None = None
+    alipay_return_url: str | None = None
+    alipay_payment_ttl_seconds: int = 900
     redemption_code_points: dict[str, int] = Field(default_factory=dict)
     redemption_code_pepper: str | None = None
     support_wechat_id: str = "OneShowAILab"

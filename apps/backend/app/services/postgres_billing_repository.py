@@ -58,13 +58,13 @@ class PostgresBillingRepository:
                 """
                 INSERT INTO billing_checkout_orders (
                   order_id, user_id, idempotency_key, product_snapshot, amount_cents,
-                  currency, channel, status, action, created_at_ms, updated_at_ms, expires_at_ms
-                ) VALUES (%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s::jsonb,%s,%s,%s)
+                  currency, channel, provider, status, action, created_at_ms, updated_at_ms, expires_at_ms
+                ) VALUES (%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s)
                 RETURNING *
                 """,
                 (
                     order["id"], order["user_id"], idempotency_key, dumps(order["product"]),
-                    order["amount_cents"], order["currency"], order["channel"], order["status"],
+                    order["amount_cents"], order["currency"], order["channel"], order["provider"], order["status"],
                     dumps(order["action"]), order["created_at_ms"], order["updated_at_ms"],
                     int(dict(order["action"]).get("expiresAtMs") or 0),
                 ),
@@ -504,6 +504,7 @@ class PostgresBillingRepository:
         return {
             "id": str(row["order_id"]), "user_id": str(row["user_id"]), "product": dict(row["product_snapshot"]),
             "amount_cents": int(row["amount_cents"]), "currency": str(row["currency"]), "channel": str(row["channel"]),
+            "provider": str(row["provider"]),
             "status": str(row["status"]), "action": dict(row["action"]), "created_at_ms": int(row["created_at_ms"]),
             "updated_at_ms": int(row["updated_at_ms"]), "provider_trade_no": row["provider_trade_no"],
             "paid_at_ms": int(row["paid_at_ms"]) if row["paid_at_ms"] is not None else None,
