@@ -39,4 +39,4 @@
 
 - [x] 7.1 Resolve the active session live route from the authoritative desktop binding
 - [x] 7.2 Add regression coverage for current-interview navigation
-- [ ] 7.3 Build, publish, and verify the Windows 0.1.2 companion through the production download flow
+- [x] 7.3 Build, publish, and verify the Windows 0.1.2 companion through the production download flow
