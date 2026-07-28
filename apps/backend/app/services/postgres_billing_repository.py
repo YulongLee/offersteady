@@ -566,6 +566,7 @@ class PostgresBillingRepository:
             Path(REPO_ROOT / "apps/backend/migrations/versions/0010_payment_recovery_reconciliation.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0011_enable_pgvector_extension.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0012_billable_interview_usage.sql"),
+            Path(REPO_ROOT / "apps/backend/migrations/versions/0013_official_alipay_payments.sql"),
         )
         with self._connect() as connection, connection.cursor() as cursor:
             cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ("offersteady:billing-migrations",))
