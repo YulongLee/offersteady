@@ -1210,6 +1210,10 @@ export function AppRoutes() {
 export interface AppProps { readonly initialAuthenticated?: boolean; readonly initialState?: WebAppState }
 
 export function App({ initialAuthenticated, initialState }: AppProps) {
-  useEffect(() => { document.title = "面试稳"; }, []);
+  useEffect(() => {
+    document.title = window.location.pathname === "/"
+      ? "AI面试助手｜实时语音、截图题与个性化回答思路 - 面试稳"
+      : "面试稳";
+  }, []);
   return <BrowserRouter><PrototypeProvider initialAuthenticated={initialAuthenticated} initialState={initialState}><Suspense fallback={<RouteLoadingPage />}><AppRoutes /></Suspense></PrototypeProvider></BrowserRouter>;
 }
