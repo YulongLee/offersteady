@@ -4,12 +4,13 @@ import { resolve } from "node:path";
 
 const webRoot = resolve(import.meta.dirname, "..");
 const repoRoot = resolve(webRoot, "../..");
-const [indexHtml, robots, sitemap, notFound, nginx] = await Promise.all([
+const [indexHtml, robots, sitemap, notFound, nginx, shareCard] = await Promise.all([
   readFile(resolve(webRoot, "index.html"), "utf8"),
   readFile(resolve(webRoot, "public/robots.txt"), "utf8"),
   readFile(resolve(webRoot, "public/sitemap.xml"), "utf8"),
   readFile(resolve(webRoot, "public/404.html"), "utf8"),
   readFile(resolve(repoRoot, "infra/nginx/default.conf"), "utf8"),
+  readFile(resolve(webRoot, "public/assets/brand/share-card.png")),
 ]);
 
 assert.match(indexHtml, /<link rel="canonical" href="https:\/\/mianshiwen\.cn\/"\s*\/>/);
@@ -24,6 +25,11 @@ assert.deepEqual(schemas.map((schema) => schema["@type"]), [
   "WebSite",
   "SoftwareApplication",
 ]);
+assert.match(indexHtml, /<meta property="og:image" content="https:\/\/mianshiwen\.cn\/assets\/brand\/share-card\.png"\s*\/>/);
+assert.match(indexHtml, /<meta name="twitter:card" content="summary_large_image"\s*\/>/);
+assert.equal(shareCard.subarray(1, 4).toString("ascii"), "PNG");
+assert.equal(shareCard.readUInt32BE(16), 1200);
+assert.equal(shareCard.readUInt32BE(20), 630);
 
 assert.equal(
   robots.trim(),
@@ -37,6 +43,10 @@ assert.match(nginx, /if \(\$host = www\.mianshiwen\.cn\)\s*\{\s*return 308 https
 assert.match(nginx, /location = \/robots\.txt[\s\S]*?try_files \$uri =404;/);
 assert.match(nginx, /location = \/sitemap\.xml[\s\S]*?try_files \$uri =404;/);
 assert.match(nginx, /location ~ \^\/\(\?:login\|error\|app/);
+assert.ok(nginx.includes('location ~* "^/assets/.+-[A-Za-z0-9_-]{8}\\.(?:js|css)$"'));
+assert.match(nginx, /location ~\* "\^\/assets\/[\s\S]*?Cache-Control "public, max-age=31536000, immutable"/);
+assert.match(nginx, /location \/assets\/\s*\{\s*try_files \$uri =404;/);
+assert.match(nginx, /location ~ \^\/\(\?:login\|error\|app[\s\S]*?X-Robots-Tag "noindex, follow"/);
 assert.match(nginx, /location \/\s*\{\s*return 404;/);
 assert.doesNotMatch(nginx, /try_files \$uri \$uri\/ \/index\.html/);
 
