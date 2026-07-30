@@ -44,7 +44,10 @@ class AdminRepository:
                 row_factory=dict_row,
             ) as connection:
                 with connection.cursor() as cursor:
-                    cursor.execute("SET statement_timeout = %s", (self.settings.admin_query_timeout_ms,))
+                    cursor.execute(
+                        "SELECT set_config('statement_timeout', %s, false)",
+                        (str(self.settings.admin_query_timeout_ms),),
+                    )
                     if readonly:
                         cursor.execute("SET TRANSACTION READ ONLY")
                 yield connection
