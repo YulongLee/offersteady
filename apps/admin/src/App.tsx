@@ -1,19 +1,19 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { adminApi } from "./api";
 
 type View = "dashboard" | "users" | "orders" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
 type Row = Record<string, unknown>;
 
-const views: { id: View; label: string; eyebrow: string }[] = [
-  { id: "dashboard", label: "运营总览", eyebrow: "OVERVIEW" },
-  { id: "users", label: "用户与权益", eyebrow: "CUSTOMERS" },
-  { id: "orders", label: "订单与支付", eyebrow: "BILLING" },
-  { id: "redemptions", label: "兑换码", eyebrow: "BENEFITS" },
-  { id: "materials", label: "资料任务", eyebrow: "KNOWLEDGE" },
-  { id: "interviews", label: "面试会话", eyebrow: "SESSIONS" },
-  { id: "audit", label: "审计记录", eyebrow: "AUDIT" },
-  { id: "admins", label: "管理员", eyebrow: "ACCESS" },
+const views: { id: View; label: string; eyebrow: string; permission: string }[] = [
+  { id: "dashboard", label: "运营总览", eyebrow: "OVERVIEW", permission: "observability.read" },
+  { id: "users", label: "用户与权益", eyebrow: "CUSTOMERS", permission: "users.read" },
+  { id: "orders", label: "订单与支付", eyebrow: "BILLING", permission: "billing.read" },
+  { id: "redemptions", label: "兑换码", eyebrow: "BENEFITS", permission: "billing.read" },
+  { id: "materials", label: "资料任务", eyebrow: "KNOWLEDGE", permission: "materials.read" },
+  { id: "interviews", label: "面试会话", eyebrow: "SESSIONS", permission: "sessions.read" },
+  { id: "audit", label: "审计记录", eyebrow: "AUDIT", permission: "audit.read" },
+  { id: "admins", label: "管理员", eyebrow: "ACCESS", permission: "admins.manage" },
 ];
 
 const labels: Record<string, string> = {
@@ -110,13 +110,14 @@ function Dashboard({ data }: { data: Row }) {
 }
 
 function Table({ rows }: { rows: Row[] }) {
-  const keys = useMemo(() => Array.from(new Set(rows.flatMap(row => Object.keys(row)))).slice(0, 8), [rows]);
-  if (!rows.length) return <div className="empty">当前范围内没有数据</div>;
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const keys = useMemo(() => Array.from(new Set(safeRows.flatMap(row => Object.keys(row)))).slice(0, 8), [safeRows]);
+  if (!safeRows.length) return <div className="empty">当前范围内没有数据</div>;
   return (
     <div className="table-wrap">
       <table>
         <thead><tr>{keys.map(key => <th key={key}>{key.replaceAll("_", " ")}</th>)}</tr></thead>
-        <tbody>{rows.map((row, index) => <tr key={String(row.id || row.user_id || row.order_id || row.session_id || index)}>{keys.map(key => <td key={key}>{display(row[key])}</td>)}</tr>)}</tbody>
+        <tbody>{safeRows.map((row, index) => <tr key={String(row.id || row.user_id || row.order_id || row.session_id || index)}>{keys.map(key => <td key={key}>{display(row[key])}</td>)}</tr>)}</tbody>
       </table>
     </div>
   );
@@ -380,29 +381,45 @@ export function App() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [offset, setOffset] = useState(0);
+  const loadSequence = useRef(0);
+  const sessionRequest = useRef<ReturnType<typeof adminApi.session> | null>(null);
 
   const load = async (target: View) => {
+    const sequence = ++loadSequence.current;
     setLoading(true);
     setError("");
     try {
-      const session = await adminApi.session();
+      if (!sessionRequest.current) sessionRequest.current = adminApi.session();
+      const session = await sessionRequest.current;
+      if (sequence !== loadSequence.current) return;
       setRole(session.role);
       setPermissions(session.permissions);
+      const targetView = views.find(item => item.id === target);
+      if (targetView && !session.permissions.includes(targetView.permission)) {
+        const fallback = views.find(item => session.permissions.includes(item.permission));
+        if (!fallback) throw new Error("当前管理员角色没有可访问的后台页面");
+        if (fallback.id !== target) setView(fallback.id);
+        return;
+      }
+      let nextData: Row | Row[];
       if (target === "dashboard") {
-        setData(await adminApi.dashboard());
+        nextData = await adminApi.dashboard();
       } else {
         const resource = target === "redemptions" ? "redemption-batches" : target;
-        setData((await adminApi.list(resource, offset)).items);
+        nextData = (await adminApi.list(resource, offset)).items;
       }
+      if (sequence === loadSequence.current) setData(nextData);
     } catch (reason) {
+      if (sequence !== loadSequence.current) return;
       const message = reason instanceof Error ? reason.message : "后台服务暂时不可用";
       setError(message);
       if (/session|required|401|invalid/i.test(message)) {
+        sessionRequest.current = null;
         adminApi.clear();
         setAuthenticated(false);
       }
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
   };
 
@@ -412,16 +429,17 @@ export function App() {
 
   if (!authenticated) return <Login onReady={() => setAuthenticated(true)} />;
   const current = views.find(item => item.id === view)!;
+  const visibleViews = views.filter(item => permissions.length === 0 || permissions.includes(item.permission));
 
   return (
     <div className="admin-shell">
       <aside>
         <div className="brand"><span className="brand-mark small">稳</span><div><strong>面试稳</strong><small>运营中心</small></div></div>
-        <nav>{views.map(item => <button className={item.id === view ? "active" : ""} onClick={() => { setOffset(0); setView(item.id); }} key={item.id}><small>{item.eyebrow}</small>{item.label}</button>)}</nav>
+        <nav>{visibleViews.map(item => <button className={item.id === view ? "active" : ""} onClick={() => { setOffset(0); setView(item.id); }} key={item.id}><small>{item.eyebrow}</small>{item.label}</button>)}</nav>
         <div className="operator"><span className="online" /><div><small>当前角色</small><strong>{role || "验证中"}</strong></div></div>
       </aside>
       <main className="workspace">
-        <header><div><p className="eyebrow">{current.eyebrow}</p><h1>{current.label}</h1></div><div className="header-actions"><span>{new Date().toLocaleDateString("zh-CN")}</span><button onClick={() => void load(view)}>刷新</button><button onClick={() => adminApi.logout().then(() => setAuthenticated(false))}>退出</button></div></header>
+        <header><div><p className="eyebrow">{current.eyebrow}</p><h1>{current.label}</h1></div><div className="header-actions"><span>{new Date().toLocaleDateString("zh-CN")}</span><button onClick={() => void load(view)}>刷新</button><button onClick={() => adminApi.logout().then(() => { sessionRequest.current = null; setAuthenticated(false); })}>退出</button></div></header>
         {error && <div className="alert">{error}</div>}
         {loading ? <div className="loading">正在读取脱敏运营数据...</div> : view === "dashboard" ? <Dashboard data={data as Row} /> : view === "admins" ? <AdminPanel rows={data as Row[]} permissions={permissions} onChanged={() => void load(view)} /> : view === "redemptions" ? <RedemptionPanel rows={data as Row[]} permissions={permissions} onChanged={() => void load(view)} /> : <>
           <Table rows={data as Row[]} />
