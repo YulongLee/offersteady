@@ -31,6 +31,23 @@ class InMemoryInterviewSessionRepository(InterviewSessionRepository):
             items = [session for session in items if session.status == status]
         return [replace(item) for item in sorted(items, key=lambda item: item.updated_at_ms, reverse=True)]
 
+    def touch_activity(self, *, user_id: str, session_id: str, activity_at_ms: int) -> InterviewSessionRecord | None:
+        session = self.sessions.get(session_id)
+        if session is None or session.owner_user_id != user_id or session.status == "ended":
+            return replace(session) if session is not None and session.owner_user_id == user_id else None
+        touched = replace(session, updated_at_ms=activity_at_ms, last_activity_at_ms=activity_at_ms)
+        self.sessions[session_id] = touched
+        return replace(touched)
+
+    def list_idle_live_sessions(self, *, before_ms: int, limit: int, user_id: str | None = None) -> list[InterviewSessionRecord]:
+        items = [
+            session for session in self.sessions.values()
+            if session.status == "live"
+            and session.last_activity_at_ms < before_ms
+            and (user_id is None or session.owner_user_id == user_id)
+        ]
+        return [replace(item) for item in sorted(items, key=lambda item: item.last_activity_at_ms)[:limit]]
+
     def delete_session(self, *, user_id: str, session_id: str) -> bool:
         session = self.sessions.get(session_id)
         if session is None or session.owner_user_id != user_id:

@@ -2,7 +2,7 @@ import type { CaptureState, FoundationIndexResponse } from "@offersteady/protoco
 
 import type { AnswerProvenance, AnswerSourceReference, AnswerTaskSnapshot, CancelAnswerResult, OfficialCheckoutOrder, PointsRedemptionResult } from "@offersteady/protocol";
 import { AppError } from "./domain";
-import type { ActiveInterviewConflict, AnswerAdvice, DesktopDeviceBinding, InterviewAppAdapter, InterviewQuestion, InterviewSummary, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
+import type { ActiveInterviewConflict, AnswerAdvice, DesktopDeviceBinding, IdleInterviewStatus, InterviewAppAdapter, InterviewQuestion, InterviewSummary, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
 import { createJsonClient, withBaseUrl } from "./api-client";
 import { authClient } from "./auth-client";
 import { createSseParser, type LiveAnswerStreamEvent, type ManualAnswerStreamUpdate } from "./live-answer-stream";
@@ -719,6 +719,29 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       body: JSON.stringify({ userId: requireUserId() }),
     }, signal);
     return toInterviewSummary(started);
+  }
+
+  async getInterviewIdleStatus(id: string, signal?: AbortSignal): Promise<IdleInterviewStatus> {
+    return this.client.request<IdleInterviewStatus>(`/api/v1/sessions/${id}/idle-status?userId=${encodeURIComponent(requireUserId())}`, {
+      headers: authHeaders(),
+    }, signal);
+  }
+
+  async continueInterviewSession(id: string, signal?: AbortSignal): Promise<IdleInterviewStatus> {
+    await this.client.request(`/api/v1/sessions/${id}/continue`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ userId: requireUserId() }),
+    }, signal);
+    return this.getInterviewIdleStatus(id, signal);
+  }
+
+  async endInterviewSession(id: string, signal?: AbortSignal): Promise<void> {
+    await this.client.request(`/api/v1/sessions/${id}/end`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ userId: requireUserId() }),
+    }, signal);
   }
 
   async bindDesktopDevice(command: Parameters<InterviewAppAdapter["bindDesktopDevice"]>[0], signal?: AbortSignal) {

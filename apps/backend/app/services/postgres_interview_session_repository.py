@@ -7,7 +7,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from app.core.config import Settings
+from app.core.config import REPO_ROOT, Settings
 from app.ports.interview_session import (
     ConversationContextEntry,
     IntegrationReference,
@@ -92,11 +92,54 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
             rows = cursor.fetchall()
         return [self._row_to_session(row) for row in rows]
 
+    def touch_activity(self, *, user_id: str, session_id: str, activity_at_ms: int) -> InterviewSessionRecord | None:
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                UPDATE interview_sessions
+                SET updated_at_ms = %s, last_activity_at_ms = %s
+                WHERE owner_user_id = %s AND session_id = %s
+                  AND status <> 'ended' AND deleted_at_ms IS NULL
+                RETURNING *
+                """,
+                (activity_at_ms, activity_at_ms, user_id, session_id),
+            )
+            row = cursor.fetchone()
+            connection.commit()
+        return self._row_to_session(row) if row else self.get_session(session_id)
+
+    def list_idle_live_sessions(self, *, before_ms: int, limit: int, user_id: str | None = None) -> list[InterviewSessionRecord]:
+        params: list[Any] = [before_ms]
+        owner_filter = ""
+        if user_id is not None:
+            owner_filter = " AND owner_user_id = %s"
+            params.append(user_id)
+        params.append(max(1, limit))
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                f"""
+                SELECT * FROM interview_sessions
+                WHERE status = 'live' AND deleted_at_ms IS NULL
+                  AND last_activity_at_ms < %s{owner_filter}
+                ORDER BY last_activity_at_ms ASC
+                LIMIT %s
+                """,
+                params,
+            )
+            rows = cursor.fetchall()
+        return [self._row_to_session(row) for row in rows]
+
     def delete_session(self, *, user_id: str, session_id: str) -> bool:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "UPDATE interview_sessions SET deleted_at_ms = (extract(epoch from now()) * 1000)::bigint WHERE owner_user_id = %s AND session_id = %s AND deleted_at_ms IS NULL",
+                    """
+                    UPDATE interview_sessions
+                    SET deleted_at_ms = (extract(epoch from now()) * 1000)::bigint,
+                        status = 'ended', continue_target = 'history',
+                        ended_at_ms = COALESCE(ended_at_ms, (extract(epoch from now()) * 1000)::bigint)
+                    WHERE owner_user_id = %s AND session_id = %s AND deleted_at_ms IS NULL
+                    """,
                     (user_id, session_id),
                 )
                 deleted = cursor.rowcount > 0
@@ -199,6 +242,9 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
                     """
                 )
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_interview_session_usage_records_session_created ON interview_session_usage_records (session_id, created_at_ms)")
+                cursor.execute(
+                    (REPO_ROOT / "apps/backend/migrations/versions/0016_idle_interview_lifecycle.sql").read_text(encoding="utf8")
+                )
             connection.commit()
 
     def _row_to_session(self, row: dict[str, Any]) -> InterviewSessionRecord:

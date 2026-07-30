@@ -482,6 +482,7 @@ class ChatService:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         if session.status != "live":
             raise DomainRequestError("live-answer", "start", "只有进行中的面试会话才能发起实时回答。", 400)
+        self.session_service.touch_activity(user_id=user_id, session_id=session_id, force=True)
         now_ms = _now_ms()
         task_id = f"answer-{uuid4().hex}"
         billing_usage_id = usage_id or f"live-answer:{task_id}"
@@ -598,6 +599,7 @@ class ChatService:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         if session.status != "live":
             raise DomainRequestError("live-answer", "start-stream", "只有进行中的面试会话才能发起实时回答。", 400)
+        self.session_service.touch_activity(user_id=user_id, session_id=session_id, force=True)
         now_ms = _now_ms()
         task_id = f"answer-{uuid4().hex}"
         billing_usage_id = usage_id or f"live-answer:{task_id}"

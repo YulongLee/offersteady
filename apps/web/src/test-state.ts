@@ -203,6 +203,20 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
     return { ...interview, id, status: "active", updatedAt: "刚刚" };
   }
 
+  async getInterviewIdleStatus(id: string, signal?: AbortSignal) {
+    await delay(signal);
+    const now = Date.now();
+    return { sessionId: id, state: "active" as const, lastActivityAtMs: now, warningAtMs: now + 1_080_000, expiresAtMs: now + 1_200_000, remainingMs: 1_200_000 };
+  }
+
+  async continueInterviewSession(id: string, signal?: AbortSignal) {
+    return this.getInterviewIdleStatus(id, signal);
+  }
+
+  async endInterviewSession(_id: string, signal?: AbortSignal) {
+    await delay(signal);
+  }
+
   async bindDesktopDevice(command: Parameters<InterviewAppAdapter["bindDesktopDevice"]>[0], signal?: AbortSignal) {
     await delay(signal);
     return {

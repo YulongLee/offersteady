@@ -301,10 +301,12 @@ class AdminRepository:
     def dashboard(self) -> dict[str, Any]:
         current = now_ms()
         since = current - 24 * 60 * 60 * 1000
+        idle_cutoff = current - self.settings.interview_idle_timeout_seconds * 1000
         with self.connect(readonly=True) as connection, connection.cursor() as cursor:
             queries = {
                 "users": "SELECT COUNT(*) AS value FROM auth_users",
-                "active_sessions": "SELECT COUNT(*) AS value FROM interview_sessions WHERE status = 'live'",
+                "active_sessions": "SELECT COUNT(*) AS value FROM interview_sessions WHERE status = 'live' AND deleted_at_ms IS NULL AND last_activity_at_ms >= %s",
+                "idle_sessions": "SELECT COUNT(*) AS value FROM interview_sessions WHERE status = 'live' AND deleted_at_ms IS NULL AND last_activity_at_ms < %s",
                 "pending_orders": "SELECT COUNT(*) AS value FROM billing_checkout_orders WHERE status = 'payment_pending'",
                 "failed_materials": "SELECT COUNT(*) AS value FROM material_documents WHERE status NOT IN ('ready','deleted')",
                 "ai_calls_24h": "SELECT COUNT(*) AS value FROM ai_usage_records WHERE created_at_ms >= %s",
@@ -312,7 +314,8 @@ class AdminRepository:
             }
             result: dict[str, Any] = {}
             for key, query in queries.items():
-                cursor.execute(query, (since,) if "%s" in query else ())
+                parameter = idle_cutoff if key in {"active_sessions", "idle_sessions"} else since
+                cursor.execute(query, (parameter,) if "%s" in query else ())
                 result[key] = int(cursor.fetchone()["value"])
         return {"updated_at_ms": current, "window_started_at_ms": since, **result}
 
@@ -489,14 +492,24 @@ class AdminRepository:
         )
 
     def list_sessions(self, *, limit: int, offset: int) -> list[dict[str, Any]]:
+        current = now_ms()
+        idle_cutoff = current - self.settings.interview_idle_timeout_seconds * 1000
         return self._all(
             """
-            SELECT session_id, owner_user_id, title, status, started_at_ms, ended_at_ms,
-                   created_at_ms, updated_at_ms, last_activity_at_ms
+            SELECT session_id, owner_user_id, title,
+                   CASE
+                     WHEN status = 'live' AND last_activity_at_ms >= %s THEN 'active'
+                     WHEN status = 'live' THEN 'idle-timeout'
+                     ELSE status
+                   END AS activity_state,
+                   status, last_activity_at_ms,
+                   GREATEST(0, ((%s - last_activity_at_ms) / 60000)::INTEGER) AS idle_minutes,
+                   started_at_ms
             FROM interview_sessions
+            WHERE deleted_at_ms IS NULL
             ORDER BY updated_at_ms DESC LIMIT %s OFFSET %s
             """,
-            (limit, offset),
+            (idle_cutoff, current, limit, offset),
         )
 
     def list_audit(

@@ -19,6 +19,7 @@ const views: { id: View; label: string; eyebrow: string; permission: string }[] 
 const labels: Record<string, string> = {
   users: "累计用户",
   active_sessions: "进行中面试",
+  idle_sessions: "空闲待关闭",
   pending_orders: "待确认订单",
   failed_materials: "待处理资料",
   ai_calls_24h: "24h AI 调用",

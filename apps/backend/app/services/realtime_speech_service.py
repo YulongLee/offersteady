@@ -353,6 +353,7 @@ class RealtimeSpeechService:
 
     def get_active_interview_conflict(self, *, user_id: str, session_id: str) -> InterviewSessionRecord | None:
         self.session_service.get_session(user_id=user_id, session_id=session_id)
+        self.reconcile_idle_sessions(user_id=user_id)
         conflicts = [
             session
             for session in self.session_service.list_sessions(user_id=user_id, status="live")
@@ -437,7 +438,23 @@ class RealtimeSpeechService:
             "closed_publishers": closed_publishers,
         }
 
+    def reconcile_idle_session(self, *, user_id: str, session_id: str) -> dict[str, object]:
+        status = self.session_service.idle_status(user_id=user_id, session_id=session_id)
+        if status["state"] != "expired":
+            return status
+        result = self.terminate_session_for_admin(user_id=user_id, session_id=session_id)
+        return {**status, "state": "ended", "autoEnded": True, "release": result}
+
+    def reconcile_idle_sessions(self, *, user_id: str | None = None) -> list[str]:
+        expired = self.session_service.list_idle_live_sessions(user_id=user_id)
+        ended: list[str] = []
+        for session in expired:
+            self.terminate_session_for_admin(user_id=session.owner_user_id, session_id=session.session_id)
+            ended.append(session.session_id)
+        return ended
+
     def record_web_session_heartbeat(self, *, user_id: str, session_id: str, binding_id: str | None, page: str, page_instance_id: str | None = None) -> WebSessionHeartbeatRecord:
+        idle = self.reconcile_idle_session(user_id=user_id, session_id=session_id)
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         if session.status == "ended":
             raise DomainRequestError(
@@ -879,6 +896,9 @@ class RealtimeSpeechService:
             sent_at_ms=sent_at_ms,
             audio_base64=audio_base64,
         )
+        publisher = prepared.get("publisher")
+        if isinstance(publisher, RealtimePublisherRecord):
+            self.session_service.touch_activity(user_id=publisher.owner_user_id, session_id=publisher.session_id)
         return self._process_prepared_audio_frame(prepared)
 
     def enqueue_audio_frame(
@@ -923,6 +943,11 @@ class RealtimeSpeechService:
             sent_at_ms=sent_at_ms,
             audio_base64=audio_base64,
         )
+        publisher = prepared.get("publisher")
+        if isinstance(publisher, RealtimePublisherRecord):
+            self.session_service.touch_activity(user_id=publisher.owner_user_id, session_id=publisher.session_id)
+        else:
+            return self._process_prepared_audio_frame(prepared)
         key = self._session_source_key(prepared["publisher"].session_id, prepared["frame"].source_kind)  # type: ignore[index]
         with self._frame_worker_lock:
             work_queue = self._frame_queues.get(key)

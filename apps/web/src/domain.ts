@@ -155,6 +155,16 @@ export interface ActiveInterviewConflict {
   readonly activeInterview: InterviewSummary | null;
 }
 
+export interface IdleInterviewStatus {
+  readonly sessionId: string;
+  readonly state: "active" | "warning" | "ended";
+  readonly lastActivityAtMs: number;
+  readonly warningAtMs: number;
+  readonly expiresAtMs: number;
+  readonly remainingMs: number;
+  readonly autoEnded?: boolean;
+}
+
 export interface SubmitManualAnswerResult {
   readonly question: InterviewQuestion;
   readonly task: AnswerTaskSnapshot;
@@ -174,6 +184,9 @@ export interface InterviewAppAdapter {
   getActiveInterviewConflict(id: string, signal?: AbortSignal): Promise<ActiveInterviewConflict>;
   supersedeActiveInterview(command: { interviewId: string; expectedPreviousInterviewId: string }, signal?: AbortSignal): Promise<readonly string[]>;
   startInterviewSession(id: string, signal?: AbortSignal): Promise<InterviewSummary>;
+  getInterviewIdleStatus(id: string, signal?: AbortSignal): Promise<IdleInterviewStatus>;
+  continueInterviewSession(id: string, signal?: AbortSignal): Promise<IdleInterviewStatus>;
+  endInterviewSession(id: string, signal?: AbortSignal): Promise<void>;
   bindDesktopDevice(command: { interviewId: string; manualCode?: string; reuseLastDevice?: boolean }, signal?: AbortSignal): Promise<DesktopDeviceBinding>;
   getLastDesktopDevice?(signal?: AbortSignal): Promise<RecentDesktopDevice | null>;
   getDesktopDeviceBinding(interviewId: string, signal?: AbortSignal): Promise<DesktopDeviceBinding | null>;

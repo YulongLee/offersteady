@@ -179,6 +179,18 @@ def test_admin_audit_query_casts_optional_filters_for_postgres() -> None:
     assert "%s::TEXT IS NULL" in sql
 
 
+def test_admin_interview_queries_exclude_deleted_and_share_idle_cutoff() -> None:
+    dashboard_constants = AdminRepository.dashboard.__code__.co_consts
+    list_constants = AdminRepository.list_sessions.__code__.co_consts
+    dashboard_sql = " ".join(value for value in dashboard_constants if isinstance(value, str))
+    list_sql = " ".join(value for value in list_constants if isinstance(value, str))
+
+    assert "deleted_at_ms IS NULL" in dashboard_sql
+    assert "last_activity_at_ms >= %s" in dashboard_sql
+    assert "deleted_at_ms IS NULL" in list_sql
+    assert "idle-timeout" in list_sql
+
+
 def test_admin_list_prefers_masked_sms_identity_over_hashed_login() -> None:
     query = AdminRepository.list_administrators.__code__.co_consts
     sql = next(value for value in query if isinstance(value, str) and "admin_authorizations" in value)

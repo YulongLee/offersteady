@@ -134,6 +134,10 @@ class Settings(BaseSettings):
     realtime_redis_snapshot_reload_on_access: bool = False
     realtime_desktop_heartbeat_ttl_seconds: int = 45
     realtime_web_heartbeat_ttl_seconds: int = 60
+    interview_idle_warning_seconds: int = 18 * 60
+    interview_idle_timeout_seconds: int = 20 * 60
+    interview_activity_touch_interval_seconds: int = 15
+    interview_idle_reaper_batch_size: int = 100
     realtime_asr_frame_timeout_seconds: float = 12.0
     realtime_asr_partial_timeout_seconds: float = 0.03
     realtime_asr_finalize_timeout_seconds: float = 8.0

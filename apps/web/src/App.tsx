@@ -2,7 +2,7 @@ import { createContext, Suspense, useContext, useEffect, useMemo, useRef, useSta
 import { BrowserRouter, Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import type { AnswerTaskSnapshot, CaptureState } from "@offersteady/protocol";
 
-import type { InterviewQuestion, LiveActionState, QuestionStatus, ScreenshotTask, SessionStatus, WebAppState } from "./domain";
+import type { IdleInterviewStatus, InterviewQuestion, LiveActionState, QuestionStatus, ScreenshotTask, SessionStatus, WebAppState } from "./domain";
 import { runAdapterOperation } from "./api-client";
 import { interviewAppAdapter, runtimeConfig } from "./app-adapter";
 import { DownloadCenter } from "./DownloadCenter";
@@ -590,6 +590,8 @@ function LivePage() {
   const [cancellingAnswer, setCancellingAnswer] = useState(false);
   const [cancelAnswerError, setCancelAnswerError] = useState("");
   const [pageLeaseStatus, setPageLeaseStatus] = useState<"claiming" | "active" | "replaced">("claiming");
+  const [idleStatus, setIdleStatus] = useState<IdleInterviewStatus | null>(null);
+  const [continuingInterview, setContinuingInterview] = useState(false);
   const [splitBounds, setSplitBounds] = useState({ min: ABSOLUTE_MIN_SPLIT_RATIO, max: ABSOLUTE_MAX_SPLIT_RATIO });
   const workspaceRef = useRef<HTMLDivElement>(null);
   const desktopLayout = useDesktopLiveLayout();
@@ -622,6 +624,31 @@ function LivePage() {
       activeAnswerTask: current.activeAnswerTask?.interviewId === id ? current.activeAnswerTask : null,
     }));
   }, [id, setState]);
+  useEffect(() => {
+    if (pageLeaseStatus === "replaced") return;
+    const controller = new AbortController();
+    let stopped = false;
+    const refreshIdleStatus = async () => {
+      try {
+        const next = await runAdapterOperation(signal => interviewAppAdapter.getInterviewIdleStatus(id, signal), controller.signal);
+        if (stopped) return;
+        setIdleStatus(next);
+        if (next.state === "ended") {
+          setState(current => ({
+            ...current,
+            captureState: "ready",
+            interviews: current.interviews.map(item => item.id === id ? { ...item, status: "ended" } : item),
+          }));
+          navigate(routes.review(id), { replace: true });
+        }
+      } catch {
+        // Realtime heartbeat continues to handle connectivity failures.
+      }
+    };
+    void refreshIdleStatus();
+    const timer = window.setInterval(() => void refreshIdleStatus(), 15_000);
+    return () => { stopped = true; controller.abort(); window.clearInterval(timer); };
+  }, [id, navigate, pageLeaseStatus, setState]);
   useEffect(() => {
     if (pageLeaseStatus === "replaced") return;
     const controller = new AbortController();
@@ -944,6 +971,32 @@ function LivePage() {
     void submitManualText(question);
   };
   const setCapture = (captureState: CaptureState, status: SessionStatus) => setState(current => current.captureState === captureState ? current : ({ ...current, captureState, interviews: current.interviews.map(item => item.id === id ? { ...item, status } : item) }));
+  const continueIdleInterview = async () => {
+    if (continuingInterview) return;
+    setContinuingInterview(true);
+    try {
+      const next = await runAdapterOperation(signal => interviewAppAdapter.continueInterviewSession(id, signal));
+      setIdleStatus(next);
+    } finally {
+      setContinuingInterview(false);
+    }
+  };
+  const finishInterview = async () => {
+    if (!window.confirm("确认结束本场面试？结束后将停止采集并进入复盘。")) return;
+    try {
+      await runAdapterOperation(signal => interviewAppAdapter.endInterviewSession(id, signal));
+    } catch (error) {
+      // The local prototype journey has no authenticated backend session. Ending
+      // must still be safe and must never leave an unhandled event rejection.
+      if ((error as { code?: string } | null)?.code !== "validation") {
+        setNotice(error instanceof Error ? error.message : "结束面试失败，请稍后重试。");
+        return;
+      }
+    } finally {
+      setCapture("ready", "ended");
+      navigate(routes.review(id));
+    }
+  };
   const updateQuestionStatus = (questionId: string, status: QuestionStatus) => {
     const question = state.questions.find(item => item.id === questionId);
     if (!question) return;
@@ -1161,7 +1214,8 @@ function LivePage() {
     });
   };
   const billingNotice = notice.includes("积分") || notice.includes("会员") || notice.toLowerCase().includes("billing");
-  return <main className="live-page focused-live-page"><header className="live-top"><Link to={routes.app}><Logo /></Link><div><strong>{interviewTitle}</strong><span><i className={state.captureState === "capturing" ? "recording-dot" : "online-dot"} /> {pageLeaseStatus === "replaced" ? "已在其他页面继续" : state.captureState === "capturing" ? "这台 Mac · 正在收音" : state.captureState === "paused" ? "收音已暂停" : state.captureState === "reconnecting" ? "Mac 正在重连" : state.captureState === "permission-required" ? "助手采集能力不可用" : state.captureState === "error" ? "设备连接异常" : "这台 Mac · 已连接，未采集"}</span></div><div className="live-top-actions"><Link className="live-balance" to={routes.billing}>积分</Link><span>18:24</span>{state.captureState === "capturing" ? <button className="button warning live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => setCapture("paused", "paused")}>暂停收音</button> : <button className="button primary live-session-control" disabled={pageLeaseStatus === "replaced" || (state.captureState !== "ready" && state.captureState !== "paused")} onClick={() => setCapture("capturing", "active")}>{state.captureState === "paused" ? "恢复收音" : "开始面试"}</button>}<button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => { if (window.confirm("确认结束本场面试？结束后将停止采集并进入复盘。")) { setCapture("ready", "ended"); navigate(routes.review(id)); } }}>结束面试</button></div></header>
+  return <main className="live-page focused-live-page"><header className="live-top"><Link to={routes.app}><Logo /></Link><div><strong>{interviewTitle}</strong><span><i className={state.captureState === "capturing" ? "recording-dot" : "online-dot"} /> {pageLeaseStatus === "replaced" ? "已在其他页面继续" : state.captureState === "capturing" ? "这台 Mac · 正在收音" : state.captureState === "paused" ? "收音已暂停" : state.captureState === "reconnecting" ? "Mac 正在重连" : state.captureState === "permission-required" ? "助手采集能力不可用" : state.captureState === "error" ? "设备连接异常" : "这台 Mac · 已连接，未采集"}</span></div><div className="live-top-actions"><Link className="live-balance" to={routes.billing}>积分</Link><span>18:24</span>{state.captureState === "capturing" ? <button className="button warning live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => setCapture("paused", "paused")}>暂停收音</button> : <button className="button primary live-session-control" disabled={pageLeaseStatus === "replaced" || (state.captureState !== "ready" && state.captureState !== "paused")} onClick={() => setCapture("capturing", "active")}>{state.captureState === "paused" ? "恢复收音" : "开始面试"}</button>}<button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束面试</button></div></header>
+    {idleStatus?.state === "warning" ? <div className="global-live-alert" role="status"><strong>本场面试即将因空闲自动结束</strong><span>连续 20 分钟没有音频、回答或截图活动会释放当前设备连接，历史记录仍会保留。</span><button className="button primary" disabled={continuingInterview} onClick={() => void continueIdleInterview()}>{continuingInterview ? "正在继续…" : "继续本场面试"}</button></div> : null}
     {pageLeaseStatus === "replaced" ? <div className="global-live-alert replaced-page-alert" role="status"><strong>本场面试已在其他页面继续</strong><span>当前页面已停止收音同步、实时订阅和回答请求；已显示内容仍可查看。关闭此页或返回面试首页即可。</span><Link className="button primary" to={routes.app}>返回面试首页</Link></div> : null}
     {state.captureState === "reconnecting" || state.captureState === "permission-required" || state.captureState === "error" ? <div className="global-live-alert" role="status"><strong>{state.captureState === "reconnecting" ? "设备正在重连" : state.captureState === "permission-required" ? "助手采集能力不可用" : "桌面设备连接异常"}</strong><span>{state.captureState === "reconnecting" ? "恢复前可能存在音频缺口，不会伪装为持续同步。" : state.captureState === "permission-required" ? "请在桌面助手中检查首次授权状态；网页不会申请麦克风或屏幕权限，手动输入仍可使用。" : "可以运行诊断，当前仍可使用手动问题和截图。"}</span><button onClick={() => setCapture("ready", "ready")}>{state.captureState === "permission-required" ? "关闭提示" : "重新诊断"}</button></div> : null}
     {notice ? <div className="global-live-alert" role="status"><strong>{notice}</strong><span>{billingNotice ? "当前任务未启动，请检查积分或会员权益。" : "当前回答没有成功启动，请根据上方原因重试。"}</span>{billingNotice ? <Link className="button primary" to={routes.billing}>前往积分页</Link> : null}</div> : null}

@@ -209,6 +209,18 @@ async def continue_session(
         timestamp=utc_now_iso(),
     )
 
+@router.get("/{session_id}/idle-status", response_model=ApiEnvelope[dict[str, object]])
+async def idle_status(
+    session_id: str,
+    request: Request,
+    user_id: str | None = Query(default=None, alias="userId"),
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: RealtimeSpeechService = Depends(realtime_speech_service),
+) -> ApiEnvelope[dict[str, object]]:
+    resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
+    result = service.reconcile_idle_session(user_id=resolved_user_id, session_id=session_id)
+    return success_response(request=request, data=result, timestamp=utc_now_iso())
+
 
 @router.post("/{session_id}/materials/confirm", response_model=ApiEnvelope[InterviewSessionResponse])
 async def confirm_materials(
@@ -247,9 +259,11 @@ async def end_session(
     request_context: Request,
     request: SessionCommandRequest,
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
-    service: SessionService = Depends(session_service),
+    service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[InterviewSessionResponse]:
-    session = service.end_session(user_id=resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context), session_id=session_id)
+    user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
+    service.terminate_session_for_admin(user_id=user_id, session_id=session_id)
+    session = service.session_service.get_session(user_id=user_id, session_id=session_id)
     return success_response(request=request_context, data=_to_session_response(session), timestamp=utc_now_iso())
 
 

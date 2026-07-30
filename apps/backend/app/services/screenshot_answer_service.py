@@ -698,6 +698,7 @@ class ScreenshotAnswerService:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         if session.status != "live":
             raise DomainRequestError("screenshot-answer", "create-task", "只有进行中的面试会话才能发起截图回答。", 400)
+        self.session_service.touch_activity(user_id=user_id, session_id=session_id, force=True)
         if len(image_ids) > self.settings.screenshot_max_images_per_task:
             raise DomainRequestError(
                 "screenshot-answer",
@@ -888,6 +889,7 @@ class ScreenshotAnswerService:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         if session.status != "live":
             raise DomainRequestError("screenshot-answer", "remote-capture", "只有进行中的面试会话才能发起截屏回答。", 400)
+        self.session_service.touch_activity(user_id=user_id, session_id=session_id, force=True)
         now_ms = _now_ms()
         request = RemoteScreenshotCaptureRequest(
             request_id=f"shot-capture-{uuid4().hex}",

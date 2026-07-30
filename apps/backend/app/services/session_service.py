@@ -38,6 +38,7 @@ class SessionService:
         self.document_repository = document_repository
         self.repository = repository
         self.material_availability = material_availability
+        self._recent_activity_touches: dict[str, int] = {}
 
     def create_session(self, *, user_id: str, title: str, restart_of_session_id: str | None = None) -> InterviewSessionRecord:
         now_ms = _now_ms()
@@ -98,7 +99,54 @@ class SessionService:
         return refreshed
 
     def continue_session(self, *, user_id: str, session_id: str) -> InterviewSessionRecord:
-        return self.get_session(user_id=user_id, session_id=session_id)
+        session = self.get_session(user_id=user_id, session_id=session_id)
+        if session.status == "live":
+            return self.touch_activity(user_id=user_id, session_id=session_id, force=True)
+        return session
+
+    def touch_activity(self, *, user_id: str, session_id: str, force: bool = False) -> InterviewSessionRecord:
+        now_ms = _now_ms()
+        minimum_interval_ms = max(1, self.settings.interview_activity_touch_interval_seconds) * 1000
+        recent = self._recent_activity_touches.get(session_id, 0)
+        if not force and now_ms - recent < minimum_interval_ms:
+            return self.get_session(user_id=user_id, session_id=session_id)
+        session = self.repository.touch_activity(user_id=user_id, session_id=session_id, activity_at_ms=now_ms)
+        if session is None:
+            raise DomainRequestError("session", "touch-activity", "面试会话不存在。", 404)
+        if session.owner_user_id != user_id:
+            raise DomainRequestError("session", "touch-activity", "不能更新其他用户的面试活动。", 403)
+        self._recent_activity_touches[session_id] = now_ms
+        return session
+
+    def idle_status(self, *, user_id: str, session_id: str, at_ms: int | None = None) -> dict[str, object]:
+        session = self.get_session(user_id=user_id, session_id=session_id)
+        current = at_ms if at_ms is not None else _now_ms()
+        warning_at_ms = session.last_activity_at_ms + self.settings.interview_idle_warning_seconds * 1000
+        expires_at_ms = session.last_activity_at_ms + self.settings.interview_idle_timeout_seconds * 1000
+        if session.status == "ended":
+            state = "ended"
+        elif current >= expires_at_ms:
+            state = "expired"
+        elif current >= warning_at_ms:
+            state = "warning"
+        else:
+            state = "active"
+        return {
+            "sessionId": session.session_id,
+            "state": state,
+            "lastActivityAtMs": session.last_activity_at_ms,
+            "warningAtMs": warning_at_ms,
+            "expiresAtMs": expires_at_ms,
+            "remainingMs": max(0, expires_at_ms - current),
+        }
+
+    def list_idle_live_sessions(self, *, user_id: str | None = None, at_ms: int | None = None) -> list[InterviewSessionRecord]:
+        current = at_ms if at_ms is not None else _now_ms()
+        return self.repository.list_idle_live_sessions(
+            before_ms=current - self.settings.interview_idle_timeout_seconds * 1000,
+            limit=max(1, self.settings.interview_idle_reaper_batch_size),
+            user_id=user_id,
+        )
 
     def confirm_materials(
         self,
@@ -161,17 +209,27 @@ class SessionService:
                 error_code="active_interview_conflict",
             )
         now_ms = _now_ms()
-        return self._save_session(
-            session,
-            status="live",
-            continue_target="live",
-            started_at_ms=session.started_at_ms or now_ms,
-            updated_at_ms=now_ms,
-            last_activity_at_ms=now_ms,
-        )
+        try:
+            return self._save_session(
+                session,
+                status="live",
+                continue_target="live",
+                started_at_ms=session.started_at_ms or now_ms,
+                updated_at_ms=now_ms,
+                last_activity_at_ms=now_ms,
+            )
+        except Exception as exc:
+            if "uq_interview_sessions_one_live_per_user" not in str(exc) and "duplicate key" not in str(exc).lower():
+                raise
+            raise DomainRequestError(
+                "session", "start", "当前账号已有一场进行中的面试。",
+                409, error_code="active_interview_conflict",
+            ) from exc
 
     def end_session(self, *, user_id: str, session_id: str) -> InterviewSessionRecord:
         session = self.get_session(user_id=user_id, session_id=session_id)
+        if session.status == "ended":
+            return session
         now_ms = _now_ms()
         return self._save_session(
             session,
