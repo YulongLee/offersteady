@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import api_router
+from app.api.admin import admin_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging, utc_now_iso
 from app.core.responses import ApiEnvelope, success_response
@@ -17,7 +18,10 @@ def create_app() -> FastAPI:
     application = FastAPI(title=settings.app_name, version=settings.app_version)
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_allowed_origins,
+        allow_origins=[
+            *settings.cors_allowed_origins,
+            *(settings.admin_allowed_origins if settings.admin_enabled else []),
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -41,6 +45,7 @@ def create_app() -> FastAPI:
         )
 
     application.include_router(api_router, prefix=settings.api_prefix)
+    application.include_router(admin_router, prefix=settings.api_prefix)
     return application
 
 

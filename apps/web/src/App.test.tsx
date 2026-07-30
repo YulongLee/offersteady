@@ -360,7 +360,7 @@ describe("OfferSteady web application", () => {
     expect(screen.getByText("这台 Mac")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Windows 10\/11/ }));
     expect(screen.getByRole("button", { name: "完成签名后开放" })).toBeDisabled();
-    expect(screen.getByText(/系统音频：当前预览版暂不支持/)).toBeInTheDocument();
+    expect(screen.getByText(/系统音频：不可用/)).toBeInTheDocument();
   });
 
   it("completes the desktop prototype journey from home through review", async () => {

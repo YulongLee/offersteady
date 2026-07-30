@@ -165,6 +165,16 @@ class Settings(BaseSettings):
     auth_sms_verify_attempt_limit: int = 5
     auth_sms_fake_code: str = "123456"
     auth_sms_test_phone_number: str | None = None
+    admin_enabled: bool = False
+    admin_allowed_origins: list[str] = Field(default_factory=list)
+    admin_session_ttl_seconds: int = 30 * 60
+    admin_recent_mfa_ttl_seconds: int = 5 * 60
+    admin_session_signing_secret: str | None = None
+    admin_encryption_key: str | None = None
+    admin_max_page_size: int = 100
+    admin_query_timeout_ms: int = 3000
+    admin_rate_limit_per_minute: int = 120
+    admin_max_concurrent_queries: int = 4
 
     public_web_base_url: str = "http://127.0.0.1:5173"
     checkout_provider: str = ""

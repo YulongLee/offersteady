@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from base64 import b64encode
+from json import dumps
 from urllib.parse import parse_qs, urlparse
 
 from cryptography.hazmat.primitives import hashes, serialization
@@ -100,3 +101,45 @@ def test_payment_callback_cannot_cross_order_provider() -> None:
     )
     assert outcome == "provider_mismatch"
     assert service.checkout_order_for_user(user_id="synthetic-user", order_id=order.id).status == "payment_pending"
+
+
+def test_alipay_order_query_requires_signed_authoritative_response(monkeypatch) -> None:
+    provider, private_key = alipay_fixture()
+    payload = {
+        "code": "10000",
+        "out_trade_no": "official-order-synthetic",
+        "trade_no": "alipay-trade-synthetic",
+        "total_amount": "39.90",
+        "trade_status": "TRADE_SUCCESS",
+    }
+    signature = private_key.sign(
+        dumps(payload, ensure_ascii=False, separators=(",", ":")).encode(),
+        padding.PKCS1v15(),
+        hashes.SHA256(),
+    )
+
+    class ResponseStub:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {
+                "alipay_trade_query_response": payload,
+                "sign": b64encode(signature).decode(),
+            }
+
+    monkeypatch.setattr("app.services.alipay_provider.httpx.post", lambda *args, **kwargs: ResponseStub())
+    result = provider.query_order(order_id="official-order-synthetic")
+    assert result.verified is True
+    assert result.paid is True
+    assert result.amount_cents == 3990
+
+    class UnsignedResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {"alipay_trade_query_response": payload, "sign": "invalid"}
+
+    monkeypatch.setattr("app.services.alipay_provider.httpx.post", lambda *args, **kwargs: UnsignedResponse())
+    assert provider.query_order(order_id="official-order-synthetic").verified is False

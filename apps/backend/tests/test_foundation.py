@@ -1966,6 +1966,16 @@ def test_new_device_binding_becomes_the_users_only_active_realtime_interview() -
         "clientName": "first-publisher",
     }))
 
+    conflict = client.post(f"/api/v1/realtime-speech/sessions/{second['sessionId']}/desktop-binding", json={
+        "userId": "single-live-user",
+        "manualCode": "310002",
+    })
+    assert conflict.status_code == 409
+    superseded = unwrap(client.post(f"/api/v1/sessions/{second['sessionId']}/supersede-active", json={
+        "userId": "single-live-user",
+        "expectedPreviousSessionId": first["sessionId"],
+    }))
+    assert superseded["retiredSessionIds"] == [first["sessionId"]]
     second_binding = unwrap(client.post(f"/api/v1/realtime-speech/sessions/{second['sessionId']}/desktop-binding", json={
         "userId": "single-live-user",
         "manualCode": "310002",

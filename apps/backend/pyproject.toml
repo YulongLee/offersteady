@@ -29,6 +29,7 @@ dev = [
 offersteady-verify-integrations = "app.services.integration_verification:main"
 offersteady-run-e2e = "app.services.end_to_end_integration:main"
 offersteady-screenshot-perf = "app.services.screenshot_answer_performance:main"
+offersteady-admin-bootstrap = "app.services.admin_bootstrap:main"
 
 [build-system]
 requires = ["hatchling"]

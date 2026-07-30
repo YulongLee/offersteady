@@ -78,14 +78,29 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
 
     def get_user_by_provider_subject(self, *, provider: IdentityProviderKind, provider_subject: str) -> UserRecord | None:
         with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
-            cursor.execute(
-                """
-                SELECT u.* FROM auth_users u
-                JOIN auth_identity_bindings b ON b.user_id = u.user_id
-                WHERE b.provider = %s AND b.provider_subject = %s AND b.status = 'active'
-                """,
-                (provider, provider_subject),
-            )
+            try:
+                cursor.execute(
+                    """
+                    SELECT u.* FROM auth_users u
+                    JOIN auth_identity_bindings b ON b.user_id = u.user_id
+                    WHERE b.provider = %s AND b.provider_subject = %s AND b.status = 'active'
+                      AND NOT EXISTS (
+                        SELECT 1 FROM admin_user_restrictions r
+                        WHERE r.user_id = u.user_id AND r.status = 'active'
+                      )
+                    """,
+                    (provider, provider_subject),
+                )
+            except psycopg.errors.UndefinedTable:
+                connection.rollback()
+                cursor.execute(
+                    """
+                    SELECT u.* FROM auth_users u
+                    JOIN auth_identity_bindings b ON b.user_id = u.user_id
+                    WHERE b.provider = %s AND b.provider_subject = %s AND b.status = 'active'
+                    """,
+                    (provider, provider_subject),
+                )
             row = cursor.fetchone()
         return self._user_from_row(row) if row else None
 
@@ -230,7 +245,21 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
 
     def _get_user(self, where: str, params: tuple[object, ...]) -> UserRecord | None:
         with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
-            cursor.execute(f"SELECT * FROM auth_users WHERE {where}", params)
+            try:
+                cursor.execute(
+                    f"""
+                    SELECT * FROM auth_users
+                    WHERE {where}
+                      AND NOT EXISTS (
+                        SELECT 1 FROM admin_user_restrictions r
+                        WHERE r.user_id = auth_users.user_id AND r.status = 'active'
+                      )
+                    """,
+                    params,
+                )
+            except psycopg.errors.UndefinedTable:
+                connection.rollback()
+                cursor.execute(f"SELECT * FROM auth_users WHERE {where}", params)
             row = cursor.fetchone()
         return self._user_from_row(row) if row else None
 

@@ -404,6 +404,39 @@ class RealtimeSpeechService:
             )
         return sorted(conflict_ids)
 
+    def terminate_session_for_admin(self, *, user_id: str, session_id: str) -> dict[str, object]:
+        session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        already_ended = session.status == "ended"
+        if not already_ended:
+            session = self.session_service.end_session(user_id=user_id, session_id=session_id)
+        now_ms = _now_ms()
+        released_bindings = 0
+        closed_publishers = 0
+        for binding in self.repository.list_session_desktop_bindings_for_user(user_id=user_id):
+            if binding.session_id == session_id and binding.status == "bound":
+                self.repository.save_session_desktop_binding(replace(binding, status="stale"))
+                released_bindings += 1
+        for publisher in self.repository.list_publishers_for_session(session_id=session_id):
+            if publisher.status not in {"closed", "failed"}:
+                self.repository.save_publisher(
+                    replace(publisher, disconnected_at_ms=now_ms, status="closed")
+                )
+                closed_publishers += 1
+        self._reset_realtime_session(session_id=session_id, retired=True)
+        self._save_event(
+            session_id=session_id,
+            owner_user_id=user_id,
+            kind="connection-state",
+            payload={"status": "terminated-by-admin"},
+        )
+        return {
+            "session_id": session_id,
+            "status": session.status,
+            "already_ended": already_ended,
+            "released_bindings": released_bindings,
+            "closed_publishers": closed_publishers,
+        }
+
     def record_web_session_heartbeat(self, *, user_id: str, session_id: str, binding_id: str | None, page: str, page_instance_id: str | None = None) -> WebSessionHeartbeatRecord:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         if session.status == "ended":

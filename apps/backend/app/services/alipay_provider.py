@@ -10,6 +10,7 @@ from textwrap import wrap
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
+import httpx
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
@@ -21,6 +22,16 @@ class AlipayNotification:
     order_id: str
     provider_trade_no: str
     amount_cents: int
+    paid: bool
+    verified: bool
+
+
+@dataclass(frozen=True)
+class AlipayOrderQuery:
+    order_id: str
+    provider_trade_no: str
+    amount_cents: int
+    provider_status: str
     paid: bool
     verified: bool
 
@@ -95,8 +106,50 @@ class AlipayPaymentProvider:
             verified=signature_verified and identity_verified,
         )
 
+    def query_order(self, *, order_id: str) -> AlipayOrderQuery:
+        if not self.enabled:
+            raise RuntimeError("支付宝官方支付尚未配置完整商户参数")
+        params = {
+            "app_id": self.settings.alipay_app_id or "",
+            "method": "alipay.trade.query",
+            "format": "JSON",
+            "charset": "utf-8",
+            "sign_type": "RSA2",
+            "timestamp": datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S"),
+            "version": "1.0",
+            "biz_content": dumps({"out_trade_no": order_id}, separators=(",", ":")),
+        }
+        response = httpx.post(
+            self.settings.alipay_gateway_url,
+            data={**params, "sign": self._sign(params)},
+            timeout=5.0,
+        )
+        response.raise_for_status()
+        envelope = response.json()
+        payload = envelope.get("alipay_trade_query_response")
+        if not isinstance(payload, dict):
+            raise RuntimeError("alipay_query_response_invalid")
+        signature = str(envelope.get("sign", ""))
+        serialized = dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        verified = self._verify_signature(serialized, signature)
+        response_order_id = str(payload.get("out_trade_no", ""))
+        if response_order_id and response_order_id != order_id:
+            verified = False
+        provider_status = str(payload.get("trade_status", "")).upper()
+        return AlipayOrderQuery(
+            order_id=response_order_id or order_id,
+            provider_trade_no=str(payload.get("trade_no", "")),
+            amount_cents=self._money_to_cents(str(payload.get("total_amount", "0"))),
+            provider_status=provider_status or str(payload.get("sub_code", payload.get("code", "UNKNOWN"))),
+            paid=provider_status in {"TRADE_SUCCESS", "TRADE_FINISHED"},
+            verified=verified and str(payload.get("code", "")) == "10000",
+        )
+
     def verify(self, params: dict[str, str]) -> bool:
         signature = params.get("sign", "")
+        return self._verify_signature(self._canonical(params), signature)
+
+    def _verify_signature(self, content: str, signature: str) -> bool:
         if not signature or not self.settings.alipay_public_key:
             return False
         try:
@@ -105,13 +158,11 @@ class AlipayPaymentProvider:
             )
             public_key.verify(
                 b64decode(signature),
-                self._canonical(params).encode("utf-8"),
+                content.encode("utf-8"),
                 padding.PKCS1v15(),
                 hashes.SHA256(),
             )
             return True
-        except (TypeError, ValueError):
-            return False
         except Exception:
             return False
 

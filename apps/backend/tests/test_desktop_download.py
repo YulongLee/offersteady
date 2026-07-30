@@ -16,10 +16,13 @@ def test_web_state_exposes_same_origin_mac_arm_download() -> None:
     with TestClient(app) as client:
         state = client.get("/api/v1/web/state").json()["data"]
     entries = state["releaseManifest"]["entries"]
-    assert len(entries) == 1
-    assert entries[0]["architecture"] == "arm64"
-    assert entries[0]["downloadUrl"].startswith("/api/v1/web/downloads/desktop/")
-    assert "objectKey" not in entries[0]
+    assert {(entry["platform"], entry["architecture"]) for entry in entries} == {
+        ("macos", "arm64"),
+        ("macos", "x64"),
+        ("windows", "x64"),
+    }
+    assert all(entry["downloadUrl"].startswith("/api/v1/web/downloads/desktop/") for entry in entries)
+    assert all("objectKey" not in entry for entry in entries)
 
 
 def test_desktop_download_redirects_to_short_lived_signed_oss_url(monkeypatch, tmp_path) -> None:

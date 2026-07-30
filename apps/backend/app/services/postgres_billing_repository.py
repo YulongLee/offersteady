@@ -394,7 +394,29 @@ class PostgresBillingRepository:
 
     def list_entitlements(self, *, user_id: str) -> list[dict[str, object]]:
         with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
-            cursor.execute("SELECT * FROM billing_time_pass_entitlements WHERE user_id = %s ORDER BY starts_at_ms", (user_id,))
+            try:
+                cursor.execute(
+                    """
+                    SELECT entitlement_id, user_id, product_id, starts_at_ms, ends_at_ms,
+                           order_id, knowledge_allowance_granted, knowledge_allowance_used,
+                           knowledge_allowance_locked
+                    FROM billing_time_pass_entitlements
+                    WHERE user_id = %s
+                    UNION ALL
+                    SELECT entitlement_id, user_id, product_id, starts_at_ms, ends_at_ms,
+                           reference_id AS order_id, 0, 0, 0
+                    FROM admin_time_entitlements
+                    WHERE user_id = %s
+                    ORDER BY starts_at_ms
+                    """,
+                    (user_id, user_id),
+                )
+            except psycopg.errors.UndefinedTable:
+                connection.rollback()
+                cursor.execute(
+                    "SELECT * FROM billing_time_pass_entitlements WHERE user_id = %s ORDER BY starts_at_ms",
+                    (user_id,),
+                )
             return [self._entitlement(row) for row in cursor.fetchall()]
 
     def expire_checkout_orders(self, *, now_ms: int, user_id: str | None = None, order_id: str | None = None) -> int:

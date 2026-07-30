@@ -30,7 +30,7 @@ describe("spec-driven interview features", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "购买" })[0]!);
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).queryByLabelText("交易单号")).not.toBeInTheDocument(); expect(within(dialog).queryByLabelText("付款截图")).not.toBeInTheDocument();
-    await waitFor(() => expect(within(dialog).getByRole("link", { name: "打开码支付收银台" })).toBeInTheDocument());
+    await waitFor(() => expect(within(dialog).getByRole("link", { name: "打开支付收银台" })).toBeInTheDocument());
     expect(openSpy).toHaveBeenCalledWith(expect.stringContaining("pay.mzfpay.com"), "_blank", "noopener,noreferrer");
     expect(within(dialog).getByText(/等待服务端验签通知/)).toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: "模拟服务端验签通知" })).not.toBeInTheDocument();
