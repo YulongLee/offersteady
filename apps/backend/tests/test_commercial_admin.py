@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Settings, get_settings
 from app.main import create_app
+from app.services.admin_repository import AdminRepository
 from app.services.admin_service import AdminService, PERMISSIONS_BY_ROLE, SAFE_DETAIL_KEYS
 
 
@@ -142,3 +143,13 @@ def test_administrator_cannot_disable_self() -> None:
         assert str(exc) == "administrator_cannot_disable_self"
     else:
         raise AssertionError("administrator must not disable their own authorization")
+
+
+def test_admin_phone_lookup_uses_the_same_irreversible_identity_as_sms_login() -> None:
+    repository = object.__new__(AdminRepository)
+    repository.settings = Settings(auth_jwt_secret="synthetic-jwt-secret")
+    direct, sms_login = repository._login_candidates("19700000000")
+    assert direct == "19700000000"
+    assert sms_login.startswith("sms:")
+    assert "19700000000" not in sms_login
+    assert len(sms_login) == 68

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import hmac
+import re
 from contextlib import contextmanager
 from pathlib import Path
 from threading import BoundedSemaphore
@@ -126,15 +129,31 @@ class AdminRepository:
         return row
 
     def user_by_login(self, login_id: str) -> dict[str, Any] | None:
+        direct_login, sms_login = self._login_candidates(login_id)
         return self._one(
             """
             SELECT user_id, login_id, display_name
             FROM auth_users
             WHERE LOWER(login_id) = LOWER(%s)
-               OR LOWER(login_id) = LOWER('sms:' || %s)
+               OR LOWER(login_id) = LOWER(%s)
             """,
-            (login_id, login_id),
+            (direct_login, sms_login),
         )
+
+    def _login_candidates(self, login_id: str) -> tuple[str, str]:
+        normalized = login_id.strip()
+        digits = re.sub(r"\D", "", normalized)
+        if digits.startswith("86") and len(digits) == 13:
+            digits = digits[2:]
+        if re.fullmatch(r"1[3-9]\d{9}", digits):
+            secret = self.settings.auth_jwt_secret or "offersteady-dev-jwt-secret"
+            digest = hmac.new(
+                secret.encode("utf-8"),
+                f"+86{digits}".encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+            return normalized, f"sms:{digest}"
+        return normalized, f"sms:{normalized}"
 
     def disable_authorization(self, *, user_id: str) -> dict[str, Any]:
         current = now_ms()
