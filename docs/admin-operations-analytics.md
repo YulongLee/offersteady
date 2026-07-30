@@ -7,13 +7,15 @@
 ```bash
 docker compose --env-file .env.production \
   -f infra/compose/docker-compose.foundation.yml \
-  run --rm analytics offersteady-admin-analytics --all-history
+  run --rm analytics sh -lc \
+  'cd /app/apps/backend && python -m app.services.admin_analytics_job --all-history'
 ```
 
 指定日期：
 
 ```bash
-offersteady-admin-analytics --start-date 2026-07-01 --end-date 2026-07-31
+cd /app/apps/backend
+python -m app.services.admin_analytics_job --start-date 2026-07-01 --end-date 2026-07-31
 ```
 
 命令通过 PostgreSQL advisory lock 和唯一键 upsert 保证重复执行安全。过去未持久化的 ASR 延迟会显示为无覆盖，不会写成零。

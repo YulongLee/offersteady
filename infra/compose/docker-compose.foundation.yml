@@ -70,7 +70,7 @@ services:
       args:
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}
         PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-mirrors.aliyun.com}
-    command: ["sh", "-c", "while true; do offersteady-admin-analytics --scheduled || true; sleep 3600; done"]
+    command: ["sh", "-c", "cd /app/apps/backend && while true; do python -m app.services.admin_analytics_job --scheduled || true; sleep 3600; done"]
     env_file:
       - ../../${OFFERSTEADY_ENV_FILE:-.env.production}
     environment:
