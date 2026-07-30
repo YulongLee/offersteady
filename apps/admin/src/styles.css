@@ -68,8 +68,11 @@ nav button.active small { color: var(--mint); }
 .trend-card { min-width: 0; padding: 20px; border: 1px solid rgba(154,211,190,.12); border-radius: 2px 18px 2px 18px; background: linear-gradient(145deg, rgba(18,42,34,.72), rgba(7,16,14,.82)); }
 .trend-card-title { display: flex; align-items: start; justify-content: space-between; gap: 12px; }.trend-card-title small { color: #57756a; font-size: 8px; letter-spacing: .16em; }.trend-card-title h3 { margin: 4px 0 0; font-size: 15px; }.trend-card-title > span { color: var(--mint); font: 700 11px monospace; }
 .trend-card > strong { display: block; margin-top: 12px; font: 500 28px Georgia, serif; }
-.chart-wrap { height: 150px; margin-top: 12px; }.chart-wrap svg { width: 100%; height: 100%; overflow: visible; }
+.chart-wrap { height: 190px; margin-top: 12px; }.chart-wrap svg { width: 100%; height: 100%; overflow: visible; }
 .chart-line { fill: none; stroke: var(--mint); stroke-width: 2.5; vector-effect: non-scaling-stroke; }.chart-glow { fill: none; stroke: rgba(99,230,181,.22); stroke-width: 10; vector-effect: non-scaling-stroke; filter: blur(5px); }
+.chart-grid { stroke: rgba(154,211,190,.1); stroke-width: 1; stroke-dasharray: 3 5; }.chart-axis { stroke: rgba(154,211,190,.28); stroke-width: 1; }
+.chart-label { fill: #6f9084; font-size: 9px; font-family: "Avenir Next", "PingFang SC", sans-serif; }.chart-label.y { text-anchor: end; }.chart-label.x.middle { text-anchor: middle; }.chart-label.x.end { text-anchor: end; }
+.chart-unit { fill: #527065; font-size: 8px; letter-spacing: .08em; }
 .chart-empty, .trend-state { display: grid; min-height: 150px; place-items: center; color: var(--muted); border: 1px dashed var(--line); font-size: 12px; }
 .trend-state { margin-top: 20px; }.trend-state.error { display: flex; justify-content: center; gap: 12px; color: #ffb9a8; }.trend-state button { padding: 7px 10px; border: 1px solid var(--line); color: #cde8dc; background: transparent; }
 .trend-card-foot { display: flex; justify-content: space-between; gap: 8px; color: #5f7c71; font-size: 9px; }.trend-card > p { min-height: 34px; margin: 12px 0 0; color: var(--muted); font-size: 10px; line-height: 1.6; }

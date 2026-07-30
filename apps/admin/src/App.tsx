@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { adminApi } from "./api";
-import { buildLinePath, formatTrendChange, formatTrendValue, type TrendMetric, type TrendResponse } from "./analytics";
+import { buildLinePath, chartDomain, formatTrendChange, formatTrendValue, type TrendMetric, type TrendResponse } from "./analytics";
 
 type View = "dashboard" | "users" | "orders" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
 type Row = Record<string, unknown>;
@@ -143,13 +143,30 @@ function Dashboard({ data }: { data: Row }) {
 
 function TrendCard({ metric }: { metric: TrendMetric }) {
   const path = buildLinePath(metric.points);
+  const domain = chartDomain(metric.points);
   const missing = metric.points.filter(point => point.value === null).length;
+  const middle = domain ? (domain.minimum + domain.maximum) / 2 : null;
+  const dateLabel = (value: string | undefined) => value ? value.slice(5) : "—";
+  const middlePoint = metric.points[Math.floor((metric.points.length - 1) / 2)];
   return (
     <article className="trend-card">
       <div className="trend-card-title"><div><small>{metric.group.toUpperCase()}</small><h3>{metric.label}</h3></div><span>{formatTrendChange(metric.summary.changePercent)}</span></div>
       <strong>{formatTrendValue(metric.summary.current, metric.unit)}</strong>
       <div className="chart-wrap">
-        {path ? <svg viewBox="0 0 560 150" role="img" aria-label={`${metric.label}趋势`} preserveAspectRatio="none"><path className="chart-glow" d={path} /><path className="chart-line" d={path} /></svg> : <div className="chart-empty">该区间暂无可用数据</div>}
+        {path && domain ? <svg viewBox="0 0 560 190" role="img" aria-label={`${metric.label}趋势`}>
+          {[10, 85, 160].map(y => <line className="chart-grid" x1="52" x2="550" y1={y} y2={y} key={y} />)}
+          <line className="chart-axis" x1="52" x2="52" y1="10" y2="160" />
+          <line className="chart-axis" x1="52" x2="550" y1="160" y2="160" />
+          <text className="chart-label y" x="45" y="14">{formatTrendValue(domain.maximum, metric.unit)}</text>
+          <text className="chart-label y" x="45" y="89">{formatTrendValue(middle, metric.unit)}</text>
+          <text className="chart-label y" x="45" y="164">{formatTrendValue(domain.minimum, metric.unit)}</text>
+          <text className="chart-label x" x="52" y="184">{dateLabel(metric.points.at(0)?.date)}</text>
+          <text className="chart-label x middle" x="301" y="184">{dateLabel(middlePoint?.date)}</text>
+          <text className="chart-label x end" x="550" y="184">{dateLabel(metric.points.at(-1)?.date)}</text>
+          <text className="chart-unit" x="52" y="8">单位：{metric.unit}</text>
+          <path className="chart-glow" d={path} />
+          <path className="chart-line" d={path} />
+        </svg> : <div className="chart-empty">该区间暂无可用数据</div>}
       </div>
       <div className="trend-card-foot"><span>{metric.points.at(0)?.date} - {metric.points.at(-1)?.date}</span><span>{missing ? `${missing} 天无覆盖` : "数据完整"}</span></div>
       <p>{metric.description}</p>
