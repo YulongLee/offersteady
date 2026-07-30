@@ -170,3 +170,9 @@ def test_generated_redemption_codes_are_unique_and_plaintext_is_only_returned_on
     assert len(codes) == len(set(codes)) == 100
     assert all(code.startswith("OS-") and len(code) == 17 for code in codes)
     assert repository.received_codes == codes
+
+
+def test_admin_audit_query_casts_optional_filters_for_postgres() -> None:
+    query = AdminRepository.list_audit.__code__.co_consts
+    sql = next(value for value in query if isinstance(value, str) and "admin_audit_events" in value)
+    assert "%s::TEXT IS NULL" in sql

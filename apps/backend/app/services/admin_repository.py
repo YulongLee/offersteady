@@ -505,7 +505,8 @@ class AdminRepository:
             SELECT audit_event_id, actor_user_id, actor_role, action, resource_type,
                    resource_id, reason, request_id, result, safe_details_json, created_at_ms
             FROM admin_audit_events
-            WHERE (%s IS NULL OR action = %s) AND (%s IS NULL OR request_id = %s)
+            WHERE (%s::TEXT IS NULL OR action = %s)
+              AND (%s::TEXT IS NULL OR request_id = %s)
             ORDER BY created_at_ms DESC LIMIT %s OFFSET %s
             """,
             (action, action, request_id, request_id, limit, offset),
