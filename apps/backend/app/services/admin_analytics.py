@@ -39,6 +39,7 @@ METRICS: dict[str, MetricDefinition] = {
         ) activity"""),
     "interviews_created": MetricDefinition("interviews_created", "创建面试", "场", "interview", "sum", "自然日内创建且未软删除的面试数。", f"{BOUNDS} SELECT COUNT(*)::DOUBLE PRECISION AS value, COUNT(*)::BIGINT AS sample_count FROM interview_sessions, bounds WHERE created_at_ms >= start_ms AND created_at_ms < end_ms AND deleted_at_ms IS NULL"),
     "interviews_completed": MetricDefinition("interviews_completed", "完成面试", "场", "interview", "sum", "自然日内正常或自动结束的面试数。", f"{BOUNDS} SELECT COUNT(*)::DOUBLE PRECISION AS value, COUNT(*)::BIGINT AS sample_count FROM interview_sessions, bounds WHERE ended_at_ms >= start_ms AND ended_at_ms < end_ms AND deleted_at_ms IS NULL"),
+    "peak_concurrent_interviews": MetricDefinition("peak_concurrent_interviews", "峰值并发面试", "场", "interview", "maximum", "自然日内实际观测到的最高有效进行中面试数；仅从容量采集上线后覆盖。", f"{BOUNDS} SELECT MAX(metric_value)::DOUBLE PRECISION AS value, COUNT(metric_value)::BIGINT AS sample_count FROM admin_metric_snapshots, bounds WHERE granularity = 'capacity_5m' AND metric_key = 'peak_concurrent_interviews' AND bucket_start_ms >= start_ms AND bucket_start_ms < end_ms", backfillable=False),
     "answer_requests": MetricDefinition("answer_requests", "回答请求", "次", "interview", "sum", "面试场景中的文本回答模型调用数。", f"{BOUNDS} SELECT COUNT(*)::DOUBLE PRECISION AS value, COUNT(*)::BIGINT AS sample_count FROM ai_usage_records, bounds WHERE created_at_ms >= start_ms AND created_at_ms < end_ms AND session_id IS NOT NULL AND operation_kind NOT IN ('vision', 'screenshot-answer')"),
     "screenshot_answers": MetricDefinition("screenshot_answers", "截图回答", "次", "interview", "sum", "截图或视觉回答模型调用数。", f"{BOUNDS} SELECT COUNT(*)::DOUBLE PRECISION AS value, COUNT(*)::BIGINT AS sample_count FROM ai_usage_records, bounds WHERE created_at_ms >= start_ms AND created_at_ms < end_ms AND operation_kind IN ('vision', 'screenshot-answer')"),
     "points_consumed": MetricDefinition("points_consumed", "积分消耗", "点", "commercial", "sum", "自然日内积分账本负向流水的绝对值。", f"{BOUNDS} SELECT COALESCE(SUM(-points) FILTER (WHERE points < 0), 0)::DOUBLE PRECISION AS value, COUNT(*) FILTER (WHERE points < 0)::BIGINT AS sample_count FROM points_redemption_ledger, bounds WHERE created_at_ms >= start_ms AND created_at_ms < end_ms"),
@@ -94,6 +95,8 @@ def summarize(definition: MetricDefinition, rows: list[dict[str, Any]]) -> float
         return None
     if definition.aggregation == "sum":
         return sum(value for value, _ in values)
+    if definition.aggregation == "maximum":
+        return max(value for value, _ in values)
     weighted = sum(value * count for value, count in values)
     samples = sum(count for _, count in values)
     return weighted / samples if samples else None
@@ -195,7 +198,7 @@ class AdminAnalyticsService:
 
     def trends(self, *, range_key: str, metric_keys: list[str] | None = None, today: date | None = None) -> dict[str, Any]:
         previous_start, start, end = range_dates(range_key, today=today)
-        selected = metric_keys or ["new_users", "interviews_created", "paid_revenue_cents", "material_success_rate", "ai_avg_duration_ms"]
+        selected = metric_keys or ["new_users", "interviews_created", "peak_concurrent_interviews", "paid_revenue_cents", "material_success_rate", "ai_avg_duration_ms"]
         if len(selected) > MAX_METRICS_PER_QUERY or not selected or any(key not in METRICS for key in selected):
             raise ValueError("analytics_metrics_invalid")
         query_start_ms, _ = day_bounds(previous_start)

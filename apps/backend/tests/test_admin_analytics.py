@@ -104,6 +104,16 @@ def test_weighted_summary_uses_sample_count() -> None:
     assert value == 250.0
 
 
+def test_peak_concurrency_uses_maximum_and_is_not_backfilled() -> None:
+    definition = METRICS["peak_concurrent_interviews"]
+    assert definition.backfillable is False
+    assert summarize(definition, [
+        {"metric_value": 2.0, "sample_count": 10},
+        {"metric_value": 7.0, "sample_count": 1},
+        {"metric_value": 4.0, "sample_count": 20},
+    ]) == 7.0
+
+
 def test_repository_analytics_upsert_uses_lock_and_conflict_update() -> None:
     constants = " ".join(
         item for item in AdminRepository.compute_and_upsert_metric.__code__.co_consts
@@ -111,6 +121,16 @@ def test_repository_analytics_upsert_uses_lock_and_conflict_update() -> None:
     )
     assert "pg_try_advisory_xact_lock" in constants
     assert "ON CONFLICT" in constants
+    assert "unavailable" in constants
+
+
+def test_capacity_peak_upsert_never_reduces_saved_maximum() -> None:
+    constants = " ".join(
+        item for item in AdminRepository.record_capacity_peak.__code__.co_consts
+        if isinstance(item, str)
+    )
+    assert "capacity_5m" in constants
+    assert "GREATEST" in constants
 
 
 def test_trend_endpoint_is_hidden_without_commercial_admin_access() -> None:

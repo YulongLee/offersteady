@@ -106,6 +106,15 @@ class AdminCapacityMonitor:
             **resources,
             **self.requests.summary(current),
         }
+        active_interviews = sample.get("activeInterviews")
+        if isinstance(active_interviews, int):
+            try:
+                self.repository.record_capacity_peak(
+                    at_ms=current,
+                    active_interviews=active_interviews,
+                )
+            except Exception:
+                pass
         with self._lock:
             self._samples.append(sample)
         self._persist(sample)

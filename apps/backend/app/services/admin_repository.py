@@ -5,11 +5,13 @@ import hashlib
 import hmac
 import re
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import BoundedSemaphore
 from time import time
 from typing import Any
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg.rows import dict_row
@@ -350,6 +352,34 @@ class AdminRepository:
             "databaseConnectionLimit": int(database["database_connection_limit"] or 0),
         }
 
+    def record_capacity_peak(self, *, at_ms: int, active_interviews: int) -> None:
+        five_minute_bucket = at_ms - at_ms % 300_000
+        local = datetime.fromtimestamp(at_ms / 1000, tz=timezone.utc).astimezone(ZoneInfo("Asia/Shanghai"))
+        daily_bucket = int(local.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
+        with self.connect() as connection, connection.cursor() as cursor:
+            for bucket_start_ms, granularity in (
+                (five_minute_bucket, "capacity_5m"),
+                (daily_bucket, "daily"),
+            ):
+                cursor.execute(
+                    """
+                    INSERT INTO admin_metric_snapshots(
+                      bucket_start_ms, granularity, metric_key, metric_value, sample_count,
+                      coverage_state, definition_version, computed_at_ms
+                    ) VALUES (%s,%s,'peak_concurrent_interviews',%s,1,'complete',1,%s)
+                    ON CONFLICT (bucket_start_ms, granularity, metric_key) DO UPDATE SET
+                      metric_value = GREATEST(
+                        admin_metric_snapshots.metric_value,
+                        EXCLUDED.metric_value
+                      ),
+                      sample_count = admin_metric_snapshots.sample_count + 1,
+                      coverage_state = 'complete',
+                      computed_at_ms = EXCLUDED.computed_at_ms
+                    """,
+                    (bucket_start_ms, granularity, active_interviews, at_ms),
+                )
+            connection.commit()
+
     def compute_and_upsert_metric(
         self,
         *,
@@ -372,6 +402,8 @@ class AdminRepository:
                 aggregate = cursor.fetchone()
                 value = aggregate["value"]
                 sample_count = int(aggregate["sample_count"] or 0)
+                if value is None and not definition.backfillable:
+                    coverage_state = "unavailable"
             cursor.execute(
                 """
                 INSERT INTO admin_metric_snapshots(
