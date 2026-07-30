@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { adminApi } from "./api";
 import { buildLinePath, chartDomain, formatTrendChange, formatTrendValue, type TrendMetric, type TrendResponse } from "./analytics";
+import { capacityLevelLabel, formatCapacityValue, type CapacityMetric, type CapacityResponse } from "./capacity";
 
 type View = "dashboard" | "users" | "orders" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
 type Row = Record<string, unknown>;
@@ -96,6 +97,8 @@ function Dashboard({ data }: { data: Row }) {
   const [trends, setTrends] = useState<TrendResponse | null>(null);
   const [trendError, setTrendError] = useState("");
   const [trendLoading, setTrendLoading] = useState(true);
+  const [capacity, setCapacity] = useState<CapacityResponse | null>(null);
+  const [capacityError, setCapacityError] = useState("");
   const loadTrends = async () => {
     setTrendLoading(true);
     setTrendError("");
@@ -108,6 +111,26 @@ function Dashboard({ data }: { data: Row }) {
     }
   };
   useEffect(() => { void loadTrends(); }, [range]);
+  useEffect(() => {
+    let active = true;
+    const loadCapacity = async () => {
+      try {
+        const response = await adminApi.capacity();
+        if (active) {
+          setCapacity(response);
+          setCapacityError("");
+        }
+      } catch (error) {
+        if (active) setCapacityError(error instanceof Error ? error.message : "容量监控暂时不可用");
+      }
+    };
+    void loadCapacity();
+    const timer = window.setInterval(() => void loadCapacity(), 15_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
   return (
     <>
       <div className="metric-grid">
@@ -122,6 +145,23 @@ function Dashboard({ data }: { data: Row }) {
       <section className="signal-panel">
         <div><p className="eyebrow">SYSTEM SIGNAL</p><h3>今日运行信号</h3></div>
         <p>后台查询使用独立时间窗、分页与超时预算。用户资料原文、音频、截图及密钥不会在这里出现。</p>
+      </section>
+      <section className="capacity-section">
+        <div className="trend-heading">
+          <div><p className="eyebrow">LIVE CAPACITY</p><h2>实时容量监控</h2><p>最近 60 分钟 · 每 30 秒采样。关注阈值用于预警，不代表压测确认的绝对上限。</p></div>
+          <div className="capacity-summary">
+            <span>活跃用户 {display(capacity?.supporting.activeUsers)}</span>
+            <span>请求速率 {display(capacity?.supporting.requestsPerMinute)} / min</span>
+          </div>
+        </div>
+        {capacityError && !capacity ? <div className="trend-state error">{capacityError}</div> : capacity ? <>
+          <div className="trend-health">
+            <span className={capacity.metrics.some(metric => metric.level === "critical") ? "delayed" : "healthy"} />
+            <strong>{capacity.metrics.some(metric => metric.level === "critical") ? "存在容量风险" : "容量采集正常"}</strong>
+            <small>更新于 {new Date(capacity.generatedAtMs).toLocaleString("zh-CN")}</small>
+          </div>
+          <div className="capacity-grid">{capacity.metrics.map(metric => <CapacityCard metric={metric} key={metric.key} />)}</div>
+        </> : <div className="trend-state">正在读取实时容量...</div>}
       </section>
       <section className="trend-section">
         <div className="trend-heading">
@@ -138,6 +178,37 @@ function Dashboard({ data }: { data: Row }) {
         </>}
       </section>
     </>
+  );
+}
+
+function CapacityCard({ metric }: { metric: CapacityMetric }) {
+  const points = metric.points.map(point => ({ date: String(point.atMs), value: point.value, coverage: point.value === null ? "unavailable" : "complete" }));
+  const path = buildLinePath(points, 360, 120);
+  const domain = chartDomain(points);
+  const middle = domain ? (domain.minimum + domain.maximum) / 2 : null;
+  const first = metric.points.at(0);
+  const last = metric.points.at(-1);
+  const timeLabel = (value: number | undefined) => value ? new Date(value).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "—";
+  return (
+    <article className={`capacity-card ${metric.level}`}>
+      <div className="capacity-card-head"><div><small>{capacityLevelLabel[metric.level]}</small><h3>{metric.label}</h3></div><strong>{formatCapacityValue(metric.value, metric.unit)}</strong></div>
+      <div className="capacity-chart">
+        {path && domain ? <svg viewBox="0 0 360 120" role="img" aria-label={`${metric.label}最近 60 分钟趋势`}>
+          {[10, 50, 90].map(y => <line className="chart-grid" x1="52" x2="350" y1={y} y2={y} key={y} />)}
+          <line className="chart-axis" x1="52" x2="52" y1="10" y2="90" />
+          <line className="chart-axis" x1="52" x2="350" y1="90" y2="90" />
+          <text className="chart-label y" x="45" y="14">{formatCapacityValue(domain.maximum, metric.unit)}</text>
+          <text className="chart-label y" x="45" y="54">{formatCapacityValue(middle, metric.unit)}</text>
+          <text className="chart-label y" x="45" y="94">{formatCapacityValue(domain.minimum, metric.unit)}</text>
+          <text className="chart-label x" x="52" y="114">{timeLabel(first?.atMs)}</text>
+          <text className="chart-label x end" x="350" y="114">{timeLabel(last?.atMs)}</text>
+          <path className="chart-glow" d={path} />
+          <path className="chart-line" d={path} />
+        </svg> : <div className="capacity-empty">等待形成分钟曲线</div>}
+      </div>
+      <p>{metric.description}</p>
+      <small className="capacity-threshold">{metric.warning === null ? "状态观测指标" : `关注 ${formatCapacityValue(metric.warning, metric.unit)} · 严重 ${formatCapacityValue(metric.critical, metric.unit)}`}</small>
+    </article>
   );
 }
 

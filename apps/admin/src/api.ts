@@ -1,6 +1,7 @@
 const apiBase = (import.meta.env.VITE_ADMIN_API_BASE_URL || "").replace(/\/$/, "");
 const adminTokenKey = "offersteady.admin.session";
 import type { TrendResponse } from "./analytics";
+import type { CapacityResponse } from "./capacity";
 
 type Envelope<T> = { data: T };
 
@@ -49,6 +50,7 @@ export const adminApi = {
   dashboard: () => request<Record<string, number>>("/api/v1/admin/dashboard"),
   trends: (range: "7d" | "30d" | "90d") =>
     request<TrendResponse>(`/api/v1/admin/analytics/trends?range=${range}`),
+  capacity: () => request<CapacityResponse>("/api/v1/admin/capacity"),
   observability: () => request<Record<string, unknown>>("/api/v1/admin/observability"),
   list: (resource: "users" | "orders" | "redemption-batches" | "materials" | "interviews" | "audit" | "admins", offset = 0) =>
     request<{ items: Record<string, unknown>[] }>(`/api/v1/admin/${resource}?limit=50&offset=${offset}`),

@@ -55,6 +55,15 @@ nav button.active small { color: var(--mint); }
 .metric p { color: var(--muted); }
 .signal-panel { display: grid; grid-template-columns: .7fr 1.3fr; gap: 40px; margin-top: 16px; padding: 28px; border: 1px solid var(--line); background: linear-gradient(110deg, rgba(99,230,181,.08), transparent); }
 .signal-panel h3 { margin: 4px 0; font-size: 24px; }.signal-panel > p { color: var(--muted); line-height: 1.8; }
+.capacity-section { margin-top: 18px; padding: 28px; border: 1px solid rgba(99,230,181,.28); border-radius: 3px 24px 3px 24px; background: linear-gradient(145deg, rgba(13,35,28,.88), rgba(7,16,14,.88)); }
+.capacity-summary { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }.capacity-summary span { padding: 8px 10px; color: #b9d7cb; border: 1px solid var(--line); border-radius: 8px; font-size: 10px; background: rgba(5,14,11,.5); }
+.capacity-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.capacity-card { min-width: 0; padding: 18px; border: 1px solid rgba(154,211,190,.14); border-radius: 2px 16px 2px 16px; background: rgba(6,18,14,.7); }
+.capacity-card.warning { border-color: rgba(230,183,99,.48); }.capacity-card.critical { border-color: rgba(255,107,85,.58); }.capacity-card.unavailable { opacity: .72; }
+.capacity-card-head { display: flex; align-items: start; justify-content: space-between; gap: 10px; }.capacity-card-head small { color: var(--mint); font-size: 8px; letter-spacing: .14em; }.capacity-card.warning .capacity-card-head small { color: #e6b763; }.capacity-card.critical .capacity-card-head small { color: #ff8e7a; }
+.capacity-card-head h3 { margin: 5px 0 0; font-size: 14px; }.capacity-card-head strong { color: #f1fff8; font: 500 22px Georgia, serif; white-space: nowrap; }
+.capacity-chart { height: 120px; margin-top: 12px; }.capacity-chart svg { width: 100%; height: 100%; overflow: visible; }.capacity-empty { display: grid; height: 100%; place-items: center; color: #59746a; border: 1px dashed var(--line); font-size: 10px; }
+.capacity-card > p { min-height: 34px; margin: 10px 0 7px; color: var(--muted); font-size: 10px; line-height: 1.55; }.capacity-threshold { color: #58766a; font-size: 8px; }
 .trend-section { margin-top: 18px; padding: 28px; border: 1px solid var(--line); border-radius: 3px 24px 3px 24px; background: rgba(8,20,16,.72); }
 .trend-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
 .trend-heading h2 { margin: 4px 0; font: 500 30px Georgia, serif; }.trend-heading p { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
@@ -110,6 +119,6 @@ tr:hover td { background: rgba(99,230,181,.035); color: white; }
 @media (max-width: 900px) {
   .login-shell { grid-template-columns: 1fr; }.login-story { display: none; }.login-card { margin: 24px; }
   .admin-shell { grid-template-columns: 76px 1fr; } aside { padding: 20px 10px; }.brand div, nav button:not(.active) small, nav button { font-size: 0; }.brand { padding: 0 7px 24px; }.operator { display: none; }
-  nav button { min-height: 48px; }.workspace { padding: 26px 18px; }.metric-grid, .trend-grid { grid-template-columns: 1fr 1fr; }.workspace header { align-items: flex-start; }.header-actions span { display: none; }
+  nav button { min-height: 48px; }.workspace { padding: 26px 18px; }.metric-grid, .trend-grid, .capacity-grid { grid-template-columns: 1fr 1fr; }.workspace header { align-items: flex-start; }.header-actions span { display: none; }
 }
-@media (max-width: 560px) { .metric-grid, .field-grid, .trend-grid { grid-template-columns: 1fr; }.workspace h1 { font-size: 30px; }.signal-panel, .action-panel { grid-template-columns: 1fr; }.trend-heading { align-items: start; flex-direction: column; }.trend-section { padding: 18px; } }
+@media (max-width: 560px) { .metric-grid, .field-grid, .trend-grid, .capacity-grid { grid-template-columns: 1fr; }.workspace h1 { font-size: 30px; }.signal-panel, .action-panel { grid-template-columns: 1fr; }.trend-heading { align-items: start; flex-direction: column; }.trend-section, .capacity-section { padding: 18px; }.capacity-summary { justify-content: flex-start; } }

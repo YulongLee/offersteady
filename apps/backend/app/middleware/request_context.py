@@ -22,10 +22,19 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         request_id = request.headers.get(self.settings.request_id_header) or f"req_{uuid4().hex}"
         request.state.request_context = RequestContext(request_id=request_id)
         started = perf_counter()
+        status_code = 500
         try:
             response = await call_next(request)
+            status_code = response.status_code
         finally:
             elapsed_ms = round((perf_counter() - started) * 1000, 2)
+            monitor = getattr(request.app.state, "capacity_monitor", None)
+            if monitor is not None:
+                monitor.record_request(
+                    path=request.url.path,
+                    elapsed_ms=elapsed_ms,
+                    status_code=status_code,
+                )
             log_event(
                 self.logger,
                 logging.INFO,

@@ -319,6 +319,37 @@ class AdminRepository:
                 result[key] = int(cursor.fetchone()["value"])
         return {"updated_at_ms": current, "window_started_at_ms": since, **result}
 
+    def capacity_counts(self) -> dict[str, int]:
+        current = now_ms()
+        active_cutoff = current - self.settings.interview_idle_timeout_seconds * 1000
+        with self.connect(readonly=True) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT COUNT(*)::INTEGER AS active_interviews,
+                       COUNT(DISTINCT owner_user_id)::INTEGER AS active_users
+                FROM interview_sessions
+                WHERE status = 'live' AND deleted_at_ms IS NULL
+                  AND last_activity_at_ms >= %s
+                """,
+                (active_cutoff,),
+            )
+            sessions = cursor.fetchone()
+            cursor.execute(
+                """
+                SELECT COUNT(*)::INTEGER AS database_connections,
+                       current_setting('max_connections')::INTEGER AS database_connection_limit
+                FROM pg_stat_activity
+                WHERE datname = current_database()
+                """
+            )
+            database = cursor.fetchone()
+        return {
+            "activeInterviews": int(sessions["active_interviews"] or 0),
+            "activeUsers": int(sessions["active_users"] or 0),
+            "databaseConnections": int(database["database_connections"] or 0),
+            "databaseConnectionLimit": int(database["database_connection_limit"] or 0),
+        }
+
     def compute_and_upsert_metric(
         self,
         *,

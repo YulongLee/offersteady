@@ -179,6 +179,20 @@ class Settings(BaseSettings):
     admin_query_timeout_ms: int = 3000
     admin_rate_limit_per_minute: int = 120
     admin_max_concurrent_queries: int = 4
+    admin_capacity_sample_interval_seconds: int = 30
+    admin_capacity_retention_seconds: int = 6 * 60 * 60
+    admin_capacity_active_interviews_warning: int = 10
+    admin_capacity_active_interviews_critical: int = 20
+    admin_capacity_audio_streams_warning: int = 16
+    admin_capacity_audio_streams_critical: int = 32
+    admin_capacity_cpu_warning_percent: float = 70.0
+    admin_capacity_cpu_critical_percent: float = 90.0
+    admin_capacity_memory_warning_percent: float = 75.0
+    admin_capacity_memory_critical_percent: float = 90.0
+    admin_capacity_api_p95_warning_ms: float = 500.0
+    admin_capacity_api_p95_critical_ms: float = 1500.0
+    admin_capacity_error_rate_warning_percent: float = 2.0
+    admin_capacity_error_rate_critical_percent: float = 5.0
 
     public_web_base_url: str = "http://127.0.0.1:5173"
     checkout_provider: str = ""

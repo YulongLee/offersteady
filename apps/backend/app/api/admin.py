@@ -213,6 +213,17 @@ def analytics_health(
     return {"data": AdminAnalyticsService(admin_service().repository).health()}
 
 
+@admin_router.get("/capacity")
+def capacity(
+    request: Request,
+    principal: Annotated[AdminPrincipal, Depends(permission("observability.read"))],
+):
+    monitor = getattr(request.app.state, "capacity_monitor", None)
+    if monitor is None:
+        raise HTTPException(status_code=503, detail="capacity_monitor_unavailable")
+    return {"data": monitor.report()}
+
+
 @admin_router.get("/users")
 def users(
     principal: Annotated[AdminPrincipal, Depends(permission("users.read"))],
