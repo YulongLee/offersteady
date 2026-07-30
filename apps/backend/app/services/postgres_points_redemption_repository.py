@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 from time import time
 from typing import Mapping
 from uuid import uuid4
@@ -56,7 +57,8 @@ class PostgresPointsRedemptionRepository(PointsRedemptionRepository):
             connection.commit()
 
     def redeem(self, *, user_id: str, code: str, idempotency_key: str) -> PersistedRedemptionResult:
-        digest = self._digest(code)
+        digests = self._digests(code)
+        digest = digests[0]
         with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
             cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (f"{user_id}:{idempotency_key}",))
             cursor.execute(
@@ -67,8 +69,13 @@ class PostgresPointsRedemptionRepository(PointsRedemptionRepository):
             if replay:
                 return PersistedRedemptionResult(outcome="redeemed", redemption=self._redemption_from_row(cursor, replay))
 
-            cursor.execute("SELECT * FROM points_redemption_codes WHERE code_digest = %s FOR UPDATE", (digest,))
-            code_row = cursor.fetchone()
+            code_row = None
+            for candidate_digest in digests:
+                cursor.execute("SELECT * FROM points_redemption_codes WHERE code_digest = %s FOR UPDATE", (candidate_digest,))
+                code_row = cursor.fetchone()
+                if code_row is not None:
+                    digest = candidate_digest
+                    break
             if (
                 not code_row
                 or code_row["status"] != "active"
@@ -184,6 +191,18 @@ class PostgresPointsRedemptionRepository(PointsRedemptionRepository):
 
     def _digest(self, code: str) -> str:
         return hmac.new(self._pepper, code.strip().upper().encode("utf8"), hashlib.sha256).hexdigest()
+
+    def _digests(self, code: str) -> list[str]:
+        normalized = code.strip().upper()
+        compact = re.sub(r"[\s-]+", "", normalized)
+        candidates = [normalized]
+        if compact and compact not in candidates:
+            candidates.append(compact)
+        if len(compact) == 16:
+            grouped = "-".join(compact[index:index + 4] for index in range(0, 16, 4))
+            if grouped not in candidates:
+                candidates.append(grouped)
+        return [self._digest(candidate) for candidate in candidates]
 
     def _connect(self):
         if not self.settings.database_url:

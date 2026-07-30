@@ -8,10 +8,75 @@ import psycopg
 import pytest
 
 from app.core.config import Settings
+from app.ports.points_redemption import (
+    PersistedPointsLedgerEntry,
+    PersistedPointsRedemption,
+    PersistedRedemptionResult,
+)
+from app.services.billing_service import BillingService
 from app.services.postgres_points_redemption_repository import PostgresPointsRedemptionRepository
 
 
 DATABASE_URL = os.getenv("OFFERSTEADY_TEST_DATABASE_URL")
+
+
+def test_database_generated_code_bypasses_static_configuration() -> None:
+    ledger_entry = PersistedPointsLedgerEntry(
+        id="ledger-generated-code",
+        user_id="generated-code-user",
+        kind="redemption_credit",
+        points=2000,
+        created_at_ms=1_800_000_000_000,
+        reference_id="redemption:generated-code",
+        description="兑换码积分入账",
+    )
+
+    class RedemptionRepositoryStub:
+        def sync_configured_codes(self, codes) -> None:
+            pass
+
+        def redeem(self, *, user_id: str, code: str, idempotency_key: str) -> PersistedRedemptionResult:
+            assert code == "ABCD-EFGH-JKLM-NPQR"
+            return PersistedRedemptionResult(
+                outcome="redeemed",
+                redemption=PersistedPointsRedemption(
+                    redemption_id="generated-code",
+                    points=2000,
+                    persisted_balance=2000,
+                    public_hint="****-NPQR",
+                    redeemed_at_ms=1_800_000_000_000,
+                    ledger_entry=ledger_entry,
+                ),
+            )
+
+        def list_ledger(self, *, user_id: str):
+            return [ledger_entry]
+
+        def balance(self, *, user_id: str) -> int:
+            return 2000
+
+    service = BillingService(Settings(environment="production"), redemption_repository=RedemptionRepositoryStub())
+    result = service.redeem_points(
+        user_id="generated-code-user",
+        code="ABCD-EFGH-JKLM-NPQR",
+        idempotency_key="generated-code-request",
+    )
+
+    assert result["outcome"] == "redeemed"
+    assert result["data"]["points"] == 2000
+    assert result["data"]["newBalance"] == 2000
+
+
+def test_redemption_digest_candidates_accept_grouped_compact_and_spaced_input() -> None:
+    repository = object.__new__(PostgresPointsRedemptionRepository)
+    repository._pepper = b"synthetic-pepper"
+
+    grouped = repository._digests("ABCD-EFGH-JKLM-NPQR")
+    compact = repository._digests("ABCDEFGHJKLMNPQR")
+    spaced = repository._digests("ABCD EFGH JKLM NPQR")
+
+    assert grouped[0] in compact
+    assert grouped[0] in spaced
 
 
 @pytest.mark.skipif(not DATABASE_URL, reason="OFFERSTEADY_TEST_DATABASE_URL is not configured")

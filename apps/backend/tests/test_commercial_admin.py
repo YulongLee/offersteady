@@ -168,7 +168,8 @@ def test_generated_redemption_codes_are_unique_and_plaintext_is_only_returned_on
     codes = result["codes"]
     assert replay is False
     assert len(codes) == len(set(codes)) == 100
-    assert all(code.startswith("OS-") and len(code) == 17 for code in codes)
+    assert all(len(code) == 19 and len(code.replace("-", "")) == 16 for code in codes)
+    assert all(len(code.split("-")) == 4 and all(len(part) == 4 for part in code.split("-")) for code in codes)
     assert repository.received_codes == codes
 
 

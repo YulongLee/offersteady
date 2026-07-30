@@ -219,10 +219,6 @@ class BillingService:
             self.redemptions_by_user_and_key[request_key] = result
             return result
         points = self.redemption_code_points.get(normalized_code)
-        if points is None:
-            result = {"outcome": "code-unavailable"}
-            self.redemptions_by_user_and_key[request_key] = result
-            return result
         if normalized_code not in DEFAULT_REDEMPTION_CODE_POINTS and self.redemption_repository is not None:
             persisted = self.redemption_repository.redeem(
                 user_id=user_id,
@@ -235,6 +231,10 @@ class BillingService:
             payload = self._redemption_payload(redemption)
             payload["newBalance"] = self._balance_for_user(user_id=user_id)
             return {"outcome": persisted.outcome, "data": payload}
+        if points is None:
+            result = {"outcome": "code-unavailable"}
+            self.redemptions_by_user_and_key[request_key] = result
+            return result
         code_key = (user_id, normalized_code)
         existing = self.redemptions_by_user_and_code.get(code_key)
         if existing is not None:
@@ -669,16 +669,18 @@ class BillingService:
 
     def _ledger_for_user(self, *, user_id: str) -> list[PointsLedgerRecord]:
         if self.billing_repository is not None:
-            return [PointsLedgerRecord(**item) for item in self.billing_repository.list_ledger(user_id=user_id)]
-        ledger = list(self.ledger_by_user.get(user_id, []))
+            ledger = [PointsLedgerRecord(**item) for item in self.billing_repository.list_ledger(user_id=user_id)]
+        else:
+            ledger = list(self.ledger_by_user.get(user_id, []))
         if self.redemption_repository is not None:
             ledger.extend(self._persistent_ledger_record(item) for item in self.redemption_repository.list_ledger(user_id=user_id))
         return sorted(ledger, key=lambda item: (item.created_at_ms, item.id), reverse=True)
 
     def _balance_for_user(self, *, user_id: str) -> int:
         if self.billing_repository is not None:
-            return self.billing_repository.balance(user_id=user_id)
-        transient_balance = sum(item.points for item in self.ledger_by_user.get(user_id, []))
+            transient_balance = self.billing_repository.balance(user_id=user_id)
+        else:
+            transient_balance = sum(item.points for item in self.ledger_by_user.get(user_id, []))
         persistent_balance = self.redemption_repository.balance(user_id=user_id) if self.redemption_repository is not None else 0
         return transient_balance + persistent_balance
 

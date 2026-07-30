@@ -281,9 +281,9 @@ class AdminService:
     ) -> tuple[dict[str, Any], bool]:
         alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
         codes = [
-            "OS-" + "-".join(
+            "-".join(
                 "".join(secrets.choice(alphabet) for _ in range(4))
-                for _ in range(3)
+                for _ in range(4)
             )
             for _ in range(quantity)
         ]
