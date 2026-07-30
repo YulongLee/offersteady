@@ -176,3 +176,10 @@ def test_admin_audit_query_casts_optional_filters_for_postgres() -> None:
     query = AdminRepository.list_audit.__code__.co_consts
     sql = next(value for value in query if isinstance(value, str) and "admin_audit_events" in value)
     assert "%s::TEXT IS NULL" in sql
+
+
+def test_admin_list_prefers_masked_sms_identity_over_hashed_login() -> None:
+    query = AdminRepository.list_administrators.__code__.co_consts
+    sql = next(value for value in query if isinstance(value, str) and "admin_authorizations" in value)
+    assert "provider_subject_hint" in sql
+    assert "provider = 'sms'" in sql

@@ -73,12 +73,19 @@ class AdminRepository:
             SELECT a.user_id, a.role, a.status, a.authorization_version,
                    a.created_at_ms, a.updated_at_ms, a.disabled_at_ms,
                    CASE
+                     WHEN phone.provider_subject_hint IS NOT NULL THEN phone.provider_subject_hint
                      WHEN LENGTH(u.login_id) <= 4 THEN '****'
                      ELSE LEFT(u.login_id, 3) || '****' || RIGHT(u.login_id, 4)
                    END AS masked_login,
                    LEFT(u.display_name, 24) AS display_name
             FROM admin_authorizations a
             JOIN auth_users u ON u.user_id = a.user_id
+            LEFT JOIN LATERAL (
+              SELECT b.provider_subject_hint
+              FROM auth_identity_bindings b
+              WHERE b.user_id = a.user_id AND b.provider = 'sms'
+              LIMIT 1
+            ) phone ON TRUE
             ORDER BY a.created_at_ms DESC
             LIMIT %s OFFSET %s
             """,

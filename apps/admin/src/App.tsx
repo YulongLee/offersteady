@@ -206,6 +206,7 @@ function AdminPanel({ rows, permissions, onChanged }: { rows: Row[]; permissions
   const [role, setRole] = useState("operations");
   const [reason, setReason] = useState("");
   const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
   if (!permissions.includes("admins.manage")) return <div className="empty">当前角色无管理员管理权限</div>;
 
   const stepUpAndRetry = async (error: unknown) => {
@@ -221,11 +222,13 @@ function AdminPanel({ rows, permissions, onChanged }: { rows: Row[]; permissions
   };
 
   const create = async () => {
+    if (busy) return;
     if (loginId.trim().length < 3 || reason.trim().length < 6) {
       setMessage("请输入已注册手机号或登录标识，并填写至少 6 个字的原因。");
       return;
     }
     if (!window.confirm(`确认授予 ${loginId} “${role}”管理员角色？`)) return;
+    setBusy(true);
     try {
       await adminApi.action("/admins", {
         loginId: loginId.trim(),
@@ -239,6 +242,8 @@ function AdminPanel({ rows, permissions, onChanged }: { rows: Row[]; permissions
       onChanged();
     } catch (error) {
       await stepUpAndRetry(error);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -277,7 +282,7 @@ function AdminPanel({ rows, permissions, onChanged }: { rows: Row[]; permissions
           </select>
           <input value={reason} onChange={event => setReason(event.target.value)} placeholder="授权或停用原因（必填）" />
           <div className="action-buttons">
-            <button onClick={() => void create()}>添加管理员</button>
+            <button disabled={busy} onClick={() => void create()}>{busy ? "正在添加..." : "添加管理员"}</button>
             {rows.filter(row => row.status === "active").map(row => (
               <button key={String(row.user_id)} onClick={() => void disable(String(row.user_id))}>
                 停用 {String(row.masked_login || row.display_name || row.user_id)}
@@ -299,15 +304,18 @@ function RedemptionPanel({ rows, permissions, onChanged }: { rows: Row[]; permis
   const [reason, setReason] = useState("");
   const [message, setMessage] = useState("");
   const [codes, setCodes] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
   const canGenerate = permissions.includes("redemptions.generate");
 
   const generate = async () => {
+    if (busy) return;
     if (!canGenerate) return;
     if (campaign.trim().length < 2 || reason.trim().length < 6) {
       setMessage("请填写活动名称和至少 6 个字的生成原因。");
       return;
     }
     if (!window.confirm(`确认生成 ${quantity} 个、每个 ${points} 积分的一次性兑换码？`)) return;
+    setBusy(true);
     try {
       const result = await adminApi.action("/redemption-batches", {
         campaign: campaign.trim(),
@@ -333,6 +341,8 @@ function RedemptionPanel({ rows, permissions, onChanged }: { rows: Row[]; permis
         return;
       }
       setMessage(text);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -359,7 +369,7 @@ function RedemptionPanel({ rows, permissions, onChanged }: { rows: Row[]; permis
             <label>有效天数<input type="number" min="1" max="365" value={expiresInDays} onChange={event => setExpiresInDays(event.target.value)} /></label>
           </div>
           <input value={reason} onChange={event => setReason(event.target.value)} placeholder="生成原因（必填）" />
-          <div className="action-buttons"><button disabled={!canGenerate} onClick={() => void generate()}>生成一次性兑换码</button></div>
+          <div className="action-buttons"><button disabled={!canGenerate || busy} onClick={() => void generate()}>{busy ? "正在生成..." : "生成一次性兑换码"}</button></div>
           <small>{canGenerate ? message : "当前角色无兑换码生成权限"}</small>
         </div>
       </section>
@@ -385,9 +395,9 @@ export function App() {
   const loadSequence = useRef(0);
   const sessionRequest = useRef<ReturnType<typeof adminApi.session> | null>(null);
 
-  const load = async (target: View) => {
+  const load = async (target: View, background = false) => {
     const sequence = ++loadSequence.current;
-    setLoading(true);
+    if (!background) setLoading(true);
     setError("");
     try {
       if (!sessionRequest.current) sessionRequest.current = adminApi.session();
@@ -420,7 +430,7 @@ export function App() {
         setAuthenticated(false);
       }
     } finally {
-      if (sequence === loadSequence.current) setLoading(false);
+      if (sequence === loadSequence.current && !background) setLoading(false);
     }
   };
 
@@ -442,10 +452,10 @@ export function App() {
       <main className="workspace">
         <header><div><p className="eyebrow">{current.eyebrow}</p><h1>{current.label}</h1></div><div className="header-actions"><span>{new Date().toLocaleDateString("zh-CN")}</span><button onClick={() => void load(view)}>刷新</button><button onClick={() => adminApi.logout().then(() => { sessionRequest.current = null; setAuthenticated(false); })}>退出</button></div></header>
         {error && <div className="alert">{error}</div>}
-        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view)} /> : <>
+        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : <>
           <Table rows={rows} />
           <div className="pagination"><button disabled={offset === 0} onClick={() => setOffset(value => Math.max(0, value - 50))}>上一页</button><span>第 {offset / 50 + 1} 页</span><button disabled={rows.length < 50} onClick={() => setOffset(value => value + 50)}>下一页</button></div>
-          <ActionPanel view={view} rows={rows} permissions={permissions} onChanged={() => void load(view)} />
+          <ActionPanel view={view} rows={rows} permissions={permissions} onChanged={() => void load(view, true)} />
         </>}
       </main>
     </div>
