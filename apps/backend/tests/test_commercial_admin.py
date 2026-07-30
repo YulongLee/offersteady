@@ -1,10 +1,5 @@
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
-import struct
-
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings, get_settings
@@ -24,23 +19,11 @@ def test_admin_role_permissions_are_deny_by_default() -> None:
     assert "billing.adjust" not in PERMISSIONS_BY_ROLE["support"]
     assert "admins.manage" not in PERMISSIONS_BY_ROLE["finance"]
     assert "admins.manage" in PERMISSIONS_BY_ROLE["super_admin"]
+    assert "redemptions.generate" in PERMISSIONS_BY_ROLE["finance"]
+    assert "redemptions.generate" not in PERMISSIONS_BY_ROLE["support"]
     assert "resume_text" not in SAFE_DETAIL_KEYS
     assert "access_token" not in SAFE_DETAIL_KEYS
     assert "screenshot" not in SAFE_DETAIL_KEYS
-
-
-def test_totp_verification_accepts_current_window_and_rejects_invalid_code() -> None:
-    secret = "JBSWY3DPEHPK3PXP"
-    timestamp = 1_780_000_000
-    normalized = secret + "=" * ((8 - len(secret) % 8) % 8)
-    key = base64.b32decode(normalized)
-    counter = timestamp // 30
-    digest = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
-    index = digest[-1] & 0x0F
-    value = (struct.unpack(">I", digest[index:index + 4])[0] & 0x7FFFFFFF) % 1_000_000
-    code = f"{value:06d}"
-    assert AdminService.verify_totp(secret, code, timestamp=timestamp)
-    assert not AdminService.verify_totp(secret, "000000", timestamp=timestamp)
 
 
 def test_admin_secrets_are_not_ready_when_unconfigured() -> None:
@@ -128,8 +111,8 @@ def test_browser_admin_provisioning_requires_existing_bootstrap_and_registered_u
     )
     assert result["status"] == "active"
     assert result["role"] == "operations"
-    assert result["enrollment_display_once"] is True
-    assert str(result["provisioning_uri"]).startswith("otpauth://totp/")
+    assert "totp_secret" not in result
+    assert "provisioning_uri" not in result
 
 
 def test_administrator_cannot_disable_self() -> None:
@@ -153,3 +136,37 @@ def test_admin_phone_lookup_uses_the_same_irreversible_identity_as_sms_login() -
     assert sms_login.startswith("sms:")
     assert "19700000000" not in sms_login
     assert len(sms_login) == 68
+
+
+def test_generated_redemption_codes_are_unique_and_plaintext_is_only_returned_once() -> None:
+    class RepositoryStub:
+        received_codes: list[str] = []
+
+        def create_redemption_batch(self, **values):
+            self.received_codes = values["codes"]
+            return {
+                "batch_id": values["batch_id"],
+                "campaign": values["campaign"],
+                "points_per_code": values["points"],
+                "code_count": len(values["codes"]),
+                "expires_at_ms": values["expires_at_ms"],
+                "codes": values["codes"],
+            }, False
+
+    repository = RepositoryStub()
+    service = AdminService(Settings(), repository)  # type: ignore[arg-type]
+    principal = type("Principal", (), {"user_id": "synthetic-finance"})()
+    result, replay = service.create_redemption_batch(
+        principal=principal,  # type: ignore[arg-type]
+        idempotency_key="synthetic-key",
+        campaign="内测活动",
+        reason="用于受控内测发放",
+        points=2000,
+        quantity=100,
+        expires_in_days=30,
+    )
+    codes = result["codes"]
+    assert replay is False
+    assert len(codes) == len(set(codes)) == 100
+    assert all(code.startswith("OS-") and len(code) == 17 for code in codes)
+    assert repository.received_codes == codes

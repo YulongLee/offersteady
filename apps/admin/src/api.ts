@@ -35,10 +35,10 @@ export const adminApi = {
       body: JSON.stringify({ phoneNumber, challengeId, code, clientLabel: "commercial-admin" }),
     }, false);
   },
-  async login(accessToken: string, totpCode: string) {
+  async login(accessToken: string) {
     const result = await request<{ token: string; role: string; permissions: string[]; expiresAtMs: number }>(
       "/api/v1/admin/session",
-      { method: "POST", body: JSON.stringify({ accessToken, totpCode }) },
+      { method: "POST", body: JSON.stringify({ accessToken }) },
       false,
     );
     sessionStorage.setItem(adminTokenKey, result.token);
@@ -47,13 +47,8 @@ export const adminApi = {
   session: () => request<{ role: string; permissions: string[] }>("/api/v1/admin/session"),
   dashboard: () => request<Record<string, number>>("/api/v1/admin/dashboard"),
   observability: () => request<Record<string, unknown>>("/api/v1/admin/observability"),
-  list: (resource: "users" | "orders" | "materials" | "interviews" | "audit" | "admins", offset = 0) =>
+  list: (resource: "users" | "orders" | "redemption-batches" | "materials" | "interviews" | "audit" | "admins", offset = 0) =>
     request<{ items: Record<string, unknown>[] }>(`/api/v1/admin/${resource}?limit=50&offset=${offset}`),
-  stepUp: (totpCode: string) =>
-    request<{ verifiedAtMs: number }>("/api/v1/admin/session/step-up", {
-      method: "POST",
-      body: JSON.stringify({ totpCode }),
-    }),
   action: (path: string, payload: Record<string, unknown>) =>
     request<Record<string, unknown>>(`/api/v1/admin${path}`, { method: "POST", body: JSON.stringify(payload) }),
   async logout() {

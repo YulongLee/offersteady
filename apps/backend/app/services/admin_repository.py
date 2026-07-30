@@ -390,6 +390,85 @@ class AdminRepository:
             (limit, offset),
         )
 
+    def list_redemption_batches(self, *, limit: int, offset: int) -> list[dict[str, Any]]:
+        return self._all(
+            """
+            SELECT b.batch_id, b.campaign, b.points_per_code, b.code_count,
+                   b.expires_at_ms, b.created_at_ms,
+                   COUNT(c.code_digest) FILTER (WHERE c.status = 'active')::INTEGER AS active_count,
+                   COUNT(c.code_digest) FILTER (WHERE c.status = 'redeemed')::INTEGER AS redeemed_count,
+                   COUNT(c.code_digest) FILTER (WHERE c.status = 'disabled')::INTEGER AS disabled_count
+            FROM admin_redemption_batches b
+            LEFT JOIN points_redemption_codes c ON c.batch_id = b.batch_id
+            GROUP BY b.batch_id
+            ORDER BY b.created_at_ms DESC
+            LIMIT %s OFFSET %s
+            """,
+            (limit, offset),
+        )
+
+    def create_redemption_batch(
+        self,
+        *,
+        batch_id: str,
+        actor_user_id: str,
+        idempotency_key: str,
+        campaign: str,
+        reason: str,
+        points: int,
+        expires_at_ms: int,
+        codes: list[str],
+    ) -> tuple[dict[str, Any], bool]:
+        if not self.settings.redemption_code_pepper:
+            raise RuntimeError("redemption_code_pepper_not_configured")
+        current = now_ms()
+        pepper = self.settings.redemption_code_pepper.encode("utf-8")
+        with self.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                (f"admin-redemption:{actor_user_id}:{idempotency_key}",),
+            )
+            cursor.execute(
+                """
+                SELECT batch_id, campaign, points_per_code, code_count, expires_at_ms, created_at_ms
+                FROM admin_redemption_batches
+                WHERE actor_user_id = %s AND idempotency_key = %s
+                """,
+                (actor_user_id, idempotency_key),
+            )
+            existing = cursor.fetchone()
+            if existing:
+                return {**dict(existing), "codes": []}, True
+            cursor.execute(
+                """
+                INSERT INTO admin_redemption_batches(
+                  batch_id, actor_user_id, idempotency_key, campaign, reason,
+                  points_per_code, code_count, expires_at_ms, created_at_ms
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING batch_id, campaign, points_per_code, code_count, expires_at_ms, created_at_ms
+                """,
+                (
+                    batch_id, actor_user_id, idempotency_key, campaign, reason,
+                    points, len(codes), expires_at_ms, current,
+                ),
+            )
+            batch = dict(cursor.fetchone())
+            rows = []
+            for code in codes:
+                digest = hmac.new(pepper, code.upper().encode("utf-8"), hashlib.sha256).hexdigest()
+                rows.append((digest, f"****-{code[-4:]}", points, batch_id, expires_at_ms, current, current))
+            cursor.executemany(
+                """
+                INSERT INTO points_redemption_codes(
+                  code_digest, public_hint, points, status, batch_id, expires_at_ms,
+                  created_at_ms, updated_at_ms
+                ) VALUES (%s,%s,%s,'active',%s,%s,%s,%s)
+                """,
+                rows,
+            )
+            connection.commit()
+        return {**batch, "codes": codes}, False
+
     def list_materials(self, *, limit: int, offset: int) -> list[dict[str, Any]]:
         return self._all(
             """
@@ -599,7 +678,11 @@ class AdminRepository:
             return [dict(row) for row in cursor.fetchall()]
 
     def _ensure_tables(self) -> None:
-        migration = Path(REPO_ROOT) / "apps/backend/migrations/versions/0014_commercial_admin_console.sql"
+        migrations = [
+            Path(REPO_ROOT) / "apps/backend/migrations/versions/0014_commercial_admin_console.sql",
+            Path(REPO_ROOT) / "apps/backend/migrations/versions/0015_admin_redemption_batches.sql",
+        ]
         with self.connect() as connection, connection.cursor() as cursor:
-            cursor.execute(migration.read_text(encoding="utf8"))
+            for migration in migrations:
+                cursor.execute(migration.read_text(encoding="utf8"))
             connection.commit()

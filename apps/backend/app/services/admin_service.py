@@ -22,6 +22,7 @@ from app.services.authentication_service import JWTAccessTokenCodec
 PERMISSIONS_BY_ROLE: dict[str, frozenset[str]] = {
     "super_admin": frozenset({
         "users.read", "users.suspend", "billing.read", "billing.adjust",
+        "redemptions.generate",
         "payments.reconcile", "materials.read", "materials.retry",
         "sessions.read", "sessions.terminate", "observability.read",
         "audit.read", "admins.manage",
@@ -31,16 +32,22 @@ PERMISSIONS_BY_ROLE: dict[str, frozenset[str]] = {
         "sessions.read", "sessions.terminate", "observability.read",
     }),
     "support": frozenset({"users.read", "billing.read", "materials.read", "sessions.read"}),
-    "finance": frozenset({"users.read", "billing.read", "billing.adjust", "payments.reconcile", "audit.read"}),
+    "finance": frozenset({
+        "users.read", "billing.read", "billing.adjust", "redemptions.generate",
+        "payments.reconcile", "audit.read",
+    }),
     "technical_auditor": frozenset({"materials.read", "sessions.read", "observability.read", "audit.read"}),
 }
 
 SAFE_DETAIL_KEYS = frozenset({
     "status", "previous_status", "points", "days", "balance", "provider",
     "order_status", "document_id", "task_id", "session_id", "error_code",
-    "idempotent_replay", "role",
+    "idempotent_replay", "role", "batch_id", "code_count", "points_per_code",
+    "expires_at_ms", "campaign",
 })
-HIGH_RISK_PERMISSIONS = frozenset({"users.suspend", "billing.adjust", "admins.manage"})
+HIGH_RISK_PERMISSIONS = frozenset({
+    "users.suspend", "billing.adjust", "redemptions.generate", "admins.manage",
+})
 
 
 @dataclass(frozen=True)
@@ -70,7 +77,6 @@ class AdminService:
         self,
         *,
         user_access_token: str,
-        totp_code: str,
         ip_hash: str | None,
         user_agent_hash: str | None,
     ) -> tuple[str, dict[str, Any]]:
@@ -81,9 +87,6 @@ class AdminService:
         authorization = self.repository.authorization_for_user(payload.sub)
         if not authorization or authorization["status"] != "active":
             raise PermissionError("admin_authorization_required")
-        secret = self.decrypt_secret(str(authorization["totp_secret_ciphertext"]))
-        if not self.verify_totp(secret, totp_code):
-            raise PermissionError("mfa_invalid")
         role = str(authorization["role"])
         permissions = sorted(PERMISSIONS_BY_ROLE.get(role, frozenset()))
         token = secrets.token_urlsafe(48)
@@ -253,9 +256,6 @@ class AdminService:
             "user_id": str(user["user_id"]),
             "role": str(authorization["role"]),
             "status": str(authorization["status"]),
-            "totp_secret": secret,
-            "provisioning_uri": uri,
-            "enrollment_display_once": True,
         }
 
     def disable_administrator(
@@ -267,6 +267,38 @@ class AdminService:
         if target_user_id == actor_user_id:
             raise PermissionError("administrator_cannot_disable_self")
         return self.repository.disable_authorization(user_id=target_user_id)
+
+    def create_redemption_batch(
+        self,
+        *,
+        principal: AdminPrincipal,
+        idempotency_key: str,
+        campaign: str,
+        reason: str,
+        points: int,
+        quantity: int,
+        expires_in_days: int,
+    ) -> tuple[dict[str, Any], bool]:
+        alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+        codes = [
+            "OS-" + "-".join(
+                "".join(secrets.choice(alphabet) for _ in range(4))
+                for _ in range(3)
+            )
+            for _ in range(quantity)
+        ]
+        if len(set(codes)) != quantity:
+            raise RuntimeError("redemption_code_collision")
+        return self.repository.create_redemption_batch(
+            batch_id=f"redemption-batch-{uuid4().hex}",
+            actor_user_id=principal.user_id,
+            idempotency_key=idempotency_key,
+            campaign=campaign.strip(),
+            reason=reason.strip(),
+            points=points,
+            expires_at_ms=now_ms() + expires_in_days * 86_400_000,
+            codes=codes,
+        )
 
     def encrypt_secret(self, value: str) -> str:
         return self._fernet().encrypt(value.encode("utf-8")).decode("ascii")

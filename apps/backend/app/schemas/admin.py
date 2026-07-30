@@ -14,11 +14,6 @@ class AdminModel(BaseModel):
 
 class AdminSessionRequest(AdminModel):
     access_token: str = Field(min_length=20)
-    totp_code: str = Field(pattern=r"^\d{6}$")
-
-
-class AdminStepUpRequest(AdminModel):
-    totp_code: str = Field(pattern=r"^\d{6}$")
 
 
 class AdminActionRequest(AdminModel):
@@ -38,3 +33,10 @@ class AdminTimeAdjustmentRequest(AdminActionRequest):
 class AdminCreateRequest(AdminActionRequest):
     login_id: str = Field(min_length=3, max_length=128)
     role: str = Field(pattern=r"^(super_admin|operations|support|finance|technical_auditor)$")
+
+
+class AdminRedemptionBatchRequest(AdminActionRequest):
+    campaign: str = Field(min_length=2, max_length=100)
+    points: int = Field(ge=1, le=100000)
+    quantity: int = Field(ge=1, le=500)
+    expires_in_days: int = Field(ge=1, le=365)

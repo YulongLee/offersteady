@@ -14,8 +14,8 @@ from app.schemas.admin import (
     AdminActionRequest,
     AdminCreateRequest,
     AdminPointsAdjustmentRequest,
+    AdminRedemptionBatchRequest,
     AdminSessionRequest,
-    AdminStepUpRequest,
     AdminTimeAdjustmentRequest,
 )
 from app.services.admin_repository import AdminRepository
@@ -127,7 +127,6 @@ def create_session(payload: AdminSessionRequest, request: Request, _: Annotated[
     try:
         token, session = admin_service().create_admin_session(
             user_access_token=payload.access_token,
-            totp_code=payload.totp_code,
             ip_hash=ip_hash,
             user_agent_hash=user_agent_hash,
         )
@@ -161,15 +160,6 @@ def get_session(principal: Annotated[AdminPrincipal, Depends(current_admin)]):
         "role": principal.role,
         "permissions": sorted(principal.permissions),
     }}
-
-
-@admin_router.post("/session/step-up")
-def step_up(payload: AdminStepUpRequest, principal: Annotated[AdminPrincipal, Depends(current_admin)]):
-    try:
-        verified_at = admin_service().step_up(principal, payload.totp_code)
-    except PermissionError as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
-    return {"data": {"verifiedAtMs": verified_at}}
 
 
 @admin_router.delete("/session")
@@ -217,6 +207,22 @@ def orders(
 ):
     limit, offset = _page(limit, offset)
     return {"data": {"items": admin_service().repository.list_orders(limit=limit, offset=offset), "limit": limit, "offset": offset}}
+
+
+@admin_router.get("/redemption-batches")
+def redemption_batches(
+    principal: Annotated[AdminPrincipal, Depends(permission("billing.read"))],
+    limit: int = Query(default=50, ge=1),
+    offset: int = Query(default=0, ge=0),
+):
+    limit, offset = _page(limit, offset)
+    return {
+        "data": {
+            "items": admin_service().repository.list_redemption_batches(limit=limit, offset=offset),
+            "limit": limit,
+            "offset": offset,
+        }
+    }
 
 
 @admin_router.get("/materials")
@@ -399,6 +405,55 @@ def adjust_points(
             reference_id=f"admin:{principal.user_id}:{payload.idempotency_key}",
         ),
     )
+
+
+@admin_router.post("/redemption-batches")
+def create_redemption_batch(
+    payload: AdminRedemptionBatchRequest,
+    request: Request,
+    principal: Annotated[AdminPrincipal, Depends(permission("redemptions.generate"))],
+):
+    _confirmed(payload.confirmed)
+    try:
+        result, replay = admin_service().create_redemption_batch(
+            principal=principal,
+            idempotency_key=payload.idempotency_key,
+            campaign=payload.campaign,
+            reason=payload.reason,
+            points=payload.points,
+            quantity=payload.quantity,
+            expires_in_days=payload.expires_in_days,
+        )
+        admin_service().audit(
+            principal=principal,
+            action="redemptions.generate",
+            resource_type="redemption_batch",
+            resource_id=str(result["batch_id"]),
+            reason=payload.reason,
+            request_id=_request_id(request),
+            result="success",
+            details={
+                "batch_id": result["batch_id"],
+                "campaign": result["campaign"],
+                "points_per_code": result["points_per_code"],
+                "code_count": result["code_count"],
+                "expires_at_ms": result["expires_at_ms"],
+                "idempotent_replay": replay,
+            },
+        )
+        return {"data": {**result, "idempotentReplay": replay}}
+    except Exception as exc:
+        admin_service().audit(
+            principal=principal,
+            action="redemptions.generate",
+            resource_type="redemption_batch",
+            resource_id=None,
+            reason=payload.reason,
+            request_id=_request_id(request),
+            result="failed",
+            details={"error_code": exc.__class__.__name__},
+        )
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @admin_router.post("/users/{user_id}/time")

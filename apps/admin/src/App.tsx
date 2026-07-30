@@ -2,13 +2,14 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { adminApi } from "./api";
 
-type View = "dashboard" | "users" | "orders" | "materials" | "interviews" | "audit" | "admins";
+type View = "dashboard" | "users" | "orders" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
 type Row = Record<string, unknown>;
 
 const views: { id: View; label: string; eyebrow: string }[] = [
   { id: "dashboard", label: "运营总览", eyebrow: "OVERVIEW" },
   { id: "users", label: "用户与权益", eyebrow: "CUSTOMERS" },
   { id: "orders", label: "订单与支付", eyebrow: "BILLING" },
+  { id: "redemptions", label: "兑换码", eyebrow: "BENEFITS" },
   { id: "materials", label: "资料任务", eyebrow: "KNOWLEDGE" },
   { id: "interviews", label: "面试会话", eyebrow: "SESSIONS" },
   { id: "audit", label: "审计记录", eyebrow: "AUDIT" },
@@ -35,8 +36,7 @@ function Login({ onReady }: { onReady: () => void }) {
   const [phone, setPhone] = useState("");
   const [challengeId, setChallengeId] = useState("");
   const [smsCode, setSmsCode] = useState("");
-  const [totpCode, setTotpCode] = useState("");
-  const [message, setMessage] = useState("使用已授权的账号完成短信验证与动态口令验证。");
+  const [message, setMessage] = useState("使用已授权的管理员手机号和短信验证码登录。");
   const [busy, setBusy] = useState(false);
 
   const send = async () => {
@@ -57,7 +57,7 @@ function Login({ onReady }: { onReady: () => void }) {
     setBusy(true);
     try {
       const user = await adminApi.verifySms(phone, challengeId, smsCode);
-      await adminApi.login(user.tokens.accessToken, totpCode);
+      await adminApi.login(user.tokens.accessToken);
       onReady();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "管理身份验证失败");
@@ -81,8 +81,7 @@ function Login({ onReady }: { onReady: () => void }) {
         <label>手机号<input value={phone} onChange={event => setPhone(event.target.value)} placeholder="请输入已授权手机号" /></label>
         <button className="secondary" type="button" onClick={send} disabled={busy || phone.length < 11}>获取短信验证码</button>
         <label>短信验证码<input value={smsCode} onChange={event => setSmsCode(event.target.value)} placeholder="6 位验证码" maxLength={6} /></label>
-        <label>动态口令<input value={totpCode} onChange={event => setTotpCode(event.target.value)} placeholder="身份验证器中的 6 位口令" maxLength={6} /></label>
-        <button className="primary" disabled={busy || !challengeId || smsCode.length !== 6 || totpCode.length !== 6}>进入运营中心</button>
+        <button className="primary" disabled={busy || !challengeId || smsCode.length !== 6}>进入运营中心</button>
         <p className="form-message">{message}</p>
       </form>
     </main>
@@ -173,17 +172,10 @@ function ActionPanel({ view, rows, permissions, onChanged }: { view: View; rows:
     } catch (error) {
       const text = error instanceof Error ? error.message : "操作失败";
       if (text.includes("admin_step_up_required")) {
-        const code = window.prompt("该操作需要近期 MFA 验证，请输入 6 位动态口令：");
-        if (code?.length === 6) {
-          try {
-            await adminApi.stepUp(code);
-            setMessage("MFA 验证成功，请再次确认操作。");
-            return;
-          } catch (stepError) {
-            setMessage(stepError instanceof Error ? stepError.message : "MFA 验证失败");
-            return;
-          }
-        }
+        setMessage("短信安全验证已过期，即将返回登录页，请重新获取短信验证码。");
+        adminApi.clear();
+        window.location.reload();
+        return;
       }
       setMessage(text);
     }
@@ -213,7 +205,6 @@ function AdminPanel({ rows, permissions, onChanged }: { rows: Row[]; permissions
   const [role, setRole] = useState("operations");
   const [reason, setReason] = useState("");
   const [message, setMessage] = useState("");
-  const [enrollment, setEnrollment] = useState<{ secret: string; uri: string } | null>(null);
   if (!permissions.includes("admins.manage")) return <div className="empty">当前角色无管理员管理权限</div>;
 
   const stepUpAndRetry = async (error: unknown) => {
@@ -222,11 +213,10 @@ function AdminPanel({ rows, permissions, onChanged }: { rows: Row[]; permissions
       setMessage(text);
       return false;
     }
-    const code = window.prompt("管理员授权需要近期 MFA 验证，请输入 6 位动态口令：");
-    if (!code || code.length !== 6) return false;
-    await adminApi.stepUp(code);
-    setMessage("MFA 验证成功，请再次提交操作。");
-    return true;
+    setMessage("短信安全验证已过期，即将返回登录页，请重新获取短信验证码。");
+    adminApi.clear();
+    window.location.reload();
+    return false;
   };
 
   const create = async () => {
@@ -236,18 +226,14 @@ function AdminPanel({ rows, permissions, onChanged }: { rows: Row[]; permissions
     }
     if (!window.confirm(`确认授予 ${loginId} “${role}”管理员角色？`)) return;
     try {
-      const result = await adminApi.action("/admins", {
+      await adminApi.action("/admins", {
         loginId: loginId.trim(),
         role,
         reason,
         confirmed: true,
         idempotencyKey: crypto.randomUUID(),
       });
-      setEnrollment({
-        secret: String(result.totp_secret),
-        uri: String(result.provisioning_uri),
-      });
-      setMessage("管理员已创建。下方绑定信息只展示一次，请安全交给该管理员。");
+      setMessage("管理员已创建，可直接使用授权手机号和短信验证码登录。");
       setLoginId("");
       onChanged();
     } catch (error) {
@@ -300,11 +286,86 @@ function AdminPanel({ rows, permissions, onChanged }: { rows: Row[]; permissions
           <small>{message}</small>
         </div>
       </section>
-      {enrollment && <section className="enrollment-panel">
-        <div><p className="eyebrow">DISPLAY ONCE</p><h3>TOTP 绑定信息</h3><p>请让新管理员立即添加到身份验证器。关闭后后台不再展示明文密钥。</p></div>
-        <code>{enrollment.secret}</code>
-        <textarea readOnly value={enrollment.uri} />
-        <button onClick={() => setEnrollment(null)}>我已安全保存并关闭</button>
+    </>
+  );
+}
+
+function RedemptionPanel({ rows, permissions, onChanged }: { rows: Row[]; permissions: string[]; onChanged: () => void }) {
+  const [campaign, setCampaign] = useState("");
+  const [points, setPoints] = useState("2000");
+  const [quantity, setQuantity] = useState("100");
+  const [expiresInDays, setExpiresInDays] = useState("30");
+  const [reason, setReason] = useState("");
+  const [message, setMessage] = useState("");
+  const [codes, setCodes] = useState<string[]>([]);
+  const canGenerate = permissions.includes("redemptions.generate");
+
+  const generate = async () => {
+    if (!canGenerate) return;
+    if (campaign.trim().length < 2 || reason.trim().length < 6) {
+      setMessage("请填写活动名称和至少 6 个字的生成原因。");
+      return;
+    }
+    if (!window.confirm(`确认生成 ${quantity} 个、每个 ${points} 积分的一次性兑换码？`)) return;
+    try {
+      const result = await adminApi.action("/redemption-batches", {
+        campaign: campaign.trim(),
+        points: Number(points),
+        quantity: Number(quantity),
+        expiresInDays: Number(expiresInDays),
+        reason,
+        confirmed: true,
+        idempotencyKey: crypto.randomUUID(),
+      });
+      const generated = Array.isArray(result.codes) ? result.codes.map(String) : [];
+      setCodes(generated);
+      setMessage(generated.length
+        ? "兑换码已生成。明文只展示这一次，请立即下载并安全分发。"
+        : "该请求已处理过，出于安全原因不会再次展示明文兑换码。");
+      onChanged();
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "生成失败";
+      if (text.includes("admin_step_up_required")) {
+        setMessage("短信安全验证已过期，即将返回登录页，请重新获取短信验证码。");
+        adminApi.clear();
+        window.location.reload();
+        return;
+      }
+      setMessage(text);
+    }
+  };
+
+  const download = () => {
+    const blob = new Blob([codes.join("\n") + "\n"], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `offersteady-${campaign.trim() || "redemption-codes"}.txt`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <>
+      <Table rows={rows} />
+      <section className="action-panel">
+        <div><p className="eyebrow">SINGLE-USE CODES</p><h3>创建兑换码批次</h3><p>每个兑换码仅可成功兑换一次。后台只保存不可逆摘要，明文不会进入数据库或审计日志。</p></div>
+        <div className="action-form">
+          <input value={campaign} onChange={event => setCampaign(event.target.value)} placeholder="活动名称，例如：首批内测用户" />
+          <div className="field-grid">
+            <label>每码积分<input type="number" min="1" max="100000" value={points} onChange={event => setPoints(event.target.value)} /></label>
+            <label>生成数量<input type="number" min="1" max="500" value={quantity} onChange={event => setQuantity(event.target.value)} /></label>
+            <label>有效天数<input type="number" min="1" max="365" value={expiresInDays} onChange={event => setExpiresInDays(event.target.value)} /></label>
+          </div>
+          <input value={reason} onChange={event => setReason(event.target.value)} placeholder="生成原因（必填）" />
+          <div className="action-buttons"><button disabled={!canGenerate} onClick={() => void generate()}>生成一次性兑换码</button></div>
+          <small>{canGenerate ? message : "当前角色无兑换码生成权限"}</small>
+        </div>
+      </section>
+      {codes.length > 0 && <section className="redemption-output">
+        <div><p className="eyebrow">DISPLAY ONCE</p><h3>本批兑换码</h3><p>关闭或刷新页面后无法恢复明文，请立即下载。</p></div>
+        <textarea readOnly value={codes.join("\n")} />
+        <div><button onClick={download}>下载 TXT</button><button onClick={() => setCodes([])}>我已保存并关闭</button></div>
       </section>}
     </>
   );
@@ -327,7 +388,12 @@ export function App() {
       const session = await adminApi.session();
       setRole(session.role);
       setPermissions(session.permissions);
-      setData(target === "dashboard" ? await adminApi.dashboard() : (await adminApi.list(target, offset)).items);
+      if (target === "dashboard") {
+        setData(await adminApi.dashboard());
+      } else {
+        const resource = target === "redemptions" ? "redemption-batches" : target;
+        setData((await adminApi.list(resource, offset)).items);
+      }
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : "后台服务暂时不可用";
       setError(message);
@@ -357,7 +423,7 @@ export function App() {
       <main className="workspace">
         <header><div><p className="eyebrow">{current.eyebrow}</p><h1>{current.label}</h1></div><div className="header-actions"><span>{new Date().toLocaleDateString("zh-CN")}</span><button onClick={() => void load(view)}>刷新</button><button onClick={() => adminApi.logout().then(() => setAuthenticated(false))}>退出</button></div></header>
         {error && <div className="alert">{error}</div>}
-        {loading ? <div className="loading">正在读取脱敏运营数据...</div> : view === "dashboard" ? <Dashboard data={data as Row} /> : view === "admins" ? <AdminPanel rows={data as Row[]} permissions={permissions} onChanged={() => void load(view)} /> : <>
+        {loading ? <div className="loading">正在读取脱敏运营数据...</div> : view === "dashboard" ? <Dashboard data={data as Row} /> : view === "admins" ? <AdminPanel rows={data as Row[]} permissions={permissions} onChanged={() => void load(view)} /> : view === "redemptions" ? <RedemptionPanel rows={data as Row[]} permissions={permissions} onChanged={() => void load(view)} /> : <>
           <Table rows={data as Row[]} />
           <div className="pagination"><button disabled={offset === 0} onClick={() => setOffset(value => Math.max(0, value - 50))}>上一页</button><span>第 {offset / 50 + 1} 页</span><button disabled={(data as Row[]).length < 50} onClick={() => setOffset(value => value + 50)}>下一页</button></div>
           <ActionPanel view={view} rows={data as Row[]} permissions={permissions} onChanged={() => void load(view)} />

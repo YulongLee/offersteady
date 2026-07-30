@@ -69,7 +69,14 @@ class PostgresPointsRedemptionRepository(PointsRedemptionRepository):
 
             cursor.execute("SELECT * FROM points_redemption_codes WHERE code_digest = %s FOR UPDATE", (digest,))
             code_row = cursor.fetchone()
-            if not code_row or code_row["status"] != "active":
+            if (
+                not code_row
+                or code_row["status"] != "active"
+                or (
+                    code_row.get("expires_at_ms") is not None
+                    and int(code_row["expires_at_ms"]) <= _now_ms()
+                )
+            ):
                 if code_row and code_row["redeemed_by_user_id"] == user_id:
                     cursor.execute("SELECT * FROM points_redemptions WHERE code_digest = %s", (digest,))
                     prior = cursor.fetchone()
@@ -188,8 +195,12 @@ class PostgresPointsRedemptionRepository(PointsRedemptionRepository):
         )
 
     def _ensure_tables(self) -> None:
-        migration = REPO_ROOT / "apps" / "backend" / "migrations" / "versions" / "0008_persistent_points_redemption.sql"
+        migrations = [
+            REPO_ROOT / "apps" / "backend" / "migrations" / "versions" / "0008_persistent_points_redemption.sql",
+            REPO_ROOT / "apps" / "backend" / "migrations" / "versions" / "0015_admin_redemption_batches.sql",
+        ]
         with self._connect() as connection, connection.cursor() as cursor:
             cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ("offersteady:billing-migrations",))
-            cursor.execute(migration.read_text(encoding="utf8"))
+            for migration in migrations:
+                cursor.execute(migration.read_text(encoding="utf8"))
             connection.commit()
