@@ -33,3 +33,8 @@ class AdminPointsAdjustmentRequest(AdminActionRequest):
 
 class AdminTimeAdjustmentRequest(AdminActionRequest):
     days: int = Field(ge=1, le=365)
+
+
+class AdminCreateRequest(AdminActionRequest):
+    login_id: str = Field(min_length=3, max_length=128)
+    role: str = Field(pattern=r"^(super_admin|operations|support|finance|technical_auditor)$")

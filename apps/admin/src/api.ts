@@ -47,7 +47,7 @@ export const adminApi = {
   session: () => request<{ role: string; permissions: string[] }>("/api/v1/admin/session"),
   dashboard: () => request<Record<string, number>>("/api/v1/admin/dashboard"),
   observability: () => request<Record<string, unknown>>("/api/v1/admin/observability"),
-  list: (resource: "users" | "orders" | "materials" | "interviews" | "audit", offset = 0) =>
+  list: (resource: "users" | "orders" | "materials" | "interviews" | "audit" | "admins", offset = 0) =>
     request<{ items: Record<string, unknown>[] }>(`/api/v1/admin/${resource}?limit=50&offset=${offset}`),
   stepUp: (totpCode: string) =>
     request<{ verifiedAtMs: number }>("/api/v1/admin/session/step-up", {

@@ -38,7 +38,7 @@ PERMISSIONS_BY_ROLE: dict[str, frozenset[str]] = {
 SAFE_DETAIL_KEYS = frozenset({
     "status", "previous_status", "points", "days", "balance", "provider",
     "order_status", "document_id", "task_id", "session_id", "error_code",
-    "idempotent_replay",
+    "idempotent_replay", "role",
 })
 HIGH_RISK_PERMISSIONS = frozenset({"users.suspend", "billing.adjust", "admins.manage"})
 
@@ -224,6 +224,49 @@ class AdminService:
         issuer = quote("OfferSteady Admin")
         uri = f"otpauth://totp/{issuer}:{label}?secret={secret}&issuer={issuer}&digits=6&period=30"
         return authorization, secret, uri
+
+    def provision_administrator(
+        self,
+        *,
+        login_id: str,
+        role: str,
+        actor_user_id: str,
+    ) -> dict[str, Any]:
+        if role not in PERMISSIONS_BY_ROLE:
+            raise ValueError("unsupported_admin_role")
+        if self.repository.active_administrator_count() == 0:
+            raise PermissionError("first_super_admin_requires_server_bootstrap")
+        user = self.repository.user_by_login(login_id)
+        if not user:
+            raise LookupError("authentication_user_not_found")
+        secret = base64.b32encode(secrets.token_bytes(20)).decode("ascii").rstrip("=")
+        authorization = self.repository.upsert_authorization(
+            user_id=str(user["user_id"]),
+            role=role,
+            encrypted_secret=self.encrypt_secret(secret),
+            created_by_user_id=actor_user_id,
+        )
+        label = quote(str(user["display_name"]))
+        issuer = quote("OfferSteady Admin")
+        uri = f"otpauth://totp/{issuer}:{label}?secret={secret}&issuer={issuer}&digits=6&period=30"
+        return {
+            "user_id": str(user["user_id"]),
+            "role": str(authorization["role"]),
+            "status": str(authorization["status"]),
+            "totp_secret": secret,
+            "provisioning_uri": uri,
+            "enrollment_display_once": True,
+        }
+
+    def disable_administrator(
+        self,
+        *,
+        target_user_id: str,
+        actor_user_id: str,
+    ) -> dict[str, Any]:
+        if target_user_id == actor_user_id:
+            raise PermissionError("administrator_cannot_disable_self")
+        return self.repository.disable_authorization(user_id=target_user_id)
 
     def encrypt_secret(self, value: str) -> str:
         return self._fernet().encrypt(value.encode("utf-8")).decode("ascii")

@@ -88,3 +88,57 @@ def test_admin_domain_command_is_idempotent() -> None:
     assert first_replay is False
     assert second_replay is True
     assert calls == 1
+
+
+def test_browser_admin_provisioning_requires_existing_bootstrap_and_registered_user() -> None:
+    class RepositoryStub:
+        active_count = 0
+
+        def active_administrator_count(self) -> int:
+            return self.active_count
+
+        def user_by_login(self, login_id: str):
+            if login_id != "19700000000":
+                return None
+            return {"user_id": "synthetic-user", "display_name": "测试管理员"}
+
+        def upsert_authorization(self, **values):
+            return {"role": values["role"], "status": "active"}
+
+    repository = RepositoryStub()
+    settings = Settings(admin_encryption_key="synthetic-encryption-key")
+    service = AdminService(settings, repository)  # type: ignore[arg-type]
+    try:
+        service.provision_administrator(
+            login_id="19700000000",
+            role="operations",
+            actor_user_id="super-admin",
+        )
+    except PermissionError as exc:
+        assert str(exc) == "first_super_admin_requires_server_bootstrap"
+    else:
+        raise AssertionError("browser flow must not create the first administrator")
+
+    repository.active_count = 1
+    result = service.provision_administrator(
+        login_id="19700000000",
+        role="operations",
+        actor_user_id="super-admin",
+    )
+    assert result["status"] == "active"
+    assert result["role"] == "operations"
+    assert result["enrollment_display_once"] is True
+    assert str(result["provisioning_uri"]).startswith("otpauth://totp/")
+
+
+def test_administrator_cannot_disable_self() -> None:
+    service = AdminService(Settings(), object())  # type: ignore[arg-type]
+    try:
+        service.disable_administrator(
+            target_user_id="same-admin",
+            actor_user_id="same-admin",
+        )
+    except PermissionError as exc:
+        assert str(exc) == "administrator_cannot_disable_self"
+    else:
+        raise AssertionError("administrator must not disable their own authorization")

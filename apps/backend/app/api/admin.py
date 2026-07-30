@@ -12,6 +12,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.core.config import get_settings
 from app.schemas.admin import (
     AdminActionRequest,
+    AdminCreateRequest,
     AdminPointsAdjustmentRequest,
     AdminSessionRequest,
     AdminStepUpRequest,
@@ -250,6 +251,22 @@ def audit(
     return {"data": {"items": admin_service().repository.list_audit(action=action, request_id=request_id, limit=limit, offset=offset), "limit": limit, "offset": offset}}
 
 
+@admin_router.get("/admins")
+def administrators(
+    principal: Annotated[AdminPrincipal, Depends(permission("admins.manage"))],
+    limit: int = Query(default=50, ge=1),
+    offset: int = Query(default=0, ge=0),
+):
+    limit, offset = _page(limit, offset)
+    return {
+        "data": {
+            "items": admin_service().repository.list_administrators(limit=limit, offset=offset),
+            "limit": limit,
+            "offset": offset,
+        }
+    }
+
+
 def _run_action(
     *,
     request: Request,
@@ -278,6 +295,65 @@ def _run_action(
             result="failed", details={"error_code": exc.__class__.__name__},
         )
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@admin_router.post("/admins")
+def create_administrator(
+    payload: AdminCreateRequest,
+    request: Request,
+    principal: Annotated[AdminPrincipal, Depends(permission("admins.manage"))],
+):
+    _confirmed(payload.confirmed)
+    try:
+        result = admin_service().provision_administrator(
+            login_id=payload.login_id,
+            role=payload.role,
+            actor_user_id=principal.user_id,
+        )
+        admin_service().audit(
+            principal=principal,
+            action="admins.create",
+            resource_type="admin_authorization",
+            resource_id=str(result["user_id"]),
+            reason=payload.reason,
+            request_id=_request_id(request),
+            result="success",
+            details={"status": result["status"], "role": result["role"]},
+        )
+        return {"data": result}
+    except Exception as exc:
+        admin_service().audit(
+            principal=principal,
+            action="admins.create",
+            resource_type="admin_authorization",
+            resource_id=None,
+            reason=payload.reason,
+            request_id=_request_id(request),
+            result="failed",
+            details={"error_code": exc.__class__.__name__},
+        )
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@admin_router.post("/admins/{user_id}/disable")
+def disable_administrator(
+    user_id: str,
+    payload: AdminActionRequest,
+    request: Request,
+    principal: Annotated[AdminPrincipal, Depends(permission("admins.manage"))],
+):
+    return _run_action(
+        request=request,
+        principal=principal,
+        payload=payload,
+        action="admins.disable",
+        resource_type="admin_authorization",
+        resource_id=user_id,
+        callback=lambda: admin_service().disable_administrator(
+            target_user_id=user_id,
+            actor_user_id=principal.user_id,
+        ),
+    )
 
 
 @admin_router.post("/users/{user_id}/suspend")

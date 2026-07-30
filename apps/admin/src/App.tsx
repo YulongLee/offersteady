@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { adminApi } from "./api";
 
-type View = "dashboard" | "users" | "orders" | "materials" | "interviews" | "audit";
+type View = "dashboard" | "users" | "orders" | "materials" | "interviews" | "audit" | "admins";
 type Row = Record<string, unknown>;
 
 const views: { id: View; label: string; eyebrow: string }[] = [
@@ -12,6 +12,7 @@ const views: { id: View; label: string; eyebrow: string }[] = [
   { id: "materials", label: "资料任务", eyebrow: "KNOWLEDGE" },
   { id: "interviews", label: "面试会话", eyebrow: "SESSIONS" },
   { id: "audit", label: "审计记录", eyebrow: "AUDIT" },
+  { id: "admins", label: "管理员", eyebrow: "ACCESS" },
 ];
 
 const labels: Record<string, string> = {
@@ -207,6 +208,108 @@ function ActionPanel({ view, rows, permissions, onChanged }: { view: View; rows:
   );
 }
 
+function AdminPanel({ rows, permissions, onChanged }: { rows: Row[]; permissions: string[]; onChanged: () => void }) {
+  const [loginId, setLoginId] = useState("");
+  const [role, setRole] = useState("operations");
+  const [reason, setReason] = useState("");
+  const [message, setMessage] = useState("");
+  const [enrollment, setEnrollment] = useState<{ secret: string; uri: string } | null>(null);
+  if (!permissions.includes("admins.manage")) return <div className="empty">当前角色无管理员管理权限</div>;
+
+  const stepUpAndRetry = async (error: unknown) => {
+    const text = error instanceof Error ? error.message : "操作失败";
+    if (!text.includes("admin_step_up_required")) {
+      setMessage(text);
+      return false;
+    }
+    const code = window.prompt("管理员授权需要近期 MFA 验证，请输入 6 位动态口令：");
+    if (!code || code.length !== 6) return false;
+    await adminApi.stepUp(code);
+    setMessage("MFA 验证成功，请再次提交操作。");
+    return true;
+  };
+
+  const create = async () => {
+    if (loginId.trim().length < 3 || reason.trim().length < 6) {
+      setMessage("请输入已注册手机号或登录标识，并填写至少 6 个字的原因。");
+      return;
+    }
+    if (!window.confirm(`确认授予 ${loginId} “${role}”管理员角色？`)) return;
+    try {
+      const result = await adminApi.action("/admins", {
+        loginId: loginId.trim(),
+        role,
+        reason,
+        confirmed: true,
+        idempotencyKey: crypto.randomUUID(),
+      });
+      setEnrollment({
+        secret: String(result.totp_secret),
+        uri: String(result.provisioning_uri),
+      });
+      setMessage("管理员已创建。下方绑定信息只展示一次，请安全交给该管理员。");
+      setLoginId("");
+      onChanged();
+    } catch (error) {
+      await stepUpAndRetry(error);
+    }
+  };
+
+  const disable = async (userId: string) => {
+    if (reason.trim().length < 6) {
+      setMessage("停用管理员前请填写至少 6 个字的原因。");
+      return;
+    }
+    if (!window.confirm("确认停用该管理员并立即撤销其管理会话？")) return;
+    try {
+      await adminApi.action(`/admins/${userId}/disable`, {
+        reason,
+        confirmed: true,
+        idempotencyKey: crypto.randomUUID(),
+      });
+      setMessage("管理员已停用，现有管理会话已撤销。");
+      onChanged();
+    } catch (error) {
+      await stepUpAndRetry(error);
+    }
+  };
+
+  return (
+    <>
+      <Table rows={rows} />
+      <section className="action-panel">
+        <div><p className="eyebrow">ADMIN ACCESS</p><h3>管理员授权</h3><p>只能添加已经注册的用户。权限使用预设角色，所有变更都会审计。</p></div>
+        <div className="action-form">
+          <input value={loginId} onChange={event => setLoginId(event.target.value)} placeholder="已注册手机号或登录标识" />
+          <select value={role} onChange={event => setRole(event.target.value)}>
+            <option value="operations">运营管理员</option>
+            <option value="support">客服管理员</option>
+            <option value="finance">财务管理员</option>
+            <option value="technical_auditor">技术审计员</option>
+            <option value="super_admin">超级管理员</option>
+          </select>
+          <input value={reason} onChange={event => setReason(event.target.value)} placeholder="授权或停用原因（必填）" />
+          <div className="action-buttons">
+            <button onClick={() => void create()}>添加管理员</button>
+            {rows.filter(row => row.status === "active").map(row => (
+              <button key={String(row.user_id)} onClick={() => void disable(String(row.user_id))}>
+                停用 {String(row.masked_login || row.display_name || row.user_id)}
+              </button>
+            ))}
+          </div>
+          <small>{message}</small>
+        </div>
+      </section>
+      {enrollment && <section className="enrollment-panel">
+        <div><p className="eyebrow">DISPLAY ONCE</p><h3>TOTP 绑定信息</h3><p>请让新管理员立即添加到身份验证器。关闭后后台不再展示明文密钥。</p></div>
+        <code>{enrollment.secret}</code>
+        <textarea readOnly value={enrollment.uri} />
+        <button onClick={() => setEnrollment(null)}>我已安全保存并关闭</button>
+      </section>}
+    </>
+  );
+}
+
 export function App() {
   const [authenticated, setAuthenticated] = useState(Boolean(adminApi.token()));
   const [view, setView] = useState<View>("dashboard");
@@ -254,7 +357,7 @@ export function App() {
       <main className="workspace">
         <header><div><p className="eyebrow">{current.eyebrow}</p><h1>{current.label}</h1></div><div className="header-actions"><span>{new Date().toLocaleDateString("zh-CN")}</span><button onClick={() => void load(view)}>刷新</button><button onClick={() => adminApi.logout().then(() => setAuthenticated(false))}>退出</button></div></header>
         {error && <div className="alert">{error}</div>}
-        {loading ? <div className="loading">正在读取脱敏运营数据...</div> : view === "dashboard" ? <Dashboard data={data as Row} /> : <>
+        {loading ? <div className="loading">正在读取脱敏运营数据...</div> : view === "dashboard" ? <Dashboard data={data as Row} /> : view === "admins" ? <AdminPanel rows={data as Row[]} permissions={permissions} onChanged={() => void load(view)} /> : <>
           <Table rows={data as Row[]} />
           <div className="pagination"><button disabled={offset === 0} onClick={() => setOffset(value => Math.max(0, value - 50))}>上一页</button><span>第 {offset / 50 + 1} 页</span><button disabled={(data as Row[]).length < 50} onClick={() => setOffset(value => value + 50)}>下一页</button></div>
           <ActionPanel view={view} rows={data as Row[]} permissions={permissions} onChanged={() => void load(view)} />

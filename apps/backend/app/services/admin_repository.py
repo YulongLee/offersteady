@@ -61,6 +61,31 @@ class AdminRepository:
             (login_id,),
         )
 
+    def list_administrators(self, *, limit: int, offset: int) -> list[dict[str, Any]]:
+        return self._all(
+            """
+            SELECT a.user_id, a.role, a.status, a.authorization_version,
+                   a.created_at_ms, a.updated_at_ms, a.disabled_at_ms,
+                   CASE
+                     WHEN LENGTH(u.login_id) <= 4 THEN '****'
+                     ELSE LEFT(u.login_id, 3) || '****' || RIGHT(u.login_id, 4)
+                   END AS masked_login,
+                   LEFT(u.display_name, 24) AS display_name
+            FROM admin_authorizations a
+            JOIN auth_users u ON u.user_id = a.user_id
+            ORDER BY a.created_at_ms DESC
+            LIMIT %s OFFSET %s
+            """,
+            (limit, offset),
+        )
+
+    def active_administrator_count(self) -> int:
+        row = self._one(
+            "SELECT COUNT(*) AS count FROM admin_authorizations WHERE status = 'active'",
+            (),
+        )
+        return int(row["count"]) if row else 0
+
     def upsert_authorization(
         self,
         *,
@@ -101,7 +126,57 @@ class AdminRepository:
         return row
 
     def user_by_login(self, login_id: str) -> dict[str, Any] | None:
-        return self._one("SELECT user_id, login_id, display_name FROM auth_users WHERE LOWER(login_id) = LOWER(%s)", (login_id,))
+        return self._one(
+            """
+            SELECT user_id, login_id, display_name
+            FROM auth_users
+            WHERE LOWER(login_id) = LOWER(%s)
+               OR LOWER(login_id) = LOWER('sms:' || %s)
+            """,
+            (login_id, login_id),
+        )
+
+    def disable_authorization(self, *, user_id: str) -> dict[str, Any]:
+        current = now_ms()
+        with self.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT user_id, role, status FROM admin_authorizations WHERE user_id = %s FOR UPDATE",
+                (user_id,),
+            )
+            authorization = cursor.fetchone()
+            if authorization is None:
+                raise LookupError("admin_authorization_not_found")
+            if authorization["status"] == "disabled":
+                return dict(authorization)
+            if authorization["role"] == "super_admin":
+                cursor.execute(
+                    "SELECT COUNT(*) AS count FROM admin_authorizations WHERE role = 'super_admin' AND status = 'active'"
+                )
+                if int(cursor.fetchone()["count"]) <= 1:
+                    raise PermissionError("last_super_admin_cannot_be_disabled")
+            cursor.execute(
+                """
+                UPDATE admin_authorizations
+                SET status = 'disabled',
+                    authorization_version = authorization_version + 1,
+                    disabled_at_ms = %s,
+                    updated_at_ms = %s
+                WHERE user_id = %s
+                RETURNING user_id, role, status, authorization_version, disabled_at_ms
+                """,
+                (current, current, user_id),
+            )
+            result = dict(cursor.fetchone())
+            cursor.execute(
+                """
+                UPDATE admin_sessions
+                SET status = 'revoked', revoked_at_ms = %s, last_used_at_ms = %s
+                WHERE user_id = %s AND status = 'active'
+                """,
+                (current, current, user_id),
+            )
+            connection.commit()
+        return result
 
     def validate_user_session(self, *, user_id: str, auth_session_id: str) -> bool:
         row = self._one(
