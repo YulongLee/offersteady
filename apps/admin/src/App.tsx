@@ -377,7 +377,8 @@ export function App() {
   const [view, setView] = useState<View>("dashboard");
   const [role, setRole] = useState("");
   const [permissions, setPermissions] = useState<string[]>([]);
-  const [data, setData] = useState<Row | Row[]>({});
+  const [dashboardData, setDashboardData] = useState<Row>({});
+  const [rows, setRows] = useState<Row[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [offset, setOffset] = useState(0);
@@ -401,14 +402,14 @@ export function App() {
         if (fallback.id !== target) setView(fallback.id);
         return;
       }
-      let nextData: Row | Row[];
       if (target === "dashboard") {
-        nextData = await adminApi.dashboard();
+        const nextDashboard = await adminApi.dashboard();
+        if (sequence === loadSequence.current) setDashboardData(nextDashboard);
       } else {
         const resource = target === "redemptions" ? "redemption-batches" : target;
-        nextData = (await adminApi.list(resource, offset)).items;
+        const nextRows = (await adminApi.list(resource, offset)).items;
+        if (sequence === loadSequence.current) setRows(Array.isArray(nextRows) ? nextRows : []);
       }
-      if (sequence === loadSequence.current) setData(nextData);
     } catch (reason) {
       if (sequence !== loadSequence.current) return;
       const message = reason instanceof Error ? reason.message : "后台服务暂时不可用";
@@ -435,16 +436,16 @@ export function App() {
     <div className="admin-shell">
       <aside>
         <div className="brand"><span className="brand-mark small">稳</span><div><strong>面试稳</strong><small>运营中心</small></div></div>
-        <nav>{visibleViews.map(item => <button className={item.id === view ? "active" : ""} onClick={() => { setOffset(0); setView(item.id); }} key={item.id}><small>{item.eyebrow}</small>{item.label}</button>)}</nav>
+        <nav>{visibleViews.map(item => <button type="button" className={item.id === view ? "active" : ""} onClick={() => { setOffset(0); setRows([]); setView(item.id); }} key={item.id}><small>{item.eyebrow}</small>{item.label}</button>)}</nav>
         <div className="operator"><span className="online" /><div><small>当前角色</small><strong>{role || "验证中"}</strong></div></div>
       </aside>
       <main className="workspace">
         <header><div><p className="eyebrow">{current.eyebrow}</p><h1>{current.label}</h1></div><div className="header-actions"><span>{new Date().toLocaleDateString("zh-CN")}</span><button onClick={() => void load(view)}>刷新</button><button onClick={() => adminApi.logout().then(() => { sessionRequest.current = null; setAuthenticated(false); })}>退出</button></div></header>
         {error && <div className="alert">{error}</div>}
-        {loading ? <div className="loading">正在读取脱敏运营数据...</div> : view === "dashboard" ? <Dashboard data={data as Row} /> : view === "admins" ? <AdminPanel rows={data as Row[]} permissions={permissions} onChanged={() => void load(view)} /> : view === "redemptions" ? <RedemptionPanel rows={data as Row[]} permissions={permissions} onChanged={() => void load(view)} /> : <>
-          <Table rows={data as Row[]} />
-          <div className="pagination"><button disabled={offset === 0} onClick={() => setOffset(value => Math.max(0, value - 50))}>上一页</button><span>第 {offset / 50 + 1} 页</span><button disabled={(data as Row[]).length < 50} onClick={() => setOffset(value => value + 50)}>下一页</button></div>
-          <ActionPanel view={view} rows={data as Row[]} permissions={permissions} onChanged={() => void load(view)} />
+        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view)} /> : <>
+          <Table rows={rows} />
+          <div className="pagination"><button disabled={offset === 0} onClick={() => setOffset(value => Math.max(0, value - 50))}>上一页</button><span>第 {offset / 50 + 1} 页</span><button disabled={rows.length < 50} onClick={() => setOffset(value => value + 50)}>下一页</button></div>
+          <ActionPanel view={view} rows={rows} permissions={permissions} onChanged={() => void load(view)} />
         </>}
       </main>
     </div>
