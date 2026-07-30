@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { adminApi } from "./api";
+import { buildLinePath, formatTrendChange, formatTrendValue, type TrendMetric, type TrendResponse } from "./analytics";
 
 type View = "dashboard" | "users" | "orders" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
 type Row = Record<string, unknown>;
@@ -91,6 +92,22 @@ function Login({ onReady }: { onReady: () => void }) {
 
 function Dashboard({ data }: { data: Row }) {
   const entries = Object.entries(data).filter(([key]) => key in labels);
+  const [range, setRange] = useState<"7d" | "30d" | "90d">("30d");
+  const [trends, setTrends] = useState<TrendResponse | null>(null);
+  const [trendError, setTrendError] = useState("");
+  const [trendLoading, setTrendLoading] = useState(true);
+  const loadTrends = async () => {
+    setTrendLoading(true);
+    setTrendError("");
+    try {
+      setTrends(await adminApi.trends(range));
+    } catch (error) {
+      setTrendError(error instanceof Error ? error.message : "趋势数据暂时不可用");
+    } finally {
+      setTrendLoading(false);
+    }
+  };
+  useEffect(() => { void loadTrends(); }, [range]);
   return (
     <>
       <div className="metric-grid">
@@ -106,7 +123,37 @@ function Dashboard({ data }: { data: Row }) {
         <div><p className="eyebrow">SYSTEM SIGNAL</p><h3>今日运行信号</h3></div>
         <p>后台查询使用独立时间窗、分页与超时预算。用户资料原文、音频、截图及密钥不会在这里出现。</p>
       </section>
+      <section className="trend-section">
+        <div className="trend-heading">
+          <div><p className="eyebrow">HISTORICAL SIGNAL</p><h2>运营趋势</h2><p>每日聚合永久保存。缺失历史不会被绘制为零。</p></div>
+          <div className="range-switch">{(["7d", "30d", "90d"] as const).map(item => <button className={range === item ? "active" : ""} onClick={() => setRange(item)} key={item}>{item.replace("d", " 天")}</button>)}</div>
+        </div>
+        {trendLoading ? <div className="trend-state">正在读取历史运营快照...</div> : trendError ? <div className="trend-state error"><span>{trendError}</span><button onClick={() => void loadTrends()}>重新加载</button></div> : trends && <>
+          <div className="trend-health">
+            <span className={trends.health.lastSuccessAtMs ? "healthy" : "delayed"} />
+            <strong>{trends.health.lastSuccessAtMs ? "聚合正常" : "等待首次聚合"}</strong>
+            <small>{trends.health.lastSuccessAtMs ? `最近更新 ${new Date(trends.health.lastSuccessAtMs).toLocaleString("zh-CN")}` : "部署后将自动生成历史快照"}</small>
+          </div>
+          <div className="trend-grid">{trends.metrics.map(metric => <TrendCard metric={metric} key={metric.key} />)}</div>
+        </>}
+      </section>
     </>
+  );
+}
+
+function TrendCard({ metric }: { metric: TrendMetric }) {
+  const path = buildLinePath(metric.points);
+  const missing = metric.points.filter(point => point.value === null).length;
+  return (
+    <article className="trend-card">
+      <div className="trend-card-title"><div><small>{metric.group.toUpperCase()}</small><h3>{metric.label}</h3></div><span>{formatTrendChange(metric.summary.changePercent)}</span></div>
+      <strong>{formatTrendValue(metric.summary.current, metric.unit)}</strong>
+      <div className="chart-wrap">
+        {path ? <svg viewBox="0 0 560 150" role="img" aria-label={`${metric.label}趋势`} preserveAspectRatio="none"><path className="chart-glow" d={path} /><path className="chart-line" d={path} /></svg> : <div className="chart-empty">该区间暂无可用数据</div>}
+      </div>
+      <div className="trend-card-foot"><span>{metric.points.at(0)?.date} - {metric.points.at(-1)?.date}</span><span>{missing ? `${missing} 天无覆盖` : "数据完整"}</span></div>
+      <p>{metric.description}</p>
+    </article>
   );
 }
 

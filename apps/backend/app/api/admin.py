@@ -19,6 +19,7 @@ from app.schemas.admin import (
     AdminTimeAdjustmentRequest,
 )
 from app.services.admin_repository import AdminRepository
+from app.services.admin_analytics import AdminAnalyticsService
 from app.services.admin_service import AdminPrincipal, AdminService, hash_client_value
 from app.services.alipay_provider import AlipayPaymentProvider
 from app.services.billing_service import BillingService
@@ -186,6 +187,30 @@ def observability(
     principal: Annotated[AdminPrincipal, Depends(permission("observability.read"))],
 ):
     return {"data": admin_service().repository.observability()}
+
+
+@admin_router.get("/analytics/trends")
+def analytics_trends(
+    principal: Annotated[AdminPrincipal, Depends(permission("observability.read"))],
+    range_key: str = Query(default="30d", alias="range", pattern="^(7d|30d|90d)$"),
+    metrics: str | None = Query(default=None, max_length=400),
+):
+    selected = [item.strip() for item in metrics.split(",") if item.strip()] if metrics else None
+    try:
+        data = AdminAnalyticsService(admin_service().repository).trends(
+            range_key=range_key,
+            metric_keys=selected,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"data": data}
+
+
+@admin_router.get("/analytics/health")
+def analytics_health(
+    principal: Annotated[AdminPrincipal, Depends(permission("observability.read"))],
+):
+    return {"data": AdminAnalyticsService(admin_service().repository).health()}
 
 
 @admin_router.get("/users")

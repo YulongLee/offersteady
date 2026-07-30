@@ -319,6 +319,160 @@ class AdminRepository:
                 result[key] = int(cursor.fetchone()["value"])
         return {"updated_at_ms": current, "window_started_at_ms": since, **result}
 
+    def compute_and_upsert_metric(
+        self,
+        *,
+        definition,
+        bucket_start_ms: int,
+        bucket_end_ms: int,
+        granularity: str,
+        coverage_state: str,
+    ) -> bool:
+        lock_key = f"admin-analytics:{granularity}:{bucket_start_ms}:{definition.key}"
+        with self.connect() as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT pg_try_advisory_xact_lock(hashtextextended(%s, 0)) AS acquired", (lock_key,))
+            if not bool(cursor.fetchone()["acquired"]):
+                connection.rollback()
+                return False
+            value = None
+            sample_count = 0
+            if definition.sql is not None:
+                cursor.execute(definition.sql, (bucket_start_ms, bucket_end_ms))
+                aggregate = cursor.fetchone()
+                value = aggregate["value"]
+                sample_count = int(aggregate["sample_count"] or 0)
+            cursor.execute(
+                """
+                INSERT INTO admin_metric_snapshots(
+                  bucket_start_ms, granularity, metric_key, metric_value, sample_count,
+                  coverage_state, definition_version, computed_at_ms
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (bucket_start_ms, granularity, metric_key) DO UPDATE SET
+                  metric_value = EXCLUDED.metric_value,
+                  sample_count = EXCLUDED.sample_count,
+                  coverage_state = EXCLUDED.coverage_state,
+                  definition_version = EXCLUDED.definition_version,
+                  computed_at_ms = EXCLUDED.computed_at_ms
+                """,
+                (
+                    bucket_start_ms, granularity, definition.key, value, sample_count,
+                    coverage_state, definition.version, now_ms(),
+                ),
+            )
+            connection.commit()
+        return True
+
+    def create_analytics_run(self, values: dict[str, Any]) -> None:
+        with self.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO admin_metric_aggregation_runs(
+                  run_id, run_kind, granularity, range_started_at_ms, range_ended_at_ms,
+                  status, started_at_ms
+                ) VALUES (
+                  %(run_id)s, %(run_kind)s, %(granularity)s, %(range_started_at_ms)s,
+                  %(range_ended_at_ms)s, 'running', %(started_at_ms)s
+                )
+                """,
+                values,
+            )
+            connection.commit()
+
+    def finish_analytics_run(
+        self,
+        *,
+        run_id: str,
+        status: str,
+        bucket_count: int,
+        metric_count: int,
+        safe_error_code: str | None,
+    ) -> None:
+        with self.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE admin_metric_aggregation_runs
+                SET status = %s, bucket_count = %s, metric_count = %s,
+                    safe_error_code = %s, completed_at_ms = %s
+                WHERE run_id = %s
+                """,
+                (status, bucket_count, metric_count, safe_error_code, now_ms(), run_id),
+            )
+            connection.commit()
+
+    def list_analytics_snapshots(
+        self,
+        *,
+        start_ms: int,
+        end_ms: int,
+        metric_keys: list[str],
+        granularity: str,
+    ) -> list[dict[str, Any]]:
+        return self._all(
+            """
+            SELECT bucket_start_ms, metric_key, metric_value, sample_count,
+                   coverage_state, definition_version, computed_at_ms
+            FROM admin_metric_snapshots
+            WHERE granularity = %s AND bucket_start_ms >= %s AND bucket_start_ms < %s
+              AND metric_key = ANY(%s)
+            ORDER BY metric_key, bucket_start_ms
+            """,
+            (granularity, start_ms, end_ms, metric_keys),
+        )
+
+    def analytics_health(self, *, expected_since_ms: int) -> dict[str, Any]:
+        with self.connect(readonly=True) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT run_id, status, granularity, bucket_count, metric_count,
+                       safe_error_code, started_at_ms, completed_at_ms
+                FROM admin_metric_aggregation_runs
+                ORDER BY started_at_ms DESC LIMIT 1
+                """
+            )
+            latest = cursor.fetchone()
+            cursor.execute(
+                """
+                SELECT MAX(computed_at_ms) AS last_success_at_ms,
+                       COUNT(DISTINCT bucket_start_ms) FILTER (
+                         WHERE granularity = 'daily' AND bucket_start_ms >= %s
+                       )::INTEGER AS covered_days
+                FROM admin_metric_snapshots
+                """,
+                (expected_since_ms,),
+            )
+            coverage = cursor.fetchone()
+        return {
+            "lastSuccessAtMs": coverage["last_success_at_ms"],
+            "coveredDays": int(coverage["covered_days"] or 0),
+            "latestRun": dict(latest) if latest else None,
+        }
+
+    def analytics_earliest_business_ms(self) -> int | None:
+        row = self._one(
+            """
+            SELECT MIN(value) AS earliest FROM (
+              SELECT MIN(created_at_ms) AS value FROM auth_users
+              UNION ALL SELECT MIN(created_at_ms) FROM interview_sessions
+              UNION ALL SELECT MIN(created_at_ms) FROM points_redemption_ledger
+              UNION ALL SELECT MIN(created_at_ms) FROM billing_checkout_orders
+              UNION ALL SELECT MIN(created_at_ms) FROM material_documents
+              UNION ALL SELECT MIN(created_at_ms) FROM ai_usage_records
+            ) source
+            """,
+            (),
+        )
+        return int(row["earliest"]) if row and row["earliest"] is not None else None
+
+    def cleanup_hourly_analytics(self, *, before_ms: int) -> int:
+        with self.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM admin_metric_snapshots WHERE granularity = 'hourly' AND bucket_start_ms < %s",
+                (before_ms,),
+            )
+            removed = cursor.rowcount
+            connection.commit()
+        return removed
+
     def observability(self) -> dict[str, Any]:
         current = now_ms()
         since = current - 24 * 60 * 60 * 1000
@@ -702,6 +856,7 @@ class AdminRepository:
         migrations = [
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0014_commercial_admin_console.sql",
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0015_admin_redemption_batches.sql",
+            Path(REPO_ROOT) / "apps/backend/migrations/versions/0017_admin_operations_analytics.sql",
         ]
         with self.connect() as connection, connection.cursor() as cursor:
             for migration in migrations:
