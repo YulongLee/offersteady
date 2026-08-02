@@ -7,4 +7,4 @@
 - [x] Update the user-facing synthetic catalog and regression expectations.
 - [x] Run backend and frontend regression tests.
 - [x] Validate this OpenSpec change with strict validation.
-- [ ] Deploy the migration, backend, admin frontend, and user frontend.
+- [x] Deploy the migration, backend, admin frontend, and user frontend.
