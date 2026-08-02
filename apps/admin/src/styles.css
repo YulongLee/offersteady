@@ -116,9 +116,19 @@ tr:hover td { background: rgba(99,230,181,.035); color: white; }
 .redemption-output > div:last-child { display: flex; gap: 10px; }
 .redemption-output button { padding: 10px 14px; color: #062016; border: 0; background: var(--mint); font-weight: 800; }
 .redemption-output button + button { color: #cde8dc; border: 1px solid #3b6757; background: transparent; }
+.pricing-intro { display: grid; grid-template-columns: 1fr minmax(280px, .55fr); align-items: end; gap: 34px; margin-bottom: 16px; padding: 24px; border: 1px solid var(--line); background: rgba(10,24,20,.72); }
+.pricing-intro h3 { margin: 5px 0; }.pricing-intro p { color: var(--muted); font-size: 12px; line-height: 1.7; }.pricing-intro label { margin: 0; }
+.pricing-grid { display: grid; grid-template-columns: repeat(5, minmax(180px, 1fr)); gap: 12px; }
+.pricing-card { display: flex; flex-direction: column; min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: 3px 18px 3px 18px; background: var(--panel); }
+.pricing-card.unpublished { opacity: .68; border-style: dashed; }.pricing-card-head { display: flex; justify-content: space-between; color: var(--mint); font-size: 10px; }.pricing-card-head small { color: var(--muted); }
+.pricing-card > strong { margin-top: 20px; font: 500 27px Georgia, serif; }.pricing-card > p { min-height: 42px; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.pricing-card label { margin: 9px 0 0; font-size: 10px; }.pricing-card input { padding: 10px 11px; font-size: 12px; }
+.pricing-card .publish-switch { display: flex; align-items: center; gap: 8px; }.pricing-card .publish-switch input { width: auto; accent-color: var(--mint); }
+.pricing-card > button { margin-top: 14px; padding: 10px; border: 1px solid #3b6757; border-radius: 8px; color: #062016; background: var(--mint); font-weight: 800; }
+.pricing-message { display: block; min-height: 20px; margin-top: 14px; color: var(--mint); }
 @media (max-width: 900px) {
   .login-shell { grid-template-columns: 1fr; }.login-story { display: none; }.login-card { margin: 24px; }
   .admin-shell { grid-template-columns: 76px 1fr; } aside { padding: 20px 10px; }.brand div, nav button:not(.active) small, nav button { font-size: 0; }.brand { padding: 0 7px 24px; }.operator { display: none; }
-  nav button { min-height: 48px; }.workspace { padding: 26px 18px; }.metric-grid, .trend-grid, .capacity-grid { grid-template-columns: 1fr 1fr; }.workspace header { align-items: flex-start; }.header-actions span { display: none; }
+  nav button { min-height: 48px; }.workspace { padding: 26px 18px; }.metric-grid, .trend-grid, .capacity-grid, .pricing-grid { grid-template-columns: 1fr 1fr; }.workspace header { align-items: flex-start; }.header-actions span { display: none; }
 }
-@media (max-width: 560px) { .metric-grid, .field-grid, .trend-grid, .capacity-grid { grid-template-columns: 1fr; }.workspace h1 { font-size: 30px; }.signal-panel, .action-panel { grid-template-columns: 1fr; }.trend-heading { align-items: start; flex-direction: column; }.trend-section, .capacity-section { padding: 18px; }.capacity-summary { justify-content: flex-start; } }
+@media (max-width: 560px) { .metric-grid, .field-grid, .trend-grid, .capacity-grid, .pricing-grid { grid-template-columns: 1fr; }.workspace h1 { font-size: 30px; }.signal-panel, .action-panel, .pricing-intro { grid-template-columns: 1fr; }.trend-heading { align-items: start; flex-direction: column; }.trend-section, .capacity-section { padding: 18px; }.capacity-summary { justify-content: flex-start; } }

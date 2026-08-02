@@ -21,7 +21,7 @@ from app.services.authentication_service import JWTAccessTokenCodec
 
 PERMISSIONS_BY_ROLE: dict[str, frozenset[str]] = {
     "super_admin": frozenset({
-        "users.read", "users.suspend", "billing.read", "billing.adjust",
+        "users.read", "users.suspend", "billing.read", "billing.adjust", "catalog.manage",
         "redemptions.generate",
         "payments.reconcile", "materials.read", "materials.retry",
         "sessions.read", "sessions.terminate", "observability.read",
@@ -33,7 +33,7 @@ PERMISSIONS_BY_ROLE: dict[str, frozenset[str]] = {
     }),
     "support": frozenset({"users.read", "billing.read", "materials.read", "sessions.read"}),
     "finance": frozenset({
-        "users.read", "billing.read", "billing.adjust", "redemptions.generate",
+        "users.read", "billing.read", "billing.adjust", "catalog.manage", "redemptions.generate",
         "payments.reconcile", "audit.read",
     }),
     "technical_auditor": frozenset({"materials.read", "sessions.read", "observability.read", "audit.read"}),
@@ -43,10 +43,11 @@ SAFE_DETAIL_KEYS = frozenset({
     "status", "previous_status", "points", "days", "balance", "provider",
     "order_status", "document_id", "task_id", "session_id", "error_code",
     "idempotent_replay", "role", "batch_id", "code_count", "points_per_code",
-    "expires_at_ms", "campaign",
+    "expires_at_ms", "campaign", "product_id", "display_name", "price_cents",
+    "published", "catalog_version",
 })
 HIGH_RISK_PERMISSIONS = frozenset({
-    "users.suspend", "billing.adjust", "redemptions.generate", "admins.manage",
+    "users.suspend", "billing.adjust", "catalog.manage", "redemptions.generate", "admins.manage",
 })
 
 

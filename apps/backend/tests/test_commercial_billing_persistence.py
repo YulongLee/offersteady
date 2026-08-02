@@ -25,7 +25,7 @@ def test_wallet_order_and_duplicate_callback_survive_restart() -> None:
     service = service_for_test()
     assert service.state_for_user(user_id=user_id).balance == 200
     order = service.create_checkout_order(
-        user_id=user_id, product_id="points-300", channel="alipay",
+        user_id=user_id, product_id="points-1000", channel="alipay",
         idempotency_key="checkout-1", payment_url="#", expires_at_ms=9999999999999,
     )
     order = service.replace_checkout_action(order_id=order.id, payment_url="https://payment.example/order", expires_at_ms=9999999999999)
@@ -34,7 +34,7 @@ def test_wallet_order_and_duplicate_callback_survive_restart() -> None:
 
     restarted = service_for_test()
     state = restarted.state_for_user(user_id=user_id)
-    assert state.balance == 500
+    assert state.balance == 1200
     assert len([item for item in state.ledger if item.kind == "welcome_grant"]) == 1
     assert len([item for item in state.ledger if item.kind == "purchase_credit"]) == 1
     assert state.official_orders[0]["status"] == "paid"
@@ -66,7 +66,7 @@ def test_payment_expiry_callback_audit_and_reconciliation() -> None:
     service = service_for_test()
     service.state_for_user(user_id=user_id)
     order = service.create_checkout_order(
-        user_id=user_id, product_id="points-300", channel="alipay",
+        user_id=user_id, product_id="points-1000", channel="alipay",
         idempotency_key="expiring-order", payment_url="#", expires_at_ms=1,
     )
     expired = service.checkout_order_for_user(user_id=user_id, order_id=order.id)
@@ -82,7 +82,7 @@ def test_payment_expiry_callback_audit_and_reconciliation() -> None:
         amount_cents=order.amount_cents, verified=True, paid=True,
     ) == "paid"
     restarted = service_for_test()
-    assert restarted.state_for_user(user_id=user_id).balance == 500
+    assert restarted.state_for_user(user_id=user_id).balance == 1200
     assert len([item for item in restarted.state_for_user(user_id=user_id).ledger if item.kind == "purchase_credit"]) == 1
 
     assert service.process_payment_notification(
@@ -90,7 +90,7 @@ def test_payment_expiry_callback_audit_and_reconciliation() -> None:
         amount_cents=100, verified=True, paid=True,
     ) == "unknown_order"
     mismatch_order = service.create_checkout_order(
-        user_id=user_id, product_id="points-800", channel="alipay",
+        user_id=user_id, product_id="points-3000", channel="alipay",
         idempotency_key="mismatch-order", payment_url="#", expires_at_ms=9999999999999,
     )
     assert service.process_payment_notification(

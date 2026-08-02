@@ -617,6 +617,44 @@ class AdminRepository:
             (limit, offset),
         )
 
+    def list_catalog_products(self, *, limit: int, offset: int) -> list[dict[str, Any]]:
+        return self._all(
+            """
+            SELECT product_id, catalog_version, kind, display_name, price_cents,
+                   points, duration_days, knowledge_index_allowance, published,
+                   updated_by_user_id, updated_at_ms
+            FROM billing_catalog_products
+            ORDER BY CASE kind WHEN 'time_pass' THEN 0 ELSE 1 END,
+                     duration_days NULLS LAST, points NULLS LAST
+            LIMIT %s OFFSET %s
+            """,
+            (limit, offset),
+        )
+
+    def update_catalog_product(self, *, product_id: str, display_name: str, price_cents: int, published: bool, actor_user_id: str) -> dict[str, Any]:
+        current = now_ms()
+        with self.connect() as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ("offersteady:billing-catalog",))
+            cursor.execute("SELECT COALESCE(MAX(catalog_version), 4) + 1 AS next_version FROM billing_catalog_products")
+            next_version = int(cursor.fetchone()["next_version"])
+            cursor.execute(
+                """
+                UPDATE billing_catalog_products
+                SET display_name = %s, price_cents = %s, published = %s,
+                    catalog_version = %s, updated_by_user_id = %s, updated_at_ms = %s
+                WHERE product_id = %s
+                RETURNING product_id, catalog_version, kind, display_name, price_cents,
+                          points, duration_days, knowledge_index_allowance, published, updated_at_ms
+                """,
+                (display_name, price_cents, published, next_version, actor_user_id, current, product_id),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                raise LookupError("catalog_product_not_found")
+            result = dict(row)
+            connection.commit()
+            return result
+
     def list_redemption_batches(self, *, limit: int, offset: int) -> list[dict[str, Any]]:
         return self._all(
             """
@@ -920,6 +958,7 @@ class AdminRepository:
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0014_commercial_admin_console.sql",
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0015_admin_redemption_batches.sql",
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0017_admin_operations_analytics.sql",
+            Path(REPO_ROOT) / "apps/backend/migrations/versions/0018_admin_managed_billing_catalog.sql",
         ]
         with self.connect() as connection, connection.cursor() as cursor:
             for migration in migrations:

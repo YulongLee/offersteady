@@ -52,7 +52,7 @@ export const adminApi = {
     request<TrendResponse>(`/api/v1/admin/analytics/trends?range=${range}`),
   capacity: () => request<CapacityResponse>("/api/v1/admin/capacity"),
   observability: () => request<Record<string, unknown>>("/api/v1/admin/observability"),
-  list: (resource: "users" | "orders" | "redemption-batches" | "materials" | "interviews" | "audit" | "admins", offset = 0) =>
+  list: (resource: "users" | "orders" | "catalog-products" | "redemption-batches" | "materials" | "interviews" | "audit" | "admins", offset = 0) =>
     request<{ items: Record<string, unknown>[] }>(`/api/v1/admin/${resource}?limit=50&offset=${offset}`),
   action: (path: string, payload: Record<string, unknown>) =>
     request<Record<string, unknown>>(`/api/v1/admin${path}`, { method: "POST", body: JSON.stringify(payload) }),

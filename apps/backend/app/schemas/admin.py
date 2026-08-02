@@ -40,3 +40,9 @@ class AdminRedemptionBatchRequest(AdminActionRequest):
     points: int = Field(ge=1, le=100000)
     quantity: int = Field(ge=1, le=500)
     expires_in_days: int = Field(ge=1, le=365)
+
+
+class AdminCatalogProductUpdateRequest(AdminActionRequest):
+    display_name: str = Field(min_length=2, max_length=40)
+    price_cents: int = Field(ge=1, le=10_000_000)
+    published: bool

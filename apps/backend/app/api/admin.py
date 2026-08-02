@@ -12,6 +12,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.core.config import get_settings
 from app.schemas.admin import (
     AdminActionRequest,
+    AdminCatalogProductUpdateRequest,
     AdminCreateRequest,
     AdminPointsAdjustmentRequest,
     AdminRedemptionBatchRequest,
@@ -245,6 +246,16 @@ def orders(
     return {"data": {"items": admin_service().repository.list_orders(limit=limit, offset=offset), "limit": limit, "offset": offset}}
 
 
+@admin_router.get("/catalog-products")
+def catalog_products(
+    principal: Annotated[AdminPrincipal, Depends(permission("billing.read"))],
+    limit: int = Query(default=50, ge=1),
+    offset: int = Query(default=0, ge=0),
+):
+    limit, offset = _page(limit, offset)
+    return {"data": {"items": admin_service().repository.list_catalog_products(limit=limit, offset=offset), "limit": limit, "offset": offset}}
+
+
 @admin_router.get("/redemption-batches")
 def redemption_batches(
     principal: Annotated[AdminPrincipal, Depends(permission("billing.read"))],
@@ -337,6 +348,24 @@ def _run_action(
             result="failed", details={"error_code": exc.__class__.__name__},
         )
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@admin_router.post("/catalog-products/{product_id}")
+def update_catalog_product(
+    product_id: str,
+    payload: AdminCatalogProductUpdateRequest,
+    request: Request,
+    principal: Annotated[AdminPrincipal, Depends(permission("catalog.manage"))],
+):
+    return _run_action(
+        request=request, principal=principal, payload=payload, action="catalog.update",
+        resource_type="billing_catalog_product", resource_id=product_id,
+        callback=lambda: admin_service().repository.update_catalog_product(
+            product_id=product_id, display_name=payload.display_name,
+            price_cents=payload.price_cents, published=payload.published,
+            actor_user_id=principal.user_id,
+        ),
+    )
 
 
 @admin_router.post("/admins")

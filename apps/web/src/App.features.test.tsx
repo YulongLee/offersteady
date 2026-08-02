@@ -26,7 +26,7 @@ describe("spec-driven interview features", () => {
     open("/app/billing");
     expect(screen.getByText("200 点", { selector: ".balance-card strong" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "3 天会员" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "300 点" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "1000 积分" })).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "购买" })[0]!);
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).queryByLabelText("交易单号")).not.toBeInTheDocument(); expect(within(dialog).queryByLabelText("付款截图")).not.toBeInTheDocument();

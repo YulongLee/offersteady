@@ -597,7 +597,7 @@ h1, h2, h3, p { margin-top: 0; }
 .redemption-status.code-unavailable, .redemption-status.rate-limited, .redemption-status.temporarily-unavailable { color: var(--warning); }
 .points-history { margin-bottom: 38px; }
 .billing-section { margin-bottom: 38px; }
-.price-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.price-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
 .price-card { display: flex; flex-direction: column; min-height: 210px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 18px; }
 .price-card > span { color: var(--brand); font-size: 8px; }
 .price-card h3 { margin: 16px 0 7px; font-size: 17px; }

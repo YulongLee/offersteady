@@ -11,7 +11,7 @@ export interface BillingProduct {
   readonly displayName: string;
   readonly priceCents: number;
   readonly points?: number;
-  readonly durationDays?: 3 | 7 | 15 | 30;
+  readonly durationDays?: 1 | 3 | 7 | 15 | 30;
   readonly knowledgeIndexAllowance?: 0 | 2;
   readonly published: boolean;
 }

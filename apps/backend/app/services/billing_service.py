@@ -442,19 +442,29 @@ class BillingService:
         return self.billing_repository.reconciliation_summary(now_ms=_now_ms())
 
     def catalog(self) -> list[BillingProductRecord]:
+        if self.billing_repository is not None:
+            return [BillingProductRecord(**item) for item in self.billing_repository.list_catalog_products()]
+        return self._fallback_catalog()
+
+    @staticmethod
+    def _fallback_catalog() -> list[BillingProductRecord]:
         return [
-            BillingProductRecord(id="pass-3", catalog_version=4, kind="time_pass", display_name="3 天会员", price_cents=6990, duration_days=3, knowledge_index_allowance=0),
-            BillingProductRecord(id="pass-7", catalog_version=4, kind="time_pass", display_name="7 天会员", price_cents=12990, duration_days=7, knowledge_index_allowance=0),
-            BillingProductRecord(id="pass-15", catalog_version=4, kind="time_pass", display_name="15 天会员", price_cents=21990, duration_days=15, knowledge_index_allowance=2),
-            BillingProductRecord(id="pass-30", catalog_version=4, kind="time_pass", display_name="30 天会员", price_cents=32990, duration_days=30, knowledge_index_allowance=2),
-            BillingProductRecord(id="points-300", catalog_version=4, kind="points_pack", display_name="300 点", price_cents=3990, points=300),
-            BillingProductRecord(id="points-800", catalog_version=4, kind="points_pack", display_name="800 点", price_cents=8990, points=800),
-            BillingProductRecord(id="points-2000", catalog_version=4, kind="points_pack", display_name="2000 点", price_cents=19990, points=2000),
+            BillingProductRecord(id="pass-1", catalog_version=5, kind="time_pass", display_name="1 天会员", price_cents=2990, duration_days=1, knowledge_index_allowance=0),
+            BillingProductRecord(id="pass-3", catalog_version=5, kind="time_pass", display_name="3 天会员", price_cents=6990, duration_days=3, knowledge_index_allowance=0),
+            BillingProductRecord(id="pass-7", catalog_version=5, kind="time_pass", display_name="7 天会员", price_cents=12990, duration_days=7, knowledge_index_allowance=0),
+            BillingProductRecord(id="pass-15", catalog_version=5, kind="time_pass", display_name="15 天会员", price_cents=21990, duration_days=15, knowledge_index_allowance=2),
+            BillingProductRecord(id="pass-30", catalog_version=5, kind="time_pass", display_name="30 天会员", price_cents=32990, duration_days=30, knowledge_index_allowance=2),
+            BillingProductRecord(id="points-1000", catalog_version=5, kind="points_pack", display_name="1000 积分", price_cents=9990, points=1000),
+            BillingProductRecord(id="points-3000", catalog_version=5, kind="points_pack", display_name="3000 积分", price_cents=26990, points=3000),
+            BillingProductRecord(id="points-10000", catalog_version=5, kind="points_pack", display_name="10000 积分", price_cents=79990, points=10000),
+            BillingProductRecord(id="points-30000", catalog_version=5, kind="points_pack", display_name="30000 积分", price_cents=199990, points=30000),
+            BillingProductRecord(id="points-66666", catalog_version=5, kind="points_pack", display_name="66666 积分", price_cents=399990, points=66666),
         ]
 
     def rates(self) -> dict[str, object]:
+        catalog = self.catalog()
         return {
-            "catalogVersion": 4,
+            "catalogVersion": max((item.catalog_version for item in catalog), default=5),
             "answerPoints": 5,
             "screenshotAnswerPoints": 15,
             "knowledgeIndexMinimumPoints": 20,

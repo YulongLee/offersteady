@@ -18,6 +18,20 @@ class PostgresBillingRepository:
         self.settings = settings
         self._ensure_tables()
 
+    def list_catalog_products(self) -> list[dict[str, object]]:
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT product_id AS id, catalog_version, kind, display_name, price_cents,
+                       points, duration_days, knowledge_index_allowance, published
+                FROM billing_catalog_products
+                WHERE published = TRUE
+                ORDER BY CASE kind WHEN 'time_pass' THEN 0 ELSE 1 END,
+                         duration_days NULLS LAST, points NULLS LAST
+                """
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
     def ensure_welcome_grant(self, *, user_id: str, points: int, created_at_ms: int) -> None:
         with self._connect() as connection, connection.cursor() as cursor:
             cursor.execute(
@@ -589,6 +603,7 @@ class PostgresBillingRepository:
             Path(REPO_ROOT / "apps/backend/migrations/versions/0011_enable_pgvector_extension.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0012_billable_interview_usage.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0013_official_alipay_payments.sql"),
+            Path(REPO_ROOT / "apps/backend/migrations/versions/0018_admin_managed_billing_catalog.sql"),
         )
         with self._connect() as connection, connection.cursor() as cursor:
             cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ("offersteady:billing-migrations",))

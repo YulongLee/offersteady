@@ -4,13 +4,14 @@ import { adminApi } from "./api";
 import { buildLinePath, chartDomain, formatTrendChange, formatTrendValue, type TrendMetric, type TrendResponse } from "./analytics";
 import { capacityLevelLabel, formatCapacityValue, type CapacityMetric, type CapacityResponse } from "./capacity";
 
-type View = "dashboard" | "users" | "orders" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
+type View = "dashboard" | "users" | "orders" | "pricing" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
 type Row = Record<string, unknown>;
 
 const views: { id: View; label: string; eyebrow: string; permission: string }[] = [
   { id: "dashboard", label: "运营总览", eyebrow: "OVERVIEW", permission: "observability.read" },
   { id: "users", label: "用户与权益", eyebrow: "CUSTOMERS", permission: "users.read" },
   { id: "orders", label: "订单与支付", eyebrow: "BILLING", permission: "billing.read" },
+  { id: "pricing", label: "商品定价", eyebrow: "CATALOG", permission: "billing.read" },
   { id: "redemptions", label: "兑换码", eyebrow: "BENEFITS", permission: "billing.read" },
   { id: "materials", label: "资料任务", eyebrow: "KNOWLEDGE", permission: "materials.read" },
   { id: "interviews", label: "面试会话", eyebrow: "SESSIONS", permission: "sessions.read" },
@@ -518,6 +519,50 @@ function RedemptionPanel({ rows, permissions, onChanged }: { rows: Row[]; permis
   );
 }
 
+type PricingDraft = { productId: string; kind: string; displayName: string; priceYuan: string; points: number | null; durationDays: number | null; knowledgeIndexAllowance: number; published: boolean; catalogVersion: number };
+
+function PricingPanel({ rows, permissions, onChanged }: { rows: Row[]; permissions: string[]; onChanged: () => void }) {
+  const [drafts, setDrafts] = useState<PricingDraft[]>([]);
+  const [reason, setReason] = useState("");
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState("");
+  const canManage = permissions.includes("catalog.manage");
+  useEffect(() => { setDrafts(rows.map(row => ({
+    productId: String(row.product_id), kind: String(row.kind), displayName: String(row.display_name),
+    priceYuan: (Number(row.price_cents) / 100).toFixed(2),
+    points: row.points == null ? null : Number(row.points), durationDays: row.duration_days == null ? null : Number(row.duration_days),
+    knowledgeIndexAllowance: Number(row.knowledge_index_allowance || 0), published: Boolean(row.published), catalogVersion: Number(row.catalog_version),
+  }))); }, [rows]);
+  const change = (productId: string, values: Partial<PricingDraft>) => setDrafts(current => current.map(item => item.productId === productId ? { ...item, ...values } : item));
+  const save = async (draft: PricingDraft) => {
+    const priceCents = Math.round(Number(draft.priceYuan) * 100);
+    if (!canManage || !Number.isFinite(priceCents) || priceCents < 1 || draft.displayName.trim().length < 2) { setMessage("请填写有效的商品名称和价格。"); return; }
+    if (reason.trim().length < 6) { setMessage("调价前请填写至少 6 个字的变更原因。"); return; }
+    if (!window.confirm(`确认将“${draft.displayName}”价格设为 ¥${draft.priceYuan}，并${draft.published ? "上架" : "下架"}？`)) return;
+    setSaving(draft.productId);
+    try {
+      await adminApi.action(`/catalog-products/${draft.productId}`, { displayName: draft.displayName.trim(), priceCents, published: draft.published, reason: reason.trim(), confirmed: true, idempotencyKey: crypto.randomUUID() });
+      setMessage("商品目录已更新，新订单将立即使用新价格；历史订单不受影响。"); onChanged();
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "目录更新失败";
+      if (text.includes("admin_step_up_required")) { adminApi.clear(); window.location.reload(); return; }
+      setMessage(text);
+    } finally { setSaving(""); }
+  };
+  return <>
+    <section className="pricing-intro"><div><p className="eyebrow">SERVER CATALOG</p><h3>商品目录与价格</h3><p>权益档位由系统固定，避免误操作改变已售商品含义。这里只调整名称、价格与上下架状态。</p></div><label>本次变更原因<input value={reason} onChange={event => setReason(event.target.value)} placeholder="例如：正式版首发价格调整" /></label></section>
+    <div className="pricing-grid">{drafts.map(draft => <article className={`pricing-card ${draft.published ? "published" : "unpublished"}`} key={draft.productId}>
+      <div className="pricing-card-head"><span>{draft.kind === "time_pass" ? "时长会员" : "积分包"}</span><small>目录 v{draft.catalogVersion}</small></div>
+      <strong>{draft.kind === "time_pass" ? `${draft.durationDays} 天` : `${draft.points?.toLocaleString("zh-CN")} 积分`}</strong>
+      <p>{draft.kind === "time_pass" ? `回答与截图不限次${draft.knowledgeIndexAllowance ? ` · 含 ${draft.knowledgeIndexAllowance} 份知识材料` : ""}` : "积分长期有效，按成功结果扣除"}</p>
+      <label>展示名称<input value={draft.displayName} disabled={!canManage} onChange={event => change(draft.productId, { displayName: event.target.value })} /></label>
+      <label>售价（人民币元）<input type="number" min="0.01" step="0.01" value={draft.priceYuan} disabled={!canManage} onChange={event => change(draft.productId, { priceYuan: event.target.value })} /></label>
+      <label className="publish-switch"><input type="checkbox" checked={draft.published} disabled={!canManage} onChange={event => change(draft.productId, { published: event.target.checked })} /><span>{draft.published ? "已上架" : "已下架"}</span></label>
+      <button disabled={!canManage || saving === draft.productId} onClick={() => void save(draft)}>{saving === draft.productId ? "保存中..." : "保存商品"}</button>
+    </article>)}</div><small className="pricing-message">{canManage ? message : "当前角色可查看目录，但只有财务管理员和超级管理员可以调价。"}</small>
+  </>;
+}
+
 export function App() {
   const [authenticated, setAuthenticated] = useState(Boolean(adminApi.token()));
   const [view, setView] = useState<View>("dashboard");
@@ -552,7 +597,7 @@ export function App() {
         const nextDashboard = await adminApi.dashboard();
         if (sequence === loadSequence.current) setDashboardData(nextDashboard);
       } else {
-        const resource = target === "redemptions" ? "redemption-batches" : target;
+        const resource = target === "redemptions" ? "redemption-batches" : target === "pricing" ? "catalog-products" : target;
         const nextRows = (await adminApi.list(resource, offset)).items;
         if (sequence === loadSequence.current) setRows(Array.isArray(nextRows) ? nextRows : []);
       }
@@ -588,7 +633,7 @@ export function App() {
       <main className="workspace">
         <header><div><p className="eyebrow">{current.eyebrow}</p><h1>{current.label}</h1></div><div className="header-actions"><span>{new Date().toLocaleDateString("zh-CN")}</span><button onClick={() => void load(view)}>刷新</button><button onClick={() => adminApi.logout().then(() => { sessionRequest.current = null; setAuthenticated(false); })}>退出</button></div></header>
         {error && <div className="alert">{error}</div>}
-        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : <>
+        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "pricing" ? <PricingPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : <>
           <Table rows={rows} />
           <div className="pagination"><button disabled={offset === 0} onClick={() => setOffset(value => Math.max(0, value - 50))}>上一页</button><span>第 {offset / 50 + 1} 页</span><button disabled={rows.length < 50} onClick={() => setOffset(value => value + 50)}>下一页</button></div>
           <ActionPanel view={view} rows={rows} permissions={permissions} onChanged={() => void load(view, true)} />

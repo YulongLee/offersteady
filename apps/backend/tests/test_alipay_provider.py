@@ -83,7 +83,7 @@ def test_payment_callback_cannot_cross_order_provider() -> None:
     service = BillingService()
     order = service.create_checkout_order(
         user_id="synthetic-user",
-        product_id="points-300",
+            product_id="points-1000",
         channel="alipay",
         provider="alipay",
         idempotency_key="synthetic-checkout",

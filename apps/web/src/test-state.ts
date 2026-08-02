@@ -32,13 +32,16 @@ export const syntheticLibrarySources: ContextLibrarySource[] = [
 ];
 
 const billingProducts: BillingProduct[] = [
-  { id: "pass-3", catalogVersion: 3, kind: "time_pass", displayName: "3 天会员", priceCents: 6990, durationDays: 3, knowledgeIndexAllowance: 0, published: true },
-  { id: "pass-7", catalogVersion: 3, kind: "time_pass", displayName: "7 天会员", priceCents: 12990, durationDays: 7, knowledgeIndexAllowance: 0, published: true },
-  { id: "pass-15", catalogVersion: 3, kind: "time_pass", displayName: "15 天会员", priceCents: 21990, durationDays: 15, knowledgeIndexAllowance: 2, published: true },
-  { id: "pass-30", catalogVersion: 3, kind: "time_pass", displayName: "30 天会员", priceCents: 32990, durationDays: 30, knowledgeIndexAllowance: 2, published: true },
-  { id: "points-300", catalogVersion: 3, kind: "points_pack", displayName: "300 点", priceCents: 3990, points: 300, published: true },
-  { id: "points-800", catalogVersion: 3, kind: "points_pack", displayName: "800 点", priceCents: 8990, points: 800, published: true },
-  { id: "points-2000", catalogVersion: 3, kind: "points_pack", displayName: "2000 点", priceCents: 19990, points: 2000, published: true },
+  { id: "pass-1", catalogVersion: 5, kind: "time_pass", displayName: "1 天会员", priceCents: 2990, durationDays: 1, knowledgeIndexAllowance: 0, published: true },
+  { id: "pass-3", catalogVersion: 5, kind: "time_pass", displayName: "3 天会员", priceCents: 6990, durationDays: 3, knowledgeIndexAllowance: 0, published: true },
+  { id: "pass-7", catalogVersion: 5, kind: "time_pass", displayName: "7 天会员", priceCents: 12990, durationDays: 7, knowledgeIndexAllowance: 0, published: true },
+  { id: "pass-15", catalogVersion: 5, kind: "time_pass", displayName: "15 天会员", priceCents: 21990, durationDays: 15, knowledgeIndexAllowance: 2, published: true },
+  { id: "pass-30", catalogVersion: 5, kind: "time_pass", displayName: "30 天会员", priceCents: 32990, durationDays: 30, knowledgeIndexAllowance: 2, published: true },
+  { id: "points-1000", catalogVersion: 5, kind: "points_pack", displayName: "1000 积分", priceCents: 9990, points: 1000, published: true },
+  { id: "points-3000", catalogVersion: 5, kind: "points_pack", displayName: "3000 积分", priceCents: 26990, points: 3000, published: true },
+  { id: "points-10000", catalogVersion: 5, kind: "points_pack", displayName: "10000 积分", priceCents: 79990, points: 10000, published: true },
+  { id: "points-30000", catalogVersion: 5, kind: "points_pack", displayName: "30000 积分", priceCents: 199990, points: 30000, published: true },
+  { id: "points-66666", catalogVersion: 5, kind: "points_pack", displayName: "66666 积分", priceCents: 399990, points: 66666, published: true },
 ];
 
 const knowledgeCollections: KnowledgeCollection[] = [
@@ -129,7 +132,7 @@ export const syntheticState: WebAppState = {
   },
   billing: {
     catalog: billingProducts,
-    rates: { catalogVersion: 4, answerPoints: 5, screenshotAnswerPoints: 15, knowledgeIndexMinimumPoints: 20, knowledgeIndexPointsPer1000Tokens: 4, tokenizerVersion: "synthetic-v1" },
+    rates: { catalogVersion: 5, answerPoints: 5, screenshotAnswerPoints: 15, knowledgeIndexMinimumPoints: 20, knowledgeIndexPointsPer1000Tokens: 4, tokenizerVersion: "synthetic-v1" },
     balance: 200,
     ledger: [{ id: "ledger-welcome", userId: "admin", kind: "welcome_grant", points: 200, createdAtMs: 1_719_734_400_000, referenceId: "welcome:admin", description: "新用户赠送积分" }],
     activePass: null,
