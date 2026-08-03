@@ -1,4 +1,5 @@
 import type { AnswerTaskSnapshot } from "@offersteady/protocol";
+import { useState } from "react";
 import type { InterviewQuestion, QuestionStatus } from "./domain";
 import { AnswerMarkdown } from "./AnswerMarkdown";
 import { answerPage } from "./live-workspace";
@@ -29,6 +30,7 @@ const splitAnswerSections = (detail: string) => {
 };
 
 export function AnswerWorkspace({ answers, viewingAnswerId, newAnswerAvailable, activeTask, cancelling, cancelError, onView, onRetry, onStop }: Props) {
+  const [mobileExpanded, setMobileExpanded] = useState(false);
   const page = answerPage(answers, viewingAnswerId);
   const taskActive = activeTask?.status === "queued" || activeTask?.status === "generating";
   if (!page) return <section className="answer-workspace empty-state" aria-labelledby="answer-title"><h2 id="answer-title">回答</h2><p>确认面试官问题或手动输入问题后，答案会显示在这里。</p></section>;
@@ -40,8 +42,8 @@ export function AnswerWorkspace({ answers, viewingAnswerId, newAnswerAvailable, 
     ? `回答依据 · 固定资料 ${fixedCount} · 知识库 ${retrievedCount}`
     : "未使用个人资料";
   const answerSections = splitAnswerSections(shown.advice.detail);
-  return <section className="answer-workspace" aria-labelledby="answer-title" aria-live="polite">
-    <header className="answer-workspace-head"><div><span className="kicker">ANSWER</span><h2 id="answer-title">回答</h2></div><div className="answer-pagination"><button disabled={!page.previousId} title={page.previousId ? "查看上一条历史答案" : "已经是最早答案"} onClick={() => onView(page.previousId)}>← 上一条</button><span>{page.index + 1} / {page.total}</span><button disabled={!page.nextId} title={page.nextId ? "查看下一条较新答案" : "已经是最新答案"} onClick={() => onView(page.nextId)}>下一条 →</button>{!page.isLatest || newAnswerAvailable ? <button className="latest-answer" onClick={() => onView(null)}>{newAnswerAvailable ? "有新答案 · 回到最新" : "回到最新"}</button> : null}</div></header>
+  return <section className={`answer-workspace${mobileExpanded ? " mobile-answer-expanded" : ""}`} aria-labelledby="answer-title" aria-live="polite">
+    <header className="answer-workspace-head"><div><span className="kicker">ANSWER</span><h2 id="answer-title">回答</h2></div><div className="answer-pagination"><button className="mobile-answer-size-toggle" aria-pressed={mobileExpanded} onClick={() => setMobileExpanded(value => !value)}>{mobileExpanded ? "恢复回答框高度" : "扩大回答框"}</button><button disabled={!page.previousId} title={page.previousId ? "查看上一条历史答案" : "已经是最早答案"} onClick={() => onView(page.previousId)}>← 上一条</button><span>{page.index + 1} / {page.total}</span><button disabled={!page.nextId} title={page.nextId ? "查看下一条较新答案" : "已经是最新答案"} onClick={() => onView(page.nextId)}>下一条 →</button>{!page.isLatest || newAnswerAvailable ? <button className="latest-answer" onClick={() => onView(null)}>{newAnswerAvailable ? "有新答案 · 回到最新" : "回到最新"}</button> : null}</div></header>
     {taskActive ? <div className="answer-task-control" role="status"><span>{viewingAnswerId ? "最新回答仍在生成" : "当前回答正在生成"}</span><button className="stop-answer" disabled={cancelling} onClick={onStop}>{cancelling ? "正在终止…" : "终止回答"}</button></div> : null}
     {cancelError ? <div className="answer-cancel-error" role="alert">{cancelError}</div> : null}
     <div className="question-block"><div><span className="question-state"><i /> {page.isLatest ? statusLabel[shown.status] : "历史答案"}</span><small>{shown.askedAt} · {shown.input === "desktop-audio" ? "桌面音频" : shown.input === "manual" ? "手动输入" : "截图"}</small></div>{shown.questionNormalizationStatus === "pending" ? <span className="normalized-question-label pending">正在整理面试官的问题</span> : shown.questionNormalizationStatus === "completed" ? <span className="normalized-question-label">AI 整理的问题</span> : shown.questionNormalizationStatus === "fallback" ? <span className="normalized-question-label fallback">根据当前转录识别的问题</span> : null}<h1>{shown.text}</h1></div>

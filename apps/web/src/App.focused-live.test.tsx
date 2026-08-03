@@ -178,6 +178,20 @@ describe("focused live interview workspace", () => {
     expect(screen.queryByText("模型推断")).not.toBeInTheDocument();
   });
 
+  it("expands and restores the mobile answer workspace without losing its answer", () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    openLive();
+    const workspace = document.querySelector(".answer-workspace");
+    const expand = screen.getByRole("button", { name: "扩大回答框" });
+    expect(workspace).not.toHaveClass("mobile-answer-expanded");
+    fireEvent.click(expand);
+    expect(workspace).toHaveClass("mobile-answer-expanded");
+    expect(screen.getByRole("button", { name: "恢复回答框高度" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("回答正文")).toHaveTextContent("可以按照 STAR 结构回答");
+    fireEvent.click(screen.getByRole("button", { name: "恢复回答框高度" }));
+    expect(workspace).not.toHaveClass("mobile-answer-expanded");
+  });
+
   it("keeps compact actions free of point-price labels", () => {
     openLive();
     const actions = screen.getByRole("region", { name: "面试操作" });
