@@ -250,6 +250,14 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
     return { speaker: structuredClone(syntheticState.speaker) };
   }
 
+  async loadInterviewWorkspace(_interviewId: string, signal?: AbortSignal) {
+    await delay(signal);
+    return {
+      questions: structuredClone(syntheticState.questions),
+      activeAnswerTask: structuredClone(syntheticState.activeAnswerTask),
+    };
+  }
+
   async loadDesktopShortcutScreenshotUpdates(_interviewId: string, signal?: AbortSignal) {
     await delay(signal);
     return [];

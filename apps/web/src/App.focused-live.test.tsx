@@ -94,6 +94,25 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 beforeEach(() => Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 }));
 
 describe("focused live interview workspace", () => {
+  it("hydrates backend answer history when the same interview opens on another device", async () => {
+    vi.spyOn(interviewAppAdapter, "loadInterviewWorkspace").mockResolvedValueOnce({
+      questions: [{
+        id: "cross-device-answer",
+        askedAt: "刚刚",
+        text: "电脑端已经回答的问题",
+        input: "manual",
+        status: "confirmed",
+        advice: { outline: [], detail: "这是从服务端恢复的完整回答。", sourceTypes: [], inference: "", uncertain: false, provenance: { selectionRevision: 0, usedSources: [] } },
+      }],
+      activeAnswerTask: null,
+    });
+
+    openLive(state => { state.questions = []; });
+
+    expect(await screen.findByText("电脑端已经回答的问题")).toBeInTheDocument();
+    expect(screen.getByLabelText("回答正文")).toHaveTextContent("这是从服务端恢复的完整回答。");
+  });
+
   it("uses conversation and answer regions without a permanent history rail", () => {
     openLive();
     expect(screen.getByRole("heading", { name: "实时对话" })).toBeInTheDocument();

@@ -2094,7 +2094,7 @@ def test_realtime_runtime_tracks_frame_receipts_and_asr_status() -> None:
     assert transcripts["transcripts"][0]["performance"]["traceId"] == "trace-runtime-mic-1"
 
 
-def test_new_live_page_lease_replaces_the_previous_page_instance() -> None:
+def test_same_interview_allows_multiple_observers_without_enabling_multiple_sessions() -> None:
     user_id = "single-active-page-user"
     session = unwrap(client.post("/api/v1/sessions", json={
         "userId": user_id,
@@ -2137,16 +2137,13 @@ def test_new_live_page_lease_replaces_the_previous_page_instance() -> None:
     assert renewed["leaseGeneration"] == 1
     assert second["leaseGeneration"] == 2
     assert second["pageInstanceId"] == "page-instance-second"
-    stale_stream = client.get(
-        f"/api/v1/realtime-speech/sessions/{session_id}/stream",
-        params={
-            "userId": user_id,
-            "cursor": 0,
-            "pageInstanceId": "page-instance-first",
-            "leaseGeneration": first["leaseGeneration"],
-        },
+    from app.deps import realtime_speech_service as realtime_speech_service_dep
+    realtime_speech_service_dep().require_active_realtime_session(
+        user_id=user_id,
+        session_id=session_id,
+        page_instance_id="page-instance-first",
+        lease_generation=first["leaseGeneration"],
     )
-    assert stale_stream.status_code == 409
 
 
 def test_realtime_publisher_replacement_keeps_one_authoritative_channel() -> None:

@@ -2,7 +2,7 @@ import type { CaptureState, FoundationIndexResponse } from "@offersteady/protoco
 
 import type { AnswerProvenance, AnswerSourceReference, AnswerTaskSnapshot, CancelAnswerResult, OfficialCheckoutOrder, PointsRedemptionResult } from "@offersteady/protocol";
 import { AppError } from "./domain";
-import type { ActiveInterviewConflict, AnswerAdvice, DesktopDeviceBinding, IdleInterviewStatus, InterviewAppAdapter, InterviewQuestion, InterviewSummary, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
+import type { ActiveInterviewConflict, AnswerAdvice, DesktopDeviceBinding, IdleInterviewStatus, InterviewAppAdapter, InterviewQuestion, InterviewSummary, InterviewWorkspaceSnapshot, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
 import { createJsonClient, withBaseUrl } from "./api-client";
 import { authClient } from "./auth-client";
 import { createSseParser, type LiveAnswerStreamEvent, type ManualAnswerStreamUpdate } from "./live-answer-stream";
@@ -797,6 +797,26 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       this.client.request<BackendRealtimeRuntimeResponse>(`/api/v1/realtime-speech/sessions/${interviewId}/runtime?userId=${encodeURIComponent(requireUserId())}`, { headers: authHeaders() }, signal).catch(() => null),
     ]);
     return mapRealtimeState(interviewId, transcripts, candidates, events, runtime);
+  }
+
+  async loadInterviewWorkspace(interviewId: string, signal?: AbortSignal): Promise<InterviewWorkspaceSnapshot> {
+    const [chatTasks, screenshotTasks] = await Promise.all([
+      this.client.request<readonly BackendLiveAnswerTaskResponse[]>(`/api/v1/live-answer/sessions/${interviewId}/history?userId=${encodeURIComponent(requireUserId())}`, {
+        headers: authHeaders(),
+      }, signal),
+      this.client.request<readonly BackendScreenshotAnswerTaskResponse[]>(`/api/v1/screenshot-answer/sessions/${interviewId}/history?userId=${encodeURIComponent(requireUserId())}`, {
+        headers: authHeaders(),
+      }, signal),
+    ]);
+    const results = [
+      ...chatTasks.map(task => ({ updatedAtMs: task.updatedAtMs, result: toSubmitManualAnswerResult(task) })),
+      ...screenshotTasks.map(task => ({ updatedAtMs: task.updatedAtMs, result: toSubmitScreenshotAnswerResult(task, task.visionSummaryTitle?.trim() || task.instruction) })),
+    ].sort((left, right) => right.updatedAtMs - left.updatedAtMs);
+    const active = results.find(item => item.result.task.status === "queued" || item.result.task.status === "generating");
+    return {
+      questions: results.map(item => item.result.question),
+      activeAnswerTask: active?.result.task ?? results[0]?.result.task ?? null,
+    };
   }
 
   async loadDesktopShortcutScreenshotUpdates(interviewId: string, signal?: AbortSignal) {

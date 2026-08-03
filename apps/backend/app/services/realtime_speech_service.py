@@ -500,17 +500,14 @@ class RealtimeSpeechService:
         active_page = self.repository.get_active_live_web_session(user_id=user_id)
         if active_page is None or active_page.lease_expires_at_ms < _now_ms():
             return
-        if (
-            not page_instance_id
-            or lease_generation is None
-            or active_page.session_id != session_id
-            or active_page.page_instance_id != page_instance_id
-            or active_page.lease_generation != lease_generation
-        ):
+        # The lease selects the user's authoritative interview session, not one
+        # browser window. Multiple authenticated pages may observe that same
+        # session, while pages for a replaced session remain rejected.
+        if active_page.session_id != session_id:
             raise DomainRequestError(
                 "realtime-speech",
                 "stream-page-lease",
-                "当前实时页面已被其他页面接管。",
+                "当前实时页面所属面试已被其他面试接管。",
                 409,
                 "realtime_page_replaced",
             )

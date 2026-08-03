@@ -98,6 +98,11 @@ export interface WebAppState {
   releaseManifest: DesktopReleaseManifest;
 }
 
+export interface InterviewWorkspaceSnapshot {
+  readonly questions: readonly InterviewQuestion[];
+  readonly activeAnswerTask: AnswerTaskSnapshot | null;
+}
+
 export interface BillingPresentationState {
   readonly catalog: readonly BillingProduct[];
   readonly rates: UsageRates;
@@ -192,6 +197,7 @@ export interface InterviewAppAdapter {
   getDesktopDeviceBinding(interviewId: string, signal?: AbortSignal): Promise<DesktopDeviceBinding | null>;
   sendDesktopSessionHeartbeat(command: { interviewId: string; bindingId?: string | null; page: "preparation" | "live"; pageInstanceId?: string }, signal?: AbortSignal): Promise<{ pageInstanceId: string | null; leaseGeneration: number; leaseExpiresAtMs: number }>;
   loadRealtimeSession(interviewId: string, signal?: AbortSignal): Promise<Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>>;
+  loadInterviewWorkspace(interviewId: string, signal?: AbortSignal): Promise<InterviewWorkspaceSnapshot>;
   loadDesktopShortcutScreenshotUpdates(interviewId: string, signal?: AbortSignal): Promise<readonly DesktopShortcutScreenshotUpdate[]>;
   subscribeRealtimeSession(interviewId: string, onUpdate: (state: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => void, signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }): Promise<void>;
   deleteInterview(id: string, signal?: AbortSignal): Promise<void>;

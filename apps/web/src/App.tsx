@@ -625,6 +625,43 @@ function LivePage() {
     }));
   }, [id, setState]);
   useEffect(() => {
+    const controller = new AbortController();
+    let stopped = false;
+    let inFlight = false;
+    const syncWorkspace = async () => {
+      if (stopped || inFlight || document.visibilityState !== "visible") return;
+      inFlight = true;
+      try {
+        const snapshot = await runAdapterOperation(signal => interviewAppAdapter.loadInterviewWorkspace(id, signal), controller.signal);
+        if (stopped) return;
+        setState(current => {
+          const authoritativeIds = new Set(snapshot.questions.map(question => question.id));
+          const localPending = current.questions.filter(question =>
+            (question.id.startsWith("manual-pending-") || question.id.startsWith("shot-pending-"))
+            && !authoritativeIds.has(question.id),
+          );
+          const keepLocalTask = current.activeAnswerTask?.id.startsWith("pending:") && localPending.some(question => question.id === current.activeAnswerTask?.questionId);
+          return {
+            ...current,
+            questions: [...localPending, ...snapshot.questions],
+            activeAnswerTask: keepLocalTask ? current.activeAnswerTask : snapshot.activeAnswerTask,
+          };
+        });
+      } catch {
+        // Keep the current page usable while a cross-device history refresh is temporarily unavailable.
+      } finally {
+        inFlight = false;
+      }
+    };
+    void syncWorkspace();
+    const timer = window.setInterval(() => void syncWorkspace(), 1500);
+    return () => {
+      stopped = true;
+      controller.abort();
+      window.clearInterval(timer);
+    };
+  }, [id, setState]);
+  useEffect(() => {
     if (pageLeaseStatus === "replaced") return;
     const controller = new AbortController();
     let stopped = false;
@@ -735,8 +772,8 @@ function LivePage() {
       if (realtimePollTimer !== null) window.clearInterval(realtimePollTimer);
     };
     channel?.addEventListener("message", event => {
-      const claim = event.data as { type?: string; pageInstanceId?: string };
-      if (claim.type === "claim" && claim.pageInstanceId && claim.pageInstanceId !== pageInstanceId.current) pauseReplacedPage();
+      const claim = event.data as { type?: string; sessionId?: string; pageInstanceId?: string };
+      if (claim.type === "claim" && claim.sessionId !== id && claim.pageInstanceId && claim.pageInstanceId !== pageInstanceId.current) pauseReplacedPage();
     });
     channel?.postMessage({ type: "claim", sessionId: id, pageInstanceId: pageInstanceId.current });
     const applyRealtimeState = (realtime: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => {

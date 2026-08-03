@@ -35,6 +35,29 @@ describe("backend preview adapter", () => {
     expect(state.interviews[0]?.id).toBe(syntheticState.interviews[0]?.id);
   });
 
+  it("restores one authoritative interview workspace across devices", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const chatTask = {
+      taskId: "chat-task-1", sessionId: "session-1", ownerUserId: "user-1", question: "请介绍项目难点", answerText: "先说明背景，再说明技术决策。", status: "completed", updatedAtMs: 100, chunks: [],
+    };
+    const screenshotTask = {
+      taskId: "shot-task-1", sessionId: "session-1", ownerUserId: "user-1", instruction: "回答截图中的算法题", answerText: "使用双指针。", status: "completed", imageIds: ["image-1"], imageCount: 1, retrievalExcerptCount: 0, retryCount: 0, createdAtMs: 150, updatedAtMs: 200, chunks: [], visionSummaryTitle: "算法截图题",
+    };
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => new Response(JSON.stringify(envelope(
+      String(input).includes("/live-answer/") ? [chatTask] : [screenshotTask],
+    )), { status: 200, headers: { "Content-Type": "application/json" } }));
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+
+    const workspace = await adapter.loadInterviewWorkspace("session-1");
+
+    expect(workspace.questions.map(question => question.id)).toEqual(["shot-task-1", "chat-task-1"]);
+    expect(workspace.questions[0]).toMatchObject({ text: "算法截图题", input: "screenshot" });
+    expect(workspace.activeAnswerTask?.id).toBe("shot-task-1");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it("does not duplicate the API prefix when the configured base URL already includes it", async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify(envelope(syntheticState)), {
       status: 200,

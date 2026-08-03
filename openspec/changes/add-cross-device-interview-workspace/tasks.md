@@ -63,3 +63,10 @@
 - [ ] 8.3 Run responsive end-to-end tests for desktop-only, mobile-only and paired-device journeys
 - [ ] 8.4 Verify the two capability specs scenario by scenario and record evidence for deferred items
 - [ ] 8.5 Update project documentation with final frontend commands, device roles and synchronization architecture
+
+## 9. Cross-device consistency patch
+
+- [x] 9.1 Restore manual and screenshot answer history from authoritative session APIs when any device opens the live workspace
+- [x] 9.2 Refresh the shared answer workspace within two seconds while preserving local in-flight placeholders
+- [x] 9.3 Allow multiple authenticated observers of the same interview while retaining one authoritative active interview per user
+- [x] 9.4 Add frontend adapter, mobile workspace hydration, and backend same-session observer regression coverage
