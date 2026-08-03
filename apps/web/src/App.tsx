@@ -230,14 +230,37 @@ const navItems = [
   { to: routes.settings, label: "设置", icon: "○" },
 ];
 
-function AppLayout() {
+function AccountMenu({ compact = false, dropUp = false }: { readonly compact?: boolean; readonly dropUp?: boolean }) {
   const { logout, state } = usePrototype();
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
   const initials = state.account.displayName.slice(0, 2).toUpperCase();
+  const leaveAccount = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await logout();
+      navigate(routes.login, { replace: true });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <details className={`account-menu${compact ? " compact" : ""}${dropUp ? " drop-up" : ""}`}>
+    <summary role="button" aria-label="账号菜单" aria-haspopup="menu"><i>{initials}</i>{compact ? null : <span>{state.account.displayName}<small>账号管理</small></span>}</summary>
+    <div className="account-menu-popover">
+      <div><small>当前账号</small><strong>{state.account.displayName}</strong></div>
+      <button type="button" disabled={busy} onClick={() => void leaveAccount()}>切换账号</button>
+      <button type="button" className="account-logout" disabled={busy} onClick={() => void leaveAccount()}>{busy ? "正在退出…" : "退出登录"}</button>
+    </div>
+  </details>;
+}
+
+function AppLayout() {
   return (
     <div className="app-shell">
-      <aside className="app-sidebar"><Link to={routes.app}><Logo /></Link><nav aria-label="应用导航">{navItems.map(item => <NavLink key={item.to} to={item.to} {...(item.end ? { end: true } : {})}><span>{item.icon}</span>{item.label}</NavLink>)}</nav><div className="sidebar-foot"><span className="privacy-note">音频默认不保存</span><button className="user-chip" onClick={() => void logout()} aria-label="退出登录"><i>{initials}</i><span>{state.account.displayName}<small>退出登录</small></span></button></div></aside>
+      <aside className="app-sidebar"><Link to={routes.app}><Logo /></Link><nav aria-label="应用导航">{navItems.map(item => <NavLink key={item.to} to={item.to} {...(item.end ? { end: true } : {})}><span>{item.icon}</span>{item.label}</NavLink>)}</nav><div className="sidebar-foot"><span className="privacy-note">音频默认不保存</span><AccountMenu /></div></aside>
       <div className="app-content"><Outlet /></div>
-      <nav className="mobile-nav" aria-label="移动端应用导航">{navItems.map(item => <NavLink key={item.to} to={item.to} {...(item.end ? { end: true } : {})}><span>{item.icon}</span><small>{item.label}</small></NavLink>)}</nav>
+      <nav className="mobile-nav" aria-label="移动端应用导航">{navItems.map(item => <NavLink key={item.to} to={item.to} {...(item.end ? { end: true } : {})}><span>{item.icon}</span><small>{item.label}</small></NavLink>)}<AccountMenu compact dropUp /></nav>
     </div>
   );
 }
@@ -1251,7 +1274,7 @@ function LivePage() {
     });
   };
   const billingNotice = notice.includes("积分") || notice.includes("会员") || notice.toLowerCase().includes("billing");
-  return <main className="live-page focused-live-page"><header className="live-top"><Link to={routes.app}><Logo /></Link><div><strong>{interviewTitle}</strong><span><i className={state.captureState === "capturing" ? "recording-dot" : "online-dot"} /> {pageLeaseStatus === "replaced" ? "已在其他页面继续" : state.captureState === "capturing" ? "这台 Mac · 正在收音" : state.captureState === "paused" ? "收音已暂停" : state.captureState === "reconnecting" ? "Mac 正在重连" : state.captureState === "permission-required" ? "助手采集能力不可用" : state.captureState === "error" ? "设备连接异常" : "这台 Mac · 已连接，未采集"}</span></div><div className="live-top-actions"><Link className="live-balance" to={routes.billing}>积分</Link><span>18:24</span>{state.captureState === "capturing" ? <button className="button warning live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => setCapture("paused", "paused")}>暂停收音</button> : <button className="button primary live-session-control" disabled={pageLeaseStatus === "replaced" || (state.captureState !== "ready" && state.captureState !== "paused")} onClick={() => setCapture("capturing", "active")}>{state.captureState === "paused" ? "恢复收音" : "开始面试"}</button>}<button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束面试</button></div></header>
+  return <main className="live-page focused-live-page"><header className="live-top"><Link to={routes.app}><Logo /></Link><div><strong>{interviewTitle}</strong><span><i className={state.captureState === "capturing" ? "recording-dot" : "online-dot"} /> {pageLeaseStatus === "replaced" ? "已在其他页面继续" : state.captureState === "capturing" ? "这台 Mac · 正在收音" : state.captureState === "paused" ? "收音已暂停" : state.captureState === "reconnecting" ? "Mac 正在重连" : state.captureState === "permission-required" ? "助手采集能力不可用" : state.captureState === "error" ? "设备连接异常" : "这台 Mac · 已连接，未采集"}</span></div><div className="live-top-actions"><Link className="live-balance" to={routes.billing}>积分</Link><span>18:24</span><AccountMenu compact />{state.captureState === "capturing" ? <button className="button warning live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => setCapture("paused", "paused")}>暂停收音</button> : <button className="button primary live-session-control" disabled={pageLeaseStatus === "replaced" || (state.captureState !== "ready" && state.captureState !== "paused")} onClick={() => setCapture("capturing", "active")}>{state.captureState === "paused" ? "恢复收音" : "开始面试"}</button>}<button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束面试</button></div></header>
     {idleStatus?.state === "warning" ? <div className="global-live-alert" role="status"><strong>本场面试即将因空闲自动结束</strong><span>连续 20 分钟没有音频、回答或截图活动会释放当前设备连接，历史记录仍会保留。</span><button className="button primary" disabled={continuingInterview} onClick={() => void continueIdleInterview()}>{continuingInterview ? "正在继续…" : "继续本场面试"}</button></div> : null}
     {pageLeaseStatus === "replaced" ? <div className="global-live-alert replaced-page-alert" role="status"><strong>本场面试已在其他页面继续</strong><span>当前页面已停止收音同步、实时订阅和回答请求；已显示内容仍可查看。关闭此页或返回面试首页即可。</span><Link className="button primary" to={routes.app}>返回面试首页</Link></div> : null}
     {state.captureState === "reconnecting" || state.captureState === "permission-required" || state.captureState === "error" ? <div className="global-live-alert" role="status"><strong>{state.captureState === "reconnecting" ? "设备正在重连" : state.captureState === "permission-required" ? "助手采集能力不可用" : "桌面设备连接异常"}</strong><span>{state.captureState === "reconnecting" ? "恢复前可能存在音频缺口，不会伪装为持续同步。" : state.captureState === "permission-required" ? "请在桌面助手中检查首次授权状态；网页不会申请麦克风或屏幕权限，手动输入仍可使用。" : "可以运行诊断，当前仍可使用手动问题和截图。"}</span><button onClick={() => setCapture("ready", "ready")}>{state.captureState === "permission-required" ? "关闭提示" : "重新诊断"}</button></div> : null}

@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { interviewAppAdapter } from "./app-adapter";
+import { authClient } from "./auth-client";
 import { syntheticState } from "./test-state";
 import type { WebAppState } from "./domain";
 
@@ -94,6 +95,20 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 beforeEach(() => Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 }));
 
 describe("focused live interview workspace", () => {
+  it("offers account switching and logout from the focused interview page", async () => {
+    const logout = vi.spyOn(authClient, "logout").mockResolvedValue();
+    openLive();
+
+    fireEvent.click(screen.getByRole("button", { name: "账号菜单" }));
+    expect(screen.getByText("当前账号")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "切换账号" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "退出登录" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "切换账号" }));
+
+    await waitFor(() => expect(logout).toHaveBeenCalledOnce());
+    await waitFor(() => expect(window.location.pathname).toBe("/login"));
+  });
+
   it("hydrates backend answer history when the same interview opens on another device", async () => {
     vi.spyOn(interviewAppAdapter, "loadInterviewWorkspace").mockResolvedValueOnce({
       questions: [{

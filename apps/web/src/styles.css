@@ -148,10 +148,22 @@ h1, h2, h3, p { margin-top: 0; }
 .app-sidebar nav a.active { color: var(--text); background: var(--surface-2); }
 .sidebar-foot { display: grid; gap: 13px; margin-top: auto; }
 .privacy-note { color: #738196; border-bottom: 1px solid var(--line); padding: 12px 4px; font-size: 9px; text-align: center; }
-.user-chip { display: flex; align-items: center; gap: 10px; border: 0; border-radius: 11px; background: transparent; padding: 7px; cursor: pointer; text-align: left; }
-.user-chip i { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--surface-3); font-style: normal; font-size: 10px; }
-.user-chip span { display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
-.user-chip small { color: var(--muted); font-size: 8px; }
+.account-menu { position: relative; min-width: 0; }
+.account-menu summary { min-height: 44px; display: flex; align-items: center; gap: 10px; border-radius: 11px; padding: 6px 7px; cursor: pointer; list-style: none; text-align: left; }
+.account-menu summary::-webkit-details-marker { display: none; }
+.account-menu summary:hover, .account-menu[open] summary { background: rgba(255,255,255,.04); }
+.account-menu summary i { flex: 0 0 auto; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: var(--brand); background: var(--surface-3); font-style: normal; font-size: 10px; }
+.account-menu summary span { min-width: 0; display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
+.account-menu summary small { color: var(--muted); font-size: 8px; }
+.account-menu.compact summary { width: 44px; justify-content: center; padding: 5px; }
+.account-menu-popover { position: absolute; z-index: 40; right: 0; top: calc(100% + 8px); width: 190px; display: grid; gap: 7px; border: 1px solid var(--line-strong); border-radius: 12px; background: #101721; box-shadow: 0 18px 48px rgba(0,0,0,.48); padding: 11px; }
+.account-menu-popover > div { min-width: 0; display: grid; gap: 4px; border-bottom: 1px solid var(--line); padding: 2px 3px 9px; }
+.account-menu-popover strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 10px; }
+.account-menu-popover small { color: var(--muted); font-size: 8px; }
+.account-menu-popover button { min-height: 36px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: rgba(255,255,255,.025); cursor: pointer; font-size: 9px; }
+.account-menu-popover button:hover { border-color: rgba(110,231,189,.32); color: var(--brand); }
+.account-menu-popover .account-logout { color: #ff8d98; }
+.account-menu.drop-up .account-menu-popover { top: auto; bottom: calc(100% + 8px); }
 .app-content { min-width: 0; }
 .app-page { width: min(1160px, calc(100% - 64px)); margin: 0 auto; padding: 45px 0 70px; }
 .app-page.narrow { width: min(720px, calc(100% - 64px)); }
@@ -299,6 +311,7 @@ h1, h2, h3, p { margin-top: 0; }
 .live-top-actions { justify-content: flex-end !important; }
 .live-balance { color: var(--brand); border: 1px solid rgba(110,231,189,.18); border-radius: 999px; padding: 6px 9px; font-size: 8px; }
 .live-top-actions button { display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 8px; padding: 8px 12px; cursor: pointer; font-size: 9px; }
+.live-top-actions .account-menu-popover button { border: 1px solid var(--line); }
 .live-session-control { white-space: nowrap; }
 .global-live-alert { position: fixed; z-index: 25; top: 72px; left: 50%; width: min(560px, calc(100% - 32px)); display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; align-items: center; transform: translateX(-50%); border: 1px solid rgba(243,189,96,.25); border-radius: 11px; background: #251d10; box-shadow: 0 14px 45px rgba(0,0,0,.4); padding: 12px 14px; }
 .global-live-alert strong { color: var(--warning); font-size: 9px; }
@@ -746,7 +759,7 @@ h1, h2, h3, p { margin-top: 0; }
   .app-sidebar .logo-lockup strong, .app-sidebar nav a:not(.active) { }
   .app-sidebar .logo-lockup strong, .app-sidebar nav a { font-size: 0; }
   .app-sidebar nav a span { font-size: 15px; }
-  .user-chip span, .privacy-note { display: none; }
+  .app-sidebar .account-menu summary span, .privacy-note { display: none; }
   .dashboard-grid, .prepare-grid, .review-grid, .device-page-grid { grid-template-columns: 1fr; }
   .check-panel { position: static; }
   .live-grid { grid-template-columns: minmax(0, 1fr); }
@@ -780,10 +793,14 @@ h1, h2, h3, p { margin-top: 0; }
   .resource-card, .library-row { grid-template-columns: auto 1fr; }
   .resource-card > .state-mark, .library-row > .state-mark { grid-column: 2; }
   .form-actions { flex-direction: column-reverse; }
-  .mobile-nav { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(6, 1fr); border-top: 1px solid var(--line); background: rgba(10,15,23,.96); backdrop-filter: blur(18px); padding-bottom: env(safe-area-inset-bottom); }
+  .mobile-nav { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(7, 1fr); border-top: 1px solid var(--line); background: rgba(10,15,23,.96); backdrop-filter: blur(18px); padding-bottom: env(safe-area-inset-bottom); }
   .mobile-nav a { min-height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--muted); }
   .mobile-nav a.active { color: var(--brand); }
   .mobile-nav small { font-size: 8px; }
+  .mobile-nav .account-menu { display: grid; place-items: center; }
+  .mobile-nav .account-menu summary { min-height: 60px; width: 100%; border-radius: 0; }
+  .mobile-nav .account-menu summary i { width: 28px; height: 28px; }
+  .mobile-nav .account-menu-popover { right: 8px; }
   .live-page { height: 100dvh; min-height: 100dvh; grid-template-rows: 58px minmax(0, 1fr) 40px; overflow: hidden; padding-bottom: env(safe-area-inset-bottom); }
   .live-top { grid-template-columns: auto 1fr auto; padding: 0 12px; }
   .live-top .logo-lockup strong { display: none; }
