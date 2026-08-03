@@ -755,9 +755,6 @@ h1, h2, h3, p { margin-top: 0; }
   .right-closed .right-side { transform: translateX(110%); }
   .live-top { grid-template-columns: auto 1fr auto; }
   .live-top-actions { flex-wrap: wrap; }
-  .focused-live-grid { grid-template-columns: minmax(0, 1fr) !important; grid-template-rows: minmax(220px, 34dvh) minmax(500px, auto); overflow-y: auto; }
-  .conversation-column { padding: 0 0 6px; }
-  .answer-column { min-height: 500px; padding: 6px 0 0; }
   .answer-pagination button, .answer-task-control .stop-answer, .cancelled-answer button, .live-session-control { min-width: 44px; min-height: 44px; }
 }
 
@@ -794,7 +791,7 @@ h1, h2, h3, p { margin-top: 0; }
   .live-top-actions { gap: 8px; }
   .live-top-actions .live-balance { display: none; }
   .live-top-actions button { min-width: 44px; min-height: 44px; padding-inline: 10px; }
-  .focused-live-grid { min-height: 0; grid-template-rows: auto auto; overflow-y: auto; overscroll-behavior: contain; padding: 8px 8px 18px; }
+  .focused-live-grid { min-height: 0; grid-template-columns: minmax(0, 1fr) !important; grid-template-rows: auto auto; overflow-y: auto; overscroll-behavior: contain; padding: 8px 8px 18px; }
   .conversation-monitor, .answer-workspace { min-height: 0; }
   .conversation-column, .answer-column { grid-template-rows: auto auto; padding: 0; }
   .conversation-turn { grid-template-columns: 36px minmax(0, 1fr); }

@@ -123,6 +123,18 @@ describe("focused live interview workspace", () => {
     await waitFor(() => expect(window.sessionStorage.getItem("offersteady.live.demo.split.v1")).toContain('"ratio":42'));
   });
 
+  it("keeps compact desktop windows side by side and resizable", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 840 });
+    openLive();
+    const input = screen.getByRole("textbox", { name: "手动输入面试官的问题" });
+    fireEvent.change(input, { target: { value: "紧凑窗口草稿" } });
+    const divider = screen.getByRole("separator", { name: "调整实时对话与回答宽度" });
+    expect(document.querySelector(".focused-live-grid")).toHaveStyle({ gridTemplateColumns: "minmax(240px, 42fr) 12px minmax(300px, 58fr)" });
+    fireEvent.keyDown(divider, { key: "ArrowRight", code: "ArrowRight", keyCode: 39 });
+    await waitFor(() => expect(divider).toHaveAttribute("aria-valuenow", "44"));
+    expect(input).toHaveValue("紧凑窗口草稿");
+  });
+
   it("clamps pointer resizing and resets the split without duplicating workspace state", async () => {
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { callback(0); return 1; });
     vi.stubGlobal("cancelAnimationFrame", () => undefined);
