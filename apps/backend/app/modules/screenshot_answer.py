@@ -385,7 +385,9 @@ async def get_next_remote_capture_request(
     service: ScreenshotAnswerService = Depends(screenshot_answer_service),
     realtime: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[RemoteScreenshotCaptureRequestResponse | None]:
-    realtime.get_desktop_capture_binding(device_id=device_id, manual_code=manual_code)
+    pairing_status = realtime.get_desktop_pairing_status(manual_code=manual_code, device_id=device_id)
+    if pairing_status.get("bound") is not True or pairing_status.get("sessionStatus") != "live":
+        return success_response(request=request, data=None, timestamp=utc_now_iso())
     capture_request = service.get_next_remote_capture_request(device_id=device_id, manual_code=manual_code)
     return success_response(request=request, data=_to_remote_capture_request_response(capture_request) if capture_request is not None else None, timestamp=utc_now_iso())
 

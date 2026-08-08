@@ -1373,6 +1373,49 @@ def test_remote_screenshot_capture_request_requires_active_desktop_binding() -> 
     assert response.status_code == 404
 
 
+def test_remote_screenshot_idle_poll_returns_null_without_mutating_state() -> None:
+    unregistered = client.get(
+        "/api/v1/screenshot-answer/desktop-devices/device-idle-unregistered/capture-requests/next",
+        params={"manualCode": "654321"},
+    )
+    assert unregistered.status_code == 200
+    assert unwrap(unregistered) is None
+
+    unwrap(client.post("/api/v1/realtime-speech/desktop-devices/register", json={
+        "deviceId": "device-idle-registered",
+        "manualCode": "654322",
+        "displayName": "空闲轮询测试设备",
+        "capabilities": {"microphone": True, "systemAudio": True, "screenCapture": True},
+    }))
+    before = unwrap(client.get(
+        "/api/v1/realtime-speech/desktop-devices/pairing-status",
+        params={"manualCode": "654322", "deviceId": "device-idle-registered"},
+    ))
+    idle = client.get(
+        "/api/v1/screenshot-answer/desktop-devices/device-idle-registered/capture-requests/next",
+        params={"manualCode": "654322"},
+    )
+    after = unwrap(client.get(
+        "/api/v1/realtime-speech/desktop-devices/pairing-status",
+        params={"manualCode": "654322", "deviceId": "device-idle-registered"},
+    ))
+
+    assert idle.status_code == 200
+    assert unwrap(idle) is None
+    assert before == after
+    assert before["state"] == "registered"
+    assert before["bound"] is False
+
+
+def test_remote_screenshot_idle_compatibility_does_not_relax_upload_authorization() -> None:
+    response = client.post(
+        "/api/v1/screenshot-answer/capture-requests/nonexistent-request/desktop-upload",
+        data={"deviceId": "unknown-device", "manualCode": "654323"},
+        files={"screenshot": ("synthetic.png", b"synthetic", "image/png")},
+    )
+    assert response.status_code == 404
+
+
 def test_remote_screenshot_capture_request_can_be_cancelled_before_desktop_upload() -> None:
     session = unwrap(client.post("/api/v1/sessions", json={
         "userId": "remote-screenshot-cancel-user",

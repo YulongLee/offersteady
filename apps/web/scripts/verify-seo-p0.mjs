@@ -42,11 +42,13 @@ assert.match(notFound, /<meta name="robots" content="noindex, follow"\s*\/>/);
 assert.match(nginx, /if \(\$host = www\.mianshiwen\.cn\)\s*\{\s*return 308 https:\/\/mianshiwen\.cn\$request_uri;/);
 assert.match(nginx, /location = \/robots\.txt[\s\S]*?try_files \$uri =404;/);
 assert.match(nginx, /location = \/sitemap\.xml[\s\S]*?try_files \$uri =404;/);
-assert.match(nginx, /location ~ \^\/\(\?:login\|error\|app/);
+assert.match(nginx, /location ~ \^\/\(\?:login\|terms\|privacy\|error\|app/);
 assert.ok(nginx.includes('location ~* "^/assets/.+-[A-Za-z0-9_-]{8}\\.(?:js|css)$"'));
 assert.match(nginx, /location ~\* "\^\/assets\/[\s\S]*?Cache-Control "public, max-age=31536000, immutable"/);
 assert.match(nginx, /location \/assets\/\s*\{\s*try_files \$uri =404;/);
-assert.match(nginx, /location ~ \^\/\(\?:login\|error\|app[\s\S]*?X-Robots-Tag "noindex, follow"/);
+assert.match(nginx, /location ~ \^\/\(\?:login\|terms\|privacy\|error\|app[\s\S]*?X-Robots-Tag "noindex, follow"/);
+assert.match(indexHtml, /<a href="\/terms">用户协议<\/a>/);
+assert.match(indexHtml, /<a href="\/privacy">隐私政策<\/a>/);
 assert.match(nginx, /location \/\s*\{\s*return 404;/);
 assert.doesNotMatch(nginx, /try_files \$uri \$uri\/ \/index\.html/);
 

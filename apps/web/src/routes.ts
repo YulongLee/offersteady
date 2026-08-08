@@ -1,6 +1,8 @@
 export const routes = {
   landing: "/",
   login: "/login",
+  terms: "/terms",
+  privacy: "/privacy",
   app: "/app",
   newInterview: "/app/interviews/new",
   prepare: (id = ":id") => `/app/interviews/${id}/prepare`,

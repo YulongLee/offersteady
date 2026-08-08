@@ -5,6 +5,7 @@ import { MicrophoneAudioAdapter, SystemAudioAdapter, describeMediaError } from "
 import { LocalSourceMonitor } from "./audio/local-source-monitor";
 import { DesktopRealtimePublisher, publisherFailureIsTerminal } from "./audio/realtime-publisher";
 import appIconUrl from "./assets/app-icon.png";
+import { BINDING_LIVE_POLL_MS, desktopPollDelayMs } from "../main/polling-policy";
 
 export const companionStatusCopy: Record<CaptureState, { title: string; detail: string }> = {
   "not-connected": { title: "设备离线", detail: "助手尚未完成服务登记，请检查网络后重试。" },
@@ -27,7 +28,7 @@ const systemAudioOptions: readonly AudioSourceDescriptor[] = [
 ];
 
 const DEFAULT_MICROPHONE_ID = "default";
-export const BINDING_STATUS_POLL_MS = 1_000;
+export const BINDING_STATUS_POLL_MS = BINDING_LIVE_POLL_MS;
 
 interface ApiEnvelope<T> {
   readonly data: T;
@@ -86,18 +87,6 @@ interface DesktopRuntimeStatus {
     readonly lastErrorCode?: string | null;
   }[];
   readonly lastErrorCode?: string | null;
-}
-
-interface RemoteScreenshotCaptureRequest {
-  readonly requestId: string;
-  readonly sessionId: string;
-  readonly ownerUserId: string;
-  readonly deviceId: string;
-  readonly manualCode: string;
-  readonly instruction: string;
-  readonly status: "requested" | "processing" | "completed" | "failed" | "cancelled";
-  readonly answerTaskId?: string | null;
-  readonly errorMessage?: string | null;
 }
 
 const displayedHealthForKind = (
@@ -346,66 +335,6 @@ const fetchPairingStatus = async (runtime: DesktopRuntimeConfig, identity: Deskt
 const waitingConnectionInfo = (_runtime?: DesktopRuntimeConfig) =>
   "请打开面试首页，进入面试后输入右侧连接码绑定这台电脑。";
 
-const fetchNextRemoteScreenshotCaptureRequest = async (runtime: DesktopRuntimeConfig, identity: DesktopPairingIdentity) => {
-  const query = new URLSearchParams({ manualCode: identity.manualCode });
-  const response = await desktopBackendFetch(runtime, `/screenshot-answer/desktop-devices/${encodeURIComponent(identity.deviceId)}/capture-requests/next?${query.toString()}`);
-  if (!response.ok) {
-    if (response.status === 404) return null;
-    throw new Error(await readBackendError(response));
-  }
-  const envelope = await response.json() as ApiEnvelope<RemoteScreenshotCaptureRequest | null>;
-  return envelope.data;
-};
-
-const uploadRemoteScreenshotCapture = async (
-  runtime: DesktopRuntimeConfig,
-  identity: DesktopPairingIdentity,
-  requestId: string,
-  screenshot: { readonly dataUrl?: string; readonly name?: string; readonly extension?: string },
-) => {
-  if (!screenshot.dataUrl) throw new Error("本地助手未获取到有效截图");
-  const [meta, payload] = screenshot.dataUrl.split(",", 2);
-  if (!meta || !payload) throw new Error("本地助手未返回可上传的截图数据");
-  const mimeType = meta.match(/^data:(.*?);base64$/)?.[1] || "";
-  const extension = screenshot.extension || (mimeType === "image/jpeg" ? "jpg" : mimeType === "image/webp" ? "webp" : "png");
-  const filename = `${(screenshot.name || "current-screen").replace(/[\\/:*?\"<>|]+/g, "-")}.${extension}`;
-  const uploadUrl = desktopApiUrl(runtime, `/screenshot-answer/capture-requests/${encodeURIComponent(requestId)}/desktop-upload`);
-  const result = await window.offersteady.uploadScreenshotCapture?.({
-    url: uploadUrl,
-    deviceId: identity.deviceId,
-    manualCode: identity.manualCode,
-    dataUrl: screenshot.dataUrl,
-    filename,
-  });
-  if (!result) throw new Error("本地助手上传通道不可用，请重启伴随程序。");
-  const response = new Response(result.bodyText, {
-    status: result.status,
-    statusText: result.statusText,
-    headers: result.headers,
-  });
-  if (!response.ok) throw new Error(await readBackendError(response));
-  return response.json();
-};
-
-const failRemoteScreenshotCapture = async (
-  runtime: DesktopRuntimeConfig,
-  identity: DesktopPairingIdentity,
-  requestId: string,
-  message: string,
-  stage = "capture-failed",
-) => {
-  await desktopBackendFetch(runtime, `/screenshot-answer/capture-requests/${encodeURIComponent(requestId)}/desktop-fail`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      deviceId: identity.deviceId,
-      manualCode: identity.manualCode,
-      message,
-      stage,
-    }),
-  });
-};
-
 const mergeBackendReceipts = (
   health: readonly AudioSourceHealth[],
   receipts: DesktopRuntimeStatus["frameReceipts"] | undefined,
@@ -464,8 +393,6 @@ export function CompanionApp() {
   const sourceHealthRef = useRef<readonly AudioSourceHealth[]>([]);
   const liveSourceHealthRef = useRef<readonly AudioSourceHealth[]>([]);
   const monitorSourceHealthRef = useRef<readonly AudioSourceHealth[]>([]);
-  const processingScreenshotRequestIdRef = useRef<string | null>(null);
-  const completedScreenshotRequestIdsRef = useRef<Set<string>>(new Set());
   const lastBindingSessionIdRef = useRef<string | null>(null);
   const lastLiveSessionIdRef = useRef<string | null>(null);
   const lastPublisherKickSessionIdRef = useRef<string | null>(null);
@@ -697,58 +624,23 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
   useEffect(() => {
     if (!config || !pairingIdentity) return;
     let stopped = false;
-    let screenshotPollInFlight = false;
-    const pollRemoteScreenshotRequests = async () => {
-      if (screenshotPollInFlight || processingScreenshotRequestIdRef.current || stopped) return;
-      screenshotPollInFlight = true;
-      try {
-        const request = await fetchNextRemoteScreenshotCaptureRequest(config, pairingIdentity);
-        if (stopped || !request) return;
-        if (request.status === "completed" || request.status === "failed" || completedScreenshotRequestIdsRef.current.has(request.requestId)) return;
-        processingScreenshotRequestIdRef.current = request.requestId;
-        setPreviewNotice("网页端已发起截图回答，正在由本地助手截取你选择的共享屏幕…");
-        setDesktopNotice("网页端已请求截图回答，本地助手正在截取当前选择的屏幕。");
-        if (selectedScreenId && !screenSources.some((source) => source.id === selectedScreenId)) {
-          throw new Error("当前选择的屏幕源已经不可用，请在本地助手中重新选择显示器后再试。");
-        }
-        const capture = await window.offersteady.captureCurrentScreen?.(selectedScreenId || null);
-        if (capture?.errorMessage) throw new Error(capture.errorMessage);
-        if (!capture?.dataUrl) throw new Error("本地助手未获取到有效共享屏幕画面，请检查屏幕捕捉权限。");
-        await uploadRemoteScreenshotCapture(config, pairingIdentity, request.requestId, capture);
-        completedScreenshotRequestIdsRef.current.add(request.requestId);
-        setPreviewNotice("本地助手已完成本次截图，并已回传后端进行识别回答");
-        setDesktopNotice("截图已回传网页端，正在生成截图回答。");
-      } catch (error) {
-        if (!stopped) {
-          const message = error instanceof Error ? error.message : "本地助手执行截图回答失败";
-          if (processingScreenshotRequestIdRef.current) {
-            void failRemoteScreenshotCapture(config, pairingIdentity, processingScreenshotRequestIdRef.current, message, message.includes("上传") ? "upload-failed" : "capture-failed").catch(() => undefined);
-          }
-          setPreviewNotice(message);
-          setDesktopNotice(`截图失败：${message}`);
-        }
-      } finally {
-        processingScreenshotRequestIdRef.current = null;
-        screenshotPollInFlight = false;
-      }
-    };
-    void pollRemoteScreenshotRequests();
-    const timer = window.setInterval(() => {
-      void pollRemoteScreenshotRequests();
-    }, 1200);
-    return () => {
-      stopped = true;
-      window.clearInterval(timer);
-    };
-  }, [config, pairingIdentity, selectedScreenId, screenSources]);
-
-  useEffect(() => {
-    if (!config || !pairingIdentity) return;
-    let stopped = false;
     let bindingPollInFlight = false;
+    let bindingPollTimer: number | null = null;
+    let pollAgainWhenSettled = false;
+    let consecutivePollFailures = 0;
+    const schedulePoll = (delayMs: number) => {
+      if (stopped) return;
+      if (bindingPollTimer !== null) window.clearTimeout(bindingPollTimer);
+      bindingPollTimer = window.setTimeout(() => void pollBindingAndPublishStatus(), delayMs);
+    };
     const pollBindingAndPublishStatus = async () => {
-      if (bindingPollInFlight || stopped) return;
+      if (stopped) return;
+      if (bindingPollInFlight) {
+        pollAgainWhenSettled = true;
+        return;
+      }
       bindingPollInFlight = true;
+      let nextDelayMs = desktopPollDelayMs("idle", 0, "binding");
       try {
         let pairingStatus: DesktopPairingStatus;
         try {
@@ -769,13 +661,15 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
             binding: envelope.data,
           };
         }
+        consecutivePollFailures = 0;
+        bindingFailureCountRef.current = 0;
         if (!pairingStatus.bound || !pairingStatus.binding) {
           if (!stopped) {
             const staleBinding = pairingStatus.state === "stale-bound" && pairingStatus.binding ? pairingStatus.binding : null;
             const nextState: CaptureState = pairingStatus.registered ? "ready" : "not-connected";
             const displayState: CaptureState = staleBinding ? "reconnecting" : nextState;
             setActiveBinding(staleBinding);
-        setBindingSessionStatus(null);
+            setBindingSessionStatus(null);
             setState(displayState);
             const staleCopy = pairingStatus.staleReason === "web-heartbeat-missing"
               ? "网页端绑定已存在，但当前面试页心跳暂未到达；请保持线上实时面试页面打开。"
@@ -791,6 +685,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
         const runtimeStatus = null as DesktopRuntimeStatus | null;
         const sessionStatus = runtimeStatus?.sessionStatus ?? pairingStatus.sessionStatus ?? "unknown";
         const live = sessionStatus === "live";
+        nextDelayMs = desktopPollDelayMs(live ? "live" : "idle", 0, "binding");
         if (stopped) return;
         setActiveBinding(binding);
         setBindingSessionStatus(sessionStatus);
@@ -850,6 +745,8 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
         }).catch(() => undefined);
       } catch (error) {
         if (stopped) return;
+        consecutivePollFailures += 1;
+        nextDelayMs = desktopPollDelayMs("failure", consecutivePollFailures, "binding");
         bindingFailureCountRef.current += 1;
         if (activeBinding && bindingFailureCountRef.current < 3) return;
         const message = error instanceof Error ? error.message : "绑定状态查询失败";
@@ -858,13 +755,20 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
         window.offersteady?.publishCaptureState("not-connected");
       } finally {
         bindingPollInFlight = false;
+        const delayMs = pollAgainWhenSettled ? 0 : nextDelayMs;
+        pollAgainWhenSettled = false;
+        schedulePoll(delayMs);
       }
     };
     void pollBindingAndPublishStatus();
-    const interval = window.setInterval(() => void pollBindingAndPublishStatus(), BINDING_STATUS_POLL_MS);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") schedulePoll(0);
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       stopped = true;
-      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (bindingPollTimer !== null) window.clearTimeout(bindingPollTimer);
     };
     // Source health changes several times per second. They must not recreate the
     // binding poller because an in-flight IPC request cannot be cancelled by React.

@@ -6,6 +6,7 @@ import type { CaptureState } from "@offersteady/protocol" with { "resolution-mod
 import { DeviceCredentialVault } from "./credential-vault";
 import { DevicePairingIdentityStore } from "./device-pairing";
 import { DEFAULT_SCREENSHOT_SHORTCUT, SCREENSHOT_SHORTCUT_OPTIONS, ScreenshotShortcutStore, isSupportedScreenshotShortcut } from "./screenshot-shortcut";
+import { desktopPollDelayMs } from "./polling-policy";
 
 // Local ad-hoc builds cannot reliably retain Apple's separate Audio Capture
 // grant across rebuilds. Reuse the Screen & System Audio Recording grant,
@@ -30,7 +31,7 @@ let screenshotShortcutRegistration = {
 let screenshotShortcutTriggerInFlight = false;
 let lastScreenshotShortcutTriggerAt = 0;
 let registrationInterval: NodeJS.Timeout | null = null;
-let screenshotRequestInterval: NodeJS.Timeout | null = null;
+let screenshotRequestTimer: NodeJS.Timeout | null = null;
 let realtimeAudioInterval: NodeJS.Timeout | null = null;
 let preferredScreenSourceId: string | null = null;
 let hasRegisteredThisRun = false;
@@ -52,6 +53,7 @@ let mainRealtimeOwnsNativeAudio = false;
 let rendererOwnsNativeAudio = false;
 let desktopRegistrationInFlight = false;
 let remoteScreenshotPollInFlight = false;
+let remoteScreenshotPollFailureCount = 0;
 let displayMediaFailureBackoffUntil = 0;
 const activeDesktopRequestControllers = new Set<AbortController>();
 const desktopApiRequestsInFlight = new Map<string, Promise<DesktopApiRequestResult>>();
@@ -378,6 +380,13 @@ const getLiveDesktopBinding = async () => {
   return envelope.data.binding;
 };
 
+const getDesktopScreenshotPollingState = async () => {
+  const liveBindingState = captureState === "capturing" || captureState === "error";
+  if (!pairingIdentityStore || !liveBindingState) return { live: false as const, identity: null };
+  const identity = await pairingIdentityStore.loadOrCreate(`${app.getName()} · ${process.platform === "darwin" ? "Mac" : "Desktop"}`);
+  return { live: true as const, identity };
+};
+
 const ensureMainRealtimeAudioPublishing = async () => {
   if (process.platform !== "darwin") {
     if (mainRealtimeBindingKey || mainRealtimePublisherTokens.size > 0) stopMainRealtimeAudioPublishing();
@@ -692,12 +701,14 @@ const reportRemoteScreenshotFailure = async (identity: { deviceId: string; manua
 
 const pollRemoteScreenshotRequest = async () => {
   if (!pairingIdentityStore || processingRemoteScreenshotRequestId) return;
-  const identity = await pairingIdentityStore.loadOrCreate(`${app.getName()} · ${process.platform === "darwin" ? "Mac" : "Desktop"}`);
+  const pollingState = await getDesktopScreenshotPollingState();
+  if (!pollingState.live || !pollingState.identity) return false;
+  const identity = pollingState.identity;
   const response = await fetchWithTimeout(desktopApiUrl(`/screenshot-answer/desktop-devices/${encodeURIComponent(identity.deviceId)}/capture-requests/next?manualCode=${encodeURIComponent(identity.manualCode)}`));
-  if (!response.ok) return;
+  if (!response.ok) throw new Error(`remote_screenshot_poll_${response.status}`);
   const envelope = await response.json() as { data?: { requestId: string; status: string } | null };
   const request = envelope.data;
-  if (!request || request.status !== "requested") return;
+  if (!request || request.status !== "requested") return true;
   processingRemoteScreenshotRequestId = request.requestId;
   try {
     mainWindow?.webContents.send("desktop:remote-screenshot-notice", "网页端已请求截图回答，本地助手正在截取当前屏幕。");
@@ -722,6 +733,7 @@ const pollRemoteScreenshotRequest = async () => {
   } finally {
     processingRemoteScreenshotRequestId = null;
   }
+  return true;
 };
 
 const shortcutNotice = (message: string) => {
@@ -794,22 +806,27 @@ const registerScreenshotShortcut = async (accelerator: string) => {
 };
 
 const startRemoteScreenshotRequestLoop = () => {
-  if (screenshotRequestInterval) clearInterval(screenshotRequestInterval);
+  if (screenshotRequestTimer) clearTimeout(screenshotRequestTimer);
+  remoteScreenshotPollFailureCount = 0;
+  const schedule = (delayMs: number) => {
+    screenshotRequestTimer = setTimeout(() => void run(), delayMs);
+  };
   const run = async () => {
-    if (remoteScreenshotPollInFlight) return;
+    if (remoteScreenshotPollInFlight || isQuitting) return;
     remoteScreenshotPollInFlight = true;
     try {
-      await pollRemoteScreenshotRequest();
+      const live = await pollRemoteScreenshotRequest();
+      remoteScreenshotPollFailureCount = 0;
+      schedule(desktopPollDelayMs(live ? "live" : "idle"));
     } catch (error) {
       console.warn("[remote-screenshot] poll failed", error);
+      remoteScreenshotPollFailureCount += 1;
+      schedule(desktopPollDelayMs("failure", remoteScreenshotPollFailureCount));
     } finally {
       remoteScreenshotPollInFlight = false;
     }
   };
   void run();
-  screenshotRequestInterval = setInterval(() => {
-    void run();
-  }, 1200);
 };
 
 const createWindow = () => {
@@ -904,8 +921,10 @@ app.whenReady().then(() => {
 });
 
 ipcMain.on("capture:set-state", (_event, state: CaptureState) => {
+  const previousState = captureState;
   captureState = state;
   updateTray();
+  if ((state === "capturing" || state === "error") && state !== previousState) startRemoteScreenshotRequestLoop();
 });
 
 ipcMain.on("app:close", () => {
@@ -1048,9 +1067,9 @@ app.on("before-quit", () => {
     clearInterval(registrationInterval);
     registrationInterval = null;
   }
-  if (screenshotRequestInterval) {
-    clearInterval(screenshotRequestInterval);
-    screenshotRequestInterval = null;
+  if (screenshotRequestTimer) {
+    clearTimeout(screenshotRequestTimer);
+    screenshotRequestTimer = null;
   }
   if (realtimeAudioInterval) {
     clearInterval(realtimeAudioInterval);

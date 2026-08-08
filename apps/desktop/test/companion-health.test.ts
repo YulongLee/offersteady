@@ -74,7 +74,7 @@ describe("companion displayed source health", () => {
   });
 
   it("follows backend binding leases on a realtime cadence", () => {
-    expect(BINDING_STATUS_POLL_MS).toBe(1_000);
+    expect(BINDING_STATUS_POLL_MS).toBe(5_000);
     expect(desktopBindingLeaseIdentity({
       bindingId: "binding-new",
       bindingGeneration: 4,

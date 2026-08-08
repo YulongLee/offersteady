@@ -25,6 +25,28 @@ describe("optimized product experience", () => {
     fireEvent.click(screen.getAllByRole("link", { name: /免费使用/ })[0]!); expect(screen.getByRole("button", { name: /获取验证码/ })).toBeInTheDocument(); expect(screen.getByText(/手机号验证码/)).toBeInTheDocument();
   });
 
+  it("exposes directly accessible legal pages and links them from login", () => {
+    const terms = open("/terms", false);
+    expect(screen.getByRole("heading", { name: "用户协议", level: 1 })).toBeInTheDocument();
+    expect(screen.getByText(/AI 生成内容仅供参考/)).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "隐私政策" }).some(link => link.getAttribute("href") === "/privacy")).toBe(true);
+    terms.unmount();
+
+    window.history.pushState({}, "", "/privacy");
+    const privacy = render(<App initialAuthenticated={false} initialState={structuredClone(syntheticState)} />);
+    expect(screen.getByRole("heading", { name: "隐私政策", level: 1 })).toBeInTheDocument();
+    expect(screen.getAllByText(/原始音频默认不保存/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/目前没有向你承诺统一的自动删除期限/)).toBeInTheDocument();
+    privacy.unmount();
+
+    window.history.pushState({}, "", "/login");
+    render(<App initialAuthenticated={false} initialState={structuredClone(syntheticState)} />);
+    const consent = document.querySelector(".login-legal-copy");
+    expect(consent).not.toBeNull();
+    expect(within(consent as HTMLElement).getByRole("link", { name: "用户协议" })).toHaveAttribute("href", "/terms");
+    expect(within(consent as HTMLElement).getByRole("link", { name: "隐私政策" })).toHaveAttribute("href", "/privacy");
+  });
+
   it("creates an empty library for free and keeps new knowledge uploads non-ready until processing finishes", async () => {
     open("/app/library"); fireEvent.click(screen.getByRole("button", { name: /新建资料库/ })); let dialog = screen.getByRole("dialog"); fireEvent.change(within(dialog).getByLabelText("资料库名称"), { target: { value: "算法面试" } }); fireEvent.click(within(dialog).getByRole("button", { name: "确认创建" })); expect(await screen.findByText(/空资料库不扣点/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "添加第一份资料" })); dialog = screen.getByRole("dialog"); const file = new File(["synthetic"], "算法笔记.md", { type: "text/markdown" }); fireEvent.change(within(dialog).getByLabelText("选择资料文件"), { target: { files: [file] } }); expect(within(dialog).getByText(/当前 200 点 → 成功后 180 点/)).toBeInTheDocument(); expect(within(dialog).getByText(/3 Token/)).toBeInTheDocument(); fireEvent.click(within(dialog).getByRole("button", { name: "确认报价并建立索引" })); expect(await screen.findByText(/等待服务端建立索引/)).toBeInTheDocument(); expect(screen.getByText("算法笔记.md")).toBeInTheDocument(); expect(screen.getByText("建立索引中")).toBeInTheDocument();
