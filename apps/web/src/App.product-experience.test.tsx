@@ -11,6 +11,7 @@ describe("optimized product experience", () => {
   it("matches the filed website name and exposes the MIIT filing link", () => {
     open("/", false);
     expect(document.title).toBe("面试稳AI助手");
+    expect(screen.getAllByText("面试稳AI助手").length).toBeGreaterThan(0);
     const filing = screen.getByRole("link", { name: "浙ICP备2026052190号-1" });
     expect(filing).toHaveAttribute("href", "https://beian.miit.gov.cn");
     const grant = screen.getByText("200 点", { selector: ".free-grant strong" }).parentElement;

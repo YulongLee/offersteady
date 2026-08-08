@@ -111,14 +111,14 @@ function PrototypeProvider({ children, initialAuthenticated, initialState }: { r
   return <PrototypeContext.Provider value={{ authenticated, setAuthenticated, state, setState: setState as React.Dispatch<React.SetStateAction<WebAppState>>, logout }}>{children}</PrototypeContext.Provider>;
 }
 
-const Logo = () => <span className="logo-lockup"><img src={assetUrl("brand.app-icon")} alt="" /><strong>面试稳</strong></span>;
+const Logo = () => <span className="logo-lockup"><img src={assetUrl("brand.app-icon")} alt="" /><strong>面试稳AI助手</strong></span>;
 
 function PublicLayout() {
   const { authenticated } = usePrototype();
   return (
     <div className="public-shell">
       <header className="public-nav">
-        <Link to={routes.landing} aria-label="面试稳首页"><Logo /></Link>
+        <Link to={routes.landing} aria-label="面试稳AI助手首页"><Logo /></Link>
         <nav aria-label="公开导航"><a href="#workflow">使用方式</a><a href="#privacy">隐私边界</a><Link className="button ghost" to={authenticated ? routes.app : routes.login}>{authenticated ? "进入应用" : "登录"}</Link></nav>
       </header>
       <Outlet />
