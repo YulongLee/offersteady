@@ -104,6 +104,9 @@ h1, h2, h3, p { margin-top: 0; }
 .value-trust details { max-width: 430px; }
 .value-trust summary { color: var(--brand); cursor: pointer; }
 .public-footer { min-height: 90px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
+.public-footer-legal { display: flex; align-items: flex-end; flex-direction: column; gap: 8px; }
+.public-footer-legal a { color: var(--muted); text-decoration: none; }
+.public-footer-legal a:hover { color: var(--brand); }
 
 /* Login and shared pages */
 .center-page { min-height: calc(100vh - 76px); display: grid; place-items: center; padding: 40px 0; }
@@ -782,6 +785,7 @@ h1, h2, h3, p { margin-top: 0; }
   .advantage-strip, .download-grid, .consumption-grid, .public-pricing-grid, .value-proof-grid { grid-template-columns: 1fr; }
 .boundary-card { gap: 25px; padding: 27px; }
   .public-footer { align-items: flex-start; flex-direction: column; gap: 15px; padding: 22px 0; }
+  .public-footer-legal { align-items: flex-start; }
   .app-shell { display: block; padding-bottom: 68px; }
   .app-sidebar { display: none; }
   .app-page, .app-page.narrow { width: min(100% - 28px, 1160px); padding-top: 28px; }

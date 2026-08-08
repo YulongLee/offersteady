@@ -8,10 +8,20 @@ import { syntheticState } from "./test-state";
 const open = (path: string, authenticated = true, mutate?: (state: WebAppState) => void) => { mockSuccessfulMaterialUploadAdapter(); const state = structuredClone(syntheticState); mutate?.(state); window.history.pushState({}, "", path); return render(<App initialAuthenticated={authenticated} initialState={state} />); };
 
 describe("optimized product experience", () => {
+  it("matches the filed website name and exposes the MIIT filing link", () => {
+    open("/", false);
+    expect(document.title).toBe("面试稳AI助手");
+    const filing = screen.getByRole("link", { name: "浙ICP备2026052190号-1" });
+    expect(filing).toHaveAttribute("href", "https://beian.miit.gov.cn");
+    const grant = screen.getByText("200 点", { selector: ".free-grant strong" }).parentElement;
+    expect(grant).toHaveTextContent("免费使用");
+    expect(grant).not.toHaveTextContent("新用户");
+  });
+
   it("uses product-value messaging and exposes SMS login without pretending it is live", () => {
     open("/", false); expect(screen.getByRole("heading", { name: /更从容地冲刺 Offer/ })).toBeInTheDocument(); expect(screen.getByRole("heading", { name: "回答更贴合你的经历" })).toBeInTheDocument(); expect(screen.getByText(/知识材料 20 点起/)).toBeInTheDocument(); expect(screen.getByText(/15 天和 30 天各含 2 份/)).toBeInTheDocument(); expect(screen.queryByText(/进入产品原型/)).not.toBeInTheDocument(); expect(document.body).not.toHaveTextContent(/保证.*Offer|唯一标准答案|完全准确/);
     fireEvent.click(screen.getByText("查看使用与隐私说明")); expect(screen.getAllByText(/原始音频默认不保存/).length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("link", { name: /免费使用/ })); expect(screen.getByRole("button", { name: /获取验证码/ })).toBeInTheDocument(); expect(screen.getByText(/手机号验证码/)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("link", { name: /免费使用/ })[0]!); expect(screen.getByRole("button", { name: /获取验证码/ })).toBeInTheDocument(); expect(screen.getByText(/手机号验证码/)).toBeInTheDocument();
   });
 
   it("creates an empty library for free and keeps new knowledge uploads non-ready until processing finishes", async () => {
