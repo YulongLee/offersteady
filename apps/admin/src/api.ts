@@ -5,6 +5,24 @@ import type { CapacityResponse } from "./capacity";
 
 type Envelope<T> = { data: T };
 
+export class AdminAuthenticationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AdminAuthenticationError";
+  }
+}
+
+export function adminAuthenticationMessage(status: number, detail: unknown): string | null {
+  if (status !== 401 && !/admin_session_invalid|admin_step_up_required/i.test(String(detail ?? ""))) return null;
+  return /admin_step_up_required/i.test(String(detail ?? ""))
+    ? "管理员安全验证已过期，请重新登录后继续操作。"
+    : "管理员登录已过期，请重新登录后继续操作。";
+}
+
+export function isAdminAuthenticationError(error: unknown): error is AdminAuthenticationError {
+  return error instanceof AdminAuthenticationError;
+}
+
 async function request<T>(path: string, init: RequestInit = {}, admin = true): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
@@ -14,7 +32,15 @@ async function request<T>(path: string, init: RequestInit = {}, admin = true): P
   }
   const response = await fetch(`${apiBase}${path}`, { ...init, headers, credentials: "omit" });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.detail || payload.error?.message || `请求失败 (${response.status})`);
+  if (!response.ok) {
+    const detail = payload.detail || payload.error?.message;
+    const authenticationMessage = admin ? adminAuthenticationMessage(response.status, detail) : null;
+    if (authenticationMessage) {
+      sessionStorage.removeItem(adminTokenKey);
+      throw new AdminAuthenticationError(authenticationMessage);
+    }
+    throw new Error(detail || `请求失败 (${response.status})`);
+  }
   return (payload as Envelope<T>).data;
 }
 

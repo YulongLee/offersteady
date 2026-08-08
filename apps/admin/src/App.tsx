@@ -1,8 +1,9 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
-import { adminApi } from "./api";
+import { adminApi, isAdminAuthenticationError } from "./api";
 import { buildLinePath, chartDomain, formatTrendChange, formatTrendValue, type TrendMetric, type TrendResponse } from "./analytics";
 import { capacityLevelLabel, formatCapacityValue, type CapacityMetric, type CapacityResponse } from "./capacity";
+import { paymentChannelStatus } from "./payment-channel-status";
 
 type View = "dashboard" | "users" | "orders" | "payments" | "pricing" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
 type Row = Record<string, unknown>;
@@ -37,11 +38,11 @@ const display = (value: unknown) => {
   return String(value);
 };
 
-function Login({ onReady }: { onReady: () => void }) {
+function Login({ onReady, initialMessage = "" }: { onReady: () => void; initialMessage?: string }) {
   const [phone, setPhone] = useState("");
   const [challengeId, setChallengeId] = useState("");
   const [smsCode, setSmsCode] = useState("");
-  const [message, setMessage] = useState("使用已授权的管理员手机号和短信验证码登录。");
+  const [message, setMessage] = useState(initialMessage || "使用已授权的管理员手机号和短信验证码登录。");
   const [busy, setBusy] = useState(false);
 
   const send = async () => {
@@ -570,7 +571,7 @@ const paymentFields = {
 } as const;
 const paymentLabels: Record<string, string> = { mchId: "微信商户号", appId: "应用 ID", merchantSerialNo: "商户证书序列号", nativeUrl: "Native API 地址", notifyUrl: "异步通知地址", returnUrl: "支付返回地址", sellerId: "支付宝卖家 ID", gatewayUrl: "支付宝网关", merchantPrivateKey: "商户 API 私钥（PEM）", platformPublicKey: "微信支付平台公钥（PEM）", apiV3Key: "APIv3 密钥", appPrivateKey: "应用私钥（PEM）", alipayPublicKey: "支付宝公钥（PEM）" };
 
-function PaymentPanel({ rows, onChanged }: { rows: Row[]; onChanged: () => void }) {
+function PaymentPanel({ rows, onChanged, onAuthenticationExpired }: { rows: Row[]; onChanged: () => void; onAuthenticationExpired: (message: string) => void }) {
   const [drafts, setDrafts] = useState<Record<string, { publicConfig: Record<string, string>; secrets: Record<string, string> }>>({});
   const [reason, setReason] = useState("");
   const [message, setMessage] = useState("");
@@ -592,25 +593,33 @@ function PaymentPanel({ rows, onChanged }: { rows: Row[]; onChanged: () => void 
     try {
       await adminApi.savePaymentChannel(channel, { ...drafts[channel], reason: reason.trim() });
       setMessage("配置已加密保存。出于安全考虑，修改配置后渠道会自动关闭，请校验后再开启。"); onChanged();
-    } catch (error) { setMessage(error instanceof Error ? error.message : "保存失败"); }
+    } catch (error) {
+      if (isAdminAuthenticationError(error)) { onAuthenticationExpired(error.message); return; }
+      setMessage(error instanceof Error ? error.message : "保存失败");
+    }
     finally { setBusy(""); }
   };
   const activate = async (channel: "wechat" | "alipay", enabled: boolean) => {
     if (reason.trim().length < 3 || !window.confirm(`确认${enabled ? "开启" : "关闭"}${channel === "wechat" ? "微信支付" : "支付宝"}？`)) return;
     setBusy(channel);
     try { await adminApi.action(`/payment-channels/${channel}/activation`, { enabled, confirmed: true, reason: reason.trim() }); setMessage(enabled ? "渠道已开启，新订单可以选择该方式。" : "渠道已关闭，历史订单回调仍会继续处理。"); onChanged(); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "操作失败"); }
+    catch (error) {
+      if (isAdminAuthenticationError(error)) { onAuthenticationExpired(error.message); return; }
+      setMessage(error instanceof Error ? error.message : "操作失败");
+    }
     finally { setBusy(""); }
   };
   return <>
     <section className="pricing-intro"><div><p className="eyebrow">ENCRYPTED CHANNEL CONFIG</p><h3>官方支付渠道</h3><p>微信与支付宝可独立配置和启停。私钥只允许替换，保存后不会再次显示原文。</p></div><label>本次变更原因<input value={reason} onChange={event => setReason(event.target.value)} placeholder="例如：录入正式商户配置" /></label></section>
-    <div className="pricing-grid">{rows.map(row => { const channel = String(row.channel) as "wechat" | "alipay"; const fields = paymentFields[channel]; const draft = drafts[channel]; const secretState = row.secretFields as Record<string, { configured: boolean }> || {}; return <article className={`pricing-card ${row.enabled ? "published" : "unpublished"}`} key={channel}>
-      <div className="pricing-card-head"><span>{channel === "wechat" ? "微信支付" : "支付宝"}</span><small>配置 v{String(row.configVersion)}</small></div>
-      <strong>{row.enabled ? "已开启" : "已关闭"}</strong><p>校验状态：{String(row.validationStatus)}{Array.isArray(row.validationErrors) && row.validationErrors.length ? ` · ${row.validationErrors.join("；")}` : ""}</p>
+    <div className="payment-grid">{rows.map(row => { const channel = String(row.channel) as "wechat" | "alipay"; const fields = paymentFields[channel]; const draft = drafts[channel]; const secretState = row.secretFields as Record<string, { configured: boolean }> || {}; const status = paymentChannelStatus(row); return <article className={`payment-card ${status.active ? "active" : "inactive"}`} key={channel}>
+      <div className="payment-card-head"><div><span>{channel === "wechat" ? "微信支付" : "支付宝"}</span><small>配置 v{String(row.configVersion)} · 更新于 {status.updatedAtLabel}</small></div><span className={`status-badge ${status.active ? "active" : "inactive"}`}>{status.usageLabel}</span></div>
+      <section className={`payment-usage ${status.active ? "active" : "inactive"}`} aria-live="polite"><span className="status-dot" /><div><strong>{status.usageLabel}</strong><p>{status.usageDescription}</p></div></section>
+      <div className="payment-readiness"><div><span className={`status-badge ${status.ready ? "ready" : "draft"}`}>{status.readinessLabel}</span><p>{status.readinessDescription}</p></div><label className="payment-toggle"><span>允许用户使用</span><input type="checkbox" role="switch" aria-label={`${channel === "wechat" ? "微信支付" : "支付宝"}用户端使用开关`} checked={status.active} disabled={busy === channel || (!row.enabled && !status.ready)} onChange={event => void activate(channel, event.target.checked)} /><span className="toggle-track" aria-hidden="true"><span /></span></label></div>
+      {status.validationErrors.length > 0 ? <div className="payment-errors"><strong>需要修正</strong><ul>{status.validationErrors.map(error => <li key={error}>{error}</li>)}</ul></div> : null}
       {draft ? fields.public.map(key => <label key={key}>{paymentLabels[key]}<input value={draft.publicConfig[key] || ""} onChange={event => updatePublic(channel, key, event.target.value)} /></label>) : null}
       {draft ? fields.secret.map(key => <label key={key}>{paymentLabels[key]}<textarea value={draft.secrets[key] || ""} placeholder={secretState[key]?.configured ? "已安全配置；留空保持不变" : "尚未配置"} onChange={event => updateSecret(channel, key, event.target.value)} /></label>) : null}
-      <button disabled={busy === channel} onClick={() => void save(channel)}>保存并校验</button>
-      <button disabled={busy === channel || (!row.enabled && row.validationStatus !== "ready")} onClick={() => void activate(channel, !Boolean(row.enabled))}>{row.enabled ? "关闭渠道" : "开启渠道"}</button>
+      <button className="payment-save" disabled={busy === channel} onClick={() => void save(channel)}>保存配置并校验</button>
+      <small className="payment-save-note">保存或修改配置会自动关闭此渠道；确认状态为“配置可启用”后，再打开上方使用开关。</small>
     </article>; })}</div><small className="pricing-message">{message}</small>
   </>;
 }
@@ -624,9 +633,17 @@ export function App() {
   const [rows, setRows] = useState<Row[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loginMessage, setLoginMessage] = useState("");
   const [offset, setOffset] = useState(0);
   const loadSequence = useRef(0);
   const sessionRequest = useRef<ReturnType<typeof adminApi.session> | null>(null);
+
+  const requireNewAdminLogin = (message: string) => {
+    adminApi.clear();
+    sessionRequest.current = null;
+    setLoginMessage(message);
+    setAuthenticated(false);
+  };
 
   const load = async (target: View, background = false) => {
     const sequence = ++loadSequence.current;
@@ -657,11 +674,7 @@ export function App() {
       if (sequence !== loadSequence.current) return;
       const message = reason instanceof Error ? reason.message : "后台服务暂时不可用";
       setError(message);
-      if (/session|required|401|invalid/i.test(message)) {
-        sessionRequest.current = null;
-        adminApi.clear();
-        setAuthenticated(false);
-      }
+      if (isAdminAuthenticationError(reason) || /session|required|401|invalid/i.test(message)) requireNewAdminLogin(message);
     } finally {
       if (sequence === loadSequence.current && !background) setLoading(false);
     }
@@ -671,7 +684,7 @@ export function App() {
     if (authenticated) void load(view);
   }, [authenticated, view, offset]);
 
-  if (!authenticated) return <Login onReady={() => setAuthenticated(true)} />;
+  if (!authenticated) return <Login initialMessage={loginMessage} onReady={() => { setLoginMessage(""); setAuthenticated(true); }} />;
   const current = views.find(item => item.id === view)!;
   const visibleViews = views.filter(item => permissions.length === 0 || permissions.includes(item.permission));
 
@@ -685,7 +698,7 @@ export function App() {
       <main className="workspace">
         <header><div><p className="eyebrow">{current.eyebrow}</p><h1>{current.label}</h1></div><div className="header-actions"><span>{new Date().toLocaleDateString("zh-CN")}</span><button onClick={() => void load(view)}>刷新</button><button onClick={() => adminApi.logout().then(() => { sessionRequest.current = null; setAuthenticated(false); })}>退出</button></div></header>
         {error && <div className="alert">{error}</div>}
-        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "pricing" ? <PricingPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "payments" ? <PaymentPanel rows={rows} onChanged={() => void load(view, true)} /> : <>
+        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "pricing" ? <PricingPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "payments" ? <PaymentPanel rows={rows} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : <>
           <Table rows={rows} />
           <div className="pagination"><button disabled={offset === 0} onClick={() => setOffset(value => Math.max(0, value - 50))}>上一页</button><span>第 {offset / 50 + 1} 页</span><button disabled={rows.length < 50} onClick={() => setOffset(value => value + 50)}>下一页</button></div>
           <ActionPanel view={view} rows={rows} permissions={permissions} onChanged={() => void load(view, true)} />
