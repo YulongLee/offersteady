@@ -104,6 +104,7 @@ export interface InterviewWorkspaceSnapshot {
 }
 
 export interface BillingPresentationState {
+  readonly availablePaymentChannels: readonly ("wechat" | "alipay")[];
   readonly catalog: readonly BillingProduct[];
   readonly rates: UsageRates;
   readonly balance: number;

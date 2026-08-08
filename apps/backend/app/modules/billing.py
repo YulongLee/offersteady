@@ -4,7 +4,7 @@ from hashlib import sha256
 from json import dumps
 from pydantic import BaseModel, ConfigDict, Field
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import PlainTextResponse, RedirectResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 
 from app.core.logging import utc_now_iso
 from app.core.responses import success_response
@@ -15,6 +15,7 @@ from app.schemas.foundation import ApiEnvelope, ModuleDescriptor
 from app.services.alipay_provider import AlipayPaymentProvider
 from app.services.billing_service import BillingService
 from app.services.mzfpay_provider import MzfpayPaymentProvider
+from app.services.payment_channel_service import PaymentChannelService
 
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -66,8 +67,10 @@ async def get_billing_state(
     request: Request,
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: BillingService = Depends(billing_service),
+    settings: Settings = Depends(settings_dependency),
 ) -> ApiEnvelope[dict[str, object]]:
     data = service.state_payload(service.state_for_user(user_id=resolve_owned_user_id(explicit_user_id=None, auth_context=auth_context)))
+    data["availablePaymentChannels"] = PaymentChannelService(settings, service.billing_repository).available_channels() if service.billing_repository else []
     return success_response(request=request, data=data, timestamp=utc_now_iso())
 
 
@@ -91,11 +94,15 @@ async def create_checkout_order(
     service: BillingService = Depends(billing_service),
     settings: Settings = Depends(settings_dependency),
 ) -> ApiEnvelope[dict[str, object]]:
-    provider = configured_payment_provider(settings)
+    try:
+        provider = (PaymentChannelService(settings, service.billing_repository).provider(request.channel)
+                    if service.billing_repository else configured_payment_provider(settings))
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail="所选支付方式暂未开放") from exc
     if not provider.enabled:
         raise HTTPException(status_code=503, detail="当前支付提供方尚未配置完整商户参数")
-    if provider.provider_name == "alipay" and request.channel != "alipay":
-        raise HTTPException(status_code=400, detail="支付宝官方支付仅支持支付宝渠道")
+    if provider.provider_name in {"alipay", "wechat"} and request.channel != provider.provider_name:
+        raise HTTPException(status_code=400, detail="支付渠道与提供方不匹配")
     user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
     expires_at_ms = int(request_context.scope.get("time", 0) * 1000) if request_context.scope.get("time") else 0
     if not expires_at_ms:
@@ -119,7 +126,8 @@ async def create_checkout_order(
         channel=order.channel,
         client_ip=request_context.client.host if request_context.client else None,
     )
-    order = service.replace_checkout_action(order_id=order.id, payment_url=payment_url, expires_at_ms=expires_at_ms)
+    order = service.replace_checkout_action(order_id=order.id, payment_url=payment_url, expires_at_ms=expires_at_ms,
+                                            action_kind="dynamic_qr" if provider.provider_name == "wechat" else "redirect")
     return success_response(request=request_context, data=service._official_order_payload(order), timestamp=utc_now_iso())
 
 
@@ -177,7 +185,8 @@ async def handle_alipay_notify(
 ) -> PlainTextResponse:
     form = await request.form()
     params = {key: str(value) for key, value in form.items()}
-    provider = AlipayPaymentProvider(settings)
+    provider = (PaymentChannelService(settings, service.billing_repository).provider("alipay", require_enabled=False)
+                if service.billing_repository else AlipayPaymentProvider(settings))
     notification = provider.parse_notification(params)
     event_fingerprint = sha256(dumps(params, sort_keys=True, separators=(",", ":")).encode("utf8")).hexdigest()
     outcome = service.process_payment_notification(
@@ -195,3 +204,23 @@ async def handle_alipay_notify(
 @router.get("/payment-providers/alipay/return")
 async def handle_alipay_return(settings: Settings = Depends(settings_dependency)) -> RedirectResponse:
     return RedirectResponse(settings.alipay_return_url or f"{settings.public_web_base_url.rstrip('/')}/app/billing")
+
+
+@router.post("/payment-providers/wechat/notify", include_in_schema=False)
+async def handle_wechat_notify(
+    request: Request,
+    service: BillingService = Depends(billing_service),
+    settings: Settings = Depends(settings_dependency),
+) -> JSONResponse:
+    body = await request.body()
+    provider = PaymentChannelService(settings, service.billing_repository).provider("wechat", require_enabled=False)
+    notification = provider.parse_notification(body, {key.lower(): value for key, value in request.headers.items()})
+    event_fingerprint = sha256(body).hexdigest()
+    outcome = service.process_payment_notification(
+        event_fingerprint=event_fingerprint, order_id=notification.order_id,
+        provider_trade_no=notification.provider_trade_no, amount_cents=notification.amount_cents,
+        verified=notification.verified, paid=notification.paid, provider="wechat",
+    )
+    if outcome in {"paid", "ignored_not_paid"}:
+        return JSONResponse({"code": "SUCCESS", "message": "成功"})
+    return JSONResponse({"code": "FAIL", "message": "签名或订单校验失败"}, status_code=400)

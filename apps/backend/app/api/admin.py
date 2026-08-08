@@ -4,10 +4,11 @@ from collections import defaultdict, deque
 from functools import lru_cache
 from threading import Lock
 from time import monotonic
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.config import get_settings
 from app.schemas.admin import (
@@ -26,6 +27,7 @@ from app.services.alipay_provider import AlipayPaymentProvider
 from app.services.billing_service import BillingService
 from app.services.document_processing import DocumentProcessingService
 from app.services.realtime_speech_service import RealtimeSpeechService
+from app.services.payment_channel_service import PaymentChannelService
 from app.deps import billing_service, document_processing_service, realtime_speech_service
 
 
@@ -33,6 +35,19 @@ admin_router = APIRouter(prefix="/admin", tags=["commercial-admin"])
 bearer = HTTPBearer(auto_error=False)
 _rate_lock = Lock()
 _rate_windows: dict[str, deque[float]] = defaultdict(deque)
+
+
+class PaymentChannelConfigRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    public_config: dict[str, Any] = Field(default_factory=dict, alias="publicConfig")
+    secrets: dict[str, str] = Field(default_factory=dict)
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class PaymentChannelActivationRequest(BaseModel):
+    enabled: bool
+    confirmed: bool
+    reason: str = Field(min_length=3, max_length=500)
 
 
 @lru_cache(maxsize=1)
@@ -244,6 +259,65 @@ def orders(
 ):
     limit, offset = _page(limit, offset)
     return {"data": {"items": admin_service().repository.list_orders(limit=limit, offset=offset), "limit": limit, "offset": offset}}
+
+
+@admin_router.get("/payment-channels")
+def payment_channels(
+    principal: Annotated[AdminPrincipal, Depends(permission("payments.manage"))],
+    billing: BillingService = Depends(billing_service),
+):
+    if billing.billing_repository is None:
+        raise HTTPException(status_code=503, detail="Payment configuration storage unavailable")
+    return {"data": {"items": PaymentChannelService(get_settings(), billing.billing_repository).list_masked()}}
+
+
+@admin_router.put("/payment-channels/{channel}")
+def update_payment_channel(
+    channel: str,
+    payload: PaymentChannelConfigRequest,
+    request: Request,
+    principal: Annotated[AdminPrincipal, Depends(permission("payments.manage"))],
+    billing: BillingService = Depends(billing_service),
+):
+    if billing.billing_repository is None:
+        raise HTTPException(status_code=503, detail="Payment configuration storage unavailable")
+    try:
+        result = PaymentChannelService(get_settings(), billing.billing_repository).save(
+            channel=channel, public_config=payload.public_config, secrets=payload.secrets, user_id=principal.user_id,
+        )
+        admin_service().audit(
+            principal=principal, action="payments.config.update", resource_type="payment_channel", resource_id=channel,
+            reason=payload.reason, request_id=_request_id(request), result="success",
+            details={"status": result["validationStatus"]},
+        )
+        return {"data": result}
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@admin_router.post("/payment-channels/{channel}/activation")
+def activate_payment_channel(
+    channel: str,
+    payload: PaymentChannelActivationRequest,
+    request: Request,
+    principal: Annotated[AdminPrincipal, Depends(permission("payments.manage"))],
+    billing: BillingService = Depends(billing_service),
+):
+    _confirmed(payload.confirmed)
+    if billing.billing_repository is None:
+        raise HTTPException(status_code=503, detail="Payment configuration storage unavailable")
+    try:
+        result = PaymentChannelService(get_settings(), billing.billing_repository).set_enabled(
+            channel=channel, enabled=payload.enabled, user_id=principal.user_id,
+        )
+        admin_service().audit(
+            principal=principal, action="payments.channel.enable" if payload.enabled else "payments.channel.disable",
+            resource_type="payment_channel", resource_id=channel, reason=payload.reason,
+            request_id=_request_id(request), result="success", details={"status": "enabled" if payload.enabled else "disabled"},
+        )
+        return {"data": result}
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @admin_router.get("/catalog-products")
@@ -561,7 +635,9 @@ def reconcile_order(
                 "order_status": order["status"],
                 "status": "provider_query_not_supported",
             }
-        authority = AlipayPaymentProvider(get_settings()).query_order(order_id=order_id)
+        if billing.billing_repository is None:
+            raise RuntimeError("payment_configuration_unavailable")
+        authority = PaymentChannelService(get_settings(), billing.billing_repository).provider("alipay", require_enabled=False).query_order(order_id=order_id)
         if not authority.verified:
             raise PermissionError("payment_provider_response_not_verified")
         if not authority.paid:

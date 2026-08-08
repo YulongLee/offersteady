@@ -30,6 +30,7 @@ from app.services.document_service import DocumentService
 from app.services.material_object_keys import MaterialObjectKeyFactory
 from app.services.screenshot_answer_service import ScreenshotAnswerService
 from app.services.session_service import SessionService
+from app.services.payment_channel_service import PaymentChannelService
 from app.ports.storage import FileStoragePort
 
 
@@ -529,6 +530,8 @@ async def get_web_state(
     screenshot_questions: list[dict[str, object]] = []
     review_screenshots: list[dict[str, object]] = []
     resources = [_prepared_resource_payload(item) for item in document_items[:3]]
+    billing_payload = billing.state_payload(billing_state)
+    billing_payload["availablePaymentChannels"] = PaymentChannelService(settings, billing.billing_repository).available_channels() if billing.billing_repository else []
     state = {
         "interviews": [_session_payload(item) for item in session_items],
         "preparation": {"resources": resources, "device": None},
@@ -542,7 +545,7 @@ async def get_web_state(
         "captureState": "ready",
         "librarySources": [_document_source_payload(item, None, None) for item in document_items],
         "contextSelections": {item.session_id: _selection_payload(item) for item in session_items},
-        "billing": billing.state_payload(billing_state),
+        "billing": billing_payload,
         "speaker": {"mode": "dual-channel", "transcripts": [], "pendingQuestion": None, "degradation": None},
         "activeAnswerTask": None,
         "account": account,

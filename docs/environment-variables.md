@@ -118,6 +118,8 @@
 
 ## 支付宝官方支付
 
+当前版本的新订单渠道不再由 `OFFERSTEADY_CHECKOUT_PROVIDER` 单选控制，而是在运营后台“支付设置”中独立配置和启停；旧环境变量只保留用于历史 MZFPay 兼容及开发测试。完整操作和真实小额验收见 [`payment-channel-operations.md`](./payment-channel-operations.md)。
+
 取得个体工商户资质、支付宝商家认证、网页应用审核和电脑网站支付签约后，将生产配置切换为：
 
 ```bash

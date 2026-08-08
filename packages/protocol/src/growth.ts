@@ -26,7 +26,7 @@ export interface OfficialCheckoutOrder {
   readonly amountCents: number;
   readonly currency: "CNY";
   readonly channel: PaymentChannel;
-  readonly provider?: "mzfpay" | "alipay";
+  readonly provider?: "mzfpay" | "alipay" | "wechat";
   readonly status: OfficialCheckoutStatus;
   readonly action: OfficialCheckoutAction;
   readonly createdAtMs: number;

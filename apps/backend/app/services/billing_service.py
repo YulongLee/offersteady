@@ -293,7 +293,7 @@ class BillingService:
             raise ValueError("商品不可购买或已下架")
         if channel not in {"wechat", "alipay"}:
             raise ValueError("支付渠道不可用")
-        if provider not in {"mzfpay", "alipay"}:
+        if provider not in {"mzfpay", "alipay", "wechat"}:
             raise ValueError("支付提供方不可用")
         now = _now_ms()
         order = OfficialCheckoutOrderRecord(
@@ -318,15 +318,17 @@ class BillingService:
         self.checkout_orders_by_user_and_key[(user_id, idempotency_key)] = order.id
         return order
 
-    def replace_checkout_action(self, *, order_id: str, payment_url: str, expires_at_ms: int) -> OfficialCheckoutOrderRecord:
+    def replace_checkout_action(self, *, order_id: str, payment_url: str, expires_at_ms: int, action_kind: str = "redirect") -> OfficialCheckoutOrderRecord:
+        action = ({"kind": "dynamic_qr", "value": payment_url, "expiresAtMs": expires_at_ms}
+                  if action_kind == "dynamic_qr" else {"kind": "redirect", "url": payment_url, "expiresAtMs": expires_at_ms})
         if self.billing_repository is not None:
             return self._persisted_order(self.billing_repository.replace_checkout_action(
                 order_id=order_id,
-                action={"kind": "redirect", "url": payment_url, "expiresAtMs": expires_at_ms},
+                action=action,
                 updated_at_ms=_now_ms(),
             ))
         order = self.checkout_orders_by_id[order_id]
-        updated = OfficialCheckoutOrderRecord(**{**order.__dict__, "action": {"kind": "redirect", "url": payment_url, "expiresAtMs": expires_at_ms}})
+        updated = OfficialCheckoutOrderRecord(**{**order.__dict__, "action": action})
         self.checkout_orders_by_id[order_id] = updated
         return updated
 

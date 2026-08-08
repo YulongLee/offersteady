@@ -4,13 +4,14 @@ import { adminApi } from "./api";
 import { buildLinePath, chartDomain, formatTrendChange, formatTrendValue, type TrendMetric, type TrendResponse } from "./analytics";
 import { capacityLevelLabel, formatCapacityValue, type CapacityMetric, type CapacityResponse } from "./capacity";
 
-type View = "dashboard" | "users" | "orders" | "pricing" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
+type View = "dashboard" | "users" | "orders" | "payments" | "pricing" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
 type Row = Record<string, unknown>;
 
 const views: { id: View; label: string; eyebrow: string; permission: string }[] = [
   { id: "dashboard", label: "运营总览", eyebrow: "OVERVIEW", permission: "observability.read" },
   { id: "users", label: "用户与权益", eyebrow: "CUSTOMERS", permission: "users.read" },
   { id: "orders", label: "订单与支付", eyebrow: "BILLING", permission: "billing.read" },
+  { id: "payments", label: "支付设置", eyebrow: "PAYMENTS", permission: "payments.manage" },
   { id: "pricing", label: "商品定价", eyebrow: "CATALOG", permission: "billing.read" },
   { id: "redemptions", label: "兑换码", eyebrow: "BENEFITS", permission: "billing.read" },
   { id: "materials", label: "资料任务", eyebrow: "KNOWLEDGE", permission: "materials.read" },
@@ -563,6 +564,57 @@ function PricingPanel({ rows, permissions, onChanged }: { rows: Row[]; permissio
   </>;
 }
 
+const paymentFields = {
+  wechat: { public: ["mchId", "appId", "merchantSerialNo", "nativeUrl", "notifyUrl"], secret: ["merchantPrivateKey", "platformPublicKey", "apiV3Key"] },
+  alipay: { public: ["appId", "sellerId", "gatewayUrl", "notifyUrl", "returnUrl"], secret: ["appPrivateKey", "alipayPublicKey"] },
+} as const;
+const paymentLabels: Record<string, string> = { mchId: "微信商户号", appId: "应用 ID", merchantSerialNo: "商户证书序列号", nativeUrl: "Native API 地址", notifyUrl: "异步通知地址", returnUrl: "支付返回地址", sellerId: "支付宝卖家 ID", gatewayUrl: "支付宝网关", merchantPrivateKey: "商户 API 私钥（PEM）", platformPublicKey: "微信支付平台公钥（PEM）", apiV3Key: "APIv3 密钥", appPrivateKey: "应用私钥（PEM）", alipayPublicKey: "支付宝公钥（PEM）" };
+
+function PaymentPanel({ rows, onChanged }: { rows: Row[]; onChanged: () => void }) {
+  const [drafts, setDrafts] = useState<Record<string, { publicConfig: Record<string, string>; secrets: Record<string, string> }>>({});
+  const [reason, setReason] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState("");
+  useEffect(() => {
+    setDrafts(Object.fromEntries(rows.map(row => [String(row.channel), { publicConfig: { ...(row.publicConfig as Record<string, string> || {}) }, secrets: {} }])));
+  }, [rows]);
+  const updatePublic = (channel: string, key: string, value: string) => setDrafts(current => {
+    const existing = current[channel] || { publicConfig: {}, secrets: {} };
+    return { ...current, [channel]: { ...existing, publicConfig: { ...existing.publicConfig, [key]: value } } };
+  });
+  const updateSecret = (channel: string, key: string, value: string) => setDrafts(current => {
+    const existing = current[channel] || { publicConfig: {}, secrets: {} };
+    return { ...current, [channel]: { ...existing, secrets: { ...existing.secrets, [key]: value } } };
+  });
+  const save = async (channel: "wechat" | "alipay") => {
+    if (reason.trim().length < 3) { setMessage("请填写本次配置变更原因。"); return; }
+    setBusy(channel);
+    try {
+      await adminApi.savePaymentChannel(channel, { ...drafts[channel], reason: reason.trim() });
+      setMessage("配置已加密保存。出于安全考虑，修改配置后渠道会自动关闭，请校验后再开启。"); onChanged();
+    } catch (error) { setMessage(error instanceof Error ? error.message : "保存失败"); }
+    finally { setBusy(""); }
+  };
+  const activate = async (channel: "wechat" | "alipay", enabled: boolean) => {
+    if (reason.trim().length < 3 || !window.confirm(`确认${enabled ? "开启" : "关闭"}${channel === "wechat" ? "微信支付" : "支付宝"}？`)) return;
+    setBusy(channel);
+    try { await adminApi.action(`/payment-channels/${channel}/activation`, { enabled, confirmed: true, reason: reason.trim() }); setMessage(enabled ? "渠道已开启，新订单可以选择该方式。" : "渠道已关闭，历史订单回调仍会继续处理。"); onChanged(); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "操作失败"); }
+    finally { setBusy(""); }
+  };
+  return <>
+    <section className="pricing-intro"><div><p className="eyebrow">ENCRYPTED CHANNEL CONFIG</p><h3>官方支付渠道</h3><p>微信与支付宝可独立配置和启停。私钥只允许替换，保存后不会再次显示原文。</p></div><label>本次变更原因<input value={reason} onChange={event => setReason(event.target.value)} placeholder="例如：录入正式商户配置" /></label></section>
+    <div className="pricing-grid">{rows.map(row => { const channel = String(row.channel) as "wechat" | "alipay"; const fields = paymentFields[channel]; const draft = drafts[channel]; const secretState = row.secretFields as Record<string, { configured: boolean }> || {}; return <article className={`pricing-card ${row.enabled ? "published" : "unpublished"}`} key={channel}>
+      <div className="pricing-card-head"><span>{channel === "wechat" ? "微信支付" : "支付宝"}</span><small>配置 v{String(row.configVersion)}</small></div>
+      <strong>{row.enabled ? "已开启" : "已关闭"}</strong><p>校验状态：{String(row.validationStatus)}{Array.isArray(row.validationErrors) && row.validationErrors.length ? ` · ${row.validationErrors.join("；")}` : ""}</p>
+      {draft ? fields.public.map(key => <label key={key}>{paymentLabels[key]}<input value={draft.publicConfig[key] || ""} onChange={event => updatePublic(channel, key, event.target.value)} /></label>) : null}
+      {draft ? fields.secret.map(key => <label key={key}>{paymentLabels[key]}<textarea value={draft.secrets[key] || ""} placeholder={secretState[key]?.configured ? "已安全配置；留空保持不变" : "尚未配置"} onChange={event => updateSecret(channel, key, event.target.value)} /></label>) : null}
+      <button disabled={busy === channel} onClick={() => void save(channel)}>保存并校验</button>
+      <button disabled={busy === channel || (!row.enabled && row.validationStatus !== "ready")} onClick={() => void activate(channel, !Boolean(row.enabled))}>{row.enabled ? "关闭渠道" : "开启渠道"}</button>
+    </article>; })}</div><small className="pricing-message">{message}</small>
+  </>;
+}
+
 export function App() {
   const [authenticated, setAuthenticated] = useState(Boolean(adminApi.token()));
   const [view, setView] = useState<View>("dashboard");
@@ -597,7 +649,7 @@ export function App() {
         const nextDashboard = await adminApi.dashboard();
         if (sequence === loadSequence.current) setDashboardData(nextDashboard);
       } else {
-        const resource = target === "redemptions" ? "redemption-batches" : target === "pricing" ? "catalog-products" : target;
+        const resource = target === "redemptions" ? "redemption-batches" : target === "pricing" ? "catalog-products" : target === "payments" ? "payment-channels" : target;
         const nextRows = (await adminApi.list(resource, offset)).items;
         if (sequence === loadSequence.current) setRows(Array.isArray(nextRows) ? nextRows : []);
       }
@@ -633,7 +685,7 @@ export function App() {
       <main className="workspace">
         <header><div><p className="eyebrow">{current.eyebrow}</p><h1>{current.label}</h1></div><div className="header-actions"><span>{new Date().toLocaleDateString("zh-CN")}</span><button onClick={() => void load(view)}>刷新</button><button onClick={() => adminApi.logout().then(() => { sessionRequest.current = null; setAuthenticated(false); })}>退出</button></div></header>
         {error && <div className="alert">{error}</div>}
-        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "pricing" ? <PricingPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : <>
+        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "pricing" ? <PricingPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "payments" ? <PaymentPanel rows={rows} onChanged={() => void load(view, true)} /> : <>
           <Table rows={rows} />
           <div className="pagination"><button disabled={offset === 0} onClick={() => setOffset(value => Math.max(0, value - 50))}>上一页</button><span>第 {offset / 50 + 1} 页</span><button disabled={rows.length < 50} onClick={() => setOffset(value => value + 50)}>下一页</button></div>
           <ActionPanel view={view} rows={rows} permissions={permissions} onChanged={() => void load(view, true)} />

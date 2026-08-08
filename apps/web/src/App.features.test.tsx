@@ -30,11 +30,28 @@ describe("spec-driven interview features", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "购买" })[0]!);
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).queryByLabelText("交易单号")).not.toBeInTheDocument(); expect(within(dialog).queryByLabelText("付款截图")).not.toBeInTheDocument();
-    await waitFor(() => expect(within(dialog).getByRole("link", { name: "打开支付收银台" })).toBeInTheDocument());
+    fireEvent.click(within(dialog).getByRole("button", { name: "支付宝支付" }));
+    await waitFor(() => expect(within(dialog).getByRole("link", { name: "打开支付宝官方收银台" })).toBeInTheDocument());
     expect(openSpy).toHaveBeenCalledWith(expect.stringContaining("pay.mzfpay.com"), "_blank", "noopener,noreferrer");
     expect(within(dialog).getByText(/等待服务端验签通知/)).toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: "模拟服务端验签通知" })).not.toBeInTheDocument();
     openSpy.mockRestore();
+  });
+
+  it("shows only enabled payment channels and disables checkout when none are ready", () => {
+    const clonedSingle = structuredClone(syntheticState);
+    const single = { ...clonedSingle, billing: { ...clonedSingle.billing, availablePaymentChannels: ["wechat"] as const } };
+    window.history.pushState({}, "", "/app/billing");
+    const rendered = render(<App initialAuthenticated initialState={single} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "购买" })[0]!);
+    expect(within(screen.getByRole("dialog")).getByRole("button", { name: "微信支付" })).toBeInTheDocument();
+    expect(within(screen.getByRole("dialog")).queryByRole("button", { name: "支付宝支付" })).not.toBeInTheDocument();
+    rendered.unmount();
+
+    const clonedDisabled = structuredClone(syntheticState);
+    const disabled = { ...clonedDisabled, billing: { ...clonedDisabled.billing, availablePaymentChannels: [] as const } };
+    render(<App initialAuthenticated initialState={disabled} />);
+    expect(screen.getAllByRole("button", { name: "支付暂未开放" })[0]).toBeDisabled();
   });
 
   it("renders only two source-fixed roles and confirms unclear question content once", () => {

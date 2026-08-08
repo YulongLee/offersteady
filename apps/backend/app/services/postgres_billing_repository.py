@@ -58,6 +58,66 @@ class PostgresBillingRepository:
             cursor.execute("SELECT COALESCE(SUM(points), 0) AS balance FROM points_redemption_ledger WHERE user_id = %s", (user_id,))
             return int(cursor.fetchone()["balance"])
 
+    def list_payment_channel_configs(self) -> list[dict[str, object]]:
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute("SELECT * FROM billing_payment_channel_configs ORDER BY channel")
+            return [dict(row) for row in cursor.fetchall()]
+
+    def payment_channel_config(self, *, channel: str) -> dict[str, object]:
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute("SELECT * FROM billing_payment_channel_configs WHERE channel = %s", (channel,))
+            row = cursor.fetchone()
+            if row is None:
+                raise KeyError(channel)
+            return dict(row)
+
+    def save_payment_channel_config(
+        self,
+        *,
+        channel: str,
+        public_config: Mapping[str, object],
+        secret_config_ciphertext: str | None,
+        validation_status: str,
+        validation_errors: list[str],
+        updated_by_user_id: str,
+        updated_at_ms: int,
+    ) -> dict[str, object]:
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                UPDATE billing_payment_channel_configs
+                SET public_config = %s::jsonb, secret_config_ciphertext = %s,
+                    validation_status = %s, validation_errors = %s::jsonb,
+                    config_version = config_version + 1, enabled = FALSE,
+                    updated_by_user_id = %s, updated_at_ms = %s
+                WHERE channel = %s RETURNING *
+                """,
+                (dumps(dict(public_config)), secret_config_ciphertext, validation_status,
+                 dumps(validation_errors), updated_by_user_id, updated_at_ms, channel),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                raise KeyError(channel)
+            connection.commit()
+            return dict(row)
+
+    def set_payment_channel_enabled(self, *, channel: str, enabled: bool, updated_by_user_id: str, updated_at_ms: int) -> dict[str, object]:
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                UPDATE billing_payment_channel_configs
+                SET enabled = %s, updated_by_user_id = %s, updated_at_ms = %s
+                WHERE channel = %s AND (%s = FALSE OR validation_status = 'ready')
+                RETURNING *
+                """,
+                (enabled, updated_by_user_id, updated_at_ms, channel, enabled),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                raise ValueError("payment_channel_not_ready")
+            connection.commit()
+            return dict(row)
+
     def create_checkout_order(self, *, order: Mapping[str, object], idempotency_key: str) -> dict[str, object]:
         with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
             cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (f"checkout:{order['user_id']}:{idempotency_key}",))
@@ -604,6 +664,7 @@ class PostgresBillingRepository:
             Path(REPO_ROOT / "apps/backend/migrations/versions/0012_billable_interview_usage.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0013_official_alipay_payments.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0018_admin_managed_billing_catalog.sql"),
+            Path(REPO_ROOT / "apps/backend/migrations/versions/0019_admin_payment_channels.sql"),
         )
         with self._connect() as connection, connection.cursor() as cursor:
             cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ("offersteady:billing-migrations",))

@@ -131,6 +131,7 @@ export const syntheticState: WebAppState = {
     review: { sessionId: "review", resumeSourceId: "resume-product", jobDescriptionSourceId: "jd-frontend", knowledgeSourceIds: ["kb-microfrontend"], revision: 2, confirmedAtMs: 1_719_000_000_000 },
   },
   billing: {
+    availablePaymentChannels: ["wechat", "alipay"],
     catalog: billingProducts,
     rates: { catalogVersion: 5, answerPoints: 5, screenshotAnswerPoints: 15, knowledgeIndexMinimumPoints: 20, knowledgeIndexPointsPer1000Tokens: 4, tokenizerVersion: "synthetic-v1" },
     balance: 200,

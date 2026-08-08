@@ -23,6 +23,8 @@ docker compose --env-file .env.production -f infra/compose/docker-compose.founda
 
 ## 支付回调
 
+官方微信支付与支付宝的新订单渠道通过运营后台独立配置。部署后两种渠道默认关闭；商户材料录入和小额验收流程见 [`../docs/payment-channel-operations.md`](../docs/payment-channel-operations.md)。
+
 真实码支付自动到账必须配置公网可访问的：
 
 ```text

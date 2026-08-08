@@ -211,6 +211,15 @@ class Settings(BaseSettings):
     alipay_notify_url: str | None = None
     alipay_return_url: str | None = None
     alipay_payment_ttl_seconds: int = 900
+    wechat_pay_native_url: str = "https://api.mch.weixin.qq.com/v3/pay/transactions/native"
+    wechat_pay_mch_id: str | None = None
+    wechat_pay_app_id: str | None = None
+    wechat_pay_merchant_serial_no: str | None = None
+    wechat_pay_merchant_private_key: str | None = None
+    wechat_pay_platform_public_key: str | None = None
+    wechat_pay_api_v3_key: str | None = None
+    wechat_pay_notify_url: str | None = None
+    wechat_pay_payment_ttl_seconds: int = 900
     redemption_code_points: dict[str, int] = Field(default_factory=dict)
     redemption_code_pepper: str | None = None
     support_wechat_id: str = "OneShowAILab"

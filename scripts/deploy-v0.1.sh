@@ -51,8 +51,11 @@ if [ -n "$LAST_DEPLOYED_COMMIT" ] && git cat-file -e "${LAST_DEPLOYED_COMMIT}^{c
   if printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(apps/web/|packages/config/|packages/protocol/|infra/docker/web\.Dockerfile$|infra/nginx/|infra/compose/docker-compose\.foundation\.yml$|package(-lock)?\.json$|tsconfig\.base\.json$)'; then
     BUILD_SERVICES+=(web)
   fi
+  if printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(apps/admin/|infra/docker/admin\.Dockerfile$|infra/compose/docker-compose\.foundation\.yml$|package(-lock)?\.json$|tsconfig\.base\.json$)'; then
+    BUILD_SERVICES+=(admin)
+  fi
 else
-  BUILD_SERVICES=(backend web)
+  BUILD_SERVICES=(backend web admin)
 fi
 
 if [ "${#BUILD_SERVICES[@]}" -gt 0 ]; then
@@ -65,10 +68,10 @@ else
 fi
 
 log "Starting Docker Compose services"
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --no-build
+docker compose --profile admin --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --no-build
 
 log "Current service status"
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps
+docker compose --profile admin --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps
 
 log "Running health checks"
 if curl -fsS "${PUBLIC_WEB_BASE_URL%/}/healthz" >/dev/null; then
