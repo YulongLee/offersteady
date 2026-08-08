@@ -26,5 +26,5 @@
 - [x] 4.2 Add synthetic Alipay and WeChat signing, callback, amount, duplicate-delivery and provider-mismatch tests
 - [x] 4.3 Add Web and Admin tests for disabled, single-channel and dual-channel states
 - [x] 4.4 Run backend, Web and Admin regression tests, production builds and strict OpenSpec validation
-- [ ] 4.5 Deploy migration and applications with both channels disabled, then verify existing public health, billing, account and interview flows
+- [x] 4.5 Deploy migration and applications with both channels disabled, then verify existing public health, billing, account and interview flows
 - [x] 4.6 Document merchant onboarding and the separate real small-value acceptance checklist required before enabling each channel
