@@ -14,25 +14,33 @@ const packageName = `OfferSteady-Companion-${desktopPackage.version}-Windows-x64
 const packageDir = join(releaseDir, "win-x64", packageName);
 const zipPath = join(releaseDir, `${packageName}.zip`);
 const metadataPath = join(releaseDir, `${packageName}.json`);
-const downloadDir = mkdtempSync(join(tmpdir(), "offersteady-electron-win-x64-"));
+const configuredElectronDir = process.env.OFFERSTEADY_WINDOWS_ELECTRON_DIR?.trim();
+const downloadDir = configuredElectronDir ? null : mkdtempSync(join(tmpdir(), "offersteady-electron-win-x64-"));
 
-const archive = await downloadArtifact({
-  version: desktopPackage.devDependencies.electron,
-  artifactName: "electron",
-  platform: "win32",
-  arch: "x64",
-});
-const extract = spawnSync("ditto", ["-x", "-k", archive, downloadDir], { encoding: "utf8" });
-if (extract.status !== 0) throw new Error(`Failed to extract Windows x64 Electron: ${extract.stderr || extract.stdout}`);
+if (downloadDir) {
+  const archive = await downloadArtifact({
+    version: desktopPackage.devDependencies.electron,
+    artifactName: "electron",
+    platform: "win32",
+    arch: "x64",
+  });
+  const extract = spawnSync("ditto", ["-x", "-k", archive, downloadDir], { encoding: "utf8" });
+  if (extract.status !== 0) throw new Error(`Failed to extract Windows x64 Electron: ${extract.stderr || extract.stdout}`);
+}
 
 rmSync(packageDir, { recursive: true, force: true });
 rmSync(zipPath, { force: true });
 rmSync(metadataPath, { force: true });
 mkdirSync(dirname(packageDir), { recursive: true });
-cpSync(downloadDir, packageDir, { recursive: true });
-renameSync(join(packageDir, "electron.exe"), join(packageDir, "OfferSteady.exe"));
+if (configuredElectronDir) {
+  cpSync(resolve(configuredElectronDir), packageDir, { recursive: true });
+} else if (downloadDir) {
+  cpSync(downloadDir, packageDir, { recursive: true });
+  renameSync(join(packageDir, "electron.exe"), join(packageDir, "OfferSteady.exe"));
+}
 
 const resourcesAppDir = join(packageDir, "resources/app");
+rmSync(resourcesAppDir, { recursive: true, force: true });
 mkdirSync(resourcesAppDir, { recursive: true });
 cpSync(join(desktopDir, "dist"), join(resourcesAppDir, "dist"), { recursive: true });
 rmSync(join(resourcesAppDir, "dist/native"), { recursive: true, force: true });
@@ -87,7 +95,7 @@ const metadata = {
   },
 };
 writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
-rmSync(downloadDir, { recursive: true, force: true });
+if (downloadDir) rmSync(downloadDir, { recursive: true, force: true });
 console.log(`Created ${zipPath}`);
 console.log(`Created ${metadataPath}`);
 console.log(`SHA-256 ${metadata.sha256}`);

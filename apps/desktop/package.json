@@ -1,6 +1,6 @@
 {
   "name": "@offersteady/desktop",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "面试稳 macOS 与 Windows 音频伴随程序",
   "author": "OfferSteady",
   "private": true,
@@ -24,7 +24,7 @@
     "package:mac:builder:x64": "npm run package:mac:x64",
     "package:mac:dir": "npm run build && electron-builder --mac --dir --config electron-builder.yml",
     "package:win:x64": "npm run build && node scripts/package-local-windows.mjs",
-    "package:win:installer:x64": "npm run package:win:x64 && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --prepackaged release/win-x64/OfferSteady-Companion-0.1.2-Windows-x64 --win nsis --x64 --config electron-builder.yml && node scripts/validate-windows-installer.mjs && node scripts/generate-release-metadata.mjs windows x64 release/OfferSteady-Companion-Setup-0.1.2-Windows-x64.exe",
+    "package:win:installer:x64": "npm run package:win:x64 && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --prepackaged release/win-x64/OfferSteady-Companion-0.1.3-Windows-x64 --win nsis --x64 --config electron-builder.yml && node scripts/validate-windows-installer.mjs && node scripts/generate-release-metadata.mjs windows x64 release/OfferSteady-Companion-Setup-0.1.3-Windows-x64.exe",
     "diagnose:e2e": "node scripts/diagnose-runtime.mjs"
   },
   "dependencies": {

@@ -21,7 +21,10 @@ if (arch !== "arm64" && arch !== "x64") {
 
 let electronApp = join(repoRoot, "node_modules/electron/dist/Electron.app");
 let downloadedElectronDir = null;
-if (arch !== process.arch) {
+const configuredElectronApp = process.env.OFFERSTEADY_ELECTRON_APP_PATH?.trim();
+if (configuredElectronApp) {
+  electronApp = resolve(configuredElectronApp);
+} else if (arch !== process.arch) {
   const { downloadArtifact } = await import("@electron/get");
   const archive = await downloadArtifact({
     version: desktopPackage.devDependencies.electron,
@@ -64,6 +67,7 @@ const copyBundle = spawnSync("ditto", [electronApp, appPath], { encoding: "utf8"
 if (copyBundle.status !== 0) {
   throw new Error(`Failed to copy Electron.app with ditto: ${copyBundle.stderr || copyBundle.stdout}`);
 }
+rmSync(resourcesAppDir, { recursive: true, force: true });
 mkdirSync(resourcesAppDir, { recursive: true });
 cpSync(join(desktopDir, "dist"), join(resourcesAppDir, "dist"), { recursive: true });
 if (existsSync(join(resourcesAppDir, "dist/native"))) {
