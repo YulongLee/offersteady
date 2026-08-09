@@ -25,5 +25,5 @@
 
 - [x] 5.1 Run focused Web and Backend regressions, type checks, production builds, and strict OpenSpec validation with synthetic fixtures only.
 - [ ] 5.2 Perform a local browser smoke test for automatic answer, quick answer, screenshot answer, stream completion, history navigation, stop, failure, and retry states.
-- [ ] 5.3 Review the diff for privacy and unrelated behavior, commit and push the approved scope to Git.
-- [ ] 5.4 Deploy only affected services without restarting PostgreSQL, Redis, or unrelated services, then verify production health and key live-workspace behavior.
+- [x] 5.3 Review the diff for privacy and unrelated behavior, commit and push the approved scope to Git.
+- [x] 5.4 Deploy only affected services without restarting PostgreSQL, Redis, or unrelated services, then verify production health and key live-workspace behavior.
