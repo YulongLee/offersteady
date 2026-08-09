@@ -65,6 +65,12 @@ interface WebAudioSourceRuntime extends RuntimeHandle {
   readonly node: MediaStreamAudioSourceNode;
 }
 
+interface SourceStartInput {
+  readonly sourceKind: AudioSourceKind;
+  readonly sourceId: string;
+  readonly open: () => Promise<OpenAudioSource>;
+}
+
 interface SegmentSnapshot {
   readonly sequence: number;
   readonly segmentId: string;
@@ -82,7 +88,8 @@ const MICROPHONE_SPEECH_CONTINUE_THRESHOLD = 0.0018;
 const SYSTEM_SPEECH_START_THRESHOLD = 0.0008;
 const SYSTEM_SPEECH_CONTINUE_THRESHOLD = 0.0005;
 const INTERIM_INTERVAL_MS = 100;
-const SILENCE_FINALIZE_MS = 220;
+const MICROPHONE_SILENCE_FINALIZE_MS = 220;
+const SYSTEM_SILENCE_FINALIZE_MS = 480;
 const MIN_EMIT_SPEECH_MS = 60;
 const PRE_SPEECH_BUFFER_LIMIT = 4;
 const MAX_PENDING_AUDIO_BYTES = 64_000;
@@ -91,6 +98,49 @@ const HTTP_PUBLISH_THROTTLE_MS = 12;
 const HTTP_PUBLISH_RETRY_DELAY_MS = 120;
 const HTTP_PUBLISH_RETRY_LIMIT = 10;
 const MEDIA_OPEN_TIMEOUT_MS = 6500;
+const SYSTEM_RECOVERY_CHECK_MS = 2_000;
+const SYSTEM_CALLBACK_STALL_MS = 4_000;
+const SYSTEM_RECOVERY_STARTUP_GRACE_MS = 6_000;
+const SYSTEM_SILENCE_RECOVERY_DELAYS_MS = [30_000, 120_000, 300_000] as const;
+
+export type SystemAudioRecoveryReason =
+  | "track-ended"
+  | "track-muted"
+  | "audio-context-not-running"
+  | "audio-callback-stalled"
+  | "system-signal-stalled";
+
+interface SystemAudioRecoverySnapshot {
+  readonly nowMs: number;
+  readonly openedAtMs: number;
+  readonly lastProcessAtMs: number;
+  readonly lastSignalAtMs: number | null;
+  readonly lastRecoveryAtMs: number | null;
+  readonly recoveryAttempt: number;
+  readonly trackReadyState: MediaStreamTrackState;
+  readonly trackMuted: boolean;
+  readonly contextState: string;
+}
+
+export const systemAudioRecoveryReason = (snapshot: SystemAudioRecoverySnapshot): SystemAudioRecoveryReason | null => {
+  if (snapshot.trackReadyState === "ended") return "track-ended";
+  const startupComplete = snapshot.nowMs - snapshot.openedAtMs >= SYSTEM_RECOVERY_STARTUP_GRACE_MS;
+  if (!startupComplete) return null;
+  if (snapshot.trackMuted) return "track-muted";
+  if (snapshot.contextState !== "running") return "audio-context-not-running";
+  if (
+    snapshot.nowMs - snapshot.lastProcessAtMs >= SYSTEM_CALLBACK_STALL_MS
+  ) return "audio-callback-stalled";
+  if (snapshot.lastSignalAtMs === null) return null;
+  const delay = SYSTEM_SILENCE_RECOVERY_DELAYS_MS[
+    Math.min(snapshot.recoveryAttempt, SYSTEM_SILENCE_RECOVERY_DELAYS_MS.length - 1)
+  ] ?? SYSTEM_SILENCE_RECOVERY_DELAYS_MS.at(-1)!;
+  const signalSilentForMs = snapshot.nowMs - snapshot.lastSignalAtMs;
+  const timeSinceRecoveryMs = snapshot.lastRecoveryAtMs === null
+    ? Number.POSITIVE_INFINITY
+    : snapshot.nowMs - snapshot.lastRecoveryAtMs;
+  return signalSilentForMs >= delay && timeSinceRecoveryMs >= delay ? "system-signal-stalled" : null;
+};
 
 interface QueuedUploadFrame {
   readonly sourceId: string;
@@ -281,7 +331,10 @@ export class SpeechSegmenter {
       return [];
     }
 
-    if (nowMs - this.lastSpeechAtMs < SILENCE_FINALIZE_MS) return [];
+    const silenceFinalizeMs = this.sourceKind === "system"
+      ? SYSTEM_SILENCE_FINALIZE_MS
+      : MICROPHONE_SILENCE_FINALIZE_MS;
+    if (nowMs - this.lastSpeechAtMs < silenceFinalizeMs) return [];
     if (!this.emitted && this.lastSpeechAtMs - this.startedAtMs < MIN_EMIT_SPEECH_MS) {
       this.reset();
       return [];
@@ -338,6 +391,10 @@ export class DesktopRealtimePublisher {
   private readonly sendBuffers = new Map<AudioSourceKind, BoundedAudioFrameBuffer>();
   private readonly uploadQueues = new Map<AudioSourceKind, UploadQueueState>();
   private readonly lastFailureNotice = new Map<AudioSourceKind, { message: string; atMs: number }>();
+  private readonly sourceRecoveryInFlight = new Set<AudioSourceKind>();
+  private lastSystemSignalAtMs: number | null = null;
+  private lastSystemRecoveryAtMs: number | null = null;
+  private systemRecoveryAttempt = 0;
   private stopped = false;
   private transport: MultiplexedRealtimeTransport | null = null;
 
@@ -417,15 +474,15 @@ export class DesktopRealtimePublisher {
       queueState.consecutiveFailures = 0;
     });
     this.lastFailureNotice.clear();
+    this.sourceRecoveryInFlight.clear();
+    this.lastSystemSignalAtMs = null;
+    this.lastSystemRecoveryAtMs = null;
+    this.systemRecoveryAttempt = 0;
     this.sendBuffers.forEach((buffer) => buffer.clear());
     this.options.onHealth([]);
   }
 
-  private async startSource(input: {
-    readonly sourceKind: AudioSourceKind;
-    readonly sourceId: string;
-    readonly open: () => Promise<OpenAudioSource>;
-  }): Promise<WebAudioSourceRuntime | null> {
+  private async startSource(input: SourceStartInput): Promise<WebAudioSourceRuntime | null> {
     let media: OpenAudioSource | null = null;
     try {
       this.updateHealth({
@@ -453,6 +510,9 @@ export class DesktopRealtimePublisher {
       const processor = context.createScriptProcessor(1024, 1, 1);
       const sink = connectProcessor(context, processor);
       const segmenter = new SpeechSegmenter(input.sourceKind);
+      const openedAtMs = Date.now();
+      let lastProcessAtMs = openedAtMs;
+      let closing = false;
 
       node.connect(processor);
 
@@ -461,6 +521,12 @@ export class DesktopRealtimePublisher {
         const channel = event.inputBuffer.getChannelData(0);
         const rms = calculateRms(channel);
         const nowMs = Date.now();
+        lastProcessAtMs = nowMs;
+        if (input.sourceKind === "system" && rms >= SYSTEM_SPEECH_CONTINUE_THRESHOLD) {
+          this.lastSystemSignalAtMs = nowMs;
+          this.lastSystemRecoveryAtMs = null;
+          this.systemRecoveryAttempt = 0;
+        }
         this.updateHealth({
           sourceId: openedMedia.descriptor.id || input.sourceId,
           sourceKind: input.sourceKind,
@@ -521,7 +587,28 @@ export class DesktopRealtimePublisher {
         }
       };
 
+      const audioTrack = openedMedia.stream.getAudioTracks()[0];
+      const recoveryTimer = input.sourceKind === "system" && audioTrack
+        ? window.setInterval(() => {
+          if (closing || this.stopped || this.sourceRecoveryInFlight.has(input.sourceKind)) return;
+          const reason = systemAudioRecoveryReason({
+            nowMs: Date.now(),
+            openedAtMs,
+            lastProcessAtMs,
+            lastSignalAtMs: this.lastSystemSignalAtMs,
+            lastRecoveryAtMs: this.lastSystemRecoveryAtMs,
+            recoveryAttempt: this.systemRecoveryAttempt,
+            trackReadyState: audioTrack.readyState,
+            trackMuted: audioTrack.muted,
+            contextState: context.state,
+          });
+          if (reason) void this.recoverSource(input, reason);
+        }, SYSTEM_RECOVERY_CHECK_MS)
+        : null;
+
       const stop = async () => {
+        closing = true;
+        if (recoveryTimer !== null) window.clearInterval(recoveryTimer);
         const tailFrames = segmenter.flush(Date.now());
         for (const snapshot of tailFrames) {
           if (snapshot.payload.byteLength === 0) continue;
@@ -563,6 +650,7 @@ export class DesktopRealtimePublisher {
 
       openedMedia.stream.getTracks().forEach((track) => {
         track.addEventListener("ended", () => {
+          if (closing || this.stopped) return;
           this.updateHealth({
             sourceId: openedMedia.descriptor.id || input.sourceId,
             sourceKind: input.sourceKind,
@@ -573,6 +661,7 @@ export class DesktopRealtimePublisher {
             active: false,
             errorCode: "source-unavailable",
           });
+          if (input.sourceKind === "system") void this.recoverSource(input, "track-ended");
         });
       });
 
@@ -602,6 +691,56 @@ export class DesktopRealtimePublisher {
       });
       this.options.onFailure(diagnostic.displayMessage);
       return null;
+    }
+  }
+
+  private async recoverSource(input: SourceStartInput, reason: SystemAudioRecoveryReason) {
+    if (this.stopped || this.sourceRecoveryInFlight.has(input.sourceKind)) return;
+    this.sourceRecoveryInFlight.add(input.sourceKind);
+    if (input.sourceKind === "system") {
+      this.lastSystemRecoveryAtMs = Date.now();
+      this.systemRecoveryAttempt += 1;
+    }
+    const current = this.runtimes.find(
+      (runtime): runtime is WebAudioSourceRuntime => "sourceKind" in runtime && runtime.sourceKind === input.sourceKind,
+    );
+    this.updateHealth({
+      sourceId: current?.sourceId || input.sourceId,
+      sourceKind: input.sourceKind,
+      label: current?.label || sourceLabel(input.sourceKind),
+      state: "reconnecting",
+      stage: "track-live",
+      level: 0,
+      active: true,
+      errorCode: "audio-gap",
+    });
+    this.options.onServerEvent?.({
+      kind: "degraded",
+      payload: {
+        reason: "system-audio-auto-recovery",
+        recoveryReason: reason,
+        sourceKind: input.sourceKind,
+        attempt: this.systemRecoveryAttempt,
+      },
+    });
+    try {
+      if (current) {
+        await current.stop();
+        this.runtimes = this.runtimes.filter(runtime => runtime !== current);
+      }
+      if (this.stopped) return;
+      const recovered = await this.startSource(input);
+      if (recovered) {
+        this.runtimes.push(recovered);
+        this.options.onServerEvent?.({
+          kind: "connection-state",
+          payload: { sourceKind: input.sourceKind, state: "reconnected", recoveryReason: reason },
+        });
+      } else {
+        this.options.onFailure(`${sourceLabel(input.sourceKind)}自动恢复失败，请在助手中重新开始面试。`);
+      }
+    } finally {
+      this.sourceRecoveryInFlight.delete(input.sourceKind);
     }
   }
 

@@ -56,6 +56,14 @@ Web 实时页 MUST NOT 显示“角色待确认”、角色置信度、“设为
 - **WHEN** 面试进行中本地麦克风或系统音频来源断开
 - **THEN** 页面显示对应来源中断，停止依赖该来源的新自动触发且保留现有对话和手动提问能力
 
+#### Scenario: System audio track remains live but stops delivering signal
+- **WHEN** macOS 系统音频轨道仍报告 live，但在已经成功接收过电脑输出后持续静音、处理回调停止、轨道被静音或 AudioContext 挂起
+- **THEN** 桌面助手将该来源视为假存活，保留麦克风采集，并以有界退避自动重建电脑输出采集，不得长期把无信号轨道显示为正常
+
+#### Scenario: Remote speech contains short digital pauses
+- **WHEN** 飞书等会议软件的电脑输出在一句话内出现短暂静音或弱信号间隔
+- **THEN** 系统音频分段器保留同一转录段，只有超过系统声道专用停顿窗口后才提交最终片段，避免把一句问题切成多个过短片段
+
 ### Requirement: Minimize source and speaker data
 系统 MUST 仅为本场会话保留完成声道映射、回声去重和问题触发所需的最小来源元数据，不得把耳机、麦克风或匿名 speaker 信息用于现实身份识别或跨会话跟踪。原始音频仍 MUST 默认不长期保存。
 

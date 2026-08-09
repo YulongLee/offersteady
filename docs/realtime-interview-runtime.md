@@ -3,7 +3,7 @@
 ## Production path
 
 ```text
-Swift microphone + ScreenCaptureKit system audio
+Electron microphone + display loopback system audio
   -> Electron IPC control boundary
   -> one authenticated WebSocket v2 per interview
   -> bounded FastAPI ingress queues per role
@@ -12,7 +12,9 @@ Swift microphone + ScreenCaptureKit system audio
   -> cursor-based SSE web consumer
 ```
 
-The packaged desktop uses Swift as the production capture owner. Browser audio is a development compatibility path and must not run beside the native owner. Raw PCM stays in bounded memory and is never stored in Redis, PostgreSQL, OSS, diagnostics, or support reports.
+The current packaged desktop uses one Electron renderer as the production capture and transport owner. The bundled Swift runtime remains an inactive migration path and must not run beside the renderer owner. Raw PCM stays in bounded memory and is never stored in Redis, PostgreSQL, OSS, diagnostics, or support reports.
+
+The renderer treats `ended`, `muted`, a suspended/closed AudioContext, a stalled audio callback, and a previously active system track that becomes persistently silent as source-health failures. It rebuilds only the system source with bounded backoff so microphone capture and the live interview remain active.
 
 ## Protocol and recovery
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { MicrophoneAudioAdapter, SystemAudioAdapter, describeMediaError, type MediaDevicesLike } from "../src/renderer/audio/audio-source-adapter";
 import { BoundedAudioFrameBuffer, SourceFrameSequencer, createAudioFrame } from "../src/renderer/audio/audio-frame-buffer";
-import { SpeechSegmenter } from "../src/renderer/audio/realtime-publisher";
+import { SpeechSegmenter, systemAudioRecoveryReason } from "../src/renderer/audio/realtime-publisher";
 import { calculateRms, isSilent } from "../src/renderer/audio/signal-diagnostics";
 
 const frame = (sequencer: SourceFrameSequencer, sourceId: string, bytes: number) =>
@@ -111,6 +111,76 @@ describe("speech segmenter", () => {
     expect(system.push(digitalAudio, 100, 0.001)).toHaveLength(1);
     expect(microphone.push(digitalAudio, 0, 0.001)).toEqual([]);
     expect(microphone.push(digitalAudio, 100, 0.001)).toEqual([]);
+  });
+
+  it("keeps Feishu system speech in one segment across a short digital pause", () => {
+    const segmenter = new SpeechSegmenter("system");
+    const speech = new Uint8Array([1, 2, 3]);
+
+    expect(segmenter.push(speech, 0, 0.01)).toEqual([]);
+    const firstPartial = segmenter.push(speech, 100, 0.01);
+    expect(firstPartial).toHaveLength(1);
+    expect(segmenter.push(new Uint8Array([0]), 400, 0.0001)).toEqual([]);
+    const continued = segmenter.push(speech, 430, 0.01);
+    expect(continued).toHaveLength(1);
+    expect(continued[0]?.segmentId).toBe(firstPartial[0]?.segmentId);
+    const finalized = segmenter.push(new Uint8Array([0]), 950, 0.0001);
+    expect(finalized).toHaveLength(1);
+    expect(finalized[0]?.isFinal).toBe(true);
+  });
+});
+
+describe("system audio recovery policy", () => {
+  const healthy = {
+    nowMs: 20_000,
+    openedAtMs: 10_000,
+    lastProcessAtMs: 19_900,
+    lastSignalAtMs: 19_000,
+    lastRecoveryAtMs: null,
+    recoveryAttempt: 0,
+    trackReadyState: "live" as const,
+    trackMuted: false,
+    contextState: "running",
+  };
+
+  it("recovers a live track after previously active system PCM becomes persistently silent", () => {
+    expect(systemAudioRecoveryReason({
+      ...healthy,
+      nowMs: 49_001,
+      lastProcessAtMs: 49_000,
+      lastSignalAtMs: 19_000,
+    })).toBe("system-signal-stalled");
+  });
+
+  it("uses bounded backoff after a silent-source recovery attempt", () => {
+    expect(systemAudioRecoveryReason({
+      ...healthy,
+      nowMs: 50_000,
+      lastProcessAtMs: 49_999,
+      lastSignalAtMs: 10_000,
+      lastRecoveryAtMs: 40_000,
+      recoveryAttempt: 1,
+    })).toBeNull();
+    expect(systemAudioRecoveryReason({
+      ...healthy,
+      nowMs: 160_001,
+      lastProcessAtMs: 160_000,
+      lastSignalAtMs: 10_000,
+      lastRecoveryAtMs: 40_000,
+      recoveryAttempt: 1,
+    })).toBe("system-signal-stalled");
+  });
+
+  it("recovers ended, muted, suspended, and callback-stalled sources", () => {
+    expect(systemAudioRecoveryReason({ ...healthy, trackReadyState: "ended" })).toBe("track-ended");
+    expect(systemAudioRecoveryReason({ ...healthy, trackMuted: true })).toBe("track-muted");
+    expect(systemAudioRecoveryReason({ ...healthy, contextState: "suspended" })).toBe("audio-context-not-running");
+    expect(systemAudioRecoveryReason({ ...healthy, lastProcessAtMs: 15_000 })).toBe("audio-callback-stalled");
+  });
+
+  it("does not restart a newly opened or never-active silent track", () => {
+    expect(systemAudioRecoveryReason({ ...healthy, openedAtMs: 19_000, trackMuted: true })).toBeNull();
+    expect(systemAudioRecoveryReason({ ...healthy, lastSignalAtMs: null })).toBeNull();
   });
 });
 
