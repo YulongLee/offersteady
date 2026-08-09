@@ -111,7 +111,7 @@ export class MicrophoneAudioAdapter implements AudioSourceAdapter {
     try {
       stream = normalizedSourceId
         ? await openWithConstraints(preferredMicrophoneConstraints(normalizedSourceId))
-        : await openDefaultMicrophone();
+        : await openWithConstraints(preferredMicrophoneConstraints());
     } catch (error) {
       try {
         stream = await openWithConstraints(fallbackMicrophoneConstraints(normalizedSourceId));

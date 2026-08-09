@@ -8,6 +8,7 @@ import re
 import threading
 from collections import Counter
 from dataclasses import replace
+from difflib import SequenceMatcher
 from time import time
 from typing import Any
 from uuid import uuid4
@@ -1220,16 +1221,17 @@ class RealtimeSpeechService:
                         "message": "检测到异常重复转写，系统已忽略本段结果。",
                     },
                 )))
-            if transcript_result.suppressed_reason == "duplicate-nearby-transcript":
+            if transcript_result.suppressed_reason in {"duplicate-nearby-transcript", "cross-channel-duplicate-transcript"}:
                 counter_bucket["duplicateResultsSuppressed"] += 1
+                cross_channel = transcript_result.suppressed_reason == "cross-channel-duplicate-transcript"
                 events.append(self._event_payload(self._save_event(
                     session_id=publisher.session_id,
                     owner_user_id=publisher.owner_user_id,
                     kind="degraded",
                     payload={
-                        "reason": "duplicate-nearby-transcript-suppressed",
+                        "reason": "cross-channel-echo-suppressed" if cross_channel else "duplicate-nearby-transcript-suppressed",
                         "sourceKind": source_kind,
-                        "message": "检测到短时间内高度重复的转写，系统已忽略本段结果。",
+                        "message": "检测到跨声道回声，系统已保留主通道并忽略重复片段。" if cross_channel else "检测到短时间内高度重复的转写，系统已忽略本段结果。",
                     },
                 )))
             return events
@@ -1826,36 +1828,56 @@ class RealtimeSpeechService:
         publisher: RealtimePublisherRecord,
         frame: AudioFrame,
     ) -> str | None:
-        compact = re.sub(r"\s+", "", text)
-        compact = re.sub(r"[，。！？、；：,.!?;:]+", "", compact)
-        if len(compact) < 2 or len(compact) > 24:
+        compact = self._compact_transcript_for_dedup(text)
+        if len(compact) < 2:
             return None
         transcripts = [
             item for item in self.repository.list_transcripts_for_session(session_id=frame.session_id)
             if item.owner_user_id == publisher.owner_user_id
-            and item.source_kind == frame.source_kind
-            and item.role == ("candidate" if frame.source_kind == "microphone" else "interviewer")
             and self._is_meaningful_transcript(item.text)
             and item.is_final
         ]
         if not transcripts:
             return None
-        latest = transcripts[-1]
-        previous_compact = re.sub(r"\s+", "", latest.text)
-        previous_compact = re.sub(r"[，。！？、；：,.!?;:]+", "", previous_compact)
-        if not previous_compact:
-            return None
-        if abs(frame.started_at_ms - latest.ended_at_ms) > 6_000:
-            return None
-        if compact == previous_compact:
-            return "duplicate-nearby-transcript"
-        if len(compact) <= 32 and len(previous_compact) <= 32:
-            if compact in previous_compact or previous_compact in compact:
-                return "duplicate-nearby-transcript"
-        shorter, longer = sorted((compact, previous_compact), key=len)
-        if len(shorter) >= 2 and longer.count(shorter) >= 2:
-            return "duplicate-nearby-transcript"
+        same_source = [item for item in transcripts if item.source_kind == frame.source_kind]
+        if same_source and len(compact) <= 24:
+            latest = same_source[-1]
+            previous_compact = self._compact_transcript_for_dedup(latest.text)
+            if previous_compact and abs(frame.started_at_ms - latest.ended_at_ms) <= 6_000:
+                if compact == previous_compact:
+                    return "duplicate-nearby-transcript"
+                if len(compact) <= 32 and len(previous_compact) <= 32 and (compact in previous_compact or previous_compact in compact):
+                    return "duplicate-nearby-transcript"
+                shorter, longer = sorted((compact, previous_compact), key=len)
+                if len(shorter) >= 2 and longer.count(shorter) >= 2:
+                    return "duplicate-nearby-transcript"
+
+        for previous in reversed(transcripts):
+            if previous.source_kind == frame.source_kind:
+                continue
+            gap_ms = max(
+                previous.started_at_ms - frame.ended_at_ms,
+                frame.started_at_ms - previous.ended_at_ms,
+                0,
+            )
+            if gap_ms > 750:
+                continue
+            previous_compact = self._compact_transcript_for_dedup(previous.text)
+            if min(len(compact), len(previous_compact)) < 4:
+                continue
+            if compact == previous_compact:
+                return "cross-channel-duplicate-transcript"
+            shorter, longer = sorted((compact, previous_compact), key=len)
+            if len(shorter) >= 6 and shorter in longer:
+                return "cross-channel-duplicate-transcript"
+            if SequenceMatcher(None, compact, previous_compact).ratio() >= 0.88:
+                return "cross-channel-duplicate-transcript"
         return None
+
+    @staticmethod
+    def _compact_transcript_for_dedup(text: str) -> str:
+        compact = re.sub(r"\s+", "", text).lower()
+        return re.sub(r"[，。！？、；：,.!?;:~～…·\-—_]+", "", compact)
 
     @staticmethod
     def _runtime_source_health(item: dict[str, object]) -> RealtimeSourceHealthResponse:

@@ -41,6 +41,10 @@ Web 实时页 MUST NOT 显示“角色待确认”、角色置信度、“设为
 - **WHEN** 本地候选人语音随后以高度相似的回声出现在系统音频
 - **THEN** 回声与重复抑制阻止该系统音频副本成为面试官问题
 
+#### Scenario: Interviewer system audio leaks into the microphone
+- **WHEN** 电脑扬声器播放的面试官声音在重叠时间窗内被本地麦克风再次采集并产生高度相似的转录
+- **THEN** 系统保留先到的电脑输出片段作为“面试官”，抑制麦克风回采副本，不得把同一句话同时显示为“面试官”和“我”
+
 ### Requirement: Degrade without inventing a third role
 当双声道来源缺失、混合或无法可靠识别时，系统 SHALL 停止基于音频的自动回答，并 MUST 明确显示音频来源异常或仅手动模式。降级状态 MUST NOT 把未分类内容强制标为“我”或“面试官”，也 MUST NOT 恢复“角色待确认”交互。
 

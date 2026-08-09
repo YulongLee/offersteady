@@ -27,6 +27,7 @@
 - [x] 3.6 Implement missing, mixed and disconnected-source degradation that keeps manual questioning available and existing session state intact
 - [x] 3.7 Clear temporary audio buffers and echo-matching features when the interview ends
 - [x] 3.8 Add synthetic service tests for clean dual channel, multiple remote speakers, echo, overlap, mixed input, source loss and reconnect
+- [x] 3.9 Fix the production regression where interviewer system audio leaks into the microphone by enforcing default-input echo cancellation and suppressing time-aligned cross-channel transcript duplicates
 
 ## 4. Two-Role Live Conversation UI
 

@@ -6,6 +6,7 @@
 - Service tests verify candidate speech, cross-channel echo, overlap, incomplete text, source loss and reconnect do not create unsafe duplicate triggers.
 - Web component tests and browser review verify the transcript displays only “我/面试官”, exposes no role confidence or correction controls, preserves transcript revisions, and keeps manual input available during source degradation.
 - Session cleanup removes temporary transcript candidates and confirmation evidence; the privacy review found no raw audio or cross-session speaker identity in fixtures, metrics or ordinary logging.
+- Production regression evidence showed the same interviewer utterance arriving on `system/interviewer` and `microphone/candidate` with 92.6–100% text similarity in overlapping windows. The hotfix explicitly requests echo cancellation for the default microphone and suppresses the later cross-channel duplicate before it becomes a visible transcript or question trigger. Targeted backend tests, the full 61-test foundation suite, all 44 desktop tests, desktop typecheck and strict OpenSpec validation passed.
 
 ## Interruptible answer generation
 

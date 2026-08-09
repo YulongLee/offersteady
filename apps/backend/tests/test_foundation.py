@@ -2423,6 +2423,109 @@ def test_realtime_speech_suppresses_duplicate_nearby_short_transcript() -> None:
     assert any(item["kind"] == "degraded" and item["payload"]["reason"] == "duplicate-nearby-transcript-suppressed" for item in events["events"])
 
 
+def test_realtime_speech_suppresses_interviewer_audio_leaking_into_microphone() -> None:
+    session = unwrap(client.post("/api/v1/sessions", json={
+        "userId": "cross-channel-echo-user",
+        "title": "跨声道回声抑制测试",
+    }))
+    session_id = session["sessionId"]
+    registered = unwrap(client.post("/api/v1/realtime-speech/desktop-devices/register", json={
+        "deviceId": "device-cross-channel-echo-1",
+        "manualCode": "773311",
+        "displayName": "面试稳伴随程序 · Cross Channel Echo",
+        "capabilities": {"microphone": "granted", "systemAudio": "granted", "screenCapture": False},
+    }))
+    binding = unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/desktop-binding", json={
+        "userId": "cross-channel-echo-user",
+        "manualCode": registered["manualCode"],
+    }))
+    unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/web-heartbeat", json={
+        "userId": "cross-channel-echo-user",
+        "bindingId": binding["bindingId"],
+        "page": "live",
+    }))
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": "cross-channel-echo-user"}))
+    system_publisher = unwrap(client.post("/api/v1/realtime-speech/publishers", json={
+        "userId": "cross-channel-echo-user",
+        "sessionId": session_id,
+        "sourceKind": "system",
+        "clientName": "desktop-system-loopback",
+    }))
+    microphone_publisher = unwrap(client.post("/api/v1/realtime-speech/publishers", json={
+        "userId": "cross-channel-echo-user",
+        "sessionId": session_id,
+        "sourceKind": "microphone",
+        "clientName": "desktop-default-microphone",
+    }))
+    transcript_text = "我们先聊一下你最近负责的项目经历"
+    payload = base64.b64encode(transcript_text.encode("utf-8")).decode("utf-8")
+
+    unwrap(client.post("/api/v1/realtime-speech/frames", json={
+        "type": "audio-frame",
+        "token": system_publisher["token"],
+        "deviceId": registered["deviceId"],
+        "sourceId": "system-loopback",
+        "sequence": 1,
+        "sourceKind": "system",
+        "segmentId": "seg-system-primary",
+        "revision": 1,
+        "capturedAtMs": 1000,
+        "startedAtMs": 1000,
+        "endedAtMs": 4000,
+        "durationMs": 3000,
+        "codec": "pcm-s16le",
+        "sampleRateHz": 16000,
+        "channels": 1,
+        "isFinal": True,
+        "traceId": "trace-system-primary",
+        "audioBase64": payload,
+    }))
+    deadline = time() + 2.0
+    while time() < deadline:
+        transcripts = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/transcripts", params={"userId": "cross-channel-echo-user"}))
+        if len(transcripts["transcripts"]) == 1:
+            break
+        sleep(0.05)
+    else:
+        raise AssertionError("primary system transcript was not published in time")
+
+    unwrap(client.post("/api/v1/realtime-speech/frames", json={
+        "type": "audio-frame",
+        "token": microphone_publisher["token"],
+        "deviceId": registered["deviceId"],
+        "sourceId": "default",
+        "sequence": 1,
+        "sourceKind": "microphone",
+        "segmentId": "seg-microphone-echo",
+        "revision": 1,
+        "capturedAtMs": 1120,
+        "startedAtMs": 1120,
+        "endedAtMs": 4120,
+        "durationMs": 3000,
+        "codec": "pcm-s16le",
+        "sampleRateHz": 16000,
+        "channels": 1,
+        "isFinal": True,
+        "traceId": "trace-microphone-echo",
+        "audioBase64": payload,
+    }))
+    deadline = time() + 2.0
+    while time() < deadline:
+        runtime = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/runtime", params={"userId": "cross-channel-echo-user"}))
+        if runtime["performance"]["countersBySource"]["microphone"]["duplicateResultsSuppressed"] > 0:
+            break
+        sleep(0.05)
+    else:
+        raise AssertionError("cross-channel microphone echo was not suppressed in time")
+
+    transcripts = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/transcripts", params={"userId": "cross-channel-echo-user"}))
+    assert [(item["sourceKind"], item["role"], item["text"]) for item in transcripts["transcripts"]] == [
+        ("system", "interviewer", transcript_text),
+    ]
+    events = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/events", params={"userId": "cross-channel-echo-user"}))
+    assert any(item["kind"] == "degraded" and item["payload"]["reason"] == "cross-channel-echo-suppressed" for item in events["events"])
+
+
 def test_realtime_speech_suppresses_filler_transcript() -> None:
     session = unwrap(client.post("/api/v1/sessions", json={
         "userId": "filler-user",

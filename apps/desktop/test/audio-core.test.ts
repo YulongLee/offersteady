@@ -163,6 +163,34 @@ describe("microphone adapter", () => {
       channelCount: { ideal: 1 },
     });
   });
+
+  it("requests echo cancellation for the default microphone instead of opening an unconstrained stream", async () => {
+    const constraints: MediaStreamConstraints[] = [];
+    const stream = {
+      getAudioTracks: () => [{ id: "default-mic", label: "MacBook Microphone", stop: () => undefined }],
+      getVideoTracks: () => [],
+      getTracks: () => [{ stop: () => undefined }],
+    } as unknown as MediaStream;
+    const mediaDevices = {
+      enumerateDevices: async () => [],
+      getUserMedia: async (nextConstraints: MediaStreamConstraints) => {
+        constraints.push(nextConstraints);
+        return stream;
+      },
+      getDisplayMedia: async () => { throw new Error("unused"); },
+    } as unknown as MediaDevicesLike;
+
+    const opened = await new MicrophoneAudioAdapter(mediaDevices).open("default");
+    opened.close();
+
+    expect(constraints[0]?.audio).toMatchObject({
+      echoCancellation: { ideal: true },
+      noiseSuppression: { ideal: true },
+      autoGainControl: { ideal: true },
+      channelCount: { ideal: 1 },
+    });
+    expect(constraints[0]?.audio).not.toHaveProperty("deviceId");
+  });
 });
 
 describe("system audio adapter diagnostics", () => {
