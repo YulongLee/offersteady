@@ -30,8 +30,13 @@ def test_desktop_download_redirects_to_short_lived_signed_oss_url(monkeypatch, t
     app.dependency_overrides[storage_port] = lambda: SignedReleaseStorage()
     try:
         with TestClient(app) as client:
+            state = client.get("/api/v1/web/state").json()["data"]
+            arm_entry = next(
+                entry for entry in state["releaseManifest"]["entries"]
+                if entry["platform"] == "macos" and entry["architecture"] == "arm64"
+            )
             response = client.get(
-                "/api/v1/web/downloads/desktop/OfferSteady-Companion-0.1.0-macOS-arm64.zip",
+                arm_entry["downloadUrl"],
                 follow_redirects=False,
             )
     finally:

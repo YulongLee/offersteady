@@ -1285,7 +1285,7 @@ class RealtimeSpeechService:
                     kind="question-candidate" if candidate.state == "needs-confirmation" else "question-confirmed",
                     payload={"candidateId": candidate.candidate_id, "state": candidate.state, "text": candidate.text, "confidence": candidate.confidence},
                 )))
-                if candidate.state == "confirmed":
+                if candidate.state == "confirmed" and candidate.answer_task_id is None:
                     answer_task, _ = self.chat_service.answer_question(
                         user_id=publisher.owner_user_id,
                         session_id=publisher.session_id,
@@ -1905,11 +1905,15 @@ class RealtimeSpeechService:
         text = transcript.text.strip()
         if not self._looks_like_question(text):
             return None
+        candidate_id = f"question:{transcript.session_id}:{transcript.segment_id}"
+        existing = self.repository.get_candidate(candidate_id)
+        if existing is not None:
+            return existing
         confidence = transcript.transcript_confidence
         if confidence < self.settings.realtime_question_auto_confirm_threshold:
             return self.repository.save_candidate(
                 QuestionCandidateRecord(
-                    candidate_id=f"question:{transcript.session_id}:{transcript.segment_id}",
+                    candidate_id=candidate_id,
                     session_id=transcript.session_id,
                     owner_user_id=transcript.owner_user_id,
                     source_segment_ids=[transcript.segment_id],
@@ -1923,7 +1927,7 @@ class RealtimeSpeechService:
             )
         return self.repository.save_candidate(
             QuestionCandidateRecord(
-                candidate_id=f"question:{transcript.session_id}:{transcript.segment_id}",
+                candidate_id=candidate_id,
                 session_id=transcript.session_id,
                 owner_user_id=transcript.owner_user_id,
                 source_segment_ids=[transcript.segment_id],
@@ -1939,9 +1943,12 @@ class RealtimeSpeechService:
     @staticmethod
     def _looks_like_question(text: str) -> bool:
         lowered = text.strip().lower()
-        return lowered.endswith(("?", "？")) or any(
+        return lowered.endswith(("?", "？")) or bool(re.match(
+            r"^(?:请|麻烦|能否|可以|可不可以)?(?:你|您)?(?:介绍|说明|讲|谈|分析|设计|实现|比较|解释)",
+            lowered,
+        )) or any(
             key in lowered
-            for key in ["请介绍", "讲讲", "怎么", "如何", "为什么", "请说明", "describe", "tell me", "what", "how", "why"]
+            for key in ["讲讲", "怎么", "如何", "为什么", "能不能", "是否", "有没有", "哪一个", "哪些", "多少", "多久", "describe", "tell me", "what", "how", "why"]
         )
 
     def _require_publisher_token(self, token: str) -> RealtimePublisherRecord:

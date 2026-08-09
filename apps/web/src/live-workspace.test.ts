@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { syntheticState } from "./test-state";
-import { DEFAULT_SPLIT_RATIO, answerPage, clampSplitRatio, initialLiveWorkspaceView, isolateRealtimeSpeakerSession, noteNewAnswer, parseStoredSplitRatio, reconcileRealtimeSpeaker, resetTransientInterviewState, serializeSplitRatio, splitRatioBounds, splitRatioStorageKey } from "./live-workspace";
+import { DEFAULT_SPLIT_RATIO, answerPage, clampSplitRatio, initialLiveWorkspaceView, isolateRealtimeSpeakerSession, mergeAnswerTask, noteNewAnswer, parseStoredSplitRatio, reconcileAnswerWorkspace, reconcileRealtimeSpeaker, resetTransientInterviewState, serializeSplitRatio, splitRatioBounds, splitRatioStorageKey } from "./live-workspace";
 
 describe("live workspace answer pagination", () => {
   const answers = syntheticState.questions;
@@ -97,5 +97,66 @@ describe("live workspace answer pagination", () => {
     expect(reset.speaker.pendingQuestion).toBeNull();
     expect(reset.activeAnswerTask).toBeNull();
     expect(reset.captureState).toBe("ready");
+  });
+
+  it("does not let an older task or shorter stream update replace current content", () => {
+    const current = {
+      id: "answer-new", interviewId: "demo", userId: "synthetic-user", billingUsageId: "usage-new",
+      questionId: "q-current", question: "新的合成问题", revision: 3, status: "completed" as const,
+      partialText: "已经显示的完整合成回答", completedText: "已经显示的完整合成回答", updatedAtMs: 300,
+    };
+    const { completedText: _completedText, ...currentWithoutCompleted } = current;
+    const stale = { ...currentWithoutCompleted, revision: 2, status: "generating" as const, partialText: "较短回答", updatedAtMs: 200 };
+    expect(mergeAnswerTask(current, stale)).toMatchObject({ status: "completed", partialText: "已经显示的完整合成回答", completedText: "已经显示的完整合成回答" });
+  });
+
+  it("keeps a newer local answer current when an older history snapshot arrives", () => {
+    const currentQuestion = syntheticState.questions[0]!;
+    const oldQuestion = syntheticState.questions[1]!;
+    const currentTask = {
+      id: "answer-new", interviewId: "demo", userId: "synthetic-user", billingUsageId: "usage-new",
+      questionId: currentQuestion.id, question: currentQuestion.text, revision: 1, status: "generating" as const,
+      partialText: "正在生成新的合成回答", updatedAtMs: 300,
+    };
+    const oldTask = { ...currentTask, id: "answer-old", questionId: oldQuestion.id, question: oldQuestion.text, status: "completed" as const, updatedAtMs: 200 };
+    const reconciled = reconcileAnswerWorkspace(
+      { questions: [currentQuestion], activeAnswerTask: currentTask },
+      { questions: [oldQuestion], activeAnswerTask: oldTask },
+    );
+    expect(reconciled.activeAnswerTask?.id).toBe("answer-new");
+    expect(reconciled.questions[0]?.id).toBe(currentQuestion.id);
+    expect(reconciled.questions.map(question => question.id)).toContain(oldQuestion.id);
+  });
+
+  it("replaces a generating placeholder with a completed answer even when the answer is shorter", () => {
+    const question = syntheticState.questions[0]!;
+    const pendingQuestion = { ...question, status: "generating" as const, advice: { ...question.advice, detail: "正在调用当前对话模型生成回答，请稍候……" } };
+    const completedQuestion = { ...question, status: "confirmed" as const, advice: { ...question.advice, detail: "最终答案。" } };
+    const pendingTask = { id: "answer-same", interviewId: "demo", userId: "synthetic-user", billingUsageId: "usage", questionId: question.id, question: question.text, revision: 1, status: "generating" as const, updatedAtMs: 100 };
+    const completedTask = { ...pendingTask, revision: 2, status: "completed" as const, completedText: "最终答案。", updatedAtMs: 200 };
+
+    const reconciled = reconcileAnswerWorkspace(
+      { questions: [pendingQuestion], activeAnswerTask: pendingTask },
+      { questions: [completedQuestion], activeAnswerTask: completedTask },
+    );
+
+    expect(reconciled.questions[0]?.advice.detail).toBe("最终答案。");
+    expect(reconciled.questions[0]?.status).toBe("confirmed");
+  });
+
+  it("lets an explicit server task replace its local placeholder despite client clock skew", () => {
+    const localQuestion = syntheticState.questions[0]!;
+    const serverQuestion = { ...localQuestion, id: "server-question", text: "显式提交后的合成问题" };
+    const localTask = { id: "pending:local", interviewId: "demo", userId: "synthetic-user", billingUsageId: "pending:local", questionId: localQuestion.id, question: localQuestion.text, revision: 1, status: "generating" as const, updatedAtMs: 9_999 };
+    const serverTask = { ...localTask, id: "answer-server", billingUsageId: "live-answer:server", questionId: serverQuestion.id, question: serverQuestion.text, updatedAtMs: 100 };
+
+    const reconciled = reconcileAnswerWorkspace(
+      { questions: [localQuestion], activeAnswerTask: localTask },
+      { questions: [serverQuestion], activeAnswerTask: serverTask },
+      { preferIncomingTask: true },
+    );
+
+    expect(reconciled.activeAnswerTask?.id).toBe("answer-server");
+    expect(reconciled.questions[0]?.id).toBe("server-question");
   });
 });

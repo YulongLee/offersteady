@@ -192,17 +192,15 @@ describe("focused live interview workspace", () => {
     await waitFor(() => expect(divider).toHaveAttribute("aria-valuenow", "42"));
   });
 
-  it("keeps a historical answer visible when a new answer arrives", async () => {
+  it("shows an explicitly requested answer immediately instead of staying on history", async () => {
     openLive();
     fireEvent.click(screen.getByRole("button", { name: /上一条/ }));
     expect(screen.getByRole("heading", { name: "请做一个简短的自我介绍。" })).toBeInTheDocument();
     const input = screen.getByRole("textbox", { name: "手动输入面试官的问题" });
     fireEvent.change(input, { target: { value: "新到达的合成问题" } });
     fireEvent.click(screen.getByRole("button", { name: "快答" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "有新答案 · 回到最新" })).toBeInTheDocument());
-    expect(screen.getByRole("heading", { name: "请做一个简短的自我介绍。" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "有新答案 · 回到最新" }));
-    expect(screen.getByRole("heading", { name: "新到达的合成问题" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "新到达的合成问题" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "有新答案 · 回到最新" })).not.toBeInTheDocument();
   });
 
   it("renders the completed answer body as the primary content", () => {
@@ -379,10 +377,13 @@ describe("focused live interview workspace", () => {
     const input = screen.getByRole("textbox", { name: "手动输入面试官的问题" });
     fireEvent.change(input, { target: { value: "验证流式首段的问题" } });
     fireEvent.click(screen.getByRole("button", { name: "快答" }));
+    expect(screen.getByRole("button", { name: "快答" })).toBeDisabled();
+    expect(screen.getByText("正在生成回答，请稍候")).toBeInTheDocument();
     expect(await screen.findByText("流式首段已经出现。")).toBeInTheDocument();
     expect(screen.queryByText("流式首段已经出现。最终回答也完成。")).not.toBeInTheDocument();
     finishStream();
     expect(await screen.findByText("流式首段已经出现。最终回答也完成。")).toBeInTheDocument();
+    expect(await screen.findByText("快答已完成")).toBeInTheDocument();
   });
 
   it("stops the active answer without stopping capture and releases reserved points", async () => {
@@ -399,15 +400,15 @@ describe("focused live interview workspace", () => {
     expect(await screen.findByText("200 点", { selector: ".balance-card strong" })).toBeInTheDocument();
   });
 
-  it("keeps active answer control available while reading history and can re-answer after cancellation", async () => {
+  it("moves an explicit answer off history and can re-answer after cancellation", async () => {
     openLive();
     fireEvent.click(screen.getByRole("button", { name: /上一条/ }));
     const input = screen.getByRole("textbox", { name: "手动输入面试官的问题" });
     fireEvent.change(input, { target: { value: "后台生成的合成问题" } });
     fireEvent.click(screen.getByRole("button", { name: "快答" }));
-    expect(await screen.findByText("最新回答仍在生成")).toBeInTheDocument();
+    expect(await screen.findByText("当前回答正在生成")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "后台生成的合成问题" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "终止回答" }));
-    fireEvent.click(await screen.findByRole("button", { name: "有新答案 · 回到最新" }));
     fireEvent.click(await screen.findByRole("button", { name: "重新回答" }));
     expect(await screen.findByRole("button", { name: "终止回答" })).toBeInTheDocument();
   });
@@ -436,7 +437,9 @@ describe("focused live interview workspace", () => {
   it("captures the current screen without file-upload copy", async () => {
     openLive();
     fireEvent.click(screen.getByRole("button", { name: "截屏回答" }));
+    expect(screen.getByRole("button", { name: "截屏回答" })).toBeDisabled();
     expect((await screen.findAllByText("请设计一个支持实时协作的 Web 系统。")).length).toBeGreaterThan(0);
+    expect(await screen.findByText("截屏回答已完成，答案已显示")).toBeInTheDocument();
     expect(screen.queryByText("上传并识别")).not.toBeInTheDocument();
   });
 

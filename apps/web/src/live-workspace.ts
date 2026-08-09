@@ -1,4 +1,5 @@
-import type { InterviewQuestion, LiveWorkspaceViewState, SpeakerPresentationState, WebAppState } from "./domain";
+import type { AnswerTaskSnapshot } from "@offersteady/protocol";
+import type { InterviewQuestion, InterviewWorkspaceSnapshot, LiveWorkspaceViewState, SpeakerPresentationState, WebAppState } from "./domain";
 
 export interface AnswerPage {
   readonly answer: InterviewQuestion;
@@ -55,6 +56,81 @@ export const answerPage = (answers: readonly InterviewQuestion[], viewingAnswerI
 export const noteNewAnswer = (view: LiveWorkspaceViewState, previousLatestId: string | undefined, nextLatestId: string | undefined): LiveWorkspaceViewState => previousLatestId && nextLatestId && previousLatestId !== nextLatestId && view.viewingAnswerId
   ? { ...view, newAnswerAvailable: true }
   : view;
+
+const terminalAnswerStatuses = new Set<AnswerTaskSnapshot["status"]>(["completed", "failed", "cancelled"]);
+
+const longerText = (left?: string, right?: string) => {
+  if (!left) return right;
+  if (!right) return left;
+  return right.length > left.length ? right : left;
+};
+
+export const mergeAnswerTask = (current: AnswerTaskSnapshot | null, incoming: AnswerTaskSnapshot | null): AnswerTaskSnapshot | null => {
+  if (!current) return incoming;
+  if (!incoming) return current;
+  if (current.id !== incoming.id) return incoming.updatedAtMs >= current.updatedAtMs ? incoming : current;
+
+  const currentTerminal = terminalAnswerStatuses.has(current.status);
+  const incomingTerminal = terminalAnswerStatuses.has(incoming.status);
+  const preferIncoming = incoming.revision > current.revision
+    || (incoming.revision === current.revision && incomingTerminal && !currentTerminal)
+    || (incoming.revision === current.revision && incomingTerminal === currentTerminal && incoming.updatedAtMs >= current.updatedAtMs);
+  const chosen = preferIncoming ? incoming : current;
+  const partialText = longerText(current.partialText, incoming.partialText);
+  const completedText = longerText(current.completedText, incoming.completedText);
+  return {
+    ...chosen,
+    ...(partialText ? { partialText } : {}),
+    ...(completedText ? { completedText } : {}),
+    updatedAtMs: Math.max(current.updatedAtMs, incoming.updatedAtMs),
+  };
+};
+
+const mergeQuestion = (current: InterviewQuestion, incoming: InterviewQuestion, preferCurrent: boolean): InterviewQuestion => {
+  const chosen = preferCurrent ? current : incoming;
+  const other = preferCurrent ? incoming : current;
+  return {
+    ...other,
+    ...chosen,
+    advice: {
+      ...other.advice,
+      ...chosen.advice,
+      detail: preferCurrent ? longerText(current.advice.detail, incoming.advice.detail) ?? chosen.advice.detail : chosen.advice.detail,
+    },
+  };
+};
+
+export const reconcileAnswerWorkspace = (
+  current: InterviewWorkspaceSnapshot,
+  incoming: InterviewWorkspaceSnapshot,
+  options: { readonly preferIncomingTask?: boolean } = {},
+) => {
+  const activeAnswerTask = options.preferIncomingTask && incoming.activeAnswerTask && current.activeAnswerTask?.id !== incoming.activeAnswerTask.id
+    ? incoming.activeAnswerTask
+    : mergeAnswerTask(current.activeAnswerTask, incoming.activeAnswerTask);
+  const currentById = new Map(current.questions.map(question => [question.id, question]));
+  const incomingIds = new Set(incoming.questions.map(question => question.id));
+  const currentTask = current.activeAnswerTask;
+  const incomingTask = incoming.activeAnswerTask;
+  const preferCurrentTask = Boolean(currentTask && activeAnswerTask?.id === currentTask.id && (
+    !incomingTask
+    || incomingTask.id !== currentTask.id
+    || currentTask.revision > incomingTask.revision
+    || (terminalAnswerStatuses.has(currentTask.status) && !terminalAnswerStatuses.has(incomingTask.status))
+  ));
+  const preferCurrentQuestionId = preferCurrentTask ? currentTask?.questionId ?? null : null;
+  const mergedIncoming = incoming.questions.map(question => {
+    const existing = currentById.get(question.id);
+    return existing ? mergeQuestion(existing, question, question.id === preferCurrentQuestionId) : question;
+  });
+  const localOnly = current.questions.filter(question => !incomingIds.has(question.id));
+  const questions = [...mergedIncoming, ...localOnly];
+  if (activeAnswerTask) {
+    const activeIndex = questions.findIndex(question => question.id === activeAnswerTask.questionId);
+    if (activeIndex > 0) questions.unshift(...questions.splice(activeIndex, 1));
+  }
+  return { questions, activeAnswerTask };
+};
 
 const hasVisibleTranscriptText = (text: string) => text.replace(/\s+/g, "").length > 0;
 

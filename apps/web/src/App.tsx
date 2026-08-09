@@ -18,7 +18,7 @@ import { ConversationMonitor } from "./ConversationMonitor";
 import { AnswerWorkspace } from "./AnswerWorkspace";
 import { ManualQuestionComposer } from "./ManualQuestionComposer";
 import { AnswerActionBar } from "./AnswerActionBar";
-import { ABSOLUTE_MAX_SPLIT_RATIO, ABSOLUTE_MIN_SPLIT_RATIO, clampSplitRatio, initialLiveWorkspaceView, isolateRealtimeSpeakerSession, noteNewAnswer, parseStoredSplitRatio, reconcileRealtimeSpeaker, resetTransientInterviewState, serializeSplitRatio, splitRatioBounds, splitRatioStorageKey } from "./live-workspace";
+import { ABSOLUTE_MAX_SPLIT_RATIO, ABSOLUTE_MIN_SPLIT_RATIO, clampSplitRatio, initialLiveWorkspaceView, isolateRealtimeSpeakerSession, noteNewAnswer, parseStoredSplitRatio, reconcileAnswerWorkspace, reconcileRealtimeSpeaker, resetTransientInterviewState, serializeSplitRatio, splitRatioBounds, splitRatioStorageKey } from "./live-workspace";
 import { WorkspaceDivider } from "./WorkspaceDivider";
 import { authClient } from "./auth-client";
 import { isInvalidRealtimeSessionStatus, realtimeRetryDelayMs } from "./realtime-recovery";
@@ -609,7 +609,7 @@ function LivePage() {
   const navigate = useNavigate();
   const storageKey = splitRatioStorageKey(id);
   const [view, setView] = useState(() => initialLiveWorkspaceView(parseStoredSplitRatio(typeof window.sessionStorage?.getItem === "function" ? window.sessionStorage.getItem(storageKey) : null)));
-  const [actionState, setActionState] = useState<Omit<LiveActionState, "pendingQuestion">>({ manualDraft: "", screenshotTask: null });
+  const [actionState, setActionState] = useState<Omit<LiveActionState, "pendingQuestion">>({ manualDraft: "", screenshotTask: null, quickAnswerStatus: "idle", quickAnswerMessage: "", screenshotAnswerStatus: "idle" });
   const [notice, setNotice] = useState("");
   const [cancellingAnswer, setCancellingAnswer] = useState(false);
   const [cancelAnswerError, setCancelAnswerError] = useState("");
@@ -630,7 +630,13 @@ function LivePage() {
   const interviewTitle = state.interviews.find(item => item.id === id)?.title ?? "本场面试";
   const active = state.questions[0] ?? emptyLiveQuestion;
   const screenshot = actionState.screenshotTask;
-  const setScreenshot = (next: ScreenshotTask | null) => setActionState(current => ({ ...current, screenshotTask: next }));
+  const setScreenshot = (next: ScreenshotTask | null) => setActionState(current => ({
+    ...current,
+    screenshotTask: next,
+    screenshotAnswerStatus: next
+      ? next.stage === "completed" ? "success" : next.stage === "failed" ? "failed" : next.stage === "cancelled" ? "cancelled" : "processing"
+      : current.screenshotAnswerStatus ?? "idle",
+  }));
   const contextSelection = state.contextSelections[id] ?? { sessionId: id, resumeSourceId: null, jobDescriptionSourceId: null, knowledgeSourceIds: [], revision: 0, confirmedAtMs: null };
   const selectedContextSources = selectionSources(managedLibrarySources(state.librarySources, state.account.id).filter(eligibleSource), contextSelection);
   useEffect(() => { if (typeof window.sessionStorage?.setItem === "function") window.sessionStorage.setItem(storageKey, serializeSplitRatio(view.splitRatio)); }, [storageKey, view.splitRatio]);
@@ -658,19 +664,13 @@ function LivePage() {
       try {
         const snapshot = await runAdapterOperation(signal => interviewAppAdapter.loadInterviewWorkspace(id, signal), controller.signal);
         if (stopped) return;
-        setState(current => {
-          const authoritativeIds = new Set(snapshot.questions.map(question => question.id));
-          const localPending = current.questions.filter(question =>
-            (question.id.startsWith("manual-pending-") || question.id.startsWith("shot-pending-"))
-            && !authoritativeIds.has(question.id),
-          );
-          const keepLocalTask = current.activeAnswerTask?.id.startsWith("pending:") && localPending.some(question => question.id === current.activeAnswerTask?.questionId);
-          return {
-            ...current,
-            questions: [...localPending, ...snapshot.questions],
-            activeAnswerTask: keepLocalTask ? current.activeAnswerTask : snapshot.activeAnswerTask,
-          };
-        });
+        setState(current => ({
+          ...current,
+          ...reconcileAnswerWorkspace(
+            { questions: current.questions, activeAnswerTask: current.activeAnswerTask },
+            snapshot,
+          ),
+        }));
       } catch {
         // Keep the current page usable while a cross-device history refresh is temporarily unavailable.
       } finally {
@@ -740,11 +740,13 @@ function LivePage() {
           const existingIds = new Set(current.questions.map(question => question.id));
           const unseen = results.filter(result => !existingIds.has(result.question.id));
           if (unseen.length === 0) return current;
-          const newest = unseen[unseen.length - 1]!;
+          const newest = unseen.reduce((latest, result) => result.task.updatedAtMs > latest.task.updatedAtMs ? result : latest);
           return {
             ...current,
-            questions: [...unseen.map(result => result.question).reverse(), ...current.questions],
-            activeAnswerTask: current.activeAnswerTask?.status === "generating" ? current.activeAnswerTask : newest.task,
+            ...reconcileAnswerWorkspace(
+              { questions: current.questions, activeAnswerTask: current.activeAnswerTask },
+              { questions: unseen.map(result => result.question), activeAnswerTask: newest.task },
+            ),
           };
         });
       } catch {
@@ -993,32 +995,65 @@ function LivePage() {
     const trimmed = text.trim(); if (!trimmed) return;
     const command = `manual:${id}:${trimmed}`; if (submittedCommands.current.has(command)) return;
     submittedCommands.current.add(command); setNotice("");
+    setActionState(current => ({ ...current, quickAnswerStatus: "processing", quickAnswerMessage: "" }));
     const pendingId = replaceQuestionId ?? `manual-pending-${Date.now()}`;
     const pendingQuestion = pendingManualQuestion(trimmed, pendingId);
     const pendingTask: AnswerTaskSnapshot = { id: `pending:${pendingId}`, interviewId: id, userId: state.account.id, billingUsageId: `pending:${pendingId}`, questionId: pendingId, question: trimmed, revision: 1, status: "generating", partialText: "正在调用当前对话模型生成回答…", updatedAtMs: Date.now() };
     setState(current => ({ ...current, questions: replaceQuestionId ? current.questions.map(item => item.id === replaceQuestionId ? pendingQuestion : item) : [pendingQuestion, ...current.questions], activeAnswerTask: pendingTask }));
     setActionState(current => ({ ...current, manualDraft: "" }));
-    setView(current => current.viewingAnswerId ? { ...current, newAnswerAvailable: true } : current);
+    setView(current => ({ ...current, viewingAnswerId: null, newAnswerAvailable: false }));
+    let pendingStreamUpdate: Parameters<NonNullable<Parameters<typeof interviewAppAdapter.submitManualAnswer>[2]>>[0] | null = null;
+    let streamRenderTimer: number | null = null;
+    const applyStreamUpdate = (update: NonNullable<typeof pendingStreamUpdate>) => {
+      setState(current => ({
+        ...current,
+        ...reconcileAnswerWorkspace(
+          {
+            questions: current.questions.filter(item => item.id !== pendingId && item.id !== update.result.question.id),
+            activeAnswerTask: current.activeAnswerTask,
+          },
+          { questions: [update.result.question], activeAnswerTask: update.result.task },
+          { preferIncomingTask: true },
+        ),
+      }));
+    };
+    const flushStreamUpdate = () => {
+      if (streamRenderTimer !== null) window.clearTimeout(streamRenderTimer);
+      streamRenderTimer = null;
+      if (!pendingStreamUpdate) return;
+      const update = pendingStreamUpdate;
+      pendingStreamUpdate = null;
+      applyStreamUpdate(update);
+    };
     try {
       manualAnswerController.current?.abort();
       const controller = new AbortController();
       manualAnswerController.current = controller;
-      const result = await runAdapterOperation(signal => interviewAppAdapter.submitManualAnswer({ interviewId: id, question: trimmed, idempotencyKey: command }, signal, ({ result: update }) => {
-        setState(current => ({
-          ...current,
-          questions: [update.question, ...current.questions.filter(item => item.id !== pendingId && item.id !== update.question.id)],
-          activeAnswerTask: update.task,
-        }));
+      const result = await runAdapterOperation(signal => interviewAppAdapter.submitManualAnswer({ interviewId: id, question: trimmed, idempotencyKey: command }, signal, update => {
+        pendingStreamUpdate = update;
+        if (["completed", "failed", "cancelled"].includes(update.event.type)) flushStreamUpdate();
+        else if (streamRenderTimer === null) streamRenderTimer = window.setTimeout(flushStreamUpdate, 100);
       }), controller.signal);
-      setState(current => ({ ...current, questions: [result.question, ...current.questions.filter(item => item.id !== pendingId && item.id !== result.question.id)], activeAnswerTask: result.task }));
+      flushStreamUpdate();
+      setState(current => ({
+        ...current,
+        ...reconcileAnswerWorkspace(
+          { questions: current.questions.filter(item => item.id !== pendingId && item.id !== result.question.id), activeAnswerTask: current.activeAnswerTask },
+          { questions: [result.question], activeAnswerTask: result.task },
+          { preferIncomingTask: true },
+        ),
+      }));
+      setActionState(current => ({ ...current, quickAnswerStatus: result.task.status === "failed" ? "failed" : result.task.status === "completed" ? "success" : "processing", quickAnswerMessage: result.task.status === "failed" ? result.task.partialText ?? "快答失败，可重试" : "" }));
       if (result.task.status === "completed") void syncBilling();
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       if (error instanceof Error && error.message === "请求已取消") return;
       const message = error instanceof Error ? error.message : "回答生成失败，请稍后重试。";
       setNotice(message);
+      setActionState(current => ({ ...current, quickAnswerStatus: "failed", quickAnswerMessage: message }));
       setState(current => ({ ...current, questions: current.questions.map(item => item.id === pendingId ? failedManualQuestion(item, message) : item), activeAnswerTask: current.activeAnswerTask?.questionId === pendingId ? { ...current.activeAnswerTask, status: "failed", partialText: message, updatedAtMs: Date.now() } : current.activeAnswerTask }));
     } finally {
+      if (streamRenderTimer !== null) window.clearTimeout(streamRenderTimer);
       manualAnswerController.current = null;
       submittedCommands.current.delete(command);
     }
@@ -1089,6 +1124,7 @@ function LivePage() {
     };
     const placeholderTask = activeTaskFor(placeholderQuestion, usageId);
     setState(current => ({ ...current, questions: [placeholderQuestion, ...current.questions], activeAnswerTask: placeholderTask }));
+    setView(current => ({ ...current, viewingAnswerId: null, newAnswerAvailable: false }));
     try {
       const result = await runAdapterOperation(signal => interviewAppAdapter.submitScreenshotAnswer({
         interviewId: id,
@@ -1099,8 +1135,7 @@ function LivePage() {
         questions: current.questions.map(item => item.id === placeholderId ? result.question : item),
         activeAnswerTask: result.task,
       }));
-      setActionState(current => ({ ...current, screenshotTask: null }));
-      setView(current => current.viewingAnswerId ? { ...current, newAnswerAvailable: true } : current);
+      setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "success" }));
       if (result.task.status === "completed") void syncBilling();
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
@@ -1148,7 +1183,16 @@ function LivePage() {
   const cancelScreenshot = () => {
     screenshotController.current?.abort();
     screenshotController.current = null;
-    setScreenshot(null);
+    setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "cancelled" }));
+    setState(current => {
+      const task = current.activeAnswerTask;
+      if (!task || !task.billingUsageId.startsWith("screenshot:remote:") || (task.status !== "queued" && task.status !== "generating")) return current;
+      return {
+        ...current,
+        activeAnswerTask: { ...task, status: "cancelled", revision: task.revision + 1, updatedAtMs: Date.now() },
+        questions: current.questions.map(question => question.id === task.questionId ? { ...question, status: "cancelled" } : question),
+      };
+    });
   };
   const beginInstantScreenshot = () => {
     if (screenshot && screenshot.stage !== "failed" && screenshot.stage !== "completed" && screenshot.stage !== "cancelled") {
@@ -1207,7 +1251,7 @@ function LivePage() {
     const question: InterviewQuestion = { ...active, id: candidate.id, text: candidate.text, askedAt: "刚刚", input: "desktop-audio", status: "generating", advice: scopedAdvice };
     const task = activeTaskFor(question, candidate.id);
     setState(current => ({ ...current, questions: current.questions.some(item => item.id === candidate.id) ? current.questions : [question, ...current.questions], speaker: { ...current.speaker, pendingQuestion: null }, activeAnswerTask: task }));
-    setView(current => current.viewingAnswerId ? { ...current, newAnswerAvailable: true } : current);
+    setView(current => ({ ...current, viewingAnswerId: null, newAnswerAvailable: false }));
   };
   const stopAnswer = async () => {
     const task = state.activeAnswerTask;
@@ -1229,7 +1273,13 @@ function LivePage() {
       },
     }));
     const markLocallyCancelled = (description?: { readonly usageId: string; readonly points: number; readonly text: string }) => {
-      setScreenshot(null);
+      const taskInput = state.questions.find(question => question.id === task.questionId)?.input;
+      setActionState(current => ({
+        ...current,
+        screenshotTask: taskInput === "screenshot" ? null : current.screenshotTask,
+        ...(taskInput === "screenshot" ? { screenshotAnswerStatus: "cancelled" as const } : {}),
+        ...(taskInput === "manual" ? { quickAnswerStatus: "cancelled" as const, quickAnswerMessage: "" } : {}),
+      }));
       setState(current => ({
         ...current,
         activeAnswerTask: { ...task, status: "cancelled", revision: task.revision + 1, updatedAtMs: Date.now() },
@@ -1256,10 +1306,15 @@ function LivePage() {
     setCancellingAnswer(true); setCancelAnswerError("");
     try {
       const result = await runAdapterOperation(signal => interviewAppAdapter.cancelAnswer({ interviewId: id, answerTaskId: task.id, expectedRevision: task.revision, idempotencyKey: `cancel:${task.id}:${task.revision}` }, task, signal));
-      if (result.outcome === "cancelled" || result.outcome === "already-cancelled") setState(current => {
+      if (result.outcome === "cancelled" || result.outcome === "already-cancelled") {
+        const taskInput = state.questions.find(question => question.id === result.task.questionId)?.input;
+        if (taskInput === "manual") setActionState(current => ({ ...current, quickAnswerStatus: "cancelled", quickAnswerMessage: "" }));
+        if (taskInput === "screenshot") setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "cancelled" }));
+        setState(current => {
         const hasFrontendReserve = !result.task.billingUsageId.startsWith("live-answer:") && !result.task.billingUsageId.startsWith("pending:");
         return { ...current, activeAnswerTask: result.task, questions: current.questions.map(question => question.id === result.task.questionId ? { ...question, status: "cancelled" } : question), billing: result.billingReleased && hasFrontendReserve && !current.billing.activePass ? { ...current.billing, balance: current.billing.balance + current.billing.rates.answerPoints, ledger: [{ id: `release-${result.task.billingUsageId}`, userId: current.account.id, kind: "usage_release", points: current.billing.rates.answerPoints, createdAtMs: Date.now(), referenceId: result.task.billingUsageId, description: "回答已终止，积分预留已释放" }, ...current.billing.ledger] } : current.billing };
-      });
+        });
+      }
       else setCancelAnswerError(result.outcome === "stale-revision" ? "回答状态刚刚发生变化，请重试。" : "回答已经完成，无法终止。");
     } catch { setCancelAnswerError("终止回答失败，当前回答状态未改变，请重试。"); }
     finally { setCancellingAnswer(false); }
@@ -1280,7 +1335,7 @@ function LivePage() {
     {pageLeaseStatus === "replaced" ? <div className="global-live-alert replaced-page-alert" role="status"><strong>本场面试已在其他页面继续</strong><span>当前页面已停止收音同步、实时订阅和回答请求；已显示内容仍可查看。关闭此页或返回面试首页即可。</span><Link className="button primary" to={routes.app}>返回面试首页</Link></div> : null}
     {state.captureState === "reconnecting" || state.captureState === "permission-required" || state.captureState === "error" ? <div className="global-live-alert" role="status"><strong>{state.captureState === "reconnecting" ? "设备正在重连" : state.captureState === "permission-required" ? "助手采集能力不可用" : "桌面设备连接异常"}</strong><span>{state.captureState === "reconnecting" ? "恢复前可能存在音频缺口，不会伪装为持续同步。" : state.captureState === "permission-required" ? "请在桌面助手中检查首次授权状态；网页不会申请麦克风或屏幕权限，手动输入仍可使用。" : "可以运行诊断，当前仍可使用手动问题和截图。"}</span><button onClick={() => setCapture("ready", "ready")}>{state.captureState === "permission-required" ? "关闭提示" : "重新诊断"}</button></div> : null}
     {notice ? <div className="global-live-alert" role="status"><strong>{notice}</strong><span>{billingNotice ? "当前任务未启动，请检查积分或会员权益。" : "当前回答没有成功启动，请根据上方原因重试。"}</span>{billingNotice ? <Link className="button primary" to={routes.billing}>前往积分页</Link> : null}</div> : null}
-    <div ref={workspaceRef} className={`live-grid focused-live-grid${pageLeaseStatus === "replaced" ? " live-grid-readonly" : ""}`} style={desktopLayout ? { gridTemplateColumns: `minmax(240px, ${view.splitRatio}fr) 12px minmax(300px, ${100 - view.splitRatio}fr)` } : undefined}><section className="conversation-column"><ConversationMonitor state={state} onConfirmQuestion={pageLeaseStatus === "replaced" ? dismissPending : confirmPending} onDismissQuestion={dismissPending} /><ManualQuestionComposer manualDraft={actionState.manualDraft} disabled={pageLeaseStatus === "replaced"} onChange={value => setActionState(current => ({ ...current, manualDraft: value }))} /></section>{desktopLayout ? <WorkspaceDivider containerRef={workspaceRef} ratio={view.splitRatio} bounds={splitBounds} onChange={splitRatio => setView(current => ({ ...current, splitRatio }))} /> : null}<section className="answer-column"><AnswerWorkspace answers={state.questions} viewingAnswerId={view.viewingAnswerId} newAnswerAvailable={view.newAnswerAvailable} activeTask={state.activeAnswerTask} cancelling={cancellingAnswer} cancelError={cancelAnswerError} onStop={() => void stopAnswer()} onView={answerId => setView(current => ({ ...current, viewingAnswerId: answerId, newAnswerAvailable: answerId ? current.newAnswerAvailable : false }))} onRetry={updateQuestionStatus} /><AnswerActionBar manualDraft={actionState.manualDraft} latestInterviewerQuestion={latestInterviewerText} screenshotTask={actionState.screenshotTask} disabled={pageLeaseStatus === "replaced"} onQuickAnswer={submitManual} onScreenshot={beginInstantScreenshot} /></section></div>{screenshot && pageLeaseStatus !== "replaced" ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="screenshot-dialog-title"><section className="sheet"><h2 id="screenshot-dialog-title">{screenshotStageTitle(screenshot)}</h2><p>{screenshotStageDetail(screenshot)}</p>{screenshot.stage === "failed" ? <div className="sheet-actions split-actions"><button className="button ghost full" onClick={dismissScreenshotFailure}>删除本次失败</button><button className="button primary full" onClick={beginInstantScreenshot}>重新截屏</button></div> : <button className="button primary full" onClick={cancelScreenshot}>取消</button>}</section></div> : null}
+    <div ref={workspaceRef} className={`live-grid focused-live-grid${pageLeaseStatus === "replaced" ? " live-grid-readonly" : ""}`} style={desktopLayout ? { gridTemplateColumns: `minmax(240px, ${view.splitRatio}fr) 12px minmax(300px, ${100 - view.splitRatio}fr)` } : undefined}><section className="conversation-column"><ConversationMonitor state={state} onConfirmQuestion={pageLeaseStatus === "replaced" ? dismissPending : confirmPending} onDismissQuestion={dismissPending} /><ManualQuestionComposer manualDraft={actionState.manualDraft} disabled={pageLeaseStatus === "replaced"} onChange={value => setActionState(current => ({ ...current, manualDraft: value, quickAnswerStatus: "idle", quickAnswerMessage: "" }))} /></section>{desktopLayout ? <WorkspaceDivider containerRef={workspaceRef} ratio={view.splitRatio} bounds={splitBounds} onChange={splitRatio => setView(current => ({ ...current, splitRatio }))} /> : null}<section className="answer-column"><AnswerWorkspace answers={state.questions} viewingAnswerId={view.viewingAnswerId} newAnswerAvailable={view.newAnswerAvailable} activeTask={state.activeAnswerTask} cancelling={cancellingAnswer} cancelError={cancelAnswerError} onStop={() => void stopAnswer()} onView={answerId => setView(current => ({ ...current, viewingAnswerId: answerId, newAnswerAvailable: answerId ? current.newAnswerAvailable : false }))} onRetry={updateQuestionStatus} /><AnswerActionBar manualDraft={actionState.manualDraft} latestInterviewerQuestion={latestInterviewerText} screenshotTask={actionState.screenshotTask} quickAnswerStatus={actionState.quickAnswerStatus ?? "idle"} quickAnswerMessage={actionState.quickAnswerMessage ?? ""} screenshotAnswerStatus={actionState.screenshotAnswerStatus ?? "idle"} disabled={pageLeaseStatus === "replaced"} onQuickAnswer={submitManual} onScreenshot={beginInstantScreenshot} /></section></div>{screenshot && pageLeaseStatus !== "replaced" ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="screenshot-dialog-title"><section className="sheet"><h2 id="screenshot-dialog-title">{screenshotStageTitle(screenshot)}</h2><p>{screenshotStageDetail(screenshot)}</p>{screenshot.stage === "failed" ? <div className="sheet-actions split-actions"><button className="button ghost full" onClick={dismissScreenshotFailure}>删除本次失败</button><button className="button primary full" onClick={beginInstantScreenshot}>重新截屏</button></div> : <button className="button primary full" onClick={cancelScreenshot}>取消</button>}</section></div> : null}
     <footer className="session-bar"><div><i className={state.captureState === "capturing" ? "recording-dot" : "online-dot"} /><strong>{state.captureState === "capturing" ? "面试进行中" : state.captureState === "paused" ? "面试已暂停" : "等待开始面试"}</strong></div><div><small>{state.captureState === "capturing" ? "正在持续接收面试官与我的实时对话" : "开始面试后会在头部右侧管理本场状态"}</small></div></footer>
   </main>;
 }

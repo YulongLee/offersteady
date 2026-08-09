@@ -1,3 +1,5 @@
 {"input":{"source":"system","text":"请介绍一下你最近做的项目？","is_final":true},"expected":{"checks":["creates_confirmed_question","triggers_one_answer","maps_to_interviewer"]}}
 {"input":{"source":"microphone","text":"我先从背景开始讲。","is_final":true},"expected":{"checks":["does_not_trigger_answer","maps_to_candidate"]}}
 {"input":{"source":"mixed","text":"混合输入","is_final":true},"expected":{"checks":["enters_degraded_mode","preserves_manual_input_path"]}}
+{"input":{"source":"system","text":"介绍一下你最近做的项目","is_final":true,"confidence":0.96},"expected":{"checks":["creates_confirmed_question","triggers_one_answer","does_not_require_question_mark"]},"synthetic":true}
+{"input":{"source":"system","text":"你是怎么处理线上故障的","is_final":true,"confidence":0.6},"expected":{"checks":["creates_question_candidate","requires_manual_confirmation","does_not_auto_trigger_before_confirm"]},"synthetic":true}

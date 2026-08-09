@@ -137,6 +137,9 @@ export interface LiveActionState {
   readonly manualDraft: string;
   readonly screenshotTask: ScreenshotTask | null;
   readonly pendingQuestion: QuestionCandidateEvent | null;
+  readonly quickAnswerStatus?: "idle" | "processing" | "success" | "failed" | "cancelled";
+  readonly quickAnswerMessage?: string;
+  readonly screenshotAnswerStatus?: "idle" | "processing" | "success" | "failed" | "cancelled";
 }
 
 export interface LiveWorkspaceViewState {

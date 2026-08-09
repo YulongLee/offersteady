@@ -277,7 +277,7 @@ describe("categorized materials and reachable live actions", () => {
     await waitFor(() => expect(screen.getByRole("separator", { name: "调整实时对话与回答宽度" })).toBeInTheDocument());
   });
 
-  it("preserves answer history, draft and screenshot preview across breakpoints", async () => {
+  it("keeps the explicit screenshot answer current and preserves draft and preview across breakpoints", async () => {
     vi.spyOn(interviewAppAdapter, "submitScreenshotAnswer").mockImplementation(() => new Promise(() => undefined));
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
     open("/app/interviews/demo/live");
@@ -286,10 +286,11 @@ describe("categorized materials and reachable live actions", () => {
     fireEvent.change(input, { target: { value: "跨断点保留的合成草稿" } });
     fireEvent.click(screen.getByRole("button", { name: "截屏回答" }));
     expect(screen.getByRole("dialog", { name: "正在截取当前屏幕" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "还有一个细节，具体怎么监控" })).toBeInTheDocument();
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     fireEvent(window, new Event("resize"));
     await waitFor(() => expect(screen.queryByRole("separator")).not.toBeInTheDocument());
-    expect(screen.getByRole("heading", { name: "请做一个简短的自我介绍。" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "还有一个细节，具体怎么监控" })).toBeInTheDocument();
     expect(input).toHaveValue("跨断点保留的合成草稿");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });

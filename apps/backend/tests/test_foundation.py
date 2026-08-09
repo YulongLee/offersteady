@@ -1469,7 +1469,7 @@ def test_realtime_speech_websocket_generates_transcript_question_and_answer() ->
         "clientName": "desktop-companion",
     }))
 
-    question_text = "请介绍一下你最近做的项目？"
+    question_text = "介绍一下你最近做的项目"
     payload = base64.b64encode(question_text.encode("utf-8")).decode("utf-8")
     with client.websocket_connect(f"/api/v1/realtime-speech/ws?token={publisher['token']}") as websocket:
         websocket.send_json({

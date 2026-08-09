@@ -506,6 +506,11 @@ h1, h2, h3, p { margin-top: 0; }
 .action-tile { min-height: 74px; align-items: flex-start; justify-content: center; flex-direction: column; gap: 4px; padding: 14px; }
 .action-tile strong { font-size: 11px; }
 .action-tile small { color: var(--muted); font-size: 8px; line-height: 1.45; text-align: left; }
+.action-tile:not(:disabled) { box-shadow: 0 8px 24px rgba(0,0,0,.18); transform: translateY(0); transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+.action-tile:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 11px 28px rgba(0,0,0,.24); }
+.action-tile:not(:disabled):active { transform: translateY(1px); box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+.action-tile:disabled { cursor: wait; opacity: .7; }
+.answer-action-status { min-height: 18px; color: var(--muted); font-size: 9px; line-height: 1.5; }
 .inline-question-confirm > strong { font-size: 9px; }
 .inline-question-confirm > small { color: var(--muted); font-size: 7px; }
 .inline-question-confirm > div { display: flex; justify-content: flex-end; gap: 7px; }
