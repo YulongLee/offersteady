@@ -63,10 +63,11 @@ describe("speech segmenter", () => {
     expect(segmenter.push(speech, 0, 0.013)).toEqual([]);
     const firstPartial = segmenter.push(speech, 130, 0.010);
     expect(firstPartial).toHaveLength(1);
-    expect(segmenter.push(new Uint8Array([0]), 260, 0.001)).toEqual([]);
-    const secondPartial = segmenter.push(speech, 440, 0.009);
+    expect(segmenter.push(new Uint8Array([0]), 900, 0.001)).toEqual([]);
+    const secondPartial = segmenter.push(speech, 950, 0.009);
     expect(secondPartial).toHaveLength(1);
-    const finalized = segmenter.push(new Uint8Array([0]), 860, 0.001);
+    expect(segmenter.push(new Uint8Array([0]), 2_049, 0.001)).toEqual([]);
+    const finalized = segmenter.push(new Uint8Array([0]), 2_050, 0.001);
 
     expect(finalized).toHaveLength(1);
     expect(finalized[0]?.isFinal).toBe(true);
@@ -124,9 +125,28 @@ describe("speech segmenter", () => {
     const continued = segmenter.push(speech, 430, 0.01);
     expect(continued).toHaveLength(1);
     expect(continued[0]?.segmentId).toBe(firstPartial[0]?.segmentId);
-    const finalized = segmenter.push(new Uint8Array([0]), 950, 0.0001);
+    expect(segmenter.push(new Uint8Array([0]), 1_229, 0.0001)).toEqual([]);
+    const finalized = segmenter.push(new Uint8Array([0]), 1_230, 0.0001);
     expect(finalized).toHaveLength(1);
     expect(finalized[0]?.isFinal).toBe(true);
+  });
+
+  it("finalizes uninterrupted speech at the bounded maximum duration", () => {
+    const segmenter = new SpeechSegmenter("microphone");
+    const speech = new Uint8Array([1, 2, 3]);
+
+    expect(segmenter.push(speech, 0, 0.01)).toEqual([]);
+    const firstPartial = segmenter.push(speech, 100, 0.01);
+    expect(firstPartial).toHaveLength(1);
+    const boundedFinal = segmenter.push(speech, 30_000, 0.01);
+
+    expect(boundedFinal).toHaveLength(1);
+    expect(boundedFinal[0]?.isFinal).toBe(true);
+    expect(boundedFinal[0]?.segmentId).toBe(firstPartial[0]?.segmentId);
+    expect(boundedFinal[0]?.durationMs).toBe(30_000);
+    expect(segmenter.push(speech, 30_020, 0.01)).toEqual([]);
+    const nextPartial = segmenter.push(speech, 30_120, 0.01);
+    expect(nextPartial[0]?.segmentId).not.toBe(firstPartial[0]?.segmentId);
   });
 });
 

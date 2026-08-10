@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { WebAppState } from "./domain";
+import { projectConversationTurns } from "./conversation-turns";
 
 interface Props {
   readonly state: WebAppState;
@@ -14,8 +15,6 @@ export const formatTranscriptTimestamp = (milliseconds: number) => {
   }
   return `[${String(Math.floor(milliseconds / 60_000)).padStart(2, "0")}:${String(Math.floor(milliseconds / 1_000) % 60).padStart(2, "0")}]`;
 };
-const normalizeTranscriptText = (text: string) => text.replace(/\s+/g, "").replace(/[，。！？、；：,.!?;:~～…·]/g, "");
-
 export const nextProgressiveTranscriptText = (current: string, target: string, step = 2) => {
   if (current === target) return current;
   if (target.startsWith(current)) return target.slice(0, current.length + Math.max(1, step));
@@ -50,36 +49,7 @@ function ProgressiveTranscriptText({ text, isFinal }: { readonly text: string; r
 export function ConversationMonitor({ state, onConfirmQuestion, onDismissQuestion }: Props) {
   const viewport = useRef<HTMLDivElement>(null);
   const followLatest = useRef(true);
-  const transcripts = useMemo(() => {
-    const cleanSegments = state.speaker.transcripts.filter(segment => normalizeTranscriptText(segment.text));
-    const latestById = new Map<string, (typeof state.speaker.transcripts)[number]>();
-    for (const segment of cleanSegments) {
-      const current = latestById.get(segment.id);
-      if (!current || segment.revision > current.revision) latestById.set(segment.id, segment);
-    }
-    const ordered = [...latestById.values()].sort((a, b) => a.startedAtMs - b.startedAtMs);
-    const collapsed: typeof ordered = [];
-    for (const segment of ordered) {
-      const previous = collapsed.at(-1);
-      if (previous) {
-        const previousText = normalizeTranscriptText(previous.text);
-        const currentText = normalizeTranscriptText(segment.text);
-        const closeInTime = Math.abs(segment.startedAtMs - previous.endedAtMs) <= 4_000;
-        const sameRole = previous.role === segment.role;
-        const sameOrContaining = previousText && currentText && (
-          previousText === currentText
-          || previousText.includes(currentText)
-          || currentText.includes(previousText)
-        );
-        if (sameRole && closeInTime && sameOrContaining) {
-          collapsed[collapsed.length - 1] = segment.revision >= previous.revision ? segment : previous;
-          continue;
-        }
-      }
-      collapsed.push(segment);
-    }
-    return collapsed;
-  }, [state.speaker.transcripts]);
+  const transcripts = useMemo(() => projectConversationTurns(state.speaker.transcripts), [state.speaker.transcripts]);
   useEffect(() => { const node = viewport.current; if (node && followLatest.current) node.scrollTop = node.scrollHeight; }, [transcripts.length, transcripts.at(-1)?.revision]);
   useEffect(() => {
     const latest = transcripts.at(-1);
@@ -107,7 +77,8 @@ export function ConversationMonitor({ state, onConfirmQuestion, onDismissQuestio
       {transcripts.length === 0 ? <div className="conversation-empty"><strong>等待当前面试的实时对话</strong><span>{state.speaker.runtimeNotice?.message ?? "桌面伴随助手连上当前 session 后，这里会按“面试官 / 我”实时显示转录。"}</span></div> : null}
       {transcripts.map(segment => {
         const role = segment.role;
-        return <article key={segment.id} className={`conversation-turn ${role}`}><time>{formatTranscriptTimestamp(segment.startedAtMs)}</time><div><div className="conversation-turn-meta"><strong>{role === "candidate" ? "我" : "面试官"}</strong><small>{segment.isFinal ? "已确认" : "转写中"}{segment.overlap ? " · 声音重叠" : ""}</small></div><ProgressiveTranscriptText text={segment.text} isFinal={segment.isFinal} />{pendingSegmentIds.has(segment.id) && state.speaker.pendingQuestion ? <div className="inline-question-confirm"><span>问题内容不清晰</span><strong>{state.speaker.pendingQuestion.text}</strong><small>确认文本后才会生成回答，与角色判断无关。</small><div><button onClick={onDismissQuestion}>忽略</button><button className="confirm" onClick={onConfirmQuestion}>确认问题</button></div></div> : null}</div></article>;
+        const hasPendingQuestion = segment.sourceSegmentIds.some(id => pendingSegmentIds.has(id));
+        return <article key={segment.id} className={`conversation-turn ${role}`}><time>{formatTranscriptTimestamp(segment.startedAtMs)}</time><div><div className="conversation-turn-meta"><strong>{role === "candidate" ? "我" : "面试官"}</strong><small>{segment.isFinal ? "已确认" : "转写中"}{segment.overlap ? " · 声音重叠" : ""}</small></div><ProgressiveTranscriptText text={segment.text} isFinal={segment.isFinal} />{hasPendingQuestion && state.speaker.pendingQuestion ? <div className="inline-question-confirm"><span>问题内容不清晰</span><strong>{state.speaker.pendingQuestion.text}</strong><small>确认文本后才会生成回答，与角色判断无关。</small><div><button onClick={onDismissQuestion}>忽略</button><button className="confirm" onClick={onConfirmQuestion}>确认问题</button></div></div> : null}</div></article>;
       })}
     </div>
   </section>;

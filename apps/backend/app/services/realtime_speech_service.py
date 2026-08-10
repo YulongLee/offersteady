@@ -1902,21 +1902,40 @@ class RealtimeSpeechService:
     def _maybe_detect_question(self, *, transcript: TranscriptSegmentRecord) -> QuestionCandidateRecord | None:
         if transcript.source_kind != "system":
             return None
-        text = transcript.text.strip()
+        text, source_segment_ids, confidence = self._assemble_interviewer_question_turn(transcript=transcript)
         if not self._looks_like_question(text):
             return None
+        source_segment_id_set = set(source_segment_ids)
+        existing_turn_candidate = next((
+            candidate
+            for candidate in reversed(self.repository.list_candidates_for_session(session_id=transcript.session_id))
+            if source_segment_id_set.intersection(candidate.source_segment_ids)
+        ), None)
+        if existing_turn_candidate is not None:
+            if (
+                existing_turn_candidate.text != text
+                or existing_turn_candidate.source_segment_ids != source_segment_ids
+                or existing_turn_candidate.confidence != confidence
+            ):
+                return self.repository.save_candidate(replace(
+                    existing_turn_candidate,
+                    text=text,
+                    source_segment_ids=source_segment_ids,
+                    confidence=confidence,
+                    updated_at_ms=_now_ms(),
+                ))
+            return existing_turn_candidate
         candidate_id = f"question:{transcript.session_id}:{transcript.segment_id}"
         existing = self.repository.get_candidate(candidate_id)
         if existing is not None:
             return existing
-        confidence = transcript.transcript_confidence
         if confidence < self.settings.realtime_question_auto_confirm_threshold:
             return self.repository.save_candidate(
                 QuestionCandidateRecord(
                     candidate_id=candidate_id,
                     session_id=transcript.session_id,
                     owner_user_id=transcript.owner_user_id,
-                    source_segment_ids=[transcript.segment_id],
+                    source_segment_ids=source_segment_ids,
                     text=text,
                     state="needs-confirmation",
                     reason="low-transcript-confidence",
@@ -1930,7 +1949,7 @@ class RealtimeSpeechService:
                 candidate_id=candidate_id,
                 session_id=transcript.session_id,
                 owner_user_id=transcript.owner_user_id,
-                source_segment_ids=[transcript.segment_id],
+                source_segment_ids=source_segment_ids,
                 text=text,
                 state="confirmed",
                 reason="auto-confirmed",
@@ -1939,6 +1958,57 @@ class RealtimeSpeechService:
                 updated_at_ms=_now_ms(),
             )
         )
+
+    def _assemble_interviewer_question_turn(
+        self,
+        *,
+        transcript: TranscriptSegmentRecord,
+    ) -> tuple[str, list[str], float]:
+        if transcript.source_kind != "system" or not transcript.is_final or transcript.overlap:
+            return transcript.text.strip(), [transcript.segment_id], transcript.transcript_confidence
+        records = self.repository.list_transcripts_for_session(session_id=transcript.session_id)
+        candidate_boundary = max((
+            item.ended_at_ms
+            for item in records
+            if item.source_kind == "microphone" and item.is_final and item.ended_at_ms <= transcript.started_at_ms
+        ), default=-1)
+        eligible = [
+            item for item in records
+            if item.source_kind == "system"
+            and item.is_final
+            and not item.overlap
+            and item.ended_at_ms > candidate_boundary
+            and item.ended_at_ms <= transcript.ended_at_ms
+        ]
+        if not any(item.segment_id == transcript.segment_id for item in eligible):
+            eligible.append(transcript)
+        eligible.sort(key=lambda item: (item.started_at_ms, item.ended_at_ms, item.segment_id))
+        selected = [transcript]
+        for previous in reversed([item for item in eligible if item.segment_id != transcript.segment_id]):
+            first = selected[0]
+            gap_ms = first.started_at_ms - previous.ended_at_ms
+            if gap_ms < -250 or gap_ms > 1_200:
+                break
+            if transcript.ended_at_ms - previous.started_at_ms > 45_000 or len(selected) >= 4:
+                break
+            selected.insert(0, previous)
+        texts: list[str] = []
+        source_segment_ids: list[str] = []
+        for item in selected:
+            current = " ".join(item.text.split()).strip()
+            if not current:
+                continue
+            compact_current = self._compact_transcript_for_dedup(current)
+            if texts:
+                compact_previous = self._compact_transcript_for_dedup(texts[-1])
+                if compact_previous == compact_current or compact_previous in compact_current or compact_current in compact_previous:
+                    if len(compact_current) >= len(compact_previous):
+                        texts[-1] = current
+                    source_segment_ids.append(item.segment_id)
+                    continue
+            texts.append(current)
+            source_segment_ids.append(item.segment_id)
+        return " ".join(texts).strip(), source_segment_ids or [transcript.segment_id], min(item.transcript_confidence for item in selected)
 
     @staticmethod
     def _looks_like_question(text: str) -> bool:

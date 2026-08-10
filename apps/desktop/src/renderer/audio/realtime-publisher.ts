@@ -88,8 +88,9 @@ const MICROPHONE_SPEECH_CONTINUE_THRESHOLD = 0.0018;
 const SYSTEM_SPEECH_START_THRESHOLD = 0.0008;
 const SYSTEM_SPEECH_CONTINUE_THRESHOLD = 0.0005;
 const INTERIM_INTERVAL_MS = 100;
-const MICROPHONE_SILENCE_FINALIZE_MS = 220;
-const SYSTEM_SILENCE_FINALIZE_MS = 480;
+const MICROPHONE_SILENCE_FINALIZE_MS = 1_100;
+const SYSTEM_SILENCE_FINALIZE_MS = 800;
+const MAX_SEGMENT_DURATION_MS = 30_000;
 const MIN_EMIT_SPEECH_MS = 60;
 const PRE_SPEECH_BUFFER_LIMIT = 4;
 const MAX_PENDING_AUDIO_BYTES = 64_000;
@@ -321,6 +322,11 @@ export class SpeechSegmenter {
 
     const speaking = rms >= continueThreshold;
     if (payload.byteLength > 0) this.unsentChunks.push(payload);
+    if (nowMs - this.startedAtMs >= MAX_SEGMENT_DURATION_MS) {
+      const boundedFinalSnapshot = this.snapshot(nowMs, true);
+      this.reset();
+      return [boundedFinalSnapshot];
+    }
     if (speaking) {
       this.lastSpeechAtMs = nowMs;
       if ((!this.emitted && nowMs - this.startedAtMs >= MIN_EMIT_SPEECH_MS) || nowMs - this.lastInterimAtMs >= INTERIM_INTERVAL_MS) {
