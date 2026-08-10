@@ -359,7 +359,8 @@ class AdminRepository:
                    COUNT(*) FILTER (WHERE validation_status = 'ready')::INTEGER AS ready_channels,
                    COUNT(*) FILTER (WHERE enabled = TRUE)::INTEGER AS enabled_channels
             FROM billing_payment_channel_configs
-            """
+            """,
+            (),
         ) or {}
         return {
             "configuredChannels": int(row.get("configured_channels") or 0),

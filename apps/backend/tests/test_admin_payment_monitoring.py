@@ -6,6 +6,8 @@ from types import SimpleNamespace
 import pytest
 
 from app.api.admin import reconcile_authoritative_order
+from app.core.config import Settings
+from app.services.admin_repository import AdminRepository
 from app.services.alipay_provider import AlipayOrderQuery
 
 
@@ -64,3 +66,20 @@ def test_payment_diagnostics_migration_is_backward_compatible_and_safe() -> None
     assert "seller_identity_verified BOOLEAN" in migration
     assert "raw_payload" not in migration
     assert "private_key" not in migration.lower()
+
+
+def test_payment_configuration_health_uses_a_bounded_parameterized_query(monkeypatch) -> None:
+    repository = object.__new__(AdminRepository)
+    repository.settings = Settings()
+    captured = {}
+
+    def one(sql, params):
+        captured.update(sql=sql, params=params)
+        return {"configured_channels": 2, "ready_channels": 1, "enabled_channels": 1}
+
+    monkeypatch.setattr(repository, "_one", one)
+    assert repository.payment_configuration_health() == {
+        "configuredChannels": 2, "readyChannels": 1, "enabledChannels": 1,
+    }
+    assert captured["params"] == ()
+    assert "billing_payment_channel_configs" in captured["sql"]
