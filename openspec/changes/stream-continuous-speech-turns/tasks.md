@@ -19,5 +19,5 @@
 
 - [x] 4.1 Run focused and full Desktop, Web, and Backend tests, type checks, production builds, privacy review, and strict OpenSpec validation.
 - [x] 4.2 Build and inspect supported companion artifacts and verify release manifest URLs, checksums, architectures, and versions.
-- [ ] 4.3 Commit and push the approved change to Git.
-- [ ] 4.4 Deploy only affected Backend/Web services, publish companion artifacts without restarting unrelated services, and verify production health and downloads.
+- [x] 4.3 Commit and push the approved change to Git.
+- [x] 4.4 Deploy only affected Backend/Web services, publish companion artifacts without restarting unrelated services, and verify production health and downloads.
