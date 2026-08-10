@@ -40,6 +40,6 @@
 
 - [x] 6.1 Update payment-channel and commercial-admin operations documentation with diagnostics, reconciliation and monitoring runbooks.
 - [x] 6.2 Run focused and full Backend/Admin tests, type checks, production builds, migration checks and strict OpenSpec validation.
-- [ ] 6.3 Deploy the database migration and Backend first, verify existing user payment and health routes, then deploy Admin without rebuilding Web or desktop companions.
+- [x] 6.3 Deploy the database migration and Backend first, verify existing user payment and health routes, then deploy Admin without rebuilding Web or desktop companions.
 - [ ] 6.4 Use authoritative Alipay queries to reconcile the two confirmed ¥29.90 production orders one at a time and verify idempotent entitlement delivery and ¥59.80 live revenue.
 - [ ] 6.5 Verify production server monitoring, payment diagnostics, access controls and responsive Admin layouts, then monitor errors and query latency for one sampling window.
