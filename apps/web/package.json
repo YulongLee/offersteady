@@ -16,6 +16,7 @@
   "dependencies": {
     "@offersteady/config": "*",
     "@offersteady/protocol": "*",
+    "@phosphor-icons/react": "^2.1.10",
     "katex": "^0.18.1",
     "qrcode": "^1.5.4",
     "react": "^19.2.7",

@@ -1,6 +1,7 @@
 import { createContext, Suspense, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { BrowserRouter, Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import type { AnswerTaskSnapshot, CaptureState } from "@offersteady/protocol";
+import { BriefcaseIcon, CaretDownIcon, ChartLineUpIcon, ChatCircleTextIcon, ClipboardTextIcon, CodeIcon, DatabaseIcon, DevicesIcon, GraduationCapIcon, IdentificationCardIcon, PaletteIcon, ScanIcon, UserFocusIcon } from "@phosphor-icons/react";
 
 import type { IdleInterviewStatus, InterviewQuestion, LiveActionState, QuestionStatus, ScreenshotTask, SessionStatus, WebAppState } from "./domain";
 import { runAdapterOperation } from "./api-client";
@@ -114,6 +115,8 @@ function PublicLayout() {
 
 function LandingPage() {
   const { state } = usePrototype(); const passes = state.billing.catalog.filter(item => item.kind === "time_pass");
+  const welcomeGrantPoints = state.billing.ledger.find(item => item.kind === "welcome_grant")?.points ?? 200;
+  const paymentChannelsLabel = state.billing.availablePaymentChannels.length ? state.billing.availablePaymentChannels.map(channel => channel === "wechat" ? "微信支付" : "支付宝").join("、") : "当前未开启在线支付渠道";
   return (
     <main>
       <section className="landing-hero">
@@ -135,6 +138,42 @@ function LandingPage() {
         <div className="section-intro"><span className="kicker">YOUR INTERVIEW RHYTHM</span><h2>从准备到现场，少一点慌乱</h2></div>
         <div className="workflow-grid"><article><b>01 · PERSONAL</b><h3>理解你的真实经历</h3><p>每场面试单独选择简历、JD 和知识材料，减少无关内容，也不替你虚构经历。</p></article><article><b>02 · REAL-TIME</b><h3>听懂问题，也看懂截图</h3><p>支持授权语音、手动输入和截图题；系统优先聚焦面试官问题，来源不清时会暂停自动回答并提示你改用手动输入。</p></article><article><b>03 · TRACEABLE</b><h3>知道建议从哪里来</h3><p>每条回答显示实际使用的资料名称与版本，资料和模型推断保持清晰分离。</p></article></div>
         <div className="advantage-strip"><div><strong>电脑端</strong><span>macOS 双芯片已规划，Windows 版本按签名状态逐步开放</span></div><div><strong>手机端</strong><span>同步查看回答和会话状态，不被单一设备绑住</span></div><div><strong>你的数据</strong><span>资料可管理、可删除，原始音频默认不保存</span></div></div>
+      </section>
+      <section id="core-capabilities" className="public-section core-capabilities" aria-labelledby="core-capabilities-title">
+        <div className="core-capabilities-intro"><span className="kicker">CORE CAPABILITIES</span><h2 id="core-capabilities-title">面试稳AI助手核心功能</h2><p>从面试准备、现场辅助到结束复盘，用一套清晰的工作流陪你完成每一次求职面试。</p></div>
+        <div className="core-capabilities-grid">
+          <article className="core-capability-card accent-coral"><span className="core-capability-icon" aria-hidden="true"><ChatCircleTextIcon size={28} weight="duotone" /></span><div><h3>实时面试辅助</h3><p>识别面试官问题并生成回答建议，支持语音、手动输入；回答内容结合当前面试上下文，并明确作为参考建议。</p></div></article>
+          <article className="core-capability-card accent-gold"><span className="core-capability-icon" aria-hidden="true"><ScanIcon size={28} weight="duotone" /></span><div><h3>截图题快速回答</h3><p>通过电脑伴随助手截取题目，识别代码、笔试题或系统设计内容，并在回答区展示处理状态与建议答案。</p></div></article>
+          <article className="core-capability-card accent-green"><span className="core-capability-icon" aria-hidden="true"><DatabaseIcon size={28} weight="duotone" /></span><div><h3>个性化知识库</h3><p>按岗位或主题整理知识材料，每场面试自主选择需要的资料，让回答更贴近你实际准备的内容。</p></div></article>
+          <article className="core-capability-card accent-blue"><span className="core-capability-icon" aria-hidden="true"><IdentificationCardIcon size={28} weight="duotone" /></span><div><h3>简历与 JD 上下文</h3><p>每场单独选择简历和职位描述，回答建议优先引用可核对的经历与岗位要求，不替你虚构项目经验。</p></div></article>
+          <article className="core-capability-card accent-violet"><span className="core-capability-icon" aria-hidden="true"><ClipboardTextIcon size={28} weight="duotone" /></span><div><h3>面试记录与复盘</h3><p>保留已确认的问题和回答建议，面试结束后可查看 AI 整理摘要、资料来源，并管理相关记录与附件。</p></div></article>
+          <article className="core-capability-card accent-indigo"><span className="core-capability-icon" aria-hidden="true"><DevicesIcon size={28} weight="duotone" /></span><div><h3>跨设备伴随使用</h3><p>电脑伴随助手负责授权采集与截图，网页端展示实时回答；手机端可同步查看回答和当前会话状态。</p></div></article>
+        </div>
+      </section>
+      <section id="user-scenarios" className="public-section user-scenarios" aria-labelledby="user-scenarios-title">
+        <div className="user-scenarios-intro"><span className="kicker">USER SCENARIOS</span><h2 id="user-scenarios-title">不同求职阶段，怎么用面试稳</h2><p>以下内容为合成使用场景，用于说明产品能力，不代表真实用户评价、任职背书或录用结果。</p></div>
+        <div className="user-scenarios-grid">
+          <article className="user-scenario-card"><header><span className="user-scenario-icon" aria-hidden="true"><BriefcaseIcon size={25} weight="duotone" /></span><div><h3>产品经理 · 社招面试</h3><span>业务追问与项目复盘</span></div><small>合成示例</small></header><p>面试前按场选择简历和目标岗位 JD；遇到项目追问时，用回答建议提醒自己先交代目标、个人决策和真实结果，减少讲着讲着偏离重点。</p></article>
+          <article className="user-scenario-card"><header><span className="user-scenario-icon" aria-hidden="true"><CodeIcon size={25} weight="duotone" /></span><div><h3>后端工程师 · 技术面</h3><span>系统设计与深度追问</span></div><small>合成示例</small></header><p>把准备过的架构材料放入知识库，系统设计面试中结合题目和个人资料整理容量、可靠性与取舍，让回答保留自己的项目边界而不是背模板。</p></article>
+          <article className="user-scenario-card"><header><span className="user-scenario-icon" aria-hidden="true"><ChartLineUpIcon size={25} weight="duotone" /></span><div><h3>数据分析师 · 案例面</h3><span>图表、SQL 与业务分析</span></div><small>合成示例</small></header><p>遇到图表或 SQL 截图题时，通过伴随助手发起截图回答，并在页面查看上传、识别和生成状态；再结合岗位要求组织分析路径和结论表达。</p></article>
+          <article className="user-scenario-card"><header><span className="user-scenario-icon" aria-hidden="true"><GraduationCapIcon size={25} weight="duotone" /></span><div><h3>应届毕业生 · 首次面试</h3><span>自我介绍与行为问题</span></div><small>合成示例</small></header><p>用简历中的课程、实习和项目作为可核对素材，面对不熟悉的问题时也能按背景、行动和收获整理表达，避免为了完整而虚构不存在的经历。</p></article>
+          <article className="user-scenario-card"><header><span className="user-scenario-icon" aria-hidden="true"><PaletteIcon size={25} weight="duotone" /></span><div><h3>设计岗位 · 作品集面试</h3><span>方案说明与协作追问</span></div><small>合成示例</small></header><p>将作品集要点整理为知识材料，面试中围绕用户问题、方案选择和协作过程组织回答；结束后通过问题记录复盘哪些案例还需要补充证据。</p></article>
+          <article className="user-scenario-card"><header><span className="user-scenario-icon" aria-hidden="true"><UserFocusIcon size={25} weight="duotone" /></span><div><h3>跨行业求职者 · 转岗面试</h3><span>能力迁移与岗位匹配</span></div><small>合成示例</small></header><p>针对每个岗位单独选择简历版本和 JD，把原行业经历转化为可迁移能力；回答后查看实际使用的资料来源，判断表达是否真正贴近目标岗位。</p></article>
+        </div>
+      </section>
+      <section id="product-facts" className="public-section product-facts" aria-label="产品信息与常见问题">
+        <div className="product-facts-grid" aria-label="可核验产品信息"><article><strong>3 种</strong><span>问题输入方式</span><small>语音 · 手动 · 截图</small></article><article><strong>6 项</strong><span>首页核心能力</span><small>准备 · 现场 · 复盘</small></article><article><strong>2 种</strong><span>灵活使用方式</span><small>积分 · 按天会员</small></article><article><strong>{welcomeGrantPoints} 点</strong><span>免费使用积分</span><small>登录后自动进入账户</small></article></div>
+        <div className="public-faq" aria-labelledby="public-faq-title">
+          <div className="public-faq-intro"><span className="kicker">FREQUENTLY ASKED QUESTIONS</span><h2 id="public-faq-title">常见问题</h2><p>先了解适用场景、使用成本和数据边界，再决定是否开始使用。</p></div>
+          <div className="public-faq-list">
+            <details open><summary><span>面试稳AI助手适合哪些岗位？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>适用于需要结构化表达、专业追问或截图题辅助的求职场景，例如产品、技术、数据、设计、运营等岗位。建议质量取决于问题识别、你选择的简历与 JD 以及真实资料完整度，不能保证面试或录用结果。</p></div></details>
+            <details><summary><span>面试稳可以免费使用吗？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>可以。当前免费使用额度为 {welcomeGrantPoints} 点；普通回答 {state.billing.rates.answerPoints} 点、截图回答 {state.billing.rates.screenshotAnswerPoints} 点，知识材料 {state.billing.rates.knowledgeIndexMinimumPoints} 点起。需要高频使用时也可以选择按天会员。</p></div></details>
+            <details><summary><span>支持哪些问题输入方式？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>支持电脑伴随助手授权后的语音输入、网页手动输入和截图题回答。设备收音不可用时仍可切换到手动输入；截图任务会显示上传、识别和生成状态。</p></div></details>
+            <details><summary><span>支持哪些设备平台？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>设备中心会按当前发布状态提供 macOS Apple Silicon、macOS Intel 和 Windows 版本；未完成签名或仍在预览的版本会明确提示。手机端可用于同步查看回答和会话状态。</p></div></details>
+            <details><summary><span>支持哪些支付方式？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>{paymentChannelsLabel}。实际可用方式以“积分与会员”页面的实时显示为准；支付成功以后端验签结果为准，返回支付页本身不代表权益已经到账。</p></div></details>
+            <details><summary><span>使用面试稳会造成信息泄露吗？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>产品默认不保存原始音频；简历、JD、知识材料、截图和会话记录提供管理或删除入口。请不要上传与求职无关的敏感信息，完整处理规则可查看<Link to={routes.privacy}>隐私政策</Link>。</p></div></details>
+          </div>
+        </div>
       </section>
       <section id="pricing-value" className="public-section pricing-value"><div className="section-intro"><span className="kicker">FLEXIBLE & FAIR</span><h2>按你的面试节奏选择</h2><p>可先使用 200 点免费额度。偶尔使用按点结算，面试密集期选择按天会员，再按实际面试节奏购买。</p></div><div className="public-pricing-grid"><article><span>灵活按次</span><h3>积分使用</h3><strong>回答 5 点起</strong><p>知识材料 20 点起，完整 Token 规则可在积分页查看。</p><Link to={routes.login}>免费开始 →</Link></article><article className="featured"><span>短期高频</span><h3>按天会员</h3><strong>3 天 ¥{((passes.find(item => item.durationDays === 3)?.priceCents ?? 0) / 100).toFixed(2)} 起</strong><p>{passes.map(item => `${item.durationDays}天`).join(" / ")}；15 天和 30 天各含 2 份知识材料额度。</p><Link to={routes.login}>免费使用 →</Link></article></div></section>
       <section id="value-proof" className="public-section value-proof"><div className="section-intro"><span className="kicker">WHY OFFERSTEADY</span><h2>从听懂问题，到组织答案，现场更从容。</h2><p>结合你的简历、目标岗位和知识材料，快速抓住问题重点，生成清晰、贴合你的回答思路。</p></div><div className="value-proof-grid"><article><span>01</span><h3>实时抓住问题重点</h3><p>区分面试官与候选人的对话，让你把注意力放在真正需要回答的问题上。</p></article><article><span>02</span><h3>回答更贴合你的经历</h3><p>按场选择简历、JD 和知识材料，快速整理更相关的表达结构。</p></article><article><span>03</span><h3>按求职节奏灵活使用</h3><p>偶尔面试按点使用，密集面试选择短期会员，不必承担长期订阅。</p></article></div><div id="privacy" className="value-trust"><p>AI 内容为回答建议，重要经历请以真实情况为准；资料和会话记录可管理、可删除。</p><details><summary>查看使用与隐私说明</summary><p>原始音频默认不保存；简历、JD、截图和会话记录提供删除入口。请遵守面试规则并以真实经历作答。</p></details></div></section>

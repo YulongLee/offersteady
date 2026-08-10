@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { readFileSync } from "node:fs";
 import type { PointsLedgerEntry, PointsRedemptionResult } from "@offersteady/protocol";
 import { App } from "./App";
 import { summarizePointsLedger } from "./BillingPage";
@@ -8,8 +9,18 @@ import { syntheticState } from "./test-state";
 
 const success = (outcome: "redeemed" | "already-redeemed-by-you" = "redeemed"): PointsRedemptionResult => ({ outcome, data: { redemptionId: "synthetic-redemption-result", points: 120, newBalance: 320, publicHint: "••••-DEMO", redeemedAtMs: 1_800_000_000_000, ledgerEntry: { id: "synthetic-redemption-ledger", userId: "prototype-user", kind: "redemption_credit", points: 120, createdAtMs: 1_800_000_000_000, referenceId: "synthetic-redemption-result", description: "兑换码 ••••-DEMO 到账" } } });
 
-const open = () => { window.history.pushState({}, "", "/app/billing"); return render(<App initialAuthenticated initialState={structuredClone(syntheticState)} />); };
+const open = (ledger?: PointsLedgerEntry[]) => { const base = structuredClone(syntheticState); const state = ledger ? { ...base, billing: { ...base.billing, ledger } } : base; window.history.pushState({}, "", "/app/billing"); return render(<App initialAuthenticated initialState={state} />); };
 const inputCode = (value = "SYNTHETIC-DEMO") => fireEvent.change(screen.getByLabelText("积分兑换码"), { target: { value } });
+
+const ledgerRows = (count: number): PointsLedgerEntry[] => Array.from({ length: count }, (_, index) => ({
+  id: `ledger-${index}`,
+  userId: "prototype-user",
+  kind: "purchase_credit",
+  points: 100 + index,
+  createdAtMs: 1_800_000_000_000 - index * 1_000,
+  referenceId: `order-${index}`,
+  description: `积分记录 ${index + 1}`,
+}));
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -43,6 +54,28 @@ describe("billing points redemption", () => {
     expect(screen.getByText("暂无支付订单")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "复制微信号" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "发送邮件" })).toHaveAttribute("href", "mailto:contact@oneshowailab.com");
+  });
+
+  it("keeps every ledger row in a named, keyboard-scrollable five-row viewport", () => {
+    open(ledgerRows(8));
+    const ledger = screen.getByRole("region", { name: "积分明细记录" });
+    expect(ledger).toHaveClass("points-ledger-scroll");
+    expect(ledger).toHaveAttribute("tabindex", "0");
+    const styles = readFileSync("src/styles.css", "utf8");
+    expect(styles).toMatch(/\.points-ledger-scroll\s*\{[^}]*max-height:\s*225px;[^}]*overflow-y:\s*auto;/s);
+    expect(ledger.querySelectorAll("article")).toHaveLength(8);
+    expect(within(ledger).getAllByText(/积分记录/).map(node => node.textContent)).toEqual([
+      "积分记录 1", "积分记录 2", "积分记录 3", "积分记录 4", "积分记录 5", "积分记录 6", "积分记录 7", "积分记录 8",
+    ]);
+    expect(document.querySelector(".billing-orders-panel .points-ledger-scroll")).not.toBeInTheDocument();
+  });
+
+  it("shows five or fewer rows without adding an unnecessary keyboard stop on a small screen", () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    open(ledgerRows(5));
+    const ledger = screen.getByRole("region", { name: "积分明细记录" });
+    expect(ledger).not.toHaveAttribute("tabindex");
+    expect(ledger.querySelectorAll("article")).toHaveLength(5);
   });
 
   it("submits only code and generated idempotency metadata from the form keyboard path", async () => {
