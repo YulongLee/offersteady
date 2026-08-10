@@ -10,4 +10,4 @@
 ## 3. Verification and Rollout
 
 - [x] 3.1 Run focused and full Backend/Admin tests, production builds and strict OpenSpec validation.
-- [ ] 3.2 Commit, push and deploy only affected Backend/Admin services, then verify production health and configuration revalidation.
+- [x] 3.2 Commit, push and deploy only affected Backend/Admin services, then verify production health and configuration revalidation.
