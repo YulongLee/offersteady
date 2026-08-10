@@ -172,6 +172,12 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
     return state;
   }
 
+  async getBillingState(signal?: AbortSignal) {
+    await delay(signal);
+    const state = await this.loadState(signal);
+    return state.billing;
+  }
+
   async createDraft(input: { title: string; role: string; company?: string }, signal?: AbortSignal) {
     await delay(signal);
     const draft: InterviewSummary = {

@@ -250,7 +250,7 @@ describe("categorized materials and reachable live actions", () => {
     open("/app/interviews/demo/live");
     fireEvent.click(screen.getByRole("button", { name: "忽略" }));
     expect(screen.queryByText("可能是面试官的问题")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "积分" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "积分与会员" })).toBeInTheDocument();
   });
 
   it.each([390, 900, 1280])("keeps primary actions mounted at %ipx", width => {

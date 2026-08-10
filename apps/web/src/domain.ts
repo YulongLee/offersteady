@@ -188,6 +188,7 @@ export interface DesktopShortcutScreenshotUpdate {
 
 export interface InterviewAppAdapter {
   loadState(signal?: AbortSignal, options?: { readonly auth?: boolean }): Promise<WebAppState>;
+  getBillingState(signal?: AbortSignal): Promise<BillingPresentationState>;
   createDraft(input: { title: string; role: string; company?: string }, signal?: AbortSignal): Promise<InterviewSummary>;
   confirmInterviewMaterials(selection: SessionContextSelection, signal?: AbortSignal): Promise<SessionContextSelection>;
   getActiveInterviewConflict(id: string, signal?: AbortSignal): Promise<ActiveInterviewConflict>;

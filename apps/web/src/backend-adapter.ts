@@ -2,7 +2,7 @@ import type { CaptureState, FoundationIndexResponse } from "@offersteady/protoco
 
 import type { AnswerProvenance, AnswerSourceReference, AnswerTaskSnapshot, CancelAnswerResult, OfficialCheckoutOrder, PointsRedemptionResult } from "@offersteady/protocol";
 import { AppError } from "./domain";
-import type { ActiveInterviewConflict, AnswerAdvice, DesktopDeviceBinding, IdleInterviewStatus, InterviewAppAdapter, InterviewQuestion, InterviewSummary, InterviewWorkspaceSnapshot, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
+import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, DesktopDeviceBinding, IdleInterviewStatus, InterviewAppAdapter, InterviewQuestion, InterviewSummary, InterviewWorkspaceSnapshot, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
 import { createJsonClient, withBaseUrl } from "./api-client";
 import { authClient } from "./auth-client";
 import { createSseParser, type LiveAnswerStreamEvent, type ManualAnswerStreamUpdate } from "./live-answer-stream";
@@ -657,6 +657,10 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
 
   async loadState(signal?: AbortSignal, options?: { readonly auth?: boolean }): Promise<WebAppState> {
     return this.client.request<WebAppState>("/api/v1/web/state", { headers: options?.auth === false ? {} : authHeaders() }, signal);
+  }
+
+  async getBillingState(signal?: AbortSignal): Promise<BillingPresentationState> {
+    return this.client.request<BillingPresentationState>("/api/v1/billing/state", { headers: authHeaders() }, signal);
   }
 
   async createDraft(input: { title: string; role: string; company?: string }, signal?: AbortSignal) {

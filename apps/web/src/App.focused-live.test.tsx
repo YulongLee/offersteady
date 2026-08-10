@@ -396,7 +396,7 @@ describe("focused live interview workspace", () => {
     expect(await screen.findByText("回答已终止", { selector: ".cancelled-answer strong" })).toBeInTheDocument();
     expect(screen.getByText("面试进行中")).toBeInTheDocument();
     expect(screen.queryByText("AI 回答建议")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("link", { name: "积分" }));
+    fireEvent.click(screen.getByRole("link", { name: "积分与会员" }));
     expect(await screen.findByText("200 点", { selector: ".balance-card strong" })).toBeInTheDocument();
   });
 

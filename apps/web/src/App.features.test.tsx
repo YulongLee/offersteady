@@ -63,6 +63,6 @@ describe("spec-driven interview features", () => {
     fireEvent.click(screen.getByRole("button", { name: "确认问题" }));
     expect(screen.getAllByText("还有一个细节，具体怎么监控").length).toBeGreaterThan(0);
     expect(screen.queryByText("问题内容不清晰")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "积分" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "积分与会员" })).toBeInTheDocument();
   });
 });

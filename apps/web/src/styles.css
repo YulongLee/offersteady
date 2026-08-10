@@ -624,6 +624,19 @@ h1, h2, h3, p { margin-top: 0; }
 .balance-card { display: flex; flex-direction: column; gap: 6px; border: 1px solid rgba(110,231,189,.2); border-radius: 16px; background: linear-gradient(135deg, rgba(110,231,189,.1), rgba(16,23,33,.8)); padding: 22px; }
 .balance-card small, .balance-card span { color: var(--muted); font-size: 8px; }
 .balance-card strong { color: var(--brand); font-size: 29px; }
+.entitlement-card { min-width: 290px; gap: 8px; }
+.entitlement-card.active { border-color: rgba(110,231,189,.38); box-shadow: 0 16px 44px rgba(0,0,0,.18); }
+.entitlement-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.entitlement-badge { border: 1px solid var(--line); border-radius: 999px; padding: 4px 8px; color: var(--muted) !important; background: rgba(255,255,255,.03); font-weight: 800; }
+.entitlement-badge.active { border-color: rgba(110,231,189,.3); color: var(--brand) !important; background: rgba(110,231,189,.08); }
+.entitlement-badge.queued { border-color: rgba(247,183,80,.35); color: var(--warning) !important; background: rgba(247,183,80,.08); }
+.balance-card .membership-remaining { font-size: 23px; line-height: 1.2; }
+.entitlement-points { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid rgba(255,255,255,.08); margin-top: 6px; padding-top: 10px; }
+.entitlement-points b { color: var(--text); font-size: 13px; }
+.billing-sync { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--brand); border: 1px solid rgba(110,231,189,.2); border-radius: 10px; background: rgba(110,231,189,.05); padding: 10px 12px; margin: -6px 0 18px; font-size: 9px; }
+.billing-sync.error { color: var(--warning); border-color: rgba(247,183,80,.28); background: rgba(247,183,80,.06); }
+.billing-sync button { border: 0; color: inherit; background: transparent; cursor: pointer; font: inherit; font-weight: 800; }
+.queued-entitlements > small { display: block; color: var(--muted); border-top: 1px solid var(--line); margin-top: 12px; padding-top: 10px; font-size: 8px; }
 .billing-notice { color: var(--brand); border: 1px solid rgba(110,231,189,.2); border-radius: 10px; background: rgba(110,231,189,.05); padding: 11px; margin-bottom: 18px; font-size: 9px; }
 .redemption-card { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(320px, 1.2fr); gap: 26px; align-items: center; margin-bottom: 28px; }
 .redemption-card h2 { margin: 6px 0; }
@@ -863,6 +876,7 @@ h1, h2, h3, p { margin-top: 0; }
   .session-bar > div:last-child { display: none; }
   .public-section { padding: 70px 0; }
   .billing-hero, .billing-bottom { grid-template-columns: 1fr; gap: 18px; }
+  .entitlement-card { min-width: 0; width: 100%; }
   .billing-support-contacts { grid-template-columns: 1fr; }
   .redemption-card { grid-template-columns: 1fr; gap: 14px; }
   .library-layout { grid-template-columns: 1fr; }
