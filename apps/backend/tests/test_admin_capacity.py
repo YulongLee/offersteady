@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from app.core.config import Settings
 from app.services.admin_capacity import AdminCapacityMonitor, RequestWindow, capacity_level, percentile
 
@@ -71,3 +73,18 @@ def test_server_health_keeps_partial_results_when_database_probe_fails(monkeypat
     assert report["overall"] == "critical"
     assert next(item for item in report["dependencies"] if item["key"] == "postgresql")["status"] == "unavailable"
     assert next(item for item in report["resources"] if item["key"] == "memoryPercent")["level"] == "critical"
+
+
+def test_memory_collector_falls_back_to_host_total_without_cgroup_limit(monkeypatch) -> None:
+    def read_text(path: Path, *args, **kwargs):
+        del args, kwargs
+        if str(path).endswith("memory.current"):
+            return "1024"
+        if str(path).endswith("memory.max"):
+            return "max"
+        if str(path) == "/proc/meminfo":
+            return "MemTotal: 100000 kB\nMemAvailable: 60000 kB\n"
+        raise OSError("unsupported synthetic path")
+
+    monkeypatch.setattr(Path, "read_text", read_text)
+    assert AdminCapacityMonitor._memory_percent() == 40.0

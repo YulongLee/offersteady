@@ -359,11 +359,21 @@ class AdminCapacityMonitor:
         try:
             current = int(Path("/sys/fs/cgroup/memory.current").read_text(encoding="ascii").strip())
             maximum_text = Path("/sys/fs/cgroup/memory.max").read_text(encoding="ascii").strip()
-            if maximum_text == "max":
-                return None
-            maximum = int(maximum_text)
-            return round(current * 100 / maximum, 2) if maximum > 0 else None
+            if maximum_text != "max":
+                maximum = int(maximum_text)
+                return round(current * 100 / maximum, 2) if maximum > 0 else None
         except (OSError, ValueError):
+            pass
+        try:
+            memory = {
+                line.split(":", 1)[0]: int(line.split()[1])
+                for line in Path("/proc/meminfo").read_text(encoding="ascii").splitlines()
+                if ":" in line and len(line.split()) >= 2
+            }
+            total = memory["MemTotal"]
+            available = memory["MemAvailable"]
+            return round((total - available) * 100 / total, 2) if total > 0 else None
+        except (OSError, KeyError, ValueError):
             return None
 
     def _persist(self, sample: dict[str, Any]) -> None:
