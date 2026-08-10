@@ -30,7 +30,8 @@ describe("application initialization", () => {
     window.history.pushState({}, "", "/app");
     render(<App />);
 
-    expect(screen.getByRole("status")).toHaveTextContent("正在安全加载");
+    expect(screen.getByRole("status", { name: "页面加载中" })).toBeEmptyDOMElement();
+    expect(screen.queryByText("正在安全加载")).not.toBeInTheDocument();
     expect(screen.queryByText("后端页面状态无法加载")).not.toBeInTheDocument();
     expect(loadState).not.toHaveBeenCalled();
 

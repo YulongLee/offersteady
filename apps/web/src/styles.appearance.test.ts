@@ -8,6 +8,7 @@ describe("appearance styles", () => {
   it("scopes the bright palette to authenticated app surfaces", () => {
     expect(styles).toContain(':root[data-theme="bright"] .app-shell');
     expect(styles).toContain(':root[data-theme="bright"] .live-page');
+    expect(styles).toContain(':root[data-theme="bright"] .route-loading-page');
     expect(styles).not.toContain(':root[data-theme="bright"] {');
     expect(styles).toContain("--field-bg: #ffffff");
     expect(styles).toContain("--answer-text: #17242b");

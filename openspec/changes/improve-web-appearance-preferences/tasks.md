@@ -2,6 +2,7 @@
 
 - [x] 1.1 Make saved-session restoration the sole protected-state loader and prevent the public loader race.
 - [x] 1.2 Add regressions for valid session, no session, slow restore and final initialization failure without transient backend-error rendering.
+- [x] 1.3 Replace visible technical loading copy with a theme-matched silent transition while retaining accessible status semantics.
 
 ## 2. Appearance Preference Model
 
