@@ -96,6 +96,9 @@ def test_alipay_notification_requires_signature_and_merchant_identity() -> None:
     provider, private_key = alipay_fixture()
     valid = provider.parse_notification(signed_notification(provider, private_key))
     assert valid.verified is True
+    assert valid.signature_verified is True
+    assert valid.app_identity_verified is True
+    assert valid.seller_identity_verified is True
     assert valid.paid is True
     assert valid.amount_cents == 3990
 
@@ -103,6 +106,9 @@ def test_alipay_notification_requires_signature_and_merchant_identity() -> None:
         signed_notification(provider, private_key, seller_id="another-seller")
     )
     assert wrong_seller.verified is False
+    assert wrong_seller.signature_verified is True
+    assert wrong_seller.app_identity_verified is True
+    assert wrong_seller.seller_identity_verified is False
 
 
 def test_payment_callback_cannot_cross_order_provider() -> None:

@@ -27,6 +27,7 @@ export const formatCapacityValue = (value: number | null, unit: string): string 
   if (value === null) return "暂无数据";
   if (unit === "%") return `${value.toFixed(1)}%`;
   if (unit === "ms") return value >= 1000 ? `${(value / 1000).toFixed(2)}s` : `${Math.round(value)}ms`;
+  if (unit === "s") return value >= 86_400 ? `${(value / 86_400).toFixed(1)} 天` : `${Math.round(value).toLocaleString("zh-CN")} 秒`;
   return `${Math.round(value).toLocaleString("zh-CN")} ${unit}`;
 };
 

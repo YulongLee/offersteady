@@ -111,6 +111,9 @@ class PaymentChannelService:
     def _masked(self, row: Mapping[str, object]) -> dict[str, object]:
         channel = str(row["channel"])
         secrets = self._decrypt(str(row["secret_config_ciphertext"])) if row.get("secret_config_ciphertext") else {}
+        acceptance = self.repository.payment_channel_acceptance(channel=channel) if hasattr(self.repository, "payment_channel_acceptance") else {
+            "notification": None, "authoritativeQuery": None,
+        }
         return {
             "channel": channel,
             "enabled": bool(row["enabled"]),
@@ -120,6 +123,7 @@ class PaymentChannelService:
             "validationStatus": str(row["validation_status"]),
             "validationErrors": list(row["validation_errors"]),
             "updatedAtMs": int(row["updated_at_ms"]),
+            "acceptance": acceptance,
         }
 
     def _fernet(self) -> Fernet:

@@ -24,6 +24,9 @@ class AlipayNotification:
     amount_cents: int
     paid: bool
     verified: bool
+    signature_verified: bool
+    app_identity_verified: bool
+    seller_identity_verified: bool
 
 
 @dataclass(frozen=True)
@@ -94,16 +97,17 @@ class AlipayPaymentProvider:
 
     def parse_notification(self, params: dict[str, str]) -> AlipayNotification:
         signature_verified = self.verify(params)
-        identity_verified = (
-            params.get("app_id", "") == (self.settings.alipay_app_id or "")
-            and params.get("seller_id", "") == (self.settings.alipay_seller_id or "")
-        )
+        app_identity_verified = params.get("app_id", "") == (self.settings.alipay_app_id or "")
+        seller_identity_verified = params.get("seller_id", "") == (self.settings.alipay_seller_id or "")
         return AlipayNotification(
             order_id=params.get("out_trade_no", ""),
             provider_trade_no=params.get("trade_no", ""),
             amount_cents=self._money_to_cents(params.get("total_amount", "0")),
             paid=params.get("trade_status", "").upper() in {"TRADE_SUCCESS", "TRADE_FINISHED"},
-            verified=signature_verified and identity_verified,
+            verified=signature_verified and app_identity_verified and seller_identity_verified,
+            signature_verified=signature_verified,
+            app_identity_verified=app_identity_verified,
+            seller_identity_verified=seller_identity_verified,
         )
 
     def query_order(self, *, order_id: str) -> AlipayOrderQuery:

@@ -2,6 +2,8 @@ const apiBase = (import.meta.env.VITE_ADMIN_API_BASE_URL || "").replace(/\/$/, "
 const adminTokenKey = "offersteady.admin.session";
 import type { TrendResponse } from "./analytics";
 import type { CapacityResponse } from "./capacity";
+import type { PaymentRevenueSummary } from "./payment-monitoring";
+import type { ServerHealthResponse } from "./server-health";
 
 type Envelope<T> = { data: T };
 
@@ -77,9 +79,14 @@ export const adminApi = {
   trends: (range: "7d" | "30d" | "90d") =>
     request<TrendResponse>(`/api/v1/admin/analytics/trends?range=${range}`),
   capacity: () => request<CapacityResponse>("/api/v1/admin/capacity"),
+  paymentRevenue: () => request<PaymentRevenueSummary>("/api/v1/admin/payments/revenue-summary"),
+  serverHealth: () => request<ServerHealthResponse>("/api/v1/admin/server-health"),
   observability: () => request<Record<string, unknown>>("/api/v1/admin/observability"),
   list: (resource: "users" | "orders" | "catalog-products" | "redemption-batches" | "payment-channels" | "materials" | "interviews" | "audit" | "admins", offset = 0) =>
     request<{ items: Record<string, unknown>[] }>(`/api/v1/admin/${resource}?limit=50&offset=${offset}`),
+  listOrders: (offset = 0, status?: string) => request<{ items: Record<string, unknown>[] }>(
+    `/api/v1/admin/orders?limit=50&offset=${offset}${status ? `&status=${encodeURIComponent(status)}` : ""}`,
+  ),
   action: (path: string, payload: Record<string, unknown>) =>
     request<Record<string, unknown>>(`/api/v1/admin${path}`, { method: "POST", body: JSON.stringify(payload) }),
   savePaymentChannel: (channel: string, payload: Record<string, unknown>) =>

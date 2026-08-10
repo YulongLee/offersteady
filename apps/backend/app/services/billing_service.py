@@ -386,6 +386,9 @@ class BillingService:
         verified: bool,
         paid: bool,
         provider: str = "mzfpay",
+        signature_verified: bool | None = None,
+        app_identity_verified: bool | None = None,
+        seller_identity_verified: bool | None = None,
     ) -> str:
         now_ms = _now_ms()
         if self.billing_repository is not None:
@@ -395,11 +398,21 @@ class BillingService:
                 "order_id": order_id,
                 "provider_trade_no": provider_trade_no,
                 "amount_cents": amount_cents,
-                "signature_verified": verified,
+                "signature_verified": verified if signature_verified is None else signature_verified,
+                "app_identity_verified": app_identity_verified,
+                "seller_identity_verified": seller_identity_verified,
                 "paid": paid,
                 "received_at_ms": now_ms,
             })
-        if not verified:
+        order_known: bool | None = None
+        amount_matches: bool | None = None
+        if signature_verified is False:
+            outcome = "invalid_signature"
+        elif app_identity_verified is False:
+            outcome = "app_identity_mismatch"
+        elif seller_identity_verified is False:
+            outcome = "seller_identity_mismatch"
+        elif not verified:
             outcome = "invalid_signature"
         elif not paid:
             outcome = "ignored_not_paid"
@@ -410,6 +423,8 @@ class BillingService:
                     if self.billing_repository is not None
                     else self.checkout_orders_by_id[order_id]
                 )
+                order_known = True
+                amount_matches = order.amount_cents == amount_cents
                 if order.provider != provider:
                     outcome = "provider_mismatch"
                 else:
@@ -420,11 +435,12 @@ class BillingService:
                     )
                     outcome = "paid" if order.status == "paid" else "amount_mismatch"
             except KeyError:
+                order_known = False
                 outcome = "unknown_order"
             except Exception:
                 outcome = "processing_failure"
         if self.billing_repository is not None:
-            if outcome in {"unknown_order", "amount_mismatch", "provider_mismatch", "processing_failure"}:
+            if outcome in {"unknown_order", "amount_mismatch", "provider_mismatch", "processing_failure", "invalid_signature", "app_identity_mismatch", "seller_identity_mismatch"}:
                 self.billing_repository.create_reconciliation_issue(
                     issue_type=outcome,
                     event_fingerprint=event_fingerprint,
@@ -435,6 +451,8 @@ class BillingService:
                 event_fingerprint=event_fingerprint,
                 outcome=outcome,
                 completed_at_ms=now_ms,
+                order_known=order_known,
+                amount_matches=amount_matches,
             )
         return outcome
 

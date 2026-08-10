@@ -197,6 +197,9 @@ async def handle_alipay_notify(
         verified=notification.verified,
         paid=notification.paid,
         provider=provider.provider_name,
+        signature_verified=notification.signature_verified,
+        app_identity_verified=notification.app_identity_verified,
+        seller_identity_verified=notification.seller_identity_verified,
     )
     return PlainTextResponse("success" if outcome in {"paid", "ignored_not_paid"} else "fail")
 

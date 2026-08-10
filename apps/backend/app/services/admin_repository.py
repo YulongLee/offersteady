@@ -352,6 +352,21 @@ class AdminRepository:
             "databaseConnectionLimit": int(database["database_connection_limit"] or 0),
         }
 
+    def payment_configuration_health(self) -> dict[str, int]:
+        row = self._one(
+            """
+            SELECT COUNT(*)::INTEGER AS configured_channels,
+                   COUNT(*) FILTER (WHERE validation_status = 'ready')::INTEGER AS ready_channels,
+                   COUNT(*) FILTER (WHERE enabled = TRUE)::INTEGER AS enabled_channels
+            FROM billing_payment_channel_configs
+            """
+        ) or {}
+        return {
+            "configuredChannels": int(row.get("configured_channels") or 0),
+            "readyChannels": int(row.get("ready_channels") or 0),
+            "enabledChannels": int(row.get("enabled_channels") or 0),
+        }
+
     def record_capacity_peak(self, *, at_ms: int, active_interviews: int) -> None:
         five_minute_bucket = at_ms - at_ms % 300_000
         local = datetime.fromtimestamp(at_ms / 1000, tz=timezone.utc).astimezone(ZoneInfo("Asia/Shanghai"))
@@ -606,15 +621,68 @@ class AdminRepository:
             (pattern, pattern, pattern, limit, offset),
         )
 
-    def list_orders(self, *, limit: int, offset: int) -> list[dict[str, Any]]:
+    def payment_revenue_summary(self) -> dict[str, Any]:
+        current = now_ms()
+        local = datetime.fromtimestamp(current / 1000, tz=timezone.utc).astimezone(ZoneInfo("Asia/Shanghai"))
+        start_ms = int(local.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
+        end_ms = start_ms + 86_400_000
+        row = self._one(
+            """
+            WITH bounds AS (SELECT %s::BIGINT AS start_ms, %s::BIGINT AS end_ms),
+            anomalous AS (
+              SELECT DISTINCT e.order_id
+              FROM billing_payment_callback_events e, bounds
+              WHERE e.first_received_at_ms >= bounds.start_ms
+                AND e.first_received_at_ms < bounds.end_ms
+                AND e.outcome NOT IN ('paid', 'ignored_not_paid')
+            )
+            SELECT
+              COUNT(*) FILTER (WHERE o.status = 'paid' AND o.paid_at_ms >= b.start_ms AND o.paid_at_ms < b.end_ms)::INTEGER AS paid_count,
+              COALESCE(SUM(o.amount_cents) FILTER (WHERE o.status = 'paid' AND o.paid_at_ms >= b.start_ms AND o.paid_at_ms < b.end_ms), 0)::INTEGER AS paid_amount_cents,
+              COUNT(*) FILTER (WHERE o.status = 'payment_pending' AND o.created_at_ms >= b.start_ms AND o.created_at_ms < b.end_ms)::INTEGER AS pending_count,
+              COALESCE(SUM(o.amount_cents) FILTER (WHERE o.status = 'payment_pending' AND o.created_at_ms >= b.start_ms AND o.created_at_ms < b.end_ms), 0)::INTEGER AS pending_amount_cents,
+              COUNT(*) FILTER (WHERE a.order_id IS NOT NULL AND o.status <> 'paid')::INTEGER AS anomalous_count,
+              COALESCE(SUM(o.amount_cents) FILTER (WHERE a.order_id IS NOT NULL AND o.status <> 'paid'), 0)::INTEGER AS anomalous_amount_cents,
+              COUNT(*) FILTER (WHERE o.status IN ('expired','failed') AND o.created_at_ms >= b.start_ms AND o.created_at_ms < b.end_ms)::INTEGER AS closed_count,
+              COALESCE(SUM(o.amount_cents) FILTER (WHERE o.status IN ('expired','failed') AND o.created_at_ms >= b.start_ms AND o.created_at_ms < b.end_ms), 0)::INTEGER AS closed_amount_cents
+            FROM billing_checkout_orders o
+            CROSS JOIN bounds b
+            LEFT JOIN anomalous a ON a.order_id = o.order_id
+            """,
+            (start_ms, end_ms),
+        ) or {}
+        category = lambda prefix: {
+            "count": int(row.get(f"{prefix}_count") or 0),
+            "amountCents": int(row.get(f"{prefix}_amount_cents") or 0),
+        }
+        return {
+            "timezone": "Asia/Shanghai", "startedAtMs": start_ms, "endsAtMs": end_ms,
+            "generatedAtMs": current, "source": "live_orders",
+            "paid": category("paid"), "pending": category("pending"),
+            "anomalous": category("anomalous"), "closed": category("closed"),
+        }
+
+    def list_orders(self, *, limit: int, offset: int, status: str | None = None) -> list[dict[str, Any]]:
         return self._all(
             """
-            SELECT order_id, user_id, amount_cents, currency, channel, provider, status,
-                   provider_trade_no, failure_reason, created_at_ms, updated_at_ms, paid_at_ms
-            FROM billing_checkout_orders
-            ORDER BY created_at_ms DESC LIMIT %s OFFSET %s
+            SELECT o.order_id, o.user_id, o.amount_cents, o.currency, o.channel, o.provider, o.status,
+                   CASE WHEN o.provider_trade_no IS NULL THEN NULL ELSE '••••' || RIGHT(o.provider_trade_no, 8) END AS provider_trade_hint,
+                   o.failure_reason, o.created_at_ms, o.updated_at_ms, o.paid_at_ms,
+                   e.outcome AS callback_outcome, e.signature_verified,
+                   e.app_identity_verified, e.seller_identity_verified,
+                   e.order_known, e.amount_matches, e.last_received_at_ms AS callback_received_at_ms
+            FROM billing_checkout_orders o
+            LEFT JOIN LATERAL (
+              SELECT outcome, signature_verified, app_identity_verified,
+                     seller_identity_verified, order_known, amount_matches, last_received_at_ms
+              FROM billing_payment_callback_events
+              WHERE order_id = o.order_id
+              ORDER BY last_received_at_ms DESC LIMIT 1
+            ) e ON TRUE
+            WHERE (%s::TEXT IS NULL OR o.status = %s)
+            ORDER BY o.created_at_ms DESC LIMIT %s OFFSET %s
             """,
-            (limit, offset),
+            (status, status, limit, offset),
         )
 
     def list_catalog_products(self, *, limit: int, offset: int) -> list[dict[str, Any]]:
@@ -959,6 +1027,7 @@ class AdminRepository:
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0015_admin_redemption_batches.sql",
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0017_admin_operations_analytics.sql",
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0018_admin_managed_billing_catalog.sql",
+            Path(REPO_ROOT) / "apps/backend/migrations/versions/0020_admin_payment_diagnostics.sql",
         ]
         with self.connect() as connection, connection.cursor() as cursor:
             for migration in migrations:

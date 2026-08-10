@@ -24,6 +24,7 @@ from app.services.admin_repository import AdminRepository
 from app.services.admin_analytics import AdminAnalyticsService
 from app.services.admin_service import AdminPrincipal, AdminService, hash_client_value
 from app.services.alipay_provider import AlipayPaymentProvider
+from app.services.alipay_provider import AlipayOrderQuery
 from app.services.billing_service import BillingService
 from app.services.document_processing import DocumentProcessingService
 from app.services.realtime_speech_service import RealtimeSpeechService
@@ -240,6 +241,17 @@ def capacity(
     return {"data": monitor.report()}
 
 
+@admin_router.get("/server-health")
+def server_health(
+    request: Request,
+    principal: Annotated[AdminPrincipal, Depends(permission("observability.read"))],
+):
+    monitor = getattr(request.app.state, "capacity_monitor", None)
+    if monitor is None:
+        raise HTTPException(status_code=503, detail="server_health_monitor_unavailable")
+    return {"data": monitor.server_report()}
+
+
 @admin_router.get("/users")
 def users(
     principal: Annotated[AdminPrincipal, Depends(permission("users.read"))],
@@ -256,9 +268,17 @@ def orders(
     principal: Annotated[AdminPrincipal, Depends(permission("billing.read"))],
     limit: int = Query(default=50, ge=1),
     offset: int = Query(default=0, ge=0),
+    status: str | None = Query(default=None, pattern="^(payment_pending|expired|paid|failed)$"),
 ):
     limit, offset = _page(limit, offset)
-    return {"data": {"items": admin_service().repository.list_orders(limit=limit, offset=offset), "limit": limit, "offset": offset}}
+    return {"data": {"items": admin_service().repository.list_orders(limit=limit, offset=offset, status=status), "limit": limit, "offset": offset}}
+
+
+@admin_router.get("/payments/revenue-summary")
+def payment_revenue_summary(
+    principal: Annotated[AdminPrincipal, Depends(permission("billing.read"))],
+):
+    return {"data": admin_service().repository.payment_revenue_summary()}
 
 
 @admin_router.get("/payment-channels")
@@ -422,6 +442,32 @@ def _run_action(
             result="failed", details={"error_code": exc.__class__.__name__},
         )
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+def reconcile_authoritative_order(
+    *, order_id: str, order: dict[str, Any], authority: AlipayOrderQuery, billing: BillingService,
+) -> dict[str, Any]:
+    """Apply a signed provider result only when every financial invariant matches."""
+    if not authority.verified:
+        raise PermissionError("payment_provider_response_not_verified")
+    if authority.order_id != order_id:
+        raise PermissionError("payment_provider_order_mismatch")
+    if not authority.paid:
+        return {
+            "order_id": order_id, "provider": order["provider"], "order_status": order["status"],
+            "provider_status": authority.provider_status, "status": "provider_reports_unpaid",
+        }
+    if authority.amount_cents != int(order["amount_cents"]):
+        raise PermissionError("payment_provider_amount_mismatch")
+    reconciled = billing.confirm_checkout_paid(
+        order_id=order_id, amount_cents=authority.amount_cents,
+        provider_trade_no=authority.provider_trade_no,
+    )
+    return {
+        "order_id": order_id, "provider": order["provider"], "order_status": reconciled.status,
+        "provider_status": authority.provider_status,
+        "status": "reconciled" if reconciled.status == "paid" else "amount_mismatch",
+    }
 
 
 @admin_router.post("/catalog-products/{product_id}")
@@ -638,28 +684,7 @@ def reconcile_order(
         if billing.billing_repository is None:
             raise RuntimeError("payment_configuration_unavailable")
         authority = PaymentChannelService(get_settings(), billing.billing_repository).provider("alipay", require_enabled=False).query_order(order_id=order_id)
-        if not authority.verified:
-            raise PermissionError("payment_provider_response_not_verified")
-        if not authority.paid:
-            return {
-                "order_id": order_id,
-                "provider": order["provider"],
-                "order_status": order["status"],
-                "provider_status": authority.provider_status,
-                "status": "provider_reports_unpaid",
-            }
-        reconciled = billing.confirm_checkout_paid(
-            order_id=order_id,
-            amount_cents=authority.amount_cents,
-            provider_trade_no=authority.provider_trade_no,
-        )
-        return {
-            "order_id": order_id,
-            "provider": order["provider"],
-            "order_status": reconciled.status,
-            "provider_status": authority.provider_status,
-            "status": "reconciled" if reconciled.status == "paid" else "amount_mismatch",
-        }
+        return reconcile_authoritative_order(order_id=order_id, order=order, authority=authority, billing=billing)
     return _run_action(
         request=request, principal=principal, payload=payload, action="payments.reconcile",
         resource_type="order", resource_id=order_id, callback=reconcile,

@@ -47,7 +47,7 @@ SAFE_DETAIL_KEYS = frozenset({
     "published", "catalog_version",
 })
 HIGH_RISK_PERMISSIONS = frozenset({
-    "users.suspend", "billing.adjust", "catalog.manage", "redemptions.generate", "payments.manage", "admins.manage",
+    "users.suspend", "billing.adjust", "catalog.manage", "redemptions.generate", "payments.manage", "payments.reconcile", "admins.manage",
 })
 
 

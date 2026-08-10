@@ -4,12 +4,15 @@ import { adminApi, isAdminAuthenticationError } from "./api";
 import { buildLinePath, chartDomain, formatTrendChange, formatTrendValue, type TrendMetric, type TrendResponse } from "./analytics";
 import { capacityLevelLabel, formatCapacityValue, type CapacityMetric, type CapacityResponse } from "./capacity";
 import { paymentChannelStatus } from "./payment-channel-status";
+import { diagnosticLabel, formatCny, type PaymentRevenueSummary } from "./payment-monitoring";
+import { formatUptime, type ServerHealthResponse } from "./server-health";
 
-type View = "dashboard" | "users" | "orders" | "payments" | "pricing" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
+type View = "dashboard" | "server" | "users" | "orders" | "payments" | "pricing" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
 type Row = Record<string, unknown>;
 
 const views: { id: View; label: string; eyebrow: string; permission: string }[] = [
   { id: "dashboard", label: "运营总览", eyebrow: "OVERVIEW", permission: "observability.read" },
+  { id: "server", label: "服务器监控", eyebrow: "SERVER", permission: "observability.read" },
   { id: "users", label: "用户与权益", eyebrow: "CUSTOMERS", permission: "users.read" },
   { id: "orders", label: "订单与支付", eyebrow: "BILLING", permission: "billing.read" },
   { id: "payments", label: "支付设置", eyebrow: "PAYMENTS", permission: "payments.manage" },
@@ -102,6 +105,8 @@ function Dashboard({ data }: { data: Row }) {
   const [trendLoading, setTrendLoading] = useState(true);
   const [capacity, setCapacity] = useState<CapacityResponse | null>(null);
   const [capacityError, setCapacityError] = useState("");
+  const [revenue, setRevenue] = useState<PaymentRevenueSummary | null>(null);
+  const [revenueError, setRevenueError] = useState("");
   const loadTrends = async () => {
     setTrendLoading(true);
     setTrendError("");
@@ -134,8 +139,26 @@ function Dashboard({ data }: { data: Row }) {
       window.clearInterval(timer);
     };
   }, []);
+  useEffect(() => {
+    let active = true;
+    const loadRevenue = async () => {
+      try { const response = await adminApi.paymentRevenue(); if (active) { setRevenue(response); setRevenueError(""); } }
+      catch (error) { if (active) { setRevenue(null); setRevenueError(error instanceof Error ? error.message : "支付实况暂不可用"); } }
+    };
+    void loadRevenue();
+    const timer = window.setInterval(() => void loadRevenue(), 15_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
   return (
     <>
+      <section className="revenue-section">
+        <div className="trend-heading"><div><p className="eyebrow">LIVE SETTLEMENT</p><h2>今日支付实况</h2><p>按 Asia/Shanghai 自然日直接读取订单，不使用延迟聚合。</p></div><small>{revenue ? `更新于 ${new Date(revenue.generatedAtMs).toLocaleTimeString("zh-CN")}` : "正在读取"}</small></div>
+        {revenueError && <div className="revenue-error">{revenueError}，请使用页面右上角“刷新”重试。</div>}
+        <div className="revenue-grid">{(["paid", "pending", "anomalous", "closed"] as const).map(key => {
+          const names = { paid: "实收金额", pending: "待支付", anomalous: "支付异常", closed: "已关闭" };
+          return <article className={`revenue-card ${key}`} key={key}><small>{names[key]}</small><strong>{revenue ? formatCny(revenue[key].amountCents) : "—"}</strong><span>{revenue ? `${revenue[key].count} 笔` : "数据不可用"}</span></article>;
+        })}</div>
+      </section>
       <div className="metric-grid">
         {entries.map(([key, value], index) => (
           <article className="metric" key={key}>
@@ -182,6 +205,32 @@ function Dashboard({ data }: { data: Row }) {
       </section>
     </>
   );
+}
+
+function OrdersPanel({ rows, permissions, onChanged }: { rows: Row[]; permissions: string[]; onChanged: () => void }) {
+  return <>
+    <section className="orders-intro"><div><p className="eyebrow">PAYMENT DIAGNOSTICS</p><h3>订单与回调诊断</h3><p>待支付订单可执行渠道权威查单；只有订单号、金额与支付状态全部匹配后才会发放权益。</p></div><div className="diagnostic-legend"><span>签名</span><span>应用</span><span>商户</span><span>订单</span><span>金额</span></div></section>
+    {rows.length ? <div className="table-wrap"><table><thead><tr><th>订单</th><th>金额</th><th>渠道 / 状态</th><th>回调结果</th><th>签名</th><th>应用</th><th>商户</th><th>订单</th><th>金额</th><th>创建时间</th></tr></thead><tbody>{rows.map(row => <tr key={String(row.order_id)}><td>{String(row.order_id)}</td><td>{formatCny(Number(row.amount_cents))}</td><td>{display(row.channel)} / {display(row.status)}</td><td>{display(row.callback_outcome)}</td>{["signature_verified", "app_identity_verified", "seller_identity_verified", "order_known", "amount_matches"].map(key => <td className={row[key] === false ? "diagnostic-failed" : row[key] === true ? "diagnostic-passed" : ""} key={key}>{diagnosticLabel(row[key])}</td>)}<td>{row.created_at_ms ? new Date(Number(row.created_at_ms)).toLocaleString("zh-CN") : "—"}</td></tr>)}</tbody></table></div> : <div className="empty">当前范围内没有订单</div>}
+    <ActionPanel view="orders" rows={rows} permissions={permissions} onChanged={onChanged} />
+  </>;
+}
+
+function ServerMonitor() {
+  const [health, setHealth] = useState<ServerHealthResponse | null>(null);
+  const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  useEffect(() => {
+    let active = true;
+    const load = async () => { try { const response = await adminApi.serverHealth(); if (active) { setHealth(response); setError(""); } } catch (reason) { if (active) setError(reason instanceof Error ? reason.message : "服务器状态暂不可用"); } };
+    void load(); const timer = window.setInterval(() => void load(), 15_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [reloadKey]);
+  if (!health) return error ? <div className="monitor-error"><span>{error}</span><button onClick={() => setReloadKey(value => value + 1)}>重新加载</button></div> : <div className="loading">正在读取服务器状态...</div>;
+  return <>
+    <section className="server-hero"><div><p className="eyebrow">INFRASTRUCTURE HEALTH</p><h2>服务状态：{health.overall === "healthy" ? "正常" : health.overall === "warning" ? "需关注" : "异常"}</h2><p>每 15 秒刷新，只展示只读运行指标，不暴露密钥、连接串或用户内容。</p></div><div><strong>{formatUptime(health.supporting.uptimeSeconds)}</strong><small>主机运行时长</small><span>{display(health.supporting.requestsPerMinute)} 请求/分钟</span></div></section>
+    <section className="capacity-section"><div className="trend-heading"><div><p className="eyebrow">HOST RESOURCES</p><h2>主机资源</h2></div><small>更新于 {new Date(health.generatedAtMs).toLocaleString("zh-CN")}</small></div><div className="capacity-grid server-resources">{health.resources.map(metric => <CapacityCard metric={metric} key={metric.key} />)}</div></section>
+    <section className="dependency-section"><p className="eyebrow">DEPENDENCIES</p><h2>依赖服务</h2><div className="dependency-grid">{health.dependencies.map(item => <article className={item.status} key={item.key}><span className="status-dot" /><div><strong>{item.label}</strong><p>{item.detail}</p></div><small>{item.latencyMs === null ? "—" : `${item.latencyMs} ms`}</small></article>)}</div></section>
+  </>;
 }
 
 function CapacityCard({ metric }: { metric: CapacityMetric }) {
@@ -615,6 +664,7 @@ function PaymentPanel({ rows, onChanged, onAuthenticationExpired }: { rows: Row[
       <div className="payment-card-head"><div><span>{channel === "wechat" ? "微信支付" : "支付宝"}</span><small>配置 v{String(row.configVersion)} · 更新于 {status.updatedAtLabel}</small></div><span className={`status-badge ${status.active ? "active" : "inactive"}`}>{status.usageLabel}</span></div>
       <section className={`payment-usage ${status.active ? "active" : "inactive"}`} aria-live="polite"><span className="status-dot" /><div><strong>{status.usageLabel}</strong><p>{status.usageDescription}</p></div></section>
       <div className="payment-readiness"><div><span className={`status-badge ${status.ready ? "ready" : "draft"}`}>{status.readinessLabel}</span><p>{status.readinessDescription}</p></div><label className="payment-toggle"><span>允许用户使用</span><input type="checkbox" role="switch" aria-label={`${channel === "wechat" ? "微信支付" : "支付宝"}用户端使用开关`} checked={status.active} disabled={busy === channel || (!row.enabled && !status.ready)} onChange={event => void activate(channel, event.target.checked)} /><span className="toggle-track" aria-hidden="true"><span /></span></label></div>
+      <div className="acceptance-panel"><strong>链路验收状态</strong>{(["notification", "authoritativeQuery"] as const).map(key => { const item = (row.acceptance as Record<string, Record<string, unknown> | null> | undefined)?.[key]; return <div key={key}><span>{key === "notification" ? "异步通知" : "权威查单"}</span><b className={String(item?.status || "unknown")}>{item ? (item.status === "passed" ? "通过" : "失败") : "尚未验证"}</b><small>{item?.atMs ? new Date(Number(item.atMs)).toLocaleString("zh-CN") : "完成一次真实链路后显示"}</small></div>; })}</div>
       {status.validationErrors.length > 0 ? <div className="payment-errors"><strong>需要修正</strong><ul>{status.validationErrors.map(error => <li key={error}>{error}</li>)}</ul></div> : null}
       {draft ? fields.public.map(key => <label key={key}>{paymentLabels[key]}<input value={draft.publicConfig[key] || ""} onChange={event => updatePublic(channel, key, event.target.value)} /></label>) : null}
       {draft ? fields.secret.map(key => <label key={key}>{paymentLabels[key]}<textarea value={draft.secrets[key] || ""} placeholder={secretState[key]?.configured ? "已安全配置；留空保持不变" : "尚未配置"} onChange={event => updateSecret(channel, key, event.target.value)} /></label>) : null}
@@ -665,7 +715,7 @@ export function App() {
       if (target === "dashboard") {
         const nextDashboard = await adminApi.dashboard();
         if (sequence === loadSequence.current) setDashboardData(nextDashboard);
-      } else {
+      } else if (target !== "server") {
         const resource = target === "redemptions" ? "redemption-batches" : target === "pricing" ? "catalog-products" : target === "payments" ? "payment-channels" : target;
         const nextRows = (await adminApi.list(resource, offset)).items;
         if (sequence === loadSequence.current) setRows(Array.isArray(nextRows) ? nextRows : []);
@@ -698,7 +748,7 @@ export function App() {
       <main className="workspace">
         <header><div><p className="eyebrow">{current.eyebrow}</p><h1>{current.label}</h1></div><div className="header-actions"><span>{new Date().toLocaleDateString("zh-CN")}</span><button onClick={() => void load(view)}>刷新</button><button onClick={() => adminApi.logout().then(() => { sessionRequest.current = null; setAuthenticated(false); })}>退出</button></div></header>
         {error && <div className="alert">{error}</div>}
-        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "pricing" ? <PricingPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "payments" ? <PaymentPanel rows={rows} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : <>
+        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} /> : view === "server" ? <ServerMonitor /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "pricing" ? <PricingPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "payments" ? <PaymentPanel rows={rows} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "orders" ? <OrdersPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : <>
           <Table rows={rows} />
           <div className="pagination"><button disabled={offset === 0} onClick={() => setOffset(value => Math.max(0, value - 50))}>上一页</button><span>第 {offset / 50 + 1} 页</span><button disabled={rows.length < 50} onClick={() => setOffset(value => value + 50)}>下一页</button></div>
           <ActionPanel view={view} rows={rows} permissions={permissions} onChanged={() => void load(view, true)} />

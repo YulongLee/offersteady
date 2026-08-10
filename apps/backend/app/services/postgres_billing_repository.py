@@ -71,6 +71,51 @@ class PostgresBillingRepository:
                 raise KeyError(channel)
             return dict(row)
 
+    def payment_channel_acceptance(self, *, channel: str) -> dict[str, object]:
+        provider = channel
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT outcome, signature_verified, app_identity_verified,
+                       seller_identity_verified, last_received_at_ms
+                FROM billing_payment_callback_events
+                WHERE provider = %s
+                ORDER BY last_received_at_ms DESC LIMIT 1
+                """,
+                (provider,),
+            )
+            callback = cursor.fetchone()
+            try:
+                cursor.execute(
+                    """
+                    SELECT result, safe_details_json, created_at_ms
+                    FROM admin_audit_events
+                    WHERE action = 'payments.reconcile'
+                      AND safe_details_json->>'provider' = %s
+                    ORDER BY created_at_ms DESC LIMIT 1
+                    """,
+                    (provider,),
+                )
+                query = cursor.fetchone()
+            except psycopg.errors.UndefinedTable:
+                connection.rollback()
+                query = None
+        return {
+            "notification": None if callback is None else {
+                "status": "passed" if callback["outcome"] == "paid" else "failed",
+                "outcome": str(callback["outcome"]),
+                "signatureVerified": callback["signature_verified"],
+                "appIdentityVerified": callback["app_identity_verified"],
+                "sellerIdentityVerified": callback["seller_identity_verified"],
+                "atMs": int(callback["last_received_at_ms"]),
+            },
+            "authoritativeQuery": None if query is None else {
+                "status": "passed" if query["result"] == "success" and dict(query["safe_details_json"]).get("status") in {"reconciled", "already_reconciled"} else "failed",
+                "outcome": str(dict(query["safe_details_json"]).get("status", query["result"])),
+                "atMs": int(query["created_at_ms"]),
+            },
+        }
+
     def save_payment_channel_config(
         self,
         *,
@@ -517,8 +562,9 @@ class PostgresBillingRepository:
                 """
                 INSERT INTO billing_payment_callback_events (
                   event_fingerprint, provider, order_id, provider_trade_no, amount_cents,
-                  signature_verified, paid, outcome, first_received_at_ms, last_received_at_ms
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,'received',%s,%s)
+                  signature_verified, app_identity_verified, seller_identity_verified,
+                  paid, outcome, first_received_at_ms, last_received_at_ms
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'received',%s,%s)
                 ON CONFLICT (event_fingerprint) DO UPDATE SET
                   delivery_count = billing_payment_callback_events.delivery_count + 1,
                   last_received_at_ms = EXCLUDED.last_received_at_ms
@@ -526,7 +572,8 @@ class PostgresBillingRepository:
                 """,
                 (
                     event["event_fingerprint"], event["provider"], event["order_id"], event["provider_trade_no"],
-                    event["amount_cents"], event["signature_verified"], event["paid"],
+                    event["amount_cents"], event["signature_verified"], event.get("app_identity_verified"),
+                    event.get("seller_identity_verified"), event["paid"],
                     event["received_at_ms"], event["received_at_ms"],
                 ),
             )
@@ -534,11 +581,11 @@ class PostgresBillingRepository:
             connection.commit()
             return row
 
-    def complete_payment_callback(self, *, event_fingerprint: str, outcome: str, completed_at_ms: int) -> None:
+    def complete_payment_callback(self, *, event_fingerprint: str, outcome: str, completed_at_ms: int, order_known: bool | None = None, amount_matches: bool | None = None) -> None:
         with self._connect() as connection, connection.cursor() as cursor:
             cursor.execute(
-                "UPDATE billing_payment_callback_events SET outcome = %s, completed_at_ms = %s WHERE event_fingerprint = %s",
-                (outcome, completed_at_ms, event_fingerprint),
+                "UPDATE billing_payment_callback_events SET outcome = %s, completed_at_ms = %s, order_known = %s, amount_matches = %s WHERE event_fingerprint = %s",
+                (outcome, completed_at_ms, order_known, amount_matches, event_fingerprint),
             )
             connection.commit()
 
@@ -665,6 +712,7 @@ class PostgresBillingRepository:
             Path(REPO_ROOT / "apps/backend/migrations/versions/0013_official_alipay_payments.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0018_admin_managed_billing_catalog.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0019_admin_payment_channels.sql"),
+            Path(REPO_ROOT / "apps/backend/migrations/versions/0020_admin_payment_diagnostics.sql"),
         )
         with self._connect() as connection, connection.cursor() as cursor:
             cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ("offersteady:billing-migrations",))

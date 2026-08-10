@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from collections import deque
 from pathlib import Path
 from threading import Lock
@@ -46,7 +47,7 @@ class RequestWindow:
         self._lock = Lock()
 
     def record(self, *, path: str, elapsed_ms: float, status_code: int) -> None:
-        if path in {"/healthz", "/api/v1/admin/capacity"}:
+        if path in {"/healthz", "/api/v1/admin/capacity", "/api/v1/admin/server-health"}:
             return
         current = _now_ms()
         with self._lock:
@@ -81,6 +82,8 @@ class AdminCapacityMonitor:
         self._lock = Lock()
         self._cpu_lock = Lock()
         self._previous_cpu: tuple[int, float] | None = None
+        self._server_cache: dict[str, Any] | None = None
+        self._server_cache_at_ms = 0
         self._redis = (
             redis.Redis.from_url(
                 settings.redis_url,
@@ -133,6 +136,9 @@ class AdminCapacityMonitor:
             ("activeAudioStreams", "活跃 ASR 音频流", "路", self.settings.admin_capacity_audio_streams_warning, self.settings.admin_capacity_audio_streams_critical, "最近 30 秒收到真实音频帧的去重音轨。"),
             ("cpuPercent", "后端容器 CPU", "%", self.settings.admin_capacity_cpu_warning_percent, self.settings.admin_capacity_cpu_critical_percent, "相对容器 CPU 配额的使用率。"),
             ("memoryPercent", "后端容器内存", "%", self.settings.admin_capacity_memory_warning_percent, self.settings.admin_capacity_memory_critical_percent, "相对容器内存上限的使用率。"),
+            ("diskPercent", "服务器磁盘", "%", 75, 90, "应用所在文件系统的整体使用率，不扫描文件内容。"),
+            ("loadAverage1m", "系统 1 分钟负载", "load", None, None, "Linux 系统一分钟平均负载。"),
+            ("uptimeSeconds", "服务器运行时长", "s", None, None, "Linux 主机或容器可见的运行时长。"),
             ("apiP95Ms", "API P95", "ms", self.settings.admin_capacity_api_p95_warning_ms, self.settings.admin_capacity_api_p95_critical_ms, "最近 5 分钟后端请求耗时 P95。"),
             ("apiErrorRate", "API 5xx 错误率", "%", self.settings.admin_capacity_error_rate_warning_percent, self.settings.admin_capacity_error_rate_critical_percent, "最近 5 分钟服务端错误占比。"),
             ("databaseConnections", "数据库连接", "条", database_limit * 0.7 if database_limit else None, database_limit * 0.9 if database_limit else None, "当前数据库连接数及其最大连接配额。"),
@@ -162,6 +168,37 @@ class AdminCapacityMonitor:
                 "databaseConnectionLimit": database_limit,
             },
         }
+
+    def server_report(self) -> dict[str, Any]:
+        current_ms = _now_ms()
+        with self._lock:
+            if self._server_cache is not None and current_ms - self._server_cache_at_ms < 10_000:
+                return self._server_cache
+        capacity = self.report()
+        allowed = {"cpuPercent", "memoryPercent", "diskPercent", "loadAverage1m", "uptimeSeconds"}
+        resources = [item for item in capacity["metrics"] if item["key"] in allowed]
+        current = {item["key"]: item["value"] for item in resources}
+        dependencies = self._dependency_health()
+        report = {
+            "generatedAtMs": _now_ms(),
+            "sampleIntervalSeconds": capacity["sampleIntervalSeconds"],
+            "windowMinutes": capacity["windowMinutes"],
+            "resources": resources,
+            "dependencies": dependencies,
+            "overall": "critical" if any(item["status"] == "critical" for item in dependencies)
+                or any(item["level"] == "critical" for item in resources)
+                else "warning" if any(item["status"] in {"warning", "unavailable"} for item in dependencies)
+                or any(item["level"] in {"warning", "unavailable"} for item in resources)
+                else "healthy",
+            "supporting": {
+                "uptimeSeconds": current.get("uptimeSeconds"),
+                "requestsPerMinute": capacity["supporting"].get("requestsPerMinute"),
+            },
+        }
+        with self._lock:
+            self._server_cache = report
+            self._server_cache_at_ms = current_ms
+        return report
 
     def _safe_database_counts(self) -> dict[str, int | None]:
         try:
@@ -215,7 +252,85 @@ class AdminCapacityMonitor:
         return {
             "cpuPercent": self._cpu_percent(),
             "memoryPercent": self._memory_percent(),
+            "diskPercent": self._disk_percent(),
+            "loadAverage1m": self._load_average(),
+            "uptimeSeconds": self._uptime_seconds(),
         }
+
+    def _dependency_health(self) -> list[dict[str, Any]]:
+        result = [{"key": "backend", "label": "Backend", "status": "healthy", "latencyMs": 0, "detail": "应用进程正在提供服务"}]
+        started = monotonic()
+        try:
+            counts = self.repository.capacity_counts()
+            ratio = (counts["databaseConnections"] / counts["databaseConnectionLimit"] * 100) if counts.get("databaseConnectionLimit") else 0
+            result.append({
+                "key": "postgresql", "label": "PostgreSQL",
+                "status": "critical" if ratio >= 90 else "warning" if ratio >= 70 else "healthy",
+                "latencyMs": round((monotonic() - started) * 1000, 2),
+                "detail": f"连接 {counts['databaseConnections']}/{counts['databaseConnectionLimit']}",
+            })
+        except Exception:
+            result.append({"key": "postgresql", "label": "PostgreSQL", "status": "unavailable", "latencyMs": None, "detail": "数据库探针不可用"})
+        if self._redis is None:
+            result.append({"key": "redis", "label": "Redis", "status": "unavailable", "latencyMs": None, "detail": "Redis 未配置"})
+        else:
+            started = monotonic()
+            try:
+                self._redis.ping()
+                result.append({"key": "redis", "label": "Redis", "status": "healthy", "latencyMs": round((monotonic() - started) * 1000, 2), "detail": "只读 PING 正常"})
+            except Exception:
+                result.append({"key": "redis", "label": "Redis", "status": "unavailable", "latencyMs": None, "detail": "Redis 探针不可用"})
+        try:
+            health = self.repository.analytics_health(expected_since_ms=_now_ms() - 86_400_000)
+            latest = health.get("lastSuccessAtMs")
+            delayed = latest is None or int(latest) < _now_ms() - 2 * 60 * 60 * 1000
+            result.append({
+                "key": "analytics", "label": "运营分析任务", "status": "warning" if delayed else "healthy",
+                "latencyMs": None, "detail": "聚合延迟" if delayed else "最近聚合正常", "lastSuccessAtMs": latest,
+            })
+        except Exception:
+            result.append({"key": "analytics", "label": "运营分析任务", "status": "unavailable", "latencyMs": None, "detail": "聚合状态不可用"})
+        started = monotonic()
+        try:
+            payment = self.repository.payment_configuration_health()
+            configured = payment["configuredChannels"]
+            ready = payment["readyChannels"]
+            result.append({
+                "key": "payment_config", "label": "支付配置服务",
+                "status": "healthy" if configured >= 2 else "warning",
+                "latencyMs": round((monotonic() - started) * 1000, 2),
+                "detail": f"已配置 {configured} 个渠道 · 可启用 {ready} 个",
+            })
+        except Exception:
+            result.append({"key": "payment_config", "label": "支付配置服务", "status": "unavailable", "latencyMs": None, "detail": "支付配置探针不可用"})
+        request_summary = self.requests.summary()
+        error_rate = request_summary["apiErrorRate"]
+        p95 = request_summary["apiP95Ms"]
+        status = "critical" if error_rate >= self.settings.admin_capacity_error_rate_critical_percent or p95 >= self.settings.admin_capacity_api_p95_critical_ms else "warning" if error_rate >= self.settings.admin_capacity_error_rate_warning_percent or p95 >= self.settings.admin_capacity_api_p95_warning_ms else "healthy"
+        result.append({"key": "api", "label": "API 质量", "status": status, "latencyMs": p95, "detail": f"5xx {error_rate:.1f}% · P95 {p95:.0f}ms"})
+        return result
+
+    @staticmethod
+    def _disk_percent() -> float | None:
+        try:
+            usage = shutil.disk_usage("/")
+            return round(usage.used * 100 / usage.total, 2) if usage.total else None
+        except OSError:
+            return None
+
+    @staticmethod
+    def _load_average() -> float | None:
+        try:
+            return round(float(os.getloadavg()[0]), 2)
+        except (OSError, AttributeError):
+            return None
+
+    @staticmethod
+    def _uptime_seconds() -> float | None:
+        try:
+            return round(float(Path("/proc/uptime").read_text(encoding="ascii").split()[0]), 0)
+        except (OSError, ValueError, IndexError):
+            return None
 
     def _cpu_percent(self) -> float | None:
         try:
