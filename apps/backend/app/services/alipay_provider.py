@@ -147,7 +147,7 @@ class AlipayPaymentProvider:
 
     def verify(self, params: dict[str, str]) -> bool:
         signature = params.get("sign", "")
-        return self._verify_signature(self._canonical(params), signature)
+        return self._verify_signature(self._notification_canonical(params), signature)
 
     def _verify_signature(self, content: str, signature: str) -> bool:
         if not signature or not self.settings.alipay_public_key:
@@ -174,14 +174,23 @@ class AlipayPaymentProvider:
             password=None,
         )
         signature = private_key.sign(
-            self._canonical(params).encode("utf-8"),
+            self._request_canonical(params).encode("utf-8"),
             padding.PKCS1v15(),
             hashes.SHA256(),
         )
         return b64encode(signature).decode("ascii")
 
     @staticmethod
-    def _canonical(params: dict[str, str]) -> str:
+    def _request_canonical(params: dict[str, str]) -> str:
+        filtered = {
+            key: str(value)
+            for key, value in params.items()
+            if key != "sign" and value is not None and str(value) != ""
+        }
+        return "&".join(f"{key}={filtered[key]}" for key in sorted(filtered))
+
+    @staticmethod
+    def _notification_canonical(params: dict[str, str]) -> str:
         filtered = {
             key: str(value)
             for key, value in params.items()

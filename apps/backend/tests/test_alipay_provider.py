@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from base64 import b64encode
+from base64 import b64decode, b64encode
 from json import dumps
 from urllib.parse import parse_qs, urlparse
 
@@ -45,15 +45,41 @@ def signed_notification(provider: AlipayPaymentProvider, private_key: object, **
         **overrides,
     }
     signature = private_key.sign(
-        provider._canonical(params).encode(),
+        _notification_canonical(params).encode(),
         padding.PKCS1v15(),
         hashes.SHA256(),
     )
     return {**params, "sign_type": "RSA2", "sign": b64encode(signature).decode()}
 
 
+def _request_canonical(params: dict[str, str]) -> str:
+    return "&".join(
+        f"{key}={params[key]}"
+        for key in sorted(params)
+        if key != "sign" and params[key] != ""
+    )
+
+
+def _notification_canonical(params: dict[str, str]) -> str:
+    return "&".join(
+        f"{key}={params[key]}"
+        for key in sorted(params)
+        if key not in {"sign", "sign_type"} and params[key] != ""
+    )
+
+
+def _assert_request_signature(private_key: object, params: dict[str, str]) -> None:
+    assert "sign_type=RSA2" in _request_canonical(params)
+    private_key.public_key().verify(
+        b64decode(params["sign"]),
+        _request_canonical(params).encode(),
+        padding.PKCS1v15(),
+        hashes.SHA256(),
+    )
+
+
 def test_alipay_checkout_uses_official_gateway_and_rsa2() -> None:
-    provider, _ = alipay_fixture()
+    provider, private_key = alipay_fixture()
     payment_url = provider.payment_url(
         order_id="official-order-synthetic",
         product_name="300积分",
@@ -63,7 +89,7 @@ def test_alipay_checkout_uses_official_gateway_and_rsa2() -> None:
     params = {key: values[0] for key, values in parse_qs(urlparse(payment_url).query).items()}
     assert params["method"] == "alipay.trade.page.pay"
     assert params["sign_type"] == "RSA2"
-    assert provider.verify(params)
+    _assert_request_signature(private_key, params)
 
 
 def test_alipay_notification_requires_signature_and_merchant_identity() -> None:
@@ -118,6 +144,8 @@ def test_alipay_order_query_requires_signed_authoritative_response(monkeypatch) 
         hashes.SHA256(),
     )
 
+    captured_request: dict[str, str] = {}
+
     class ResponseStub:
         def raise_for_status(self) -> None:
             return None
@@ -128,8 +156,14 @@ def test_alipay_order_query_requires_signed_authoritative_response(monkeypatch) 
                 "sign": b64encode(signature).decode(),
             }
 
-    monkeypatch.setattr("app.services.alipay_provider.httpx.post", lambda *args, **kwargs: ResponseStub())
+    def post_stub(*args, **kwargs):
+        del args
+        captured_request.update(kwargs["data"])
+        return ResponseStub()
+
+    monkeypatch.setattr("app.services.alipay_provider.httpx.post", post_stub)
     result = provider.query_order(order_id="official-order-synthetic")
+    _assert_request_signature(private_key, captured_request)
     assert result.verified is True
     assert result.paid is True
     assert result.amount_cents == 3990
