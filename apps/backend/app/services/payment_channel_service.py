@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import json
 from time import time
@@ -9,6 +10,7 @@ from urllib.parse import urlparse
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 from app.core.config import Settings
 from app.services.alipay_provider import AlipayPaymentProvider
@@ -48,7 +50,10 @@ class PaymentChannelService:
         current_secrets = self._decrypt(str(current["secret_config_ciphertext"])) if current.get("secret_config_ciphertext") else {}
         replacements = {key: str(value).strip() for key, value in secrets.items() if key in SECRET_FIELDS[channel] and str(value).strip()}
         merged_secrets = {**current_secrets, **replacements}
-        errors = self.validate(channel, merged_public, merged_secrets)
+        normalization_errors: list[str] = []
+        if channel == "alipay":
+            merged_secrets, normalization_errors = self._normalize_alipay_secrets(merged_secrets)
+        errors = list(dict.fromkeys([*normalization_errors, *self.validate(channel, merged_public, merged_secrets)]))
         row = self.repository.save_payment_channel_config(
             channel=channel,
             public_config=merged_public,
@@ -132,6 +137,56 @@ class PaymentChannelService:
     @staticmethod
     def _filtered(values: Mapping[str, object], allowed: tuple[str, ...]) -> dict[str, str]:
         return {key: str(value).strip() for key, value in values.items() if key in allowed}
+
+    @classmethod
+    def _normalize_alipay_secrets(cls, values: Mapping[str, object]) -> tuple[dict[str, str], list[str]]:
+        normalized = {key: str(value) for key, value in values.items()}
+        errors: list[str] = []
+        private_value = normalized.get("appPrivateKey", "").strip()
+        if private_value:
+            try:
+                normalized["appPrivateKey"] = cls._canonical_rsa_private_pem(private_value)
+            except (ValueError, TypeError, binascii.Error):
+                errors.append("appPrivateKey 不是有效的 RSA PEM 私钥")
+        public_value = normalized.get("alipayPublicKey", "").strip()
+        if public_value:
+            try:
+                normalized["alipayPublicKey"] = cls._canonical_rsa_public_pem(public_value)
+            except (ValueError, TypeError, binascii.Error):
+                errors.append("alipayPublicKey 不是有效的 RSA PEM 公钥")
+        return normalized, errors
+
+    @staticmethod
+    def _canonical_rsa_private_pem(value: str) -> str:
+        prepared = value.strip().replace("\\n", "\n")
+        if prepared.startswith("-----BEGIN"):
+            key = serialization.load_pem_private_key(prepared.encode("utf-8"), password=None)
+        else:
+            key = serialization.load_der_private_key(
+                base64.b64decode("".join(prepared.split()), validate=True),
+                password=None,
+            )
+        if not isinstance(key, rsa.RSAPrivateKey):
+            raise ValueError("not-rsa-private-key")
+        return key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        ).decode("ascii")
+
+    @staticmethod
+    def _canonical_rsa_public_pem(value: str) -> str:
+        prepared = value.strip().replace("\\n", "\n")
+        if prepared.startswith("-----BEGIN"):
+            key = serialization.load_pem_public_key(prepared.encode("utf-8"))
+        else:
+            key = serialization.load_der_public_key(base64.b64decode("".join(prepared.split()), validate=True))
+        if not isinstance(key, rsa.RSAPublicKey):
+            raise ValueError("not-rsa-public-key")
+        return key.public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        ).decode("ascii")
 
     @staticmethod
     def _assert_channel(channel: str) -> None:

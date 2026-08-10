@@ -3,10 +3,14 @@ from __future__ import annotations
 import base64
 import json
 import time
+from datetime import datetime, timedelta, timezone
+from textwrap import wrap
 
+from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.x509.oid import NameOID
 
 from app.core.config import Settings
 from app.services.payment_channel_service import PaymentChannelService
@@ -18,6 +22,20 @@ def _keys() -> tuple[str, str, object]:
     private_pem = private.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()
     public_pem = private.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo).decode()
     return private_pem, public_pem, private
+
+
+def _pem_body(value: str) -> str:
+    return "".join(line for line in value.splitlines() if not line.startswith("-----"))
+
+
+def _alipay_public_config() -> dict[str, str]:
+    return {
+        "appId": "app-1",
+        "sellerId": "seller-1",
+        "gatewayUrl": "https://openapi.alipay.com/gateway.do",
+        "notifyUrl": "https://example.test/notify",
+        "returnUrl": "https://example.test/return",
+    }
 
 
 class FakePaymentRepository:
@@ -64,6 +82,112 @@ def test_channel_secrets_are_encrypted_masked_and_required_before_activation():
         assert str(exc) == "payment_channel_not_ready"
 
 
+def test_alipay_accepts_copied_base64_keys_and_persists_canonical_pem() -> None:
+    private_pem, public_pem, _ = _keys()
+    repository = FakePaymentRepository()
+    service = PaymentChannelService(Settings(admin_encryption_key="unit-test-key"), repository)  # type: ignore[arg-type]
+
+    result = service.save(
+        channel="alipay",
+        public_config=_alipay_public_config(),
+        secrets={
+            "appPrivateKey": "\n".join(wrap(_pem_body(private_pem), 72)),
+            "alipayPublicKey": "\n".join(wrap(_pem_body(public_pem), 72)),
+        },
+        user_id="admin-1",
+    )
+
+    stored = service._decrypt(str(repository.rows["alipay"]["secret_config_ciphertext"]))
+    assert result["validationStatus"] == "ready"
+    assert stored["appPrivateKey"].startswith("-----BEGIN PRIVATE KEY-----")
+    assert stored["alipayPublicKey"].startswith("-----BEGIN PUBLIC KEY-----")
+    serialization.load_pem_private_key(stored["appPrivateKey"].encode(), password=None)
+    serialization.load_pem_public_key(stored["alipayPublicKey"].encode())
+
+
+def test_alipay_accepts_copied_pkcs1_private_key_body() -> None:
+    _, public_pem, private = _keys()
+    pkcs1_private = private.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.TraditionalOpenSSL,
+        serialization.NoEncryption(),
+    ).decode()
+    repository = FakePaymentRepository()
+    service = PaymentChannelService(Settings(admin_encryption_key="unit-test-key"), repository)  # type: ignore[arg-type]
+
+    result = service.save(
+        channel="alipay",
+        public_config=_alipay_public_config(),
+        secrets={"appPrivateKey": _pem_body(pkcs1_private), "alipayPublicKey": _pem_body(public_pem)},
+        user_id="admin-1",
+    )
+
+    assert result["validationStatus"] == "ready"
+
+
+def test_alipay_revalidates_existing_encrypted_base64_draft_without_replacement() -> None:
+    private_pem, public_pem, _ = _keys()
+    repository = FakePaymentRepository()
+    service = PaymentChannelService(Settings(admin_encryption_key="unit-test-key"), repository)  # type: ignore[arg-type]
+    repository.rows["alipay"].update({
+        "public_config": _alipay_public_config(),
+        "secret_config_ciphertext": service._encrypt({
+            "appPrivateKey": _pem_body(private_pem),
+            "alipayPublicKey": _pem_body(public_pem),
+        }),
+        "validation_status": "draft",
+    })
+
+    result = service.save(channel="alipay", public_config={}, secrets={}, user_id="admin-1")
+
+    assert result["validationStatus"] == "ready"
+    stored = service._decrypt(str(repository.rows["alipay"]["secret_config_ciphertext"]))
+    assert stored["appPrivateKey"].startswith("-----BEGIN PRIVATE KEY-----")
+    assert stored["alipayPublicKey"].startswith("-----BEGIN PUBLIC KEY-----")
+
+
+def test_alipay_rejects_non_rsa_invalid_and_certificate_material_without_echoing_secrets() -> None:
+    ec_private = ec.generate_private_key(ec.SECP256R1())
+    ec_private_pem = ec_private.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode()
+    rsa_private_pem, _, rsa_private = _keys()
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "synthetic-alipay-test")])
+    now = datetime.now(timezone.utc)
+    certificate_pem = x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(
+        rsa_private.public_key()
+    ).serial_number(x509.random_serial_number()).not_valid_before(now).not_valid_after(
+        now + timedelta(days=1)
+    ).sign(rsa_private, hashes.SHA256()).public_bytes(serialization.Encoding.PEM).decode()
+    repository = FakePaymentRepository()
+    service = PaymentChannelService(Settings(admin_encryption_key="unit-test-key"), repository)  # type: ignore[arg-type]
+
+    result = service.save(
+        channel="alipay",
+        public_config=_alipay_public_config(),
+        secrets={"appPrivateKey": ec_private_pem, "alipayPublicKey": certificate_pem},
+        user_id="admin-1",
+    )
+
+    assert result["validationStatus"] == "draft"
+    assert "appPrivateKey 不是有效的 RSA PEM 私钥" in result["validationErrors"]
+    assert "alipayPublicKey 不是有效的 RSA PEM 公钥" in result["validationErrors"]
+    assert ec_private_pem not in str(result)
+    assert certificate_pem not in str(result)
+    assert rsa_private_pem not in str(result)
+
+    invalid = service.save(
+        channel="alipay",
+        public_config={},
+        secrets={"appPrivateKey": "not-a-key", "alipayPublicKey": "also-not-a-key"},
+        user_id="admin-1",
+    )
+    assert invalid["validationStatus"] == "draft"
+    assert "not-a-key" not in str(invalid)
+
+
 def test_wechat_notification_signature_identity_and_aes_gcm_decryption():
     merchant_private, platform_public, platform_private = _keys()
     api_key = "0123456789abcdef0123456789abcdef"
@@ -85,4 +209,3 @@ def test_wechat_notification_signature_identity_and_aes_gcm_decryption():
     assert notification.paid is True
     assert notification.order_id == "order-1"
     assert notification.amount_cents == 3990
-

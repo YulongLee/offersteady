@@ -569,7 +569,7 @@ const paymentFields = {
   wechat: { public: ["mchId", "appId", "merchantSerialNo", "nativeUrl", "notifyUrl"], secret: ["merchantPrivateKey", "platformPublicKey", "apiV3Key"] },
   alipay: { public: ["appId", "sellerId", "gatewayUrl", "notifyUrl", "returnUrl"], secret: ["appPrivateKey", "alipayPublicKey"] },
 } as const;
-const paymentLabels: Record<string, string> = { mchId: "微信商户号", appId: "应用 ID", merchantSerialNo: "商户证书序列号", nativeUrl: "Native API 地址", notifyUrl: "异步通知地址", returnUrl: "支付返回地址", sellerId: "支付宝卖家 ID", gatewayUrl: "支付宝网关", merchantPrivateKey: "商户 API 私钥（PEM）", platformPublicKey: "微信支付平台公钥（PEM）", apiV3Key: "APIv3 密钥", appPrivateKey: "应用私钥（PEM）", alipayPublicKey: "支付宝公钥（PEM）" };
+const paymentLabels: Record<string, string> = { mchId: "微信商户号", appId: "应用 ID", merchantSerialNo: "商户证书序列号", nativeUrl: "Native API 地址", notifyUrl: "异步通知地址", returnUrl: "支付返回地址", sellerId: "支付宝卖家 ID", gatewayUrl: "支付宝网关", merchantPrivateKey: "商户 API 私钥（PEM）", platformPublicKey: "微信支付平台公钥（PEM）", apiV3Key: "APIv3 密钥", appPrivateKey: "应用私钥（支持直接复制或 PEM）", alipayPublicKey: "支付宝公钥（支持直接复制或 PEM）" };
 
 function PaymentPanel({ rows, onChanged, onAuthenticationExpired }: { rows: Row[]; onChanged: () => void; onAuthenticationExpired: (message: string) => void }) {
   const [drafts, setDrafts] = useState<Record<string, { publicConfig: Record<string, string>; secrets: Record<string, string> }>>({});
