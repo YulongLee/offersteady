@@ -141,4 +141,23 @@ describe("web application states", () => {
     expect(screen.queryByText(/^7 天$|^30 天$|^手动删除$/)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "查看数据说明" })).toBeInTheDocument();
   });
+
+  it("applies and persists the answer size and bright theme settings", () => {
+    const store = new Map<string, string>();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, value),
+        removeItem: (key: string) => void store.delete(key),
+      },
+    });
+    renderState("/app/settings");
+    fireEvent.change(screen.getByRole("combobox", { name: "回答字号" }), { target: { value: "large" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "页面主题" }), { target: { value: "bright" } });
+
+    expect(document.documentElement).toHaveAttribute("data-answer-font-size", "large");
+    expect(document.documentElement).toHaveAttribute("data-theme", "bright");
+    expect(JSON.parse(window.localStorage.getItem("offersteady:web-appearance") ?? "{}")).toEqual({ answerFontSize: "large", theme: "bright" });
+  });
 });

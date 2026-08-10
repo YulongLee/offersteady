@@ -23,6 +23,7 @@ import { ABSOLUTE_MAX_SPLIT_RATIO, ABSOLUTE_MIN_SPLIT_RATIO, clampSplitRatio, in
 import { WorkspaceDivider } from "./WorkspaceDivider";
 import { authClient } from "./auth-client";
 import { isInvalidRealtimeSessionStatus, realtimeRetryDelayMs } from "./realtime-recovery";
+import { applyAppearancePreferences, persistAppearancePreferences, readAppearancePreferences, type AppearancePreferences } from "./appearance-preferences";
 import "./styles.css";
 
 interface PrototypeContextValue {
@@ -55,43 +56,26 @@ function PrototypeProvider({ children, initialAuthenticated, initialState }: { r
   }, [initialAuthenticated, initialState]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    if (!initialState) {
-      const existing = authClient.readStoredSession();
-      interviewAppAdapter.loadState(controller.signal, { auth: !existing })
-        .then(next => {
-          setState(existing ? { ...next, account: existing.account } : next);
-          setLoadError("");
-        })
-        .catch(error => {
-          setLoadError(error instanceof Error ? error.message : "后端页面状态加载失败");
-        });
-    }
-    return () => controller.abort();
-  }, [initialState]);
-
-  useEffect(() => {
     if (initialState) return;
     const controller = new AbortController();
     const existing = authClient.readStoredSession();
-    if (!existing) return () => controller.abort();
-    void authClient.restore(controller.signal)
-      .then(restored => {
+    const initialize = async () => {
+      if (existing) {
+        await authClient.restore(controller.signal);
         setAuthenticatedState(true);
-        setState(current => current ? { ...current, account: restored.account } : current);
-        return interviewAppAdapter.loadState(controller.signal);
-      })
+      } else {
+        setAuthenticatedState(false);
+      }
+      return interviewAppAdapter.loadState(controller.signal, existing ? undefined : { auth: true });
+    };
+    void initialize()
       .then(next => {
         setState(next);
         setLoadError("");
       })
-      .catch(() => {
-        if (authClient.readStoredSession()) {
-          setAuthenticatedState(true);
-          setState(current => current ? { ...current, account: existing.account } : current);
-          return;
-        }
-        setAuthenticatedState(false);
+      .catch(error => {
+        if (controller.signal.aborted) return;
+        setLoadError(error instanceof Error ? error.message : "后端页面状态加载失败");
       });
     return () => controller.abort();
   }, [initialState]);
@@ -1318,7 +1302,16 @@ function DevicesPage() {
   return <main className="app-page"><PageHeader eyebrow="DESKTOP COMPANION" title="电脑伴随程序" detail="根据系统和芯片选择安装包；实际收音能力以连接后的检测结果为准。" /><div className="device-page-grid"><DownloadCenter manifest={state.releaseManifest} /><section className="panel"><div className="panel-heading"><h2>已连接设备</h2><span className="success-text">● 在线</span></div><div className="paired-device"><span className="device-glyph">⌘</span><div><strong>{state.preparation.device?.displayName}</strong><small>{state.preparation.device?.capabilities.platformVersion} · 麦克风与系统音频权限正常</small></div><button className="button ghost">诊断</button></div><div className="privacy-box"><strong>当前没有收音</strong><p>伴随程序不会因为打开网页而自动开始。Windows 预览版若不支持系统音频，会明确降级到麦克风、手动输入和截图。</p></div></section></div></main>;
 }
 
-function SettingsPage() { return <main className="app-page"><PageHeader eyebrow="SETTINGS" title="设置" detail="查看真实的数据行为和辅助功能。" /><div className="settings-list"><section className="panel"><h2>数据与隐私</h2><div className="setting-row"><span><strong>原始音频</strong><small>完成当前转写后不保留</small></span><b>默认不保存</b></div><div className="setting-row"><span><strong>面试记录</strong><small>请在对应复盘页查看、管理和删除记录。</small></span><Link to={`${routes.guide}#privacy-support`}>查看数据说明</Link></div></section><section className="panel"><h2>辅助功能</h2><label className="setting-row"><span><strong>减少动态效果</strong><small>减少波形与状态动画</small></span><input type="checkbox" /></label><label className="setting-row"><span><strong>回答字号</strong><small>只影响实时回答区域</small></span><select aria-label="回答字号" defaultValue="normal"><option value="normal">标准</option><option value="large">较大</option></select></label></section></div></main>; }
+function SettingsPage() {
+  const [appearance, setAppearance] = useState<AppearancePreferences>(() => readAppearancePreferences());
+  const updateAppearance = (patch: Partial<AppearancePreferences>) => {
+    const next = { ...appearance, ...patch };
+    setAppearance(next);
+    applyAppearancePreferences(next);
+    persistAppearancePreferences(next);
+  };
+  return <main className="app-page"><PageHeader eyebrow="SETTINGS" title="设置" detail="查看真实的数据行为和辅助功能。" /><div className="settings-list"><section className="panel"><h2>数据与隐私</h2><div className="setting-row"><span><strong>原始音频</strong><small>完成当前转写后不保留</small></span><b>默认不保存</b></div><div className="setting-row"><span><strong>面试记录</strong><small>请在对应复盘页查看、管理和删除记录。</small></span><Link to={`${routes.guide}#privacy-support`}>查看数据说明</Link></div></section><section className="panel"><h2>辅助功能</h2><label className="setting-row"><span><strong>减少动态效果</strong><small>减少波形与状态动画</small></span><input type="checkbox" /></label><label className="setting-row"><span><strong>回答字号</strong><small>只影响实时回答区域</small></span><select aria-label="回答字号" value={appearance.answerFontSize} onChange={event => updateAppearance({ answerFontSize: event.target.value as AppearancePreferences["answerFontSize"] })}><option value="normal">标准</option><option value="large">较大</option></select></label><label className="setting-row"><span><strong>页面主题</strong><small>明亮模式提高页面整体亮度，适合光线充足的环境</small></span><select aria-label="页面主题" value={appearance.theme} onChange={event => updateAppearance({ theme: event.target.value as AppearancePreferences["theme"] })}><option value="dark">深色</option><option value="bright">明亮</option></select></label></section></div></main>;
+}
 
 function RouteErrorPage() { return <main className="center-page"><EmptyState title="页面暂时无法加载" detail="没有输出任何敏感内容。请返回应用首页重试。" action={<Link className="button primary" to={routes.app}>返回首页</Link>} /></main>; }
 function IntegrationModeErrorPage({ message }: { readonly message: string }) { return <main className="center-page"><EmptyState title="后端页面状态无法加载" detail={`${message}。当前页面只读取后端 API，请检查服务状态或接口契约。`} action={<a className="button primary" href={runtimeConfig.apiBaseUrl} target="_blank" rel="noreferrer">检查后端服务</a>} /></main>; }
