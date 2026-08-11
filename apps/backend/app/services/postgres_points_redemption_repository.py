@@ -11,6 +11,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from app.core.config import REPO_ROOT, Settings
+from app.services.postgres_migrations import apply_sql_migrations
 from app.ports.points_redemption import (
     PersistedPointsLedgerEntry,
     PersistedPointsRedemption,
@@ -217,9 +218,8 @@ class PostgresPointsRedemptionRepository(PointsRedemptionRepository):
         migrations = [
             REPO_ROOT / "apps" / "backend" / "migrations" / "versions" / "0008_persistent_points_redemption.sql",
             REPO_ROOT / "apps" / "backend" / "migrations" / "versions" / "0015_admin_redemption_batches.sql",
+            REPO_ROOT / "apps" / "backend" / "migrations" / "versions" / "0022_referral_ledger_constraint_repair.sql",
         ]
         with self._connect() as connection, connection.cursor() as cursor:
-            cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ("offersteady:billing-migrations",))
-            for migration in migrations:
-                cursor.execute(migration.read_text(encoding="utf8"))
+            apply_sql_migrations(cursor, migrations)
             connection.commit()

@@ -48,6 +48,23 @@ class _StreamingFakeWebSocket:
         self.closed = True
 
 
+class _LatePartialAfterCompletedFakeWebSocket(_StreamingFakeWebSocket):
+    def send(self, payload: str) -> None:
+        message = json.loads(payload)
+        self.sent.append(message)
+        if message["type"] == "input_audio_buffer.append":
+            return
+        if message["type"] == "input_audio_buffer.commit":
+            self.events.put({
+                "type": "conversation.item.input_audio_transcription.completed",
+                "transcript": "最终识别结果",
+            })
+            self.events.put({
+                "type": "conversation.item.input_audio_transcription.text",
+                "text": "迟到的不完整识别",
+            })
+
+
 def _frame(*, revision: int, is_final: bool, audio: bytes) -> AudioFrame:
     return AudioFrame(
         publisher_id="publisher-stream",
@@ -116,4 +133,24 @@ def test_gateway_delivers_partial_that_arrives_between_audio_frames(monkeypatch)
     second = gateway.transcribe(frame=_frame(revision=2, is_final=False, audio=b"second"), attempt=0)
 
     assert second.text == "持续流式识别"
+    gateway._close_source_session("session-stream:microphone")
+
+
+def test_gateway_freezes_completed_transcript_and_ignores_late_partial(monkeypatch) -> None:
+    socket = _LatePartialAfterCompletedFakeWebSocket()
+    monkeypatch.setattr(
+        "app.services.dashscope_realtime_asr_gateway.connect",
+        lambda *args, **kwargs: socket,
+    )
+    gateway = DashScopeRealtimeAsrGateway(
+        Settings(
+            realtime_asr_api_key="test-key",
+            realtime_asr_finalize_timeout_seconds=0.5,
+        ),
+        logging.getLogger("test-late-partial-after-completed"),
+    )
+
+    final = gateway.transcribe(frame=_frame(revision=1, is_final=True, audio=b"final"), attempt=0)
+
+    assert final.text == "最终识别结果"
     gateway._close_source_session("session-stream:microphone")

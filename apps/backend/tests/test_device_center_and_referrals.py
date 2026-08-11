@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -12,6 +13,8 @@ from app.main import create_app
 from app.deps import billing_service
 from app.services.billing_service import BillingService
 from app.services.postgres_billing_repository import PostgresBillingRepository
+from app.services.postgres_authentication_repository import PostgresAuthenticationRepository
+from app.services.postgres_points_redemption_repository import PostgresPointsRedemptionRepository
 
 
 def unwrap(response):
@@ -154,3 +157,42 @@ def test_postgres_referral_activation_is_concurrency_safe() -> None:
     restarted = BillingService(settings, billing_repository=PostgresBillingRepository(settings))
     assert restarted.referral_status(user_id=inviter)["inviteCount"] == 1
     assert len([entry for entry in restarted.state_for_user(user_id=inviter).ledger if entry.kind == "referral_credit"]) == 1
+
+
+@pytest.mark.skipif(not DATABASE_URL, reason="OFFERSTEADY_TEST_DATABASE_URL is not configured")
+def test_postgres_redemption_repository_initialization_preserves_referral_credit() -> None:
+    settings = Settings(
+        _env_file=None,
+        environment="test",
+        database_url=DATABASE_URL,
+        redemption_code_pepper="synthetic-referral-schema-order-pepper",
+    )
+    billing = BillingService(settings, billing_repository=PostgresBillingRepository(settings))
+    inviter = f"schema-order-inviter-{uuid4().hex}"
+    first_invitee = f"schema-order-invitee-{uuid4().hex}"
+    second_invitee = f"schema-order-second-{uuid4().hex}"
+    code = str(billing.referral_status(user_id=inviter)["referralCode"])
+    billing.update_growth_referral_settings(enabled=True, reward_points=321, updated_by_user_id="schema-order-admin")
+    assert billing.activate_referral(invitee_user_id=first_invitee, referral_code=code)["outcome"] == "activated"
+
+    PostgresAuthenticationRepository(settings)
+    PostgresPointsRedemptionRepository(settings)
+
+    restarted = BillingService(settings, billing_repository=PostgresBillingRepository(settings))
+    assert restarted.activate_referral(invitee_user_id=second_invitee, referral_code=code)["outcome"] == "activated"
+    rewards = [entry for entry in restarted.state_for_user(user_id=inviter).ledger if entry.kind == "referral_credit"]
+    assert len(rewards) == 2
+    assert sum(entry.points for entry in rewards) == 642
+
+
+def test_all_ledger_initializers_include_referral_constraint_repair() -> None:
+    repository_sources = [
+        Path("apps/backend/app/services/postgres_billing_repository.py").read_text(),
+        Path("apps/backend/app/services/postgres_points_redemption_repository.py").read_text(),
+        Path("apps/backend/app/services/admin_repository.py").read_text(),
+    ]
+    migration = Path("apps/backend/migrations/versions/0022_referral_ledger_constraint_repair.sql").read_text()
+
+    assert all("0022_referral_ledger_constraint_repair.sql" in source for source in repository_sources)
+    assert "'referral_credit'" in migration
+    assert "'admin_adjustment'" in migration

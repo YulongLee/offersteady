@@ -53,6 +53,7 @@
 - [ ] 7.3 Replace ambiguous “个人资料” wording with “已选资料” or “资料库内容” where the source can include Knowledge materials
 - [ ] 7.4 Update answer cards to show fixed source count, retrieved Knowledge count, unavailable sources and no-selected-material state
 - [ ] 7.5 Keep the existing prototype layout and navigation structure while improving status and grounding clarity
+- [x] 7.6 Connect the failed-material recovery action to the real backend processing retry endpoint and provide actionable fallback guidance
 
 ## 8. Tests, Evals and Verification
 
@@ -64,7 +65,9 @@
 - [ ] 8.6 Add regression tests for selected materials missing Markdown, chunks or vector records at answer time
 - [ ] 8.7 Add Web tests for preparation selectable states, backend confirmation pending state and unavailable warnings
 - [ ] 8.8 Add AI eval cases for grounded Resume/JD answers, grounded Knowledge answers, unavailable material degradation and no-context no-fabrication
-- [ ] 8.9 Run OpenSpec strict validation for this change and record any implementation validation commands that are actually executed
+- [x] 8.9 Run OpenSpec strict validation for this change and record any implementation validation commands that are actually executed
+  - 2026-08-12: `npm run test --workspaces --if-present`, `npm run typecheck --workspaces --if-present`, `npm run build --workspaces --if-present`, Backend `pytest` with a disposable PostgreSQL instance, and `openspec validate --all --strict` all passed.
+- [x] 8.10 Add a Web regression proving failed-material retry calls the backend task instead of only refreshing local state
 
 ## 9. Migration and Cleanup
 

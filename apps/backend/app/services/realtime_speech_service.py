@@ -16,6 +16,7 @@ from uuid import uuid4
 from app.core.config import Settings
 from app.core.errors import DomainRequestError
 from app.core.logging import log_event
+from app.ports.commercial_hardening import AiUsageRecord, CommercialHardeningRepository
 from app.ports.realtime_speech import (
     AccountDesktopDeviceRecord,
     AsrUsageReport,
@@ -111,6 +112,7 @@ class RealtimeSpeechService:
         session_service: SessionService,
         chat_service: ChatService,
         asr_gateway: RealtimeAsrGatewayPort,
+        commercial_repository: CommercialHardeningRepository | None = None,
     ) -> None:
         self.settings = settings
         self.logger = logger
@@ -118,6 +120,7 @@ class RealtimeSpeechService:
         self.session_service = session_service
         self.chat_service = chat_service
         self.asr_gateway = asr_gateway
+        self.commercial_repository = commercial_repository
         self._asr_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="realtime-asr")
         self._latest_timings_by_session_source: dict[tuple[str, RealtimeSourceKind], dict[str, int | None]] = {}
         self._counters_by_session_source: dict[tuple[str, RealtimeSourceKind], dict[str, int]] = {}
@@ -126,6 +129,37 @@ class RealtimeSpeechService:
         self._frame_workers: dict[tuple[str, RealtimeSourceKind], threading.Thread] = {}
         self._frame_queues: dict[tuple[str, RealtimeSourceKind], "queue.Queue[dict[str, object]]"] = {}
         self._retired_session_ids: set[str] = set()
+
+    def _record_speech_usage(
+        self,
+        *,
+        publisher: RealtimePublisherRecord,
+        frame: AudioFrame,
+        result: TranscriptResult | None,
+        final_latency_ms: int | None,
+        safe_error_code: str | None = None,
+    ) -> None:
+        if self.commercial_repository is None or not frame.is_final:
+            return
+        try:
+            usage = result.usage if result is not None else None
+            self.commercial_repository.record_ai_usage(AiUsageRecord(
+                usage_id=f"ai-speech:{frame.session_id}:{frame.segment_id}:{frame.revision}",
+                owner_user_id=publisher.owner_user_id,
+                operation_kind="speech",
+                provider=usage.provider_name if usage is not None else "dashscope-realtime-asr",
+                model=usage.model_name if usage is not None else self.settings.realtime_asr_model,
+                status="succeeded" if safe_error_code is None else "failed",
+                related_task_id=frame.segment_id,
+                session_id=frame.session_id,
+                total_units=usage.total_tokens if usage is not None else None,
+                duration_ms=final_latency_ms,
+                final_latency_ms=final_latency_ms,
+                safe_error_code=safe_error_code,
+                created_at_ms=_now_ms(),
+            ))
+        except Exception as exc:  # Observability must never interrupt live transcription.
+            self.logger.warning("realtime_speech.ai_usage_record_failed", extra={"segment_id": frame.segment_id, "safe_error_code": exc.__class__.__name__})
 
     @staticmethod
     def _session_source_key(session_id: str, source_kind: RealtimeSourceKind) -> tuple[str, RealtimeSourceKind]:
@@ -1194,6 +1228,13 @@ class RealtimeSpeechService:
             transcript, transcript_result = self._transcribe_frame(publisher=publisher, frame=frame)
             self.repository.save_frame_receipt(replace(pending_receipt, asr_status="accepted"))
         except DomainRequestError as exc:
+            self._record_speech_usage(
+                publisher=publisher,
+                frame=frame,
+                result=None,
+                final_latency_ms=max(0, _now_ms() - asr_started_at_ms),
+                safe_error_code=exc.error_code or "asr-failed",
+            )
             self.repository.save_frame_receipt(replace(pending_receipt, asr_status="failed", error_code=exc.error_code or "asr-failed"))
             events.append(self._event_payload(self._save_event(
                 session_id=publisher.session_id,
@@ -1224,6 +1265,12 @@ class RealtimeSpeechService:
             "frontendRenderMs": None,
         }
         self._set_latest_timing(session_id=publisher.session_id, source_kind=source_kind, timing=timing)
+        self._record_speech_usage(
+            publisher=publisher,
+            frame=frame,
+            result=transcript_result,
+            final_latency_ms=timing["finalTranscriptMs"],
+        )
         if transcript is None:
             if transcript_result.suppressed_reason == "empty-transcript":
                 counter_bucket["emptyResultsSuppressed"] += 1

@@ -71,7 +71,7 @@ def test_supported_ranges_include_equal_previous_window() -> None:
     assert (start - previous).days == 30
 
 
-def test_daily_aggregation_is_idempotent_and_marks_unavailable_metrics() -> None:
+def test_daily_aggregation_is_idempotent_and_computes_runtime_metrics() -> None:
     repository = AnalyticsRepositoryStub()
     service = AdminAnalyticsService(repository)
     service.aggregate_days(start=date(2026, 7, 1), end=date(2026, 7, 1))
@@ -79,8 +79,15 @@ def test_daily_aggregation_is_idempotent_and_marks_unavailable_metrics() -> None
     service.aggregate_days(start=date(2026, 7, 1), end=date(2026, 7, 1))
     assert len(repository.snapshots) == first_count == len(METRICS)
     asr = next(value for (_, _, key), value in repository.snapshots.items() if key == "asr_final_latency_ms")
-    assert asr["coverage_state"] == "unavailable"
-    assert asr["metric_value"] is None
+    assert asr["coverage_state"] == "complete"
+    assert asr["metric_value"] == 1.0
+
+
+def test_ai_metrics_use_persisted_runtime_fields_and_canonical_success_status() -> None:
+    assert "first_token_ms" in (METRICS["answer_first_token_ms"].sql or "")
+    assert "final_latency_ms" in (METRICS["asr_final_latency_ms"].sql or "")
+    assert "status <> 'succeeded'" in (METRICS["ai_error_rate"].sql or "")
+    assert "operation_kind = 'chat'" in (METRICS["answer_requests"].sql or "")
 
 
 def test_trends_align_missing_dates_and_calculate_period_summary() -> None:

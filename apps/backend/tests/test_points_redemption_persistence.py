@@ -82,6 +82,8 @@ def test_redemption_digest_candidates_accept_grouped_compact_and_spaced_input() 
 @pytest.mark.skipif(not DATABASE_URL, reason="OFFERSTEADY_TEST_DATABASE_URL is not configured")
 def test_configured_code_is_private_atomic_and_survives_repository_restart() -> None:
     code = f"TEST-{uuid4().hex.upper()}"
+    test_run_id = uuid4().hex
+    users = (f"redemption-user-a-{test_run_id}", f"redemption-user-b-{test_run_id}")
     settings = Settings(
         database_url=DATABASE_URL,
         redemption_code_pepper=f"pepper-{uuid4().hex}",
@@ -93,7 +95,7 @@ def test_configured_code_is_private_atomic_and_survives_repository_restart() -> 
     with ThreadPoolExecutor(max_workers=2) as pool:
         outcomes = list(pool.map(
             lambda user: repository.redeem(user_id=user, code=code, idempotency_key=f"request-{user}"),
-            ("redemption-user-a", "redemption-user-b"),
+            users,
         ))
     assert sorted(item.outcome for item in outcomes) == ["code-unavailable", "redeemed"]
     winner = next(item for item in outcomes if item.outcome == "redeemed")
@@ -106,7 +108,7 @@ def test_configured_code_is_private_atomic_and_survives_repository_restart() -> 
     assert restarted.balance(user_id=winner_user) == 2000
     assert len(restarted.list_ledger(user_id=winner_user)) == 1
 
-    loser = "redemption-user-b" if winner_user == "redemption-user-a" else "redemption-user-a"
+    loser = users[1] if winner_user == users[0] else users[0]
     assert restarted.redeem(user_id=loser, code=code, idempotency_key="retry").outcome == "code-unavailable"
 
     with psycopg.connect(DATABASE_URL) as connection, connection.cursor() as cursor:

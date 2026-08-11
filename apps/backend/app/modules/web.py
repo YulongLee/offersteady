@@ -70,12 +70,24 @@ def _published_desktop_entry(filename: str) -> dict[str, object] | None:
     return next((entry for entry in manifest["entries"] if isinstance(entry, dict) and entry.get("fileName") == filename), None)
 
 
+def _is_public_desktop_entry(entry: dict[str, object] | None) -> bool:
+    if entry is None or entry.get("signingStatus") != "verified":
+        return False
+    checksum = entry.get("sha256")
+    if not isinstance(checksum, str) or len(checksum) != 64 or any(character not in "0123456789abcdefABCDEF" for character in checksum):
+        return False
+    return entry.get("platform") != "macos" or entry.get("notarized") is True
+
+
 @router.get("/downloads/desktop/{filename}")
 async def download_desktop_artifact(
     filename: str,
     storage: FileStoragePort = Depends(storage_port),
 ) -> Response:
     if "/" in filename or "\\" in filename or not filename.startswith("OfferSteady-Companion-") or not filename.endswith((".zip", ".dmg", ".exe")):
+        raise HTTPException(status_code=404, detail="Desktop artifact not found")
+    entry = _published_desktop_entry(filename)
+    if not _is_public_desktop_entry(entry):
         raise HTTPException(status_code=404, detail="Desktop artifact not found")
     release_dir = _desktop_release_dir().resolve()
     artifact = (release_dir / filename).resolve()
@@ -85,7 +97,6 @@ async def download_desktop_artifact(
             filename=artifact.name,
             media_type="application/zip" if artifact.suffix == ".zip" else "application/x-apple-diskimage" if artifact.suffix == ".dmg" else "application/vnd.microsoft.portable-executable",
         )
-    entry = _published_desktop_entry(filename)
     object_key = entry.get("objectKey") if entry else None
     if not isinstance(object_key, str) or not object_key:
         raise HTTPException(status_code=404, detail="Desktop artifact not found")
@@ -142,10 +153,12 @@ def _release_manifest() -> dict[str, object]:
                 continue
             entry = {key: value for key, value in raw_entry.items() if key != "objectKey"}
             filename = entry.pop("fileName", None)
-            if isinstance(filename, str) and filename:
+            if isinstance(filename, str) and filename and _is_public_desktop_entry(raw_entry):
                 download_url = f"/api/v1/web/downloads/desktop/{filename}"
                 entry["downloadUrl"] = download_url
-                entry["localPath"] = download_url
+            else:
+                entry.pop("downloadUrl", None)
+                entry.pop("localPath", None)
             public_entries.append(entry)
         return {
             "version": int(published.get("version", 1)),
@@ -185,7 +198,7 @@ def _release_manifest() -> dict[str, object]:
             local_sha = hashlib.sha256(local_bytes).hexdigest()
             local_size = local_artifact.stat().st_size
             local_filename = local_artifact.name
-        local_path = f"/api/v1/web/downloads/desktop/{local_filename}"
+        local_path = None
     return {
         "version": 1,
         "generatedAtMs": now_ms,

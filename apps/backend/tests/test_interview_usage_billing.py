@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from app.deps import billing_service
 from app.main import app
 from app.services.billing_service import BillingService
+from app.core.config import Settings
 
 
 client = TestClient(app)
@@ -35,6 +36,25 @@ def test_screenshot_failure_releases_without_charging() -> None:
     service.release_usage(usage_id="screenshot-command-1")
 
     assert service.state_for_user(user_id=user_id).balance == 200
+
+
+def test_abandoned_usage_reservation_expires_without_late_charge(monkeypatch) -> None:
+    current_ms = 1_000_000
+    monkeypatch.setattr("app.services.billing_service._now_ms", lambda: current_ms)
+    service = BillingService(Settings(_env_file=None, billing_usage_reservation_ttl_seconds=60))
+    user_id = "synthetic-abandoned-usage"
+
+    reservation = service.reserve_usage(user_id=user_id, usage_id="abandoned-answer", usage_kind="answer")
+    assert reservation.status == "reserved"
+
+    current_ms += 60_001
+    assert service.state_for_user(user_id=user_id).balance == 200
+    released = service.settle_usage(usage_id="abandoned-answer")
+
+    assert released is not None
+    assert released.status == "released"
+    assert service.state_for_user(user_id=user_id).balance == 200
+    assert not any(item.reference_id == "usage:abandoned-answer" for item in service.state_for_user(user_id=user_id).ledger)
 
 
 def test_insufficient_balance_blocks_additional_usage() -> None:

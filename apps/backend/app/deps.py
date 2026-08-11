@@ -278,6 +278,7 @@ def chat_service() -> ChatService:
         prompt_builder=prompt_builder_port(),
         llm_gateway=llm_gateway_port(),
         billing_service=billing_service(),
+        commercial_repository=commercial_hardening_repository(),
     )
 
 
@@ -414,6 +415,7 @@ def screenshot_answer_service() -> ScreenshotAnswerService:
         prompt_builder=screenshot_prompt_builder_port(),
         llm_gateway=llm_gateway_port(),
         billing_service=billing_service(),
+        commercial_repository=commercial_hardening_repository(),
     )
 
 
@@ -455,6 +457,7 @@ def realtime_speech_service() -> RealtimeSpeechService:
         session_service=session_service(),
         chat_service=chat_service(),
         asr_gateway=realtime_asr_gateway(),
+        commercial_repository=commercial_hardening_repository(),
     )
 
 

@@ -177,6 +177,34 @@ def test_authentication_register_login_refresh_logout_and_multi_device_sessions(
     assert me_missing.status_code == 401
 
 
+def test_expired_auth_sessions_are_persisted_as_expired() -> None:
+    from dataclasses import replace
+    from app.deps import authentication_repository
+
+    primary = unwrap(client.post("/api/v1/auth/register", json={
+        "loginId": "expired-sessions@example.com",
+        "password": "Password123!",
+        "clientLabel": "primary-browser",
+    }))
+    secondary = unwrap(client.post("/api/v1/auth/login", json={
+        "loginId": "expired-sessions@example.com",
+        "password": "Password123!",
+        "clientLabel": "old-browser",
+    }))
+    repository = authentication_repository()
+    stale = repository.get_auth_session(secondary["authSessionId"])
+    assert stale is not None
+    repository.save_auth_session(replace(stale, expires_at_ms=1))
+
+    listing = unwrap(client.get(
+        "/api/v1/auth/sessions",
+        headers={"Authorization": f"Bearer {primary['tokens']['accessToken']}"},
+    ))
+    expired = next(item for item in listing["sessions"] if item["authSessionId"] == secondary["authSessionId"])
+    assert expired["status"] == "expired"
+    assert repository.get_auth_session(secondary["authSessionId"]).status == "expired"
+
+
 def test_wechat_authorization_session_supports_scan_authorize_and_replay_protection() -> None:
     created = unwrap(client.post("/api/v1/auth/wechat/authorization-sessions", json={"clientLabel": "web-wechat"}))
     assert created["status"] == "waiting"

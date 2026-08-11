@@ -1,4 +1,5 @@
--- Durable, idempotent billing reservations for interview answers.
+-- Keep the immutable points ledger compatible with referral rewards regardless
+-- of which repository initializes its schema first after a rolling restart.
 
 ALTER TABLE points_redemption_ledger
   DROP CONSTRAINT IF EXISTS points_redemption_ledger_kind_check;
@@ -23,19 +24,3 @@ ALTER TABLE points_redemption_ledger
     OR (kind = 'pass_usage' AND points = 0)
     OR (kind = 'admin_adjustment' AND points <> 0)
   );
-
-CREATE TABLE IF NOT EXISTS billing_usage_reservations (
-  reservation_id TEXT PRIMARY KEY,
-  usage_id TEXT NOT NULL UNIQUE,
-  user_id TEXT NOT NULL,
-  usage_kind TEXT NOT NULL CHECK (usage_kind IN ('answer', 'screenshot_answer')),
-  points_reserved INTEGER NOT NULL CHECK (points_reserved >= 0),
-  billing_source TEXT NOT NULL CHECK (billing_source IN ('points', 'time_pass')),
-  status TEXT NOT NULL CHECK (status IN ('reserved', 'settled', 'released')),
-  created_at_ms BIGINT NOT NULL,
-  settled_at_ms BIGINT NULL,
-  released_at_ms BIGINT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_billing_usage_reservations_user_status
-  ON billing_usage_reservations(user_id, status);

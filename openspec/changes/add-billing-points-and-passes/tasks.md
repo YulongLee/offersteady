@@ -50,6 +50,7 @@
 - [ ] 5.8 Show operation price and projected balance next to answer and screenshot confirmation controls
 - [x] 5.9 Build insufficient-balance recovery without hiding existing interview content
 - [x] 5.10 Add usage tests for retries, duplicate queue messages, failure release, pass precedence and insufficient balance
+- [x] 5.11 Add a bounded stale-reservation expiry policy, startup/user-access recovery, PostgreSQL regression coverage and production cleanup verification.
 
 ## 6. Manual WeChat and Alipay Orders
 

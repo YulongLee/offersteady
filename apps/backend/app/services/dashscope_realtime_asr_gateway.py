@@ -33,6 +33,7 @@ class _SourceRealtimeSession:
     first_text_at_ms: int | None = None
     completed_at_ms: int | None = None
     receiver_error: Exception | None = None
+    accepting_transcript_events: bool = True
     closed: bool = False
     receiver_thread: threading.Thread | None = None
 
@@ -154,10 +155,13 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                     finalize=frame.is_final,
                 )
                 if frame.is_final:
-                    session.current_segment_id = None
-                    session.transcript_text = ""
-                    session.first_text_at_ms = None
-                    session.completed_at_ms = None
+                    with session.event_condition:
+                        # Freeze a completed utterance before releasing the source
+                        # lock. Providers may still deliver an older partial after
+                        # `completed`; it must not overwrite the final transcript or
+                        # leak into the next segment.
+                        session.accepting_transcript_events = False
+                        session.current_segment_id = None
                 self._connection_state_by_source[session.source_kind] = "receiving"
                 self._last_error_by_source.pop(session.source_kind, None)
                 return transcript_text, first_text_at_ms, completed_at_ms
@@ -173,6 +177,12 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             self._record_error(frame.source_kind, "realtime_asr_invalid_response")
             self._close_source_session(self._source_session_key(frame))
             raise NonRetryableAsrError("realtime_asr_invalid_response") from exc
+        except RetryableAsrError:
+            # A missing final or receiver failure leaves provider-side utterance
+            # state ambiguous. Recreate the source session before retrying instead
+            # of allowing late events to contaminate the next segment.
+            self._close_source_session(self._source_session_key(frame))
+            raise
 
     def _source_session_key(self, frame: AudioFrame) -> str:
         return f"{frame.session_id}:{frame.source_kind}"
@@ -186,6 +196,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             session.first_text_at_ms = None
             session.completed_at_ms = None
             session.receiver_error = None
+            session.accepting_transcript_events = True
             session.delivered_revision = session.event_revision
 
     def _get_or_create_source_session(self, frame: AudioFrame) -> _SourceRealtimeSession:
@@ -332,13 +343,9 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             completed_at_ms = session.completed_at_ms
             if has_new_revision:
                 session.delivered_revision = session.event_revision
-        if finalize and completed_at_ms is None and not transcript_text.strip():
+        if finalize and completed_at_ms is None:
             self._completed_missing[session.source_kind] = self._completed_missing.get(session.source_kind, 0) + 1
             raise RetryableAsrError("realtime_asr_transcript_missing")
-        if finalize and completed_at_ms is None and transcript_text.strip():
-            self._connection_state_by_source[session.source_kind] = "partial"
-            self._last_error_by_source.pop(session.source_kind, None)
-            completed_at_ms = int(time.time() * 1000)
         return transcript_text, first_text_at_ms, completed_at_ms
 
     def _receive_events(self, session: _SourceRealtimeSession) -> None:
@@ -373,6 +380,15 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                 continue
             if event_type in {"conversation.item.input_audio_transcription.text", "conversation.item.input_audio_transcription.completed"}:
                 with session.event_condition:
+                    if not session.accepting_transcript_events:
+                        continue
+                    if (
+                        event_type == "conversation.item.input_audio_transcription.text"
+                        and session.completed_at_ms is not None
+                    ):
+                        # The completed transcript is authoritative. A delayed
+                        # partial from the same provider buffer cannot revise it.
+                        continue
                     next_text = (
                         message.get("transcript")
                         or message.get("text")

@@ -5,7 +5,7 @@ import { routes } from "./routes";
 
 type LegalKind = "terms" | "privacy";
 
-const updatedAt = "2026 年 8 月 9 日";
+const updatedAt = "2026 年 8 月 12 日";
 
 const termsSections = [
   ["一、服务说明", [
@@ -67,7 +67,7 @@ const privacySections = [
     "请遵守面试组织方规则和所在地关于录音、录屏及个人信息处理的要求，并在需要时取得参与者同意。",
   ]],
   ["七、更新与联系", [
-    "数据流程或服务能力发生重要变化时，我们会更新本政策并标注更新时间。正式商业化前，本政策仍需结合实际运营主体、供应商和适用地区进行专业复核。",
+    "数据流程、服务能力、运营主体或主要服务提供方发生重要变化时，我们会及时更新本政策并标注更新时间；涉及你权益的重要变化将通过页面提示或其他合理方式告知。",
     "隐私问题可通过客服微信 OneShowAILab 或邮箱 contact@oneshowailab.com 联系。请勿通过客服渠道发送密码、验证码或完整身份证件。",
   ]],
 ] as const;

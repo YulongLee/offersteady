@@ -9,6 +9,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from app.core.config import REPO_ROOT, Settings
+from app.services.postgres_migrations import apply_sql_migrations
 
 
 class PostgresBillingRepository:
@@ -669,6 +670,28 @@ class PostgresBillingRepository:
             connection.commit()
             return result
 
+    def release_stale_usage_reservations(
+        self,
+        *,
+        stale_before_ms: int,
+        released_at_ms: int,
+        user_id: str | None = None,
+    ) -> int:
+        with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE billing_usage_reservations
+                SET status = 'released', released_at_ms = %s
+                WHERE status = 'reserved'
+                  AND created_at_ms < %s
+                  AND (%s::TEXT IS NULL OR user_id = %s)
+                """,
+                (released_at_ms, stale_before_ms, user_id, user_id),
+            )
+            released = int(cursor.rowcount)
+            connection.commit()
+            return released
+
     def list_entitlements(self, *, user_id: str) -> list[dict[str, object]]:
         with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
             try:
@@ -865,16 +888,15 @@ class PostgresBillingRepository:
             Path(REPO_ROOT / "apps/backend/migrations/versions/0008_persistent_points_redemption.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0009_commercial_billing_persistence.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0010_payment_recovery_reconciliation.sql"),
-            Path(REPO_ROOT / "apps/backend/migrations/versions/0011_enable_pgvector_extension.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0012_billable_interview_usage.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0013_official_alipay_payments.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0018_admin_managed_billing_catalog.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0019_admin_payment_channels.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0020_admin_payment_diagnostics.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0021_referral_rewards.sql"),
+            Path(REPO_ROOT / "apps/backend/migrations/versions/0022_referral_ledger_constraint_repair.sql"),
+            Path(REPO_ROOT / "apps/backend/migrations/versions/0023_stale_usage_reservation_recovery.sql"),
         )
         with self._connect() as connection, connection.cursor() as cursor:
-            cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ("offersteady:billing-migrations",))
-            for migration in migrations:
-                cursor.execute(migration.read_text(encoding="utf8"))
+            apply_sql_migrations(cursor, migrations)
             connection.commit()

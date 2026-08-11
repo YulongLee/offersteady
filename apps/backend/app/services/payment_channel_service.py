@@ -4,6 +4,7 @@ import base64
 import binascii
 import hashlib
 import json
+import re
 from time import time
 from typing import Mapping
 from urllib.parse import urlparse
@@ -37,11 +38,12 @@ class PaymentChannelService:
         return [self._masked(row) for row in self.repository.list_payment_channel_configs()]
 
     def available_channels(self) -> list[str]:
-        return [
-            str(row["channel"])
-            for row in self.repository.list_payment_channel_configs()
-            if bool(row["enabled"]) and str(row["validation_status"]) == "ready"
-        ]
+        channels: list[str] = []
+        for row in self.repository.list_payment_channel_configs():
+            _, errors = self._effective_validation(row)
+            if bool(row["enabled"]) and not errors:
+                channels.append(str(row["channel"]))
+        return channels
 
     def save(self, *, channel: str, public_config: Mapping[str, object], secrets: Mapping[str, object], user_id: str) -> dict[str, object]:
         self._assert_channel(channel)
@@ -67,6 +69,9 @@ class PaymentChannelService:
 
     def set_enabled(self, *, channel: str, enabled: bool, user_id: str) -> dict[str, object]:
         self._assert_channel(channel)
+        row = self.repository.payment_channel_config(channel=channel)
+        if enabled and self._effective_validation(row)[1]:
+            raise ValueError("payment_channel_not_ready")
         return self._masked(self.repository.set_payment_channel_enabled(
             channel=channel, enabled=enabled, updated_by_user_id=user_id, updated_at_ms=int(time() * 1000),
         ))
@@ -74,10 +79,10 @@ class PaymentChannelService:
     def provider(self, channel: str, *, require_enabled: bool = True) -> AlipayPaymentProvider | WechatPayProvider:
         self._assert_channel(channel)
         row = self.repository.payment_channel_config(channel=channel)
-        if require_enabled and (not row["enabled"] or row["validation_status"] != "ready"):
+        public, validation_errors = self._effective_validation(row)
+        if require_enabled and (not row["enabled"] or validation_errors):
             raise ValueError("payment_channel_disabled")
         secrets = self._decrypt(str(row["secret_config_ciphertext"])) if row.get("secret_config_ciphertext") else {}
-        public = dict(row["public_config"])
         updates = self._settings_updates(channel, public, secrets)
         configured = self.settings.model_copy(update=updates)
         return AlipayPaymentProvider(configured) if channel == "alipay" else WechatPayProvider(configured)
@@ -85,6 +90,10 @@ class PaymentChannelService:
     @staticmethod
     def validate(channel: str, public: Mapping[str, object], secrets: Mapping[str, object]) -> list[str]:
         errors = [f"缺少字段：{key}" for key in (*PUBLIC_FIELDS[channel], *SECRET_FIELDS[channel]) if not str((public if key in PUBLIC_FIELDS[channel] else secrets).get(key, "")).strip()]
+        if channel == "alipay":
+            seller_id = str(public.get("sellerId", "")).strip()
+            if seller_id and re.fullmatch(r"2088\d{12}", seller_id) is None:
+                errors.append("sellerId 必须是支付宝签约商户 PID（以 2088 开头的 16 位纯数字）")
         for key in ("notifyUrl", "returnUrl"):
             value = str(public.get(key, ""))
             if value and urlparse(value).scheme != "https":
@@ -111,6 +120,7 @@ class PaymentChannelService:
     def _masked(self, row: Mapping[str, object]) -> dict[str, object]:
         channel = str(row["channel"])
         secrets = self._decrypt(str(row["secret_config_ciphertext"])) if row.get("secret_config_ciphertext") else {}
+        _, effective_errors = self._effective_validation(row, secrets=secrets)
         acceptance = self.repository.payment_channel_acceptance(channel=channel) if hasattr(self.repository, "payment_channel_acceptance") else {
             "notification": None, "authoritativeQuery": None,
         }
@@ -120,11 +130,25 @@ class PaymentChannelService:
             "configVersion": int(row["config_version"]),
             "publicConfig": dict(row["public_config"]),
             "secretFields": {key: {"configured": bool(secrets.get(key)), "masked": "••••••••" if secrets.get(key) else ""} for key in SECRET_FIELDS[channel]},
-            "validationStatus": str(row["validation_status"]),
-            "validationErrors": list(row["validation_errors"]),
+            "validationStatus": "ready" if not effective_errors else "draft",
+            "validationErrors": effective_errors,
             "updatedAtMs": int(row["updated_at_ms"]),
             "acceptance": acceptance,
         }
+
+    def _effective_validation(
+        self,
+        row: Mapping[str, object],
+        *,
+        secrets: Mapping[str, object] | None = None,
+    ) -> tuple[dict[str, object], list[str]]:
+        channel = str(row["channel"])
+        public = dict(row["public_config"])
+        decrypted = dict(secrets) if secrets is not None else (
+            self._decrypt(str(row["secret_config_ciphertext"])) if row.get("secret_config_ciphertext") else {}
+        )
+        persisted_errors = [str(error) for error in row.get("validation_errors", [])]
+        return public, list(dict.fromkeys([*persisted_errors, *self.validate(channel, public, decrypted)]))
 
     def _fernet(self) -> Fernet:
         raw = (self.settings.admin_encryption_key or "").encode()

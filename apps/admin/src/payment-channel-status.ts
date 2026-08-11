@@ -16,6 +16,23 @@ export type PaymentChannelStatus = {
   updatedAtLabel: string;
 };
 
+const acceptanceOutcomes: Record<string, string> = {
+  paid: "支付通知与权益到账均已通过",
+  seller_identity_mismatch: "支付宝已通知付款，但 Seller ID 与配置的签约 PID 不一致。请从支付宝商户平台复制以 2088 开头的 16 位 PID，保存后重新执行权威查单。",
+  app_identity_mismatch: "支付宝通知的应用 ID 与当前配置不一致，请核对收款应用和后台应用 ID。",
+  invalid_signature: "通知签名校验失败，请核对当前应用对应的支付宝公钥。",
+  amount_mismatch: "支付宝通知金额与本地订单金额不一致，订单未入账。",
+  unknown_order: "支付宝通知中的商户订单号在本系统中不存在。",
+  processing_failure: "通知已到达，但订单处理失败，请查看待对账订单并执行权威查单。",
+  reconciled: "权威查单通过，订单与权益已完成入账。",
+  already_reconciled: "订单此前已经完成对账，未重复发放权益。",
+};
+
+export const paymentAcceptanceOutcomeLabel = (outcome: unknown) => {
+  const key = typeof outcome === "string" ? outcome : "";
+  return acceptanceOutcomes[key] || (key ? `渠道返回：${key}` : "完成一次真实链路后显示");
+};
+
 export function paymentChannelStatus(row: PaymentChannelStatusInput): PaymentChannelStatus {
   const ready = row.validationStatus === "ready";
   const active = row.enabled === true && ready;

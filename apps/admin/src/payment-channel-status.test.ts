@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { paymentChannelStatus } from "./payment-channel-status";
+import { paymentAcceptanceOutcomeLabel, paymentChannelStatus } from "./payment-channel-status";
 
 describe("payment channel status", () => {
   it("keeps a draft channel visibly unavailable and reports validation errors", () => {
@@ -35,5 +35,13 @@ describe("payment channel status", () => {
 
     expect(status.active).toBe(false);
     expect(status.usageLabel).toBe("用户端未使用");
+  });
+
+  it("turns seller identity failures into an actionable PID recovery message", () => {
+    const message = paymentAcceptanceOutcomeLabel("seller_identity_mismatch");
+
+    expect(message).toContain("支付宝已通知付款");
+    expect(message).toContain("2088");
+    expect(message).toContain("权威查单");
   });
 });

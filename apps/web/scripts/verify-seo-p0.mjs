@@ -37,6 +37,7 @@ assert.equal(
 );
 assert.match(sitemap, /^<\?xml version="1\.0" encoding="UTF-8"\?>/);
 assert.match(sitemap, /<loc>https:\/\/mianshiwen\.cn\/<\/loc>/);
+assert.match(sitemap, /<loc>https:\/\/mianshiwen\.cn\/guide<\/loc>/);
 assert.doesNotMatch(sitemap, /\/login|\/app/);
 assert.match(notFound, /<meta name="robots" content="noindex, follow"\s*\/>/);
 assert.match(nginx, /if \(\$host = www\.mianshiwen\.cn\)\s*\{\s*return 308 https:\/\/mianshiwen\.cn\$request_uri;/);

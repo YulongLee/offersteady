@@ -30,8 +30,8 @@ def _pem_body(value: str) -> str:
 
 def _alipay_public_config() -> dict[str, str]:
     return {
-        "appId": "app-1",
-        "sellerId": "seller-1",
+        "appId": "2021000000000001",
+        "sellerId": "2088000000000001",
         "gatewayUrl": "https://openapi.alipay.com/gateway.do",
         "notifyUrl": "https://example.test/notify",
         "returnUrl": "https://example.test/return",
@@ -66,7 +66,7 @@ def test_channel_secrets_are_encrypted_masked_and_required_before_activation():
     service = PaymentChannelService(Settings(admin_encryption_key="unit-test-key"), repo)  # type: ignore[arg-type]
     result = service.save(
         channel="alipay",
-        public_config={"appId": "app-1", "sellerId": "seller-1", "gatewayUrl": "https://openapi.alipay.com/gateway.do", "notifyUrl": "https://example.test/notify", "returnUrl": "https://example.test/return"},
+        public_config=_alipay_public_config(),
         secrets={"appPrivateKey": private_pem, "alipayPublicKey": public_pem}, user_id="admin-1",
     )
     assert result["validationStatus"] == "ready"
@@ -78,6 +78,56 @@ def test_channel_secrets_are_encrypted_masked_and_required_before_activation():
     try:
         service.set_enabled(channel="wechat", enabled=True, user_id="admin-1")
         raise AssertionError("incomplete channel was enabled")
+    except ValueError as exc:
+        assert str(exc) == "payment_channel_not_ready"
+
+
+def test_alipay_rejects_non_pid_seller_identity_before_activation() -> None:
+    private_pem, public_pem, _ = _keys()
+    repository = FakePaymentRepository()
+    service = PaymentChannelService(Settings(admin_encryption_key="unit-test-key"), repository)  # type: ignore[arg-type]
+
+    result = service.save(
+        channel="alipay",
+        public_config={**_alipay_public_config(), "sellerId": "208802016780965"},
+        secrets={"appPrivateKey": private_pem, "alipayPublicKey": public_pem},
+        user_id="admin-1",
+    )
+
+    assert result["validationStatus"] == "draft"
+    assert result["enabled"] is False
+    assert result["validationErrors"] == [
+        "sellerId 必须是支付宝签约商户 PID（以 2088 开头的 16 位纯数字）"
+    ]
+
+
+def test_historically_ready_alipay_config_is_revalidated_before_use() -> None:
+    private_pem, public_pem, _ = _keys()
+    repository = FakePaymentRepository()
+    service = PaymentChannelService(Settings(admin_encryption_key="unit-test-key"), repository)  # type: ignore[arg-type]
+    repository.rows["alipay"].update({
+        "enabled": True,
+        "validation_status": "ready",
+        "validation_errors": [],
+        "public_config": {**_alipay_public_config(), "sellerId": "208802016780965"},
+        "secret_config_ciphertext": service._encrypt({
+            "appPrivateKey": private_pem,
+            "alipayPublicKey": public_pem,
+        }),
+    })
+
+    assert service.available_channels() == []
+    masked = service.list_masked()[1]
+    assert masked["validationStatus"] == "draft"
+    assert "sellerId 必须是支付宝签约商户 PID" in str(masked["validationErrors"])
+    try:
+        service.provider("alipay")
+        raise AssertionError("historically invalid configuration was used")
+    except ValueError as exc:
+        assert str(exc) == "payment_channel_disabled"
+    try:
+        service.set_enabled(channel="alipay", enabled=True, user_id="admin-1")
+        raise AssertionError("historically invalid configuration was enabled")
     except ValueError as exc:
         assert str(exc) == "payment_channel_not_ready"
 

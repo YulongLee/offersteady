@@ -12,7 +12,7 @@ class SignedReleaseStorage:
         return "https://example.invalid/signed-desktop-release"
 
 
-def test_web_state_exposes_same_origin_mac_arm_download() -> None:
+def test_web_state_hides_unverified_desktop_download_actions() -> None:
     with TestClient(app) as client:
         state = client.get("/api/v1/web/state").json()["data"]
     entries = state["releaseManifest"]["entries"]
@@ -21,12 +21,26 @@ def test_web_state_exposes_same_origin_mac_arm_download() -> None:
         ("macos", "x64"),
         ("windows", "x64"),
     }
-    assert all(entry["downloadUrl"].startswith("/api/v1/web/downloads/desktop/") for entry in entries)
+    assert all("downloadUrl" not in entry and "localPath" not in entry for entry in entries)
     assert all("objectKey" not in entry for entry in entries)
 
 
 def test_desktop_download_redirects_to_short_lived_signed_oss_url(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(web_module, "_desktop_release_dir", lambda: tmp_path)
+    monkeypatch.setattr(web_module, "_published_desktop_manifest", lambda: {
+        "version": 1,
+        "generatedAtMs": 1,
+        "entries": [{
+            "id": "mac-arm64-verified",
+            "platform": "macos",
+            "architecture": "arm64",
+            "fileName": "OfferSteady-Companion-1.0.0-macOS-arm64.dmg",
+            "sha256": "a" * 64,
+            "signingStatus": "verified",
+            "notarized": True,
+            "objectKey": "desktop-releases/macos/arm64/1.0.0/OfferSteady-Companion-1.0.0-macOS-arm64.dmg",
+        }],
+    })
     app.dependency_overrides[storage_port] = lambda: SignedReleaseStorage()
     try:
         with TestClient(app) as client:
@@ -43,3 +57,12 @@ def test_desktop_download_redirects_to_short_lived_signed_oss_url(monkeypatch, t
         app.dependency_overrides.pop(storage_port, None)
     assert response.status_code == 307
     assert response.headers["location"] == "https://example.invalid/signed-desktop-release"
+
+
+def test_direct_unverified_desktop_download_is_not_accessible(monkeypatch, tmp_path) -> None:
+    filename = "OfferSteady-Companion-0.1.5-macOS-arm64.zip"
+    (tmp_path / filename).write_bytes(b"synthetic-unverified-artifact")
+    monkeypatch.setattr(web_module, "_desktop_release_dir", lambda: tmp_path)
+    with TestClient(app) as client:
+        response = client.get(f"/api/v1/web/downloads/desktop/{filename}")
+    assert response.status_code == 404

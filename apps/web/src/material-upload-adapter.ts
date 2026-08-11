@@ -23,6 +23,11 @@ export interface MaterialUploadAdapter {
   uploadKnowledgeFile(userId: string, collectionId: string, file: File, signal?: AbortSignal): Promise<MaterialUploadCompletionResult>;
   createPastedJobDescription(request: CreatePastedJobDescriptionRequest, signal?: AbortSignal): Promise<MaterialUploadCompletionResult>;
   deleteDocument(userId: string, documentId: string, signal?: AbortSignal): Promise<void>;
+  retryDocument(userId: string, documentId: string, signal?: AbortSignal): Promise<void>;
+}
+
+interface DocumentProcessingStatus {
+  readonly latestTask: { readonly taskId: string } | null;
 }
 
 const runtimeConfig = readRuntimeConfig(import.meta.env);
@@ -86,6 +91,20 @@ export class BackendMaterialUploadAdapter implements MaterialUploadAdapter {
 
   async deleteDocument(userId: string, documentId: string, signal?: AbortSignal) {
     await this.client.request(`/api/v1/documents/${documentId}?userId=${encodeURIComponent(userId)}`, { method: "DELETE", headers: authHeaders() }, signal);
+  }
+
+  async retryDocument(userId: string, documentId: string, signal?: AbortSignal) {
+    const status = await this.client.request<DocumentProcessingStatus>(
+      `/api/v1/document-processing/documents/${encodeURIComponent(documentId)}?userId=${encodeURIComponent(userId)}`,
+      { headers: authHeaders() },
+      signal,
+    );
+    if (!status.latestTask?.taskId) throw new AppError("validation", "当前资料没有可重试的处理任务，请重新上传文件");
+    await this.client.request(
+      `/api/v1/document-processing/tasks/${encodeURIComponent(status.latestTask.taskId)}/retry`,
+      { method: "POST", headers: authHeaders(), body: JSON.stringify({ userId }) },
+      signal,
+    );
   }
 
   private async uploadFile(

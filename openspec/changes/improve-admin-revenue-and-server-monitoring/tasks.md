@@ -43,3 +43,5 @@
 - [x] 6.3 Deploy the database migration and Backend first, verify existing user payment and health routes, then deploy Admin without rebuilding Web or desktop companions.
 - [ ] 6.4 Use authoritative Alipay queries to reconcile the two confirmed ¥29.90 production orders one at a time and verify idempotent entitlement delivery and ¥59.80 live revenue.
 - [ ] 6.5 Verify production server monitoring, payment diagnostics, access controls and responsive Admin layouts, then monitor errors and query latency for one sampling window.
+- [x] 6.6 Enforce the official Alipay Seller ID/PID format before activation, expose actionable mismatch diagnostics, and add focused Backend/Admin regressions.
+- [x] 6.7 Correct AI success-state analytics, record core answer/realtime usage in the analytics fact source, stop polling after admin-session expiry, and add focused regressions.

@@ -222,6 +222,7 @@ class Settings(BaseSettings):
     wechat_pay_payment_ttl_seconds: int = 900
     redemption_code_points: dict[str, int] = Field(default_factory=dict)
     redemption_code_pepper: str | None = None
+    billing_usage_reservation_ttl_seconds: int = 30 * 60
     support_wechat_id: str = "OneShowAILab"
     support_email: str = "contact@oneshowailab.com"
     realtime_speech_state_file: str = "artifacts/runtime/realtime-speech-state.json"

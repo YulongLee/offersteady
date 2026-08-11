@@ -61,6 +61,30 @@ def test_concurrent_index_reservations_cannot_overspend() -> None:
 
 
 @pytest.mark.skipif(not DATABASE_URL, reason="OFFERSTEADY_TEST_DATABASE_URL is not configured")
+def test_postgres_abandoned_usage_reservation_is_released_and_cannot_settle(monkeypatch) -> None:
+    current_ms = 2_000_000
+    monkeypatch.setattr("app.services.billing_service._now_ms", lambda: current_ms)
+    settings = Settings(
+        _env_file=None,
+        database_url=DATABASE_URL,
+        environment="test",
+        billing_usage_reservation_ttl_seconds=60,
+    )
+    service = BillingService(settings, billing_repository=PostgresBillingRepository(settings))
+    user_id = f"billing-stale-usage-{uuid4().hex}"
+    reservation = service.reserve_usage(user_id=user_id, usage_id=f"usage-{uuid4().hex}", usage_kind="answer")
+    assert reservation.status == "reserved"
+
+    current_ms += 60_001
+    service.state_for_user(user_id=user_id)
+    late = service.settle_usage(usage_id=reservation.usage_id)
+
+    assert late is not None
+    assert late.status == "released"
+    assert service.state_for_user(user_id=user_id).balance == 200
+
+
+@pytest.mark.skipif(not DATABASE_URL, reason="OFFERSTEADY_TEST_DATABASE_URL is not configured")
 def test_payment_expiry_callback_audit_and_reconciliation() -> None:
     user_id = f"billing-callback-{uuid4().hex}"
     service = service_for_test()

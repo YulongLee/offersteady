@@ -52,6 +52,10 @@
 - **WHEN** provider 返回某条发言的 final transcript
 - **THEN** 系统冻结该条文本、允许其进入稳定 transcript 列表，并让后续问题识别或回答触发只基于 final 内容执行
 
+#### Scenario: Late partial arrives after final transcript
+- **WHEN** provider 已返回某条发言的 final transcript 后又送达同一缓冲区的迟到 partial
+- **THEN** 系统保持已冻结的 final 文本并丢弃迟到 partial，不得让其覆盖 final 或污染下一条发言
+
 #### Scenario: Provider returns blank partial
 - **WHEN** provider 返回空白、纯噪声或不可发布的 partial 结果
 - **THEN** 系统丢弃该结果，不刷新实时对话显示，也不写入最终 transcript 存储

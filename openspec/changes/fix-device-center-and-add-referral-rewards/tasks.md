@@ -33,3 +33,4 @@
 - [ ] 4.5 Run production API and Playwright smoke checks for device center, referral activation and Admin configuration
   - Production API, route and bundle smoke checks passed; the Playwright browser runtime had no available browser instance in this session.
 - [x] 4.6 Re-run focused Web tests, typecheck/build and strict OpenSpec validation for the Billing activation entry
+- [x] 4.7 Make every billing migration initializer preserve `referral_credit` and add a real PostgreSQL schema-order regression.

@@ -82,6 +82,43 @@ def test_admin_domain_command_is_idempotent() -> None:
     assert calls == 1
 
 
+def test_expired_admin_session_is_revoked_when_rejected() -> None:
+    class RepositoryStub:
+        revoked: list[str] = []
+
+        def session_by_fingerprint(self, fingerprint: str):
+            return {
+                "admin_session_id": "admin-session-expired",
+                "user_id": "synthetic-admin",
+                "status": "active",
+                "authorization_status": "active",
+                "authorization_version": 1,
+                "current_authorization_version": 1,
+                "expires_at_ms": 1,
+                "permissions_json": [],
+                "role": "support",
+                "recent_mfa_at_ms": 1,
+            }
+
+        def revoke_session(self, admin_session_id: str) -> None:
+            self.revoked.append(admin_session_id)
+
+    repository = RepositoryStub()
+    service = AdminService(Settings(
+        admin_enabled=True,
+        admin_session_signing_secret="synthetic-signing-secret",
+        admin_encryption_key="synthetic-encryption-key",
+        database_url="postgresql://synthetic.invalid/offersteady",
+    ), repository)  # type: ignore[arg-type]
+    try:
+        service.authenticate("expired-token")
+    except PermissionError as exc:
+        assert str(exc) == "admin_session_invalid"
+    else:
+        raise AssertionError("expired admin session must be rejected")
+    assert repository.revoked == ["admin-session-expired"]
+
+
 def test_browser_admin_provisioning_requires_existing_bootstrap_and_registered_user() -> None:
     class RepositoryStub:
         active_count = 0

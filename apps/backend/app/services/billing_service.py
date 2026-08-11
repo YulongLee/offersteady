@@ -190,6 +190,7 @@ class BillingService:
         }
 
     def state_for_user(self, *, user_id: str) -> BillingStateRecord:
+        self._release_stale_usage_reservations(user_id=user_id)
         self._ensure_welcome_grant(user_id=user_id)
         ledger = self._ledger_for_user(user_id=user_id)
         return BillingStateRecord(
@@ -742,6 +743,7 @@ class BillingService:
     def reserve_usage(self, *, user_id: str, usage_id: str, usage_kind: str) -> UsageReservationRecord:
         if usage_kind not in {"answer", "screenshot_answer"}:
             raise ValueError(f"Unsupported billable usage kind: {usage_kind}")
+        self._release_stale_usage_reservations(user_id=user_id)
         self._ensure_welcome_grant(user_id=user_id)
         points = int(self.rates()["answerPoints" if usage_kind == "answer" else "screenshotAnswerPoints"])
         created_at_ms = _now_ms()
@@ -822,6 +824,29 @@ class BillingService:
             return reservation
         released = UsageReservationRecord(**{**reservation.__dict__, "status": "released", "released_at_ms": _now_ms()})
         self.usage_reservations_by_id[usage_id] = released
+        return released
+
+    def _release_stale_usage_reservations(self, *, user_id: str) -> int:
+        ttl_seconds = max(
+            60,
+            int(self.settings.billing_usage_reservation_ttl_seconds) if self.settings is not None else 30 * 60,
+        )
+        released_at_ms = _now_ms()
+        stale_before_ms = released_at_ms - ttl_seconds * 1000
+        if self.billing_repository is not None:
+            return self.billing_repository.release_stale_usage_reservations(
+                stale_before_ms=stale_before_ms,
+                released_at_ms=released_at_ms,
+                user_id=user_id,
+            )
+        released = 0
+        for usage_id, reservation in list(self.usage_reservations_by_id.items()):
+            if reservation.user_id != user_id or reservation.status != "reserved" or reservation.created_at_ms >= stale_before_ms:
+                continue
+            self.usage_reservations_by_id[usage_id] = UsageReservationRecord(
+                **{**reservation.__dict__, "status": "released", "released_at_ms": released_at_ms}
+            )
+            released += 1
         return released
 
     def _ensure_welcome_grant(self, *, user_id: str) -> None:

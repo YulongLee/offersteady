@@ -59,6 +59,10 @@
 - **WHEN** 回答生成失败、超时、取消或截图无法识别
 - **THEN** 系统释放预留积分并在余额明细中展示未扣费结果
 
+#### Scenario: Reserved operation is abandoned
+- **WHEN** 回答或截图用量长期停留在 `reserved` 且超过服务端公布的预留有效期
+- **THEN** 系统幂等释放该预留、恢复可用余额，并且后续迟到的结算请求不得重新扣费
+
 ### Requirement: Meter knowledge indexing from server Token quotes
 系统 SHALL 对新知识材料使用 200 点最低消费和每 1,000 Token 20 点的版本化服务端报价；15 天和 30 天会员可优先使用对应权益段的两份知识材料额度。
 

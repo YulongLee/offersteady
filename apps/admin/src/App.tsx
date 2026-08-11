@@ -3,7 +3,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { adminApi, isAdminAuthenticationError } from "./api";
 import { buildLinePath, chartDomain, formatTrendChange, formatTrendValue, type TrendMetric, type TrendResponse } from "./analytics";
 import { capacityLevelLabel, formatCapacityValue, type CapacityMetric, type CapacityResponse } from "./capacity";
-import { paymentChannelStatus } from "./payment-channel-status";
+import { paymentAcceptanceOutcomeLabel, paymentChannelStatus } from "./payment-channel-status";
 import { diagnosticLabel, formatCny, type PaymentRevenueSummary } from "./payment-monitoring";
 import { formatUptime, type ServerHealthResponse } from "./server-health";
 import { validateGrowthSettings } from "./growth-settings";
@@ -99,7 +99,7 @@ function Login({ onReady, initialMessage = "" }: { onReady: () => void; initialM
   );
 }
 
-function Dashboard({ data }: { data: Row }) {
+function Dashboard({ data, onAuthenticationExpired }: { data: Row; onAuthenticationExpired: (message: string) => void }) {
   const entries = Object.entries(data).filter(([key]) => key in labels);
   const [range, setRange] = useState<"7d" | "30d" | "90d">("30d");
   const [trends, setTrends] = useState<TrendResponse | null>(null);
@@ -115,6 +115,10 @@ function Dashboard({ data }: { data: Row }) {
     try {
       setTrends(await adminApi.trends(range));
     } catch (error) {
+      if (isAdminAuthenticationError(error)) {
+        onAuthenticationExpired(error.message);
+        return;
+      }
       setTrendError(error instanceof Error ? error.message : "趋势数据暂时不可用");
     } finally {
       setTrendLoading(false);
@@ -131,6 +135,11 @@ function Dashboard({ data }: { data: Row }) {
           setCapacityError("");
         }
       } catch (error) {
+        if (isAdminAuthenticationError(error)) {
+          active = false;
+          onAuthenticationExpired(error.message);
+          return;
+        }
         if (active) setCapacityError(error instanceof Error ? error.message : "容量监控暂时不可用");
       }
     };
@@ -145,7 +154,14 @@ function Dashboard({ data }: { data: Row }) {
     let active = true;
     const loadRevenue = async () => {
       try { const response = await adminApi.paymentRevenue(); if (active) { setRevenue(response); setRevenueError(""); } }
-      catch (error) { if (active) { setRevenue(null); setRevenueError(error instanceof Error ? error.message : "支付实况暂不可用"); } }
+      catch (error) {
+        if (isAdminAuthenticationError(error)) {
+          active = false;
+          onAuthenticationExpired(error.message);
+          return;
+        }
+        if (active) { setRevenue(null); setRevenueError(error instanceof Error ? error.message : "支付实况暂不可用"); }
+      }
     };
     void loadRevenue();
     const timer = window.setInterval(() => void loadRevenue(), 15_000);
@@ -217,13 +233,25 @@ function OrdersPanel({ rows, permissions, onChanged }: { rows: Row[]; permission
   </>;
 }
 
-function ServerMonitor() {
+function ServerMonitor({ onAuthenticationExpired }: { onAuthenticationExpired: (message: string) => void }) {
   const [health, setHealth] = useState<ServerHealthResponse | null>(null);
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
   useEffect(() => {
     let active = true;
-    const load = async () => { try { const response = await adminApi.serverHealth(); if (active) { setHealth(response); setError(""); } } catch (reason) { if (active) setError(reason instanceof Error ? reason.message : "服务器状态暂不可用"); } };
+    const load = async () => {
+      try {
+        const response = await adminApi.serverHealth();
+        if (active) { setHealth(response); setError(""); }
+      } catch (reason) {
+        if (isAdminAuthenticationError(reason)) {
+          active = false;
+          onAuthenticationExpired(reason.message);
+          return;
+        }
+        if (active) setError(reason instanceof Error ? reason.message : "服务器状态暂不可用");
+      }
+    };
     void load(); const timer = window.setInterval(() => void load(), 15_000);
     return () => { active = false; window.clearInterval(timer); };
   }, [reloadKey]);
@@ -666,9 +694,9 @@ function PaymentPanel({ rows, onChanged, onAuthenticationExpired }: { rows: Row[
       <div className="payment-card-head"><div><span>{channel === "wechat" ? "微信支付" : "支付宝"}</span><small>配置 v{String(row.configVersion)} · 更新于 {status.updatedAtLabel}</small></div><span className={`status-badge ${status.active ? "active" : "inactive"}`}>{status.usageLabel}</span></div>
       <section className={`payment-usage ${status.active ? "active" : "inactive"}`} aria-live="polite"><span className="status-dot" /><div><strong>{status.usageLabel}</strong><p>{status.usageDescription}</p></div></section>
       <div className="payment-readiness"><div><span className={`status-badge ${status.ready ? "ready" : "draft"}`}>{status.readinessLabel}</span><p>{status.readinessDescription}</p></div><label className="payment-toggle"><span>允许用户使用</span><input type="checkbox" role="switch" aria-label={`${channel === "wechat" ? "微信支付" : "支付宝"}用户端使用开关`} checked={status.active} disabled={busy === channel || (!row.enabled && !status.ready)} onChange={event => void activate(channel, event.target.checked)} /><span className="toggle-track" aria-hidden="true"><span /></span></label></div>
-      <div className="acceptance-panel"><strong>链路验收状态</strong>{(["notification", "authoritativeQuery"] as const).map(key => { const item = (row.acceptance as Record<string, Record<string, unknown> | null> | undefined)?.[key]; return <div key={key}><span>{key === "notification" ? "异步通知" : "权威查单"}</span><b className={String(item?.status || "unknown")}>{item ? (item.status === "passed" ? "通过" : "失败") : "尚未验证"}</b><small>{item?.atMs ? new Date(Number(item.atMs)).toLocaleString("zh-CN") : "完成一次真实链路后显示"}</small></div>; })}</div>
+      <div className="acceptance-panel"><strong>链路验收状态</strong>{(["notification", "authoritativeQuery"] as const).map(key => { const item = (row.acceptance as Record<string, Record<string, unknown> | null> | undefined)?.[key]; return <div key={key}><span>{key === "notification" ? "异步通知" : "权威查单"}</span><b className={String(item?.status || "unknown")}>{item ? (item.status === "passed" ? "通过" : "失败") : "尚未验证"}</b><small>{item?.atMs ? `${new Date(Number(item.atMs)).toLocaleString("zh-CN")} · ${paymentAcceptanceOutcomeLabel(item.outcome)}` : "完成一次真实链路后显示"}</small></div>; })}</div>
       {status.validationErrors.length > 0 ? <div className="payment-errors"><strong>需要修正</strong><ul>{status.validationErrors.map(error => <li key={error}>{error}</li>)}</ul></div> : null}
-      {draft ? fields.public.map(key => <label key={key}>{paymentLabels[key]}<input value={draft.publicConfig[key] || ""} onChange={event => updatePublic(channel, key, event.target.value)} /></label>) : null}
+      {draft ? fields.public.map(key => <label key={key}>{paymentLabels[key]}<input value={draft.publicConfig[key] || ""} inputMode={channel === "alipay" && ["appId", "sellerId"].includes(key) ? "numeric" : undefined} placeholder={channel === "alipay" && key === "sellerId" ? "以 2088 开头的 16 位签约商户 PID" : undefined} onChange={event => updatePublic(channel, key, event.target.value)} />{channel === "alipay" && key === "sellerId" ? <small>请填写支付宝商户平台显示的签约 PID，不是应用 ID、登录账号或订单号。</small> : null}</label>) : null}
       {draft ? fields.secret.map(key => <label key={key}>{paymentLabels[key]}<textarea value={draft.secrets[key] || ""} placeholder={secretState[key]?.configured ? "已安全配置；留空保持不变" : "尚未配置"} onChange={event => updateSecret(channel, key, event.target.value)} /></label>) : null}
       <button className="payment-save" disabled={busy === channel} onClick={() => void save(channel)}>保存配置并校验</button>
       <small className="payment-save-note">保存或修改配置会自动关闭此渠道；确认状态为“配置可启用”后，再打开上方使用开关。</small>
@@ -782,7 +810,7 @@ export function App() {
       <main className="workspace">
         <header><div><p className="eyebrow">{current.eyebrow}</p><h1>{current.label}</h1></div><div className="header-actions"><span>{new Date().toLocaleDateString("zh-CN")}</span><button onClick={() => void load(view)}>刷新</button><button onClick={() => adminApi.logout().then(() => { sessionRequest.current = null; setAuthenticated(false); })}>退出</button></div></header>
         {error && <div className="alert">{error}</div>}
-        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} /> : view === "server" ? <ServerMonitor /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "pricing" ? <PricingPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "payments" ? <PaymentPanel rows={rows} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "growth" ? <GrowthPanel row={rows[0]} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "orders" ? <OrdersPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : <>
+        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} onAuthenticationExpired={requireNewAdminLogin} /> : view === "server" ? <ServerMonitor onAuthenticationExpired={requireNewAdminLogin} /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "pricing" ? <PricingPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "payments" ? <PaymentPanel rows={rows} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "growth" ? <GrowthPanel row={rows[0]} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "orders" ? <OrdersPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : <>
           <Table rows={rows} />
           <div className="pagination"><button disabled={offset === 0} onClick={() => setOffset(value => Math.max(0, value - 50))}>上一页</button><span>第 {offset / 50 + 1} 页</span><button disabled={rows.length < 50} onClick={() => setOffset(value => value + 50)}>下一页</button></div>
           <ActionPanel view={view} rows={rows} permissions={permissions} onChanged={() => void load(view, true)} />

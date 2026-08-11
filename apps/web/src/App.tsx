@@ -6,18 +6,13 @@ import { BriefcaseIcon, CaretDownIcon, ChartLineUpIcon, ChatCircleTextIcon, Clip
 import type { IdleInterviewStatus, InterviewQuestion, LiveActionState, QuestionStatus, ScreenshotTask, SessionStatus, WebAppState } from "./domain";
 import { runAdapterOperation } from "./api-client";
 import { interviewAppAdapter, runtimeConfig } from "./app-adapter";
-import { DownloadCenter } from "./DownloadCenter";
-import { LibraryManager } from "./LibraryManager";
 import { routes } from "./routes";
 import { ContextPicker } from "./ContextPicker";
 import { contextLevel, eligibleSource, managedLibrarySources, selectionSources, selectionValidity } from "./context-selection";
-import { BillingPage } from "./BillingPage";
-import { GuidePage } from "./GuidePage";
-import { LegalPage } from "./LegalPage";
 import { assetUrl } from "./assets";
 import { interviewPlatforms } from "./platform-brands";
 import { ConversationMonitor } from "./ConversationMonitor";
-import { AnswerWorkspace } from "./AnswerWorkspace";
+import { AnswerWorkspace, BillingPage, DownloadCenter, GuidePage, LegalPage, LibraryManager } from "./route-components";
 import { latestInterviewerTurnText } from "./conversation-turns";
 import { ManualQuestionComposer } from "./ManualQuestionComposer";
 import { AnswerActionBar } from "./AnswerActionBar";
@@ -27,6 +22,7 @@ import { authClient } from "./auth-client";
 import { isInvalidRealtimeSessionStatus, realtimeRetryDelayMs } from "./realtime-recovery";
 import { applyAppearancePreferences, persistAppearancePreferences, readAppearancePreferences, type AppearancePreferences } from "./appearance-preferences";
 import "./styles.css";
+
 
 interface PrototypeContextValue {
   authenticated: boolean;
@@ -249,7 +245,7 @@ function LoginPage() {
       setBusy("");
     }
   };
-  return <main className="center-page"><section className="login-card"><Logo /><span className="prototype-badge">免费使用 · 新用户赠 200 点</span><h1>开始你的面试准备</h1><p>使用手机号验证码完成登录或注册，同一个账号可以管理资料、积分和不同设备上的面试。</p><form className="sms-login-form" onSubmit={challengeId ? verifyCode : sendCode}><label><span>手机号</span><input value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} inputMode="tel" autoComplete="tel" placeholder="请输入手机号" /></label>{challengeId ? <label><span>验证码</span><input value={code} onChange={event => setCode(event.target.value)} inputMode="numeric" autoComplete="one-time-code" placeholder="请输入验证码" /></label> : null}<div className="sms-actions"><button className="button primary large full" type="submit" disabled={Boolean(busy)}>{busy === "verify" ? "登录中..." : challengeId ? "登录 / 注册" : busy === "send" ? "发送中..." : "获取验证码"}</button>{challengeId ? <button className="button ghost full" type="button" disabled={cooldown > 0 || Boolean(busy)} onClick={event => { void sendCode(event as unknown as FormEvent); }}>{cooldown > 0 ? `${cooldown}s 后重发` : "重新发送验证码"}</button> : null}</div></form>{message ? <p className="login-message">{message}</p> : null}<Link className="text-link login-back" to={routes.landing}>返回首页</Link><small className="login-legal-copy">登录即表示你同意<Link to={routes.terms}>用户协议</Link>与<Link to={routes.privacy}>隐私政策</Link>。验证码只用于账号识别和登录校验。</small></section></main>;
+  return <main className="center-page"><section className="login-card"><Logo /><span className="prototype-badge">当前可免费使用</span><h1>开始你的面试准备</h1><p>使用手机号验证码完成登录或注册，同一个账号可以管理资料、积分和不同设备上的面试。</p><form className="sms-login-form" onSubmit={challengeId ? verifyCode : sendCode}><label><span>手机号</span><input value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} inputMode="tel" autoComplete="tel" placeholder="请输入手机号" /></label>{challengeId ? <label><span>验证码</span><input value={code} onChange={event => setCode(event.target.value)} inputMode="numeric" autoComplete="one-time-code" placeholder="请输入验证码" /></label> : null}<div className="sms-actions"><button className="button primary large full" type="submit" disabled={Boolean(busy)}>{busy === "verify" ? "登录中..." : challengeId ? "登录 / 注册" : busy === "send" ? "发送中..." : "获取验证码"}</button>{challengeId ? <button className="button ghost full" type="button" disabled={cooldown > 0 || Boolean(busy)} onClick={event => { void sendCode(event as unknown as FormEvent); }}>{cooldown > 0 ? `${cooldown}s 后重发` : "重新发送验证码"}</button> : null}</div></form>{message ? <p className="login-message">{message}</p> : null}<Link className="text-link login-back" to={routes.landing}>返回首页</Link><small className="login-legal-copy">登录即表示你同意<Link to={routes.terms}>用户协议</Link>与<Link to={routes.privacy}>隐私政策</Link>。验证码只用于账号识别和登录校验。</small></section></main>;
 }
 
 function ReferralLandingPage() {

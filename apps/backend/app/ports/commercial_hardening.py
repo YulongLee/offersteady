@@ -8,7 +8,7 @@ MaterialArtifactKind = Literal["original", "normalized_markdown", "chunk_manifes
 MaterialArtifactSyncStatus = Literal["synced", "processing", "missing", "failed", "deleted"]
 CommercialJobKind = Literal["processing", "deletion", "reconcile"]
 CommercialJobStatus = Literal["queued", "running", "retrying", "succeeded", "failed", "cancelled"]
-AiOperationKind = Literal["parser", "vision", "embedding", "rerank", "chat"]
+AiOperationKind = Literal["parser", "vision", "embedding", "rerank", "chat", "speech"]
 
 
 @dataclass(frozen=True)
@@ -71,6 +71,8 @@ class AiUsageRecord:
     total_units: int | None = None
     point_cost: int | None = None
     duration_ms: int | None = None
+    first_token_ms: int | None = None
+    final_latency_ms: int | None = None
     safe_error_code: str | None = None
     created_at_ms: int = 0
 

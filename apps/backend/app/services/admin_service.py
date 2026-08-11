@@ -122,6 +122,8 @@ class AdminService:
         self.assert_ready()
         row = self.repository.session_by_fingerprint(self.token_fingerprint(token))
         current = now_ms()
+        if row and row["status"] == "active" and int(row["expires_at_ms"]) <= current:
+            self.repository.revoke_session(str(row["admin_session_id"]))
         if (
             not row
             or row["status"] != "active"

@@ -17,6 +17,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from app.core.config import REPO_ROOT, Settings
+from app.services.postgres_migrations import apply_sql_migrations
 
 
 def now_ms() -> int:
@@ -312,7 +313,7 @@ class AdminRepository:
                 "pending_orders": "SELECT COUNT(*) AS value FROM billing_checkout_orders WHERE status = 'payment_pending'",
                 "failed_materials": "SELECT COUNT(*) AS value FROM material_documents WHERE status NOT IN ('ready','deleted')",
                 "ai_calls_24h": "SELECT COUNT(*) AS value FROM ai_usage_records WHERE created_at_ms >= %s",
-                "ai_errors_24h": "SELECT COUNT(*) AS value FROM ai_usage_records WHERE created_at_ms >= %s AND status <> 'success'",
+                "ai_errors_24h": "SELECT COUNT(*) AS value FROM ai_usage_records WHERE created_at_ms >= %s AND status <> 'succeeded'",
             }
             result: dict[str, Any] = {}
             for key, query in queries.items():
@@ -1030,8 +1031,9 @@ class AdminRepository:
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0018_admin_managed_billing_catalog.sql",
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0020_admin_payment_diagnostics.sql",
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0021_referral_rewards.sql",
+            Path(REPO_ROOT) / "apps/backend/migrations/versions/0022_referral_ledger_constraint_repair.sql",
+            Path(REPO_ROOT) / "apps/backend/migrations/versions/0024_ai_runtime_performance_metrics.sql",
         ]
         with self.connect() as connection, connection.cursor() as cursor:
-            for migration in migrations:
-                cursor.execute(migration.read_text(encoding="utf8"))
+            apply_sql_migrations(cursor, migrations)
             connection.commit()

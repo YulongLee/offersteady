@@ -15,7 +15,6 @@ export const detectArchitecture = (userAgent: string, platform = navigator.platf
 };
 
 export const downloadableRelease = (entry: DesktopReleaseEntry) => {
-  if (entry.signingStatus === "local-development") return Boolean(entry.downloadUrl || entry.localPath);
   return entry.signingStatus === "verified" && Boolean(entry.downloadUrl) && /^[a-f0-9]{64}$/i.test(entry.sha256) && (entry.platform !== "macos" || entry.notarized);
 };
 

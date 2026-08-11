@@ -4,6 +4,7 @@ import { App } from "./App";
 import { interviewAppAdapter } from "./app-adapter";
 import type { WebAppState } from "./domain";
 import { mockSuccessfulMaterialUploadAdapter } from "./test-adapter-builders";
+import { materialUploadAdapter } from "./material-upload-adapter";
 import { syntheticState } from "./test-state";
 
 const open = (path: string, mutate?: (state: WebAppState) => void) => {
@@ -98,6 +99,25 @@ const connectWithMachineCode = async () => {
 };
 
 describe("categorized materials and reachable live actions", () => {
+  it("retries a failed document through the backend instead of only refreshing local state", async () => {
+    const retry = vi.spyOn(materialUploadAdapter, "retryDocument").mockResolvedValue();
+    open("/app/library", state => {
+      const failed = state.knowledgeDocuments[0];
+      if (!failed) throw new Error("knowledge fixture is required");
+      state.knowledgeDocuments = state.knowledgeDocuments.map((item, index) => index === 0 ? {
+          ...failed,
+          status: "failed",
+          syncStatus: "failed",
+          safeSummary: "文档解析失败，可重新处理。",
+        } : item);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "重新处理" }));
+
+    await waitFor(() => expect(retry).toHaveBeenCalledWith("admin", "kb-performance", expect.any(AbortSignal)));
+    expect(await screen.findByText(/已重新提交资料处理任务/)).toBeInTheDocument();
+    expect(screen.getByText(/完成前不会用于新面试/)).toBeInTheDocument();
+  });
   it("separates resume, JD and knowledge management without authorizing a new resume", async () => {
     open("/app/library");
     const tabs = screen.getByRole("navigation", { name: "资料类型" });

@@ -15,3 +15,4 @@
 - [x] 3.1 Define multi-device auth-session storage, refresh-token revocation, and authenticated-session read boundaries
 - [x] 3.2 Define future membership and entitlement linkage boundaries without implementing payment or membership logic
 - [x] 3.3 Add security and service verification tasks, including token validation, revoked-session handling, credential redaction, and `openspec validate establish-authentication-service --strict`
+- [x] 3.4 Persist elapsed active sessions as expired during token validation and device-session listing, with a focused regression

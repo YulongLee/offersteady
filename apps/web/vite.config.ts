@@ -1,8 +1,14 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
+  resolve: {
+    alias: mode === "test" ? {
+      "./route-components": fileURLToPath(new URL("./src/route-components.eager.ts", import.meta.url)),
+    } : {},
+  },
   build: {
     target: "chrome86",
   },
@@ -20,4 +26,4 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",
   },
-});
+}));

@@ -405,7 +405,14 @@ class AuthenticationService:
         return self._complete_wechat_authorization(session=session, profile=profile, source="provider-callback")
 
     def list_auth_sessions(self, *, auth_context: AuthenticatedRequestContext) -> list[AuthSessionRecord]:
-        return self.repository.list_auth_sessions_for_user(user_id=auth_context.user_id)
+        current = _now_ms()
+        sessions = self.repository.list_auth_sessions_for_user(user_id=auth_context.user_id)
+        return [
+            self.repository.save_auth_session(replace(session, status="expired", revoked_at_ms=current))
+            if session.status == "active" and current > session.expires_at_ms
+            else session
+            for session in sessions
+        ]
 
     def authenticate_access_token(self, *, access_token: str) -> AuthenticatedRequestContext:
         payload = self.token_codec.decode_access_token(access_token)
@@ -413,6 +420,7 @@ class AuthenticationService:
         if session is None or session.status != "active" or session.user_id != payload.sub:
             raise DomainRequestError("authentication", "authenticate", "登录状态已失效，请重新登录。", 401)
         if _now_ms() > session.expires_at_ms:
+            self.repository.save_auth_session(replace(session, status="expired", revoked_at_ms=_now_ms()))
             raise DomainRequestError("authentication", "authenticate", "登录状态已失效，请重新登录。", 401)
         self._require_user(payload.sub)
         updated = self.repository.save_auth_session(replace(session, last_used_at_ms=_now_ms()))

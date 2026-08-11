@@ -23,6 +23,8 @@
 - [x] 2.11 Replace the hero points and pricing prompts with adjacent “免费使用” and public “使用手册” actions
 - [x] 2.12 Add a responsive common-platform compatibility section using traceable authentic brand marks, truthful capability boundaries and regression coverage
 - [x] 2.13 Build a responsive commercial footer with product links, public documentation, configured contact details and filing information
+- [x] 2.14 Align public legal copy with the active commercial service and add regression coverage preventing pre-commercial draft wording.
+- [x] 2.15 Split the oversized Web entry bundle into route-level chunks while preserving route loading and production behavior.
 
 ## 3. Verified Windows Support
 
@@ -36,6 +38,7 @@
 - [ ] 3.8 Revoke support and download visibility when release or capability evidence is withdrawn
 - [ ] 3.9 Add authorization, incomplete-gate, stale-evidence, withdrawal and cross-page consistency tests
 - [ ] 3.10 Complete Windows signed release, pairing, capture and physical-device verification before enabling the claim
+- [x] 3.11 Hide all local-development or unverified desktop artifacts from public download actions and add cross-page release-gate regressions.
 
 ## 4. Official WeChat Account Entry
 

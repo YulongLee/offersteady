@@ -31,6 +31,7 @@ from app.ports.chat import (
     UsageReport,
 )
 from app.ports.retrieval import RetrievalContext, RetrievalFilter, RetrievalPort
+from app.ports.commercial_hardening import AiUsageRecord, CommercialHardeningRepository
 from app.ports.storage import FileStoragePort
 from app.schemas.retrieval import RetrievalResponse, RetrievedChunkResponse
 from app.services.session_service import SessionService
@@ -433,6 +434,7 @@ class ChatService:
         prompt_builder: PromptBuilderPort,
         llm_gateway: LLMGatewayPort,
         billing_service: BillingService | None = None,
+        commercial_repository: CommercialHardeningRepository | None = None,
     ) -> None:
         self.settings = settings
         self.logger = logger
@@ -444,6 +446,7 @@ class ChatService:
         self.prompt_builder = prompt_builder
         self.llm_gateway = llm_gateway
         self.billing_service = billing_service
+        self.commercial_repository = commercial_repository
         self.billing_usage_by_task: dict[str, str] = {}
 
     def _reserve_answer_usage(self, *, user_id: str, usage_id: str) -> None:
@@ -452,6 +455,41 @@ class ChatService:
         reservation = self.billing_service.reserve_usage(user_id=user_id, usage_id=usage_id, usage_kind="answer")
         if reservation.status == "insufficient_balance":
             raise DomainRequestError("billing", "reserve-answer", "积分不足，请先购买积分或开通会员。", 409)
+
+    def _record_ai_usage(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        task_id: str,
+        status: str,
+        started_at_ms: int,
+        usage: UsageReport | None = None,
+        first_token_ms: int | None = None,
+        safe_error_code: str | None = None,
+    ) -> None:
+        if self.commercial_repository is None:
+            return
+        try:
+            self.commercial_repository.record_ai_usage(AiUsageRecord(
+                usage_id=f"ai-chat:{task_id}",
+                owner_user_id=user_id,
+                operation_kind="chat",
+                provider=usage.provider_name if usage is not None else "qwen-compatible",
+                model=usage.model_name if usage is not None else self.settings.chat_qwen_model,
+                status="succeeded" if status == "succeeded" else "failed",
+                related_task_id=task_id,
+                session_id=session_id,
+                input_units=usage.prompt_tokens if usage is not None else None,
+                output_units=usage.completion_tokens if usage is not None else None,
+                total_units=usage.total_tokens if usage is not None else None,
+                duration_ms=max(0, _now_ms() - started_at_ms),
+                first_token_ms=first_token_ms,
+                safe_error_code=safe_error_code,
+                created_at_ms=_now_ms(),
+            ))
+        except Exception as exc:  # Observability must never break a user answer.
+            self.logger.warning("chat.ai_usage_record_failed", extra={"task_id": task_id, "safe_error_code": exc.__class__.__name__})
 
     def _load_stage_prompt(self, stage: str) -> tuple[str, PromptConfig]:
         loader = getattr(self.prompt_template, "load_stage_prompt", None)
@@ -565,6 +603,10 @@ class ChatService:
                         model_name=gateway_result.usage.model_name,
                         related_task_id=completed.task_id,
                     )
+                self._record_ai_usage(
+                    user_id=user_id, session_id=session_id, task_id=completed.task_id,
+                    status="succeeded", started_at_ms=now_ms, usage=gateway_result.usage,
+                )
                 self._log(logging.INFO, "chat.completed", task=completed, session_id=session_id, question=question, retry_count=attempt)
                 if self.billing_service is not None:
                     self.billing_service.settle_usage(usage_id=billing_usage_id)
@@ -590,6 +632,10 @@ class ChatService:
         )
         if self.billing_service is not None:
             self.billing_service.release_usage(usage_id=billing_usage_id)
+        self._record_ai_usage(
+            user_id=user_id, session_id=session_id, task_id=failed.task_id,
+            status="failed", started_at_ms=now_ms, safe_error_code=error_code,
+        )
         self._log(logging.WARNING, "chat.failed", task=failed, session_id=session_id, question=question, retry_count=failed.retry_count, error_code=error_code)
         return failed, self._to_retrieval_response(retrieval)
 
@@ -856,6 +902,11 @@ class ChatService:
                     model_name=usage.model_name,
                     related_task_id=completed.task_id,
                 )
+                self._record_ai_usage(
+                    user_id=user_id, session_id=session_id, task_id=completed.task_id,
+                    status="succeeded", started_at_ms=stream_started_at_ms, usage=usage,
+                    first_token_ms=(first_token_at_ms - stream_started_at_ms) if first_token_at_ms is not None else None,
+                )
                 log_event(
                     self.logger, logging.INFO, settings=self.settings,
                     event="chat.prompt_quality_completed", feature="live-answer", action="prompt-quality",
@@ -897,6 +948,10 @@ class ChatService:
         )
         if self.billing_service is not None:
             self.billing_service.release_usage(usage_id=billing_usage_id)
+        self._record_ai_usage(
+            user_id=user_id, session_id=session_id, task_id=failed.task_id,
+            status="failed", started_at_ms=stream_started_at_ms, safe_error_code=error_code,
+        )
         self._log(logging.WARNING, "chat.stream_failed", task=failed, session_id=session_id, question=question, retry_count=failed.retry_count, error_code=error_code)
         yield {"type": "failed", "task": failed, "error_code": error_code, "error_message": failed.error_message, "partial_text": failed.answer_text}
 

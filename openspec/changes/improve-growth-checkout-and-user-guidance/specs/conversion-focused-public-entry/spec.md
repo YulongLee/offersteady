@@ -53,3 +53,10 @@ The public homepage SHALL end with a responsive multi-column footer containing b
 - **THEN** the visitor can open the public guide, installation guidance, user agreement and privacy policy
 - **AND** the footer displays the currently configured customer-service WeChat ID, email and service hours
 - **AND** the MIIT filing number links to the official filing website
+
+### Requirement: Published legal copy matches commercial operation
+Public terms and privacy copy SHALL describe the currently operating service and MUST NOT label the policy as a pre-commercial draft. It SHALL state the current data categories, third-party processing categories, retention approach, user controls, payment confirmation boundary and contact path without promising unimplemented deletion or refund outcomes.
+
+#### Scenario: Paying user reviews privacy terms
+- **WHEN** a visitor opens `/terms` or `/privacy` on the commercial site
+- **THEN** the document describes the active paid service and does not say that professional review is deferred until before commercialization

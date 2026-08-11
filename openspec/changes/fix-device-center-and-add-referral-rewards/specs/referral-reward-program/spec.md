@@ -64,6 +64,10 @@
 - **WHEN** 保存奖励账本失败
 - **THEN** 激活关系一并回滚，客户端收到可重试失败而不是部分成功
 
+#### Scenario: Multiple billing repositories initialize in production
+- **WHEN** 兑换码、管理后台和计费仓库以任意顺序初始化或重启
+- **THEN** 最终数据库账本约束仍允许 `referral_credit`，且一次真实 PostgreSQL 激活能够原子写入关系和奖励流水
+
 ### Requirement: Admin controls referral availability and reward amount
 后台管理平台 SHALL 提供邀请奖励启用开关和单次奖励积分配置。更新 MUST 要求 `growth.manage` 权限、1–100000 的整数额度、变更原因和管理员审计，并记录配置版本与更新时间。
 

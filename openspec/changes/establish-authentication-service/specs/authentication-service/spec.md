@@ -55,6 +55,10 @@ The system SHALL support multiple simultaneous authenticated sessions per accoun
 - **WHEN** the user logs out from one authenticated device session
 - **THEN** the system MUST revoke that session’s refresh token without automatically revoking every other active device session unless explicitly requested
 
+#### Scenario: An expired device session is observed
+- **WHEN** token validation or the authenticated device-session list encounters an active row whose expiry time has passed
+- **THEN** the system MUST persist that session as expired and MUST NOT continue presenting it as an active device
+
 ### Requirement: The authentication service MUST expose current-user information safely
 The system SHALL provide one authenticated current-user endpoint or equivalent boundary that returns safe profile and account metadata without exposing password hashes, provider secrets, or internal token material.
 

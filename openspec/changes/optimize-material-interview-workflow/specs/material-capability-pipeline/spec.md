@@ -22,6 +22,10 @@ The system SHALL convert uploaded materials to normalized Markdown through the c
 - **WHEN** MinerU returns failure, times out or the converted Markdown is empty
 - **THEN** the document version is not selectable for interviews and the material list exposes a safe failure reason
 
+#### Scenario: User retries failed processing
+- **WHEN** a user selects retry for a failed or artifact-missing material they own
+- **THEN** the Web client resolves the latest backend processing task, submits the real retry command, keeps the material unselectable while processing, and shows an actionable re-upload or support path if retry cannot start
+
 ### Requirement: Knowledge materials produce chunks and vector index records
 The system SHALL build chunk artifacts and vector index records for Knowledge materials before marking them selectable. Resume and JD materials SHALL be allowed to become selectable after verified normalized Markdown is available, even if they are not used as default RAG sources.
 

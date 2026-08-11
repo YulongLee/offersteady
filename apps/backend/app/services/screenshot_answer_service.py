@@ -29,6 +29,7 @@ from app.ports.chat import (
     UsageReport,
 )
 from app.ports.retrieval import RetrievalContext, RetrievalFilter, RetrievalPort
+from app.ports.commercial_hardening import AiUsageRecord, CommercialHardeningRepository
 from app.ports.storage import FileStoragePort
 from app.ports.screenshot_answer import (
     ConfirmedScreenshotUpload,
@@ -497,6 +498,7 @@ class ScreenshotAnswerService:
         prompt_builder: ScreenshotPromptBuilderPort,
         llm_gateway: LLMGatewayPort,
         billing_service: BillingService | None = None,
+        commercial_repository: CommercialHardeningRepository | None = None,
     ) -> None:
         self.settings = settings
         self.logger = logger
@@ -511,6 +513,38 @@ class ScreenshotAnswerService:
         self.prompt_builder = prompt_builder
         self.llm_gateway = llm_gateway
         self.billing_service = billing_service
+        self.commercial_repository = commercial_repository
+
+    def _record_ai_usage(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        task_id: str,
+        status: str,
+        started_at_ms: int,
+        usage: UsageReport | None = None,
+        safe_error_code: str | None = None,
+    ) -> None:
+        if self.commercial_repository is None:
+            return
+        try:
+            self.commercial_repository.record_ai_usage(AiUsageRecord(
+                usage_id=f"ai-vision:{task_id}",
+                owner_user_id=user_id,
+                operation_kind="vision",
+                provider=usage.provider_name if usage is not None else "vision-compatible",
+                model=usage.model_name if usage is not None else self.settings.screenshot_vision_model,
+                status="succeeded" if status == "succeeded" else "failed",
+                related_task_id=task_id,
+                session_id=session_id,
+                total_units=usage.total_tokens if usage is not None else None,
+                duration_ms=max(0, _now_ms() - started_at_ms),
+                safe_error_code=safe_error_code,
+                created_at_ms=_now_ms(),
+            ))
+        except Exception as exc:  # Observability must never break screenshot answers.
+            self.logger.warning("screenshot_answer.ai_usage_record_failed", extra={"task_id": task_id, "safe_error_code": exc.__class__.__name__})
 
     def validation_policy(self) -> dict[str, object]:
         return {
@@ -815,6 +849,10 @@ class ScreenshotAnswerService:
                     completed = self.repository.save_task(replace(completed, telemetry=self._telemetry_from_metrics(telemetry)))
                 if self.billing_service is not None:
                     self.billing_service.settle_usage(usage_id=billing_usage_id)
+                self._record_ai_usage(
+                    user_id=user_id, session_id=session_id, task_id=completed.task_id,
+                    status="succeeded", started_at_ms=completed.created_at_ms, usage=vision.usage,
+                )
                 return completed, self._to_retrieval_response(retrieval_context)
             except (RetryableVisionError, RetryableChatError) as exc:
                 last_error = exc
@@ -849,6 +887,10 @@ class ScreenshotAnswerService:
         )
         if self.billing_service is not None:
             self.billing_service.release_usage(usage_id=billing_usage_id)
+        self._record_ai_usage(
+            user_id=user_id, session_id=session_id, task_id=failed.task_id,
+            status="failed", started_at_ms=failed.created_at_ms, safe_error_code=failed.error_code,
+        )
         self._log(logging.WARNING, "screenshot_answer.failed", task=failed, session_id=session_id, image_count=len(image_ids), retry_count=failed.retry_count, error_code=failed.error_code)
         return failed, self._to_retrieval_response(retrieval_context)
 
