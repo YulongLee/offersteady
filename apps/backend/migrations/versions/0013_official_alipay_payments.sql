@@ -20,7 +20,10 @@ ALTER TABLE billing_reconciliation_issues
   DROP CONSTRAINT IF EXISTS billing_reconciliation_issues_issue_type_check;
 ALTER TABLE billing_reconciliation_issues
   ADD CONSTRAINT billing_reconciliation_issues_issue_type_check
-  CHECK (issue_type IN ('unknown_order', 'amount_mismatch', 'provider_mismatch', 'processing_failure'));
+  CHECK (issue_type IN (
+    'unknown_order', 'amount_mismatch', 'provider_mismatch', 'processing_failure',
+    'invalid_signature', 'app_identity_mismatch', 'seller_identity_mismatch'
+  ));
 
 CREATE INDEX IF NOT EXISTS idx_billing_checkout_orders_provider_status
   ON billing_checkout_orders(provider, status, created_at_ms DESC);

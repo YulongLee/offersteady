@@ -61,9 +61,12 @@ def test_authoritative_unpaid_result_never_grants_entitlement() -> None:
 
 def test_payment_diagnostics_migration_is_backward_compatible_and_safe() -> None:
     migration = Path("apps/backend/migrations/versions/0020_admin_payment_diagnostics.sql").read_text()
+    alipay_migration = Path("apps/backend/migrations/versions/0013_official_alipay_payments.sql").read_text()
     assert migration.count("ADD COLUMN IF NOT EXISTS") == 4
     assert "app_identity_verified BOOLEAN" in migration
     assert "seller_identity_verified BOOLEAN" in migration
+    assert "seller_identity_mismatch" in alipay_migration
+    assert "app_identity_mismatch" in alipay_migration
     assert "raw_payload" not in migration
     assert "private_key" not in migration.lower()
 
