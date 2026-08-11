@@ -42,6 +42,7 @@ assert.match(notFound, /<meta name="robots" content="noindex, follow"\s*\/>/);
 assert.match(nginx, /if \(\$host = www\.mianshiwen\.cn\)\s*\{\s*return 308 https:\/\/mianshiwen\.cn\$request_uri;/);
 assert.match(nginx, /location = \/robots\.txt[\s\S]*?try_files \$uri =404;/);
 assert.match(nginx, /location = \/sitemap\.xml[\s\S]*?try_files \$uri =404;/);
+assert.match(nginx, /location ~ \^\/guide\/\?\$[\s\S]*?try_files \/index\.html =404;/);
 assert.match(nginx, /location ~ \^\/\(\?:login\|terms\|privacy\|error\|invite\/\[\^\/\]\+\|app/);
 assert.ok(nginx.includes('location ~* "^/assets/.+-[A-Za-z0-9_-]{8}\\.(?:js|css)$"'));
 assert.match(nginx, /location ~\* "\^\/assets\/[\s\S]*?Cache-Control "public, max-age=31536000, immutable"/);
