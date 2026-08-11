@@ -159,15 +159,22 @@ h1, h2, h3, p { margin-top: 0; }
 .user-scenarios-intro { max-width: 760px; margin: 0 auto 42px; text-align: center; }
 .user-scenarios-intro h2 { margin: 14px 0 13px; font-size: clamp(32px, 4vw, 48px); letter-spacing: -.04em; }
 .user-scenarios-intro p { color: var(--muted); margin: 0; font-size: 12px; line-height: 1.8; }
+.user-scenarios-intro p strong { color: var(--brand); font-weight: 800; }
 .user-scenarios-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.user-scenario-card { min-width: 0; min-height: 196px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel-bg-soft); padding: 26px; }
-.user-scenario-card header { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 14px; margin-bottom: 20px; }
+.user-scenario-card { display: flex; min-width: 0; min-height: 306px; flex-direction: column; border: 1px solid var(--line); border-radius: 18px; background: var(--panel-bg-soft); padding: 26px; transition: border-color .18s ease, background-color .18s ease, transform .18s ease; }
+.user-scenario-card:hover { border-color: rgba(110,231,189,.3); background: var(--panel-bg); transform: translateY(-2px); }
+.user-scenario-card header { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 14px; margin-bottom: 18px; }
 .user-scenario-icon { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid rgba(110,231,189,.2); border-radius: 50%; color: var(--brand); background: rgba(110,231,189,.08); }
 .user-scenario-card header > div { min-width: 0; }
-.user-scenario-card h3 { margin: 0 0 5px; font-size: 15px; }
-.user-scenario-card header div > span { display: block; overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.user-scenario-card header small { align-self: start; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: rgba(255,255,255,.025); padding: 5px 8px; font-size: 8px; white-space: nowrap; }
-.user-scenario-card > p { color: #b9c5d3; margin: 0; font-size: 11px; line-height: 1.9; }
+.user-scenario-card h3 { margin: 0 0 5px; font-size: 16px; }
+.user-scenario-card header div > span { display: block; overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.user-scenario-card header small { align-self: start; border: 1px solid rgba(110,231,189,.2); border-radius: 999px; color: var(--brand); background: rgba(110,231,189,.06); padding: 5px 8px; font-size: 9px; font-weight: 750; white-space: nowrap; }
+.scenario-focus { display: grid; gap: 7px; border-left: 2px solid var(--brand); border-radius: 0 10px 10px 0; background: rgba(110,231,189,.045); padding: 12px 14px; margin-bottom: 15px; }
+.scenario-focus span { color: var(--brand); font-size: 9px; font-weight: 800; letter-spacing: .1em; }
+.scenario-focus strong { color: #dce5ef; font-size: 13px; line-height: 1.55; }
+.user-scenario-card > p { color: #b9c5d3; margin: 0 0 18px; font-size: 12px; line-height: 1.85; }
+.scenario-capabilities { display: flex; flex-wrap: wrap; gap: 7px; margin-top: auto; }
+.scenario-capabilities span { border: 1px solid var(--line); border-radius: 999px; color: #aab8c9; background: rgba(255,255,255,.025); padding: 5px 8px; font-size: 9px; }
 .product-facts { padding-block: 105px; }
 .product-facts-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 105px; }
 .product-facts-grid article { display: flex; min-width: 0; flex-direction: column; align-items: center; border: 1px solid var(--line); border-radius: 16px; background: var(--panel-bg-soft); padding: 25px 16px; text-align: center; }
@@ -951,6 +958,7 @@ h1, h2, h3, p { margin-top: 0; }
 .user-scenario-card header { grid-template-columns: 42px minmax(0, 1fr); gap: 12px; margin-bottom: 16px; }
 .user-scenario-icon { width: 40px; height: 40px; }
 .user-scenario-card header small { grid-column: 2; justify-self: start; }
+.scenario-focus { padding: 11px 12px; }
 .product-facts { padding-block: 74px; }
 .product-facts-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 74px; }
 .product-facts-grid article { padding: 21px 10px; }

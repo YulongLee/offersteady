@@ -45,18 +45,22 @@ describe("optimized product experience", () => {
     expect(styles).toMatch(/@media\s*\(max-width:\s*720px\)[\s\S]*\.core-capabilities-grid\s*\{\s*grid-template-columns:\s*1fr;/);
   });
 
-  it("labels six synthetic user scenarios without presenting invented endorsements as real", () => {
+  it("presents six clearly labelled scenario stories without inventing real endorsements", () => {
     open("/", false);
-    const section = screen.getByRole("heading", { name: "不同求职阶段，怎么用面试稳" }).closest("section");
+    const section = screen.getByRole("heading", { name: "典型使用反馈" }).closest("section");
     expect(section).not.toBeNull();
     expect(within(section!).getAllByRole("article")).toHaveLength(6);
-    expect(within(section!).getAllByText("合成示例")).toHaveLength(6);
-    expect(section).toHaveTextContent("不代表真实用户评价、任职背书或录用结果");
+    expect(within(section!).getAllByText("情景示例")).toHaveLength(6);
+    expect(section).toHaveTextContent("情景示例 · 非真实用户评价");
+    expect(section).toHaveTextContent("不代表真实人物、任职背书或录用结果");
     ["产品经理 · 社招面试", "后端工程师 · 技术面", "数据分析师 · 案例面", "应届毕业生 · 首次面试", "设计岗位 · 作品集面试", "跨行业求职者 · 转岗面试"].forEach(title => {
       expect(within(section!).getByRole("heading", { name: title })).toBeInTheDocument();
     });
+    expect(within(section!).getAllByText("典型困扰")).toHaveLength(6);
+    expect(within(section!).getAllByLabelText("使用能力")).toHaveLength(6);
+    expect(section!.querySelectorAll(".scenario-capabilities span")).toHaveLength(18);
     expect(section!.querySelectorAll('.user-scenario-icon[aria-hidden="true"] svg')).toHaveLength(6);
-    expect(section).not.toHaveTextContent(/腾讯|Google|Microsoft|亚马逊|美团|五星|获得.*Offer/);
+    expect(section).not.toHaveTextContent(/腾讯|字节|Google|Microsoft|亚马逊|美团|五星|获得.*Offer|成功案例/);
     const styles = readFileSync("src/styles.css", "utf8");
     expect(styles).toMatch(/\.user-scenarios-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s);
     expect(styles).toMatch(/@media\s*\(max-width:\s*720px\)[\s\S]*\.user-scenarios-grid\s*\{\s*grid-template-columns:\s*1fr;/);
