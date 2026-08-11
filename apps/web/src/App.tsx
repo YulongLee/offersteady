@@ -62,12 +62,20 @@ function PrototypeProvider({ children, initialAuthenticated, initialState }: { r
     const existing = authClient.readStoredSession();
     const initialize = async () => {
       if (existing) {
-        await authClient.restore(controller.signal);
-        setAuthenticatedState(true);
+        try {
+          await authClient.restore(controller.signal);
+          setAuthenticatedState(true);
+          return interviewAppAdapter.loadState(controller.signal);
+        } catch (error) {
+          if (controller.signal.aborted) throw error;
+          authClient.clear();
+          setAuthenticatedState(false);
+          return interviewAppAdapter.loadState(controller.signal, { auth: false });
+        }
       } else {
         setAuthenticatedState(false);
       }
-      return interviewAppAdapter.loadState(controller.signal, existing ? undefined : { auth: true });
+      return interviewAppAdapter.loadState(controller.signal, { auth: false });
     };
     void initialize()
       .then(next => {

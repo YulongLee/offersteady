@@ -50,21 +50,36 @@ describe("application initialization", () => {
     expect(await screen.findByRole("heading", { name: /AI 面试助手/ })).toBeInTheDocument();
     expect(authClient.restore).not.toHaveBeenCalled();
     expect(loadState).toHaveBeenCalledTimes(1);
-    expect(loadState.mock.calls[0]?.[1]).toEqual({ auth: true });
+    expect(loadState.mock.calls[0]?.[1]).toEqual({ auth: false });
   });
 
-  it("shows the backend error only when the final saved-session initialization fails", async () => {
+  it("clears an unrestorable saved session and falls back to public state", async () => {
     const restoration = deferred<StoredAuthSession>();
     vi.spyOn(authClient, "readStoredSession").mockReturnValue(session);
     vi.spyOn(authClient, "restore").mockReturnValue(restoration.promise);
+    const clear = vi.spyOn(authClient, "clear");
     const loadState = vi.spyOn(interviewAppAdapter, "loadState").mockResolvedValue(structuredClone(syntheticState));
     window.history.pushState({}, "", "/app");
     render(<App />);
 
     expect(screen.queryByText("后端页面状态无法加载")).not.toBeInTheDocument();
     await act(async () => restoration.reject(new Error("会话恢复失败")));
+    expect(await screen.findByRole("heading", { name: "开始你的面试准备" })).toBeInTheDocument();
+    expect(screen.queryByText("后端页面状态无法加载")).not.toBeInTheDocument();
+    expect(clear).toHaveBeenCalledTimes(1);
+    expect(loadState).toHaveBeenCalledTimes(1);
+    expect(loadState.mock.calls[0]?.[1]).toEqual({ auth: false });
+  });
+
+  it("shows the backend error only when saved-session recovery and public state both fail", async () => {
+    vi.spyOn(authClient, "readStoredSession").mockReturnValue(session);
+    vi.spyOn(authClient, "restore").mockRejectedValue(new Error("会话恢复失败"));
+    vi.spyOn(authClient, "clear");
+    vi.spyOn(interviewAppAdapter, "loadState").mockRejectedValue(new Error("公共状态加载失败"));
+    window.history.pushState({}, "", "/app");
+    render(<App />);
+
     expect(await screen.findByText("后端页面状态无法加载")).toBeInTheDocument();
-    expect(screen.getByText(/会话恢复失败/)).toBeInTheDocument();
-    expect(loadState).not.toHaveBeenCalled();
+    expect(screen.getByText(/公共状态加载失败/)).toBeInTheDocument();
   });
 });
