@@ -22,6 +22,14 @@ The homepage SHALL explain that users can choose point-based usage or 3/7/15/30-
 - **WHEN** the visitor opens the pricing-value section
 - **THEN** the page distinguishes occasional point usage from short-term high-frequency membership and links to complete pricing terms
 
+### Requirement: Public homepage uses the approved commercial metrics and free-use wording
+The public homepage SHALL display the operator-approved metrics `累计面试 10W+`, `效率提升 98%`, `面试题库 1W+` and `支持岗位 100+`. The homepage and public sharing image SHALL use “免费使用” wording and MUST NOT expose the welcome-grant points amount or “新用户赠送” wording; detailed point balances remain available after sign-in.
+
+#### Scenario: Visitor reviews commercial proof and free entry
+- **WHEN** a visitor opens the public homepage or its sharing preview
+- **THEN** the four approved commercial metrics are visible
+- **AND** no `200 点` or `新用户赠送` copy is used as public acquisition messaging
+
 ### Requirement: Common interview platforms are presented with truthful compatibility boundaries
 The homepage SHALL present a responsive compatibility section for common remote-interview, collaboration and online-assessment platforms using the current homepage theme surfaces and card hierarchy. Each platform SHALL use a traceable authentic brand mark alongside a visible recognizable name, preserve the mark's proportions and colors, and MUST NOT substitute initials, a fabricated logo or an unexplained symbol-only mark. The section MUST NOT add a disclaimer paragraph below the platform cards.
 

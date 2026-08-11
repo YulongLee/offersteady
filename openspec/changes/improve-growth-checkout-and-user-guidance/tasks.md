@@ -115,3 +115,4 @@
 - [ ] 8.8 Run the supported Windows download → install → bind → capture → manual fallback journey
 - [x] 8.9 Run full typecheck, unit, integration, production build and OpenSpec strict validation
 - [ ] 8.10 Define launch dashboards for CTA conversion, login completion, payment success, delayed confirmation and guide search gaps
+- [x] 8.11 Display the approved homepage metrics and remove public welcome-point messaging from the homepage and sharing image

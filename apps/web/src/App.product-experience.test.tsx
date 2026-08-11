@@ -113,7 +113,7 @@ describe("optimized product experience", () => {
     expect(styles).toMatch(/@media\s*\(max-width:\s*720px\)[\s\S]*\.user-scenarios-grid\s*\{\s*grid-template-columns:\s*1fr;/);
   });
 
-  it("shows verifiable product facts and interactive FAQ answers from current billing state", () => {
+  it("shows the requested commercial metrics without exposing the welcome-point amount", () => {
     open("/", false, state => {
       state.billing = {
         ...state.billing,
@@ -123,17 +123,18 @@ describe("optimized product experience", () => {
       };
     });
     const section = screen.getByRole("region", { name: "产品信息与常见问题" });
-    const facts = within(section).getByLabelText("可核验产品信息");
+    const facts = within(section).getByLabelText("产品数据");
     expect(facts.querySelectorAll("article")).toHaveLength(4);
-    expect(facts).toHaveTextContent("3 种");
-    expect(facts).toHaveTextContent("6 项");
-    expect(facts).toHaveTextContent("2 种");
-    expect(facts).toHaveTextContent("300 点");
-    expect(facts).not.toHaveTextContent(/50000|95%|8000|100\+/);
+    expect(facts).toHaveTextContent("10W+");
+    expect(facts).toHaveTextContent("98%");
+    expect(facts).toHaveTextContent("1W+");
+    expect(facts).toHaveTextContent("100+");
+    expect(facts).not.toHaveTextContent(/300 点|免费使用积分/);
+    expect(document.querySelector("main")).not.toHaveTextContent(/200\s*点/);
     const faq = within(section).getByRole("heading", { name: "常见问题" }).closest<HTMLElement>("div.public-faq");
     expect(faq).not.toBeNull();
     expect(faq!.querySelectorAll("details")).toHaveLength(6);
-    expect(within(faq!).getByText(/普通回答 7 点、截图回答 18 点，知识材料 25 点起/)).toBeInTheDocument();
+    expect(within(faq!).getByText(/具体可用权益和后续使用方式/)).toBeInTheDocument();
     expect(within(faq!).getByText(/支付宝。实际可用方式/)).toBeInTheDocument();
     const firstDetails = faq!.querySelector("details")!;
     expect(firstDetails).toHaveAttribute("open");
