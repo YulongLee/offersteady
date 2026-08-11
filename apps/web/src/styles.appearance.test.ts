@@ -10,8 +10,12 @@ describe("appearance styles", () => {
     expect(styles).toContain(':root[data-theme="bright"] .live-page');
     expect(styles).toContain(':root[data-theme="bright"] .route-loading-page');
     expect(styles).not.toContain(':root[data-theme="bright"] {');
-    expect(styles).toContain("--field-bg: #ffffff");
-    expect(styles).toContain("--answer-text: #17242b");
+    expect(styles).toContain("--bg: #f6f8fb");
+    expect(styles).toContain("--field-bg: #fbfcfd");
+    expect(styles).toContain("--answer-text: #1f2933");
+    expect(styles).toContain(':root[data-theme="bright"] .continue-card');
+    expect(styles).toContain(':root[data-theme="bright"] .balance-card');
+    expect(styles).toContain(':root[data-theme="bright"] .global-live-alert');
   });
 
   it("uses a single answer-size variable without enlarging transcript controls", () => {

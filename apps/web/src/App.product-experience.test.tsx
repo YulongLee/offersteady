@@ -15,9 +15,28 @@ describe("optimized product experience", () => {
     expect(screen.getAllByText("面试稳AI助手").length).toBeGreaterThan(0);
     const filing = screen.getByRole("link", { name: "浙ICP备2026052190号-1" });
     expect(filing).toHaveAttribute("href", "https://beian.miit.gov.cn");
-    const grant = screen.getByText("200 点", { selector: ".free-grant strong" }).parentElement;
-    expect(grant).toHaveTextContent("免费使用");
-    expect(grant).not.toHaveTextContent("新用户");
+    const hero = screen.getByRole("heading", { name: /更从容地冲刺 Offer/ }).closest("section");
+    expect(hero).not.toBeNull();
+    expect(within(hero!).getByRole("link", { name: /免费使用/ })).toHaveAttribute("href", "/login");
+    expect(within(hero!).getByRole("link", { name: "使用手册" })).toHaveAttribute("href", "/guide");
+    expect(hero).not.toHaveTextContent("200 点");
+    expect(hero).not.toHaveTextContent("看看怎么收费");
+  });
+
+  it("renders a commercial footer with public documents and configured contacts", () => {
+    open("/", false, state => {
+      state.billing = { ...state.billing, support: { ...state.billing.support, wechatId: "configured-wechat", email: "help@example.test", serviceHours: "每天 09:00–21:00" } };
+    });
+    const footer = document.querySelector<HTMLElement>(".public-footer");
+    expect(footer).not.toBeNull();
+    expect(within(footer!).getByText("configured-wechat")).toBeInTheDocument();
+    expect(within(footer!).getByRole("link", { name: "help@example.test" })).toHaveAttribute("href", "mailto:help@example.test");
+    expect(footer).toHaveTextContent("每天 09:00–21:00");
+    expect(within(footer!).getByRole("link", { name: "使用手册" })).toHaveAttribute("href", "/guide");
+    expect(within(footer!).getByRole("link", { name: "下载安装说明" })).toHaveAttribute("href", "/guide#desktop");
+    expect(within(footer!).getByRole("link", { name: "用户协议" })).toHaveAttribute("href", "/terms");
+    expect(within(footer!).getByRole("link", { name: "隐私政策" })).toHaveAttribute("href", "/privacy");
+    expect(within(footer!).getByRole("link", { name: "浙ICP备2026052190号-1" })).toHaveAttribute("href", "https://beian.miit.gov.cn");
   });
 
   it("uses product-value messaging and exposes SMS login without pretending it is live", () => {
@@ -28,6 +47,15 @@ describe("optimized product experience", () => {
     expect(within(pricing!).getByText(/15 天和 30 天各含 2 份/)).toBeInTheDocument(); expect(screen.queryByText(/进入产品原型/)).not.toBeInTheDocument(); expect(document.body).not.toHaveTextContent(/保证.*Offer|唯一标准答案|完全准确/);
     fireEvent.click(screen.getByText("查看使用与隐私说明")); expect(screen.getAllByText(/原始音频默认不保存/).length).toBeGreaterThan(0);
     fireEvent.click(screen.getAllByRole("link", { name: /免费使用/ })[0]!); expect(screen.getByRole("button", { name: /获取验证码/ })).toBeInTheDocument(); expect(screen.getByText(/手机号验证码/)).toBeInTheDocument();
+  });
+
+  it("opens the user guide from the public homepage without requiring login", () => {
+    open("/", false);
+    const hero = screen.getByRole("heading", { name: /更从容地冲刺 Offer/ }).closest("section");
+    fireEvent.click(within(hero!).getByRole("link", { name: "使用手册" }));
+    expect(screen.getByRole("heading", { name: "使用说明" })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Windows、支付未到账/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "免费使用" })).toHaveAttribute("href", "/login");
   });
 
   it("presents six truthful core capabilities in an accessible responsive grid", () => {
@@ -45,14 +73,27 @@ describe("optimized product experience", () => {
     expect(styles).toMatch(/@media\s*\(max-width:\s*720px\)[\s\S]*\.core-capabilities-grid\s*\{\s*grid-template-columns:\s*1fr;/);
   });
 
-  it("presents six clearly labelled scenario stories without inventing real endorsements", () => {
+  it("presents common interview platforms without claiming universal or official integration", () => {
     open("/", false);
-    const section = screen.getByRole("heading", { name: "典型使用反馈" }).closest("section");
+    const section = screen.getByRole("heading", { name: "适配常见远程面试与在线笔试平台" }).closest("section");
+    expect(section).not.toBeNull();
+    expect(within(section!).getAllByRole("listitem")).toHaveLength(10);
+    ["Zoom", "Google Meet", "Microsoft Teams", "腾讯会议", "飞书", "钉钉", "企业微信", "力扣", "牛客", "Slack"].forEach(platform => {
+      expect(within(section!).getByText(platform, { selector: "strong" })).toBeInTheDocument();
+    });
+    expect(section).toHaveTextContent("取决于电脑系统权限、面试平台的音频设置与当前助手版本");
+    expect(section).toHaveTextContent("不代表官方合作或直接集成");
+    expect(section).not.toHaveTextContent("支持所有");
+  });
+
+  it("presents six commercial use cases without inventing user endorsements", () => {
+    open("/", false);
+    const section = screen.getByRole("heading", { name: "覆盖多种岗位与面试场景" }).closest("section");
     expect(section).not.toBeNull();
     expect(within(section!).getAllByRole("article")).toHaveLength(6);
-    expect(within(section!).getAllByText("情景示例")).toHaveLength(6);
-    expect(section).toHaveTextContent("情景示例 · 非真实用户评价");
-    expect(section).toHaveTextContent("不代表真实人物、任职背书或录用结果");
+    expect(section).toHaveTextContent("ROLE-BASED WORKFLOWS");
+    expect(section).toHaveTextContent("帮助你更快组织真实经历与专业表达");
+    expect(section).not.toHaveTextContent(/典型使用反馈|情景示例|非真实用户评价|用户评价|用户反馈/);
     ["产品经理 · 社招面试", "后端工程师 · 技术面", "数据分析师 · 案例面", "应届毕业生 · 首次面试", "设计岗位 · 作品集面试", "跨行业求职者 · 转岗面试"].forEach(title => {
       expect(within(section!).getByRole("heading", { name: title })).toBeInTheDocument();
     });
@@ -60,7 +101,7 @@ describe("optimized product experience", () => {
     expect(within(section!).getAllByLabelText("使用能力")).toHaveLength(6);
     expect(section!.querySelectorAll(".scenario-capabilities span")).toHaveLength(18);
     expect(section!.querySelectorAll('.user-scenario-icon[aria-hidden="true"] svg')).toHaveLength(6);
-    expect(section).not.toHaveTextContent(/腾讯|字节|Google|Microsoft|亚马逊|美团|五星|获得.*Offer|成功案例/);
+    expect(section).not.toHaveTextContent(/腾讯|字节|Google|Microsoft|亚马逊|美团|五星|获得.*Offer|成功案例|真实案例/);
     const styles = readFileSync("src/styles.css", "utf8");
     expect(styles).toMatch(/\.user-scenarios-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s);
     expect(styles).toMatch(/@media\s*\(max-width:\s*720px\)[\s\S]*\.user-scenarios-grid\s*\{\s*grid-template-columns:\s*1fr;/);

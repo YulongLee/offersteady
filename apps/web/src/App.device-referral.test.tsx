@@ -13,31 +13,15 @@ const open = (path: string, authenticated = true) => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("device center and referral growth", () => {
-  it("renders truthful linked-device state and actionable diagnostics", async () => {
-    vi.spyOn(interviewAppAdapter, "listDesktopDevices").mockResolvedValue([{
-      deviceId: "device-synthetic",
-      displayName: "测试 MacBook Pro",
-      maskedManualCode: "••••35",
-      capabilities: { platformVersion: "macOS 15.0", microphone: "granted", systemAudio: "granted", screenCapture: "denied" },
-      online: false,
-      lastSeenAtMs: 1_719_000_000_000,
-      linkedAtMs: 1_718_000_000_000,
-      lastUsedAtMs: 1_719_000_000_000,
-      accountBound: true,
-      devicePresence: "offline",
-      permissionStatus: { microphone: "granted", systemAudio: "granted", screenCapture: "denied" },
-      activeInterview: null,
-    }]);
+  it("keeps device downloads without loading the linked-device center", () => {
+    const listDesktopDevices = vi.spyOn(interviewAppAdapter, "listDesktopDevices");
     open("/app/devices");
-    const card = (await screen.findByText("测试 MacBook Pro")).closest("article");
-    expect(card).not.toBeNull();
-    expect(card).toHaveTextContent("离线");
-    expect(card).toHaveTextContent("当前面试未连接");
-    expect(card).not.toHaveTextContent("权限正常");
-    fireEvent.click(within(card!).getByRole("button", { name: "诊断" }));
-    expect(within(card!).getByText("麦克风").parentElement).toHaveTextContent("已授权");
-    expect(within(card!).getByText("屏幕录制").parentElement).toHaveTextContent("未授权");
-    expect(within(card!).getByRole("link", { name: "打开设备授权与故障排查" })).toHaveAttribute("href", "/app/guide#desktop");
+    expect(screen.getByRole("heading", { name: "下载电脑伴随程序" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "安装说明" })).toHaveAttribute("href", "/app/guide#desktop");
+    expect(screen.queryByText("已关联设备")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "诊断" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "刷新状态" })).not.toBeInTheDocument();
+    expect(listDesktopDevices).not.toHaveBeenCalled();
   });
 
   it("shows a stable referral link and aggregate rewards on billing", async () => {

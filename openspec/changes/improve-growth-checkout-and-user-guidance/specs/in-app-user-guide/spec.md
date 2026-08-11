@@ -1,7 +1,11 @@
 ## ADDED Requirements
 
-### Requirement: Authenticated application provides a dedicated user guide
-The application SHALL expose an “使用说明” navigation item and protected `/app/guide` route. The guide SHALL be readable on desktop and mobile without covering an active interview unexpectedly.
+### Requirement: Public and authenticated applications provide a dedicated user guide
+The application SHALL expose a public `/guide` route, an authenticated “使用说明” navigation item and `/app/guide` route. The guide SHALL be readable on desktop and mobile without covering an active interview unexpectedly.
+
+#### Scenario: Visitor opens the guide from the public homepage
+- **WHEN** a visitor selects “使用手册” from the public hero
+- **THEN** the application opens the guide without requiring authentication
 
 #### Scenario: User opens the guide from application navigation
 - **WHEN** an authenticated user selects “使用说明”

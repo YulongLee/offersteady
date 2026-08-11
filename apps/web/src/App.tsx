@@ -3,7 +3,7 @@ import { BrowserRouter, Link, NavLink, Navigate, Outlet, Route, Routes, useLocat
 import type { AnswerTaskSnapshot, CaptureState } from "@offersteady/protocol";
 import { BriefcaseIcon, CaretDownIcon, ChartLineUpIcon, ChatCircleTextIcon, ClipboardTextIcon, CodeIcon, DatabaseIcon, DevicesIcon, GraduationCapIcon, IdentificationCardIcon, PaletteIcon, ScanIcon, UserFocusIcon } from "@phosphor-icons/react";
 
-import type { AccountDesktopDevice, IdleInterviewStatus, InterviewQuestion, LiveActionState, QuestionStatus, ScreenshotTask, SessionStatus, WebAppState } from "./domain";
+import type { IdleInterviewStatus, InterviewQuestion, LiveActionState, QuestionStatus, ScreenshotTask, SessionStatus, WebAppState } from "./domain";
 import { runAdapterOperation } from "./api-client";
 import { interviewAppAdapter, runtimeConfig } from "./app-adapter";
 import { DownloadCenter } from "./DownloadCenter";
@@ -108,6 +108,19 @@ function PrototypeProvider({ children, initialAuthenticated, initialState }: { r
 
 const Logo = () => <span className="logo-lockup"><img src={assetUrl("brand.app-icon")} alt="" /><strong>面试稳AI助手</strong></span>;
 
+const interviewPlatforms = [
+  { name: "Zoom", mark: "ZM", tone: "zoom" },
+  { name: "Google Meet", mark: "GM", tone: "meet" },
+  { name: "Microsoft Teams", mark: "MT", tone: "teams" },
+  { name: "腾讯会议", mark: "腾讯", tone: "tencent" },
+  { name: "飞书", mark: "飞书", tone: "feishu" },
+  { name: "钉钉", mark: "钉", tone: "dingtalk" },
+  { name: "企业微信", mark: "企微", tone: "wecom" },
+  { name: "力扣", mark: "LC", tone: "leetcode" },
+  { name: "牛客", mark: "牛客", tone: "nowcoder" },
+  { name: "Slack", mark: "SL", tone: "slack" },
+] as const;
+
 function PublicLayout() {
   const { authenticated } = usePrototype();
   return (
@@ -132,8 +145,7 @@ function LandingPage() {
           <span className="kicker">AI INTERVIEW COPILOT</span>
           <h1>AI 面试助手，<br />助你更从容地冲刺 Offer。</h1>
           <p>实时理解面试问题，结合你的简历、岗位要求和个人资料，快速生成清晰回答思路。语音、手动输入和截图题都支持。</p>
-          <div className="hero-actions"><Link className="button primary large" to={routes.login}>免费使用 <span>→</span></Link><a className="text-link" href="#pricing-value">看看怎么收费</a></div>
-          <div className="free-grant"><strong>200 点</strong><span>免费使用</span></div>
+          <div className="hero-actions"><Link className="button primary large" to={routes.login}>免费使用 <span>→</span></Link><Link className="button ghost large" to={routes.publicGuide}>使用手册</Link></div>
           <div className="trust-list"><span>✓ 实时辅助</span><span>✓ 个性化回答</span><span>✓ 按自己的节奏使用</span></div>
         </div>
         <div className="answer-demo" aria-label="实时回答区域预览">
@@ -158,15 +170,20 @@ function LandingPage() {
           <article className="core-capability-card accent-indigo"><span className="core-capability-icon" aria-hidden="true"><DevicesIcon size={28} weight="duotone" /></span><div><h3>跨设备伴随使用</h3><p>电脑伴随助手负责授权采集与截图，网页端展示实时回答；手机端可同步查看回答和当前会话状态。</p></div></article>
         </div>
       </section>
+      <section id="platform-compatibility" className="public-section platform-compatibility" aria-labelledby="platform-compatibility-title">
+        <div className="platform-compatibility-intro"><span className="kicker">PLATFORM COMPATIBILITY</span><h2 id="platform-compatibility-title">适配常见远程面试与在线笔试平台</h2><p>电脑伴随助手通过你明确授权的系统音频、麦克风和截图能力工作，无需安装平台插件。</p></div>
+        <ul className="platform-grid" aria-label="常见使用平台">{interviewPlatforms.map(platform => <li className={`platform-card tone-${platform.tone}`} key={platform.name}><span aria-hidden="true">{platform.mark}</span><strong>{platform.name}</strong></li>)}</ul>
+        <p className="platform-compatibility-note">实际可用能力取决于电脑系统权限、面试平台的音频设置与当前助手版本；平台名称仅用于说明常见使用场景，不代表官方合作或直接集成。</p>
+      </section>
       <section id="user-scenarios" className="public-section user-scenarios" aria-labelledby="user-scenarios-title">
-        <div className="user-scenarios-intro"><span className="kicker">SCENARIO STORIES</span><h2 id="user-scenarios-title">典型使用反馈</h2><p><strong>情景示例 · 非真实用户评价</strong>　以下内容用于演示不同岗位如何使用现有能力，不代表真实人物、任职背书或录用结果。</p></div>
+        <div className="user-scenarios-intro"><span className="kicker">ROLE-BASED WORKFLOWS</span><h2 id="user-scenarios-title">覆盖多种岗位与面试场景</h2><p>按岗位查看面试稳如何结合简历、JD、知识库、实时语音和截图回答，帮助你更快组织真实经历与专业表达。</p></div>
         <div className="user-scenarios-grid">
-          <article className="user-scenario-card"><header><span className="user-scenario-icon" aria-hidden="true"><BriefcaseIcon size={25} weight="duotone" /></span><div><h3>产品经理 · 社招面试</h3><span>业务追问与项目复盘</span></div><small>情景示例</small></header><div className="scenario-focus"><span>典型困扰</span><strong>项目讲得很长，却没有突出自己的决策</strong></div><p>如果遇到连续追问，可以结合已选择的简历和目标岗位 JD，按“目标—判断—行动—结果”整理回答思路，把重点拉回自己的真实贡献。</p><footer className="scenario-capabilities" aria-label="使用能力"><span>简历与 JD</span><span>实时回答</span><span>资料来源</span></footer></article>
-          <article className="user-scenario-card"><header><span className="user-scenario-icon" aria-hidden="true"><CodeIcon size={25} weight="duotone" /></span><div><h3>后端工程师 · 技术面</h3><span>系统设计与深度追问</span></div><small>情景示例</small></header><div className="scenario-focus"><span>典型困扰</span><strong>系统设计有思路，但容量与取舍容易讲散</strong></div><p>可以把准备过的架构材料加入知识库，让回答建议围绕题目整理容量、可靠性与技术取舍，同时保留自己项目的真实边界，不照搬模板。</p><footer className="scenario-capabilities" aria-label="使用能力"><span>知识库</span><span>实时回答</span><span>面试复盘</span></footer></article>
-          <article className="user-scenario-card"><header><span className="user-scenario-icon" aria-hidden="true"><ChartLineUpIcon size={25} weight="duotone" /></span><div><h3>数据分析师 · 案例面</h3><span>图表、SQL 与业务分析</span></div><small>情景示例</small></header><div className="scenario-focus"><span>典型困扰</span><strong>截图题信息密集，一时找不到分析入口</strong></div><p>遇到图表或 SQL 截图题时，可以通过伴随助手发起截图回答，在网页查看上传、识别和生成状态，再结合岗位要求组织分析路径与结论。</p><footer className="scenario-capabilities" aria-label="使用能力"><span>截图回答</span><span>JD 上下文</span><span>状态追踪</span></footer></article>
-          <article className="user-scenario-card"><header><span className="user-scenario-icon" aria-hidden="true"><GraduationCapIcon size={25} weight="duotone" /></span><div><h3>应届毕业生 · 首次面试</h3><span>自我介绍与行为问题</span></div><small>情景示例</small></header><div className="scenario-focus"><span>典型困扰</span><strong>经历不多，回答行为问题时容易紧张空白</strong></div><p>可以使用简历中的课程、实习和项目作为可核对素材，按背景、行动和收获组织表达；内容始终以真实经历为准，不为了完整而虚构。</p><footer className="scenario-capabilities" aria-label="使用能力"><span>简历上下文</span><span>回答建议</span><span>问题记录</span></footer></article>
-          <article className="user-scenario-card"><header><span className="user-scenario-icon" aria-hidden="true"><PaletteIcon size={25} weight="duotone" /></span><div><h3>设计岗位 · 作品集面试</h3><span>方案说明与协作追问</span></div><small>情景示例</small></header><div className="scenario-focus"><span>典型困扰</span><strong>作品集很完整，但方案取舍没有讲清楚</strong></div><p>可以把作品集要点整理为知识材料，围绕用户问题、方案选择和协作过程组织回答；结束后根据问题记录检查哪些案例还需要补充证据。</p><footer className="scenario-capabilities" aria-label="使用能力"><span>知识材料</span><span>实时回答</span><span>面试复盘</span></footer></article>
-          <article className="user-scenario-card"><header><span className="user-scenario-icon" aria-hidden="true"><UserFocusIcon size={25} weight="duotone" /></span><div><h3>跨行业求职者 · 转岗面试</h3><span>能力迁移与岗位匹配</span></div><small>情景示例</small></header><div className="scenario-focus"><span>典型困扰</span><strong>原行业经历丰富，却很难对应目标岗位</strong></div><p>可以为每个岗位单独选择简历版本和 JD，把原行业经历整理为可迁移能力；再查看回答实际引用的资料，判断表达是否贴近目标岗位。</p><footer className="scenario-capabilities" aria-label="使用能力"><span>多版本简历</span><span>JD 上下文</span><span>来源核对</span></footer></article>
+          <article className="user-scenario-card"><header><span className="user-scenario-icon" aria-hidden="true"><BriefcaseIcon size={25} weight="duotone" /></span><div><h3>产品经理 · 社招面试</h3><span>业务追问与项目复盘</span></div></header><div className="scenario-focus"><span>典型困扰</span><strong>项目讲得很长，却没有突出自己的决策</strong></div><p>如果遇到连续追问，可以结合已选择的简历和目标岗位 JD，按“目标—判断—行动—结果”整理回答思路，把重点拉回自己的真实贡献。</p><footer className="scenario-capabilities" aria-label="使用能力"><span>简历与 JD</span><span>实时回答</span><span>资料来源</span></footer></article>
+          <article className="user-scenario-card"><header><span className="user-scenario-icon" aria-hidden="true"><CodeIcon size={25} weight="duotone" /></span><div><h3>后端工程师 · 技术面</h3><span>系统设计与深度追问</span></div></header><div className="scenario-focus"><span>典型困扰</span><strong>系统设计有思路，但容量与取舍容易讲散</strong></div><p>可以把准备过的架构材料加入知识库，让回答建议围绕题目整理容量、可靠性与技术取舍，同时保留自己项目的真实边界，不照搬模板。</p><footer className="scenario-capabilities" aria-label="使用能力"><span>知识库</span><span>实时回答</span><span>面试复盘</span></footer></article>
+          <article className="user-scenario-card"><header><span className="user-scenario-icon" aria-hidden="true"><ChartLineUpIcon size={25} weight="duotone" /></span><div><h3>数据分析师 · 案例面</h3><span>图表、SQL 与业务分析</span></div></header><div className="scenario-focus"><span>典型困扰</span><strong>截图题信息密集，一时找不到分析入口</strong></div><p>遇到图表或 SQL 截图题时，可以通过伴随助手发起截图回答，在网页查看上传、识别和生成状态，再结合岗位要求组织分析路径与结论。</p><footer className="scenario-capabilities" aria-label="使用能力"><span>截图回答</span><span>JD 上下文</span><span>状态追踪</span></footer></article>
+          <article className="user-scenario-card"><header><span className="user-scenario-icon" aria-hidden="true"><GraduationCapIcon size={25} weight="duotone" /></span><div><h3>应届毕业生 · 首次面试</h3><span>自我介绍与行为问题</span></div></header><div className="scenario-focus"><span>典型困扰</span><strong>经历不多，回答行为问题时容易紧张空白</strong></div><p>可以使用简历中的课程、实习和项目作为可核对素材，按背景、行动和收获组织表达；内容始终以真实经历为准，不为了完整而虚构。</p><footer className="scenario-capabilities" aria-label="使用能力"><span>简历上下文</span><span>回答建议</span><span>问题记录</span></footer></article>
+          <article className="user-scenario-card"><header><span className="user-scenario-icon" aria-hidden="true"><PaletteIcon size={25} weight="duotone" /></span><div><h3>设计岗位 · 作品集面试</h3><span>方案说明与协作追问</span></div></header><div className="scenario-focus"><span>典型困扰</span><strong>作品集很完整，但方案取舍没有讲清楚</strong></div><p>可以把作品集要点整理为知识材料，围绕用户问题、方案选择和协作过程组织回答；结束后根据问题记录检查哪些案例还需要补充证据。</p><footer className="scenario-capabilities" aria-label="使用能力"><span>知识材料</span><span>实时回答</span><span>面试复盘</span></footer></article>
+          <article className="user-scenario-card"><header><span className="user-scenario-icon" aria-hidden="true"><UserFocusIcon size={25} weight="duotone" /></span><div><h3>跨行业求职者 · 转岗面试</h3><span>能力迁移与岗位匹配</span></div></header><div className="scenario-focus"><span>典型困扰</span><strong>原行业经历丰富，却很难对应目标岗位</strong></div><p>可以为每个岗位单独选择简历版本和 JD，把原行业经历整理为可迁移能力；再查看回答实际引用的资料，判断表达是否贴近目标岗位。</p><footer className="scenario-capabilities" aria-label="使用能力"><span>多版本简历</span><span>JD 上下文</span><span>来源核对</span></footer></article>
         </div>
       </section>
       <section id="product-facts" className="public-section product-facts" aria-label="产品信息与常见问题">
@@ -185,7 +202,7 @@ function LandingPage() {
       </section>
       <section id="pricing-value" className="public-section pricing-value"><div className="section-intro"><span className="kicker">FLEXIBLE & FAIR</span><h2>按你的面试节奏选择</h2><p>可先使用 200 点免费额度。偶尔使用按点结算，面试密集期选择按天会员，再按实际面试节奏购买。</p></div><div className="public-pricing-grid"><article><span>灵活按次</span><h3>积分使用</h3><strong>回答 5 点起</strong><p>知识材料 20 点起，完整 Token 规则可在积分页查看。</p><Link to={routes.login}>免费开始 →</Link></article><article className="featured"><span>短期高频</span><h3>按天会员</h3><strong>3 天 ¥{((passes.find(item => item.durationDays === 3)?.priceCents ?? 0) / 100).toFixed(2)} 起</strong><p>{passes.map(item => `${item.durationDays}天`).join(" / ")}；15 天和 30 天各含 2 份知识材料额度。</p><Link to={routes.login}>免费使用 →</Link></article></div></section>
       <section id="value-proof" className="public-section value-proof"><div className="section-intro"><span className="kicker">WHY OFFERSTEADY</span><h2>从听懂问题，到组织答案，现场更从容。</h2><p>结合你的简历、目标岗位和知识材料，快速抓住问题重点，生成清晰、贴合你的回答思路。</p></div><div className="value-proof-grid"><article><span>01</span><h3>实时抓住问题重点</h3><p>区分面试官与候选人的对话，让你把注意力放在真正需要回答的问题上。</p></article><article><span>02</span><h3>回答更贴合你的经历</h3><p>按场选择简历、JD 和知识材料，快速整理更相关的表达结构。</p></article><article><span>03</span><h3>按求职节奏灵活使用</h3><p>偶尔面试按点使用，密集面试选择短期会员，不必承担长期订阅。</p></article></div><div id="privacy" className="value-trust"><p>AI 内容为回答建议，重要经历请以真实情况为准；资料和会话记录可管理、可删除。</p><details><summary>查看使用与隐私说明</summary><p>原始音频默认不保存；简历、JD、截图和会话记录提供删除入口。请遵守面试规则并以真实经历作答。</p></details></div></section>
-      <footer className="public-footer"><Logo /><div className="public-footer-legal"><span>© 2026 面试稳AI助手 · OneShow AI Lab</span><span className="public-footer-links"><Link to={routes.terms}>用户协议</Link><Link to={routes.privacy}>隐私政策</Link></span><a href="https://beian.miit.gov.cn" target="_blank" rel="noreferrer">浙ICP备2026052190号-1</a></div></footer>
+      <footer className="public-footer"><div className="public-footer-main"><section className="footer-brand"><Logo /><p>面向求职者的 AI 面试辅助工具，从资料准备、现场表达建议到面试复盘，让每一次面试更有条理。</p><span>AI 输出仅供参考，请始终以真实经历作答。</span></section><nav className="footer-column" aria-label="页脚产品导航"><h2>产品</h2><a href="#core-capabilities">核心功能</a><a href="#platform-compatibility">适配平台</a><a href="#user-scenarios">使用场景</a><a href="#pricing-value">积分与会员</a></nav><nav className="footer-column" aria-label="页脚资源导航"><h2>资源</h2><Link to={routes.publicGuide}>使用手册</Link><Link to={`${routes.publicGuide}#desktop`}>下载安装说明</Link><Link to={routes.terms}>用户协议</Link><Link to={routes.privacy}>隐私政策</Link></nav><section className="footer-contact"><h2>联系我们</h2><dl><div><dt>客服微信</dt><dd>{state.billing.support.wechatId || "暂未配置"}</dd></div><div><dt>联系邮箱</dt><dd>{state.billing.support.email ? <a href={`mailto:${state.billing.support.email}`}>{state.billing.support.email}</a> : "暂未配置"}</dd></div><div><dt>服务时间</dt><dd>{state.billing.support.serviceHours || "请通过邮箱留言"}</dd></div></dl><p>咨询订单时请提供订单号，请勿发送密码、验证码或完整身份资料。</p></section></div><div className="public-footer-legal"><span>© 2026 面试稳AI助手 · OneShow AI Lab</span><a href="https://beian.miit.gov.cn" target="_blank" rel="noreferrer">浙ICP备2026052190号-1</a></div></footer>
     </main>
   );
 }
@@ -1377,33 +1394,7 @@ function GuideRoutePage() { const { state } = usePrototype(); return <GuidePage 
 
 function DevicesPage() {
   const { state } = usePrototype();
-  const [devices, setDevices] = useState<readonly AccountDesktopDevice[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [diagnosticDeviceId, setDiagnosticDeviceId] = useState<string | null>(null);
-  const loadDevices = async (signal?: AbortSignal) => {
-    setLoading(true);
-    setError("");
-    try {
-      const next = interviewAppAdapter.listDesktopDevices
-        ? await runAdapterOperation(requestSignal => interviewAppAdapter.listDesktopDevices!(requestSignal), signal)
-        : [];
-      setDevices(next);
-    } catch (reason) {
-      if (signal?.aborted) return;
-      setError(reason instanceof Error ? reason.message : "设备状态暂时无法读取");
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  };
-  useEffect(() => {
-    const controller = new AbortController();
-    void loadDevices(controller.signal);
-    return () => controller.abort();
-  }, []);
-  const permissionLabel = (value: unknown) => value === true || value === "granted" ? "已授权" : value === false || value === "denied" ? "未授权" : "未报告";
-  const formatActivity = (value: number) => value > 0 ? new Date(value).toLocaleString("zh-CN") : "暂无记录";
-  return <main className="app-page"><PageHeader eyebrow="DESKTOP COMPANION" title="电脑伴随程序" detail="这里展示账号真实关联的设备；在线、系统权限和当前面试连接分别判断。" action={<button className="button ghost" disabled={loading} onClick={() => void loadDevices()}>{loading ? "刷新中…" : "刷新状态"}</button>} /><div className="device-page-grid"><DownloadCenter manifest={state.releaseManifest} /><section className="panel linked-device-panel"><div className="panel-heading"><div><h2>已关联设备</h2><p>{devices.length ? `共 ${devices.length} 台，状态来自助手最近心跳` : "成功输入机器码后，设备会出现在这里"}</p></div><span className={devices.some(device => device.online) ? "success-text" : "muted-text"}>● {devices.some(device => device.online) ? "有设备在线" : "暂无在线设备"}</span></div>{error ? <div className="inline-error" role="alert">{error}<button onClick={() => void loadDevices()}>重试</button></div> : loading ? <div className="device-loading" role="status">正在读取真实设备状态…</div> : devices.length === 0 ? <div className="device-empty"><strong>还没有关联设备</strong><p>先打开对应芯片版本的电脑伴随程序，再在新面试准备页输入助手显示的 6 位机器码。</p><Link className="button ghost" to={`${routes.guide}#desktop`}>查看连接说明</Link></div> : <div className="linked-device-list">{devices.map(device => { const permissions = device.permissionStatus || device.capabilities; const diagnosticOpen = diagnosticDeviceId === device.deviceId; return <article className={`linked-device-card ${device.online ? "online" : "offline"}`} key={device.deviceId}><div className="paired-device"><span className="device-glyph">⌘</span><div><strong>{device.displayName || "电脑伴随程序"}</strong><small>{device.maskedManualCode} · {String(device.capabilities.platformVersion || device.capabilities.platform || "平台未报告")}</small></div><span className={`device-presence ${device.online ? "online" : "offline"}`}>{device.online ? "在线" : "离线"}</span><button className="button ghost" aria-expanded={diagnosticOpen} onClick={() => setDiagnosticDeviceId(diagnosticOpen ? null : device.deviceId)}>{diagnosticOpen ? "收起" : "诊断"}</button></div><div className="device-state-strip"><span><b>账号关系</b>已关联</span><span><b>设备状态</b>{device.online ? "可用" : "等待助手上线"}</span><span><b>当前面试</b>{device.activeInterview ? "已连接" : "未连接"}</span></div>{diagnosticOpen ? <div className="device-diagnostics"><dl><div><dt>最近心跳</dt><dd>{formatActivity(device.lastSeenAtMs)}</dd></div><div><dt>最近使用</dt><dd>{formatActivity(device.lastUsedAtMs)}</dd></div><div><dt>麦克风</dt><dd>{permissionLabel(permissions.microphone)}</dd></div><div><dt>系统音频</dt><dd>{permissionLabel(permissions.systemAudio)}</dd></div><div><dt>屏幕录制</dt><dd>{permissionLabel(permissions.screenCapture ?? permissions.screen)}</dd></div></dl><p>{device.activeInterview ? `当前连接会话：${device.activeInterview.sessionId.slice(-8)}` : "当前没有面试连接；这不代表系统权限失效，也不会自动开始收音。"}</p><Link to={`${routes.guide}#desktop`}>打开设备授权与故障排查</Link></div> : null}</article>; })}</div>}<div className="privacy-box"><strong>设备在线不等于正在收音</strong><p>只有你在面试中明确开始后才会采集。网页只显示助手报告的权限，不会代替 macOS 或 Windows 发起系统授权。</p></div></section></div></main>;
+  return <main className="app-page"><PageHeader eyebrow="DESKTOP COMPANION" title="电脑伴随程序" detail="下载与你电脑匹配的伴随助手，并查看安装与系统授权说明。" /><DownloadCenter manifest={state.releaseManifest} /></main>;
 }
 
 function SettingsPage() {
@@ -1423,7 +1414,7 @@ function NotFoundPage() { return <main className="center-page"><EmptyState title
 function RouteLoadingPage() { return <main className="route-loading-page" role="status" aria-label="页面加载中" />; }
 
 export function AppRoutes() {
-  return <Routes><Route element={<PublicLayout />}><Route path={routes.landing} element={<LandingPage />} /><Route path={routes.login} element={<LoginPage />} /><Route path={routes.invite()} element={<ReferralLandingPage />} /><Route path={routes.terms} element={<LegalPage kind="terms" />} /><Route path={routes.privacy} element={<LegalPage kind="privacy" />} /></Route><Route element={<ProtectedRoute />}><Route path="/app" element={<AppLayout />}><Route index element={<HomePage />} /><Route path="interviews/new" element={<NewInterviewPage />} /><Route path="interviews/:id/prepare" element={<PreparationPage />} /><Route path="interviews/:id/review" element={<ReviewPage />} /><Route path="library" element={<LibraryPage />} /><Route path="billing" element={<BillingRoutePage />} /><Route path="guide" element={<GuideRoutePage />} /><Route path="devices" element={<DevicesPage />} /><Route path="settings" element={<SettingsPage />} /></Route><Route path="/app/interviews/:id/live" element={<LivePage />} /></Route><Route path="/error" element={<RouteErrorPage />} /><Route path="*" element={<NotFoundPage />} /></Routes>;
+  return <Routes><Route element={<PublicLayout />}><Route path={routes.landing} element={<LandingPage />} /><Route path={routes.login} element={<LoginPage />} /><Route path={routes.publicGuide} element={<GuideRoutePage />} /><Route path={routes.invite()} element={<ReferralLandingPage />} /><Route path={routes.terms} element={<LegalPage kind="terms" />} /><Route path={routes.privacy} element={<LegalPage kind="privacy" />} /></Route><Route element={<ProtectedRoute />}><Route path="/app" element={<AppLayout />}><Route index element={<HomePage />} /><Route path="interviews/new" element={<NewInterviewPage />} /><Route path="interviews/:id/prepare" element={<PreparationPage />} /><Route path="interviews/:id/review" element={<ReviewPage />} /><Route path="library" element={<LibraryPage />} /><Route path="billing" element={<BillingRoutePage />} /><Route path="guide" element={<GuideRoutePage />} /><Route path="devices" element={<DevicesPage />} /><Route path="settings" element={<SettingsPage />} /></Route><Route path="/app/interviews/:id/live" element={<LivePage />} /></Route><Route path="/error" element={<RouteErrorPage />} /><Route path="*" element={<NotFoundPage />} /></Routes>;
 }
 
 export interface AppProps { readonly initialAuthenticated?: boolean; readonly initialState?: WebAppState }
