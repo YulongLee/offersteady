@@ -83,8 +83,9 @@ describe("optimized product experience", () => {
       expect(within(section!).getByRole("img", { name: `${platform} 品牌标识` })).toHaveAttribute("src", expect.stringMatching(/^https:\/\//));
     });
     expect(section!.querySelectorAll("[data-brand-source^='https://']")).toHaveLength(10);
-    expect(section!.querySelectorAll(".platform-brand-wordmark")).toHaveLength(2);
-    expect(section!.querySelectorAll(".platform-brand-lockup")).toHaveLength(8);
+    expect(section!.querySelectorAll(".platform-brand-wordmark")).toHaveLength(1);
+    expect(section!.querySelectorAll(".platform-brand-lockup")).toHaveLength(9);
+    expect(within(section!).getByText("Slack", { selector: ".brand-slack strong" })).toBeVisible();
     expect(section).not.toHaveTextContent(/\b(?:ZM|GM|MT|LC|SL)\b/);
     expect(section).toHaveTextContent("取决于电脑系统权限、面试平台的音频设置与当前助手版本");
     expect(section).toHaveTextContent("不代表官方合作或直接集成");

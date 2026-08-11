@@ -20,5 +20,5 @@ export const interviewPlatforms: readonly PlatformBrand[] = [
   { slug: "wecom", name: "企业微信", logoUrl: "https://wwcdn.weixin.qq.com/node/wwnl/wwnl/style/images/independent/favicon/favicon_48h$c976bd14.png", sourcePage: "https://work.weixin.qq.com/", presentation: "lockup" },
   { slug: "leetcode", name: "力扣", logoUrl: "https://leetcode.com/favicon.ico", sourcePage: "https://leetcode.com/", presentation: "lockup", secondaryLabel: "LeetCode" },
   { slug: "nowcoder", name: "牛客", logoUrl: "https://static.nowcoder.com/fe/common/share-logo.png", sourcePage: "https://www.nowcoder.com/", presentation: "lockup", secondaryLabel: "NOWCODER" },
-  { slug: "slack", name: "Slack", logoUrl: "https://a.slack-edge.com/38f0e7c/marketing/img/nav/logo.svg", sourcePage: "https://slack.com/", presentation: "wordmark" },
+  { slug: "slack", name: "Slack", logoUrl: "https://a.slack-edge.com/e6a93c1/img/icons/favicon-32.png", sourcePage: "https://slack.com/", presentation: "lockup" },
 ] as const;

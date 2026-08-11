@@ -23,7 +23,7 @@ The homepage SHALL explain that users can choose point-based usage or 3/7/15/30-
 - **THEN** the page distinguishes occasional point usage from short-term high-frequency membership and links to complete pricing terms
 
 ### Requirement: Common interview platforms are presented with truthful compatibility boundaries
-The homepage SHALL present a responsive compatibility section for common remote-interview, collaboration and online-assessment platforms. Each platform SHALL use a traceable authentic brand mark alongside its name, preserve the mark's proportions and colors, and MUST NOT substitute initials or a fabricated logo. The section SHALL explain that OfferSteady uses user-authorized system audio, microphone and screenshot capabilities, and MUST NOT claim universal compatibility, official partnership or direct platform integration without verified evidence.
+The homepage SHALL present a responsive compatibility section for common remote-interview, collaboration and online-assessment platforms using the current homepage theme surfaces and card hierarchy. Each platform SHALL use a traceable authentic brand mark alongside a visible recognizable name, preserve the mark's proportions and colors, and MUST NOT substitute initials, a fabricated logo or an unexplained symbol-only mark. The section SHALL explain that OfferSteady uses user-authorized system audio, microphone and screenshot capabilities, and MUST NOT claim universal compatibility, official partnership or direct platform integration without verified evidence.
 
 #### Scenario: Visitor checks whether their interview platform is covered
 - **WHEN** the visitor views the platform compatibility section
