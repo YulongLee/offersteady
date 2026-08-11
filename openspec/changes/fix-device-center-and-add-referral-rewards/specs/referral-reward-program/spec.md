@@ -12,7 +12,7 @@
 - **THEN** 系统返回原有邀请码和链接，不重复创建或使历史链接失效
 
 ### Requirement: Referral activation is explicit and account authenticated
-邀请链接 SHALL 打开说明邀请关系和奖励对象的公开落地页。激活 MUST 由登录用户从该落地页明确发起；未登录用户完成登录后 SHALL 能恢复待激活邀请码，但前端缓存本身不得视为成功。
+邀请链接 SHALL 打开说明邀请关系和奖励对象的公开落地页。积分与会员页 SHALL 同时为尚未激活邀请的登录用户提供粘贴完整分享链接或邀请码的入口。两种入口的激活都 MUST 由登录用户明确确认；未登录用户完成登录后 SHALL 能恢复待激活邀请码，但前端缓存本身不得视为成功。
 
 #### Scenario: Visitor activates after login
 - **WHEN** 未登录访问者从有效邀请链接选择“登录并激活”并完成登录
@@ -21,6 +21,14 @@
 #### Scenario: Invalid referral code is opened
 - **WHEN** 访问者打开不存在、格式错误或已撤销的邀请码
 - **THEN** 页面显示链接不可用且不创建邀请关系或积分流水
+
+#### Scenario: Logged-in user activates from billing
+- **WHEN** 尚未激活邀请的登录用户在积分与会员页粘贴另一用户的完整分享链接或邀请码并确认激活
+- **THEN** Web 解析邀请码、调用认证激活接口、显示服务端确认结果并刷新当前邀请状态
+
+#### Scenario: Billing activation is no longer available
+- **WHEN** 当前账号已经成功激活过邀请或管理员关闭邀请活动
+- **THEN** 积分与会员页不允许再次提交激活，并明确展示已激活或活动暂停状态
 
 ### Requirement: Each invitee activates at most once
 每个账号 MUST 终身最多作为被邀请人成功激活一个其他用户的邀请码，且 MUST 禁止邀请人激活自己的链接。相同请求重试 SHALL 幂等返回原成功结果；已激活后尝试另一邀请码 SHALL 被拒绝。
