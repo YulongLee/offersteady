@@ -27,5 +27,6 @@
 - [x] 4.1 Run focused and full Backend, Web and Admin tests, typechecks and production builds
 - [x] 4.2 Validate the OpenSpec change strictly and review privacy/security scenarios
 - [x] 4.3 Commit and push the completed change
-- [ ] 4.4 Deploy database/backend first, then Web and Admin without rebuilding the desktop assistant
+- [x] 4.4 Deploy database/backend first, then Web and Admin without rebuilding the desktop assistant
 - [ ] 4.5 Run production API and Playwright smoke checks for device center, referral activation and Admin configuration
+  - Production API, route and bundle smoke checks passed; the Playwright browser runtime had no available browser instance in this session.
