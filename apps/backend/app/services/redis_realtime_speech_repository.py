@@ -162,6 +162,7 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
     def save_account_desktop_device(self, association): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_account_desktop_device(association))
     def get_account_desktop_device(self, *, user_id, device_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_account_desktop_device(user_id=user_id, device_id=device_id))
     def get_last_account_desktop_device(self, *, user_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_last_account_desktop_device(user_id=user_id))
+    def list_account_desktop_devices(self, *, user_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_account_desktop_devices(user_id=user_id))
     def save_session_desktop_binding(self, binding): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_session_desktop_binding(binding))
     def get_session_desktop_binding(self, *, user_id, session_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_session_desktop_binding(user_id=user_id, session_id=session_id))
     def get_latest_session_desktop_binding_for_device(self, *, device_id, manual_code): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_latest_session_desktop_binding_for_device(device_id=device_id, manual_code=manual_code))

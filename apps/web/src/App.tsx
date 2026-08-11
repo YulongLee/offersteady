@@ -3,7 +3,7 @@ import { BrowserRouter, Link, NavLink, Navigate, Outlet, Route, Routes, useLocat
 import type { AnswerTaskSnapshot, CaptureState } from "@offersteady/protocol";
 import { BriefcaseIcon, CaretDownIcon, ChartLineUpIcon, ChatCircleTextIcon, ClipboardTextIcon, CodeIcon, DatabaseIcon, DevicesIcon, GraduationCapIcon, IdentificationCardIcon, PaletteIcon, ScanIcon, UserFocusIcon } from "@phosphor-icons/react";
 
-import type { IdleInterviewStatus, InterviewQuestion, LiveActionState, QuestionStatus, ScreenshotTask, SessionStatus, WebAppState } from "./domain";
+import type { AccountDesktopDevice, IdleInterviewStatus, InterviewQuestion, LiveActionState, QuestionStatus, ScreenshotTask, SessionStatus, WebAppState } from "./domain";
 import { runAdapterOperation } from "./api-client";
 import { interviewAppAdapter, runtimeConfig } from "./app-adapter";
 import { DownloadCenter } from "./DownloadCenter";
@@ -238,6 +238,37 @@ function LoginPage() {
     }
   };
   return <main className="center-page"><section className="login-card"><Logo /><span className="prototype-badge">免费使用 · 新用户赠 200 点</span><h1>开始你的面试准备</h1><p>使用手机号验证码完成登录或注册，同一个账号可以管理资料、积分和不同设备上的面试。</p><form className="sms-login-form" onSubmit={challengeId ? verifyCode : sendCode}><label><span>手机号</span><input value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} inputMode="tel" autoComplete="tel" placeholder="请输入手机号" /></label>{challengeId ? <label><span>验证码</span><input value={code} onChange={event => setCode(event.target.value)} inputMode="numeric" autoComplete="one-time-code" placeholder="请输入验证码" /></label> : null}<div className="sms-actions"><button className="button primary large full" type="submit" disabled={Boolean(busy)}>{busy === "verify" ? "登录中..." : challengeId ? "登录 / 注册" : busy === "send" ? "发送中..." : "获取验证码"}</button>{challengeId ? <button className="button ghost full" type="button" disabled={cooldown > 0 || Boolean(busy)} onClick={event => { void sendCode(event as unknown as FormEvent); }}>{cooldown > 0 ? `${cooldown}s 后重发` : "重新发送验证码"}</button> : null}</div></form>{message ? <p className="login-message">{message}</p> : null}<Link className="text-link login-back" to={routes.landing}>返回首页</Link><small className="login-legal-copy">登录即表示你同意<Link to={routes.terms}>用户协议</Link>与<Link to={routes.privacy}>隐私政策</Link>。验证码只用于账号识别和登录校验。</small></section></main>;
+}
+
+function ReferralLandingPage() {
+  const { authenticated } = usePrototype();
+  const { code = "" } = useParams();
+  const navigate = useNavigate();
+  const [status, setStatus] = useState<"loading" | "ready" | "invalid" | "disabled">("loading");
+  const [rewardPoints, setRewardPoints] = useState<number | null>(null);
+  const [activating, setActivating] = useState(false);
+  const [result, setResult] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    void runAdapterOperation(signal => interviewAppAdapter.resolveReferral(code, signal), controller.signal).then(referral => {
+      setRewardPoints(referral.rewardPoints ?? null);
+      setStatus(!referral.valid ? "invalid" : referral.enabled ? "ready" : "disabled");
+    }).catch(() => setStatus("invalid"));
+    return () => controller.abort();
+  }, [code]);
+  const activate = async () => {
+    if (!authenticated) {
+      navigate(routes.login, { state: { from: routes.invite(code) } });
+      return;
+    }
+    setActivating(true); setResult("");
+    try {
+      const activation = await runAdapterOperation(signal => interviewAppAdapter.activateReferral(code, signal));
+      setResult(activation.outcome === "activated" ? (activation.replayed ? "你已经激活过这个邀请，无需重复操作。" : "邀请已成功激活，奖励已发放给邀请人。") : activation.outcome === "already-activated" ? "当前账号已经激活过其他邀请，每个账号只能激活一次。" : activation.outcome === "self-referral" ? "不能激活自己的邀请链接。" : activation.outcome === "disabled" ? "邀请活动目前已暂停。" : "邀请链接无效或已撤销。");
+    } catch (error) { setResult(error instanceof Error ? error.message : "激活失败，请稍后重试"); }
+    finally { setActivating(false); }
+  };
+  return <main className="center-page referral-landing"><section className="referral-landing-card"><Logo /><span className="kicker">INVITATION</span><h1>好友邀请你体验面试稳</h1>{status === "loading" ? <p>正在安全校验邀请链接…</p> : status === "invalid" ? <><p>这个邀请链接无效或已撤销，没有创建任何邀请关系。</p><Link className="button primary full" to={routes.landing}>返回首页</Link></> : status === "disabled" ? <><p>邀请活动目前暂停，历史奖励不会受影响。你仍然可以免费使用产品。</p><Link className="button primary full" to={routes.login}>登录使用</Link></> : <><div className="referral-reward-preview"><strong>{rewardPoints ?? 0} 点</strong><span>成功激活后奖励给邀请人</span></div><p>每个账号只能激活一次其他用户的邀请，不能激活自己的链接。登录后点击确认，服务端才会建立邀请关系。</p><button className="button primary full" disabled={activating} onClick={() => void activate()}>{activating ? "激活中…" : authenticated ? "确认激活邀请" : "登录并激活"}</button></>}{result ? <div className="referral-result" role="status">{result}<Link to={routes.billing}>查看积分与会员</Link></div> : null}<small>邀请关系只记录账号标识和奖励流水，不公开手机号或设备信息。</small></section></main>;
 }
 
 function ProtectedRoute() {
@@ -1338,7 +1369,33 @@ function GuideRoutePage() { const { state } = usePrototype(); return <GuidePage 
 
 function DevicesPage() {
   const { state } = usePrototype();
-  return <main className="app-page"><PageHeader eyebrow="DESKTOP COMPANION" title="电脑伴随程序" detail="根据系统和芯片选择安装包；实际收音能力以连接后的检测结果为准。" /><div className="device-page-grid"><DownloadCenter manifest={state.releaseManifest} /><section className="panel"><div className="panel-heading"><h2>已连接设备</h2><span className="success-text">● 在线</span></div><div className="paired-device"><span className="device-glyph">⌘</span><div><strong>{state.preparation.device?.displayName}</strong><small>{state.preparation.device?.capabilities.platformVersion} · 麦克风与系统音频权限正常</small></div><button className="button ghost">诊断</button></div><div className="privacy-box"><strong>当前没有收音</strong><p>伴随程序不会因为打开网页而自动开始。Windows 预览版若不支持系统音频，会明确降级到麦克风、手动输入和截图。</p></div></section></div></main>;
+  const [devices, setDevices] = useState<readonly AccountDesktopDevice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [diagnosticDeviceId, setDiagnosticDeviceId] = useState<string | null>(null);
+  const loadDevices = async (signal?: AbortSignal) => {
+    setLoading(true);
+    setError("");
+    try {
+      const next = interviewAppAdapter.listDesktopDevices
+        ? await runAdapterOperation(requestSignal => interviewAppAdapter.listDesktopDevices!(requestSignal), signal)
+        : [];
+      setDevices(next);
+    } catch (reason) {
+      if (signal?.aborted) return;
+      setError(reason instanceof Error ? reason.message : "设备状态暂时无法读取");
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
+  };
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadDevices(controller.signal);
+    return () => controller.abort();
+  }, []);
+  const permissionLabel = (value: unknown) => value === true || value === "granted" ? "已授权" : value === false || value === "denied" ? "未授权" : "未报告";
+  const formatActivity = (value: number) => value > 0 ? new Date(value).toLocaleString("zh-CN") : "暂无记录";
+  return <main className="app-page"><PageHeader eyebrow="DESKTOP COMPANION" title="电脑伴随程序" detail="这里展示账号真实关联的设备；在线、系统权限和当前面试连接分别判断。" action={<button className="button ghost" disabled={loading} onClick={() => void loadDevices()}>{loading ? "刷新中…" : "刷新状态"}</button>} /><div className="device-page-grid"><DownloadCenter manifest={state.releaseManifest} /><section className="panel linked-device-panel"><div className="panel-heading"><div><h2>已关联设备</h2><p>{devices.length ? `共 ${devices.length} 台，状态来自助手最近心跳` : "成功输入机器码后，设备会出现在这里"}</p></div><span className={devices.some(device => device.online) ? "success-text" : "muted-text"}>● {devices.some(device => device.online) ? "有设备在线" : "暂无在线设备"}</span></div>{error ? <div className="inline-error" role="alert">{error}<button onClick={() => void loadDevices()}>重试</button></div> : loading ? <div className="device-loading" role="status">正在读取真实设备状态…</div> : devices.length === 0 ? <div className="device-empty"><strong>还没有关联设备</strong><p>先打开对应芯片版本的电脑伴随程序，再在新面试准备页输入助手显示的 6 位机器码。</p><Link className="button ghost" to={`${routes.guide}#desktop`}>查看连接说明</Link></div> : <div className="linked-device-list">{devices.map(device => { const permissions = device.permissionStatus || device.capabilities; const diagnosticOpen = diagnosticDeviceId === device.deviceId; return <article className={`linked-device-card ${device.online ? "online" : "offline"}`} key={device.deviceId}><div className="paired-device"><span className="device-glyph">⌘</span><div><strong>{device.displayName || "电脑伴随程序"}</strong><small>{device.maskedManualCode} · {String(device.capabilities.platformVersion || device.capabilities.platform || "平台未报告")}</small></div><span className={`device-presence ${device.online ? "online" : "offline"}`}>{device.online ? "在线" : "离线"}</span><button className="button ghost" aria-expanded={diagnosticOpen} onClick={() => setDiagnosticDeviceId(diagnosticOpen ? null : device.deviceId)}>{diagnosticOpen ? "收起" : "诊断"}</button></div><div className="device-state-strip"><span><b>账号关系</b>已关联</span><span><b>设备状态</b>{device.online ? "可用" : "等待助手上线"}</span><span><b>当前面试</b>{device.activeInterview ? "已连接" : "未连接"}</span></div>{diagnosticOpen ? <div className="device-diagnostics"><dl><div><dt>最近心跳</dt><dd>{formatActivity(device.lastSeenAtMs)}</dd></div><div><dt>最近使用</dt><dd>{formatActivity(device.lastUsedAtMs)}</dd></div><div><dt>麦克风</dt><dd>{permissionLabel(permissions.microphone)}</dd></div><div><dt>系统音频</dt><dd>{permissionLabel(permissions.systemAudio)}</dd></div><div><dt>屏幕录制</dt><dd>{permissionLabel(permissions.screenCapture ?? permissions.screen)}</dd></div></dl><p>{device.activeInterview ? `当前连接会话：${device.activeInterview.sessionId.slice(-8)}` : "当前没有面试连接；这不代表系统权限失效，也不会自动开始收音。"}</p><Link to={`${routes.guide}#desktop`}>打开设备授权与故障排查</Link></div> : null}</article>; })}</div>}<div className="privacy-box"><strong>设备在线不等于正在收音</strong><p>只有你在面试中明确开始后才会采集。网页只显示助手报告的权限，不会代替 macOS 或 Windows 发起系统授权。</p></div></section></div></main>;
 }
 
 function SettingsPage() {
@@ -1358,7 +1415,7 @@ function NotFoundPage() { return <main className="center-page"><EmptyState title
 function RouteLoadingPage() { return <main className="route-loading-page" role="status" aria-label="页面加载中" />; }
 
 export function AppRoutes() {
-  return <Routes><Route element={<PublicLayout />}><Route path={routes.landing} element={<LandingPage />} /><Route path={routes.login} element={<LoginPage />} /><Route path={routes.terms} element={<LegalPage kind="terms" />} /><Route path={routes.privacy} element={<LegalPage kind="privacy" />} /></Route><Route element={<ProtectedRoute />}><Route path="/app" element={<AppLayout />}><Route index element={<HomePage />} /><Route path="interviews/new" element={<NewInterviewPage />} /><Route path="interviews/:id/prepare" element={<PreparationPage />} /><Route path="interviews/:id/review" element={<ReviewPage />} /><Route path="library" element={<LibraryPage />} /><Route path="billing" element={<BillingRoutePage />} /><Route path="guide" element={<GuideRoutePage />} /><Route path="devices" element={<DevicesPage />} /><Route path="settings" element={<SettingsPage />} /></Route><Route path="/app/interviews/:id/live" element={<LivePage />} /></Route><Route path="/error" element={<RouteErrorPage />} /><Route path="*" element={<NotFoundPage />} /></Routes>;
+  return <Routes><Route element={<PublicLayout />}><Route path={routes.landing} element={<LandingPage />} /><Route path={routes.login} element={<LoginPage />} /><Route path={routes.invite()} element={<ReferralLandingPage />} /><Route path={routes.terms} element={<LegalPage kind="terms" />} /><Route path={routes.privacy} element={<LegalPage kind="privacy" />} /></Route><Route element={<ProtectedRoute />}><Route path="/app" element={<AppLayout />}><Route index element={<HomePage />} /><Route path="interviews/new" element={<NewInterviewPage />} /><Route path="interviews/:id/prepare" element={<PreparationPage />} /><Route path="interviews/:id/review" element={<ReviewPage />} /><Route path="library" element={<LibraryPage />} /><Route path="billing" element={<BillingRoutePage />} /><Route path="guide" element={<GuideRoutePage />} /><Route path="devices" element={<DevicesPage />} /><Route path="settings" element={<SettingsPage />} /></Route><Route path="/app/interviews/:id/live" element={<LivePage />} /></Route><Route path="/error" element={<RouteErrorPage />} /><Route path="*" element={<NotFoundPage />} /></Routes>;
 }
 
 export interface AppProps { readonly initialAuthenticated?: boolean; readonly initialState?: WebAppState }

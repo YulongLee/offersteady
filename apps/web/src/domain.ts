@@ -81,6 +81,16 @@ export interface RecentDesktopDevice {
   readonly permissionStatus?: Record<string, unknown>;
 }
 
+export interface AccountDesktopDevice extends RecentDesktopDevice {
+  readonly linkedAtMs: number;
+  readonly lastUsedAtMs: number;
+  readonly activeInterview?: {
+    readonly sessionId: string;
+    readonly bindingId: string;
+    readonly connectedAtMs: number;
+  } | null;
+}
+
 export interface WebAppState {
   interviews: InterviewSummary[];
   preparation: PreparationState;
@@ -114,6 +124,24 @@ export interface BillingPresentationState {
   readonly orders: readonly BillingOrder[];
   readonly officialOrders: readonly OfficialCheckoutOrder[];
   readonly support: BillingSupportConfig;
+}
+
+export interface ReferralStatus {
+  readonly enabled: boolean;
+  readonly rewardPoints: number;
+  readonly configVersion: number;
+  readonly referralCode: string;
+  readonly shareUrl: string;
+  readonly inviteCount: number;
+  readonly totalRewardPoints: number;
+  readonly hasActivatedReferral: boolean;
+}
+
+export interface ReferralActivationResult {
+  readonly outcome: "activated" | "already-activated" | "invalid-code" | "self-referral" | "disabled";
+  readonly replayed?: boolean;
+  readonly rewardPoints?: number;
+  readonly activatedAtMs?: number;
 }
 
 export interface SpeakerPresentationState {
@@ -189,6 +217,9 @@ export interface DesktopShortcutScreenshotUpdate {
 export interface InterviewAppAdapter {
   loadState(signal?: AbortSignal, options?: { readonly auth?: boolean }): Promise<WebAppState>;
   getBillingState(signal?: AbortSignal): Promise<BillingPresentationState>;
+  getReferralStatus(signal?: AbortSignal): Promise<ReferralStatus>;
+  resolveReferral(code: string, signal?: AbortSignal): Promise<{ valid: boolean; enabled: boolean; rewardPoints?: number }>;
+  activateReferral(code: string, signal?: AbortSignal): Promise<ReferralActivationResult>;
   createDraft(input: { title: string; role: string; company?: string }, signal?: AbortSignal): Promise<InterviewSummary>;
   confirmInterviewMaterials(selection: SessionContextSelection, signal?: AbortSignal): Promise<SessionContextSelection>;
   getActiveInterviewConflict(id: string, signal?: AbortSignal): Promise<ActiveInterviewConflict>;
@@ -199,6 +230,7 @@ export interface InterviewAppAdapter {
   endInterviewSession(id: string, signal?: AbortSignal): Promise<void>;
   bindDesktopDevice(command: { interviewId: string; manualCode?: string; reuseLastDevice?: boolean }, signal?: AbortSignal): Promise<DesktopDeviceBinding>;
   getLastDesktopDevice?(signal?: AbortSignal): Promise<RecentDesktopDevice | null>;
+  listDesktopDevices?(signal?: AbortSignal): Promise<readonly AccountDesktopDevice[]>;
   getDesktopDeviceBinding(interviewId: string, signal?: AbortSignal): Promise<DesktopDeviceBinding | null>;
   sendDesktopSessionHeartbeat(command: { interviewId: string; bindingId?: string | null; page: "preparation" | "live"; pageInstanceId?: string }, signal?: AbortSignal): Promise<{ pageInstanceId: string | null; leaseGeneration: number; leaseExpiresAtMs: number }>;
   loadRealtimeSession(interviewId: string, signal?: AbortSignal): Promise<Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>>;

@@ -208,7 +208,8 @@ class AlipayPaymentProvider:
         if normalized.startswith("-----BEGIN"):
             return normalized.encode("utf-8")
         body = "".join(normalized.split())
-        return f"-----BEGIN {label}-----\n{'\n'.join(wrap(body, 64))}\n-----END {label}-----\n".encode("utf-8")
+        wrapped_body = "\n".join(wrap(body, 64))
+        return f"-----BEGIN {label}-----\n{wrapped_body}\n-----END {label}-----\n".encode("utf-8")
 
     def _notify_url(self) -> str:
         return self.settings.alipay_notify_url or "http://127.0.0.1:8000/api/v1/billing/payment-providers/alipay/notify"

@@ -178,6 +178,23 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
     return state.billing;
   }
 
+  async getReferralStatus(signal?: AbortSignal) {
+    await delay(signal);
+    return { enabled: true, rewardPoints: 500, configVersion: 1, referralCode: "syntheticReferralCode", shareUrl: "https://example.test/invite/syntheticReferralCode", inviteCount: 0, totalRewardPoints: 0, hasActivatedReferral: false };
+  }
+
+  async resolveReferral(code: string, signal?: AbortSignal) {
+    await delay(signal);
+    return { valid: code === "syntheticReferralCode", enabled: true, rewardPoints: 500 };
+  }
+
+  async activateReferral(code: string, signal?: AbortSignal) {
+    await delay(signal);
+    return code === "syntheticReferralCode"
+      ? { outcome: "activated" as const, replayed: false, rewardPoints: 500, activatedAtMs: Date.now() }
+      : { outcome: "invalid-code" as const };
+  }
+
   async createDraft(input: { title: string; role: string; company?: string }, signal?: AbortSignal) {
     await delay(signal);
     const draft: InterviewSummary = {

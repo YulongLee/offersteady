@@ -2,7 +2,7 @@ import type { CaptureState, FoundationIndexResponse } from "@offersteady/protoco
 
 import type { AnswerProvenance, AnswerSourceReference, AnswerTaskSnapshot, CancelAnswerResult, OfficialCheckoutOrder, PointsRedemptionResult } from "@offersteady/protocol";
 import { AppError } from "./domain";
-import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, DesktopDeviceBinding, IdleInterviewStatus, InterviewAppAdapter, InterviewQuestion, InterviewSummary, InterviewWorkspaceSnapshot, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
+import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, DesktopDeviceBinding, IdleInterviewStatus, InterviewAppAdapter, InterviewQuestion, InterviewSummary, InterviewWorkspaceSnapshot, ReferralActivationResult, ReferralStatus, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
 import { createJsonClient, withBaseUrl } from "./api-client";
 import { authClient } from "./auth-client";
 import { createSseParser, type LiveAnswerStreamEvent, type ManualAnswerStreamUpdate } from "./live-answer-stream";
@@ -155,6 +155,12 @@ interface BackendRecentDesktopDeviceResponse {
   readonly accountBound?: boolean;
   readonly devicePresence?: "online" | "offline";
   readonly permissionStatus?: Record<string, unknown>;
+}
+
+interface BackendAccountDesktopDeviceResponse extends BackendRecentDesktopDeviceResponse {
+  readonly linkedAtMs: number;
+  readonly lastUsedAtMs: number;
+  readonly activeInterview?: { readonly sessionId: string; readonly bindingId: string; readonly connectedAtMs: number } | null;
 }
 
 interface BackendRealtimeTranscriptListResponse {
@@ -663,6 +669,22 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     return this.client.request<BillingPresentationState>("/api/v1/billing/state", { headers: authHeaders() }, signal);
   }
 
+  async getReferralStatus(signal?: AbortSignal): Promise<ReferralStatus> {
+    return this.client.request<ReferralStatus>("/api/v1/billing/referrals/me", { headers: authHeaders() }, signal);
+  }
+
+  async resolveReferral(code: string, signal?: AbortSignal) {
+    return this.client.request<{ valid: boolean; enabled: boolean; rewardPoints?: number }>(`/api/v1/billing/referrals/${encodeURIComponent(code)}`, undefined, signal);
+  }
+
+  async activateReferral(code: string, signal?: AbortSignal): Promise<ReferralActivationResult> {
+    return this.client.request<ReferralActivationResult>("/api/v1/billing/referrals/activate", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ referralCode: code }),
+    }, signal);
+  }
+
   async createDraft(input: { title: string; role: string; company?: string }, signal?: AbortSignal) {
     const persistedTitle = deriveInterviewTitle(input);
     const created = await this.client.request<BackendSessionResponse>("/api/v1/sessions", {
@@ -766,6 +788,12 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       headers: authHeaders(),
     }, signal);
     return device;
+  }
+
+  async listDesktopDevices(signal?: AbortSignal) {
+    return this.client.request<BackendAccountDesktopDeviceResponse[]>("/api/v1/realtime-speech/desktop-devices", {
+      headers: authHeaders(),
+    }, signal);
   }
 
   async getDesktopDeviceBinding(interviewId: string, signal?: AbortSignal) {

@@ -252,6 +252,39 @@ class RealtimeSpeechService:
             "permissionStatus": self._permission_status(device),
         }
 
+    def list_desktop_devices_for_user(self, *, user_id: str) -> list[dict[str, object]]:
+        active_bindings = {
+            item.device_id: item
+            for item in self.repository.list_session_desktop_bindings_for_user(user_id=user_id)
+            if item.status == "bound"
+        }
+        devices: list[dict[str, object]] = []
+        for association in self.repository.list_account_desktop_devices(user_id=user_id):
+            device = self.repository.get_desktop_device_by_code(association.manual_code)
+            if device is None or device.device_id != association.device_id:
+                continue
+            online = self._desktop_device_fresh(device)
+            binding = active_bindings.get(device.device_id)
+            devices.append({
+                "deviceId": device.device_id,
+                "displayName": device.display_name,
+                "maskedManualCode": f"••••{device.manual_code[-2:]}",
+                "capabilities": dict(device.capabilities),
+                "online": online,
+                "lastSeenAtMs": device.last_seen_at_ms,
+                "linkedAtMs": association.linked_at_ms,
+                "lastUsedAtMs": association.last_used_at_ms,
+                "accountBound": True,
+                "devicePresence": "online" if online else "offline",
+                "permissionStatus": self._permission_status(device),
+                "activeInterview": None if binding is None else {
+                    "sessionId": binding.session_id,
+                    "bindingId": binding.binding_id,
+                    "connectedAtMs": binding.bound_at_ms,
+                },
+            })
+        return devices
+
     def bind_desktop_device(
         self,
         *,

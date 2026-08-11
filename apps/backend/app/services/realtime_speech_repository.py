@@ -63,6 +63,16 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
             return None
         return replace(max(records, key=lambda item: (item.last_used_at_ms, item.device_id)))
 
+    def list_account_desktop_devices(self, *, user_id: str) -> list[AccountDesktopDeviceRecord]:
+        return [
+            replace(item)
+            for item in sorted(
+                (record for record in self.account_desktop_devices.values() if record.owner_user_id == user_id),
+                key=lambda record: (record.last_used_at_ms, record.device_id),
+                reverse=True,
+            )
+        ]
+
     def save_session_desktop_binding(self, binding: SessionDesktopBindingRecord) -> SessionDesktopBindingRecord:
         stored = replace(binding)
         self.session_bindings[(stored.owner_user_id, stored.session_id)] = stored

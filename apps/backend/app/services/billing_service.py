@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import secrets
 from time import time
 from uuid import uuid4
 
@@ -144,6 +145,7 @@ class BillingService:
         redemption_repository: PointsRedemptionRepository | None = None,
         billing_repository: BillingPersistencePort | None = None,
     ) -> None:
+        self.settings = settings
         configured_codes = settings.redemption_code_points if settings is not None else {}
         self.redemption_code_points: dict[str, int] = {
             **(DEFAULT_REDEMPTION_CODE_POINTS if settings is None or settings.environment != "production" else {}),
@@ -175,6 +177,17 @@ class BillingService:
         self.checkout_orders_by_id: dict[str, OfficialCheckoutOrderRecord] = {}
         self.checkout_orders_by_user_and_key: dict[tuple[str, str], str] = {}
         self.pass_entitlements_by_user: dict[str, list[TimePassEntitlementRecord]] = {}
+        self.referral_codes_by_user: dict[str, str] = {}
+        self.referral_users_by_code: dict[str, str] = {}
+        self.referral_activations_by_invitee: dict[str, dict[str, object]] = {}
+        self.referral_activations_by_inviter: dict[str, list[dict[str, object]]] = {}
+        self.referral_settings: dict[str, object] = {
+            "enabled": False,
+            "rewardPoints": 500,
+            "configVersion": 1,
+            "updatedByUserId": None,
+            "updatedAtMs": 0,
+        }
 
     def state_for_user(self, *, user_id: str) -> BillingStateRecord:
         self._ensure_welcome_grant(user_id=user_id)
@@ -203,6 +216,139 @@ class BillingService:
             official_orders=[],
             support=dict(self.support),
         )
+
+    def referral_status(self, *, user_id: str) -> dict[str, object]:
+        code = self._referral_code_for_user(user_id=user_id)
+        if self.billing_repository is not None:
+            status = self.billing_repository.referral_status(user_id=user_id)
+        else:
+            activations = self.referral_activations_by_inviter.get(user_id, [])
+            status = {
+                **self.referral_settings,
+                "inviteCount": len(activations),
+                "totalRewardPoints": sum(int(item["rewardPoints"]) for item in activations),
+                "hasActivatedReferral": user_id in self.referral_activations_by_invitee,
+            }
+        public_base_url = (self.settings.public_web_base_url if self.settings is not None else "http://127.0.0.1:5173").rstrip("/")
+        return {
+            **status,
+            "referralCode": code,
+            "shareUrl": f"{public_base_url}/invite/{code}",
+        }
+
+    def resolve_referral(self, *, referral_code: str) -> dict[str, object]:
+        code = referral_code.strip()
+        if len(code) < 12 or len(code) > 48:
+            return {"valid": False, "enabled": False}
+        if self.billing_repository is not None:
+            resolved = self.billing_repository.resolve_referral_code(referral_code=code)
+            if resolved is None:
+                return {"valid": False, "enabled": False}
+            return {
+                "valid": True,
+                "enabled": bool(resolved["enabled"]),
+                "rewardPoints": int(resolved["reward_points"]),
+            }
+        inviter_user_id = self.referral_users_by_code.get(code)
+        return {
+            "valid": inviter_user_id is not None,
+            "enabled": inviter_user_id is not None and bool(self.referral_settings["enabled"]),
+            "rewardPoints": int(self.referral_settings["rewardPoints"]),
+        }
+
+    def activate_referral(self, *, invitee_user_id: str, referral_code: str) -> dict[str, object]:
+        code = referral_code.strip()
+        if self.billing_repository is not None:
+            return self.billing_repository.activate_referral(
+                invitee_user_id=invitee_user_id,
+                referral_code=code,
+                activated_at_ms=_now_ms(),
+            )
+        inviter_user_id = self.referral_users_by_code.get(code)
+        if inviter_user_id is None:
+            return {"outcome": "invalid-code"}
+        if inviter_user_id == invitee_user_id:
+            return {"outcome": "self-referral"}
+        existing = self.referral_activations_by_invitee.get(invitee_user_id)
+        if existing is not None:
+            same_code = existing["referralCode"] == code
+            return {
+                "outcome": "activated" if same_code else "already-activated",
+                "replayed": same_code,
+                "rewardPoints": int(existing["rewardPoints"]),
+                "activatedAtMs": int(existing["activatedAtMs"]),
+            }
+        if not bool(self.referral_settings["enabled"]):
+            return {"outcome": "disabled"}
+        reward_points = int(self.referral_settings["rewardPoints"])
+        activated_at_ms = _now_ms()
+        activation_id = f"referral-activation-{uuid4().hex}"
+        activation = {
+            "activationId": activation_id,
+            "inviterUserId": inviter_user_id,
+            "inviteeUserId": invitee_user_id,
+            "referralCode": code,
+            "rewardPoints": reward_points,
+            "configVersion": int(self.referral_settings["configVersion"]),
+            "activatedAtMs": activated_at_ms,
+        }
+        self._ensure_welcome_grant(user_id=inviter_user_id)
+        reference_id = f"referral:{activation_id}"
+        if not any(item.reference_id == reference_id for item in self.ledger_by_user.get(inviter_user_id, [])):
+            self.ledger_by_user.setdefault(inviter_user_id, []).append(PointsLedgerRecord(
+                id=f"ledger-{uuid4().hex}", user_id=inviter_user_id, kind="referral_credit",
+                points=reward_points, created_at_ms=activated_at_ms, reference_id=reference_id,
+                description="邀请好友奖励",
+            ))
+        self.referral_activations_by_invitee[invitee_user_id] = activation
+        self.referral_activations_by_inviter.setdefault(inviter_user_id, []).append(activation)
+        return {
+            "outcome": "activated",
+            "replayed": False,
+            "rewardPoints": reward_points,
+            "activatedAtMs": activated_at_ms,
+            "inviterBalance": self._balance_for_user(user_id=inviter_user_id),
+        }
+
+    def growth_referral_settings(self) -> dict[str, object]:
+        if self.billing_repository is not None:
+            return self.billing_repository.growth_referral_settings()
+        return dict(self.referral_settings)
+
+    def update_growth_referral_settings(self, *, enabled: bool, reward_points: int, updated_by_user_id: str) -> dict[str, object]:
+        if isinstance(reward_points, bool) or reward_points < 1 or reward_points > 100_000:
+            raise ValueError("referral_reward_points_invalid")
+        updated_at_ms = _now_ms()
+        if self.billing_repository is not None:
+            return self.billing_repository.update_growth_referral_settings(
+                enabled=enabled,
+                reward_points=reward_points,
+                updated_by_user_id=updated_by_user_id,
+                updated_at_ms=updated_at_ms,
+            )
+        self.referral_settings = {
+            "enabled": enabled,
+            "rewardPoints": reward_points,
+            "configVersion": int(self.referral_settings["configVersion"]) + 1,
+            "updatedByUserId": updated_by_user_id,
+            "updatedAtMs": updated_at_ms,
+        }
+        return dict(self.referral_settings)
+
+    def _referral_code_for_user(self, *, user_id: str) -> str:
+        existing = self.referral_codes_by_user.get(user_id)
+        if existing is not None:
+            return existing
+        candidate = secrets.token_urlsafe(16)
+        if self.billing_repository is not None:
+            return self.billing_repository.get_or_create_referral_code(
+                user_id=user_id,
+                candidate_code=candidate,
+                created_at_ms=_now_ms(),
+            )
+        self.referral_codes_by_user[user_id] = candidate
+        self.referral_users_by_code[candidate] = user_id
+        return candidate
 
     def redeem_points(self, *, user_id: str, code: str, idempotency_key: str) -> dict[str, object]:
         normalized_code = code.strip().upper()

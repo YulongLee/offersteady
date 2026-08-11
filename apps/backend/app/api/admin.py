@@ -51,6 +51,14 @@ class PaymentChannelActivationRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
 
 
+class GrowthReferralSettingsRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    enabled: bool
+    reward_points: int = Field(ge=1, le=100_000, alias="rewardPoints")
+    confirmed: bool
+    reason: str = Field(min_length=3, max_length=500)
+
+
 @lru_cache(maxsize=1)
 def admin_service() -> AdminService:
     settings = get_settings()
@@ -289,6 +297,51 @@ def payment_channels(
     if billing.billing_repository is None:
         raise HTTPException(status_code=503, detail="Payment configuration storage unavailable")
     return {"data": {"items": PaymentChannelService(get_settings(), billing.billing_repository).list_masked()}}
+
+
+@admin_router.get("/growth/referrals")
+def growth_referral_settings(
+    principal: Annotated[AdminPrincipal, Depends(permission("growth.manage"))],
+    billing: BillingService = Depends(billing_service),
+):
+    if billing.billing_repository is None:
+        raise HTTPException(status_code=503, detail="Growth configuration storage unavailable")
+    return {"data": billing.growth_referral_settings()}
+
+
+@admin_router.put("/growth/referrals")
+def update_growth_referral_settings(
+    payload: GrowthReferralSettingsRequest,
+    request: Request,
+    principal: Annotated[AdminPrincipal, Depends(permission("growth.manage"))],
+    billing: BillingService = Depends(billing_service),
+):
+    _confirmed(payload.confirmed)
+    if billing.billing_repository is None:
+        raise HTTPException(status_code=503, detail="Growth configuration storage unavailable")
+    try:
+        result = billing.update_growth_referral_settings(
+            enabled=payload.enabled,
+            reward_points=payload.reward_points,
+            updated_by_user_id=principal.user_id,
+        )
+        admin_service().audit(
+            principal=principal,
+            action="growth.referrals.update",
+            resource_type="growth_referral_settings",
+            resource_id="default",
+            reason=payload.reason,
+            request_id=_request_id(request),
+            result="success",
+            details={
+                "enabled": payload.enabled,
+                "reward_points": payload.reward_points,
+                "config_version": result["configVersion"],
+            },
+        )
+        return {"data": result}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @admin_router.put("/payment-channels/{channel}")

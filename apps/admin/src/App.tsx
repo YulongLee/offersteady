@@ -6,8 +6,9 @@ import { capacityLevelLabel, formatCapacityValue, type CapacityMetric, type Capa
 import { paymentChannelStatus } from "./payment-channel-status";
 import { diagnosticLabel, formatCny, type PaymentRevenueSummary } from "./payment-monitoring";
 import { formatUptime, type ServerHealthResponse } from "./server-health";
+import { validateGrowthSettings } from "./growth-settings";
 
-type View = "dashboard" | "server" | "users" | "orders" | "payments" | "pricing" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
+type View = "dashboard" | "server" | "users" | "orders" | "payments" | "growth" | "pricing" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
 type Row = Record<string, unknown>;
 
 const views: { id: View; label: string; eyebrow: string; permission: string }[] = [
@@ -16,6 +17,7 @@ const views: { id: View; label: string; eyebrow: string; permission: string }[] 
   { id: "users", label: "用户与权益", eyebrow: "CUSTOMERS", permission: "users.read" },
   { id: "orders", label: "订单与支付", eyebrow: "BILLING", permission: "billing.read" },
   { id: "payments", label: "支付设置", eyebrow: "PAYMENTS", permission: "payments.manage" },
+  { id: "growth", label: "增长设置", eyebrow: "GROWTH", permission: "growth.manage" },
   { id: "pricing", label: "商品定价", eyebrow: "CATALOG", permission: "billing.read" },
   { id: "redemptions", label: "兑换码", eyebrow: "BENEFITS", permission: "billing.read" },
   { id: "materials", label: "资料任务", eyebrow: "KNOWLEDGE", permission: "materials.read" },
@@ -674,6 +676,35 @@ function PaymentPanel({ rows, onChanged, onAuthenticationExpired }: { rows: Row[
   </>;
 }
 
+function GrowthPanel({ row, onChanged, onAuthenticationExpired }: { row: Row | undefined; onChanged: () => void; onAuthenticationExpired: (message: string) => void }) {
+  const [enabled, setEnabled] = useState(Boolean(row?.enabled));
+  const [rewardPoints, setRewardPoints] = useState(String(row?.rewardPoints ?? 500));
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  useEffect(() => {
+    setEnabled(Boolean(row?.enabled));
+    setRewardPoints(String(row?.rewardPoints ?? 500));
+  }, [row?.enabled, row?.rewardPoints]);
+  const save = async () => {
+    const points = Number(rewardPoints);
+    const validation = validateGrowthSettings(rewardPoints, reason);
+    if (!validation.valid) { setMessage(validation.message); return; }
+    setBusy(true); setMessage("");
+    try {
+      const result = await adminApi.saveGrowthReferralSettings({ enabled, rewardPoints: points, confirmed: true, reason: reason.trim() });
+      setMessage(result.enabled ? `邀请奖励已开启，每成功激活 1 人奖励 ${result.rewardPoints} 积分。` : "邀请奖励已关闭，历史关系和已发积分不会撤销。");
+      setReason("");
+      onChanged();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "保存失败";
+      setMessage(errorMessage);
+      if (isAdminAuthenticationError(error)) onAuthenticationExpired(errorMessage);
+    } finally { setBusy(false); }
+  };
+  return <section className="growth-settings-card"><div className="growth-settings-head"><div><p className="eyebrow">REFERRAL PROGRAM</p><h3>邀请拉新奖励</h3><p>用户分享专属链接，其他账号首次激活后，邀请人获得积分。每个账号只能激活一次，禁止自邀。</p></div><span className={`status-badge ${enabled ? "active" : "inactive"}`}>{enabled ? "当前已启用" : "当前已关闭"}</span></div><div className="growth-setting-grid"><label><span>允许新邀请激活</span><small>关闭后保留历史数据，仅停止新的激活和奖励</small><input type="checkbox" role="switch" aria-label="允许新邀请激活" checked={enabled} onChange={event => setEnabled(event.target.checked)} /></label><label><span>每次成功邀请奖励</span><small>只奖励邀请人，额度由服务端入账</small><div className="points-input"><input type="number" min="1" max="100000" step="1" value={rewardPoints} onChange={event => setRewardPoints(event.target.value)} /><b>积分</b></div></label></div><label className="growth-reason">配置变更原因<input value={reason} onChange={event => setReason(event.target.value)} placeholder="例如：上线首期邀请活动" /></label><div className="growth-settings-footer"><div><strong>配置版本 v{String(row?.configVersion ?? 1)}</strong><small>{Number(row?.updatedAtMs) > 0 ? `最近更新：${new Date(Number(row?.updatedAtMs)).toLocaleString("zh-CN")}` : "尚未进行运营配置"}</small></div><button className="primary" disabled={busy} onClick={() => void save()}>{busy ? "保存中…" : "保存并立即生效"}</button></div>{message ? <div className="form-message" role="status">{message}</div> : null}</section>;
+}
+
 export function App() {
   const [authenticated, setAuthenticated] = useState(Boolean(adminApi.token()));
   const [view, setView] = useState<View>("dashboard");
@@ -715,6 +746,9 @@ export function App() {
       if (target === "dashboard") {
         const nextDashboard = await adminApi.dashboard();
         if (sequence === loadSequence.current) setDashboardData(nextDashboard);
+      } else if (target === "growth") {
+        const settings = await adminApi.growthReferralSettings();
+        if (sequence === loadSequence.current) setRows([settings]);
       } else if (target !== "server") {
         const resource = target === "redemptions" ? "redemption-batches" : target === "pricing" ? "catalog-products" : target === "payments" ? "payment-channels" : target;
         const nextRows = (await adminApi.list(resource, offset)).items;
@@ -748,7 +782,7 @@ export function App() {
       <main className="workspace">
         <header><div><p className="eyebrow">{current.eyebrow}</p><h1>{current.label}</h1></div><div className="header-actions"><span>{new Date().toLocaleDateString("zh-CN")}</span><button onClick={() => void load(view)}>刷新</button><button onClick={() => adminApi.logout().then(() => { sessionRequest.current = null; setAuthenticated(false); })}>退出</button></div></header>
         {error && <div className="alert">{error}</div>}
-        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} /> : view === "server" ? <ServerMonitor /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "pricing" ? <PricingPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "payments" ? <PaymentPanel rows={rows} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "orders" ? <OrdersPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : <>
+        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} /> : view === "server" ? <ServerMonitor /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "pricing" ? <PricingPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "payments" ? <PaymentPanel rows={rows} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "growth" ? <GrowthPanel row={rows[0]} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "orders" ? <OrdersPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : <>
           <Table rows={rows} />
           <div className="pagination"><button disabled={offset === 0} onClick={() => setOffset(value => Math.max(0, value - 50))}>上一页</button><span>第 {offset / 50 + 1} 页</span><button disabled={rows.length < 50} onClick={() => setOffset(value => value + 50)}>下一页</button></div>
           <ActionPanel view={view} rows={rows} permissions={permissions} onChanged={() => void load(view, true)} />

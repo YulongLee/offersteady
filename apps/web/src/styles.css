@@ -694,6 +694,38 @@ h1, h2, h3, p { margin-top: 0; }
 .review-summary .failed { color: var(--danger); }
 .data-panel .button { margin-top: 16px; }
 .device-page-grid { grid-template-columns: 1fr 1fr; }
+.referral-landing-card { width: min(100%, 520px); border: 1px solid var(--line); border-radius: 20px; background: var(--panel-bg); padding: 34px; box-shadow: var(--shadow); text-align: center; }
+.referral-landing-card .logo-lockup { justify-content: center; margin-bottom: 24px; }.referral-landing-card h1 { margin: 10px 0 12px; font-size: 30px; }.referral-landing-card > p { color: var(--muted); font-size: 11px; line-height: 1.75; }.referral-landing-card > small { display: block; color: var(--muted); margin-top: 16px; font-size: 8px; line-height: 1.6; }
+.referral-reward-preview { display: grid; gap: 4px; border: 1px solid rgba(110,231,189,.22); border-radius: 14px; background: rgba(110,231,189,.06); margin: 18px 0; padding: 18px; }.referral-reward-preview strong { color: var(--brand); font-size: 32px; }.referral-reward-preview span { color: var(--muted); font-size: 9px; }
+.referral-result { display: grid; gap: 8px; border-radius: 10px; background: rgba(110,231,189,.07); margin-top: 12px; color: var(--text); padding: 12px; font-size: 9px; }.referral-result a { color: var(--brand); }
+.linked-device-panel { min-width: 0; }
+.linked-device-panel .panel-heading > div p { margin: 5px 0 0; color: var(--muted); font-size: 8px; }
+.muted-text { color: var(--muted); font-size: 8px; }
+.device-loading, .device-empty { display: grid; place-items: center; gap: 10px; min-height: 180px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); padding: 24px; text-align: center; }
+.device-empty strong { color: var(--text); font-size: 12px; }
+.device-empty p { max-width: 390px; margin: 0; font-size: 9px; line-height: 1.7; }
+.linked-device-list { display: grid; gap: 12px; }
+.linked-device-card { border: 1px solid var(--line); border-radius: 13px; background: rgba(255,255,255,.018); overflow: hidden; }
+.linked-device-card.online { border-color: rgba(110,231,189,.24); }
+.linked-device-card .paired-device { border: 0; border-radius: 0; background: transparent; }
+.device-presence { border-radius: 999px; padding: 4px 7px; font-size: 8px; font-weight: 800; }
+.device-presence.online { color: var(--brand); background: rgba(110,231,189,.08); }
+.device-presence.offline { color: var(--muted); background: rgba(255,255,255,.04); }
+.device-state-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; border-top: 1px solid var(--line); background: var(--line); }
+.device-state-strip span { display: grid; gap: 4px; background: var(--panel-bg-soft); color: var(--muted); padding: 10px 12px; font-size: 8px; }
+.device-state-strip b { color: var(--text); font-size: 8px; }
+.device-diagnostics { border-top: 1px solid var(--line); padding: 14px; }
+.device-diagnostics dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.device-diagnostics dl > div { border: 1px solid var(--line); border-radius: 9px; padding: 9px; }
+.device-diagnostics dt { color: var(--muted); font-size: 7px; }
+.device-diagnostics dd { margin: 4px 0 0; font-size: 9px; font-weight: 800; }
+.device-diagnostics p { color: var(--muted); margin: 12px 0 8px; font-size: 8px; line-height: 1.6; }
+.device-diagnostics a { color: var(--brand); font-size: 8px; }
+.referral-card { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 28px; align-items: center; margin-bottom: 18px; border-color: rgba(110,231,189,.22); background: linear-gradient(135deg, rgba(110,231,189,.055), var(--panel-bg) 48%); }
+.referral-card-copy h2 { margin: 8px 0 10px; font-size: 22px; }.referral-card-copy > p { color: var(--muted); margin: 0; font-size: 9px; line-height: 1.75; }
+.referral-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 18px; }.referral-summary span { display: grid; gap: 4px; border: 1px solid var(--line); border-radius: 10px; background: rgba(0,0,0,.12); padding: 10px; color: var(--muted); font-size: 7px; }.referral-summary b { color: var(--brand); font-size: 16px; }
+.referral-share-box { min-width: 0; border: 1px solid var(--line); border-radius: 14px; background: rgba(0,0,0,.14); padding: 16px; }.referral-status-row { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 12px; }.referral-status-row small { color: var(--muted); font-size: 7px; }.referral-share-box > label { display: block; color: var(--muted); margin-bottom: 6px; font-size: 8px; }.referral-share-box > small { display: block; color: var(--muted); margin-top: 8px; font-size: 7px; }.referral-loading { color: var(--muted); font-size: 9px; }
+.referral-link-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }.referral-link-controls input { min-width: 0; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--field-bg); color: var(--text); padding: 10px; font-size: 9px; }
 .segmented { display: flex; gap: 5px; border-radius: 10px; background: rgba(0,0,0,.18); padding: 4px; }
 .segmented button { flex: 1; border: 0; border-radius: 7px; background: transparent; color: var(--muted); padding: 8px; cursor: pointer; font-size: 9px; }
 .segmented button.active { color: var(--text); background: var(--surface-3); }
@@ -942,6 +974,11 @@ h1, h2, h3, p { margin-top: 0; }
   .public-shell { width: min(100% - 28px, 1240px); }
   .public-nav { height: 64px; }
   .public-nav nav > a:not(.button) { display: none; }
+  .referral-card { grid-template-columns: 1fr; gap: 18px; }
+  .referral-summary { grid-template-columns: 1fr; }
+  .referral-link-controls { grid-template-columns: 1fr; }
+  .device-state-strip { grid-template-columns: 1fr; }
+  .device-diagnostics dl { grid-template-columns: 1fr; }
   .landing-hero { min-height: 0; padding: 50px 0 70px; }
   .landing-hero h1 { font-size: 46px; }
   .workflow-grid, .boundary-card { grid-template-columns: 1fr; }

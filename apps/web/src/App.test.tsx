@@ -353,6 +353,8 @@ describe("OfferSteady web application", () => {
   });
 
   it("offers explicit macOS architectures and a truthful Windows preview", async () => {
+    vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue("Mozilla/5.0 (Macintosh; Apple Silicon Mac OS X) arm64");
+    vi.spyOn(window.navigator, "platform", "get").mockReturnValue("MacARM");
     await login();
     fireEvent.click(screen.getAllByRole("link", { name: /设备/ })[0]!);
     expect(await screen.findByRole("button", { name: /macOS Apple Silicon/ })).toBeInTheDocument();

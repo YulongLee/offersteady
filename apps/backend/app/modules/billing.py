@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from app.core.logging import utc_now_iso
 from app.core.responses import success_response
 from app.core.config import Settings
-from app.deps import billing_service, optional_authenticated_context, resolve_owned_user_id, settings_dependency
+from app.deps import billing_service, optional_authenticated_context, require_authenticated_context, resolve_owned_user_id, settings_dependency
 from app.ports.authentication import AuthenticatedRequestContext
 from app.schemas.foundation import ApiEnvelope, ModuleDescriptor
 from app.services.alipay_provider import AlipayPaymentProvider
@@ -43,6 +43,11 @@ class CheckoutOrderRequest(BaseModel):
     idempotency_key: str = Field(min_length=1, alias="idempotencyKey")
 
 
+class ReferralActivationRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    referral_code: str = Field(min_length=12, max_length=48, alias="referralCode")
+
+
 def configured_payment_provider(settings: Settings) -> MzfpayPaymentProvider | AlipayPaymentProvider:
     if settings.checkout_provider == "alipay":
         return AlipayPaymentProvider(settings)
@@ -72,6 +77,46 @@ async def get_billing_state(
     data = service.state_payload(service.state_for_user(user_id=resolve_owned_user_id(explicit_user_id=None, auth_context=auth_context)))
     data["availablePaymentChannels"] = PaymentChannelService(settings, service.billing_repository).available_channels() if service.billing_repository else []
     return success_response(request=request, data=data, timestamp=utc_now_iso())
+
+
+@router.get("/referrals/me", response_model=ApiEnvelope[dict[str, object]])
+async def get_referral_status(
+    request: Request,
+    auth_context: AuthenticatedRequestContext = Depends(require_authenticated_context),
+    service: BillingService = Depends(billing_service),
+) -> ApiEnvelope[dict[str, object]]:
+    return success_response(
+        request=request,
+        data=service.referral_status(user_id=auth_context.user_id),
+        timestamp=utc_now_iso(),
+    )
+
+
+@router.get("/referrals/{referral_code}", response_model=ApiEnvelope[dict[str, object]])
+async def resolve_referral(
+    referral_code: str,
+    request: Request,
+    service: BillingService = Depends(billing_service),
+) -> ApiEnvelope[dict[str, object]]:
+    return success_response(
+        request=request,
+        data=service.resolve_referral(referral_code=referral_code),
+        timestamp=utc_now_iso(),
+    )
+
+
+@router.post("/referrals/activate", response_model=ApiEnvelope[dict[str, object]])
+async def activate_referral(
+    payload: ReferralActivationRequest,
+    request: Request,
+    auth_context: AuthenticatedRequestContext = Depends(require_authenticated_context),
+    service: BillingService = Depends(billing_service),
+) -> ApiEnvelope[dict[str, object]]:
+    return success_response(
+        request=request,
+        data=service.activate_referral(invitee_user_id=auth_context.user_id, referral_code=payload.referral_code),
+        timestamp=utc_now_iso(),
+    )
 
 
 @router.post("/redemptions", response_model=ApiEnvelope[dict[str, object]])

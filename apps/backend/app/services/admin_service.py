@@ -26,10 +26,12 @@ PERMISSIONS_BY_ROLE: dict[str, frozenset[str]] = {
         "payments.reconcile", "payments.manage", "materials.read", "materials.retry",
         "sessions.read", "sessions.terminate", "observability.read",
         "audit.read", "admins.manage",
+        "growth.manage",
     }),
     "operations": frozenset({
         "users.read", "billing.read", "materials.read", "materials.retry",
         "sessions.read", "sessions.terminate", "observability.read",
+        "growth.manage",
     }),
     "support": frozenset({"users.read", "billing.read", "materials.read", "sessions.read"}),
     "finance": frozenset({
@@ -45,9 +47,10 @@ SAFE_DETAIL_KEYS = frozenset({
     "idempotent_replay", "role", "batch_id", "code_count", "points_per_code",
     "expires_at_ms", "campaign", "product_id", "display_name", "price_cents",
     "published", "catalog_version",
+    "enabled", "reward_points", "config_version",
 })
 HIGH_RISK_PERMISSIONS = frozenset({
-    "users.suspend", "billing.adjust", "catalog.manage", "redemptions.generate", "payments.manage", "payments.reconcile", "admins.manage",
+    "users.suspend", "billing.adjust", "catalog.manage", "redemptions.generate", "payments.manage", "payments.reconcile", "growth.manage", "admins.manage",
 })
 
 

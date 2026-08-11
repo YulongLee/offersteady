@@ -1029,6 +1029,7 @@ class AdminRepository:
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0017_admin_operations_analytics.sql",
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0018_admin_managed_billing_catalog.sql",
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0020_admin_payment_diagnostics.sql",
+            Path(REPO_ROOT) / "apps/backend/migrations/versions/0021_referral_rewards.sql",
         ]
         with self.connect() as connection, connection.cursor() as cursor:
             for migration in migrations:

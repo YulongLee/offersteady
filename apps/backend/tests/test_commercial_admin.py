@@ -24,6 +24,9 @@ def test_admin_role_permissions_are_deny_by_default() -> None:
     assert "payments.manage" in PERMISSIONS_BY_ROLE["super_admin"]
     assert "payments.manage" in PERMISSIONS_BY_ROLE["finance"]
     assert "payments.manage" not in PERMISSIONS_BY_ROLE["support"]
+    assert "growth.manage" in PERMISSIONS_BY_ROLE["super_admin"]
+    assert "growth.manage" in PERMISSIONS_BY_ROLE["operations"]
+    assert "growth.manage" not in PERMISSIONS_BY_ROLE["support"]
     assert "appPrivateKey" not in SAFE_DETAIL_KEYS
     assert "apiV3Key" not in SAFE_DETAIL_KEYS
     assert "resume_text" not in SAFE_DETAIL_KEYS

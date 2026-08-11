@@ -3,6 +3,7 @@ export const routes = {
   login: "/login",
   terms: "/terms",
   privacy: "/privacy",
+  invite: (code = ":code") => `/invite/${code}`,
   app: "/app",
   newInterview: "/app/interviews/new",
   prepare: (id = ":id") => `/app/interviews/${id}/prepare`,
