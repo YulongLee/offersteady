@@ -80,7 +80,12 @@ describe("optimized product experience", () => {
     expect(within(section!).getAllByRole("listitem")).toHaveLength(10);
     ["Zoom", "Google Meet", "Microsoft Teams", "腾讯会议", "飞书", "钉钉", "企业微信", "力扣", "牛客", "Slack"].forEach(platform => {
       expect(within(section!).getByText(platform, { selector: "strong" })).toBeInTheDocument();
+      expect(within(section!).getByRole("img", { name: `${platform} 品牌标识` })).toHaveAttribute("src", expect.stringMatching(/^https:\/\//));
     });
+    expect(section!.querySelectorAll("[data-brand-source^='https://']")).toHaveLength(10);
+    expect(section!.querySelectorAll(".platform-brand-wordmark")).toHaveLength(2);
+    expect(section!.querySelectorAll(".platform-brand-lockup")).toHaveLength(8);
+    expect(section).not.toHaveTextContent(/\b(?:ZM|GM|MT|LC|SL)\b/);
     expect(section).toHaveTextContent("取决于电脑系统权限、面试平台的音频设置与当前助手版本");
     expect(section).toHaveTextContent("不代表官方合作或直接集成");
     expect(section).not.toHaveTextContent("支持所有");

@@ -23,11 +23,12 @@ The homepage SHALL explain that users can choose point-based usage or 3/7/15/30-
 - **THEN** the page distinguishes occasional point usage from short-term high-frequency membership and links to complete pricing terms
 
 ### Requirement: Common interview platforms are presented with truthful compatibility boundaries
-The homepage SHALL present a responsive compatibility section for common remote-interview, collaboration and online-assessment platforms. The section SHALL explain that OfferSteady uses user-authorized system audio, microphone and screenshot capabilities, and MUST NOT claim universal compatibility, official partnership or direct platform integration without verified evidence.
+The homepage SHALL present a responsive compatibility section for common remote-interview, collaboration and online-assessment platforms. Each platform SHALL use a traceable authentic brand mark alongside its name, preserve the mark's proportions and colors, and MUST NOT substitute initials or a fabricated logo. The section SHALL explain that OfferSteady uses user-authorized system audio, microphone and screenshot capabilities, and MUST NOT claim universal compatibility, official partnership or direct platform integration without verified evidence.
 
 #### Scenario: Visitor checks whether their interview platform is covered
 - **WHEN** the visitor views the platform compatibility section
 - **THEN** the page presents Zoom, Google Meet, Microsoft Teams, 腾讯会议, 飞书, 钉钉, 企业微信, 力扣, 牛客 and Slack as common usage scenarios
+- **AND** each platform uses a real brand mark from a recorded source rather than a generated abbreviation
 - **AND** the page discloses that actual availability depends on system permissions, platform audio settings and the current release
 
 ### Requirement: Trust boundaries remain discoverable but secondary

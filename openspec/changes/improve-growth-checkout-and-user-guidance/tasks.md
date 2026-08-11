@@ -21,7 +21,7 @@
 - [x] 2.9 Add tests preventing employment guarantees, prototype wording and client-hardcoded prices
 - [ ] 2.10 Run desktop, tablet, mobile, keyboard, screen-reader, contrast and conversion-copy reviews
 - [x] 2.11 Replace the hero points and pricing prompts with adjacent “免费使用” and public “使用手册” actions
-- [x] 2.12 Add a responsive common-platform compatibility section with truthful capability boundaries and regression coverage
+- [x] 2.12 Add a responsive common-platform compatibility section using traceable authentic brand marks, truthful capability boundaries and regression coverage
 - [x] 2.13 Build a responsive commercial footer with product links, public documentation, configured contact details and filing information
 
 ## 3. Verified Windows Support

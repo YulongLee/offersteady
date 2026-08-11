@@ -15,6 +15,7 @@ import { BillingPage } from "./BillingPage";
 import { GuidePage } from "./GuidePage";
 import { LegalPage } from "./LegalPage";
 import { assetUrl } from "./assets";
+import { interviewPlatforms } from "./platform-brands";
 import { ConversationMonitor } from "./ConversationMonitor";
 import { AnswerWorkspace } from "./AnswerWorkspace";
 import { latestInterviewerTurnText } from "./conversation-turns";
@@ -108,19 +109,6 @@ function PrototypeProvider({ children, initialAuthenticated, initialState }: { r
 
 const Logo = () => <span className="logo-lockup"><img src={assetUrl("brand.app-icon")} alt="" /><strong>面试稳AI助手</strong></span>;
 
-const interviewPlatforms = [
-  { name: "Zoom", mark: "ZM", tone: "zoom" },
-  { name: "Google Meet", mark: "GM", tone: "meet" },
-  { name: "Microsoft Teams", mark: "MT", tone: "teams" },
-  { name: "腾讯会议", mark: "腾讯", tone: "tencent" },
-  { name: "飞书", mark: "飞书", tone: "feishu" },
-  { name: "钉钉", mark: "钉", tone: "dingtalk" },
-  { name: "企业微信", mark: "企微", tone: "wecom" },
-  { name: "力扣", mark: "LC", tone: "leetcode" },
-  { name: "牛客", mark: "牛客", tone: "nowcoder" },
-  { name: "Slack", mark: "SL", tone: "slack" },
-] as const;
-
 function PublicLayout() {
   const { authenticated } = usePrototype();
   return (
@@ -172,7 +160,7 @@ function LandingPage() {
       </section>
       <section id="platform-compatibility" className="public-section platform-compatibility" aria-labelledby="platform-compatibility-title">
         <div className="platform-compatibility-intro"><span className="kicker">PLATFORM COMPATIBILITY</span><h2 id="platform-compatibility-title">适配常见远程面试与在线笔试平台</h2><p>电脑伴随助手通过你明确授权的系统音频、麦克风和截图能力工作，无需安装平台插件。</p></div>
-        <ul className="platform-grid" aria-label="常见使用平台">{interviewPlatforms.map(platform => <li className={`platform-card tone-${platform.tone}`} key={platform.name}><span aria-hidden="true">{platform.mark}</span><strong>{platform.name}</strong></li>)}</ul>
+        <ul className="platform-grid" aria-label="常见使用平台">{interviewPlatforms.map(platform => <li className={`platform-card brand-${platform.slug}`} data-brand-source={platform.sourcePage} key={platform.name}><span className={`platform-brand platform-brand-${platform.presentation}`}><img src={platform.logoUrl} alt={`${platform.name} 品牌标识`} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={event => { event.currentTarget.hidden = true; }} /><span className={platform.presentation === "wordmark" ? "sr-only" : "platform-brand-copy"}><strong>{platform.name}</strong>{platform.secondaryLabel ? <small>{platform.secondaryLabel}</small> : null}</span></span></li>)}</ul>
         <p className="platform-compatibility-note">实际可用能力取决于电脑系统权限、面试平台的音频设置与当前助手版本；平台名称仅用于说明常见使用场景，不代表官方合作或直接集成。</p>
       </section>
       <section id="user-scenarios" className="public-section user-scenarios" aria-labelledby="user-scenarios-title">
