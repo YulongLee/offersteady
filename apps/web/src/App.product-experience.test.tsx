@@ -87,8 +87,8 @@ describe("optimized product experience", () => {
     expect(section!.querySelectorAll(".platform-brand-lockup")).toHaveLength(9);
     expect(within(section!).getByText("Slack", { selector: ".brand-slack strong" })).toBeVisible();
     expect(section).not.toHaveTextContent(/\b(?:ZM|GM|MT|LC|SL)\b/);
-    expect(section).toHaveTextContent("取决于电脑系统权限、面试平台的音频设置与当前助手版本");
-    expect(section).toHaveTextContent("不代表官方合作或直接集成");
+    expect(section).not.toHaveTextContent("实际可用能力取决于电脑系统权限");
+    expect(section).not.toHaveTextContent("不代表官方合作或直接集成");
     expect(section).not.toHaveTextContent("支持所有");
   });
 

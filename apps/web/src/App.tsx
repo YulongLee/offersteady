@@ -161,7 +161,6 @@ function LandingPage() {
       <section id="platform-compatibility" className="public-section platform-compatibility" aria-labelledby="platform-compatibility-title">
         <div className="platform-compatibility-intro"><span className="kicker">PLATFORM COMPATIBILITY</span><h2 id="platform-compatibility-title">适配常见远程面试与在线笔试平台</h2><p>电脑伴随助手通过你明确授权的系统音频、麦克风和截图能力工作，无需安装平台插件。</p></div>
         <ul className="platform-grid" aria-label="常见使用平台">{interviewPlatforms.map(platform => <li className={`platform-card brand-${platform.slug}`} data-brand-source={platform.sourcePage} key={platform.name}><span className={`platform-brand platform-brand-${platform.presentation}`}><img src={platform.logoUrl} alt={`${platform.name} 品牌标识`} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={event => { event.currentTarget.hidden = true; }} /><span className={platform.presentation === "wordmark" ? "sr-only" : "platform-brand-copy"}><strong>{platform.name}</strong>{platform.secondaryLabel ? <small>{platform.secondaryLabel}</small> : null}</span></span></li>)}</ul>
-        <p className="platform-compatibility-note">实际可用能力取决于电脑系统权限、面试平台的音频设置与当前助手版本；平台名称仅用于说明常见使用场景，不代表官方合作或直接集成。</p>
       </section>
       <section id="user-scenarios" className="public-section user-scenarios" aria-labelledby="user-scenarios-title">
         <div className="user-scenarios-intro"><span className="kicker">ROLE-BASED WORKFLOWS</span><h2 id="user-scenarios-title">覆盖多种岗位与面试场景</h2><p>按岗位查看面试稳如何结合简历、JD、知识库、实时语音和截图回答，帮助你更快组织真实经历与专业表达。</p></div>

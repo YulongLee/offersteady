@@ -23,13 +23,13 @@ The homepage SHALL explain that users can choose point-based usage or 3/7/15/30-
 - **THEN** the page distinguishes occasional point usage from short-term high-frequency membership and links to complete pricing terms
 
 ### Requirement: Common interview platforms are presented with truthful compatibility boundaries
-The homepage SHALL present a responsive compatibility section for common remote-interview, collaboration and online-assessment platforms using the current homepage theme surfaces and card hierarchy. Each platform SHALL use a traceable authentic brand mark alongside a visible recognizable name, preserve the mark's proportions and colors, and MUST NOT substitute initials, a fabricated logo or an unexplained symbol-only mark. The section SHALL explain that OfferSteady uses user-authorized system audio, microphone and screenshot capabilities, and MUST NOT claim universal compatibility, official partnership or direct platform integration without verified evidence.
+The homepage SHALL present a responsive compatibility section for common remote-interview, collaboration and online-assessment platforms using the current homepage theme surfaces and card hierarchy. Each platform SHALL use a traceable authentic brand mark alongside a visible recognizable name, preserve the mark's proportions and colors, and MUST NOT substitute initials, a fabricated logo or an unexplained symbol-only mark. The section MUST NOT add a disclaimer paragraph below the platform cards.
 
 #### Scenario: Visitor checks whether their interview platform is covered
 - **WHEN** the visitor views the platform compatibility section
 - **THEN** the page presents Zoom, Google Meet, Microsoft Teams, 腾讯会议, 飞书, 钉钉, 企业微信, 力扣, 牛客 and Slack as common usage scenarios
 - **AND** each platform uses a real brand mark from a recorded source rather than a generated abbreviation
-- **AND** the page discloses that actual availability depends on system permissions, platform audio settings and the current release
+- **AND** no platform disclaimer paragraph appears below the cards
 
 ### Requirement: Trust boundaries remain discoverable but secondary
 The interface SHALL keep AI-advice, truthful-experience, privacy and platform-capability boundaries available in a trust section without using them as the primary hero proposition.
