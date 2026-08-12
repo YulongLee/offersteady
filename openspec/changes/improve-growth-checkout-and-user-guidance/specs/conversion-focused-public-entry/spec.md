@@ -45,6 +45,14 @@ The deployed Web shell SHALL not retain stale hashed build artifacts as part of 
 - **THEN** the page reloads once into the current release
 - **AND** the release image does not continue serving unrelated hashed artifacts from earlier deployments
 
+### Requirement: Mobile live answers remain fully readable
+On mobile Web viewports, the live workspace SHALL provide one continuous vertical page scroll for the answer content. The answer action bar MUST NOT cover the answer body, and nested fixed-height answer scrolling MUST NOT prevent the user from reaching the complete answer.
+
+#### Scenario: A mobile user reads a long generated answer
+- **WHEN** the generated answer is taller than the visible mobile viewport
+- **THEN** the user can swipe upward through the complete answer
+- **AND** the quick-answer and screenshot actions do not obscure any answer text
+
 ### Requirement: Common interview platforms are presented with truthful compatibility boundaries
 The homepage SHALL present a responsive compatibility section for common remote-interview, collaboration and online-assessment platforms using the current homepage theme surfaces and card hierarchy. Each platform SHALL use a traceable authentic brand mark alongside a visible recognizable name, preserve the mark's proportions and colors, and MUST NOT substitute initials, a fabricated logo or an unexplained symbol-only mark. The section MUST NOT add a disclaimer paragraph below the platform cards.
 

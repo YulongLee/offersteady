@@ -27,6 +27,7 @@
 - [x] 2.15 Split the oversized Web entry bundle into route-level chunks while preserving route loading and production behavior.
 - [x] 2.16 Automatically recover the initial Web state after a transient backend deployment outage and provide an in-page immediate retry action.
 - [x] 2.17 Remove stale hashed assets during deployment and automatically refresh running tabs when a newer Web entry is detected.
+- [x] 2.18 Keep mobile live answers in one touch-scroll flow and prevent the answer action bar from covering answer text.
 
 ## 3. Verified Windows Support
 

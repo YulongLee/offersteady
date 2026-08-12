@@ -25,4 +25,12 @@ describe("appearance styles", () => {
     expect(styles).toMatch(/\.simple-answer p[^}]*font-size: var\(--answer-font-size\)/);
     expect(styles).toMatch(/\.conversation-turn p[^}]*font-size: 10px/);
   });
+
+  it("keeps the mobile answer in the page scroll flow without a covering action bar", () => {
+    expect(styles).toMatch(/\.focused-live-grid \{[^}]*overflow-y: auto[^}]*-webkit-overflow-scrolling: touch[^}]*touch-action: pan-y/);
+    expect(styles).toMatch(/\.answer-workspace, \.answer-workspace\.mobile-answer-expanded \{[^}]*overflow: visible/);
+    expect(styles).toMatch(/\.answer-workspace-head \{[^}]*position: static/);
+    expect(styles).toMatch(/\.answer-action-bar \{[^}]*position: static/);
+    expect(styles).not.toMatch(/\.answer-action-bar \{[^}]*position: sticky/);
+  });
 });

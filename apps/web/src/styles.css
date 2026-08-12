@@ -1097,20 +1097,20 @@ h1, h2, h3, p { margin-top: 0; }
   .live-top-actions { gap: 8px; }
   .live-top-actions .live-balance { display: none; }
   .live-top-actions button { min-width: 44px; min-height: 44px; padding-inline: 10px; }
-  .focused-live-grid { min-height: 0; grid-template-columns: minmax(0, 1fr) !important; grid-template-rows: auto auto; overflow-y: auto; overscroll-behavior: contain; padding: 8px 8px 18px; }
-  .conversation-monitor, .answer-workspace { min-height: 0; }
-  .conversation-column, .answer-column { grid-template-rows: auto auto; padding: 0; }
+  .focused-live-grid { min-height: 0; grid-template-columns: minmax(0, 1fr) !important; grid-template-rows: auto auto; overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 8px 8px max(28px, env(safe-area-inset-bottom)); }
+  .conversation-column, .answer-column { flex: none; overflow: visible; padding: 0; }
+  .conversation-monitor { min-height: 0; max-height: 54dvh; flex: none; }
+  .conversation-list { -webkit-overflow-scrolling: touch; touch-action: pan-y; }
   .conversation-turn { grid-template-columns: 36px minmax(0, 1fr); }
   .conversation-turn-meta { align-items: flex-start; flex-direction: column; gap: 3px; }
-  .answer-workspace-head { align-items: flex-start; flex-direction: column; }
+  .answer-workspace-head { position: static; align-items: flex-start; flex-direction: column; }
   .answer-pagination { width: 100%; flex-wrap: wrap; }
   .answer-pagination button { min-height: 44px; flex: 1; }
-  .answer-workspace { min-height: 58dvh; transition: min-height .18s ease; }
-  .answer-workspace.mobile-answer-expanded { min-height: 84dvh; }
-  .mobile-answer-size-toggle { display: inline-flex; flex-basis: 100%; align-items: center; justify-content: center; border-color: rgba(110,231,189,.3) !important; color: var(--brand) !important; background: rgba(110,231,189,.06) !important; }
+  .answer-workspace, .answer-workspace.mobile-answer-expanded { min-height: 0; flex: none; overflow: visible; transition: none; }
+  .mobile-answer-size-toggle { display: none; }
   .manual-question-composer { order: 2; }
   .answer-workspace { order: 3; }
-  .answer-action-bar { order: 4; position: sticky; z-index: 12; bottom: 8px; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+  .answer-action-bar { order: 2; position: static; z-index: auto; padding-bottom: 14px; }
   .manual-question-composer textarea { min-height: 52px; max-height: 30dvh; }
   .answer-action-buttons { grid-template-columns: 1fr 1fr; }
   .action-tile { min-height: 60px; }

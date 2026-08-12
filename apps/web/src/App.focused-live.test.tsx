@@ -210,7 +210,7 @@ describe("focused live interview workspace", () => {
     expect(screen.queryByText("模型推断")).not.toBeInTheDocument();
   });
 
-  it("expands and restores the mobile answer workspace without losing its answer", () => {
+  it("keeps the complete mobile answer in one continuous scroll flow", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     openLive();
     const workspace = document.querySelector(".answer-workspace");
