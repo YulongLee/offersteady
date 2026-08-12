@@ -15,7 +15,9 @@ export const detectArchitecture = (userAgent: string, platform = navigator.platf
 };
 
 export const downloadableRelease = (entry: DesktopReleaseEntry) => {
-  return entry.signingStatus === "verified" && Boolean(entry.downloadUrl) && /^[a-f0-9]{64}$/i.test(entry.sha256) && (entry.platform !== "macos" || entry.notarized);
+  const published = entry.distributionStatus === "published" || entry.signingStatus === "verified";
+  const withdrawn = entry.distributionStatus === "withdrawn" || entry.signingStatus === "withdrawn";
+  return published && !withdrawn && Boolean(entry.downloadUrl) && /^[a-f0-9]{64}$/i.test(entry.sha256);
 };
 
 export const recommendedRelease = (manifest: DesktopReleaseManifest, userAgent: string, platform = navigator.platform) => {

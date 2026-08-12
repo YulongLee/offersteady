@@ -39,6 +39,7 @@
 - [ ] 3.9 Add authorization, incomplete-gate, stale-evidence, withdrawal and cross-page consistency tests
 - [ ] 3.10 Complete Windows signed release, pairing, capture and physical-device verification before enabling the claim
 - [x] 3.11 Hide all local-development or unverified desktop artifacts from public download actions and add cross-page release-gate regressions.
+- [x] 3.12 Separate operator publication from signing evidence and expose the operator-approved 0.1.5 macOS arm64, macOS x64 and Windows x64 artifacts in the authenticated download center.
 
 ## 4. Official WeChat Account Entry
 

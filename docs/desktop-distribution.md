@@ -2,9 +2,9 @@
 
 计划分发三个独立安装包：macOS Apple Silicon arm64、macOS Intel x64、Windows 10/11 x64。Windows ARM64、Linux 和移动原生伴随程序不在当前范围。
 
-macOS 发布包必须完成 Developer ID 签名、公证和安装验证；Windows 发布包必须完成代码签名和安装/卸载验证。发布清单包含版本、最低系统版本、大小、SHA-256、协议版本、签名状态和实际能力。签名失败、校验值缺失、被撤回或协议不兼容的包不能显示下载按钮。
+发布清单分别记录运营发布状态 `distributionStatus` 与技术签名状态 `signingStatus`。运营负责人确认当前安装包可作为正式产品分发后，将其标为 `published`；网页可以提供下载，但不得把尚未完成的 Developer ID 签名、公证或 Windows 代码签名描述为“已验证”。校验值缺失、内部使用、失败或被撤回的包不能显示下载按钮。
 
-未签名或 ad-hoc 包只允许标记为 `local-development` 测试版。取得证书并通过真实设备验证后，发布负责人才能把对应条目切换为 `verified`。
+未签名或 ad-hoc 包的技术状态保留为 `local-development`。取得证书并通过真实设备验证后，发布负责人再把签名状态切换为 `verified`；这个过程不需要撤销运营方已经确认的 `published` 分发状态。
 
 ## 本机开发版下载
 

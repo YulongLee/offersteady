@@ -9,7 +9,8 @@ The system SHALL expose “Windows 已支持” only when an authorized readines
 
 #### Scenario: Windows signing or core flow is incomplete
 - **WHEN** any mandatory readiness check is pending, failed or expired
-- **THEN** the product does not label Windows as fully supported and does not expose an unverified download action
+- **THEN** the product does not label Windows signing or complete readiness as verified
+- **AND** any separately operator-published download follows the explicit evidence wording and withdrawal rules below
 
 ### Requirement: Supported Windows scope is explicit
 The support statement SHALL include minimum Windows version, x64 architecture and actual microphone/system-audio capabilities. If a limited Windows mode is approved, every support claim MUST disclose the limitation and recovery inputs.
@@ -25,3 +26,14 @@ Readiness SHALL be version-specific and SHALL be revoked when the artifact is wi
 - **WHEN** release management withdraws the current supported artifact
 - **THEN** new visitors no longer see the withdrawn version as supported or downloadable
 
+### Requirement: Operator publication is distinct from signing evidence
+The release manifest SHALL represent the operator's distribution decision separately from code-signing and macOS notarization evidence. An artifact explicitly marked `published` by the authorized operator MAY be offered from the product download center when its object key, file size and SHA-256 are present, even if signing evidence remains `local-development` or pending. The UI MUST describe it as a downloadable formal product release and MUST NOT falsely label signing or notarization as verified. Internal, failed or withdrawn artifacts MUST remain inaccessible.
+
+#### Scenario: Operator confirms the current companion artifacts as formal releases
+- **WHEN** the current macOS Apple Silicon, macOS Intel and Windows x64 entries are marked `published` and their stored artifacts remain reachable
+- **THEN** the download center exposes all three download actions
+- **AND** the signing and notarization fields retain their factual values
+
+#### Scenario: An unpublished artifact filename is requested directly
+- **WHEN** the requested artifact is internal, failed or withdrawn
+- **THEN** the backend returns not found and does not create a signed storage URL

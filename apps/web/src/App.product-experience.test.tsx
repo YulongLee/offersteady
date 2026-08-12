@@ -203,17 +203,18 @@ describe("optimized product experience", () => {
     open("/app/library", true, state => { state.billing = { ...state.billing, balance: 0, activePass: null }; }); fireEvent.click(screen.getByRole("button", { name: "＋ 添加资料" })); const dialog = screen.getByRole("dialog"); fireEvent.change(within(dialog).getByLabelText("选择资料文件"), { target: { files: [new File(["synthetic"], "余额不足.md", { type: "text/markdown" })] } }); expect(within(dialog).getByRole("link", { name: "积分不足，去充值" })).toBeInTheDocument();
   });
 
-  it("separates verified downloads from the unsigned Windows preview", () => {
-    open("/app/devices"); expect(screen.getByRole("button", { name: /macOS Apple Silicon/ })).toBeInTheDocument(); expect(screen.getByRole("button", { name: /macOS Intel/ })).toBeInTheDocument(); fireEvent.click(screen.getByRole("button", { name: /Windows 10\/11/ })); expect(screen.getByRole("button", { name: "完成签名后开放" })).toBeDisabled();
+  it("separates downloadable releases from an unpublished Windows preview", () => {
+    open("/app/devices"); expect(screen.getByRole("button", { name: /macOS Apple Silicon/ })).toBeInTheDocument(); expect(screen.getByRole("button", { name: /macOS Intel/ })).toBeInTheDocument(); fireEvent.click(screen.getByRole("button", { name: /Windows 10\/11/ })); expect(screen.getByRole("button", { name: "暂未开放下载" })).toBeDisabled();
   });
 
-  it("never exposes local-development desktop artifacts as downloads", () => {
+  it("never exposes internal desktop artifacts as downloads", () => {
     open("/app/devices", true, state => {
       const [first, ...rest] = state.releaseManifest.entries;
       if (!first) throw new Error("desktop release fixture is required");
       state.releaseManifest = { ...state.releaseManifest, entries: [{
           ...first,
           signingStatus: "local-development",
+          distributionStatus: "internal",
           notarized: false,
           downloadUrl: "/api/v1/web/downloads/desktop/internal.zip",
           localPath: "/api/v1/web/downloads/desktop/internal.zip",
@@ -221,8 +222,26 @@ describe("optimized product experience", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /macOS Apple Silicon/ }));
     expect(screen.getByText("内部构建不可下载")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "正式版待发布" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "暂未开放下载" })).toBeDisabled();
     expect(screen.queryByRole("link", { name: /下载安装包/ })).not.toBeInTheDocument();
+  });
+
+  it("allows operator-published companion releases without claiming verified signing", () => {
+    open("/app/devices", true, state => {
+      state.releaseManifest = {
+        ...state.releaseManifest,
+        entries: state.releaseManifest.entries.map(entry => ({
+          ...entry,
+          signingStatus: "local-development",
+          distributionStatus: "published",
+          notarized: false,
+          downloadUrl: `/api/v1/web/downloads/desktop/${entry.id}`,
+        })),
+      };
+    });
+    expect(screen.getAllByText("✓ 正式版可下载")).toHaveLength(3);
+    expect(screen.getByRole("link", { name: "下载安装包" })).toHaveAttribute("href", expect.stringContaining("/api/v1/web/downloads/desktop/"));
+    expect(screen.queryByText("✓ 已验证")).not.toBeInTheDocument();
   });
 
   it("provides a protected searchable guide with support fallbacks", () => {

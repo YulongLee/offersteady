@@ -71,12 +71,17 @@ def _published_desktop_entry(filename: str) -> dict[str, object] | None:
 
 
 def _is_public_desktop_entry(entry: dict[str, object] | None) -> bool:
-    if entry is None or entry.get("signingStatus") != "verified":
+    if entry is None:
+        return False
+    distribution_status = entry.get("distributionStatus")
+    if distribution_status == "withdrawn" or entry.get("signingStatus") == "withdrawn":
+        return False
+    if distribution_status != "published" and entry.get("signingStatus") != "verified":
         return False
     checksum = entry.get("sha256")
     if not isinstance(checksum, str) or len(checksum) != 64 or any(character not in "0123456789abcdefABCDEF" for character in checksum):
         return False
-    return entry.get("platform") != "macos" or entry.get("notarized") is True
+    return True
 
 
 @router.get("/downloads/desktop/{filename}")

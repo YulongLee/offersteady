@@ -1,6 +1,7 @@
 import type { DesktopArchitecture, DesktopPlatform } from "./audio.js";
 
 export type ReleaseSigningStatus = "verified" | "pending" | "failed" | "withdrawn" | "local-development";
+export type ReleaseDistributionStatus = "internal" | "published" | "withdrawn";
 
 export interface DesktopReleaseCapabilities {
   readonly microphone: boolean;
@@ -19,6 +20,7 @@ export interface DesktopReleaseEntry {
   readonly fileSizeBytes: number;
   readonly sha256: string;
   readonly signingStatus: ReleaseSigningStatus;
+  readonly distributionStatus?: ReleaseDistributionStatus;
   readonly notarized: boolean;
   readonly publishedAtMs: number;
   readonly protocolVersion: string;
