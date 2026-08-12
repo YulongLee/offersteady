@@ -25,6 +25,7 @@
 - [x] 2.13 Build a responsive commercial footer with product links, public documentation, configured contact details and filing information
 - [x] 2.14 Align public legal copy with the active commercial service and add regression coverage preventing pre-commercial draft wording.
 - [x] 2.15 Split the oversized Web entry bundle into route-level chunks while preserving route loading and production behavior.
+- [x] 2.16 Automatically recover the initial Web state after a transient backend deployment outage and provide an in-page immediate retry action.
 
 ## 3. Verified Windows Support
 

@@ -5,7 +5,7 @@ import { BriefcaseIcon, CaretDownIcon, ChartLineUpIcon, ChatCircleTextIcon, Clip
 
 import type { IdleInterviewStatus, InterviewQuestion, LiveActionState, QuestionStatus, ScreenshotTask, SessionStatus, WebAppState } from "./domain";
 import { runAdapterOperation } from "./api-client";
-import { interviewAppAdapter, runtimeConfig } from "./app-adapter";
+import { interviewAppAdapter } from "./app-adapter";
 import { routes } from "./routes";
 import { ContextPicker } from "./ContextPicker";
 import { contextLevel, eligibleSource, managedLibrarySources, selectionSources, selectionValidity } from "./context-selection";
@@ -44,6 +44,8 @@ function PrototypeProvider({ children, initialAuthenticated, initialState }: { r
   const [authenticated, setAuthenticatedState] = useState(() => initialAuthenticated ?? Boolean(authClient.readStoredSession()));
   const [state, setState] = useState<WebAppState | null>(() => initialState ? structuredClone(initialState) : null);
   const [loadError, setLoadError] = useState("");
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const automaticRetryCount = useRef(0);
 
   useEffect(() => {
     if (!initialAuthenticated || !initialState?.account) return;
@@ -84,7 +86,24 @@ function PrototypeProvider({ children, initialAuthenticated, initialState }: { r
         setLoadError(error instanceof Error ? error.message : "后端页面状态加载失败");
       });
     return () => controller.abort();
-  }, [initialState]);
+  }, [initialState, loadAttempt]);
+
+  useEffect(() => {
+    if (initialState || state || !loadError) return;
+    const delayMs = Math.min(10_000, 1_500 * 2 ** automaticRetryCount.current);
+    automaticRetryCount.current += 1;
+    const timer = window.setTimeout(() => {
+      setLoadError("");
+      setLoadAttempt(value => value + 1);
+    }, delayMs);
+    return () => window.clearTimeout(timer);
+  }, [initialState, loadError, state]);
+
+  const retryInitialLoad = () => {
+    automaticRetryCount.current = 0;
+    setLoadError("");
+    setLoadAttempt(value => value + 1);
+  };
 
   const setAuthenticated = (value: boolean) => {
     setAuthenticatedState(value);
@@ -97,7 +116,7 @@ function PrototypeProvider({ children, initialAuthenticated, initialState }: { r
   };
 
   if (!state && !loadError) return <RouteLoadingPage />;
-  if (!state && loadError) return <IntegrationModeErrorPage message={loadError} />;
+  if (!state && loadError) return <IntegrationModeErrorPage message={loadError} onRetry={retryInitialLoad} />;
 
   if (!state) return <RouteLoadingPage />;
   return <PrototypeContext.Provider value={{ authenticated, setAuthenticated, state, setState: setState as React.Dispatch<React.SetStateAction<WebAppState>>, logout }}>{children}</PrototypeContext.Provider>;
@@ -1391,7 +1410,7 @@ function SettingsPage() {
 }
 
 function RouteErrorPage() { return <main className="center-page"><EmptyState title="页面暂时无法加载" detail="没有输出任何敏感内容。请返回应用首页重试。" action={<Link className="button primary" to={routes.app}>返回首页</Link>} /></main>; }
-function IntegrationModeErrorPage({ message }: { readonly message: string }) { return <main className="center-page"><EmptyState title="后端页面状态无法加载" detail={`${message}。当前页面只读取后端 API，请检查服务状态或接口契约。`} action={<a className="button primary" href={runtimeConfig.apiBaseUrl} target="_blank" rel="noreferrer">检查后端服务</a>} /></main>; }
+function IntegrationModeErrorPage({ message, onRetry }: { readonly message: string; readonly onRetry: () => void }) { return <main className="center-page"><EmptyState title="后端页面状态暂时无法加载" detail={`${message}。页面会自动重试；服务恢复后将自动进入，无需重复登录。`} action={<button className="button primary" type="button" onClick={onRetry}>立即重试</button>} /></main>; }
 function NotFoundPage() { return <main className="center-page"><EmptyState title="没有找到这个页面" detail="检查地址，或回到面试首页继续。" action={<Link className="button primary" to={routes.app}>返回首页</Link>} /></main>; }
 function RouteLoadingPage() { return <main className="route-loading-page" role="status" aria-label="页面加载中" />; }
 

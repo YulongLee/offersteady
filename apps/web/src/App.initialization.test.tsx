@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
@@ -19,7 +19,10 @@ const deferred = <T,>() => {
   return { promise, resolve, reject };
 };
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 describe("application initialization", () => {
   it("waits for saved-session restoration before making the sole protected state request", async () => {
@@ -32,7 +35,7 @@ describe("application initialization", () => {
 
     expect(screen.getByRole("status", { name: "页面加载中" })).toBeEmptyDOMElement();
     expect(screen.queryByText("正在安全加载")).not.toBeInTheDocument();
-    expect(screen.queryByText("后端页面状态无法加载")).not.toBeInTheDocument();
+    expect(screen.queryByText("后端页面状态暂时无法加载")).not.toBeInTheDocument();
     expect(loadState).not.toHaveBeenCalled();
 
     await act(async () => restoration.resolve(session));
@@ -62,10 +65,10 @@ describe("application initialization", () => {
     window.history.pushState({}, "", "/app");
     render(<App />);
 
-    expect(screen.queryByText("后端页面状态无法加载")).not.toBeInTheDocument();
+    expect(screen.queryByText("后端页面状态暂时无法加载")).not.toBeInTheDocument();
     await act(async () => restoration.reject(new Error("会话恢复失败")));
     expect(await screen.findByRole("heading", { name: "开始你的面试准备" })).toBeInTheDocument();
-    expect(screen.queryByText("后端页面状态无法加载")).not.toBeInTheDocument();
+    expect(screen.queryByText("后端页面状态暂时无法加载")).not.toBeInTheDocument();
     expect(clear).toHaveBeenCalledTimes(1);
     expect(loadState).toHaveBeenCalledTimes(1);
     expect(loadState.mock.calls[0]?.[1]).toEqual({ auth: false });
@@ -79,7 +82,38 @@ describe("application initialization", () => {
     window.history.pushState({}, "", "/app");
     render(<App />);
 
-    expect(await screen.findByText("后端页面状态无法加载")).toBeInTheDocument();
+    expect(await screen.findByText("后端页面状态暂时无法加载")).toBeInTheDocument();
     expect(screen.getByText(/公共状态加载失败/)).toBeInTheDocument();
+  });
+
+  it("recovers automatically after a transient backend startup failure", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(authClient, "readStoredSession").mockReturnValue(null);
+    const loadState = vi.spyOn(interviewAppAdapter, "loadState")
+      .mockRejectedValueOnce(new Error("部署切换中"))
+      .mockResolvedValue(structuredClone(syntheticState));
+    window.history.pushState({}, "", "/");
+    render(<App />);
+
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByText("后端页面状态暂时无法加载")).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_500); });
+    expect(screen.getByRole("heading", { name: /AI 面试助手/ })).toBeInTheDocument();
+    expect(loadState).toHaveBeenCalledTimes(2);
+  });
+
+  it("lets the user retry immediately without opening a backend API tab", async () => {
+    vi.spyOn(authClient, "readStoredSession").mockReturnValue(null);
+    const loadState = vi.spyOn(interviewAppAdapter, "loadState")
+      .mockRejectedValueOnce(new Error("部署切换中"))
+      .mockResolvedValue(structuredClone(syntheticState));
+    window.history.pushState({}, "", "/");
+    render(<App />);
+
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByText("后端页面状态暂时无法加载")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "立即重试" }));
+    expect(await screen.findByRole("heading", { name: /AI 面试助手/ })).toBeInTheDocument();
+    expect(loadState).toHaveBeenCalledTimes(2);
   });
 });

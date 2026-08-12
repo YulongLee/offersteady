@@ -30,6 +30,14 @@ The public homepage SHALL display the operator-approved metrics `累计面试 10
 - **THEN** the four approved commercial metrics are visible
 - **AND** no `200 点` or `新用户赠送` copy is used as public acquisition messaging
 
+### Requirement: Public entry recovers from transient deployment outages
+The Web application SHALL treat an initial backend-state network failure as recoverable. It SHALL automatically retry with bounded backoff and offer an in-page immediate retry action. Once the backend state API recovers, the application SHALL render the requested page without requiring a browser refresh, opening a raw API tab or repeating login.
+
+#### Scenario: Backend restarts while a visitor opens the site
+- **WHEN** the initial state request fails during a short deployment window and a subsequent retry succeeds
+- **THEN** the temporary recovery message is replaced by the requested page automatically
+- **AND** the visitor does not remain stranded on a stale error screen
+
 ### Requirement: Common interview platforms are presented with truthful compatibility boundaries
 The homepage SHALL present a responsive compatibility section for common remote-interview, collaboration and online-assessment platforms using the current homepage theme surfaces and card hierarchy. Each platform SHALL use a traceable authentic brand mark alongside a visible recognizable name, preserve the mark's proportions and colors, and MUST NOT substitute initials, a fabricated logo or an unexplained symbol-only mark. The section MUST NOT add a disclaimer paragraph below the platform cards.
 
