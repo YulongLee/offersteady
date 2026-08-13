@@ -226,7 +226,7 @@ describe("categorized materials and reachable live actions", () => {
     await waitFor(() => expect(start).toBeEnabled());
     fireEvent.click(start);
     expect(await screen.findByText("等待开始面试")).toBeInTheDocument();
-    expect(screen.getByText("这台 Mac · 已连接，未采集")).toBeInTheDocument();
+    expect(screen.getByText("这台设备 · 已连接，未采集")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "手动输入面试官的问题" })).toBeInTheDocument();
   });
 

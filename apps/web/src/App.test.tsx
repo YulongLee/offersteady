@@ -248,7 +248,7 @@ describe("OfferSteady web application", () => {
     await waitFor(() => expect(interviewAppAdapter.startInterviewSession).toHaveBeenCalledWith("demo", expect.any(AbortSignal)));
     expect((await screen.findAllByText("请介绍一个你负责过的、最有挑战的前端项目。")).length).toBeGreaterThan(0);
     expect(screen.getByText("等待开始面试")).toBeInTheDocument();
-    expect(screen.getByText("这台 Mac · 已连接，未采集")).toBeInTheDocument();
+    expect(screen.getByText("这台设备 · 已连接，未采集")).toBeInTheDocument();
   });
 
   it("keeps the user on preparation when backend session start fails", async () => {
@@ -335,6 +335,7 @@ describe("OfferSteady web application", () => {
     window.history.pushState({}, "", "/app/interviews/demo/live");
     window.dispatchEvent(new PopStateEvent("popstate"));
     fireEvent.click(await screen.findByRole("button", { name: "开始面试" }));
+    expect(screen.getByText("这台设备 · 正在收音")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "暂停收音" }));
     expect(screen.getByText("面试已暂停")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "结束面试" }));
