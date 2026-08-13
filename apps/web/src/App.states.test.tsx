@@ -103,7 +103,7 @@ describe("web application states", () => {
   it("keeps original records available when AI review generation fails", () => {
     renderState("/app/interviews/review/review", state => { state.review = { ...state.review, status: "failed" }; });
     expect(screen.getByText(/摘要生成失败/)).toBeInTheDocument();
-    expect(screen.getByText("问题与回答记录")).toBeInTheDocument();
+    expect(screen.getByText("问题与 AI 回答建议")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "重试" }));
     expect(screen.getByText("这是基于本场记录的生成建议，与原始问题记录分开保存。")).toBeInTheDocument();
   });

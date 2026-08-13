@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 from collections.abc import Iterator
 from dataclasses import replace
 from json import JSONDecodeError
@@ -72,9 +73,20 @@ class RetryableChatError(Exception):
 
 
 class NonRetryableChatError(Exception):
-    def __init__(self, message: str, *, code: str = "chat_provider_invalid_response") -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "chat_provider_invalid_response",
+        partial_suffix: str = "",
+    ) -> None:
         self.code = code
+        self.partial_suffix = partial_suffix
         super().__init__(message)
+
+
+class ChatTaskCancelled(Exception):
+    pass
 
 
 class FilePromptTemplateAdapter(PromptTemplatePort):
@@ -94,7 +106,7 @@ class FilePromptTemplateAdapter(PromptTemplatePort):
         )
 
     def load_stage_prompt(self, stage: str) -> tuple[str, PromptConfig]:
-        if stage not in {"quick", "detail"}:
+        if stage not in {"quick", "detail", "continuation"}:
             raise ValueError(f"unsupported_prompt_stage:{stage}")
         prompt_path = Path(self.settings.chat_prompt_template_path)
         if not prompt_path.is_absolute():
@@ -269,7 +281,7 @@ class QwenCompatibleGateway(LLMGatewayPort):
             "model": self.settings.chat_qwen_model,
             "stream": stream,
             "temperature": 0.2,
-            "max_tokens": 1000,
+            "max_tokens": self._max_tokens_for_prompt(prompt),
             "enable_thinking": False,
             "messages": [
                 {"role": "system", "content": prompt.system_prompt},
@@ -317,7 +329,7 @@ class QwenCompatibleGateway(LLMGatewayPort):
             "model": self.settings.chat_qwen_model,
             "stream": True,
             "temperature": 0.2,
-            "max_tokens": 520,
+            "max_tokens": self._max_tokens_for_prompt(prompt),
             "enable_thinking": False,
             "messages": [
                 {"role": "system", "content": prompt.system_prompt},
@@ -332,11 +344,16 @@ class QwenCompatibleGateway(LLMGatewayPort):
                 with client.stream("POST", url, headers={"Authorization": f"Bearer {self.settings.chat_qwen_api_key}"}, json=payload) as response:
                     self._raise_for_provider_status(response.status_code)
                     for line in response.iter_lines():
-                        text = self._extract_stream_line_text(line)
-                        if not text:
+                        text, finish_reason = self._extract_stream_line(line)
+                        if not text and finish_reason is None:
                             continue
                         sequence += 1
-                        yield ChatAnswerChunk(sequence=sequence, text=text, is_final=False)
+                        yield ChatAnswerChunk(
+                            sequence=sequence,
+                            text=text,
+                            is_final=finish_reason is not None,
+                            provider_finish_reason=finish_reason,
+                        )
         except httpx.HTTPError as exc:
             raise RetryableChatError("当前对话模型暂时不可用，请稍后重试。", code="chat_provider_unavailable") from exc
         finally:
@@ -352,30 +369,55 @@ class QwenCompatibleGateway(LLMGatewayPort):
                 chunk_count=sequence,
             )
 
-    def _extract_stream_line_text(self, line: str) -> str:
+    def _max_tokens_for_prompt(self, prompt: PromptBuildResult) -> int:
+        template_id = prompt.prompt_config.template_id
+        if "continuation" in template_id:
+            return max(128, self.settings.chat_continuation_max_tokens)
+        if template_id.endswith("-quick"):
+            return max(128, self.settings.chat_quick_max_tokens)
+        if template_id.endswith("-detail"):
+            return max(256, self.settings.chat_detail_max_tokens)
+        return max(256, self.settings.chat_detail_max_tokens)
+
+    @staticmethod
+    def _normalize_provider_finish_reason(value: object) -> str | None:
+        if value is None:
+            return None
+        normalized = str(value).strip().lower().replace("_", "-")
+        if normalized in {"stop", "length", "content-filter", "tool-calls"}:
+            return normalized
+        return "unknown"
+
+    def _extract_stream_line(self, line: str) -> tuple[str, str | None]:
         if not line:
-            return ""
+            return "", None
         payload = line.strip()
         if not payload:
-            return ""
+            return "", None
         if payload.startswith("data:"):
             payload = payload[5:].strip()
         if payload == "[DONE]":
-            return ""
+            return "", None
         try:
             body = json.loads(payload)
         except JSONDecodeError:
-            return ""
+            return "", None
         choices = body.get("choices")
         if not isinstance(choices, list) or not choices:
-            return ""
-        delta = choices[0].get("delta") or choices[0].get("message") or {}
+            return "", None
+        choice = choices[0] if isinstance(choices[0], dict) else {}
+        finish_reason = self._normalize_provider_finish_reason(choice.get("finish_reason"))
+        delta = choice.get("delta") or choice.get("message") or {}
         content = delta.get("content")
         if isinstance(content, str):
-            return content
+            return content, finish_reason
         if isinstance(content, list):
-            return "".join(item.get("text", "") for item in content if isinstance(item, dict))
-        return ""
+            return "".join(item.get("text", "") for item in content if isinstance(item, dict)), finish_reason
+        return "", finish_reason
+
+    def _extract_stream_line_text(self, line: str) -> str:
+        text, _finish_reason = self._extract_stream_line(line)
+        return text
 
     def _extract_answer_text(self, body: dict) -> str:
         choices = body.get("choices")
@@ -513,6 +555,138 @@ class ChatService:
     @staticmethod
     def _size_bucket(length: int) -> str:
         return "xs" if length <= 256 else "sm" if length <= 1000 else "md" if length <= 4000 else "lg"
+
+    @staticmethod
+    def _answer_looks_incomplete(text: str, finish_reason: str) -> bool:
+        candidate = text.rstrip()
+        if not candidate:
+            return True
+        if finish_reason == "length":
+            return True
+        if candidate.count("```") % 2:
+            return True
+        if candidate.endswith(("，", ",", "：", ":", "；", ";", "、", "（", "(", "【", "[", "{", "以及", "并且", "或者")):
+            return True
+        return re.search(r"(?:^|\n)\s*(?:[-*+] |\d+[.)、]\s*)$", candidate) is not None
+
+    @staticmethod
+    def _append_without_overlap(existing: str, continuation: str) -> tuple[str, str]:
+        suffix = continuation.lstrip("\ufeff")
+        max_overlap = min(len(existing), len(suffix))
+        overlap = 0
+        for size in range(max_overlap, 0, -1):
+            if existing.endswith(suffix[:size]):
+                overlap = size
+                break
+        appended = suffix[overlap:]
+        return existing + appended, appended
+
+    def _continuation_prompt(
+        self,
+        *,
+        stage: str,
+        original_prompt: PromptBuildResult,
+        existing_answer: str,
+    ) -> PromptBuildResult:
+        system_prompt, config = self._load_stage_prompt("continuation")
+        user_prompt = (
+            f"<original_request>\n{original_prompt.user_prompt}\n</original_request>\n\n"
+            f"<answer_stage>{stage}</answer_stage>\n"
+            f"<authoritative_existing_answer>\n{existing_answer}\n</authoritative_existing_answer>"
+        )
+        continuation_config = replace(config, template_id=f"interview-chat-continuation-{stage}")
+        return PromptBuildResult(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            rendered_prompt=f"{system_prompt}\n\n{user_prompt}",
+            prompt_config=continuation_config,
+            retrieval_excerpt_count=original_prompt.retrieval_excerpt_count,
+        )
+
+    def _complete_answer_stage(
+        self,
+        *,
+        stage: str,
+        question: str,
+        prompt: PromptBuildResult,
+        existing_answer: str,
+        finish_reason: str,
+        provider_attempt: int,
+        task_id: str,
+    ) -> tuple[str, int, int]:
+        if finish_reason in {"content-filter", "tool-calls", "unknown"}:
+            raise NonRetryableChatError(
+                "当前回答未能正常完成，请重新发起回答。",
+                code="chat_provider_incomplete_response",
+            )
+        self._log_stage_finish(stage=stage, finish_reason=finish_reason, continuation_attempt=0, text=existing_answer)
+        if not self._answer_looks_incomplete(existing_answer, finish_reason):
+            return "", 0, 0
+
+        current_text = existing_answer
+        appended_parts: list[str] = []
+        prompt_characters = 0
+        max_attempts = max(0, self.settings.chat_continuation_max_attempts)
+        for continuation_attempt in range(1, max_attempts + 1):
+            if self._is_task_cancelled(task_id):
+                raise ChatTaskCancelled()
+            continuation_prompt = self._continuation_prompt(
+                stage=stage,
+                original_prompt=prompt,
+                existing_answer=current_text,
+            )
+            prompt_characters += len(continuation_prompt.rendered_prompt)
+            continuation_parts: list[str] = []
+            continuation_finish_reason = "stop"
+            for chunk in self.llm_gateway.stream_generate(
+                question=question,
+                prompt=continuation_prompt,
+                attempt=provider_attempt,
+            ):
+                if self._is_task_cancelled(task_id):
+                    raise ChatTaskCancelled()
+                if chunk.text:
+                    continuation_parts.append(chunk.text)
+                if chunk.provider_finish_reason is not None:
+                    continuation_finish_reason = chunk.provider_finish_reason
+            if continuation_finish_reason in {"content-filter", "tool-calls", "unknown"}:
+                raise NonRetryableChatError(
+                    "当前回答未能正常完成，请重新发起回答。",
+                    code="chat_provider_incomplete_response",
+                )
+            continuation_text = "".join(continuation_parts)
+            current_text, appended = self._append_without_overlap(current_text, continuation_text)
+            if appended:
+                appended_parts.append(appended)
+            self._log_stage_finish(
+                stage=stage,
+                finish_reason=continuation_finish_reason,
+                continuation_attempt=continuation_attempt,
+                text=current_text,
+            )
+            if not self._answer_looks_incomplete(current_text, continuation_finish_reason):
+                return "".join(appended_parts), continuation_attempt, prompt_characters
+
+        raise NonRetryableChatError(
+            "回答尚未生成完整，请重试当前问题。已生成内容会为你保留。",
+            code="chat_answer_incomplete",
+            partial_suffix="".join(appended_parts),
+        )
+
+    def _log_stage_finish(self, *, stage: str, finish_reason: str, continuation_attempt: int, text: str) -> None:
+        log_event(
+            self.logger,
+            logging.INFO,
+            settings=self.settings,
+            event="chat.answer_stage_finished",
+            feature="live-answer",
+            action="answer-completeness",
+            stage=stage,
+            finish_reason=finish_reason,
+            continuation_attempt=continuation_attempt,
+            answer_size_bucket=self._size_bucket(len(text)),
+            model=self.settings.chat_qwen_model,
+        )
 
     def answer_question(
         self, *, user_id: str, session_id: str, question: str, stream: bool, usage_id: str | None = None
@@ -727,6 +901,9 @@ class ChatService:
         normalization_buffer = ""
         normalization_resolved = False
         normalized_question = question.strip()
+        quick_finish_reason = "stop"
+        continuation_prompt_characters = 0
+        continuation_count = 0
         last_error: Exception | None = None
         stream_started_at_ms = _now_ms()
         first_token_at_ms: int | None = None
@@ -741,7 +918,9 @@ class ChatService:
                         cancelled = self.repository.get_task(current_task.task_id) or current_task
                         yield {"type": "cancelled", "task": cancelled}
                         return
-                    if first_token_at_ms is None:
+                    if chunk.provider_finish_reason is not None:
+                        quick_finish_reason = chunk.provider_finish_reason
+                    if chunk.text and first_token_at_ms is None:
                         first_token_at_ms = _now_ms()
                     visible_text = chunk.text
                     if not normalization_resolved:
@@ -800,6 +979,26 @@ class ChatService:
                         replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
                     )
                     yield {"type": "chunk", "task": current_task, "chunk": normalized}
+                quick_answer = "".join(answer_parts).removeprefix("简单回答\n").strip()
+                quick_suffix, quick_continuations, quick_prompt_characters = self._complete_answer_stage(
+                    stage="quick",
+                    question=normalized_question,
+                    prompt=prompt,
+                    existing_answer=quick_answer,
+                    finish_reason=quick_finish_reason,
+                    provider_attempt=attempt,
+                    task_id=current_task.task_id,
+                )
+                continuation_count += quick_continuations
+                continuation_prompt_characters += quick_prompt_characters
+                if quick_suffix:
+                    normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=quick_suffix, is_final=False)
+                    chunks.append(normalized)
+                    answer_parts.append(normalized.text)
+                    current_task = self.repository.save_task(
+                        replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
+                    )
+                    yield {"type": "chunk", "task": current_task, "chunk": normalized}
                 retrieval = self._retrieve_context(user_id=user_id, session=session, question=normalized_question)
                 if self._is_task_cancelled(current_task.task_id):
                     cancelled = self.repository.get_task(current_task.task_id) or current_task
@@ -845,12 +1044,39 @@ class ChatService:
                     replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
                 )
                 yield {"type": "chunk", "task": current_task, "chunk": normalized}
+                detail_parts: list[str] = []
+                detail_finish_reason = "stop"
                 for chunk in self.llm_gateway.stream_generate(question=normalized_question, prompt=detail_prompt, attempt=attempt):
                     if self._is_task_cancelled(current_task.task_id):
                         cancelled = self.repository.get_task(current_task.task_id) or current_task
                         yield {"type": "cancelled", "task": cancelled}
                         return
+                    if chunk.provider_finish_reason is not None:
+                        detail_finish_reason = chunk.provider_finish_reason
+                    if not chunk.text:
+                        continue
+                    detail_parts.append(chunk.text)
                     normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=chunk.text, is_final=False)
+                    chunks.append(normalized)
+                    answer_parts.append(normalized.text)
+                    current_task = self.repository.save_task(
+                        replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
+                    )
+                    yield {"type": "chunk", "task": current_task, "chunk": normalized}
+                detail_answer = "".join(detail_parts).strip()
+                detail_suffix, detail_continuations, detail_prompt_characters = self._complete_answer_stage(
+                    stage="detail",
+                    question=normalized_question,
+                    prompt=detail_prompt,
+                    existing_answer=detail_answer,
+                    finish_reason=detail_finish_reason,
+                    provider_attempt=attempt,
+                    task_id=current_task.task_id,
+                )
+                continuation_count += detail_continuations
+                continuation_prompt_characters += detail_prompt_characters
+                if detail_suffix:
+                    normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=detail_suffix, is_final=False)
                     chunks.append(normalized)
                     answer_parts.append(normalized.text)
                     current_task = self.repository.save_task(
@@ -864,9 +1090,9 @@ class ChatService:
                     last = chunks[-1]
                     chunks[-1] = ChatAnswerChunk(sequence=last.sequence, text=last.text, is_final=True)
                 usage = UsageReport(
-                    prompt_tokens=max(1, (len(prompt.rendered_prompt) + len(detail_prompt.rendered_prompt)) // 4),
+                    prompt_tokens=max(1, (len(prompt.rendered_prompt) + len(detail_prompt.rendered_prompt) + continuation_prompt_characters) // 4),
                     completion_tokens=max(1, len(final_text) // 4),
-                    total_tokens=max(1, (len(prompt.rendered_prompt) + len(detail_prompt.rendered_prompt)) // 4) + max(1, len(final_text) // 4),
+                    total_tokens=max(1, (len(prompt.rendered_prompt) + len(detail_prompt.rendered_prompt) + continuation_prompt_characters) // 4) + max(1, len(final_text) // 4),
                     provider_name="qwen-compatible",
                     model_name=self.settings.chat_qwen_model,
                 )
@@ -917,11 +1143,16 @@ class ChatService:
                     question_size_bucket=self._size_bucket(len(question)), answer_size_bucket=self._size_bucket(len(completed.answer_text)),
                     first_token_ms=(first_token_at_ms - stream_started_at_ms) if first_token_at_ms is not None else None,
                     completion_ms=_now_ms() - stream_started_at_ms, status=completed.status,
+                    continuation_count=continuation_count,
                 )
                 self._log(logging.INFO, "chat.stream_completed", task=completed, session_id=session_id, question=question, retry_count=attempt)
                 if self.billing_service is not None:
                     self.billing_service.settle_usage(usage_id=billing_usage_id)
                 yield {"type": "completed", "task": completed, "retrieval": self._to_retrieval_response(retrieval)}
+                return
+            except ChatTaskCancelled:
+                cancelled = self.repository.get_task(current_task.task_id) or current_task
+                yield {"type": "cancelled", "task": cancelled}
                 return
             except RetryableChatError as exc:
                 last_error = exc
@@ -930,6 +1161,23 @@ class ChatService:
                     break
                 continue
             except NonRetryableChatError as exc:
+                if exc.partial_suffix:
+                    partial_chunk = ChatAnswerChunk(
+                        sequence=len(chunks) + 1,
+                        text=exc.partial_suffix,
+                        is_final=False,
+                    )
+                    chunks.append(partial_chunk)
+                    answer_parts.append(partial_chunk.text)
+                    current_task = self.repository.save_task(
+                        replace(
+                            current_task,
+                            chunks=chunks.copy(),
+                            answer_text="".join(answer_parts),
+                            retry_count=attempt,
+                            updated_at_ms=_now_ms(),
+                        )
+                    )
                 last_error = exc
                 break
         error_code = getattr(last_error, "code", last_error.__class__.__name__ if last_error else "chat_failed")

@@ -559,6 +559,7 @@ async def get_web_state(
             "duration": "0 分钟",
             "summary": "暂无可复盘记录。" if not chat_questions and not screenshot_questions else "已从后端会话记录整理本场问题与回答。",
             "screenshots": review_screenshots,
+            "transcripts": [],
         },
         "captureState": "ready",
         "librarySources": [_document_source_payload(item, None, None) for item in document_items],

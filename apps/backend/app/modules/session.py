@@ -14,6 +14,7 @@ from app.schemas.session import (
     ConversationContextEntryResponse,
     CreateInterviewSessionRequest,
     InterviewSessionResponse,
+    InterviewReviewSnapshotResponse,
     RecordSessionUsageRequest,
     SessionCommandRequest,
     SessionContextAppendRequest,
@@ -139,6 +140,42 @@ async def get_session(
 ) -> ApiEnvelope[InterviewSessionResponse]:
     session = service.get_session(user_id=resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context), session_id=session_id)
     return success_response(request=request, data=_to_session_response(session), timestamp=utc_now_iso())
+
+
+@router.get("/{session_id}/review", response_model=ApiEnvelope[InterviewReviewSnapshotResponse])
+async def get_interview_review(
+    session_id: str,
+    request: Request,
+    user_id: str | None = Query(default=None, alias="userId"),
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: SessionService = Depends(session_service),
+) -> ApiEnvelope[InterviewReviewSnapshotResponse]:
+    resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
+    session, transcripts = service.get_review_transcripts(user_id=resolved_user_id, session_id=session_id)
+    duration_ms = max(0, (session.ended_at_ms or session.updated_at_ms) - (session.started_at_ms or session.created_at_ms))
+    return success_response(
+        request=request,
+        data=InterviewReviewSnapshotResponse(
+            sessionId=session.session_id,
+            title=session.title,
+            status=session.status,
+            startedAtMs=session.started_at_ms,
+            endedAtMs=session.ended_at_ms,
+            durationMs=duration_ms,
+            transcripts=[
+                {
+                    "id": entry.entry_id,
+                    "role": entry.role,
+                    "speakerLabel": "面试官" if entry.role == "interviewer" else "我",
+                    "text": entry.content,
+                    "occurredAtMs": entry.created_at_ms,
+                    "ordering": entry.ordering,
+                }
+                for entry in transcripts
+            ],
+        ),
+        timestamp=utc_now_iso(),
+    )
 
 
 @router.delete("/{session_id}", response_model=ApiEnvelope[dict[str, str]])

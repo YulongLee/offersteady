@@ -12,7 +12,7 @@ from app.core.config import Settings, get_settings
 from app.main import create_app
 from app.ports.authentication import SmsChallengeRecord
 from app.ports.realtime_speech import AudioFrame, RealtimeEvent
-from app.ports.chat import PromptBuildResult, PromptConfig
+from app.ports.chat import ChatAnswerChunk, PromptBuildResult, PromptConfig
 from app.services.chat_service import NonRetryableChatError, QwenCompatibleGateway, RetryableChatError
 from app.services.dashscope_realtime_asr_gateway import DashScopeRealtimeAsrGateway
 from app.services.realtime_speech_repository import InMemoryRealtimeSpeechRepository
@@ -1164,6 +1164,162 @@ def test_live_answer_stream_cancellation_isolates_late_chunks() -> None:
     persisted = service.get_task(user_id="chat-stream-cancel-user", task_id=task_id)
     assert persisted.status == "cancelled"
     assert persisted.answer_text == ""
+
+
+def test_live_answer_stream_continues_quick_and_detail_length_truncation(monkeypatch) -> None:
+    from app.deps import llm_gateway_port
+
+    gateway = llm_gateway_port()
+
+    def scripted_stream_generate(*, question, prompt, attempt):
+        template_id = prompt.prompt_config.template_id
+        if template_id == "interview-chat-quick":
+            yield ChatAnswerChunk(
+                sequence=1,
+                text=f"<normalized_question>{question}</normalized_question>先确认延迟，",
+                provider_finish_reason="length",
+                is_final=True,
+            )
+        elif template_id == "interview-chat-continuation-quick":
+            yield ChatAnswerChunk(sequence=1, text="再结合链路追踪定位瓶颈。", provider_finish_reason="stop", is_final=True)
+        elif template_id == "interview-chat-detail":
+            yield ChatAnswerChunk(sequence=1, text="详细说明先检查队列，", provider_finish_reason="length", is_final=True)
+        elif template_id == "interview-chat-continuation-detail":
+            yield ChatAnswerChunk(sequence=1, text="检查队列，再扩容消费者并限制重试。", provider_finish_reason="stop", is_final=True)
+        else:
+            raise AssertionError(template_id)
+
+    monkeypatch.setattr(gateway, "stream_generate", scripted_stream_generate)
+    session = unwrap(client.post("/api/v1/sessions", json={
+        "userId": "chat-continuation-user",
+        "title": "回答完整性测试",
+    }))
+    session_id = session["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": "chat-continuation-user"}))
+
+    with client.stream("POST", "/api/v1/live-answer/questions/stream", json={
+        "userId": "chat-continuation-user",
+        "sessionId": session_id,
+        "question": "如何定位性能瓶颈？",
+        "stream": True,
+    }) as response:
+        events = parse_sse_events(response.read().decode("utf-8"))
+
+    assert events[-1]["type"] == "completed"
+    answer_text = events[-1]["task"]["answerText"]
+    assert "先确认延迟，再结合链路追踪定位瓶颈。" in answer_text
+    assert "详细说明先检查队列，再扩容消费者并限制重试。" in answer_text
+    assert answer_text.count("检查队列") == 1
+    chunks = [event["chunk"] for event in events if event["type"] == "chunk"]
+    assert [chunk["sequence"] for chunk in chunks] == list(range(1, len(chunks) + 1))
+
+
+def test_live_answer_stream_exhausted_continuation_preserves_partial_and_fails(monkeypatch) -> None:
+    from app.deps import chat_service as chat_service_dep, llm_gateway_port
+
+    gateway = llm_gateway_port()
+    service = chat_service_dep()
+    monkeypatch.setattr(service.settings, "chat_continuation_max_attempts", 2)
+
+    def scripted_stream_generate(*, question, prompt, attempt):
+        template_id = prompt.prompt_config.template_id
+        if template_id == "interview-chat-quick":
+            yield ChatAnswerChunk(
+                sequence=1,
+                text=f"<normalized_question>{question}</normalized_question>回答开始，",
+                provider_finish_reason="length",
+                is_final=True,
+            )
+        elif template_id == "interview-chat-continuation-quick":
+            yield ChatAnswerChunk(sequence=1, text="仍未结束，", provider_finish_reason="length", is_final=True)
+        else:
+            raise AssertionError(template_id)
+
+    monkeypatch.setattr(gateway, "stream_generate", scripted_stream_generate)
+    session = unwrap(client.post("/api/v1/sessions", json={
+        "userId": "chat-continuation-fail-user",
+        "title": "回答续写失败测试",
+    }))
+    session_id = session["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": "chat-continuation-fail-user"}))
+
+    with client.stream("POST", "/api/v1/live-answer/questions/stream", json={
+        "userId": "chat-continuation-fail-user",
+        "sessionId": session_id,
+        "question": "请完整回答",
+        "stream": True,
+    }) as response:
+        events = parse_sse_events(response.read().decode("utf-8"))
+
+    assert events[-1]["type"] == "failed"
+    assert events[-1]["errorCode"] == "chat_answer_incomplete"
+    assert "仍未结束" in events[-1]["partialText"]
+    assert not any(event["type"] == "completed" for event in events)
+
+
+def test_ended_interview_review_returns_owned_chronological_dual_role_transcripts() -> None:
+    session = unwrap(client.post("/api/v1/sessions", json={
+        "userId": "review-transcript-owner",
+        "title": "后端工程师一面",
+    }))
+    session_id = session["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": "review-transcript-owner"}))
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/context", json={
+        "userId": "review-transcript-owner",
+        "role": "interviewer",
+        "sourceKind": "realtime-system",
+        "content": "请介绍一下最近负责的项目。",
+        "visibility": "session",
+    }))
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/context", json={
+        "userId": "review-transcript-owner",
+        "role": "candidate",
+        "sourceKind": "realtime-microphone",
+        "content": "我最近负责订单服务的稳定性建设。",
+        "visibility": "session",
+    }))
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/context", json={
+        "userId": "review-transcript-owner",
+        "role": "candidate",
+        "sourceKind": "realtime-interim",
+        "content": "这是一条未确认的临时识别",
+        "visibility": "session",
+    }))
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/end", json={"userId": "review-transcript-owner"}))
+
+    review = unwrap(client.get(f"/api/v1/sessions/{session_id}/review", params={"userId": "review-transcript-owner"}))
+
+    assert review["status"] == "ended"
+    assert review["title"] == "后端工程师一面"
+    assert review["durationMs"] >= 0
+    assert [(item["role"], item["speakerLabel"], item["text"]) for item in review["transcripts"]] == [
+        ("interviewer", "面试官", "请介绍一下最近负责的项目。"),
+        ("candidate", "我", "我最近负责订单服务的稳定性建设。"),
+    ]
+    assert [item["ordering"] for item in review["transcripts"]] == sorted(item["ordering"] for item in review["transcripts"])
+
+    forbidden = client.get(f"/api/v1/sessions/{session_id}/review", params={"userId": "different-review-user"})
+    assert forbidden.status_code == 403
+    assert "订单服务" not in forbidden.text
+
+    unwrap(client.delete(f"/api/v1/sessions/{session_id}", params={"userId": "review-transcript-owner"}))
+    deleted = client.get(f"/api/v1/sessions/{session_id}/review", params={"userId": "review-transcript-owner"})
+    assert deleted.status_code == 404
+    assert "订单服务" not in deleted.text
+
+
+def test_live_interview_review_is_not_available_before_end() -> None:
+    session = unwrap(client.post("/api/v1/sessions", json={
+        "userId": "review-live-owner",
+        "title": "尚未结束的面试",
+    }))
+    session_id = session["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": "review-live-owner"}))
+
+    response = client.get(f"/api/v1/sessions/{session_id}/review", params={"userId": "review-live-owner"})
+
+    assert response.status_code == 409
+    assert "结束后" in response.text
 
 
 def test_web_state_recent_interviews_are_limited_to_five_items() -> None:

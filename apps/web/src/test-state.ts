@@ -123,6 +123,14 @@ export const syntheticState: WebAppState = {
     duration: "42 分钟",
     summary: "回答建议主要围绕项目决策、工程化和协作展开。复盘仅整理本场记录，不对候选人能力打分。",
     screenshots: [{ id: "shot-1", name: "系统设计题（合成）.png" }],
+    sessionId: "review",
+    title: "产品工程师模拟面试",
+    startedAtMs: 1_719_000_000_000,
+    endedAtMs: 1_719_002_520_000,
+    transcripts: [
+      { id: "review-t1", role: "interviewer", speakerLabel: "面试官", text: "请介绍一下你如何推动跨团队协作。", occurredAtMs: 1_719_000_060_000, ordering: 1 },
+      { id: "review-t2", role: "candidate", speakerLabel: "我", text: "我会先统一目标和交付边界，再建立固定同步机制。", occurredAtMs: 1_719_000_075_000, ordering: 2 },
+    ],
   },
   captureState: "ready",
   librarySources: syntheticLibrarySources,
@@ -242,6 +250,11 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
 
   async endInterviewSession(_id: string, signal?: AbortSignal) {
     await delay(signal);
+  }
+
+  async loadInterviewReview(interviewId: string, signal?: AbortSignal) {
+    await delay(signal);
+    return { ...structuredClone(syntheticState.review), sessionId: interviewId };
   }
 
   async bindDesktopDevice(command: Parameters<InterviewAppAdapter["bindDesktopDevice"]>[0], signal?: AbortSignal) {

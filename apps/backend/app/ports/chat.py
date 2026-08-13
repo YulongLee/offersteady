@@ -7,6 +7,7 @@ from typing import Literal, Protocol
 
 AnswerTaskStatus = Literal["queued", "streaming", "completed", "failed", "cancelled"]
 ChatFinishReason = Literal["completed", "failed", "cancelled", "retry-exhausted"]
+ProviderFinishReason = Literal["stop", "length", "content-filter", "tool-calls", "unknown"]
 QuestionNormalizationStatus = Literal["pending", "completed", "fallback", "not-requested"]
 
 
@@ -32,6 +33,7 @@ class ChatAnswerChunk:
     sequence: int
     text: str
     is_final: bool = False
+    provider_finish_reason: ProviderFinishReason | None = None
 
 
 @dataclass(frozen=True)

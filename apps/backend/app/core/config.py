@@ -98,6 +98,10 @@ class Settings(BaseSettings):
     chat_max_history_entries: int = 6
     chat_retry_max_attempts: int = 1
     chat_stream_chunk_chars: int = 32
+    chat_quick_max_tokens: int = 420
+    chat_detail_max_tokens: int = 1400
+    chat_continuation_max_tokens: int = 900
+    chat_continuation_max_attempts: int = 2
     chat_provider: str = "qwen-compatible"
     chat_qwen_model: str = "qwen-plus"
     chat_qwen_api_key: str | None = None

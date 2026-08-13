@@ -50,6 +50,20 @@ export interface InterviewReview {
   readonly duration: string;
   readonly summary: string;
   readonly screenshots: readonly { id: string; name: string }[];
+  readonly sessionId?: string;
+  readonly title?: string;
+  readonly startedAtMs?: number | null;
+  readonly endedAtMs?: number | null;
+  readonly transcripts: readonly InterviewReviewTranscript[];
+}
+
+export interface InterviewReviewTranscript {
+  readonly id: string;
+  readonly role: "interviewer" | "candidate";
+  readonly speakerLabel: "面试官" | "我";
+  readonly text: string;
+  readonly occurredAtMs: number;
+  readonly ordering: number;
 }
 
 export interface PreparationState {
@@ -235,6 +249,7 @@ export interface InterviewAppAdapter {
   sendDesktopSessionHeartbeat(command: { interviewId: string; bindingId?: string | null; page: "preparation" | "live"; pageInstanceId?: string }, signal?: AbortSignal): Promise<{ pageInstanceId: string | null; leaseGeneration: number; leaseExpiresAtMs: number }>;
   loadRealtimeSession(interviewId: string, signal?: AbortSignal): Promise<Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>>;
   loadInterviewWorkspace(interviewId: string, signal?: AbortSignal): Promise<InterviewWorkspaceSnapshot>;
+  loadInterviewReview(interviewId: string, signal?: AbortSignal): Promise<InterviewReview>;
   loadDesktopShortcutScreenshotUpdates(interviewId: string, signal?: AbortSignal): Promise<readonly DesktopShortcutScreenshotUpdate[]>;
   subscribeRealtimeSession(interviewId: string, onUpdate: (state: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => void, signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }): Promise<void>;
   deleteInterview(id: string, signal?: AbortSignal): Promise<void>;

@@ -143,6 +143,22 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
                     (user_id, session_id),
                 )
                 deleted = cursor.rowcount > 0
+                if deleted:
+                    cursor.execute(
+                        "DELETE FROM interview_session_context_entries WHERE owner_user_id = %s AND session_id = %s",
+                        (user_id, session_id),
+                    )
+                    cursor.execute(
+                        "DELETE FROM interview_session_usage_records WHERE owner_user_id = %s AND session_id = %s",
+                        (user_id, session_id),
+                    )
+                    cursor.execute("SELECT to_regclass('public.approved_realtime_transcripts')")
+                    approved_transcript_table = cursor.fetchone()
+                    if approved_transcript_table and approved_transcript_table[0]:
+                        cursor.execute(
+                            "DELETE FROM approved_realtime_transcripts WHERE owner_user_id = %s AND session_id = %s",
+                            (user_id, session_id),
+                        )
             connection.commit()
         return deleted
 

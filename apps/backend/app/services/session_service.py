@@ -297,6 +297,21 @@ class SessionService:
             return entries
         return entries[-limit:]
 
+    def get_review_transcripts(self, *, user_id: str, session_id: str) -> tuple[InterviewSessionRecord, list[ConversationContextEntry]]:
+        session = self.get_session(user_id=user_id, session_id=session_id)
+        if session.status != "ended":
+            raise DomainRequestError("session", "review", "面试结束后才能查看完整复盘。", 409)
+        allowed_sources = {"realtime-system", "realtime-microphone"}
+        transcripts = [
+            entry
+            for entry in self.repository.list_context_entries(session_id=session_id)
+            if entry.owner_user_id == user_id
+            and entry.source_kind in allowed_sources
+            and entry.role in {"interviewer", "candidate"}
+            and entry.content.strip()
+        ]
+        return session, sorted(transcripts, key=lambda item: (item.ordering, item.created_at_ms, item.entry_id))
+
     def record_usage(
         self,
         *,

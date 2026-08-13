@@ -69,6 +69,27 @@ class ConversationContextEntryResponse(BaseModel):
     created_at_ms: int = Field(alias="createdAtMs")
 
 
+class InterviewReviewTranscriptResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    id: str
+    role: Literal["interviewer", "candidate"]
+    speaker_label: Literal["面试官", "我"] = Field(alias="speakerLabel")
+    text: str
+    occurred_at_ms: int = Field(alias="occurredAtMs")
+    ordering: int
+
+
+class InterviewReviewSnapshotResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    session_id: str = Field(alias="sessionId")
+    title: str
+    status: InterviewSessionState
+    started_at_ms: int | None = Field(default=None, alias="startedAtMs")
+    ended_at_ms: int | None = Field(default=None, alias="endedAtMs")
+    duration_ms: int = Field(alias="durationMs")
+    transcripts: list[InterviewReviewTranscriptResponse] = Field(default_factory=list)
+
+
 class SessionUsageRecordResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
     usage_id: str = Field(alias="usageId")

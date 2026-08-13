@@ -2,7 +2,7 @@ import type { CaptureState, FoundationIndexResponse } from "@offersteady/protoco
 
 import type { AnswerProvenance, AnswerSourceReference, AnswerTaskSnapshot, CancelAnswerResult, OfficialCheckoutOrder, PointsRedemptionResult } from "@offersteady/protocol";
 import { AppError } from "./domain";
-import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, DesktopDeviceBinding, IdleInterviewStatus, InterviewAppAdapter, InterviewQuestion, InterviewSummary, InterviewWorkspaceSnapshot, ReferralActivationResult, ReferralStatus, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
+import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, DesktopDeviceBinding, IdleInterviewStatus, InterviewAppAdapter, InterviewQuestion, InterviewReview, InterviewSummary, InterviewWorkspaceSnapshot, ReferralActivationResult, ReferralStatus, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
 import { createJsonClient, withBaseUrl } from "./api-client";
 import { authClient } from "./auth-client";
 import { createSseParser, type LiveAnswerStreamEvent, type ManualAnswerStreamUpdate } from "./live-answer-stream";
@@ -24,6 +24,23 @@ interface BackendSessionResponse {
 interface BackendActiveSessionConflictResponse {
   readonly currentSessionId: string;
   readonly activeSession: BackendSessionResponse | null;
+}
+
+interface BackendInterviewReviewResponse {
+  readonly sessionId: string;
+  readonly title: string;
+  readonly status: "ended";
+  readonly startedAtMs: number | null;
+  readonly endedAtMs: number | null;
+  readonly durationMs: number;
+  readonly transcripts: readonly {
+    readonly id: string;
+    readonly role: "interviewer" | "candidate";
+    readonly speakerLabel: "面试官" | "我";
+    readonly text: string;
+    readonly occurredAtMs: number;
+    readonly ordering: number;
+  }[];
 }
 
 interface BackendSupersedeActiveSessionResponse {
@@ -848,6 +865,24 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     return {
       questions: results.map(item => item.result.question),
       activeAnswerTask: active?.result.task ?? results[0]?.result.task ?? null,
+    };
+  }
+
+  async loadInterviewReview(interviewId: string, signal?: AbortSignal): Promise<InterviewReview> {
+    const review = await this.client.request<BackendInterviewReviewResponse>(`/api/v1/sessions/${interviewId}/review?userId=${encodeURIComponent(requireUserId())}`, {
+      headers: authHeaders(),
+    }, signal);
+    const durationMinutes = Math.max(0, Math.round(review.durationMs / 60_000));
+    return {
+      status: "complete",
+      duration: `${durationMinutes} 分钟`,
+      summary: review.transcripts.length ? "已从本场持久记录整理面试官与我的语音转写。" : "本场没有可用的持久语音转写。",
+      screenshots: [],
+      sessionId: review.sessionId,
+      title: review.title,
+      startedAtMs: review.startedAtMs,
+      endedAtMs: review.endedAtMs,
+      transcripts: review.transcripts,
     };
   }
 

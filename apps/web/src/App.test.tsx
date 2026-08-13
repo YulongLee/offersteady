@@ -346,10 +346,35 @@ describe("OfferSteady web application", () => {
     await login();
     window.history.pushState({}, "", "/app/interviews/review/review");
     window.dispatchEvent(new PopStateEvent("popstate"));
-    expect(await screen.findByText("原始记录")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "真实对话记录" })).toBeInTheDocument();
+    expect(await screen.findByText("请介绍一下你如何推动跨团队协作。")).toBeInTheDocument();
+    expect(await screen.findByText("我会先统一目标和交付边界，再建立固定同步机制。")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "问题与 AI 回答建议" })).toBeInTheDocument();
+    expect(screen.getByText("生成建议，不代表实际作答")).toBeInTheDocument();
     expect(screen.getByText("AI 整理摘要")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "删除截图" }));
     await waitFor(() => expect(screen.queryByText("系统设计题（合成）.png")).not.toBeInTheDocument());
+  });
+
+  it("downloads the review locally and keeps the mobile transcript readable", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    await login();
+    window.history.pushState({}, "", "/app/interviews/review/review");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+
+    const download = await screen.findByRole("button", { name: "下载复盘" });
+    await waitFor(() => expect(download).toBeEnabled());
+    expect(screen.getByText(/仅在你的浏览器本地生成/)).toBeInTheDocument();
+    const click = vi.fn();
+    const anchor = document.createElement("a");
+    anchor.click = click;
+    vi.spyOn(document, "createElement").mockReturnValue(anchor);
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:review");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    fireEvent.click(download);
+
+    expect(URL.createObjectURL).toHaveBeenCalledOnce();
+    expect(click).toHaveBeenCalledOnce();
   });
 
   it("offers explicit macOS architectures and a truthful Windows preview", async () => {
