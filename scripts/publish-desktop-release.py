@@ -19,6 +19,7 @@ def main() -> int:
     parser.add_argument("--metadata", default="apps/desktop/release/OfferSteady-Companion-0.1.0-macOS-arm64.json")
     parser.add_argument("--channel", default="test")
     args = parser.parse_args()
+    is_production = args.channel == "production"
 
     metadata_path = (ROOT / args.metadata).resolve()
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -63,22 +64,29 @@ def main() -> int:
             entry for entry in existing_payload.get("entries", [])
             if entry.get("platform") != platform or entry.get("architecture") != architecture
         ]
+    version_suffix = version.replace(".", "")
+    display_name = (
+        "macOS Apple Silicon" if platform == "macos" and architecture == "arm64"
+        else "macOS Intel" if platform == "macos"
+        else "Windows 10/11 安装版"
+    )
     entry = {
-            "id": metadata["id"],
-            "platform": platform,
-            "architecture": architecture,
-            "displayName": metadata["displayName"],
+        "id": f"{'mac' if platform == 'macos' else 'win'}-{architecture}-{version_suffix}",
+        "platform": platform,
+        "architecture": architecture,
+        "displayName": display_name if is_production else metadata["displayName"],
             "version": version,
             "minimumOs": metadata["minimumOs"],
             "fileName": artifact.name,
             "fileSizeBytes": metadata["fileSizeBytes"],
-            "sha256": metadata["sha256"],
-            "signingStatus": "local-development",
-            "notarized": bool(metadata.get("notarized", False)),
+        "sha256": metadata["sha256"],
+        "signingStatus": "local-development",
+        "distributionStatus": "published" if is_production else "internal",
+        "notarized": bool(metadata.get("notarized", False)),
             "publishedAtMs": published_at_ms,
             "protocolVersion": metadata["protocolVersion"],
             "captureRuntime": metadata.get("captureRuntime", "electron-single-owner"),
-            "developmentOnly": True,
+        "developmentOnly": not is_production,
             "objectKey": object_key,
             "capabilities": metadata["capabilities"],
         }
