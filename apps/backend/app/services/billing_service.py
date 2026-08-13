@@ -219,6 +219,7 @@ class BillingService:
         )
 
     def referral_status(self, *, user_id: str) -> dict[str, object]:
+        self._require_persistent_referrals()
         code = self._referral_code_for_user(user_id=user_id)
         if self.billing_repository is not None:
             status = self.billing_repository.referral_status(user_id=user_id)
@@ -238,6 +239,7 @@ class BillingService:
         }
 
     def resolve_referral(self, *, referral_code: str) -> dict[str, object]:
+        self._require_persistent_referrals()
         code = referral_code.strip()
         if len(code) < 12 or len(code) > 48:
             return {"valid": False, "enabled": False}
@@ -258,6 +260,7 @@ class BillingService:
         }
 
     def activate_referral(self, *, invitee_user_id: str, referral_code: str) -> dict[str, object]:
+        self._require_persistent_referrals()
         code = referral_code.strip()
         if self.billing_repository is not None:
             return self.billing_repository.activate_referral(
@@ -312,11 +315,13 @@ class BillingService:
         }
 
     def growth_referral_settings(self) -> dict[str, object]:
+        self._require_persistent_referrals()
         if self.billing_repository is not None:
             return self.billing_repository.growth_referral_settings()
         return dict(self.referral_settings)
 
     def update_growth_referral_settings(self, *, enabled: bool, reward_points: int, updated_by_user_id: str) -> dict[str, object]:
+        self._require_persistent_referrals()
         if isinstance(reward_points, bool) or reward_points < 1 or reward_points > 100_000:
             raise ValueError("referral_reward_points_invalid")
         updated_at_ms = _now_ms()
@@ -335,6 +340,10 @@ class BillingService:
             "updatedAtMs": updated_at_ms,
         }
         return dict(self.referral_settings)
+
+    def _require_persistent_referrals(self) -> None:
+        if self.settings is not None and self.settings.environment == "production" and self.billing_repository is None:
+            raise RuntimeError("Production billing and referral state requires PostgreSQL persistence")
 
     def _referral_code_for_user(self, *, user_id: str) -> str:
         existing = self.referral_codes_by_user.get(user_id)

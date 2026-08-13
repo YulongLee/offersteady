@@ -10,6 +10,7 @@ from app.services.knowledge_retrieval import HeuristicRerankerAdapter, Synthetic
 from app.services.realtime_speech_service import SyntheticRealtimeAsrGateway
 from app.services.screenshot_answer_service import SyntheticVisionGateway
 from app.services.sms_verification_provider import FakeSmsVerificationProvider
+from app.services.billing_service import BillingService
 
 
 FACTORIES = (
@@ -100,3 +101,14 @@ def test_production_validation_names_missing_variable_without_secret_value() -> 
     message = str(error.value)
     assert "OFFERSTEADY_REALTIME_ASR_API_KEY" in message
     assert "must-not-appear" not in message
+
+
+def test_production_billing_rejects_in_memory_referral_state() -> None:
+    service = BillingService(isolated_settings("production"))
+    with pytest.raises(RuntimeError, match="requires PostgreSQL persistence"):
+        service.referral_status(user_id="synthetic-user")
+
+
+def test_development_billing_allows_in_memory_referral_state() -> None:
+    service = BillingService(isolated_settings("development"))
+    assert service.referral_status(user_id="synthetic-user")["referralCode"]
