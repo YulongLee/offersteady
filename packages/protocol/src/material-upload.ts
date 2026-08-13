@@ -48,6 +48,10 @@ export interface MaterialUploadCompletionResult {
   readonly source: MaterialUploadSourceRecord;
   readonly documentVersionId?: string;
   readonly collectionId?: string;
+  readonly indexBilling?: {
+    readonly status: "reserved" | "settled" | "released";
+    readonly settlesAfter?: "indexed";
+  };
 }
 
 export interface CreateKnowledgeCollectionRequest {

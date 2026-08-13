@@ -53,6 +53,10 @@ export const formatMembershipDuration = (durationMs: number) => {
 export const formatMembershipRemaining = (endsAtMs: number, nowMs: number) =>
   endsAtMs <= nowMs ? "已到期" : formatMembershipDuration(endsAtMs - nowMs);
 
+export const successfulOfficialOrders = (
+  orders: readonly OfficialCheckoutOrder[],
+) => orders.filter((order) => order.status === "paid");
+
 const referralCodePattern = /^[A-Za-z0-9_-]{12,48}$/;
 
 export function parseReferralActivationInput(value: string): string | null {
@@ -174,8 +178,11 @@ export function summarizePointsLedger(
       createdAtMs: number;
     }
   >();
+  const seenReferences = new Set<string>();
 
   for (const entry of entries) {
+    if (seenReferences.has(entry.referenceId)) continue;
+    seenReferences.add(entry.referenceId);
     const category = consumptionCategory(entry);
     if (!category) {
       displayEntries.push({ ...entry, count: 1, isConsumption: false });
@@ -229,6 +236,10 @@ export function BillingPage({ state, setState }: Props) {
   const [redemptionPending, setRedemptionPending] = useState(false);
   const [redemptionResult, setRedemptionResult] =
     useState<PointsRedemptionResult | null>(null);
+  const paidOfficialOrders = useMemo(
+    () => successfulOfficialOrders(state.billing.officialOrders),
+    [state.billing.officialOrders],
+  );
   const redemptionController = useRef<AbortController | null>(null);
   const refreshBillingState = useCallback(async () => {
     setEntitlementSync("syncing");
@@ -366,8 +377,8 @@ export function BillingPage({ state, setState }: Props) {
             balance: data.newBalance,
             ledger: current.billing.ledger.some(
               (entry) =>
-                entry.kind === "redemption_credit" &&
-                entry.referenceId === data.redemptionId,
+                entry.id === data.ledgerEntry.id ||
+                entry.referenceId === data.ledgerEntry.referenceId,
             )
               ? current.billing.ledger
               : [data.ledgerEntry, ...current.billing.ledger],
@@ -435,6 +446,9 @@ export function BillingPage({ state, setState }: Props) {
     (item) => item.kind === "points_pack" && item.published,
   );
   const ledgerEntries = summarizePointsLedger(state.billing.ledger);
+  const uniqueLedgerCount = new Set(
+    state.billing.ledger.map((entry) => entry.referenceId),
+  ).size;
   const knowledgeIndexPointsPer5000Tokens =
     state.billing.rates.knowledgeIndexPointsPer1000Tokens * 5;
   const cards = (items: readonly BillingProduct[]) => (
@@ -916,7 +930,7 @@ export function BillingPage({ state, setState }: Props) {
         <div className="panel-heading">
           <h2>积分明细</h2>
           <span>
-            {ledgerEntries.length} 项 · {state.billing.ledger.length} 笔流水
+            {ledgerEntries.length} 项 · {uniqueLedgerCount} 笔流水
           </span>
         </div>
         <div
@@ -1021,11 +1035,11 @@ export function BillingPage({ state, setState }: Props) {
               <span className="kicker">ORDER HISTORY</span>
               <h2 id="official-orders-title">官方订单</h2>
             </div>
-            <span>{state.billing.officialOrders.length} 笔</span>
+            <span>{paidOfficialOrders.length} 笔</span>
           </div>
-          {state.billing.officialOrders.length ? (
+          {paidOfficialOrders.length ? (
             <div className="order-list">
-              {state.billing.officialOrders.map((order) => (
+              {paidOfficialOrders.map((order) => (
                 <article key={order.id}>
                   <div>
                     <strong>{order.product.displayName}</strong>
@@ -1041,8 +1055,8 @@ export function BillingPage({ state, setState }: Props) {
           ) : (
             <div className="billing-orders-empty">
               <span>◇</span>
-              <strong>暂无支付订单</strong>
-              <p>购买积分包或会员后，订单状态会显示在这里。</p>
+              <strong>暂无成功订单</strong>
+              <p>支付成功并到账后，订单会显示在这里。</p>
             </div>
           )}
         </section>

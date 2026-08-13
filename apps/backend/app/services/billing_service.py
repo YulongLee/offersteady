@@ -90,6 +90,9 @@ class KnowledgeIndexReservationRecord:
     points_reserved: int
     status: str
     created_at_ms: int
+    billing_source: str = "points"
+    entitlement_id: str | None = None
+    allowance_reserved: int = 0
     settled_at_ms: int | None = None
     released_at_ms: int | None = None
 
@@ -690,6 +693,18 @@ class BillingService:
         existing = self.index_reservations_by_quote.get(quote_id)
         if existing is not None:
             return existing
+        active_pass = next((item for item in self._passes_for_user(user_id=user_id) if item.starts_at_ms <= _now_ms() < item.ends_at_ms and item.knowledge_allowance_granted - item.knowledge_allowance_used - item.knowledge_allowance_locked > 0), None)
+        if active_pass is not None:
+            updated_pass = TimePassEntitlementRecord(**{**active_pass.__dict__, "knowledge_allowance_locked": active_pass.knowledge_allowance_locked + 1})
+            self.pass_entitlements_by_user[user_id] = [updated_pass if item.id == active_pass.id else item for item in self.pass_entitlements_by_user.get(user_id, [])]
+            reservation = KnowledgeIndexReservationRecord(
+                reservation_id=f"index-reservation-{uuid4().hex}", quote_id=quote.quote_id,
+                user_id=user_id, document_version_id=quote.document_version_id,
+                points_reserved=0, billing_source="pass_allowance", entitlement_id=active_pass.id,
+                allowance_reserved=1, status="reserved", created_at_ms=_now_ms(),
+            )
+            self.index_reservations_by_quote[quote_id] = reservation
+            return reservation
         balance = self._balance_for_user(user_id=user_id)
         if balance < quote.points_required:
             return KnowledgeIndexReservationRecord(
@@ -698,6 +713,7 @@ class BillingService:
                 user_id=user_id,
                 document_version_id=quote.document_version_id,
                 points_reserved=quote.points_required,
+                billing_source="points",
                 status="insufficient_balance",
                 created_at_ms=_now_ms(),
             )
@@ -707,6 +723,7 @@ class BillingService:
             user_id=user_id,
             document_version_id=quote.document_version_id,
             points_reserved=quote.points_required,
+            billing_source="points",
             status="reserved",
             created_at_ms=_now_ms(),
         )
@@ -720,20 +737,31 @@ class BillingService:
         reservation = self.index_reservations_by_quote.get(quote_id)
         if reservation is None or reservation.status != "reserved":
             return reservation
+        if reservation.billing_source == "pass_allowance" and reservation.entitlement_id:
+            passes = self.pass_entitlements_by_user.get(reservation.user_id, [])
+            self.pass_entitlements_by_user[reservation.user_id] = [
+                TimePassEntitlementRecord(**{
+                    **item.__dict__,
+                    "knowledge_allowance_locked": max(0, item.knowledge_allowance_locked - reservation.allowance_reserved),
+                    "knowledge_allowance_used": item.knowledge_allowance_used + reservation.allowance_reserved,
+                }) if item.id == reservation.entitlement_id else item
+                for item in passes
+            ]
         if any(item.reference_id == reference_id and item.kind == "knowledge_index_settlement" for item in self.ledger_by_user.get(reservation.user_id, [])):
             return reservation
         settled_at_ms = _now_ms()
-        self.ledger_by_user.setdefault(reservation.user_id, []).append(
-            PointsLedgerRecord(
-                id=f"ledger-{uuid4().hex}",
-                user_id=reservation.user_id,
-                kind="knowledge_index_settlement",
-                points=-reservation.points_reserved,
-                created_at_ms=settled_at_ms,
-                reference_id=reference_id,
-                description="知识资料索引结算",
+        if reservation.points_reserved:
+            self.ledger_by_user.setdefault(reservation.user_id, []).append(
+                PointsLedgerRecord(
+                    id=f"ledger-{uuid4().hex}",
+                    user_id=reservation.user_id,
+                    kind="knowledge_index_settlement",
+                    points=-reservation.points_reserved,
+                    created_at_ms=settled_at_ms,
+                    reference_id=reference_id,
+                    description="知识资料索引结算",
+                )
             )
-        )
         settled = KnowledgeIndexReservationRecord(**{**reservation.__dict__, "status": "settled", "settled_at_ms": settled_at_ms})
         self.index_reservations_by_quote[quote_id] = settled
         return settled
@@ -745,9 +773,43 @@ class BillingService:
         reservation = self.index_reservations_by_quote.get(quote_id)
         if reservation is None or reservation.status != "reserved":
             return reservation
+        if reservation.billing_source == "pass_allowance" and reservation.entitlement_id:
+            passes = self.pass_entitlements_by_user.get(reservation.user_id, [])
+            self.pass_entitlements_by_user[reservation.user_id] = [
+                TimePassEntitlementRecord(**{
+                    **item.__dict__,
+                    "knowledge_allowance_locked": max(0, item.knowledge_allowance_locked - reservation.allowance_reserved),
+                }) if item.id == reservation.entitlement_id else item
+                for item in passes
+            ]
         released = KnowledgeIndexReservationRecord(**{**reservation.__dict__, "status": "released", "released_at_ms": _now_ms()})
         self.index_reservations_by_quote[quote_id] = released
         return released
+
+    def reserved_knowledge_index_for_document(self, *, user_id: str, document_version_id: str) -> KnowledgeIndexReservationRecord | None:
+        if self.billing_repository is not None:
+            item = self.billing_repository.reserved_index_quote_for_document(user_id=user_id, document_version_id=document_version_id)
+            return KnowledgeIndexReservationRecord(**item) if item is not None else None
+        return next((
+            item for item in sorted(
+                self.index_reservations_by_quote.values(),
+                key=lambda value: (value.created_at_ms, value.reservation_id),
+                reverse=True,
+            )
+            if item.user_id == user_id and item.document_version_id == document_version_id
+        ), None)
+
+    def settle_knowledge_index_for_document(self, *, user_id: str, document_version_id: str) -> KnowledgeIndexReservationRecord | None:
+        reservation = self.reserved_knowledge_index_for_document(user_id=user_id, document_version_id=document_version_id)
+        if reservation is None:
+            return None
+        return self.settle_knowledge_index(quote_id=reservation.quote_id, reference_id=f"knowledge-index:{document_version_id}")
+
+    def release_knowledge_index_for_document(self, *, user_id: str, document_version_id: str) -> KnowledgeIndexReservationRecord | None:
+        reservation = self.reserved_knowledge_index_for_document(user_id=user_id, document_version_id=document_version_id)
+        if reservation is None:
+            return None
+        return self.release_knowledge_index(quote_id=reservation.quote_id)
 
     def reserve_usage(self, *, user_id: str, usage_id: str, usage_kind: str) -> UsageReservationRecord:
         if usage_kind not in {"answer", "screenshot_answer"}:
@@ -887,7 +949,13 @@ class BillingService:
         # ledger when the unified billing repository is not configured.
         if self.redemption_repository is not None and self.billing_repository is None:
             ledger.extend(self._persistent_ledger_record(item) for item in self.redemption_repository.list_ledger(user_id=user_id))
-        return sorted(ledger, key=lambda item: (item.created_at_ms, item.id), reverse=True)
+        unique_by_reference: dict[str, PointsLedgerRecord] = {}
+        for item in sorted(ledger, key=lambda value: (value.created_at_ms, value.id), reverse=True):
+            # reference_id is the immutable business idempotency key in the
+            # shared ledger. Keep the newest copy if a compatibility adapter
+            # returns the same physical row more than once.
+            unique_by_reference.setdefault(item.reference_id, item)
+        return list(unique_by_reference.values())
 
     def _balance_for_user(self, *, user_id: str) -> int:
         if self.billing_repository is not None:

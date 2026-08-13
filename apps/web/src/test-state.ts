@@ -248,6 +248,11 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
     return this.getInterviewIdleStatus(id, signal);
   }
 
+  async controlInterviewCapture(_id: string, action: "pause" | "resume", signal?: AbortSignal) {
+    await delay(signal);
+    return action === "pause" ? "paused" as const : "capturing" as const;
+  }
+
   async endInterviewSession(_id: string, signal?: AbortSignal) {
     await delay(signal);
   }
@@ -298,6 +303,10 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
   async loadDesktopShortcutScreenshotUpdates(_interviewId: string, signal?: AbortSignal) {
     await delay(signal);
     return [];
+  }
+
+  async cancelDesktopShortcutScreenshot(_requestId: string, signal?: AbortSignal) {
+    await delay(signal);
   }
 
   async subscribeRealtimeSession(_interviewId: string, onUpdate: (state: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => void, signal?: AbortSignal, _lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }) {

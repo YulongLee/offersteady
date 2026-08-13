@@ -21,7 +21,6 @@ import { WorkspaceDivider } from "./WorkspaceDivider";
 import { authClient } from "./auth-client";
 import { isInvalidRealtimeSessionStatus, realtimeRetryDelayMs } from "./realtime-recovery";
 import { applyAppearancePreferences, persistAppearancePreferences, readAppearancePreferences, type AppearancePreferences } from "./appearance-preferences";
-import { downloadInterviewReviewMarkdown, formatInterviewReviewMarkdown, interviewReviewFilename } from "./interview-review-export";
 import "./styles.css";
 
 
@@ -341,7 +340,7 @@ function AccountMenu({ compact = false, dropUp = false }: { readonly compact?: b
 function AppLayout() {
   return (
     <div className="app-shell">
-      <aside className="app-sidebar"><Link to={routes.app}><Logo /></Link><nav aria-label="应用导航">{navItems.map(item => <NavLink key={item.to} to={item.to} {...(item.end ? { end: true } : {})}><span>{item.icon}</span>{item.label}</NavLink>)}</nav><div className="sidebar-foot"><span className="privacy-note">音频默认不保存</span><AccountMenu /></div></aside>
+      <aside className="app-sidebar"><Link to={routes.app}><Logo /></Link><nav aria-label="应用导航">{navItems.map(item => <NavLink key={item.to} to={item.to} {...(item.end ? { end: true } : {})}><span>{item.icon}</span>{item.label}</NavLink>)}</nav><div className="sidebar-foot"><span className="privacy-note">音频默认不保存</span><AccountMenu dropUp /></div></aside>
       <div className="app-content"><Outlet /></div>
       <nav className="mobile-nav" aria-label="移动端应用导航">{navItems.map(item => <NavLink key={item.to} to={item.to} {...(item.end ? { end: true } : {})}><span>{item.icon}</span><small>{item.label}</small></NavLink>)}<AccountMenu compact dropUp /></nav>
     </div>
@@ -431,12 +430,12 @@ function EmptyState({ title, detail, action }: { readonly title: string; readonl
 
 function NewInterviewPage() {
   const navigate = useNavigate();
-  const { setState } = usePrototype();
+  const { state, setState } = usePrototype();
   const [form, setForm] = useState(() => {
-    if (typeof window.sessionStorage?.getItem !== "function") return { title: "", role: "", company: "" };
-    const saved = window.sessionStorage.getItem("offersteady.last-draft");
-    if (!saved) return { title: "", role: "", company: "" };
-    try { return JSON.parse(saved) as { title: string; role: string; company: string }; } catch { return { title: "", role: "", company: "" }; }
+    const latest = state.interviews[0];
+    return latest
+      ? { title: latest.title, role: latest.role, company: latest.company ?? "" }
+      : { title: "", role: "", company: "" };
   });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -455,7 +454,6 @@ function NewInterviewPage() {
           contextSelections: { ...current.contextSelections, [draft.id]: { sessionId: draft.id, resumeSourceId: null, jobDescriptionSourceId: null, knowledgeSourceIds: [], revision: 0, confirmedAtMs: null } },
         };
       });
-      if (typeof window.sessionStorage?.setItem === "function") window.sessionStorage.setItem("offersteady.last-draft", JSON.stringify(form));
       navigate(routes.prepare(draft.id), { state: { newlyCreatedInterview: true } });
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "创建面试失败，请稍后重试。");
@@ -620,17 +618,16 @@ function PreparationPage() {
       <aside className="panel check-panel"><div className="panel-heading"><h2>开始前检查</h2><span>{canStart ? "可进入" : !selectionReady ? "待确认资料" : "待绑定机器"}</span></div><ul className="check-list"><li className={selectionReady ? "done" : ""}><i>{selectionReady ? "✓" : "1"}</i><div><strong>本场资料</strong><span>{validity === "unconfirmed" ? "请选择资料或确认不使用资料" : validity === "attention-required" ? "所选资料已失效，请处理" : level === "none" ? "已确认不使用个人资料" : level === "personalized" ? "简历与 JD 已选择" : "已确认使用部分资料"}</span></div></li><li className={machineReady ? "done" : ""}><i>{machineReady ? "✓" : "2"}</i><div><strong>收音机器</strong><span>{inputDiagnostic}</span></div></li></ul>
         <div className="machine-code-panel">
           <strong className="connection-choice-title">连接桌面助手</strong>
-          {!newlyCreatedInterview && lastDevice ? <div className={`last-device-choice ${lastDevice.online ? "online" : "offline"}`}><span><b>{lastDevice.displayName}</b><small>{lastDevice.online ? `设备在线 · ${lastDevice.maskedManualCode}` : "设备离线，请先打开助手"}</small></span><button className="button primary" disabled={!conflictResolved || binding || !lastDevice.online || deviceBinding?.deviceId === lastDevice.deviceId} onClick={() => void connectDesktopDevice(true)}>{deviceBinding?.deviceId === lastDevice.deviceId ? "已连接本场" : "一键连接上次设备"}</button></div> : null}
-          {!newlyCreatedInterview && lastDevice ? <div className="connection-divider"><span>或重新输入机器码</span></div> : null}
           <label><span>{newlyCreatedInterview ? "输入机器码连接本场" : "重新输入机器码"}</span><input inputMode="numeric" maxLength={6} value={machineCode} onChange={event => setMachineCode(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="输入 6 位机器码" /></label>
           <button className="button ghost" disabled={!conflictResolved || binding || machineReady && machineCode === deviceBinding?.manualCode} onClick={() => void connectDesktopDevice(false)}>{binding ? "连接中…" : "验证并连接"}</button>
-          <small>{deviceBinding ? `本场已连接：${deviceBinding.displayName}` : newlyCreatedInterview ? "输入助手显示的固定机器码，本场连接不会改变系统授权。" : "可复用上次设备或重新输入机器码；新连接会接管该账号上一场实时连接。"}</small>
+          <small>{deviceBinding ? `本场已连接：${deviceBinding.displayName}` : "输入助手显示的固定机器码，或直接连接当前账号上次使用的设备。"}</small>
           {bindingError ? <div className="inline-error" role="alert">{bindingError}</div> : null}
+          {lastDevice ? <><div className="connection-divider"><span>或使用上次设备</span></div><div className={`last-device-choice ${lastDevice.online ? "online" : "offline"}`}><span><b>{lastDevice.displayName}</b><small>{lastDevice.online ? `设备在线 · ${lastDevice.maskedManualCode}` : "设备离线，请先打开助手"}</small></span><button className="button primary" disabled={!conflictResolved || binding || !lastDevice.online || deviceBinding?.deviceId === lastDevice.deviceId} onClick={() => void connectDesktopDevice(true)}>{deviceBinding?.deviceId === lastDevice.deviceId ? "已连接本场" : "一键连接上次设备"}</button></div></> : null}
         </div>
         <div className="device-mini"><span className="device-glyph">⌘</span><div><strong>{deviceBinding?.displayName ?? state.preparation.device?.displayName ?? "电脑伴随程序"}</strong><small>{deviceBinding ? "本场设备已连接；系统权限沿用助手首次授权结果" : "当前仅缺少本场设备连接，不代表助手系统权限失效"}</small></div><Link to={routes.devices}>管理</Link></div>
         <div className="privacy-confirm preparation-disclosure"><span><strong>本场数据说明</strong><small>已选资料和转录仅用于生成回答建议；原始音频默认不保存，会话记录可在复盘中删除。麦克风和屏幕权限只由桌面助手首次申请，网页不会再次申请。</small></span></div>
         <div className="points-mini"><strong>{state.billing.balance} 点</strong><span>回答 5 点 · 截图 15 点</span><Link to={routes.billing}>查看收费说明</Link><Link to={`${routes.guide}#quick-start`}>准备流程说明</Link></div>
-        {startError ? <div className="inline-error" role="alert">{startError}</div> : null}<button className="button primary full" disabled={!canStart || starting} onClick={() => void startInterview()}>{starting ? "正在开始面试…" : "开始面试 →"}</button>{!selectionReady ? <small className="blocked-help">确认本场资料选择（可以为空）后继续。</small> : !machineReady ? <small className="blocked-help">{newlyCreatedInterview ? "请输入助手机器码，为新面试建立设备连接。" : "请选择上次设备或重新输入机器码，为本场恢复设备连接。"}</small> : level === "none" ? <small className="blocked-help context-disclosure">本场未使用个人资料，回答将更通用，也不会自动读取其他资料。助手会沿用已授予的系统权限。</small> : <small className="blocked-help context-disclosure">本地端会沿用首次授权并检查音频与问题检测；进入面试后，实时对话会按“面试官 / 我”展示双通道转录。</small>}
+        {startError ? <div className="inline-error" role="alert">{startError}</div> : null}<button className="button primary full" disabled={!canStart || starting} onClick={() => void startInterview()}>{starting ? "正在开始面试…" : "开始面试 →"}</button>{!selectionReady ? <small className="blocked-help">确认本场资料选择（可以为空）后继续。</small> : !machineReady ? <small className="blocked-help">请选择上次设备或输入机器码，为本场建立设备连接。</small> : level === "none" ? <small className="blocked-help context-disclosure">本场未使用个人资料，回答将更通用，也不会自动读取其他资料。助手会沿用已授予的系统权限。</small> : <small className="blocked-help context-disclosure">本地端会沿用首次授权并检查音频与问题检测；进入面试后，实时对话会按“面试官 / 我”展示双通道转录。</small>}
       </aside></div>
     {activeConflict ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="active-interview-conflict-title"><section className="sheet active-interview-conflict-sheet"><span className="conflict-kicker">单设备 · 单场面试</span><h2 id="active-interview-conflict-title">已有一场面试正在进行</h2><p>为避免旧页面和新页面同时占用语音链路，请先选择如何继续。</p><div className="active-interview-card"><span>进行中</span><strong>{activeConflict.title}</strong><small>结束上一场只会停止实时连接，历史记录和资料不会删除。</small></div>{conflictError ? <div className="inline-error" role="alert">{conflictError}</div> : null}<div className="sheet-actions conflict-actions"><button className="button primary" disabled={resolvingConflict} onClick={() => navigate(routes.live(activeConflict.id))}>继续上一场面试</button><button className="button ghost" disabled={resolvingConflict} onClick={() => void supersedePreviousInterview()}>{resolvingConflict ? "正在切换…" : "结束上一场，准备当前面试"}</button></div><Link className="conflict-return" to={routes.app}>暂不进入，返回面试首页</Link></section></div> : null}
   </main>;
@@ -647,6 +644,7 @@ function LivePage() {
   const [cancellingAnswer, setCancellingAnswer] = useState(false);
   const [cancelAnswerError, setCancelAnswerError] = useState("");
   const [pageLeaseStatus, setPageLeaseStatus] = useState<"claiming" | "active" | "replaced">("claiming");
+  const [captureControlPending, setCaptureControlPending] = useState<"pause" | "resume" | null>(null);
   const [idleStatus, setIdleStatus] = useState<IdleInterviewStatus | null>(null);
   const [continuingInterview, setContinuingInterview] = useState(false);
   const [splitBounds, setSplitBounds] = useState({ min: ABSOLUTE_MIN_SPLIT_RATIO, max: ABSOLUTE_MAX_SPLIT_RATIO });
@@ -758,7 +756,7 @@ function LivePage() {
         );
         if (stopped || updates.length === 0) return;
         const latest = updates[updates.length - 1]!;
-        if (latest.status === "requested" || latest.status === "processing") {
+        if ((latest.status === "requested" || latest.status === "processing") && !terminalShortcutScreenshotRequests.current.has(latest.requestId)) {
           activeShortcutScreenshotRequest.current = latest.requestId;
           setScreenshot(latest.screenshotTask);
         } else if (!terminalShortcutScreenshotRequests.current.has(latest.requestId)) {
@@ -766,7 +764,11 @@ function LivePage() {
           if (activeShortcutScreenshotRequest.current === latest.requestId) {
             activeShortcutScreenshotRequest.current = null;
           }
-          setScreenshot(latest.status === "completed" ? null : latest.screenshotTask);
+          if (latest.status === "completed") {
+            setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "success" }));
+          } else {
+            setScreenshot(latest.screenshotTask);
+          }
         }
         const results = updates.flatMap(update => update.result ? [update.result] : []);
         setState(current => {
@@ -1100,6 +1102,19 @@ function LivePage() {
     void submitManualText(question);
   };
   const setCapture = (captureState: CaptureState, status: SessionStatus) => setState(current => current.captureState === captureState ? current : ({ ...current, captureState, interviews: current.interviews.map(item => item.id === id ? { ...item, status } : item) }));
+  const controlCapture = async (action: "pause" | "resume") => {
+    if (captureControlPending || pageLeaseStatus === "replaced") return;
+    setCaptureControlPending(action);
+    setNotice("");
+    try {
+      const captureState = await runAdapterOperation(signal => interviewAppAdapter.controlInterviewCapture(id, action, signal));
+      setCapture(captureState, captureState === "paused" ? "paused" : "active");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : action === "pause" ? "暂停收音失败，请稍后重试。" : "恢复收音失败，请稍后重试。");
+    } finally {
+      setCaptureControlPending(null);
+    }
+  };
   const continueIdleInterview = async () => {
     if (continuingInterview) return;
     setContinuingInterview(true);
@@ -1138,22 +1153,25 @@ function LivePage() {
     }
     setState(current => ({ ...current, questions: current.questions.map(item => item.id === questionId ? { ...item, status } : item) }));
   };
-  const screenshotInstruction = (latestQuestion: string) => latestQuestion.trim()
-    ? `请结合当前截图，直接回答这道题。如果截图内容与问题存在差异，以截图内容为准。面试官最近的问题是：${latestQuestion.trim()}`
-    : "请直接识别当前截图中的题目、代码或系统设计内容，并给出可直接使用的中文回答。";
+  const screenshotInstruction = "请只依据当前截图识别其中的题目、代码或系统设计内容，并给出可直接使用的中文回答。不要使用实时对话、面试官最近的问题或其他会话信息。";
   const submitScreenshot = async () => {
     const usageId = `screenshot:remote:${Date.now()}`;
-    const latestQuestion = latestInterviewerQuestion();
-    const instruction = screenshotInstruction(latestQuestion);
     const placeholderId = `shot-pending-${Date.now()}`;
     const placeholderQuestion: InterviewQuestion = {
       ...active,
       id: placeholderId,
-      text: latestQuestion.trim() || "请根据当前截图直接回答",
+      text: "请根据当前截图直接回答",
       input: "screenshot",
       askedAt: "刚刚",
       status: "generating",
-      advice: scopedAdvice,
+      advice: {
+        outline: [],
+        detail: "正在识别当前截图并生成回答…",
+        sourceTypes: [],
+        inference: "",
+        uncertain: false,
+        provenance: { selectionRevision: 0, usedSources: [] },
+      },
     };
     const placeholderTask = activeTaskFor(placeholderQuestion, usageId);
     setState(current => ({ ...current, questions: [placeholderQuestion, ...current.questions], activeAnswerTask: placeholderTask }));
@@ -1161,7 +1179,7 @@ function LivePage() {
     try {
       const result = await runAdapterOperation(signal => interviewAppAdapter.submitScreenshotAnswer({
         interviewId: id,
-        instruction,
+        instruction: screenshotInstruction,
       }, signal, task => setScreenshot(task)), screenshotController.current?.signal);
       setState(current => ({
         ...current,
@@ -1202,7 +1220,7 @@ function LivePage() {
     if (task.stage === "uploading") return "本地助手已接收任务，正在截取并上传压缩后的全屏截图。";
     if (task.stage === "uploaded") return "截图已上传到后端，正在准备交给视觉模型识别。";
     if (task.stage === "recognizing") return "正在识别截图中的题目、代码或系统设计内容。";
-    if (task.stage === "generating") return "视觉模型正在生成答案，耗时主要取决于模型 API。";
+    if (task.stage === "generating") return null;
     if (task.stage === "completed") return "截图回答已完成，答案会显示在右侧回答区。";
     if (task.stage === "cancelled") return "本次截屏回答已取消。";
     return "正在截取你选择的共享屏幕，不会跳转到上传页面。";
@@ -1213,7 +1231,20 @@ function LivePage() {
     if (error instanceof Error && error.message) return error.message;
     return "共享屏幕暂时无法截取，请重试。";
   };
-  const cancelScreenshot = () => {
+  const cancelScreenshot = async () => {
+    const shortcutRequestId = activeShortcutScreenshotRequest.current;
+    if (shortcutRequestId) {
+      terminalShortcutScreenshotRequests.current.add(shortcutRequestId);
+      activeShortcutScreenshotRequest.current = null;
+      setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "cancelled" }));
+      try {
+        await runAdapterOperation(signal => interviewAppAdapter.cancelDesktopShortcutScreenshot(shortcutRequestId, signal));
+      } catch (error) {
+        terminalShortcutScreenshotRequests.current.delete(shortcutRequestId);
+        screenshotFailure(error instanceof Error ? error.message : "取消截屏回答失败，请稍后重试。");
+      }
+      return;
+    }
     screenshotController.current?.abort();
     screenshotController.current = null;
     setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "cancelled" }));
@@ -1363,12 +1394,12 @@ function LivePage() {
     });
   };
   const billingNotice = notice.includes("积分") || notice.includes("会员") || notice.toLowerCase().includes("billing");
-  return <main className="live-page focused-live-page"><header className="live-top"><Link to={routes.app}><Logo /></Link><div><strong>{interviewTitle}</strong><span><i className={state.captureState === "capturing" ? "recording-dot" : "online-dot"} /> {pageLeaseStatus === "replaced" ? "已在其他页面继续" : state.captureState === "capturing" ? "这台设备 · 正在收音" : state.captureState === "paused" ? "收音已暂停" : state.captureState === "reconnecting" ? "设备正在重连" : state.captureState === "permission-required" ? "助手采集能力不可用" : state.captureState === "error" ? "设备连接异常" : "这台设备 · 已连接，未采集"}</span></div><div className="live-top-actions"><Link className="live-balance" to={routes.billing}>积分与会员</Link><span>18:24</span><AccountMenu compact />{state.captureState === "capturing" ? <button className="button warning live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => setCapture("paused", "paused")}>暂停收音</button> : <button className="button primary live-session-control" disabled={pageLeaseStatus === "replaced" || (state.captureState !== "ready" && state.captureState !== "paused")} onClick={() => setCapture("capturing", "active")}>{state.captureState === "paused" ? "恢复收音" : "开始面试"}</button>}<button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束面试</button></div></header>
+  return <main className="live-page focused-live-page"><header className="live-top"><Link to={routes.app}><Logo /></Link><div><strong>{interviewTitle}</strong><span><i className={state.captureState === "capturing" ? "recording-dot" : "online-dot"} /> {pageLeaseStatus === "replaced" ? "已在其他页面继续" : state.captureState === "capturing" ? "这台设备 · 正在收音" : state.captureState === "paused" ? "收音已暂停" : state.captureState === "reconnecting" ? "设备正在重连" : state.captureState === "permission-required" ? "助手采集能力不可用" : state.captureState === "error" ? "设备连接异常" : "这台设备 · 已连接，未采集"}</span></div><div className="live-top-actions"><Link className="live-balance" to={routes.billing}>积分与会员</Link><span>18:24</span><AccountMenu compact />{state.captureState === "capturing" ? <button className="button warning live-session-control" disabled={pageLeaseStatus === "replaced" || captureControlPending !== null} onClick={() => void controlCapture("pause")}>{captureControlPending === "pause" ? "暂停中…" : "暂停收音"}</button> : <button className="button primary live-session-control" disabled={pageLeaseStatus === "replaced" || captureControlPending !== null || (state.captureState !== "ready" && state.captureState !== "paused")} onClick={() => state.captureState === "paused" ? void controlCapture("resume") : setCapture("capturing", "active")}>{captureControlPending === "resume" ? "恢复中…" : state.captureState === "paused" ? "恢复收音" : "开始面试"}</button>}<button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束面试</button></div></header>
     {idleStatus?.state === "warning" ? <div className="global-live-alert" role="status"><strong>本场面试即将因空闲自动结束</strong><span>连续 20 分钟没有音频、回答或截图活动会释放当前设备连接，历史记录仍会保留。</span><button className="button primary" disabled={continuingInterview} onClick={() => void continueIdleInterview()}>{continuingInterview ? "正在继续…" : "继续本场面试"}</button></div> : null}
     {pageLeaseStatus === "replaced" ? <div className="global-live-alert replaced-page-alert" role="status"><strong>本场面试已在其他页面继续</strong><span>当前页面已停止收音同步、实时订阅和回答请求；已显示内容仍可查看。关闭此页或返回面试首页即可。</span><Link className="button primary" to={routes.app}>返回面试首页</Link></div> : null}
     {state.captureState === "reconnecting" || state.captureState === "permission-required" || state.captureState === "error" ? <div className="global-live-alert" role="status"><strong>{state.captureState === "reconnecting" ? "设备正在重连" : state.captureState === "permission-required" ? "助手采集能力不可用" : "桌面设备连接异常"}</strong><span>{state.captureState === "reconnecting" ? "恢复前可能存在音频缺口，不会伪装为持续同步。" : state.captureState === "permission-required" ? "请在桌面助手中检查首次授权状态；网页不会申请麦克风或屏幕权限，手动输入仍可使用。" : "可以运行诊断，当前仍可使用手动问题和截图。"}</span><button onClick={() => setCapture("ready", "ready")}>{state.captureState === "permission-required" ? "关闭提示" : "重新诊断"}</button></div> : null}
     {notice ? <div className="global-live-alert" role="status"><strong>{notice}</strong><span>{billingNotice ? "当前任务未启动，请检查积分或会员权益。" : "当前回答没有成功启动，请根据上方原因重试。"}</span>{billingNotice ? <Link className="button primary" to={routes.billing}>前往积分与会员</Link> : null}</div> : null}
-    <div ref={workspaceRef} className={`live-grid focused-live-grid${pageLeaseStatus === "replaced" ? " live-grid-readonly" : ""}`} style={desktopLayout ? { gridTemplateColumns: `minmax(240px, ${view.splitRatio}fr) 12px minmax(300px, ${100 - view.splitRatio}fr)` } : undefined}><section className="conversation-column"><ConversationMonitor state={state} onConfirmQuestion={pageLeaseStatus === "replaced" ? dismissPending : confirmPending} onDismissQuestion={dismissPending} /><ManualQuestionComposer manualDraft={actionState.manualDraft} disabled={pageLeaseStatus === "replaced"} onChange={value => setActionState(current => ({ ...current, manualDraft: value, quickAnswerStatus: "idle", quickAnswerMessage: "" }))} /></section>{desktopLayout ? <WorkspaceDivider containerRef={workspaceRef} ratio={view.splitRatio} bounds={splitBounds} onChange={splitRatio => setView(current => ({ ...current, splitRatio }))} /> : null}<section className="answer-column"><AnswerWorkspace answers={state.questions} viewingAnswerId={view.viewingAnswerId} newAnswerAvailable={view.newAnswerAvailable} activeTask={state.activeAnswerTask} cancelling={cancellingAnswer} cancelError={cancelAnswerError} onStop={() => void stopAnswer()} onView={answerId => setView(current => ({ ...current, viewingAnswerId: answerId, newAnswerAvailable: answerId ? current.newAnswerAvailable : false }))} onRetry={updateQuestionStatus} /><AnswerActionBar manualDraft={actionState.manualDraft} latestInterviewerQuestion={latestInterviewerText} screenshotTask={actionState.screenshotTask} quickAnswerStatus={actionState.quickAnswerStatus ?? "idle"} quickAnswerMessage={actionState.quickAnswerMessage ?? ""} screenshotAnswerStatus={actionState.screenshotAnswerStatus ?? "idle"} disabled={pageLeaseStatus === "replaced"} onQuickAnswer={submitManual} onScreenshot={beginInstantScreenshot} /></section></div>{screenshot && pageLeaseStatus !== "replaced" ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="screenshot-dialog-title"><section className="sheet"><h2 id="screenshot-dialog-title">{screenshotStageTitle(screenshot)}</h2><p>{screenshotStageDetail(screenshot)}</p>{screenshot.stage === "failed" ? <div className="sheet-actions split-actions"><button className="button ghost full" onClick={dismissScreenshotFailure}>删除本次失败</button><button className="button primary full" onClick={beginInstantScreenshot}>重新截屏</button></div> : <button className="button primary full" onClick={cancelScreenshot}>取消</button>}</section></div> : null}
+    <div ref={workspaceRef} className={`live-grid focused-live-grid${pageLeaseStatus === "replaced" ? " live-grid-readonly" : ""}`} style={desktopLayout ? { gridTemplateColumns: `minmax(240px, ${view.splitRatio}fr) 12px minmax(300px, ${100 - view.splitRatio}fr)` } : undefined}><section className="conversation-column"><ConversationMonitor state={state} onConfirmQuestion={pageLeaseStatus === "replaced" ? dismissPending : confirmPending} onDismissQuestion={dismissPending} /><ManualQuestionComposer manualDraft={actionState.manualDraft} disabled={pageLeaseStatus === "replaced"} onChange={value => setActionState(current => ({ ...current, manualDraft: value, quickAnswerStatus: "idle", quickAnswerMessage: "" }))} /></section>{desktopLayout ? <WorkspaceDivider containerRef={workspaceRef} ratio={view.splitRatio} bounds={splitBounds} onChange={splitRatio => setView(current => ({ ...current, splitRatio }))} /> : null}<section className="answer-column"><AnswerWorkspace answers={state.questions} viewingAnswerId={view.viewingAnswerId} newAnswerAvailable={view.newAnswerAvailable} activeTask={state.activeAnswerTask} cancelling={cancellingAnswer} cancelError={cancelAnswerError} onStop={() => void stopAnswer()} onView={answerId => setView(current => ({ ...current, viewingAnswerId: answerId, newAnswerAvailable: answerId ? current.newAnswerAvailable : false }))} onRetry={updateQuestionStatus} /><AnswerActionBar manualDraft={actionState.manualDraft} latestInterviewerQuestion={latestInterviewerText} screenshotTask={actionState.screenshotTask} quickAnswerStatus={actionState.quickAnswerStatus ?? "idle"} quickAnswerMessage={actionState.quickAnswerMessage ?? ""} screenshotAnswerStatus={actionState.screenshotAnswerStatus ?? "idle"} disabled={pageLeaseStatus === "replaced"} onQuickAnswer={submitManual} onScreenshot={beginInstantScreenshot} /></section></div>{screenshot && pageLeaseStatus !== "replaced" ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="screenshot-dialog-title"><section className="sheet"><h2 id="screenshot-dialog-title">{screenshotStageTitle(screenshot)}</h2>{screenshotStageDetail(screenshot) ? <p>{screenshotStageDetail(screenshot)}</p> : null}{screenshot.stage === "failed" ? <div className="sheet-actions split-actions"><button className="button ghost full" onClick={dismissScreenshotFailure}>删除本次失败</button><button className="button primary full" onClick={beginInstantScreenshot}>重新截屏</button></div> : <button className="button primary full" onClick={() => void cancelScreenshot()}>取消</button>}</section></div> : null}
     <footer className="session-bar"><div><i className={state.captureState === "capturing" ? "recording-dot" : "online-dot"} /><strong>{state.captureState === "capturing" ? "面试进行中" : state.captureState === "paused" ? "面试已暂停" : "等待开始面试"}</strong></div><div><small>{state.captureState === "capturing" ? "正在持续接收面试官与我的实时对话" : "开始面试后会在头部右侧管理本场状态"}</small></div></footer>
   </main>;
 }
@@ -1383,6 +1414,7 @@ function ReviewPage() {
   const [deletingInterview, setDeletingInterview] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(true);
   const [reviewLoadError, setReviewLoadError] = useState("");
+  const [wordExportState, setWordExportState] = useState<"idle" | "generating" | "success" | "error">("idle");
   const interview = state.interviews.find(item => item.id === id);
   useEffect(() => {
     const controller = new AbortController();
@@ -1412,17 +1444,23 @@ function ReviewPage() {
       .finally(() => setReviewLoading(false));
     return () => controller.abort();
   }, [id, setState]);
-  const downloadReview = () => {
+  const downloadReview = async () => {
+    if (wordExportState === "generating") return;
     const title = state.review.title || interview?.title || "面试复盘";
-    downloadInterviewReviewMarkdown(
-      interviewReviewFilename(title, state.review.endedAtMs),
-      formatInterviewReviewMarkdown(state.review, state.questions, interview),
-    );
+    setWordExportState("generating");
+    try {
+      const { createInterviewReviewWordBlob, downloadInterviewReviewWord, interviewReviewWordFilename } = await import("./interview-review-word-export");
+      const blob = await createInterviewReviewWordBlob(state.review, state.questions, interview);
+      downloadInterviewReviewWord(interviewReviewWordFilename(title, state.review.endedAtMs), blob);
+      setWordExportState("success");
+    } catch {
+      setWordExportState("error");
+    }
   };
   const deleteShot = async (shotId: string) => { setDeleteError(""); setDeletingShotId(shotId); try { await runAdapterOperation(signal => interviewAppAdapter.deleteScreenshot(shotId, signal)); setState(current => ({ ...current, review: { ...current.review, screenshots: current.review.screenshots.filter(item => item.id !== shotId) } })); } catch { setDeleteError("截图删除失败，记录仍然保留，请重试。"); } finally { setDeletingShotId(null); } };
   const deleteInterview = async () => { if (!window.confirm("删除整场面试及其问题、回答和会话附件？可复用简历与知识库仍会保留。")) return; setDeleteError(""); setDeletingInterview(true); try { await runAdapterOperation(signal => interviewAppAdapter.deleteInterview(id, signal)); setState(current => ({ ...current, interviews: current.interviews.filter(item => item.id !== id), questions: [] })); navigate(routes.app); } catch { setDeleteError("整场面试删除失败，现有记录未改变，请重试。"); } finally { setDeletingInterview(false); } };
-  return <main className="app-page"><Link className="back-link" to={routes.app}>← 返回面试首页</Link><PageHeader eyebrow="INTERVIEW REVIEW" title="本场面试复盘" detail="整理语音转写与 AI 回答建议，不对你的能力作自动评分。" action={<div className="review-header-actions"><button type="button" className="button primary" onClick={downloadReview} disabled={reviewLoading}>下载复盘</button><div className="review-meta"><strong>{state.review.duration}</strong><span>{state.review.transcripts.length} 条对话 · {state.questions.length} 个问题</span></div></div>} />
-    <p className="review-download-note">下载文件包含本场面试对话，仅在你的浏览器本地生成，请妥善保管。</p>{reviewLoadError ? <div className="inline-error" role="status">{reviewLoadError}</div> : null}
+  return <main className="app-page"><Link className="back-link" to={routes.app}>← 返回面试首页</Link><PageHeader eyebrow="INTERVIEW REVIEW" title="本场面试复盘" detail="整理语音转写与 AI 回答建议，不对你的能力作自动评分。" action={<div className="review-header-actions"><button type="button" className="button primary" onClick={() => void downloadReview()} disabled={reviewLoading || wordExportState === "generating"}>{wordExportState === "generating" ? "正在生成 Word…" : "下载 Word"}</button><div className="review-meta"><strong>{state.review.duration}</strong><span>{state.review.transcripts.length} 条对话 · {state.questions.length} 个问题</span></div></div>} />
+    <p className={`review-download-note${wordExportState === "error" ? " error-text" : ""}`} role={wordExportState === "error" ? "alert" : undefined}>{wordExportState === "error" ? "Word 生成失败，请重试。当前复盘内容不会丢失。" : wordExportState === "success" ? "Word 已生成并开始下载，请妥善保管本场面试对话。" : "Word 文件包含本场面试对话，仅在你的浏览器本地生成，请妥善保管。"}</p>{reviewLoadError ? <div className="inline-error" role="status">{reviewLoadError}</div> : null}
     <div className="review-grid"><div className="review-main"><section className="panel"><div className="panel-heading"><h2>真实对话记录</h2><span>语音转写</span></div>{reviewLoading ? <p className="review-loading">正在加载本场对话…</p> : state.review.transcripts.length ? <div className="review-transcript-list">{state.review.transcripts.map(item => <article key={item.id} className={`review-transcript ${item.role}`}><header><strong>{item.speakerLabel}</strong><time dateTime={new Date(item.occurredAtMs).toISOString()}>{new Date(item.occurredAtMs).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}</time></header><p>{item.text}</p></article>)}</div> : <EmptyState title="没有可用的对话转写" detail="旧场次或未成功收音的场次可能没有持久语音转写，已有问题与 AI 建议仍可查看。" />}</section><section className="panel"><div className="panel-heading"><h2>问题与 AI 回答建议</h2><span>生成建议，不代表实际作答</span></div>{state.questions.length ? <div className="review-timeline">{[...state.questions].reverse().map((question, index) => <article key={question.id}><i>{index + 1}</i><div><small>{question.askedAt} · {question.input === "screenshot" ? "截图题" : question.input === "manual" ? "手动输入" : "音频转写"}</small><h3>{question.text}</h3><p>{question.advice.outline.join("；")}</p><div className="source-pills"><small>资料 v{question.advice.provenance.selectionRevision}</small>{question.advice.provenance.usedSources.map(source => <span key={source.sourceId}>{source.displayName}</span>)}</div></div></article>)}</div> : <EmptyState title="没有可复盘的问题" detail="本场面试没有已确认的问题记录。" />}</section></div>
       <aside><section className="panel review-summary"><div className="panel-heading"><h2>AI 整理摘要</h2><span className={reviewStatus}>{reviewStatus === "complete" ? "已生成" : reviewStatus === "failed" ? "生成失败" : "处理中"}</span></div>{reviewStatus === "complete" ? <><p>{state.review.summary}</p><div className="evidence-box"><span>说明</span><p>这是基于本场记录的生成建议，与原始问题记录分开保存。</p></div></> : reviewStatus === "failed" ? <div className="inline-error">摘要生成失败，原始记录仍可查看。<button onClick={() => setReviewStatus("complete")}>重试</button></div> : <p>正在整理本场已确认问题…</p>}</section><section className="panel data-panel"><div className="panel-heading"><h2>数据与附件</h2><span>可删除</span></div>{deleteError ? <div className="inline-error" role="alert">{deleteError}</div> : null}<ul className="compact-list"><li><span>简历与知识库</span><b>作为可复用资料保留</b></li><li><span>对话转写</span><b>随会话保存并删除</b></li><li><span>问题与 AI 建议</span><b>随会话保存</b></li>{state.review.screenshots.map(shot => <li key={shot.id}><span>{shot.name}</span><button disabled={deletingShotId === shot.id} onClick={() => void deleteShot(shot.id)}>{deletingShotId === shot.id ? "删除中…" : "删除截图"}</button></li>)}</ul><button className="button danger full" disabled={deletingInterview} onClick={() => void deleteInterview()}>{deletingInterview ? "正在删除…" : "删除整场面试"}</button></section></aside></div>
   </main>;

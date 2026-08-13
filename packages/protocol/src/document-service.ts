@@ -64,6 +64,7 @@ export interface CompleteDocumentUploadRequest {
   readonly etag?: string;
   readonly contentSha256?: string;
   readonly knowledgeCollectionId?: string;
+  readonly confirmIndexCharge?: boolean;
 }
 
 export interface DocumentRecord {

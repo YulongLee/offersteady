@@ -13,6 +13,14 @@
 - **WHEN** 用户点击“新建面试”但服务端创建失败
 - **THEN** 系统显示创建失败信息且最近面试列表不出现伪造的新会话
 
+#### Scenario: New interview reuses the latest interview details
+- **WHEN** 当前账号已有历史面试且用户打开新建面试页
+- **THEN** 系统使用最近一场面试的名称、目标岗位和公司作为可编辑默认值
+
+#### Scenario: First interview starts with an empty form
+- **WHEN** 当前账号没有任何历史面试且用户打开新建面试页
+- **THEN** 面试名称、目标岗位和公司保持为空，并要求用户自行填写必填项
+
 ### Requirement: Confirm the material list without a redundant data-purpose checkbox
 当用户已确认本场资料并点击“开始面试”时，系统 MUST 先完成后端会话启动，再进入实时面试页。若当前模式为 Web 手动输入模式，开始面试 MUST NOT 再要求额外令牌、发布凭证或等价的前置门槛。
 

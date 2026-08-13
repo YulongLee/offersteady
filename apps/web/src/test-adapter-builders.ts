@@ -27,7 +27,11 @@ export const buildMaterialCompletion = (
     updatedAtMs: Date.now(),
     summary: "文件已上传，等待服务端处理。",
   },
-  ...(collectionId ? { collectionId, documentVersionId: sourceId(kind, displayName) } : {}),
+  ...(collectionId ? {
+    collectionId,
+    documentVersionId: sourceId(kind, displayName),
+    indexBilling: { status: "reserved" as const, settlesAfter: "indexed" as const },
+  } : {}),
 });
 
 export const mockSuccessfulMaterialUploadAdapter = () => {
@@ -41,6 +45,14 @@ export const mockSuccessfulMaterialUploadAdapter = () => {
       updatedAtMs: now,
     } satisfies CreatedKnowledgeCollection;
   });
+  vi.spyOn(materialUploadAdapter, "renameKnowledgeCollection").mockImplementation(async (userId, collectionId, name) => ({
+    collectionId,
+    ownerUserId: userId,
+    name,
+    createdAtMs: Date.now() - 1,
+    updatedAtMs: Date.now(),
+  }));
+  vi.spyOn(materialUploadAdapter, "deleteKnowledgeCollection").mockResolvedValue();
   const assertSupported = (file: File) => {
     if (!detectMaterialUploadFormat(file.name)) throw new AppError("validation", `当前仅支持 ${materialUploadFormatLabel}`);
   };

@@ -35,6 +35,7 @@ describe("OfferSteady web application", () => {
     }));
     vi.spyOn(interviewAppAdapter, "getActiveInterviewConflict").mockImplementation(async id => ({ currentInterviewId: id, activeInterview: null }));
     vi.spyOn(interviewAppAdapter, "supersedeActiveInterview").mockResolvedValue([]);
+    vi.spyOn(interviewAppAdapter, "controlInterviewCapture").mockImplementation(async (_id, action) => action === "pause" ? "paused" : "capturing");
     vi.spyOn(interviewAppAdapter, "getDesktopDeviceBinding").mockResolvedValue(null);
     vi.spyOn(interviewAppAdapter, "getLastDesktopDevice").mockResolvedValue({
       deviceId: "fixture-last-device",
@@ -186,8 +187,12 @@ describe("OfferSteady web application", () => {
       updatedAt: "刚刚",
       readiness: 0,
     });
-    await login();
-    fireEvent.click(screen.getByRole("link", { name: /新建面试/ }));
+    const firstUseState = clonedState();
+    firstUseState.interviews = [];
+    openAtWithState("/app/interviews/new", firstUseState, true);
+    expect(screen.getByLabelText("面试名称")).toHaveValue("");
+    expect(screen.getByLabelText("目标岗位")).toHaveValue("");
+    expect(screen.getByLabelText("公司（可选）")).toHaveValue("");
     fireEvent.click(screen.getByRole("button", { name: /保存并准备/ }));
     expect(screen.getByRole("alert")).toHaveTextContent("请填写面试名称和目标岗位");
     fireEvent.change(screen.getByLabelText("面试名称"), { target: { value: "前端架构师终面" } });
@@ -195,7 +200,43 @@ describe("OfferSteady web application", () => {
     fireEvent.click(screen.getByRole("button", { name: /保存并准备/ }));
     expect(await screen.findByRole("heading", { name: "前端架构师终面" })).toBeInTheDocument();
     expect(screen.getByText("输入机器码连接本场")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "一键连接上次设备" })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "一键连接上次设备" }));
+    await waitFor(() => expect(interviewAppAdapter.bindDesktopDevice).toHaveBeenCalledWith({
+      interviewId: "draft",
+      reuseLastDevice: true,
+    }, expect.any(AbortSignal)));
+    expect(screen.getByText("本场已连接：面试稳伴随程序 · Mac")).toBeInTheDocument();
+  });
+
+  it("prefills a new interview from the current account latest interview and keeps it editable", async () => {
+    const createDraft = vi.spyOn(interviewAppAdapter, "createDraft").mockImplementation(async input => ({
+      id: "prefilled-draft",
+      title: input.title,
+      role: input.role,
+      ...(input.company ? { company: input.company } : {}),
+      status: "preparing",
+      updatedAt: "刚刚",
+      readiness: 0,
+    }));
+    const state = clonedState();
+    state.interviews = [
+      { id: "latest", title: "算法工程师二面", role: "算法工程师", company: "示例智能", status: "ended", updatedAt: "刚刚", readiness: 100 },
+      { id: "older", title: "前端工程师一面", role: "前端工程师", company: "示例科技", status: "ended", updatedAt: "昨天", readiness: 100 },
+    ];
+    openAtWithState("/app/interviews/new", state, true);
+
+    expect(screen.getByLabelText("面试名称")).toHaveValue("算法工程师二面");
+    expect(screen.getByLabelText("目标岗位")).toHaveValue("算法工程师");
+    expect(screen.getByLabelText("公司（可选）")).toHaveValue("示例智能");
+    fireEvent.change(screen.getByLabelText("面试名称"), { target: { value: "算法工程师终面" } });
+    fireEvent.change(screen.getByLabelText("公司（可选）"), { target: { value: "新公司" } });
+    fireEvent.click(screen.getByRole("button", { name: /保存并准备/ }));
+
+    await waitFor(() => expect(createDraft).toHaveBeenCalledWith({
+      title: "算法工程师终面",
+      role: "算法工程师",
+      company: "新公司",
+    }, expect.any(AbortSignal)));
   });
 
   it("shows the backend reason when creating an interview draft fails", async () => {
@@ -331,13 +372,15 @@ describe("OfferSteady web application", () => {
 
   it("pauses and ends a session explicitly", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
+    const captureControl = vi.mocked(interviewAppAdapter.controlInterviewCapture);
     await login();
     window.history.pushState({}, "", "/app/interviews/demo/live");
     window.dispatchEvent(new PopStateEvent("popstate"));
     fireEvent.click(await screen.findByRole("button", { name: "开始面试" }));
     expect(screen.getByText("这台设备 · 正在收音")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "暂停收音" }));
-    expect(screen.getByText("面试已暂停")).toBeInTheDocument();
+    expect(await screen.findByText("面试已暂停")).toBeInTheDocument();
+    expect(captureControl).toHaveBeenCalledWith("demo", "pause", expect.any(AbortSignal));
     fireEvent.click(screen.getByRole("button", { name: "结束面试" }));
     expect(await screen.findByRole("heading", { name: "本场面试复盘" })).toBeInTheDocument();
   });
@@ -363,7 +406,7 @@ describe("OfferSteady web application", () => {
     window.history.pushState({}, "", "/app/interviews/review/review");
     window.dispatchEvent(new PopStateEvent("popstate"));
 
-    const download = await screen.findByRole("button", { name: "下载复盘" });
+    const download = await screen.findByRole("button", { name: "下载 Word" });
     await waitFor(() => expect(download).toBeEnabled());
     expect(screen.getByText(/仅在你的浏览器本地生成/)).toBeInTheDocument();
     const click = vi.fn();
@@ -374,8 +417,9 @@ describe("OfferSteady web application", () => {
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
     fireEvent.click(download);
 
-    expect(URL.createObjectURL).toHaveBeenCalledOnce();
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledOnce());
     expect(click).toHaveBeenCalledOnce();
+    expect(screen.getByText(/Word 已生成并开始下载/)).toBeInTheDocument();
   });
 
   it("offers explicit macOS architectures and a truthful Windows preview", async () => {
@@ -419,6 +463,6 @@ describe("OfferSteady web application", () => {
     expect(screen.queryByRole("button", { name: /资料/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "开始面试" }));
     fireEvent.click(screen.getByRole("button", { name: "暂停收音" }));
-    expect(screen.getByText("面试已暂停")).toBeInTheDocument();
+    expect(await screen.findByText("面试已暂停")).toBeInTheDocument();
   });
 });

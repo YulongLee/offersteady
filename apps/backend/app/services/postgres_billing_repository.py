@@ -489,6 +489,33 @@ class PostgresBillingRepository:
             existing = cursor.fetchone()
             if existing:
                 return self._reservation(existing)
+            cursor.execute(
+                """
+                SELECT * FROM billing_time_pass_entitlements
+                WHERE user_id = %s AND starts_at_ms <= %s AND ends_at_ms > %s
+                  AND knowledge_allowance_granted - knowledge_allowance_used - knowledge_allowance_locked > 0
+                ORDER BY ends_at_ms ASC LIMIT 1 FOR UPDATE
+                """,
+                (user_id, created_at_ms, created_at_ms),
+            )
+            entitlement = cursor.fetchone()
+            if entitlement is not None:
+                cursor.execute(
+                    "UPDATE billing_time_pass_entitlements SET knowledge_allowance_locked = knowledge_allowance_locked + 1 WHERE entitlement_id = %s",
+                    (entitlement["entitlement_id"],),
+                )
+                cursor.execute(
+                    """
+                    INSERT INTO billing_index_reservations (
+                      reservation_id, quote_id, user_id, document_version_id, points_reserved, status,
+                      created_at_ms, billing_source, entitlement_id, allowance_reserved
+                    ) VALUES (%s,%s,%s,%s,0,'reserved',%s,'pass_allowance',%s,1) RETURNING *
+                    """,
+                    (f"index-reservation-{uuid4().hex}", quote_id, user_id, quote["document_version_id"], created_at_ms, entitlement["entitlement_id"]),
+                )
+                result = self._reservation(cursor.fetchone())
+                connection.commit()
+                return result
             cursor.execute("SELECT COALESCE(SUM(points), 0) AS balance FROM points_redemption_ledger WHERE user_id = %s", (user_id,))
             balance = int(cursor.fetchone()["balance"])
             cursor.execute(
@@ -507,6 +534,7 @@ class PostgresBillingRepository:
                     "user_id": user_id, "document_version_id": str(quote["document_version_id"]),
                     "points_reserved": int(quote["points_required"]), "status": "insufficient_balance",
                     "created_at_ms": created_at_ms, "settled_at_ms": None, "released_at_ms": None,
+                    "billing_source": "points", "entitlement_id": None, "allowance_reserved": 0,
                 }
             cursor.execute(
                 """
@@ -531,7 +559,13 @@ class PostgresBillingRepository:
                 return None
             if row["status"] != "reserved":
                 return self._reservation(row)
-            cursor.execute(
+            if row["billing_source"] == "pass_allowance" and row["entitlement_id"] is not None:
+                cursor.execute(
+                    "UPDATE billing_time_pass_entitlements SET knowledge_allowance_locked = GREATEST(0, knowledge_allowance_locked - %s), knowledge_allowance_used = knowledge_allowance_used + %s WHERE entitlement_id = %s",
+                    (row["allowance_reserved"], row["allowance_reserved"], row["entitlement_id"]),
+                )
+            elif int(row["points_reserved"]) > 0:
+                cursor.execute(
                 """
                 INSERT INTO points_redemption_ledger (
                   ledger_entry_id, user_id, kind, points, created_at_ms, reference_id, description
@@ -542,7 +576,7 @@ class PostgresBillingRepository:
                     f"ledger-{uuid4().hex}", row["user_id"], -int(row["points_reserved"]),
                     settled_at_ms, reference_id, "知识资料索引结算",
                 ),
-            )
+                )
             cursor.execute(
                 "UPDATE billing_index_reservations SET status = 'settled', settled_at_ms = %s WHERE quote_id = %s RETURNING *",
                 (settled_at_ms, quote_id),
@@ -559,6 +593,11 @@ class PostgresBillingRepository:
                 return None
             if row["status"] != "reserved":
                 return self._reservation(row)
+            if row["billing_source"] == "pass_allowance" and row["entitlement_id"] is not None:
+                cursor.execute(
+                    "UPDATE billing_time_pass_entitlements SET knowledge_allowance_locked = GREATEST(0, knowledge_allowance_locked - %s) WHERE entitlement_id = %s",
+                    (row["allowance_reserved"], row["entitlement_id"]),
+                )
             cursor.execute(
                 "UPDATE billing_index_reservations SET status = 'released', released_at_ms = %s WHERE quote_id = %s RETURNING *",
                 (released_at_ms, quote_id),
@@ -566,6 +605,15 @@ class PostgresBillingRepository:
             result = self._reservation(cursor.fetchone())
             connection.commit()
             return result
+
+    def reserved_index_quote_for_document(self, *, user_id: str, document_version_id: str) -> dict[str, object] | None:
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                "SELECT * FROM billing_index_reservations WHERE user_id = %s AND document_version_id = %s ORDER BY created_at_ms DESC, reservation_id DESC LIMIT 1",
+                (user_id, document_version_id),
+            )
+            row = cursor.fetchone()
+            return self._reservation(row) if row is not None else None
 
     def reserve_usage(self, *, usage: Mapping[str, object], created_at_ms: int) -> dict[str, object]:
         user_id = str(usage["user_id"])
@@ -853,6 +901,9 @@ class PostgresBillingRepository:
             "created_at_ms": int(row["created_at_ms"]),
             "settled_at_ms": int(row["settled_at_ms"]) if row["settled_at_ms"] is not None else None,
             "released_at_ms": int(row["released_at_ms"]) if row["released_at_ms"] is not None else None,
+            "billing_source": str(row.get("billing_source") or "points"),
+            "entitlement_id": str(row["entitlement_id"]) if row.get("entitlement_id") is not None else None,
+            "allowance_reserved": int(row.get("allowance_reserved") or 0),
         }
 
     @staticmethod
@@ -897,6 +948,7 @@ class PostgresBillingRepository:
             Path(REPO_ROOT / "apps/backend/migrations/versions/0022_referral_ledger_constraint_repair.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0023_stale_usage_reservation_recovery.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0025_referral_ledger_constraint_repair_v2.sql"),
+            Path(REPO_ROOT / "apps/backend/migrations/versions/0027_knowledge_index_billing_sources.sql"),
         )
         with self._connect() as connection, connection.cursor() as cursor:
             apply_sql_migrations(cursor, migrations)

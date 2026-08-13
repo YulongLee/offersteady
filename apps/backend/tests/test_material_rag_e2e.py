@@ -5,6 +5,7 @@ from time import sleep, time
 from fastapi.testclient import TestClient
 
 from app.main import create_app
+from app.deps import billing_service
 
 
 client = TestClient(create_app())
@@ -20,6 +21,7 @@ def unwrap(response):
 
 def test_synthetic_material_upload_index_session_rag_and_delete_exclusion() -> None:
     user_id = "synthetic-material-e2e-user"
+    balance_before = billing_service().state_for_user(user_id=user_id).balance
     collection = unwrap(client.post("/api/v1/knowledge/collections", json={
         "userId": user_id,
         "name": "合成面试资料库",
@@ -38,6 +40,7 @@ def test_synthetic_material_upload_index_session_rag_and_delete_exclusion() -> N
         "sizeBytes": 2048,
         "etag": "synthetic-etag",
         "contentSha256": "c" * 64,
+        "confirmIndexCharge": True,
     }))
     document_id = completed["source"]["sourceId"]
 
@@ -51,6 +54,26 @@ def test_synthetic_material_upload_index_session_rag_and_delete_exclusion() -> N
         sleep(0.1)
     assert latest is not None
     assert latest["documentVersionId"]
+    billing_after_index = billing_service().state_for_user(user_id=user_id)
+    assert billing_after_index.balance == balance_before - 20
+    index_entries = [item for item in billing_after_index.ledger if item.kind == "knowledge_index_settlement"]
+    assert len(index_entries) == 1
+    assert index_entries[0].points == -20
+
+    repeated = unwrap(client.post(f"/api/v1/knowledge/collections/{collection['collectionId']}/uploads/complete", json={
+        "userId": user_id,
+        "intentId": intent["intentId"],
+        "objectKey": intent["objectKey"],
+        "contentType": "text/plain",
+        "sizeBytes": 2048,
+        "etag": "synthetic-etag",
+        "contentSha256": "c" * 64,
+        "confirmIndexCharge": True,
+    }))
+    assert repeated["documentVersionId"] == completed["documentVersionId"]
+    billing_after_replay = billing_service().state_for_user(user_id=user_id)
+    assert billing_after_replay.balance == balance_before - 20
+    assert len([item for item in billing_after_replay.ledger if item.kind == "knowledge_index_settlement"]) == 1
 
     processing = unwrap(client.get(f"/api/v1/document-processing/documents/{document_id}", params={"userId": user_id}))
     assert processing["latestTask"]["currentStage"] == "COMPLETED"
@@ -94,3 +117,73 @@ def test_synthetic_material_upload_index_session_rag_and_delete_exclusion() -> N
         "stream": False,
     }))
     assert post_delete_answer["retrieval"]["finalCount"] == 0
+
+
+def test_knowledge_collection_rename_delete_and_owner_isolation() -> None:
+    stamp = str(int(time() * 1000))
+    owner_auth = unwrap(client.post("/api/v1/auth/register", json={
+        "loginId": f"synthetic-collection-owner-{stamp}",
+        "password": "SyntheticCollection123@",
+        "displayName": "Synthetic owner",
+        "clientLabel": "collection-lifecycle-test",
+    }))
+    other_auth = unwrap(client.post("/api/v1/auth/register", json={
+        "loginId": f"synthetic-collection-other-{stamp}",
+        "password": "SyntheticCollection123@",
+        "displayName": "Synthetic other",
+        "clientLabel": "collection-lifecycle-test",
+    }))
+    owner = owner_auth["user"]["userId"]
+    other = other_auth["user"]["userId"]
+    owner_headers = {"Authorization": f"Bearer {owner_auth['tokens']['accessToken']}"}
+    other_headers = {"Authorization": f"Bearer {other_auth['tokens']['accessToken']}"}
+    collection = unwrap(client.post("/api/v1/knowledge/collections", json={
+        "userId": owner,
+        "name": "旧资料库名称",
+    }, headers=owner_headers))
+    collection_id = collection["collectionId"]
+
+    renamed = unwrap(client.patch(f"/api/v1/knowledge/collections/{collection_id}", json={
+        "userId": owner,
+        "name": "新资料库名称",
+    }, headers=owner_headers))
+    assert renamed["name"] == "新资料库名称"
+
+    owner_state = unwrap(client.get("/api/v1/web/state", headers=owner_headers))
+    assert any(item["id"] == collection_id and item["name"] == "新资料库名称" for item in owner_state["knowledgeCollections"])
+
+    intent = unwrap(client.post(f"/api/v1/knowledge/collections/{collection_id}/upload-intents", json={
+        "userId": owner,
+        "filename": "collection-delete-regression.txt",
+        "contentType": "text/plain",
+        "sizeBytes": 128,
+    }, headers=owner_headers))
+    completed = unwrap(client.post(f"/api/v1/knowledge/collections/{collection_id}/uploads/complete", json={
+        "userId": owner,
+        "intentId": intent["intentId"],
+        "objectKey": intent["objectKey"],
+        "contentType": "text/plain",
+        "sizeBytes": 128,
+        "etag": "synthetic-collection-delete-etag",
+        "contentSha256": "d" * 64,
+        "confirmIndexCharge": True,
+    }, headers=owner_headers))
+    document_id = completed["source"]["sourceId"]
+
+    forbidden_rename = client.patch(f"/api/v1/knowledge/collections/{collection_id}", json={
+        "userId": other,
+        "name": "越权重命名",
+    }, headers=other_headers)
+    assert forbidden_rename.status_code == 403
+    forbidden_delete = client.delete(f"/api/v1/knowledge/collections/{collection_id}", params={"userId": other}, headers=other_headers)
+    assert forbidden_delete.status_code == 403
+
+    deleted = unwrap(client.delete(f"/api/v1/knowledge/collections/{collection_id}", params={"userId": owner}, headers=owner_headers))
+    assert deleted["collectionId"] == collection_id
+    state_after_delete = unwrap(client.get("/api/v1/web/state", headers=owner_headers))
+    assert all(item["id"] != collection_id for item in state_after_delete["knowledgeCollections"])
+    deleted_documents = unwrap(client.get("/api/v1/documents", params={"userId": owner, "includeDeleted": True}, headers=owner_headers))
+    assert next(item for item in deleted_documents if item["documentId"] == document_id)["status"] == "deleted"
+
+    missing = client.delete(f"/api/v1/knowledge/collections/{collection_id}", params={"userId": owner}, headers=owner_headers)
+    assert missing.status_code == 404

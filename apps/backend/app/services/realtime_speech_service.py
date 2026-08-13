@@ -711,6 +711,7 @@ class RealtimeSpeechService:
                 "permissionStatus": permission_status,
                 "sessionConnection": "connected",
                 "sessionStatus": session_status,
+                "captureState": self.capture_control_state(session_id=binding.session_id) if session_status == "live" else "ready",
                 "message": "网页端已绑定本机。",
                 "binding": self.desktop_binding_response(binding).model_dump(by_alias=True),
             }
@@ -738,6 +739,34 @@ class RealtimeSpeechService:
             "sessionConnection": "disconnected",
             "message": "后端尚未登记这台电脑，请保持伴随程序打开。",
         }
+
+    def capture_control_state(self, *, session_id: str) -> str:
+        latest = next(
+            (
+                event for event in reversed(self.repository.list_events_for_session(session_id=session_id))
+                if event.kind == "capture-control"
+            ),
+            None,
+        )
+        state = latest.payload.get("captureState") if latest is not None else None
+        return "paused" if state == "paused" else "capturing"
+
+    def control_capture(self, *, user_id: str, session_id: str, action: str) -> dict[str, object]:
+        session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        if session.status != "live":
+            raise DomainRequestError("realtime-speech", "capture-control", "只有进行中的面试可以暂停或恢复收音。", 409, "session_not_live")
+        if action not in {"pause", "resume"}:
+            raise DomainRequestError("realtime-speech", "capture-control", "不支持的收音控制操作。", 400, "capture_control_invalid")
+        capture_state = "paused" if action == "pause" else "capturing"
+        if self.capture_control_state(session_id=session_id) != capture_state:
+            self._save_event(
+                session_id=session_id,
+                owner_user_id=user_id,
+                kind="capture-control",
+                payload={"action": action, "captureState": capture_state},
+            )
+        self.session_service.touch_activity(user_id=user_id, session_id=session_id, force=True)
+        return {"sessionId": session_id, "captureState": capture_state}
 
     def get_desktop_active_connection(self, *, device_id: str, manual_code: str) -> dict[str, object]:
         status = self.get_desktop_pairing_status(manual_code=manual_code, device_id=device_id)
@@ -852,6 +881,8 @@ class RealtimeSpeechService:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         if session.status != "live":
             raise DomainRequestError("realtime-speech", "create-publisher", "只有进行中的面试会话才能创建实时语音发布者。", 400)
+        if self.capture_control_state(session_id=session_id) == "paused":
+            raise DomainRequestError("realtime-speech", "create-publisher", "当前面试已暂停收音，请先在网页端恢复收音。", 409, "capture_paused")
         now_ms = _now_ms()
         safe_client_name = client_name.strip()
         for previous in self.repository.list_publishers_for_session(session_id=session_id):
@@ -1126,7 +1157,9 @@ class RealtimeSpeechService:
         audio_base64: str,
     ) -> dict[str, object]:
         publisher = self._require_publisher_token(token)
-        self.session_service.get_session(user_id=publisher.owner_user_id, session_id=publisher.session_id)
+        session = self.session_service.get_session(user_id=publisher.owner_user_id, session_id=publisher.session_id)
+        if session.status != "live" or self.capture_control_state(session_id=publisher.session_id) == "paused":
+            return {"early_events": []}
         ingest_received_at_ms = _now_ms()
         if source_kind == "mixed":
             degraded = self.repository.save_publisher(replace(publisher, status="degraded"))
@@ -1207,6 +1240,9 @@ class RealtimeSpeechService:
         early_events = prepared.get("early_events")
         if isinstance(early_events, list):
             return early_events
+        publisher_for_control = prepared.get("publisher")
+        if isinstance(publisher_for_control, RealtimePublisherRecord) and self.capture_control_state(session_id=publisher_for_control.session_id) == "paused":
+            return []
         publisher = prepared["publisher"]
         frame = prepared["frame"]
         pending_receipt = prepared["pending_receipt"]
@@ -1415,6 +1451,7 @@ class RealtimeSpeechService:
 
     def get_runtime(self, *, user_id: str, session_id: str) -> RealtimeSessionRuntimeResponse:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        capture_state = self.capture_control_state(session_id=session_id) if session.status == "live" else "ready"
         binding = self.repository.get_session_desktop_binding(user_id=user_id, session_id=session_id)
         device = self.repository.get_desktop_device_by_code(binding.manual_code) if binding is not None else None
         publishers = [item for item in self.repository.list_publishers_for_session(session_id=session_id) if item.owner_user_id == user_id]
@@ -1441,6 +1478,8 @@ class RealtimeSpeechService:
             stage = "registered"
         elif session.status != "live":
             stage = "bound"
+        elif capture_state == "paused":
+            stage = "paused"
         elif any(item.status in {"transcribing"} for item in publishers):
             stage = "transcribing"
         elif transcripts:
@@ -1490,6 +1529,8 @@ class RealtimeSpeechService:
             last_error_code=last_error_code,
             evidence=evidence,
         )
+        if capture_state == "paused":
+            anomaly_reasons, dominant_bottleneck = [], None
         return RealtimeSessionRuntimeResponse(
             sessionId=session_id,
             sessionStatus=session.status,
@@ -1498,6 +1539,7 @@ class RealtimeSpeechService:
             deviceRegistered=device is not None,
             machineCodeBound=binding is not None,
             sessionLive=session.status == "live",
+            captureState=capture_state,
             manualCode=binding.manual_code if binding else None,
             deviceId=binding.device_id if binding else None,
             displayName=binding.display_name if binding else None,

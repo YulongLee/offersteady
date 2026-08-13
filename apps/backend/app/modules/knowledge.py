@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 
 from app.core.logging import utc_now_iso
 from app.core.responses import success_response
 from app.deps import document_service, optional_authenticated_context, resolve_owned_user_id
 from app.ports.authentication import AuthenticatedRequestContext
 from app.schemas.foundation import ApiEnvelope, ModuleDescriptor
-from app.schemas.material_upload import CompleteUploadRequest, CreateKnowledgeCollectionRequest, CreatedKnowledgeCollectionResponse, MaterialUploadCompletionResponse, UploadIntentRequest, UploadIntentResponse
+from app.schemas.material_upload import CompleteUploadRequest, CreateKnowledgeCollectionRequest, CreatedKnowledgeCollectionResponse, MaterialUploadCompletionResponse, RenameKnowledgeCollectionRequest, UploadIntentRequest, UploadIntentResponse
 from app.services.document_service import DocumentService
 
 
@@ -41,6 +41,38 @@ async def create_collection(
     return success_response(
         request=request_context,
         data=service.create_knowledge_collection(user_id=user_id, name=request.name),
+        timestamp=utc_now_iso(),
+    )
+
+
+@router.patch("/collections/{collection_id}", response_model=ApiEnvelope[CreatedKnowledgeCollectionResponse])
+async def rename_collection(
+    collection_id: str,
+    request_context: Request,
+    request: RenameKnowledgeCollectionRequest,
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: DocumentService = Depends(document_service),
+) -> ApiEnvelope[CreatedKnowledgeCollectionResponse]:
+    user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
+    return success_response(
+        request=request_context,
+        data=service.rename_knowledge_collection(user_id=user_id, collection_id=collection_id, name=request.name),
+        timestamp=utc_now_iso(),
+    )
+
+
+@router.delete("/collections/{collection_id}", response_model=ApiEnvelope[CreatedKnowledgeCollectionResponse])
+async def delete_collection(
+    collection_id: str,
+    request_context: Request,
+    user_id: str = Query(alias="userId"),
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: DocumentService = Depends(document_service),
+) -> ApiEnvelope[CreatedKnowledgeCollectionResponse]:
+    owner_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
+    return success_response(
+        request=request_context,
+        data=service.delete_knowledge_collection(user_id=owner_id, collection_id=collection_id),
         timestamp=utc_now_iso(),
     )
 
@@ -100,6 +132,7 @@ async def complete_knowledge_upload(
         etag=request.etag,
         content_sha256=request.content_sha256,
         knowledge_collection_id=collection_id,
+        confirm_index_charge=request.confirm_index_charge,
     )
     return success_response(
         request=request_context,
@@ -116,6 +149,7 @@ async def complete_knowledge_upload(
             },
             documentVersionId=completed.document.document_version_id,
             collectionId=collection_id,
+            indexBilling={"status": "reserved", "settlesAfter": "indexed"},
         ),
         timestamp=utc_now_iso(),
     )

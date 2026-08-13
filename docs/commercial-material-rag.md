@@ -36,6 +36,7 @@
 - `material_document_chunks`：pgvector chunk 行，必须包含 owner、document、version、kind、collection、embedding model 元数据。
 - `session_material_snapshots`：面试开始前确认的不可变资料快照。
 - `material_deletion_jobs`：异步删除 OSS 对象、processed artifact 与向量行的审计 job。
+- `material_knowledge_collections`：用户知识资料库元数据；重命名由后端持久化，删除使用 `deleted_at_ms` 软删除，并同步软删除库内文档。
 
 ## 处理与索引流程
 
@@ -64,6 +65,8 @@
 - reserve 只能在用户显式确认报价后发生。
 - settle 只能在可用 pgvector index 交付后发生，并通过 reference ID 保证幂等。
 - parse、embedding、pgvector、timeout 或 cancellation 失败时 release reservation。
+- 有有效会员知识资料额度时优先锁定 1 份额度，成功后从 locked 转为 used；否则预留积分并在成功后写入 `knowledge_index_settlement` 负数账本。
+- 完成上传请求必须携带显式计费确认；同一 `documentVersionId` 的完成重放或 worker 重试不得重复扣点或重复消耗额度。
 
 ## 日志与隐私
 

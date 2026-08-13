@@ -241,6 +241,7 @@ interface BackendRealtimeRuntimeResponse {
   readonly deviceRegistered: boolean;
   readonly machineCodeBound: boolean;
   readonly sessionLive: boolean;
+  readonly captureState?: string;
   readonly manualCode?: string | null;
   readonly deviceId?: string | null;
   readonly displayName?: string | null;
@@ -525,7 +526,8 @@ const mapRealtimeState = (
   const pending = candidates.candidates.find(candidate => candidate.state === "needs-confirmation");
   const latestDeviceStatus = [...events.events].reverse().find(event => event.kind === "device-status");
   const latestDegraded = [...events.events].reverse().find(event => event.kind === "degraded");
-  const captureState = toCaptureState(latestDeviceStatus?.payload.captureState)
+  const captureState = toCaptureState(runtime?.captureState)
+    ?? toCaptureState(latestDeviceStatus?.payload.captureState)
     ?? (runtime?.sessionLive && runtime.machineCodeBound ? "capturing" as const : undefined);
   const meaningfulTranscripts = transcripts.transcripts.filter(segment => segment.text.replace(/[，。！？、；：,.!?;:~～…·\s]+/g, "").trim());
   const degraded = latestDegraded?.payload?.reason === "mixed-input"
@@ -779,6 +781,17 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     return this.getInterviewIdleStatus(id, signal);
   }
 
+  async controlInterviewCapture(id: string, action: "pause" | "resume", signal?: AbortSignal): Promise<CaptureState> {
+    const result = await this.client.request<{ captureState: string }>(`/api/v1/realtime-speech/sessions/${id}/capture-control`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ userId: requireUserId(), action }),
+    }, signal);
+    const captureState = toCaptureState(result.captureState);
+    if (captureState !== "paused" && captureState !== "capturing") throw new AppError("validation", "后端返回了无效的收音状态");
+    return captureState;
+  }
+
   async endInterviewSession(id: string, signal?: AbortSignal): Promise<void> {
     await this.client.request(`/api/v1/sessions/${id}/end`, {
       method: "POST",
@@ -905,6 +918,14 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
             }
           : {}),
       }));
+  }
+
+  async cancelDesktopShortcutScreenshot(requestId: string, signal?: AbortSignal) {
+    await this.client.request<BackendRemoteScreenshotCaptureRequestResponse>(`/api/v1/screenshot-answer/capture-requests/${encodeURIComponent(requestId)}/cancel`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ userId: requireUserId() }),
+    }, signal);
   }
 
   async subscribeRealtimeSession(interviewId: string, onUpdate: (state: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => void, signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }) {

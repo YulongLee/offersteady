@@ -43,6 +43,7 @@ class CompleteUploadRequest(BaseModel):
     size_bytes: int = Field(ge=1, alias="sizeBytes")
     etag: str | None = None
     content_sha256: str | None = Field(default=None, alias="contentSha256")
+    confirm_index_charge: bool = Field(default=False, alias="confirmIndexCharge")
 
 
 class MaterialSourceRecord(BaseModel):
@@ -62,9 +63,16 @@ class MaterialUploadCompletionResponse(BaseModel):
     source: MaterialSourceRecord
     document_version_id: str | None = Field(default=None, alias="documentVersionId")
     collection_id: str | None = Field(default=None, alias="collectionId")
+    index_billing: dict[str, object] | None = Field(default=None, alias="indexBilling")
 
 
 class CreateKnowledgeCollectionRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    user_id: str = Field(min_length=1, alias="userId")
+    name: str = Field(min_length=1, max_length=120)
+
+
+class RenameKnowledgeCollectionRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
     user_id: str = Field(min_length=1, alias="userId")
     name: str = Field(min_length=1, max_length=120)

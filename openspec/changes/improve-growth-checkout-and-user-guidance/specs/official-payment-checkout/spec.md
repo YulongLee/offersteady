@@ -18,6 +18,11 @@ WeChat Native and supported Alipay modes SHALL return a short-lived order-specif
 - **WHEN** the provider cannot create a payment action
 - **THEN** the order remains unpaid, no entitlement is issued and the user can safely retry or choose another channel
 
+#### Scenario: User reviews official order history
+- **WHEN** the billing page renders the official order history
+- **THEN** it SHALL list and count only paid orders whose entitlement was successfully confirmed, while unpaid, failed, closed, cancelled, refund-pending and refunded orders remain hidden from that history
+- **AND** an active checkout MAY continue showing its current non-paid status in the checkout dialog until server confirmation
+
 ### Requirement: Only verified server payment evidence can activate entitlement
 The system MUST verify provider notification signatures, merchant identity, application identity, order number, amount and payment state. A successful verified notification or active server query SHALL activate entitlement exactly once in the same transactional boundary.
 
@@ -53,4 +58,3 @@ Refund requests SHALL use the server provider adapter, preserve order and entitl
 **Reason**: Official provider orders, signed notifications and active queries replace transaction references, screenshots and manual payment approval.
 
 **Migration**: Stop creating new manual-proof orders. Existing manual orders remain read-only and may complete their original audit/refund policy, but the new checkout does not expose proof-upload controls.
-

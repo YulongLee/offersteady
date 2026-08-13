@@ -356,7 +356,7 @@ export function LibraryManager({ state, setState }: Props) {
         ),
       }));
       pollDocumentUntilSettled(document.id);
-      setNotice("资料已上传，等待服务端建立索引；索引成功后才会正式结算");
+      setNotice("报价已由服务端确认并预留；索引成功后自动结算，失败则自动释放");
     } catch (error) {
       setState((current) => ({
         ...current,
@@ -593,31 +593,27 @@ export function LibraryManager({ state, setState }: Props) {
     )
       return;
     setOperation("delete-collection");
-    const ids = new Set(documents.map((item) => item.id));
-    void Promise.all(
-      documents.map((document) =>
-        runAdapterOperation((signal) =>
-          materialUploadAdapter.deleteDocument(
-            state.account.id,
-            document.documentId ?? document.id,
-            signal,
-          ),
-        ),
+    const deletingCollectionId = selected.id;
+    void runAdapterOperation((signal) =>
+      materialUploadAdapter.deleteKnowledgeCollection(
+        state.account.id,
+        deletingCollectionId,
+        signal,
       ),
     )
       .then(() => refreshFromBackend())
       .then((nextState) => {
         const next = nextState.knowledgeCollections.find(
-          (item) => item.id !== selected.id,
+          (item) => item.id !== deletingCollectionId,
         );
         setSelectedId(next?.id ?? "");
-        setNotice("资料库内资料已删除，未来面试不会再检索其中资料");
+        setNotice("资料库已删除，其中资料不会再参与未来面试");
       })
       .catch((error) =>
         setError(
           error instanceof Error
             ? error.message
-            : "删除资料库资料失败，请稍后重试",
+            : "删除资料库失败，请稍后重试",
         ),
       )
       .finally(() => setOperation(null));
@@ -627,16 +623,23 @@ export function LibraryManager({ state, setState }: Props) {
     const next = window.prompt("新的资料库名称", selected.name)?.trim();
     if (!next) return;
     setOperation("rename-collection");
-    setState((current) => ({
-      ...current,
-      knowledgeCollections: current.knowledgeCollections.map((item) =>
-        item.id === selected.id
-          ? { ...item, name: next, updatedAtMs: Date.now() }
-          : item,
+    setError("");
+    void runAdapterOperation((signal) =>
+      materialUploadAdapter.renameKnowledgeCollection(
+        state.account.id,
+        selected.id,
+        next,
+        signal,
       ),
-    }));
-    setNotice("资料库已重命名");
-    setOperation(null);
+    )
+      .then(() => refreshFromBackend())
+      .then(() => setNotice("资料库已重命名并保存"))
+      .catch((error) =>
+        setError(
+          error instanceof Error ? error.message : "重命名资料库失败，请稍后重试",
+        ),
+      )
+      .finally(() => setOperation(null));
   };
   const updateDocument = (
     document: KnowledgeDocumentVersion,
@@ -1088,7 +1091,7 @@ export function LibraryManager({ state, setState }: Props) {
       {dialog === "upload-knowledge" ? (
         <DialogShell title="添加并建立索引" onClose={() => setDialog(null)}>
           <p>
-            {supportedFormatsLabel}。选择后由服务端计算 Token 并生成短期报价。
+            {supportedFormatsLabel}。选择后先显示费用预估，确认时由服务端校验并预留积分或会员额度。
           </p>
           <label className="checkout-field">
             选择文件
@@ -1105,7 +1108,7 @@ export function LibraryManager({ state, setState }: Props) {
             />
           </label>
           <div className="index-estimate">
-            <span>{pendingFile ? "服务端预估报价" : "等待选择文件"}</span>
+            <span>{pendingFile ? "预计索引费用" : "等待选择文件"}</span>
             <strong>
               {pendingFile
                 ? quoteSource === "pass_allowance"
@@ -1136,7 +1139,7 @@ export function LibraryManager({ state, setState }: Props) {
             <small>
               每 5,000 Token {knowledgeIndexPointsPer5000Tokens} 点，最低{" "}
               {state.billing.rates.knowledgeIndexMinimumPoints}{" "}
-              点；失败或取消会释放预留或额度。
+              点；最终以服务端确认为准，失败或取消会释放预留或额度。
             </small>
           </div>
           <div className="sheet-actions">

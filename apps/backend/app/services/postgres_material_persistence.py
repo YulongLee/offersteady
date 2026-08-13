@@ -9,11 +9,12 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from app.core.config import Settings
+from app.core.config import REPO_ROOT, Settings
 from app.material_formats import MaterialKind
 from app.ports.document_processing import EmbeddedChunk, VectorSearchMatch, VectorStorePort
 from app.ports.document_repository import DocumentRecord, DocumentRepository
 from app.schemas.material_upload import CreatedKnowledgeCollectionResponse
+from app.services.postgres_migrations import apply_sql_migrations
 
 
 class PostgresDocumentRepository(DocumentRepository):
@@ -132,15 +133,24 @@ class PostgresKnowledgeCollectionStore:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "INSERT INTO material_knowledge_collections (collection_id, owner_user_id, name, created_at_ms, updated_at_ms) VALUES (%s,%s,%s,%s,%s) ON CONFLICT (collection_id) DO UPDATE SET name = EXCLUDED.name, updated_at_ms = EXCLUDED.updated_at_ms",
+                    "INSERT INTO material_knowledge_collections (collection_id, owner_user_id, name, created_at_ms, updated_at_ms, deleted_at_ms) VALUES (%s,%s,%s,%s,%s,NULL) ON CONFLICT (collection_id) DO UPDATE SET name = EXCLUDED.name, updated_at_ms = EXCLUDED.updated_at_ms, deleted_at_ms = NULL",
                     (collection.collection_id, collection.owner_user_id, collection.name, collection.created_at_ms, collection.updated_at_ms),
                 )
             connection.commit()
         return collection
 
+    def delete_collection(self, collection_id: str) -> None:
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE material_knowledge_collections SET deleted_at_ms = (extract(epoch from now()) * 1000)::bigint, updated_at_ms = (extract(epoch from now()) * 1000)::bigint WHERE collection_id = %s",
+                    (collection_id,),
+                )
+            connection.commit()
+
     def list_collections(self) -> list[CreatedKnowledgeCollectionResponse]:
         with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
-            cursor.execute("SELECT collection_id, owner_user_id, name, created_at_ms, updated_at_ms FROM material_knowledge_collections ORDER BY updated_at_ms DESC")
+            cursor.execute("SELECT collection_id, owner_user_id, name, created_at_ms, updated_at_ms FROM material_knowledge_collections WHERE deleted_at_ms IS NULL ORDER BY updated_at_ms DESC")
             rows = cursor.fetchall()
         return [CreatedKnowledgeCollectionResponse(collectionId=row["collection_id"], ownerUserId=row["owner_user_id"], name=row["name"], createdAtMs=int(row["created_at_ms"]), updatedAtMs=int(row["updated_at_ms"])) for row in rows]
 
@@ -152,7 +162,9 @@ class PostgresKnowledgeCollectionStore:
     def _ensure_table(self) -> None:
         with self._connect() as connection:
             with connection.cursor() as cursor:
-                cursor.execute("CREATE TABLE IF NOT EXISTS material_knowledge_collections (collection_id TEXT PRIMARY KEY, owner_user_id TEXT NOT NULL, name TEXT NOT NULL, created_at_ms BIGINT NOT NULL, updated_at_ms BIGINT NOT NULL)")
+                apply_sql_migrations(cursor, [
+                    REPO_ROOT / "apps/backend/migrations/versions/0026_knowledge_collection_lifecycle.sql",
+                ])
             connection.commit()
 
 

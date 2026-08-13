@@ -99,6 +99,52 @@ const connectWithMachineCode = async () => {
 };
 
 describe("categorized materials and reachable live actions", () => {
+  it("persists collection rename through the backend before confirming success", async () => {
+    const rename = vi.spyOn(materialUploadAdapter, "renameKnowledgeCollection").mockResolvedValue({
+      collectionId: "collection-frontend",
+      ownerUserId: "admin",
+      name: "后端架构资料",
+      createdAtMs: 1,
+      updatedAtMs: 2,
+    });
+    vi.spyOn(interviewAppAdapter, "loadState").mockImplementation(async () => {
+      const next = structuredClone(syntheticState);
+      next.knowledgeCollections = next.knowledgeCollections.map(item =>
+        item.id === "collection-frontend" ? { ...item, name: "后端架构资料", updatedAtMs: 2 } : item,
+      );
+      return next;
+    });
+    vi.spyOn(window, "prompt").mockReturnValue("后端架构资料");
+    open("/app/library");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "重命名" })[0]!);
+
+    await waitFor(() => expect(rename).toHaveBeenCalledWith("admin", "collection-frontend", "后端架构资料", expect.any(AbortSignal)));
+    expect(await screen.findAllByText("后端架构资料")).not.toHaveLength(0);
+    expect(screen.getByText("资料库已重命名并保存")).toBeInTheDocument();
+  });
+
+  it("deletes an empty collection through the collection API and removes it after refresh", async () => {
+    const remove = vi.spyOn(materialUploadAdapter, "deleteKnowledgeCollection").mockResolvedValue();
+    vi.spyOn(interviewAppAdapter, "loadState").mockImplementation(async () => {
+      const next = structuredClone(syntheticState);
+      next.knowledgeCollections = next.knowledgeCollections.filter(item => item.id !== "collection-system");
+      next.knowledgeDocuments = next.knowledgeDocuments.filter(item => item.collectionId !== "collection-system");
+      return next;
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    open("/app/library", state => {
+      state.knowledgeDocuments = state.knowledgeDocuments.filter(item => item.collectionId !== "collection-system");
+    });
+    fireEvent.click(screen.getByRole("button", { name: /系统设计.*0 份资料/ }));
+
+    fireEvent.click(screen.getByRole("button", { name: "删除资料库" }));
+
+    await waitFor(() => expect(remove).toHaveBeenCalledWith("admin", "collection-system", expect.any(AbortSignal)));
+    expect(await screen.findByText("资料库已删除，其中资料不会再参与未来面试")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /系统设计.*0 份资料/ })).not.toBeInTheDocument();
+  });
+
   it("retries a failed document through the backend instead of only refreshing local state", async () => {
     const retry = vi.spyOn(materialUploadAdapter, "retryDocument").mockResolvedValue();
     open("/app/library", state => {
@@ -178,7 +224,7 @@ describe("categorized materials and reachable live actions", () => {
     const file = new File(["synthetic"], "新知识.md", { type: "text/markdown" });
     fireEvent.change(within(dialog).getByLabelText("选择资料文件"), { target: { files: [file] } });
     fireEvent.click(within(dialog).getByRole("button", { name: "确认报价并建立索引" }));
-    expect(await screen.findByText(/等待服务端建立索引/)).toBeInTheDocument();
+    expect(await screen.findByText(/报价已由服务端确认并预留/)).toBeInTheDocument();
     window.history.pushState({}, "", "/app/interviews/demo/prepare"); window.dispatchEvent(new PopStateEvent("popstate"));
     expect(await screen.findByRole("checkbox", { name: /新知识.md/ })).toBeDisabled();
   });
@@ -306,11 +352,12 @@ describe("categorized materials and reachable live actions", () => {
     fireEvent.change(input, { target: { value: "跨断点保留的合成草稿" } });
     fireEvent.click(screen.getByRole("button", { name: "截屏回答" }));
     expect(screen.getByRole("dialog", { name: "正在截取当前屏幕" })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "还有一个细节，具体怎么监控" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "请根据当前截图直接回答" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "还有一个细节，具体怎么监控" })).not.toBeInTheDocument();
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     fireEvent(window, new Event("resize"));
     await waitFor(() => expect(screen.queryByRole("separator")).not.toBeInTheDocument());
-    expect(screen.getByRole("heading", { name: "还有一个细节，具体怎么监控" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "请根据当前截图直接回答" })).toBeInTheDocument();
     expect(input).toHaveValue("跨断点保留的合成草稿");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });

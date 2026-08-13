@@ -33,6 +33,14 @@ The renderer treats `ended`, `muted`, a suspended/closed AudioContext, a stalled
 - Process memory: bounded audio queues and active provider socket handles.
 - OSS: never used for realtime audio.
 
+## Pause and resume privacy control
+
+- The live web workspace sends `pause` or `resume` to the session capture control API; changing React state alone is not authoritative.
+- The backend persists the latest capture control as a session event and exposes it in runtime and desktop pairing snapshots.
+- While capture is `paused`, audio frames are discarded before receipt creation, ASR, transcript publication, billing usage, and activity updates.
+- The desktop stops both its active realtime publisher and idle audio monitor while paused. Polling, page refresh, WebSocket reconnect, and desktop relaunch must not resume capture.
+- Capture resumes only after an explicit `resume` command for the same live session. Ending a session remains terminal.
+
 ## Feature controls
 
 - `OFFERSTEADY_REALTIME_TRANSPORT_MODE=websocket-v2`

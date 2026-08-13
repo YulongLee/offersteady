@@ -201,6 +201,7 @@ def document_service() -> DocumentService:
         processing_service=document_processing_service(),
         deletion_scheduler=material_deletion_scheduler(),
         commercial_repository=commercial_hardening_repository(),
+        billing_service=billing_service(),
     )
 
 
@@ -600,6 +601,7 @@ def document_processing_service() -> DocumentProcessingService:
         embedding_pipeline=embedding_pipeline_service(),
         material_availability=material_availability_validator(),
         commercial_repository=commercial_hardening_repository(),
+        billing_service=billing_service(),
     )
 
 

@@ -436,11 +436,56 @@ describe("focused live interview workspace", () => {
 
   it("captures the current screen without file-upload copy", async () => {
     openLive();
+    const submitScreenshot = vi.mocked(interviewAppAdapter.submitScreenshotAnswer);
     fireEvent.click(screen.getByRole("button", { name: "截屏回答" }));
     expect(screen.getByRole("button", { name: "截屏回答" })).toBeDisabled();
     expect((await screen.findAllByText("请设计一个支持实时协作的 Web 系统。")).length).toBeGreaterThan(0);
     expect(await screen.findByText("截屏回答已完成，答案已显示")).toBeInTheDocument();
     expect(screen.queryByText("上传并识别")).not.toBeInTheDocument();
+    const instruction = submitScreenshot.mock.calls.at(-1)?.[0].instruction ?? "";
+    expect(instruction).toContain("只依据当前截图");
+    expect(instruction).toContain("不要使用实时对话");
+    expect(instruction).not.toContain("面试官最近的问题是");
+    expect(instruction).not.toContain("还有一个细节，具体怎么监控");
+  });
+
+  it("hides model implementation copy while generating a screenshot answer", async () => {
+    vi.spyOn(interviewAppAdapter, "submitScreenshotAnswer").mockImplementation(async (_command, signal, onStage) => {
+      onStage?.({ name: "共享屏幕截取", stage: "generating" });
+      await new Promise<void>((_resolve, reject) => {
+        signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+      });
+      return {} as never;
+    });
+    openLive();
+
+    fireEvent.click(screen.getByRole("button", { name: "截屏回答" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "正在生成答案" });
+    expect(within(dialog).queryByText(/视觉模型|模型 API/)).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("shows and cancels desktop shortcut screenshots with the same feedback as the screenshot button", async () => {
+    vi.spyOn(interviewAppAdapter, "loadDesktopShortcutScreenshotUpdates").mockResolvedValue([{
+      requestId: "shortcut-shot-1",
+      status: "processing",
+      screenshotTask: { name: "共享屏幕截取", stage: "generating" },
+    }]);
+    const cancelShortcut = vi.spyOn(interviewAppAdapter, "cancelDesktopShortcutScreenshot").mockResolvedValue();
+    openLive();
+
+    const dialog = await screen.findByRole("dialog", { name: "正在生成答案" });
+    expect(within(dialog).queryByText(/视觉模型|模型 API/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "截屏回答" })).toBeDisabled();
+    expect(screen.getAllByText("正在生成截图答案")).toHaveLength(2);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+
+    await waitFor(() => expect(cancelShortcut).toHaveBeenCalledWith("shortcut-shot-1", expect.any(AbortSignal)));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByText("截屏回答已取消")).toBeInTheDocument();
   });
 
   it("can terminate a pending screenshot answer before the local assistant finishes", async () => {

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import os
 from concurrent.futures import ThreadPoolExecutor
+from time import time
 from uuid import uuid4
 
 import pytest
 
 from app.core.config import Settings
-from app.services.billing_service import BillingService
+from app.services.billing_service import BillingService, TimePassEntitlementRecord
 from app.services.postgres_billing_repository import PostgresBillingRepository
 
 
@@ -58,6 +59,46 @@ def test_concurrent_index_reservations_cannot_overspend() -> None:
             quotes,
         ))
     assert sorted(item.status for item in reservations) == ["insufficient_balance", "reserved"]
+
+
+def test_member_knowledge_allowance_is_locked_settled_and_released_without_points() -> None:
+    service = BillingService(Settings(_env_file=None, environment="test"))
+    user_id = f"member-index-{uuid4().hex}"
+    now_ms = int(time() * 1000)
+    service.pass_entitlements_by_user[user_id] = [TimePassEntitlementRecord(
+        id="member-index-entitlement",
+        user_id=user_id,
+        product_id="pass-15",
+        starts_at_ms=now_ms - 1_000,
+        ends_at_ms=now_ms + 86_400_000,
+        order_id="member-index-order",
+        knowledge_allowance_granted=2,
+    )]
+    balance_before = service.state_for_user(user_id=user_id).balance
+
+    first_quote = service.quote_knowledge_index(
+        user_id=user_id, document_version_id="version-member-1", token_estimate=1_000,
+        idempotency_key="member-index-1",
+    )
+    first = service.reserve_knowledge_index(user_id=user_id, quote_id=first_quote.quote_id)
+    assert first.billing_source == "pass_allowance"
+    assert service.state_for_user(user_id=user_id).active_pass["knowledgeAllowanceLocked"] == 1
+    service.settle_knowledge_index(quote_id=first_quote.quote_id, reference_id="knowledge-index:version-member-1")
+    active = service.state_for_user(user_id=user_id).active_pass
+    assert active["knowledgeAllowanceLocked"] == 0
+    assert active["knowledgeAllowanceUsed"] == 1
+    assert service.state_for_user(user_id=user_id).balance == balance_before
+
+    second_quote = service.quote_knowledge_index(
+        user_id=user_id, document_version_id="version-member-2", token_estimate=1_000,
+        idempotency_key="member-index-2",
+    )
+    second = service.reserve_knowledge_index(user_id=user_id, quote_id=second_quote.quote_id)
+    assert second.billing_source == "pass_allowance"
+    service.release_knowledge_index(quote_id=second_quote.quote_id)
+    active = service.state_for_user(user_id=user_id).active_pass
+    assert active["knowledgeAllowanceLocked"] == 0
+    assert active["knowledgeAllowanceUsed"] == 1
 
 
 @pytest.mark.skipif(not DATABASE_URL, reason="OFFERSTEADY_TEST_DATABASE_URL is not configured")

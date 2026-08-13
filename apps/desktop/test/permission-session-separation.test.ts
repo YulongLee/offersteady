@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { companionStatusCopy, desktopBindingLeaseIdentity } from "../src/renderer/CompanionApp";
+import { captureEnabledForBinding, companionStatusCopy, desktopBindingLeaseIdentity } from "../src/renderer/CompanionApp";
 import { desktopCaptureArchitecture, sessionCapturePermissionPolicy } from "../src/renderer/audio/realtime-publisher";
 
 describe("desktop permission and interview connection states", () => {
@@ -32,5 +32,11 @@ describe("desktop permission and interview connection states", () => {
     expect(sessionCapturePermissionPolicy.systemAudioCapture).toBe("electron-display-loopback");
     expect(sessionCapturePermissionPolicy.captureOwner).toBe("electron-single-owner");
     expect(desktopCaptureArchitecture).toBe("electron-single-owner");
+  });
+
+  it("never resumes capture while the authoritative binding remains paused", () => {
+    expect(captureEnabledForBinding("live", "capturing")).toBe(true);
+    expect(captureEnabledForBinding("live", "paused")).toBe(false);
+    expect(captureEnabledForBinding("preparing", "capturing")).toBe(false);
   });
 });

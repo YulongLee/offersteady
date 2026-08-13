@@ -431,4 +431,46 @@ describe("backend preview adapter", () => {
     }));
     expect(result).toMatchObject({ id: "session-1", title: "后端启动测试", status: "active", readiness: 100 });
   });
+
+  it("cancels a desktop shortcut screenshot through the remote capture API", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(envelope({
+      requestId: "shortcut-shot-1",
+      status: "cancelled",
+      stage: "cancelled",
+    })), { status: 200, headers: { "Content-Type": "application/json" } }));
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+
+    await adapter.cancelDesktopShortcutScreenshot("shortcut-shot-1");
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/screenshot-answer/capture-requests/shortcut-shot-1/cancel",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ userId: "user-1" }),
+      }),
+    );
+  });
+
+  it("persists pause and resume through the realtime capture control API", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const action = JSON.parse(String(init?.body)).action;
+      return new Response(JSON.stringify(envelope({ sessionId: "session-1", captureState: action === "pause" ? "paused" : "capturing" })), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+    await expect(adapter.controlInterviewCapture("session-1", "pause")).resolves.toBe("paused");
+    await expect(adapter.controlInterviewCapture("session-1", "resume")).resolves.toBe("capturing");
+    expect(fetchImpl).toHaveBeenLastCalledWith("http://localhost:8000/api/v1/realtime-speech/sessions/session-1/capture-control", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ userId: "user-1", action: "resume" }),
+    }));
+  });
 });

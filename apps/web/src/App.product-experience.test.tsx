@@ -172,7 +172,7 @@ describe("optimized product experience", () => {
 
   it("creates an empty library for free and keeps new knowledge uploads non-ready until processing finishes", async () => {
     open("/app/library"); fireEvent.click(screen.getByRole("button", { name: /新建资料库/ })); let dialog = screen.getByRole("dialog"); fireEvent.change(within(dialog).getByLabelText("资料库名称"), { target: { value: "算法面试" } }); fireEvent.click(within(dialog).getByRole("button", { name: "确认创建" })); expect(await screen.findByText(/空资料库不扣点/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "添加第一份资料" })); dialog = screen.getByRole("dialog"); const file = new File(["synthetic"], "算法笔记.md", { type: "text/markdown" }); fireEvent.change(within(dialog).getByLabelText("选择资料文件"), { target: { files: [file] } }); expect(within(dialog).getByText(/当前 200 点 → 成功后 180 点/)).toBeInTheDocument(); expect(within(dialog).getByText(/3 Token/)).toBeInTheDocument(); fireEvent.click(within(dialog).getByRole("button", { name: "确认报价并建立索引" })); expect(await screen.findByText(/等待服务端建立索引/)).toBeInTheDocument(); expect(screen.getByText("算法笔记.md")).toBeInTheDocument(); expect(screen.getByText("建立索引中")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "添加第一份资料" })); dialog = screen.getByRole("dialog"); const file = new File(["synthetic"], "算法笔记.md", { type: "text/markdown" }); fireEvent.change(within(dialog).getByLabelText("选择资料文件"), { target: { files: [file] } }); expect(within(dialog).getByText(/当前 200 点 → 成功后 180 点/)).toBeInTheDocument(); expect(within(dialog).getByText(/3 Token/)).toBeInTheDocument(); fireEvent.click(within(dialog).getByRole("button", { name: "确认报价并建立索引" })); expect(await screen.findByText(/报价已由服务端确认并预留/)).toBeInTheDocument(); expect(screen.getByText("算法笔记.md")).toBeInTheDocument(); expect(screen.getByText("建立索引中")).toBeInTheDocument();
   });
 
   it("shows the revised catalog and complete consumption rules", () => {
@@ -196,7 +196,7 @@ describe("optimized product experience", () => {
   it("shows a long-pass allowance quote before knowledge indexing starts", async () => {
     open("/app/library", true, state => { state.billing = { ...state.billing, activePass: { id: "member-15", userId: state.account.id, productId: "pass-15", orderId: "synthetic-order", startsAtMs: 1, endsAtMs: Date.now() + 86_400_000, knowledgeAllowanceGranted: 2, knowledgeAllowanceUsed: 0, knowledgeAllowanceLocked: 0 } }; });
     fireEvent.click(screen.getByRole("button", { name: "＋ 添加资料" })); const dialog = screen.getByRole("dialog"); fireEvent.change(within(dialog).getByLabelText("选择资料文件"), { target: { files: [new File(["synthetic"], "会员资料.md", { type: "text/markdown" })] } });
-    expect(within(dialog).getByText("使用 1 份会员额度")).toBeInTheDocument(); expect(within(dialog).getByText(/当前剩余 2 份/)).toBeInTheDocument(); fireEvent.click(within(dialog).getByRole("button", { name: "确认报价并建立索引" })); expect(await screen.findByText(/索引成功后才会正式结算/)).toBeInTheDocument();
+    expect(within(dialog).getByText("使用 1 份会员额度")).toBeInTheDocument(); expect(within(dialog).getByText(/当前剩余 2 份/)).toBeInTheDocument(); fireEvent.click(within(dialog).getByRole("button", { name: "确认报价并建立索引" })); expect(await screen.findByText(/索引成功后自动结算/)).toBeInTheDocument();
   });
 
   it("blocks a points quote when the balance cannot cover the minimum", () => {

@@ -4,6 +4,7 @@
 - [x] 1.2 Fix new interview creation so the UI only inserts a session after backend creation succeeds and shows a real error on failure.
 - [x] 1.3 Enforce a five-item recent interview roster in the backend-facing dashboard/app state contract.
 - [x] 1.4 Add delete actions and refresh behavior for recent interviews so users can maintain the roster safely.
+- [x] 1.5 Prefill the new-interview form from the current account's latest backend interview while keeping first-use forms empty and editable.
 
 ## 2. Manual-mode interview start without extra token gates
 
@@ -23,3 +24,4 @@
 - [x] 4.2 Add regression tests for start-interview in Web manual mode without extra token gating.
 - [x] 4.3 Add integration coverage proving manual fast-answer hits the real backend runtime contract instead of mock output.
 - [x] 4.4 Run `openspec validate fix-interview-creation-and-live-model-readiness --strict`.
+- [x] 4.5 Add Web regression tests for latest-interview defaults, first-use empty fields and editable prefilled values.

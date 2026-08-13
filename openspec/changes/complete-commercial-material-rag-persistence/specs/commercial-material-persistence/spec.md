@@ -33,6 +33,14 @@ The system SHALL support soft deletion for documents and collections, immediatel
 - **WHEN** a user confirms deletion of a material document
 - **THEN** the document version becomes unavailable for future interview selection and retrieval before asynchronous object/vector cleanup completes
 
+#### Scenario: User renames a knowledge collection
+- **WHEN** the owner renames a knowledge collection
+- **THEN** the new name is persisted by the backend and remains visible after the material library is reloaded
+
+#### Scenario: User deletes a knowledge collection
+- **WHEN** the owner confirms deletion of a knowledge collection, whether it is empty or contains documents
+- **THEN** the collection is soft-deleted, its contained documents become unavailable for future interview selection and retrieval, and the collection remains absent after the material library is reloaded
+
 #### Scenario: User reviews historical answer after deletion
 - **WHEN** an old answer referenced a deleted document version
 - **THEN** the answer shows only source name, source kind, version and deleted marker without restoring document content
@@ -43,3 +51,7 @@ The system SHALL enforce owner-scoped access for upload intents, metadata reads,
 #### Scenario: User requests another user's document
 - **WHEN** a request targets a document, version, collection, object or processing job owned by another user
 - **THEN** the system rejects the request without exposing names, object keys, processing metadata or content fingerprints
+
+#### Scenario: User tries to rename or delete another user's collection
+- **WHEN** an authenticated user submits a rename or delete request for a knowledge collection owned by another user
+- **THEN** the system rejects the request and does not change the collection or its documents

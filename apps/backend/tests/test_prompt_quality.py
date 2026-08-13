@@ -5,7 +5,7 @@ from app.core.config import Settings
 from app.ports.chat import PromptConfig
 from app.ports.screenshot_answer import VisionSummary
 from app.services.chat_service import FilePromptTemplateAdapter, InterviewPromptBuilder
-from app.services.screenshot_answer_service import OpenAICompatibleVisionGateway, ScreenshotPromptBuilder
+from app.services.screenshot_answer_service import OpenAICompatibleVisionGateway, ScreenshotPromptBuilder, _screenshot_only_instruction
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -33,17 +33,22 @@ def test_live_prompt_delimits_evidence_and_anchor() -> None:
 def test_screenshot_prompt_excludes_personal_materials() -> None:
     prompt = ScreenshotPromptBuilder().build(
         instruction="给完整代码", session_title="合成截图", system_prompt="screenshot-only",
-        conversation_history=[], session_material_context_text="[简历] 不应进入", retrieval_context_text="[1] 不应进入",
+        conversation_history=["面试官最近的问题：不应进入"], session_material_context_text="[简历] 不应进入", retrieval_context_text="[1] 不应进入",
         vision_summary=VisionSummary(title="算法题", summary_text="两数之和", derived_question="返回下标", image_count=1),
         prompt_config=PromptConfig(template_id="screenshot-answer-system", version="v2", max_history_entries=4, include_retrieval_context=False),
     )
     assert "两数之和" in prompt.user_prompt
     assert "不应进入" not in prompt.user_prompt
+    assert "合成截图" not in prompt.user_prompt
+
+def test_screenshot_instruction_removes_internal_shortcut_metadata() -> None:
+    assert _screenshot_only_instruction("只回答截图。[来源:助手快捷键]") == "只回答截图。"
 
 def test_vision_gateway_loads_v2_policy() -> None:
     policy = OpenAICompatibleVisionGateway(Settings(_env_file=None, screenshot_prompt_version="v2"))._load_system_prompt()
     assert "完整可运行代码" in policy
-    assert "不使用简历、JD、知识库" in policy
+    assert "简历、JD、知识库" in policy
+    assert "禁止使用实时对话" in policy
     assert "只输出最终Markdown答案" in policy
 
 def test_vision_gateway_extracts_direct_and_legacy_json_answers() -> None:

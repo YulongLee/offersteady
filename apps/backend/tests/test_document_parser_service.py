@@ -24,13 +24,14 @@ from app.services.document_processing_adapters import (
 )
 from app.services.document_processing_repository import InMemoryProcessingTaskRepository
 from app.services.document_repository import InMemoryDocumentRepository
+from app.services.billing_service import BillingService
 
 
 def _now_ms() -> int:
     return int(time() * 1000)
 
 
-def test_empty_text_document_becomes_permanent_parser_failure() -> None:
+def test_empty_text_document_becomes_permanent_parser_failure_and_releases_knowledge_charge() -> None:
     settings = get_settings()
     logger = configure_logging(settings)
     storage = AliyunOssStorageAdapter(settings)
@@ -58,6 +59,7 @@ def test_empty_text_document_becomes_permanent_parser_failure() -> None:
         vector_store=vector_store,
         status_reporter=embedding_reporter,
     )
+    billing = BillingService(Settings(_env_file=None, environment="test"))
     service = DocumentProcessingService(
         settings=settings,
         logger=logger,
@@ -65,6 +67,7 @@ def test_empty_text_document_becomes_permanent_parser_failure() -> None:
         task_repository=tasks,
         parser_service=parser_service,
         embedding_pipeline=embedding_pipeline,
+        billing_service=billing,
     )
     document = documents.save(
         DocumentRecord(
@@ -116,6 +119,65 @@ def test_empty_text_document_becomes_permanent_parser_failure() -> None:
     assert any(event.event_name == "parser_started" for event in events)
     assert any(event.event_name == "parser_failed" for event in events)
     assert any(event.event_name == "task_failed" for event in events)
+
+    user_id = "knowledge-failure-user"
+    version_id = "version-empty-knowledge"
+    storage.uploaded_objects["materials/knowledge-failure-user/knowledge/empty.txt"] = b"   "
+    balance_before = billing.state_for_user(user_id=user_id).balance
+    quote = billing.quote_knowledge_index(
+        user_id=user_id,
+        document_version_id=version_id,
+        token_estimate=1,
+        idempotency_key=f"knowledge-index:{version_id}",
+    )
+    reservation = billing.reserve_knowledge_index(user_id=user_id, quote_id=quote.quote_id)
+    assert reservation.status == "reserved"
+    knowledge_document = documents.save(
+        DocumentRecord(
+            document_id="document-empty-knowledge",
+            owner_user_id=user_id,
+            document_kind="knowledge",
+            display_name="empty.txt",
+            file_kind="txt",
+            content_type="text/plain",
+            size_bytes=3,
+            object_key="materials/knowledge-failure-user/knowledge/empty.txt",
+            status="processing_requested",
+            knowledge_collection_id="collection-empty-knowledge",
+            processing_requested_at_ms=_now_ms(),
+            deleted_at_ms=None,
+            created_at_ms=_now_ms(),
+            updated_at_ms=_now_ms(),
+            summary="等待处理",
+            document_version_id=version_id,
+        )
+    )
+    knowledge_task = tasks.save_task(
+        ProcessingTaskRecord(
+            task_id="task-empty-knowledge",
+            document_id=knowledge_document.document_id,
+            owner_user_id=user_id,
+            document_kind="knowledge",
+            current_stage="QUEUED",
+            retry_count=0,
+            max_retries=1,
+            parser_provider=settings.document_processing_parser_provider,
+            embedding_provider=settings.document_processing_embedding_provider,
+            created_at_ms=_now_ms(),
+            updated_at_ms=_now_ms(),
+            queued_at_ms=_now_ms(),
+            billing_quote_id=quote.quote_id,
+        )
+    )
+
+    service.process_task(knowledge_task.task_id)
+
+    released = billing.release_knowledge_index(quote_id=quote.quote_id)
+    assert released is not None
+    assert released.status == "released"
+    billing_after_failure = billing.state_for_user(user_id=user_id)
+    assert billing_after_failure.balance == balance_before
+    assert not [item for item in billing_after_failure.ledger if item.kind == "knowledge_index_settlement"]
 
 
 def test_mineru_parser_polls_async_task_until_markdown(monkeypatch) -> None:

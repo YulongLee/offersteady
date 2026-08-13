@@ -20,6 +20,7 @@ from app.schemas.realtime_speech import (
     DesktopDeviceHeartbeatRequest,
     DesktopDeviceBindingResponse,
     RealtimeCandidateCommandRequest,
+    RealtimeCaptureControlRequest,
     RealtimeDeviceStatusRequest,
     RealtimeEventListResponse,
     RealtimePublisherResponse,
@@ -315,6 +316,19 @@ async def get_runtime(
     resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
     runtime = service.get_runtime(user_id=resolved_user_id, session_id=session_id)
     return success_response(request=request, data=runtime, timestamp=utc_now_iso())
+
+
+@router.post("/sessions/{session_id}/capture-control", response_model=ApiEnvelope[dict[str, object]])
+async def control_session_capture(
+    session_id: str,
+    request_context: Request,
+    request: RealtimeCaptureControlRequest,
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: RealtimeSpeechService = Depends(realtime_speech_service),
+) -> ApiEnvelope[dict[str, object]]:
+    user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
+    result = service.control_capture(user_id=user_id, session_id=session_id, action=request.action)
+    return success_response(request=request_context, data=result, timestamp=utc_now_iso())
 
 
 @router.get("/sessions/{session_id}/stream")

@@ -31,3 +31,14 @@ The runtime SHALL expose one authoritative state from `paired-idle`, `connecting
 #### Scenario: Channel reconnects successfully
 - **WHEN** a degraded channel reconnects before its lease expires
 - **THEN** the runtime returns to `streaming` without a duplicate capture owner or provider session
+
+### Requirement: Authoritative privacy pause control
+The runtime SHALL persist an explicit session-scoped capture control state, and web, backend ingestion, and desktop capture SHALL all honor that state until the user explicitly resumes or ends the interview.
+
+#### Scenario: User pauses capture from the live workspace
+- **WHEN** the owner selects pause during a live interview
+- **THEN** the backend records `paused`, rejects new audio from entering ASR, the desktop stops its active publisher, and realtime refresh or reconnect does not restore capture automatically
+
+#### Scenario: User resumes capture explicitly
+- **WHEN** the owner selects resume for the same live interview
+- **THEN** the backend records `capturing` and the bound desktop may create one authoritative publisher and resume both role channels

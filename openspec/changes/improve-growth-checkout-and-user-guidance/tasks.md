@@ -78,6 +78,7 @@
 - [ ] 5.15 Preserve historical manual-proof orders as read-only while blocking new manual-order creation
 - [ ] 5.16 Add provider sandbox tests for paid, cancelled, delayed, replayed, forged, wrong-amount and refund flows
 - [ ] 5.17 Add end-to-end WeChat Pay and Alipay journeys through one idempotent entitlement grant
+- [x] 5.18 Restrict customer official order history and its count to successfully paid orders while preserving active checkout status polling
 
 ## 6. Managed Product Assets
 

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
-import type { PointsLedgerEntry, PointsRedemptionResult } from "@offersteady/protocol";
+import type { OfficialCheckoutOrder, PointsLedgerEntry, PointsRedemptionResult } from "@offersteady/protocol";
 import { App } from "./App";
 import { summarizePointsLedger } from "./BillingPage";
 import { interviewAppAdapter } from "./app-adapter";
@@ -9,7 +9,7 @@ import { syntheticState } from "./test-state";
 
 const success = (outcome: "redeemed" | "already-redeemed-by-you" = "redeemed"): PointsRedemptionResult => ({ outcome, data: { redemptionId: "synthetic-redemption-result", points: 120, newBalance: 320, publicHint: "••••-DEMO", redeemedAtMs: 1_800_000_000_000, ledgerEntry: { id: "synthetic-redemption-ledger", userId: "prototype-user", kind: "redemption_credit", points: 120, createdAtMs: 1_800_000_000_000, referenceId: "synthetic-redemption-result", description: "兑换码 ••••-DEMO 到账" } } });
 
-const open = (ledger?: PointsLedgerEntry[]) => { const base = structuredClone(syntheticState); const state = ledger ? { ...base, billing: { ...base.billing, ledger } } : base; window.history.pushState({}, "", "/app/billing"); return render(<App initialAuthenticated initialState={state} />); };
+const open = (ledger?: PointsLedgerEntry[], officialOrders?: OfficialCheckoutOrder[]) => { const base = structuredClone(syntheticState); const state = { ...base, billing: { ...base.billing, ...(ledger ? { ledger } : {}), ...(officialOrders ? { officialOrders } : {}) } }; window.history.pushState({}, "", "/app/billing"); return render(<App initialAuthenticated initialState={state} />); };
 const inputCode = (value = "SYNTHETIC-DEMO") => fireEvent.change(screen.getByLabelText("积分兑换码"), { target: { value } });
 
 const ledgerRows = (count: number): PointsLedgerEntry[] => Array.from({ length: count }, (_, index) => ({
@@ -44,6 +44,27 @@ describe("billing points redemption", () => {
     ]));
   });
 
+  it("shows a repeated ledger reference once while preserving separate equal-value credits", () => {
+    const ledger: PointsLedgerEntry[] = [
+      { id: "welcome-copy-1", userId: "prototype-user", kind: "welcome_grant", points: 200, createdAtMs: 20, referenceId: "welcome:prototype-user", description: "新用户赠送积分" },
+      { id: "welcome-copy-2", userId: "prototype-user", kind: "welcome_grant", points: 200, createdAtMs: 20, referenceId: "welcome:prototype-user", description: "新用户赠送积分" },
+      { id: "redemption-separate", userId: "prototype-user", kind: "redemption_credit", points: 200, createdAtMs: 10, referenceId: "redemption:separate", description: "兑换码积分入账" },
+    ];
+
+    const display = summarizePointsLedger(ledger);
+
+    expect(display).toHaveLength(2);
+    expect(display.map((item) => item.id)).toEqual(["welcome-copy-1", "redemption-separate"]);
+  });
+
+  it("reports the unique backend ledger count when duplicate references are received", () => {
+    const duplicate = { id: "welcome-copy-1", userId: "prototype-user", kind: "welcome_grant", points: 200, createdAtMs: 20, referenceId: "welcome:prototype-user", description: "新用户赠送积分" } satisfies PointsLedgerEntry;
+    open([duplicate, { ...duplicate, id: "welcome-copy-2" }]);
+
+    expect(screen.getByText("1 项 · 1 笔流水")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "积分明细记录" }).querySelectorAll("article")).toHaveLength(1);
+  });
+
   it("starts empty with an accessible disabled action and no checkout", () => {
     open(); expect(screen.getByRole("button", { name: "立即兑换" })).toBeDisabled(); expect(screen.getByText(/输入 16 位兑换码/)).toBeInTheDocument(); expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
@@ -51,9 +72,38 @@ describe("billing points redemption", () => {
   it("keeps support contacts and an empty official order state compact and accessible", () => {
     open();
     expect(screen.getByRole("heading", { name: "支付保障与售后" })).toBeInTheDocument();
-    expect(screen.getByText("暂无支付订单")).toBeInTheDocument();
+    expect(screen.getByText("暂无成功订单")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "复制微信号" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "发送邮件" })).toHaveAttribute("href", "mailto:contact@oneshowailab.com");
+  });
+
+  it("shows only paid official orders in order history", () => {
+    const product = syntheticState.billing.catalog[0]!;
+    const order = (id: string, status: OfficialCheckoutOrder["status"]): OfficialCheckoutOrder => ({
+      id,
+      userId: "prototype-user",
+      product,
+      amountCents: product.priceCents,
+      currency: "CNY",
+      channel: "alipay",
+      provider: "alipay",
+      status,
+      action: { kind: "redirect", url: "https://example.invalid/pay", expiresAtMs: 1_800_000_000_000 },
+      createdAtMs: 1_700_000_000_000,
+      updatedAtMs: 1_700_000_000_000,
+    });
+    open(undefined, [
+      order("paid-order", "paid"),
+      order("pending-order", "payment_pending"),
+      order("failed-order", "failed"),
+      order("closed-order", "closed"),
+      order("refunded-order", "refunded"),
+    ]);
+
+    const history = screen.getByRole("heading", { name: "官方订单" }).closest("section")!;
+    expect(within(history).getByText("1 笔")).toBeInTheDocument();
+    expect(within(history).getByText(/paid-order/)).toBeInTheDocument();
+    expect(within(history).queryByText(/pending-order|failed-order|closed-order|refunded-order/)).not.toBeInTheDocument();
   });
 
   it("keeps every ledger row in a named, keyboard-scrollable five-row viewport", () => {
@@ -92,6 +142,19 @@ describe("billing points redemption", () => {
     vi.spyOn(interviewAppAdapter, "redeemPoints").mockResolvedValue(success()); open(); inputCode(); fireEvent.click(screen.getByRole("button", { name: "立即兑换" }));
     expect(await screen.findByText(/兑换成功：\+120 点/)).toBeInTheDocument(); expect(screen.getByText("320 点", { selector: ".balance-card strong" })).toBeInTheDocument(); expect(screen.getByLabelText("积分兑换码")).toHaveValue("");
     expect(within(screen.getByRole("heading", { name: "积分明细" }).closest("section")!).getByText("+120 点")).toBeInTheDocument();
+  });
+
+  it("does not append a redemption ledger row already present by its server reference", async () => {
+    const result = success();
+    if (!("data" in result)) throw new Error("synthetic redemption result must include data");
+    const existing = result.data.ledgerEntry;
+    vi.spyOn(interviewAppAdapter, "redeemPoints").mockResolvedValue(result);
+    open([existing]);
+    inputCode();
+    fireEvent.click(screen.getByRole("button", { name: "立即兑换" }));
+
+    await screen.findByText(/兑换成功：\+120 点/);
+    expect(screen.getByRole("region", { name: "积分明细记录" }).querySelectorAll("article")).toHaveLength(1);
   });
 
   it("renders safe owner replay, unavailable and rate-limit states", async () => {

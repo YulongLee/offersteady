@@ -108,6 +108,53 @@ def test_shared_postgres_ledger_is_not_counted_twice() -> None:
     assert service._balance_for_user(user_id="shared-ledger-user") == 500
 
 
+def test_duplicate_repository_rows_are_collapsed_by_business_reference() -> None:
+    class BillingRepositoryStub:
+        def list_ledger(self, *, user_id: str):
+            return [
+                {
+                    "id": "duplicate-newer",
+                    "user_id": user_id,
+                    "kind": "welcome_grant",
+                    "points": 200,
+                    "created_at_ms": 20,
+                    "reference_id": f"welcome:{user_id}",
+                    "description": "新用户赠送积分",
+                },
+                {
+                    "id": "duplicate-older",
+                    "user_id": user_id,
+                    "kind": "welcome_grant",
+                    "points": 200,
+                    "created_at_ms": 10,
+                    "reference_id": f"welcome:{user_id}",
+                    "description": "新用户赠送积分",
+                },
+                {
+                    "id": "separate-credit",
+                    "user_id": user_id,
+                    "kind": "redemption_credit",
+                    "points": 200,
+                    "created_at_ms": 5,
+                    "reference_id": "redemption:separate",
+                    "description": "兑换码积分入账",
+                },
+            ]
+
+        def balance(self, *, user_id: str) -> int:
+            return 400
+
+    service = BillingService(
+        Settings(environment="production"),
+        billing_repository=BillingRepositoryStub(),
+    )
+
+    ledger = service._ledger_for_user(user_id="duplicate-ledger-user")
+
+    assert [item.id for item in ledger] == ["duplicate-newer", "separate-credit"]
+    assert service._balance_for_user(user_id="duplicate-ledger-user") == 400
+
+
 def test_redemption_digest_candidates_accept_grouped_compact_and_spaced_input() -> None:
     repository = object.__new__(PostgresPointsRedemptionRepository)
     repository._pepper = b"synthetic-pepper"

@@ -29,6 +29,7 @@ class ProcessingTaskRecord:
     started_at_ms: int | None = None
     completed_at_ms: int | None = None
     last_retry_at_ms: int | None = None
+    billing_quote_id: str | None = None
 
 
 @dataclass

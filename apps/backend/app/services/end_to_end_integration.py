@@ -441,6 +441,7 @@ class ScenarioRunner:
                 "contentType": "text/markdown",
                 "sizeBytes": len(content),
                 "etag": "e2e-knowledge",
+                "confirmIndexCharge": True,
             }))
             self.knowledge_id = completed["source"]["sourceId"]
             status = self._wait_for_processing(self.knowledge_id)

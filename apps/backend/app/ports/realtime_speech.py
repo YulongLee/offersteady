@@ -5,7 +5,7 @@ from typing import Literal, Protocol
 
 
 RealtimeConnectionState = Literal["connected", "receiving-audio", "transcribing", "degraded", "reconnecting", "answer-streaming", "failed", "closed"]
-RealtimeEventKind = Literal["connection-state", "transcript-updated", "question-candidate", "question-confirmed", "answer-completed", "degraded", "device-status"]
+RealtimeEventKind = Literal["connection-state", "transcript-updated", "question-candidate", "question-confirmed", "answer-completed", "degraded", "device-status", "capture-control"]
 RealtimeSourceKind = Literal["microphone", "system", "mixed"]
 TranscriptRole = Literal["candidate", "interviewer"]
 QuestionCandidateState = Literal["needs-confirmation", "confirmed", "dismissed"]

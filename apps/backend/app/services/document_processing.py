@@ -22,6 +22,7 @@ from app.services.embedding_pipeline import EmbeddingExecutionError, EmbeddingPi
 from app.services.document_parser import DocumentParserService, ParserExecutionError
 from app.services.material_availability import MaterialAvailabilityValidator
 from app.services.commercial_hardening import job_id
+from app.services.billing_service import BillingService
 
 
 def _now_ms() -> int:
@@ -46,6 +47,7 @@ class DocumentProcessingService:
         embedding_pipeline: EmbeddingPipelineService,
         material_availability: MaterialAvailabilityValidator | None = None,
         commercial_repository: CommercialHardeningRepository | None = None,
+        billing_service: BillingService | None = None,
     ) -> None:
         self.settings = settings
         self.logger = logger
@@ -55,6 +57,7 @@ class DocumentProcessingService:
         self.embedding_pipeline = embedding_pipeline
         self.material_availability = material_availability
         self.commercial_repository = commercial_repository
+        self.billing_service = billing_service
         self.queue: Queue[str] = Queue()
         self._worker_lock = Lock()
         self._worker_started = False
@@ -64,7 +67,7 @@ class DocumentProcessingService:
             "knowledge": PipelineProfile(parser_profile="knowledge-default", chunk_profile="knowledge-default"),
         }
 
-    def submit_document(self, document: DocumentRecord) -> ProcessingTaskRecord:
+    def submit_document(self, document: DocumentRecord, *, billing_quote_id: str | None = None) -> ProcessingTaskRecord:
         self._require_supported_document_kind(document.document_kind)
         now_ms = _now_ms()
         uploaded = ProcessingTaskRecord(
@@ -79,6 +82,7 @@ class DocumentProcessingService:
             embedding_provider=self.settings.document_processing_embedding_provider,
             created_at_ms=now_ms,
             updated_at_ms=now_ms,
+            billing_quote_id=billing_quote_id,
         )
         uploaded = self.task_repository.save_task(uploaded)
         self._record_event(uploaded, event_name="task_created")
@@ -99,6 +103,20 @@ class DocumentProcessingService:
         document = self.document_repository.get_by_id(task.document_id)
         if document is None:
             raise DomainRequestError("document-processing", "retry-task", "关联文档不存在。", 404)
+        billing_quote_id = task.billing_quote_id
+        if document.document_kind == "knowledge":
+            if self.billing_service is None or not document.document_version_id:
+                raise DomainRequestError("document-processing", "retry-task", "知识资料计费服务暂不可用，请稍后重试。", 503)
+            quote = self.billing_service.quote_knowledge_index(
+                user_id=user_id,
+                document_version_id=document.document_version_id,
+                token_estimate=max(1, (document.size_bytes + 3) // 4),
+                idempotency_key=f"knowledge-index:{document.document_version_id}:retry:{task.retry_count + 1}",
+            )
+            reservation = self.billing_service.reserve_knowledge_index(user_id=user_id, quote_id=quote.quote_id)
+            if reservation.status != "reserved":
+                raise DomainRequestError("document-processing", "retry-task", "积分或会员知识资料额度不足，暂时无法重新建立索引。", 402)
+            billing_quote_id = quote.quote_id
         reset = replace(
             task,
             current_stage="QUEUED",
@@ -108,6 +126,7 @@ class DocumentProcessingService:
             updated_at_ms=_now_ms(),
             completed_at_ms=None,
             last_retry_at_ms=_now_ms(),
+            billing_quote_id=billing_quote_id,
         )
         saved = self.task_repository.save_task(reset)
         self._record_event(saved, event_name="task_requeued_manual")
@@ -161,6 +180,19 @@ class DocumentProcessingService:
                 availability = self.material_availability.check_processed_artifacts(document)
                 if not availability.available:
                     raise RuntimeError(availability.reason_code or "material_availability_check_failed")
+            latest_document = self.document_repository.get_by_id(document.document_id)
+            if latest_document is None or latest_document.status == "deleted":
+                self._release_index_reservation(current_task)
+                return
+            if document.document_kind == "knowledge":
+                if not document.document_version_id or self.billing_service is None:
+                    raise RuntimeError("knowledge_index_billing_unavailable")
+                settlement = self.billing_service.settle_knowledge_index_for_document(
+                    user_id=document.owner_user_id,
+                    document_version_id=document.document_version_id,
+                )
+                if settlement is None or settlement.status != "settled":
+                    raise RuntimeError("knowledge_index_billing_settlement_failed")
             completed = replace(
                 current_task,
                 current_stage="COMPLETED",
@@ -188,6 +220,7 @@ class DocumentProcessingService:
             else:
                 self._fail_durable_processing_job(task_id=failed.task_id, now_ms=_now_ms(), safe_error_code=failed.error_code or "parser_failed", retryable=False)
                 self._save_document(document, status="failed", summary="文档解析失败，可稍后重试。")
+                self._release_index_reservation(failed)
         except EmbeddingExecutionError as exc:
             current_task = exc.task
             failed = self._fail_task(
@@ -204,6 +237,7 @@ class DocumentProcessingService:
             else:
                 self._fail_durable_processing_job(task_id=failed.task_id, now_ms=_now_ms(), safe_error_code=failed.error_code or "embedding_failed", retryable=False)
                 self._save_document(document, status="failed", summary="文档向量化失败，可稍后重试。")
+                self._release_index_reservation(failed)
         except Exception as exc:  # pragma: no cover - exercised through behavior, exception type environment dependent
             failed = self._fail_task(current_task, exc.__class__.__name__, "文档处理失败。", retryable=current_task.retry_count < current_task.max_retries)
             self._record_event(failed, event_name="task_failed", error_code=failed.error_code)
@@ -214,6 +248,23 @@ class DocumentProcessingService:
             else:
                 self._fail_durable_processing_job(task_id=failed.task_id, now_ms=_now_ms(), safe_error_code=failed.error_code or "processing_failed", retryable=False)
                 self._save_document(document, status="failed", summary="文档处理失败，可稍后重试。")
+                self._release_index_reservation(failed)
+
+    def _release_index_reservation(self, task: ProcessingTaskRecord) -> None:
+        if task.document_kind != "knowledge" or self.billing_service is None:
+            return
+        document = self.document_repository.get_by_id(task.document_id)
+        if document is not None and document.document_version_id:
+            self.billing_service.release_knowledge_index_for_document(
+                user_id=task.owner_user_id,
+                document_version_id=document.document_version_id,
+            )
+        elif task.billing_quote_id:
+            self.billing_service.release_knowledge_index(quote_id=task.billing_quote_id)
+
+    def release_document_index_reservation(self, *, document_id: str, user_id: str) -> None:
+        for task in self.task_repository.list_tasks_for_user(user_id=user_id, document_id=document_id):
+            self._release_index_reservation(task)
 
     def _fail_task(self, task: ProcessingTaskRecord, error_code: str, error_message: str, *, retryable: bool) -> ProcessingTaskRecord:
         now_ms = _now_ms()

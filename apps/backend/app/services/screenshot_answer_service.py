@@ -61,6 +61,12 @@ def _elapsed_ms(start: float) -> float:
     return round((perf_counter() - start) * 1000, 2)
 
 
+def _screenshot_only_instruction(instruction: str) -> str:
+    """Keep transport metadata out of the visual model's evidence."""
+    cleaned = re.sub(r"\s*\[来源:[^\]]+\]\s*", " ", instruction).strip()
+    return cleaned or "请只依据当前截图识别并回答其中的题目。"
+
+
 class RetryableVisionError(Exception):
     pass
 
@@ -104,18 +110,15 @@ class ScreenshotPromptBuilder(ScreenshotPromptBuilderPort):
             version="v1",
             max_history_entries=4,
         )
-        history_text = "\n".join(conversation_history[-typed_prompt_config.max_history_entries :])
+        screenshot_instruction = _screenshot_only_instruction(instruction)
         sections = [
             "<authoritative_screenshot_request>",
-            f"会话标题：{session_title}\n截图摘要：{vision_summary.title}",
+            f"截图摘要：{vision_summary.title}",
             "</authoritative_screenshot_request>",
             f"<untrusted_screenshot_evidence>\n{vision_summary.summary_text}\n</untrusted_screenshot_evidence>",
         ]
-        if instruction.strip():
-            sections.append(f"<user_instruction>{instruction.strip()}</user_instruction>")
-        if history_text:
-            sections.append(f"<untrusted_screenshot_conversation>\n{history_text}\n</untrusted_screenshot_conversation>")
-        _ = session_material_context_text, retrieval_context_text
+        sections.append(f"<user_instruction>{screenshot_instruction}</user_instruction>")
+        _ = session_title, conversation_history, session_material_context_text, retrieval_context_text
         user_prompt = "\n\n".join(sections)
         return PromptBuildResult(
             system_prompt=system_prompt,
@@ -348,6 +351,7 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
         attempt: int,
     ) -> VisionSummary:
         _ = session_id, attempt
+        screenshot_instruction = _screenshot_only_instruction(instruction)
         if not self.settings.screenshot_vision_base_url or not self.settings.screenshot_vision_api_key:
             raise NonRetryableVisionError("当前多模识别模型未配置完成，请检查服务端 .env 配置。")
         url = f"{self.settings.screenshot_vision_base_url.rstrip('/')}/chat/completions"
@@ -358,7 +362,7 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
                     "请直接识别并回答截图中的题目。只输出最终 Markdown 答案，不要输出 JSON、字段名、"
                     "识别过程、OCR 摘要或额外前言。答案必须严格执行系统策略；代码题必须给出完整可运行代码，"
                     "不要只描述解题框架。"
-                    f"\n<user_instruction>{instruction.strip() or '无'}</user_instruction>"
+                    f"\n<user_instruction>{screenshot_instruction}</user_instruction>"
                 ),
             }
         ]
@@ -395,8 +399,8 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
         if not text:
             raise NonRetryableVisionError("截图识别模型没有返回可读取的内容。")
         title = "截图题目理解"
-        summary_text = instruction.strip() or "已根据当前截图识别题目并生成回答。"
-        derived_question = instruction.strip() or "请根据截图内容直接给出本题的回答。"
+        summary_text = "已仅根据当前截图识别题目并生成回答。"
+        derived_question = "请根据截图内容直接给出本题的回答。"
         final_answer = self._extract_final_answer(text)
         try:
             parsed = self._parse_json_object(text)
@@ -730,6 +734,7 @@ class ScreenshotAnswerService:
         telemetry: dict[str, object] | None = None,
     ) -> tuple[ScreenshotAnswerTaskRecord, RetrievalResponse]:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        screenshot_instruction = _screenshot_only_instruction(instruction)
         if session.status != "live":
             raise DomainRequestError("screenshot-answer", "create-task", "只有进行中的面试会话才能发起截图回答。", 400)
         self.session_service.touch_activity(user_id=user_id, session_id=session_id, force=True)
@@ -765,7 +770,7 @@ class ScreenshotAnswerService:
                 task_id=task_id,
                 session_id=session_id,
                 owner_user_id=user_id,
-                instruction=instruction.strip(),
+                instruction=screenshot_instruction,
                 answer_text="",
                 status="queued",
                 stream_mode=stream,
@@ -779,7 +784,7 @@ class ScreenshotAnswerService:
         current = self.repository.save_task(replace(task, status="processing-images", updated_at_ms=_now_ms()))
         last_error: Exception | None = None
         retrieval_context = RetrievalContext(
-            normalized_question=instruction.strip(),
+            normalized_question=screenshot_instruction,
             context_text="",
             chunks=[],
             candidate_count=0,
@@ -790,7 +795,7 @@ class ScreenshotAnswerService:
             try:
                 current = self.repository.save_task(replace(current, status="vision-running", updated_at_ms=_now_ms(), retry_count=attempt))
                 vision_started = perf_counter()
-                vision = self.vision_gateway.analyze(session_id=session_id, instruction=instruction, images=prepared, attempt=attempt)
+                vision = self.vision_gateway.analyze(session_id=session_id, instruction=screenshot_instruction, images=prepared, attempt=attempt)
                 if telemetry is not None:
                     telemetry["vision_model_ms"] = _elapsed_ms(vision_started)
                 current = self.repository.save_task(

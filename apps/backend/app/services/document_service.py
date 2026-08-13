@@ -33,6 +33,7 @@ from app.services.material_object_keys import MaterialObjectKeyFactory
 from app.services.commercial_hardening import artifact_id, job_id
 
 if TYPE_CHECKING:
+    from app.services.billing_service import BillingService
     from app.services.document_processing import DocumentProcessingService
 
 
@@ -44,6 +45,16 @@ def _now_ms() -> int:
 class InMemoryKnowledgeCollectionStore:
     collections: dict[str, CreatedKnowledgeCollectionResponse] = field(default_factory=dict)
 
+    def get_collection(self, collection_id: str) -> CreatedKnowledgeCollectionResponse | None:
+        return self.collections.get(collection_id)
+
+    def save_collection(self, collection: CreatedKnowledgeCollectionResponse) -> CreatedKnowledgeCollectionResponse:
+        self.collections[collection.collection_id] = collection
+        return collection
+
+    def delete_collection(self, collection_id: str) -> None:
+        self.collections.pop(collection_id, None)
+
 
 @dataclass
 class DocumentService:
@@ -53,6 +64,7 @@ class DocumentService:
     processing_service: DocumentProcessingService | None = None
     deletion_scheduler: InMemoryMaterialDeletionScheduler | None = None
     commercial_repository: CommercialHardeningRepository | None = None
+    billing_service: BillingService | None = None
     max_file_size_bytes: int = 20 * 1024 * 1024
 
     def validation_policy(self) -> DocumentValidationPolicyResponse:
@@ -137,6 +149,7 @@ class DocumentService:
         etag: str | None,
         content_sha256: str | None = None,
         knowledge_collection_id: str | None = None,
+        confirm_index_charge: bool = False,
     ) -> CompleteDocumentUploadResponse:
         confirmed = self.storage.confirm_uploaded_object(
             user_id=user_id,
@@ -149,6 +162,8 @@ class DocumentService:
         )
         if confirmed.material_kind == "knowledge":
             self._require_collection_access(user_id=user_id, collection_id=knowledge_collection_id)
+            if not confirm_index_charge:
+                raise DomainRequestError("knowledge", "complete-upload", "请先确认知识资料索引报价。", 400)
         if confirmed.document_id:
             existing = self.repository.get_by_id(confirmed.document_id)
             if existing is not None:
@@ -156,34 +171,55 @@ class DocumentService:
                     raise DomainRequestError("document-service", "complete-upload", "不能确认其他用户的文档。", 403)
                 return CompleteDocumentUploadResponse(document=self._to_response(existing))
         now_ms = confirmed.confirmed_at_ms
-        document = self.repository.save(
-            DocumentRecord(
-                document_id=confirmed.document_id or f"document-{uuid4().hex}",
-                owner_user_id=user_id,
-                document_kind=confirmed.material_kind,
-                display_name=confirmed.filename,
-                file_kind=confirmed.file_kind,
-                content_type=confirmed.content_type,
-                size_bytes=confirmed.size_bytes,
-                object_key=confirmed.object_key,
-                status="processing_requested",
-                knowledge_collection_id=knowledge_collection_id,
-                processing_requested_at_ms=now_ms,
-                deleted_at_ms=None,
-                created_at_ms=now_ms,
-                updated_at_ms=now_ms,
-                summary="文件已上传，后台正在建立可供 AI 使用的文档索引。",
-                object_id=confirmed.object_id,
-                document_version_id=confirmed.document_version_id,
-                version=1,
-                content_fingerprint=confirmed.content_fingerprint,
-                original_filename=confirmed.filename,
-                index_state="queued",
-            )
+        document_record = DocumentRecord(
+            document_id=confirmed.document_id or f"document-{uuid4().hex}",
+            owner_user_id=user_id,
+            document_kind=confirmed.material_kind,
+            display_name=confirmed.filename,
+            file_kind=confirmed.file_kind,
+            content_type=confirmed.content_type,
+            size_bytes=confirmed.size_bytes,
+            object_key=confirmed.object_key,
+            status="processing_requested",
+            knowledge_collection_id=knowledge_collection_id,
+            processing_requested_at_ms=now_ms,
+            deleted_at_ms=None,
+            created_at_ms=now_ms,
+            updated_at_ms=now_ms,
+            summary="文件已上传，后台正在建立可供 AI 使用的文档索引。",
+            object_id=confirmed.object_id,
+            document_version_id=confirmed.document_version_id,
+            version=1,
+            content_fingerprint=confirmed.content_fingerprint,
+            original_filename=confirmed.filename,
+            index_state="queued",
         )
-        self._record_original_artifact(document=document, verified_at_ms=now_ms)
-        if self.processing_service is not None:
-            self.processing_service.submit_document(document)
+        billing_quote_id: str | None = None
+        if confirmed.material_kind == "knowledge":
+            if self.billing_service is None or not confirmed.document_version_id:
+                raise DomainRequestError("knowledge", "index-billing", "知识资料计费服务暂不可用，请稍后重试。", 503)
+            quote = self.billing_service.quote_knowledge_index(
+                user_id=user_id,
+                document_version_id=confirmed.document_version_id,
+                token_estimate=max(1, (confirmed.size_bytes + 3) // 4),
+                idempotency_key=f"knowledge-index:{confirmed.document_version_id}",
+            )
+            reservation = self.billing_service.reserve_knowledge_index(user_id=user_id, quote_id=quote.quote_id)
+            if reservation.status != "reserved":
+                raise DomainRequestError("knowledge", "index-billing", "积分或会员知识资料额度不足，文件尚未开始建立索引。", 402)
+            billing_quote_id = quote.quote_id
+        try:
+            document = self.repository.save(document_record)
+            self._record_original_artifact(document=document, verified_at_ms=now_ms)
+            if self.processing_service is not None:
+                self.processing_service.submit_document(document, billing_quote_id=billing_quote_id)
+        except Exception:
+            if confirmed.material_kind == "knowledge" and confirmed.document_version_id and self.billing_service is not None:
+                self.billing_service.release_knowledge_index_for_document(
+                    user_id=user_id,
+                    document_version_id=confirmed.document_version_id,
+                )
+            raise
         return CompleteDocumentUploadResponse(document=self._to_response(document))
 
     def list_documents(
@@ -226,6 +262,8 @@ class DocumentService:
             **{**record.__dict__, "status": "deleted", "deleted_at_ms": _now_ms(), "updated_at_ms": _now_ms(), "summary": "文档已删除，不再用于面试或后续处理。"}
         )
         saved = self.repository.save(deleting)
+        if self.processing_service is not None:
+            self.processing_service.release_document_index_reservation(document_id=saved.document_id, user_id=user_id)
         self._enqueue_deletion_job(document=saved, deleted_at_ms=saved.deleted_at_ms or _now_ms())
         if self.deletion_scheduler is not None:
             self.deletion_scheduler.schedule_document_deletion(document=saved, deleted_at_ms=saved.deleted_at_ms or _now_ms())
@@ -261,6 +299,33 @@ class DocumentService:
             self.knowledge_store.save_collection(collection)  # type: ignore[attr-defined]
         else:
             self.knowledge_store.collections[collection.collection_id] = collection
+        return collection
+
+    def rename_knowledge_collection(self, *, user_id: str, collection_id: str, name: str) -> CreatedKnowledgeCollectionResponse:
+        collection = self._owned_collection(user_id=user_id, collection_id=collection_id)
+        clean_name = name.strip()
+        if not clean_name:
+            raise DomainRequestError("knowledge", "rename-collection", "资料库名称不能为空。")
+        renamed = CreatedKnowledgeCollectionResponse(
+            collectionId=collection.collection_id,
+            ownerUserId=collection.owner_user_id,
+            name=clean_name,
+            createdAtMs=collection.created_at_ms,
+            updatedAtMs=_now_ms(),
+        )
+        return self.knowledge_store.save_collection(renamed)  # type: ignore[attr-defined]
+
+    def delete_knowledge_collection(self, *, user_id: str, collection_id: str) -> CreatedKnowledgeCollectionResponse:
+        collection = self._owned_collection(user_id=user_id, collection_id=collection_id)
+        documents = self.repository.list_for_user(
+            user_id=user_id,
+            document_kind="knowledge",
+            knowledge_collection_id=collection_id,
+            include_deleted=False,
+        )
+        for document in documents:
+            self.delete_document(user_id=user_id, document_id=document.document_id)
+        self.knowledge_store.delete_collection(collection_id)  # type: ignore[attr-defined]
         return collection
 
     def create_pasted_job_description(self, *, user_id: str, text: str, display_name: str | None) -> CompleteDocumentUploadResponse:
@@ -390,6 +455,14 @@ class DocumentService:
             raise DomainRequestError("knowledge", "document-service", "资料库不存在。", 404)
         if collection.owner_user_id != user_id:
             raise DomainRequestError("knowledge", "document-service", "不能把资料写入其他用户的资料库。", 403)
+
+    def _owned_collection(self, *, user_id: str, collection_id: str) -> CreatedKnowledgeCollectionResponse:
+        collection = self.knowledge_store.get_collection(collection_id)  # type: ignore[attr-defined]
+        if collection is None:
+            raise DomainRequestError("knowledge", "collection", "资料库不存在。", 404)
+        if collection.owner_user_id != user_id:
+            raise DomainRequestError("knowledge", "collection", "不能管理其他用户的资料库。", 403)
+        return collection
 
     def _to_response(self, record: DocumentRecord) -> DocumentRecordResponse:
         return DocumentRecordResponse(

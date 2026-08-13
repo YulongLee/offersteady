@@ -39,3 +39,19 @@ The system SHALL reserve points or a knowledge allowance only after explicit quo
 #### Scenario: Indexing succeeds
 - **WHEN** pgvector rows are committed and the document version is marked indexed
 - **THEN** the system settles the reserved points or allowance exactly once for that document version
+
+#### Scenario: User confirms a points-funded indexing quote
+- **WHEN** the user confirms knowledge indexing and has no eligible member allowance
+- **THEN** the backend reserves the quoted points before processing and writes exactly one negative knowledge-index ledger entry only after the document version becomes indexed
+
+#### Scenario: User confirms a member-allowance indexing quote
+- **WHEN** the user confirms knowledge indexing while an active membership has an unused knowledge allowance
+- **THEN** the backend locks one allowance before processing, consumes it after successful indexing, and does not deduct points
+
+#### Scenario: Confirmed indexing fails or is deleted before completion
+- **WHEN** a confirmed knowledge document reaches a terminal processing failure or is deleted before a usable index is delivered
+- **THEN** the backend releases the reserved points or locked allowance without adding a settlement ledger entry
+
+#### Scenario: Index completion is replayed
+- **WHEN** upload completion or the indexing worker repeats for the same document version
+- **THEN** the backend reuses the existing quote and settlement reference without deducting points or allowance again

@@ -56,6 +56,7 @@ interface DesktopPairingStatus {
   readonly registeredDeviceId?: string | null;
   readonly bound: boolean;
   readonly sessionStatus?: "preparing" | "live" | "ended" | "missing" | "unknown" | string;
+  readonly captureState?: "capturing" | "paused" | "ready" | string;
   readonly message: string;
   readonly staleReason?: string | null;
   readonly authoritative?: boolean;
@@ -66,6 +67,9 @@ interface DesktopPairingStatus {
 
 export const desktopBindingLeaseIdentity = (binding: DesktopActiveBinding | null) =>
   binding ? `${binding.bindingId}:${binding.bindingGeneration ?? 1}` : "";
+
+export const captureEnabledForBinding = (sessionStatus: string | null, captureState: string | null) =>
+  sessionStatus === "live" && captureState !== "paused";
 
 interface DesktopRuntimeStatus {
   readonly sessionId: string;
@@ -381,6 +385,7 @@ export function CompanionApp() {
   const [screenPreviewUrl, setScreenPreviewUrl] = useState<string | null>(null);
   const [activeBinding, setActiveBinding] = useState<DesktopActiveBinding | null>(null);
   const [bindingSessionStatus, setBindingSessionStatus] = useState<string | null>(null);
+  const [bindingCaptureState, setBindingCaptureState] = useState<string | null>(null);
   const [nativeRuntimeHealth, setNativeRuntimeHealth] = useState<DesktopNativeRuntimeHealth | null>(null);
   const [liveSourceHealthState, setLiveSourceHealthState] = useState<readonly AudioSourceHealth[]>([]);
   const [monitorSourceHealthState, setMonitorSourceHealthState] = useState<readonly AudioSourceHealth[]>([]);
@@ -405,9 +410,10 @@ export function CompanionApp() {
   };
   const [captureDiagnostic, setCaptureDiagnostic] = useState<string | null>(null);
   const sourceHealthState = mergeDisplayedSourceHealth(liveSourceHealthState, monitorSourceHealthState);
+  const captureEnabled = captureEnabledForBinding(bindingSessionStatus, bindingCaptureState);
   const publisherHasTakenOver = useMemo(
-    () => bindingSessionStatus === "live" && hasPublisherTakenOver(liveSourceHealthState),
-    [bindingSessionStatus, liveSourceHealthState],
+    () => captureEnabled && hasPublisherTakenOver(liveSourceHealthState),
+    [captureEnabled, liveSourceHealthState],
   );
 
   useEffect(() => {
@@ -670,6 +676,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
             const displayState: CaptureState = staleBinding ? "reconnecting" : nextState;
             setActiveBinding(staleBinding);
             setBindingSessionStatus(null);
+            setBindingCaptureState(null);
             setState(displayState);
             const staleCopy = pairingStatus.staleReason === "web-heartbeat-missing"
               ? "网页端绑定已存在，但当前面试页心跳暂未到达；请保持线上实时面试页面打开。"
@@ -685,10 +692,12 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
         const runtimeStatus = null as DesktopRuntimeStatus | null;
         const sessionStatus = runtimeStatus?.sessionStatus ?? pairingStatus.sessionStatus ?? "unknown";
         const live = sessionStatus === "live";
+        const captureState = pairingStatus.captureState === "paused" ? "paused" : live ? "capturing" : "ready";
         nextDelayMs = desktopPollDelayMs(live ? "live" : "idle", 0, "binding");
         if (stopped) return;
         setActiveBinding(binding);
         setBindingSessionStatus(sessionStatus);
+        setBindingCaptureState(captureState);
         if (lastBindingSessionIdRef.current !== binding.sessionId) {
           lastBindingSessionIdRef.current = binding.sessionId;
           setDesktopNotice("网页面试已绑定这台电脑。");
@@ -697,7 +706,9 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
           lastLiveSessionIdRef.current = binding.sessionId;
           setDesktopNotice("面试已开始，本地助手正在启动麦克风、电脑输出和屏幕能力。");
         }
-        const nextCaptureState: CaptureState = live
+        const nextCaptureState: CaptureState = captureState === "paused"
+          ? "paused"
+          : live
           ? (captureDiagnostic && (runtimeStatus?.frameReceipts?.length ?? 0) === 0 && (runtimeStatus?.transcriptCount ?? 0) === 0 ? "error" : "capturing")
           : "ready";
         setState(nextCaptureState);
@@ -733,7 +744,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
             userId: binding.ownerUserId,
             deviceId: pairingIdentity.deviceId,
             manualCode: pairingIdentity.manualCode,
-            captureState: live ? "capturing" : "connected",
+            captureState,
             sourceHealth: sourceHealthRef.current,
             capabilities: {
               ...capabilitiesFor(config),
@@ -776,10 +787,10 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
   }, [config, pairingIdentity]);
 
   useEffect(() => {
-    if (bindingSessionStatus === "live" || publisherHasTakenOver || !selectedSystemAudioId) {
+    if (bindingCaptureState === "paused" || captureEnabled || publisherHasTakenOver || !selectedSystemAudioId) {
       void localMonitorRef.current?.stop();
       localMonitorRef.current = null;
-      if (bindingSessionStatus === "live" || publisherHasTakenOver) setMonitorSourceHealthState([]);
+      if (bindingCaptureState === "paused" || captureEnabled || publisherHasTakenOver) setMonitorSourceHealthState([]);
       return;
     }
     let cancelled = false;
@@ -817,10 +828,10 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       if (localMonitorRef.current === monitor) localMonitorRef.current = null;
       void monitor.stop();
     };
-  }, [bindingSessionStatus, publisherHasTakenOver, effectiveMicrophoneId, selectedSystemAudioId]);
+  }, [bindingCaptureState, captureEnabled, publisherHasTakenOver, effectiveMicrophoneId, selectedSystemAudioId]);
 
   useEffect(() => {
-    if (!config || !pairingIdentity || !activeBinding || bindingSessionStatus !== "live") {
+    if (!config || !pairingIdentity || !activeBinding || !captureEnabled) {
       void publisherRef.current?.stop();
       publisherRef.current = null;
       if (!activeBinding) {
@@ -917,6 +928,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
     activeBinding?.ownerUserId,
     activeBinding?.manualCode,
     bindingSessionStatus,
+    bindingCaptureState,
     config?.apiBaseUrl,
     pairingIdentity?.deviceId,
     pairingIdentity?.displayName,
@@ -1006,7 +1018,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
             ? "部分权限尚未开启，请在 Windows 设置 → 隐私和安全性中允许麦克风和屏幕捕捉后重试。"
             : "部分权限尚未开启，请在 macOS 系统设置 → 隐私与安全性中允许后重新检查。",
       );
-      setState(activeBinding ? (bindingSessionStatus === "live" ? "capturing" : "ready") : "ready");
+      setState(activeBinding ? (captureEnabled ? "capturing" : bindingCaptureState === "paused" ? "paused" : "ready") : "ready");
     } catch (error) {
       const message = error instanceof Error ? error.message : "权限检查失败";
       setDesktopNotice(`权限检查失败：${message}`);

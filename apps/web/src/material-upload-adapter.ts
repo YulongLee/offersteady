@@ -18,6 +18,8 @@ import { authClient } from "./auth-client";
 
 export interface MaterialUploadAdapter {
   createKnowledgeCollection(request: CreateKnowledgeCollectionRequest, signal?: AbortSignal): Promise<CreatedKnowledgeCollection>;
+  renameKnowledgeCollection(userId: string, collectionId: string, name: string, signal?: AbortSignal): Promise<CreatedKnowledgeCollection>;
+  deleteKnowledgeCollection(userId: string, collectionId: string, signal?: AbortSignal): Promise<void>;
   uploadResume(userId: string, file: File, signal?: AbortSignal): Promise<MaterialUploadCompletionResult>;
   uploadJobDescriptionFile(userId: string, file: File, signal?: AbortSignal): Promise<MaterialUploadCompletionResult>;
   uploadKnowledgeFile(userId: string, collectionId: string, file: File, signal?: AbortSignal): Promise<MaterialUploadCompletionResult>;
@@ -46,13 +48,14 @@ const buildIntentPayload = (userId: string, materialKind: CreateMaterialUploadIn
   sizeBytes: file.size || 1,
 });
 
-const buildCompletePayload = (userId: string, intent: MaterialUploadIntent, file: File): CompleteMaterialUploadRequest => ({
+const buildCompletePayload = (userId: string, intent: MaterialUploadIntent, file: File, confirmIndexCharge = false): CompleteMaterialUploadRequest => ({
   userId,
   intentId: intent.intentId,
   objectKey: intent.objectKey,
   contentType: intent.contentType,
   sizeBytes: file.size || 1,
   etag: `${file.name}:${file.size}`,
+  ...(confirmIndexCharge ? { confirmIndexCharge: true } : {}),
 });
 
 export class BackendMaterialUploadAdapter implements MaterialUploadAdapter {
@@ -64,6 +67,22 @@ export class BackendMaterialUploadAdapter implements MaterialUploadAdapter {
 
   async createKnowledgeCollection(request: CreateKnowledgeCollectionRequest, signal?: AbortSignal) {
     return this.client.request<CreatedKnowledgeCollection>("/api/v1/knowledge/collections", { method: "POST", headers: authHeaders(), body: JSON.stringify(request) }, signal);
+  }
+
+  async renameKnowledgeCollection(userId: string, collectionId: string, name: string, signal?: AbortSignal) {
+    return this.client.request<CreatedKnowledgeCollection>(
+      `/api/v1/knowledge/collections/${encodeURIComponent(collectionId)}`,
+      { method: "PATCH", headers: authHeaders(), body: JSON.stringify({ userId, name }) },
+      signal,
+    );
+  }
+
+  async deleteKnowledgeCollection(userId: string, collectionId: string, signal?: AbortSignal) {
+    await this.client.request(
+      `/api/v1/knowledge/collections/${encodeURIComponent(collectionId)}?userId=${encodeURIComponent(userId)}`,
+      { method: "DELETE", headers: authHeaders() },
+      signal,
+    );
   }
 
   async uploadResume(userId: string, file: File, signal?: AbortSignal) {
@@ -119,7 +138,7 @@ export class BackendMaterialUploadAdapter implements MaterialUploadAdapter {
     if (!fileKind) throw new AppError("validation", "当前仅支持 PDF、DOCX、DOC、TXT、MD");
     const intent = await this.client.request<MaterialUploadIntent>(intentPath, { method: "POST", headers: authHeaders(), body: JSON.stringify(buildIntentPayload(userId, materialKind, file)) }, signal);
     await this.uploadToOss(intent, file, completionPath, userId, signal);
-    return this.client.request<MaterialUploadCompletionResult>(completionPath, { method: "POST", headers: authHeaders(), body: JSON.stringify(buildCompletePayload(userId, intent, file)) }, signal);
+    return this.client.request<MaterialUploadCompletionResult>(completionPath, { method: "POST", headers: authHeaders(), body: JSON.stringify(buildCompletePayload(userId, intent, file, materialKind === "knowledge")) }, signal);
   }
 
   private async uploadToOss(intent: MaterialUploadIntent, file: File, completionPath: string, userId: string, signal?: AbortSignal) {

@@ -5,3 +5,4 @@
 {"id":"missing-options","problem_type":"multiple-choice","must_not_claim_definitive_letter":true,"synthetic":true}
 {"id":"unreadable-schema","problem_type":"sql","must_not_invent_schema":true,"must_request_recapture":true,"synthetic":true}
 {"id":"no-personal-material","session_materials":["resume","jd","knowledge"],"must_report_no_personal_material":true,"synthetic":true}
+{"id":"screenshot-only-no-conversation","screen_question":"合并两个有序数组","recent_interviewer_question":"请评价候选人的项目经历","session_title":"高级前端工程师面试","must_answer_screen_question":true,"must_not_use":["recent_interviewer_question","conversation_history","session_title","resume","jd","knowledge"],"synthetic":true}

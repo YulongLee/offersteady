@@ -63,6 +63,7 @@ class CompleteDocumentUploadRequest(BaseModel):
     etag: str | None = None
     content_sha256: str | None = Field(default=None, alias="contentSha256")
     knowledge_collection_id: str | None = Field(default=None, alias="knowledgeCollectionId")
+    confirm_index_charge: bool = Field(default=False, alias="confirmIndexCharge")
 
 
 class DocumentRecordResponse(BaseModel):

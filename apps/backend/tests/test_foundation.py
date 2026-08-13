@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Settings, get_settings
 from app.main import create_app
+from app.deps import realtime_speech_service
 from app.ports.authentication import SmsChallengeRecord
 from app.ports.realtime_speech import AudioFrame, RealtimeEvent
 from app.ports.chat import ChatAnswerChunk, PromptBuildResult, PromptConfig
@@ -420,8 +421,31 @@ def test_knowledge_completion_checks_collection_ownership() -> None:
         "objectKey": intent["objectKey"],
         "contentType": "text/markdown",
         "sizeBytes": 2048,
+        "confirmIndexCharge": True,
     })
     assert response.status_code == 403
+
+
+def test_knowledge_completion_requires_explicit_index_charge_confirmation() -> None:
+    collection = unwrap(client.post("/api/v1/knowledge/collections", json={
+        "userId": "knowledge-charge-confirmation",
+        "name": "计费确认资料库",
+    }))
+    intent = unwrap(client.post(f"/api/v1/knowledge/collections/{collection['collectionId']}/upload-intents", json={
+        "userId": "knowledge-charge-confirmation",
+        "filename": "notes.md",
+        "contentType": "text/markdown",
+        "sizeBytes": 128,
+    }))
+    response = client.post(f"/api/v1/knowledge/collections/{collection['collectionId']}/uploads/complete", json={
+        "userId": "knowledge-charge-confirmation",
+        "intentId": intent["intentId"],
+        "objectKey": intent["objectKey"],
+        "contentType": "text/markdown",
+        "sizeBytes": 128,
+    })
+    assert response.status_code == 400
+    assert response.json()["error"]["message"] == "请先确认知识资料索引报价。"
 
 
 def test_document_object_keys_are_unique_for_same_filename() -> None:
@@ -484,6 +508,7 @@ def test_processing_handoff_boundary_exposes_uploaded_knowledge_documents() -> N
         "objectKey": intent["objectKey"],
         "contentType": "text/markdown",
         "sizeBytes": 2048,
+        "confirmIndexCharge": True,
     })
     response = client.get("/api/v1/documents/processing/handoffs", params={"userId": "owner-handoff"})
     assert response.status_code == 200
@@ -569,6 +594,7 @@ def test_knowledge_retrieval_returns_structured_multi_source_context() -> None:
         "objectKey": knowledge_intent["objectKey"],
         "contentType": "text/markdown",
         "sizeBytes": 256,
+        "confirmIndexCharge": True,
     }))
     wait_for_task_stage(resume_complete["source"]["sourceId"], "retrieval-user", "COMPLETED")
     wait_for_task_stage(knowledge_complete["source"]["sourceId"], "retrieval-user", "COMPLETED")
@@ -678,6 +704,7 @@ def test_interview_session_lifecycle_materials_context_and_usage() -> None:
         "objectKey": knowledge_intent["objectKey"],
         "contentType": "text/markdown",
         "sizeBytes": 128,
+        "confirmIndexCharge": True,
     }))
     wait_for_task_stage(resume_complete["source"]["sourceId"], "session-user", "COMPLETED")
     wait_for_task_stage(jd_complete["source"]["sourceId"], "session-user", "COMPLETED")
@@ -905,6 +932,7 @@ def test_live_answer_chat_service_generates_history_and_usage() -> None:
         "objectKey": knowledge_intent["objectKey"],
         "contentType": "text/markdown",
         "sizeBytes": 128,
+        "confirmIndexCharge": True,
     }))
     wait_for_task_stage(resume_complete["source"]["sourceId"], "chat-user", "COMPLETED")
     wait_for_task_stage(knowledge_complete["source"]["sourceId"], "chat-user", "COMPLETED")
@@ -2319,6 +2347,65 @@ def test_realtime_runtime_tracks_frame_receipts_and_asr_status() -> None:
     assert transcripts["transcripts"][0]["publishedAtMs"] is not None
     assert transcripts["transcripts"][0]["performance"]["backendPushMs"] is not None
     assert transcripts["transcripts"][0]["performance"]["traceId"] == "trace-runtime-mic-1"
+
+
+def test_capture_pause_is_authoritative_and_blocks_audio_until_explicit_resume() -> None:
+    user_id = "capture-pause-user"
+    session = unwrap(client.post("/api/v1/sessions", json={"userId": user_id, "title": "暂停收音测试"}))
+    session_id = session["sessionId"]
+    unwrap(client.post("/api/v1/realtime-speech/desktop-devices/register", json={
+        "deviceId": "capture-pause-device",
+        "manualCode": "764321",
+        "displayName": "暂停收音测试 Mac",
+        "capabilities": {"microphone": True, "systemAudio": True},
+    }))
+    unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/desktop-binding", json={
+        "userId": user_id,
+        "manualCode": "764321",
+    }))
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": user_id}))
+    publisher = unwrap(client.post("/api/v1/realtime-speech/publishers", json={
+        "userId": user_id,
+        "sessionId": session_id,
+        "sourceKind": "microphone",
+        "clientName": "pause-test-publisher",
+    }))
+
+    paused = unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/capture-control", json={
+        "userId": user_id,
+        "action": "pause",
+    }))
+    assert paused["captureState"] == "paused"
+    runtime = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/runtime", params={"userId": user_id}))
+    assert runtime["captureState"] == "paused"
+    assert runtime["stage"] == "paused"
+    assert runtime["anomalyReasons"] == []
+    pairing = unwrap(client.get("/api/v1/realtime-speech/desktop-devices/pairing-status", params={
+        "manualCode": "764321",
+        "deviceId": "capture-pause-device",
+    }))
+    assert pairing["captureState"] == "paused"
+
+    payload = base64.b64encode(b"synthetic paused pcm").decode("utf-8")
+    events = realtime_speech_service().process_audio_frame(
+        token=publisher["token"], device_id="capture-pause-device", source_id="mic-default",
+        sequence=1, source_kind="microphone", segment_id="paused-segment", revision=1,
+        captured_at_ms=1000, started_at_ms=1000, ended_at_ms=1200, duration_ms=200,
+        codec="pcm-s16le", sample_rate_hz=16000, channels=1, is_final=True,
+        trace_id="paused-trace", sent_at_ms=1050, audio_base64=payload,
+    )
+    assert events == []
+    runtime = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/runtime", params={"userId": user_id}))
+    assert runtime["frameReceipts"] == []
+    assert runtime["transcriptCount"] == 0
+
+    resumed = unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/capture-control", json={
+        "userId": user_id,
+        "action": "resume",
+    }))
+    assert resumed["captureState"] == "capturing"
+    runtime = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/runtime", params={"userId": user_id}))
+    assert runtime["captureState"] == "capturing"
 
 
 def test_same_interview_allows_multiple_observers_without_enabling_multiple_sessions() -> None:

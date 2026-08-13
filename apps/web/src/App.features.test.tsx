@@ -14,6 +14,16 @@ const open = (path: string) => {
 };
 
 describe("spec-driven interview features", () => {
+  it("opens the desktop sidebar account actions above the account trigger", () => {
+    open("/app");
+
+    const accountMenu = document.querySelector(".app-sidebar .account-menu");
+    expect(accountMenu).toHaveClass("drop-up");
+    fireEvent.click(within(accountMenu as HTMLElement).getByRole("button", { name: "账号菜单" }));
+    expect(within(accountMenu as HTMLElement).getByRole("button", { name: "切换账号" })).toBeInTheDocument();
+    expect(within(accountMenu as HTMLElement).getByRole("button", { name: "退出登录" })).toBeInTheDocument();
+  });
+
   it("keeps prepared provenance visible without offering live material changes", () => {
     open("/app/interviews/demo/live");
     expect(screen.getByText(/回答依据/)).toBeInTheDocument();

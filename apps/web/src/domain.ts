@@ -241,6 +241,7 @@ export interface InterviewAppAdapter {
   startInterviewSession(id: string, signal?: AbortSignal): Promise<InterviewSummary>;
   getInterviewIdleStatus(id: string, signal?: AbortSignal): Promise<IdleInterviewStatus>;
   continueInterviewSession(id: string, signal?: AbortSignal): Promise<IdleInterviewStatus>;
+  controlInterviewCapture(id: string, action: "pause" | "resume", signal?: AbortSignal): Promise<CaptureState>;
   endInterviewSession(id: string, signal?: AbortSignal): Promise<void>;
   bindDesktopDevice(command: { interviewId: string; manualCode?: string; reuseLastDevice?: boolean }, signal?: AbortSignal): Promise<DesktopDeviceBinding>;
   getLastDesktopDevice?(signal?: AbortSignal): Promise<RecentDesktopDevice | null>;
@@ -251,6 +252,7 @@ export interface InterviewAppAdapter {
   loadInterviewWorkspace(interviewId: string, signal?: AbortSignal): Promise<InterviewWorkspaceSnapshot>;
   loadInterviewReview(interviewId: string, signal?: AbortSignal): Promise<InterviewReview>;
   loadDesktopShortcutScreenshotUpdates(interviewId: string, signal?: AbortSignal): Promise<readonly DesktopShortcutScreenshotUpdate[]>;
+  cancelDesktopShortcutScreenshot(requestId: string, signal?: AbortSignal): Promise<void>;
   subscribeRealtimeSession(interviewId: string, onUpdate: (state: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => void, signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }): Promise<void>;
   deleteInterview(id: string, signal?: AbortSignal): Promise<void>;
   deleteScreenshot(id: string, signal?: AbortSignal): Promise<void>;

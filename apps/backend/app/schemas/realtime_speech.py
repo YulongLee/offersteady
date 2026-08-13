@@ -143,6 +143,7 @@ class RealtimeSessionRuntimeResponse(BaseModel):
     device_registered: bool = Field(default=False, alias="deviceRegistered")
     machine_code_bound: bool = Field(default=False, alias="machineCodeBound")
     session_live: bool = Field(default=False, alias="sessionLive")
+    capture_state: str = Field(default="ready", alias="captureState")
     manual_code: str | None = Field(default=None, alias="manualCode")
     device_id: str | None = Field(default=None, alias="deviceId")
     display_name: str | None = Field(default=None, alias="displayName")
@@ -181,6 +182,12 @@ class RealtimeEventListResponse(BaseModel):
 class RealtimeCandidateCommandRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
     user_id: str = Field(min_length=1, alias="userId")
+
+
+class RealtimeCaptureControlRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    user_id: str = Field(min_length=1, alias="userId")
+    action: str = Field(pattern="^(pause|resume)$")
 
 
 class RealtimeDeviceStatusRequest(BaseModel):
