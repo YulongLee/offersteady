@@ -67,6 +67,47 @@ def test_database_generated_code_bypasses_static_configuration() -> None:
     assert result["data"]["newBalance"] == 2000
 
 
+def test_shared_postgres_ledger_is_not_counted_twice() -> None:
+    ledger_entry = PersistedPointsLedgerEntry(
+        id="shared-ledger-entry",
+        user_id="shared-ledger-user",
+        kind="referral_credit",
+        points=500,
+        created_at_ms=1_800_000_000_000,
+        reference_id="referral:shared-ledger",
+        description="邀请好友奖励",
+    )
+
+    class SharedLedgerRepositoryStub:
+        def sync_configured_codes(self, codes) -> None:
+            pass
+
+        def list_ledger(self, *, user_id: str):
+            return [ledger_entry]
+
+        def balance(self, *, user_id: str) -> int:
+            return 500
+
+    class BillingRepositoryStub:
+        def list_ledger(self, *, user_id: str):
+            return [ledger_entry.__dict__]
+
+        def balance(self, *, user_id: str) -> int:
+            return 500
+
+    shared = SharedLedgerRepositoryStub()
+    service = BillingService(
+        Settings(environment="production"),
+        redemption_repository=shared,
+        billing_repository=BillingRepositoryStub(),
+    )
+
+    ledger = service._ledger_for_user(user_id="shared-ledger-user")
+
+    assert len(ledger) == 1
+    assert service._balance_for_user(user_id="shared-ledger-user") == 500
+
+
 def test_redemption_digest_candidates_accept_grouped_compact_and_spaced_input() -> None:
     repository = object.__new__(PostgresPointsRedemptionRepository)
     repository._pepper = b"synthetic-pepper"

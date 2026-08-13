@@ -882,7 +882,10 @@ class BillingService:
             ledger = [PointsLedgerRecord(**item) for item in self.billing_repository.list_ledger(user_id=user_id)]
         else:
             ledger = list(self.ledger_by_user.get(user_id, []))
-        if self.redemption_repository is not None:
+        # PostgreSQL billing and redemption repositories read the same shared
+        # points_redemption_ledger table. Only merge the legacy redemption
+        # ledger when the unified billing repository is not configured.
+        if self.redemption_repository is not None and self.billing_repository is None:
             ledger.extend(self._persistent_ledger_record(item) for item in self.redemption_repository.list_ledger(user_id=user_id))
         return sorted(ledger, key=lambda item: (item.created_at_ms, item.id), reverse=True)
 
@@ -891,7 +894,11 @@ class BillingService:
             transient_balance = self.billing_repository.balance(user_id=user_id)
         else:
             transient_balance = sum(item.points for item in self.ledger_by_user.get(user_id, []))
-        persistent_balance = self.redemption_repository.balance(user_id=user_id) if self.redemption_repository is not None else 0
+        persistent_balance = (
+            self.redemption_repository.balance(user_id=user_id)
+            if self.redemption_repository is not None and self.billing_repository is None
+            else 0
+        )
         return transient_balance + persistent_balance
 
     @staticmethod
