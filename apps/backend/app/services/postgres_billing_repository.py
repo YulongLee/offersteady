@@ -896,6 +896,7 @@ class PostgresBillingRepository:
             Path(REPO_ROOT / "apps/backend/migrations/versions/0021_referral_rewards.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0022_referral_ledger_constraint_repair.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0023_stale_usage_reservation_recovery.sql"),
+            Path(REPO_ROOT / "apps/backend/migrations/versions/0025_referral_ledger_constraint_repair_v2.sql"),
         )
         with self._connect() as connection, connection.cursor() as cursor:
             apply_sql_migrations(cursor, migrations)

@@ -1033,6 +1033,7 @@ class AdminRepository:
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0021_referral_rewards.sql",
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0022_referral_ledger_constraint_repair.sql",
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0024_ai_runtime_performance_metrics.sql",
+            Path(REPO_ROOT) / "apps/backend/migrations/versions/0025_referral_ledger_constraint_repair_v2.sql",
         ]
         with self.connect() as connection, connection.cursor() as cursor:
             apply_sql_migrations(cursor, migrations)

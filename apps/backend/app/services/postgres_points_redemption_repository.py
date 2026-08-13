@@ -219,6 +219,7 @@ class PostgresPointsRedemptionRepository(PointsRedemptionRepository):
             REPO_ROOT / "apps" / "backend" / "migrations" / "versions" / "0008_persistent_points_redemption.sql",
             REPO_ROOT / "apps" / "backend" / "migrations" / "versions" / "0015_admin_redemption_batches.sql",
             REPO_ROOT / "apps" / "backend" / "migrations" / "versions" / "0022_referral_ledger_constraint_repair.sql",
+            REPO_ROOT / "apps" / "backend" / "migrations" / "versions" / "0025_referral_ledger_constraint_repair_v2.sql",
         ]
         with self._connect() as connection, connection.cursor() as cursor:
             apply_sql_migrations(cursor, migrations)

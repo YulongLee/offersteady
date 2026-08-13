@@ -185,14 +185,14 @@ def test_postgres_redemption_repository_initialization_preserves_referral_credit
     assert sum(entry.points for entry in rewards) == 642
 
 
-def test_all_ledger_initializers_include_referral_constraint_repair() -> None:
+def test_all_ledger_initializers_include_latest_referral_constraint_repair() -> None:
     repository_sources = [
         Path("apps/backend/app/services/postgres_billing_repository.py").read_text(),
         Path("apps/backend/app/services/postgres_points_redemption_repository.py").read_text(),
         Path("apps/backend/app/services/admin_repository.py").read_text(),
     ]
-    migration = Path("apps/backend/migrations/versions/0022_referral_ledger_constraint_repair.sql").read_text()
+    migration = Path("apps/backend/migrations/versions/0025_referral_ledger_constraint_repair_v2.sql").read_text()
 
-    assert all("0022_referral_ledger_constraint_repair.sql" in source for source in repository_sources)
+    assert all("0025_referral_ledger_constraint_repair_v2.sql" in source for source in repository_sources)
     assert "'referral_credit'" in migration
     assert "'admin_adjustment'" in migration
