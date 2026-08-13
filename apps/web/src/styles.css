@@ -41,8 +41,7 @@
 }
 
 :root[data-theme="bright"] .app-shell,
-:root[data-theme="bright"] .live-page,
-:root[data-theme="bright"] .route-loading-page {
+:root[data-theme="bright"] .live-page {
   color: #18212b;
   background: #f6f8fb;
   --bg: #f6f8fb;
@@ -78,54 +77,23 @@
 
 /* Bright mode uses neutral product surfaces instead of reusing translucent dark-mode fills. */
 :root[data-theme="bright"] .app-sidebar { box-shadow: 8px 0 28px rgba(15,23,42,.035); }
-:root[data-theme="bright"] .panel,
-:root[data-theme="bright"] .form-panel,
-:root[data-theme="bright"] .conversation-monitor,
-:root[data-theme="bright"] .answer-workspace,
-:root[data-theme="bright"] .manual-question-composer,
-:root[data-theme="bright"] .answer-action-bar { box-shadow: 0 1px 2px rgba(15,23,42,.035), 0 8px 24px rgba(15,23,42,.025); }
-:root[data-theme="bright"] .button.ghost,
-:root[data-theme="bright"] .account-menu summary:hover,
-:root[data-theme="bright"] .account-menu[open] summary,
-:root[data-theme="bright"] .account-menu-popover button,
-:root[data-theme="bright"] .resource-card,
-:root[data-theme="bright"] .library-row,
-:root[data-theme="bright"] .device-mini,
-:root[data-theme="bright"] .paired-device,
-:root[data-theme="bright"] .last-device-choice.offline,
-:root[data-theme="bright"] .side-actions > button,
-:root[data-theme="bright"] .side-actions > label,
-:root[data-theme="bright"] .empty-live-context,
-:root[data-theme="bright"] .manual-action,
-:root[data-theme="bright"] .transcript-list article,
-:root[data-theme="bright"] .download-choice,
-:root[data-theme="bright"] .billing-assurance-list article,
-:root[data-theme="bright"] .billing-orders-empty { background: #f7f9fa; }
-:root[data-theme="bright"] .continue-card { border-color: rgba(8,127,103,.18); background: linear-gradient(125deg, #e9f7f3, #ffffff 58%); box-shadow: 0 12px 34px rgba(15,23,42,.045); }
-:root[data-theme="bright"] .progress-line { background: #e3e9ec; }
-:root[data-theme="bright"] .form-panel label,
-:root[data-theme="bright"] .machine-code-panel label,
-:root[data-theme="bright"] .live-side h2,
-:root[data-theme="bright"] .advice-card details summary { color: var(--text); }
-:root[data-theme="bright"] .privacy-note,
-:root[data-theme="bright"] .side-privacy,
-:root[data-theme="bright"] .advice-card details p,
-:root[data-theme="bright"] .evidence-box p,
-:root[data-theme="bright"] .advice-footer > span,
-:root[data-theme="bright"] .transcript-list p,
-:root[data-theme="bright"] .guide-article section p { color: var(--muted); }
-:root[data-theme="bright"] .inline-error { color: var(--danger); border-color: rgba(180,35,54,.18); background: #fff4f5; }
-:root[data-theme="bright"] .global-live-alert { border-color: #ead4aa; background: #fff9ed; box-shadow: 0 14px 38px rgba(87,58,11,.12); }
-:root[data-theme="bright"] .global-live-alert span { color: #765f39; }
-:root[data-theme="bright"] .answer-markdown pre { background: #f3f5f7; }
-:root[data-theme="bright"] .sheet-backdrop { background: rgba(15,23,42,.42); }
-:root[data-theme="bright"] .sheet { box-shadow: 0 28px 80px rgba(15,23,42,.18); }
-:root[data-theme="bright"] .referral-summary span,
-:root[data-theme="bright"] .referral-share-box { background: #f5f8f8; }
-:root[data-theme="bright"] .segmented { background: #e9eef0; }
-:root[data-theme="bright"] .balance-card { border-color: rgba(8,127,103,.2); background: linear-gradient(135deg, #e8f7f2, #ffffff 68%); }
-:root[data-theme="bright"] .entitlement-points { border-top-color: var(--line); }
-:root[data-theme="bright"] .mobile-nav { background: rgba(255,255,255,.97); }
+:root[data-theme="bright"] :is(.app-shell, .live-page) :is(.panel, .form-panel, .conversation-monitor, .answer-workspace, .manual-question-composer, .answer-action-bar) { box-shadow: 0 1px 2px rgba(15,23,42,.035), 0 8px 24px rgba(15,23,42,.025); }
+:root[data-theme="bright"] :is(.app-shell, .live-page) :is(.button.ghost, .account-menu summary:hover, .account-menu[open] summary, .account-menu-popover button, .resource-card, .library-row, .device-mini, .paired-device, .last-device-choice.offline, .side-actions > button, .side-actions > label, .empty-live-context, .manual-action, .transcript-list article, .download-choice, .billing-assurance-list article, .billing-orders-empty) { background: #f7f9fa; }
+:root[data-theme="bright"] :is(.app-shell, .live-page) .continue-card { border-color: rgba(8,127,103,.18); background: linear-gradient(125deg, #e9f7f3, #ffffff 58%); box-shadow: 0 12px 34px rgba(15,23,42,.045); }
+:root[data-theme="bright"] :is(.app-shell, .live-page) .progress-line { background: #e3e9ec; }
+:root[data-theme="bright"] :is(.app-shell, .live-page) :is(.form-panel label, .machine-code-panel label, .live-side h2, .advice-card details summary) { color: var(--text); }
+:root[data-theme="bright"] :is(.app-shell, .live-page) :is(.privacy-note, .side-privacy, .advice-card details p, .evidence-box p, .advice-footer > span, .transcript-list p, .guide-article section p) { color: var(--muted); }
+:root[data-theme="bright"] :is(.app-shell, .live-page) .inline-error { color: var(--danger); border-color: rgba(180,35,54,.18); background: #fff4f5; }
+:root[data-theme="bright"] :is(.app-shell, .live-page) .global-live-alert { border-color: #ead4aa; background: #fff9ed; box-shadow: 0 14px 38px rgba(87,58,11,.12); }
+:root[data-theme="bright"] :is(.app-shell, .live-page) .global-live-alert span { color: #765f39; }
+:root[data-theme="bright"] :is(.app-shell, .live-page) .answer-markdown pre { background: #f3f5f7; }
+:root[data-theme="bright"] :is(.app-shell, .live-page) .sheet-backdrop { background: rgba(15,23,42,.42); }
+:root[data-theme="bright"] :is(.app-shell, .live-page) .sheet { box-shadow: 0 28px 80px rgba(15,23,42,.18); }
+:root[data-theme="bright"] :is(.app-shell, .live-page) :is(.referral-summary span, .referral-share-box) { background: #f5f8f8; }
+:root[data-theme="bright"] :is(.app-shell, .live-page) .segmented { background: #e9eef0; }
+:root[data-theme="bright"] :is(.app-shell, .live-page) .balance-card { border-color: rgba(8,127,103,.2); background: linear-gradient(135deg, #e8f7f2, #ffffff 68%); }
+:root[data-theme="bright"] :is(.app-shell, .live-page) .entitlement-points { border-top-color: var(--line); }
+:root[data-theme="bright"] .app-shell .mobile-nav { background: rgba(255,255,255,.97); }
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }

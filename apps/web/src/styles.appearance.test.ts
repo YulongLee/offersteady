@@ -8,14 +8,15 @@ describe("appearance styles", () => {
   it("scopes the bright palette to authenticated app surfaces", () => {
     expect(styles).toContain(':root[data-theme="bright"] .app-shell');
     expect(styles).toContain(':root[data-theme="bright"] .live-page');
-    expect(styles).toContain(':root[data-theme="bright"] .route-loading-page');
+    expect(styles).not.toContain(':root[data-theme="bright"] .route-loading-page');
     expect(styles).not.toContain(':root[data-theme="bright"] {');
     expect(styles).toContain("--bg: #f6f8fb");
     expect(styles).toContain("--field-bg: #fbfcfd");
     expect(styles).toContain("--answer-text: #1f2933");
-    expect(styles).toContain(':root[data-theme="bright"] .continue-card');
-    expect(styles).toContain(':root[data-theme="bright"] .balance-card');
-    expect(styles).toContain(':root[data-theme="bright"] .global-live-alert');
+    expect(styles).toContain(':root[data-theme="bright"] :is(.app-shell, .live-page) .continue-card');
+    expect(styles).toContain(':root[data-theme="bright"] :is(.app-shell, .live-page) .balance-card');
+    expect(styles).toContain(':root[data-theme="bright"] :is(.app-shell, .live-page) .global-live-alert');
+    expect(styles).not.toMatch(/:root\[data-theme="bright"\]\s+\.button\.ghost/);
   });
 
   it("uses a single answer-size variable without enlarging transcript controls", () => {
