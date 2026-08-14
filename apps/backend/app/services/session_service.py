@@ -125,6 +125,8 @@ class SessionService:
         expires_at_ms = session.last_activity_at_ms + self.settings.interview_idle_timeout_seconds * 1000
         if session.status == "ended":
             state = "ended"
+        elif session.status != "live" or session.started_at_ms is None:
+            state = "active"
         elif current >= expires_at_ms:
             state = "expired"
         elif current >= warning_at_ms:

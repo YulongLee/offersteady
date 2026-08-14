@@ -147,6 +147,35 @@ describe("OfferSteady web application", () => {
     expect(screen.queryByText("请介绍一个你负责过的、最有挑战的前端项目。")).not.toBeInTheDocument();
   });
 
+  it("shows a user-correctable message when the SMS verification code is wrong", async () => {
+    vi.spyOn(authClient, "sendSmsCode").mockResolvedValue({
+      challengeId: "sms-challenge-ui-error",
+      status: "sent",
+      provider: "aliyun-dypnsapi",
+      expiresAtMs: Date.now() + 300_000,
+      cooldownSeconds: 0,
+      maskedPhone: "157****8798",
+    });
+    vi.spyOn(authClient, "verifySmsLogin").mockRejectedValue(
+      new Error("验证码不正确或已过期，请检查后重新输入。"),
+    );
+    openAt("/login");
+
+    fireEvent.change(screen.getByPlaceholderText("请输入手机号"), {
+      target: { value: "15773668798" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "获取验证码" }));
+    const codeInput = await screen.findByPlaceholderText("请输入验证码");
+    fireEvent.change(codeInput, { target: { value: "610368" } });
+    fireEvent.click(screen.getByRole("button", { name: "登录 / 注册" }));
+
+    expect(
+      await screen.findByText("验证码不正确或已过期，请检查后重新输入。"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/短信校验服务暂时不可用/)).not.toBeInTheDocument();
+    expect(codeInput).toHaveValue("610368");
+  });
+
   it("enters the app and shows an action-oriented home", async () => {
     await login();
     expect(screen.getByRole("link", { name: /新建面试/ })).toBeInTheDocument();

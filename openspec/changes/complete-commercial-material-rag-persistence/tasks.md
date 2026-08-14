@@ -48,6 +48,8 @@
 - [x] 6.4 Save immutable session material snapshots with source ID, document version ID, display name, kind, index state, selection revision and confirmation time
 - [x] 6.5 Show stale/deleted selected material attention states without silently replacing sources
 - [ ] 6.6 Add Web tests for material list rendering, processing states, disabled selection, deletion invalidation and snapshot confirmation
+- [x] 6.7 Add owner-scoped reversible document disable/enable actions that reuse an existing ready index without duplicate metering
+- [x] 6.8 Preserve sibling document lifecycle and sync states across deletion refreshes, including stale-request ordering protection
 
 ## 7. Integration and Operations
 

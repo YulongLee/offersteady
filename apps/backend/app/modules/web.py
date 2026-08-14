@@ -282,6 +282,18 @@ def _is_selectable_document(document) -> bool:
     return document.status == "ready" and document.index_state == "indexed"
 
 
+def _document_ui_status(document) -> str:
+    if document.status == "ready" and document.index_state == "disabled":
+        return "disabled"
+    return {
+        "processing_requested": "processing",
+        "processing": "processing",
+        "ready": "ready",
+        "failed": "failed",
+        "deleted": "deleted",
+    }.get(document.status, "processing")
+
+
 def _artifact_manifest(document, storage: FileStoragePort | None = None, commercial_repository: CommercialHardeningRepository | None = None) -> tuple[str, list[dict[str, object]]]:
     if document.status == "deleted":
         return "deleted", []
@@ -344,7 +356,7 @@ def _artifact_manifest(document, storage: FileStoragePort | None = None, commerc
         )
     if document.status not in {"ready", "failed"}:
         return "processing", artifacts
-    if document.status == "ready" and document.index_state == "indexed":
+    if document.status == "ready" and document.index_state in {"indexed", "disabled"}:
         return "synced", artifacts
     if document.status == "failed":
         return "failed", artifacts
@@ -353,13 +365,7 @@ def _artifact_manifest(document, storage: FileStoragePort | None = None, commerc
 
 def _document_source_payload(document, storage: FileStoragePort | None = None, commercial_repository: CommercialHardeningRepository | None = None) -> dict[str, object]:
     kind = "jd" if document.document_kind == "job_description" else document.document_kind
-    status = {
-        "processing_requested": "processing",
-        "processing": "processing",
-        "ready": "ready",
-        "failed": "failed",
-        "deleted": "deleted",
-    }.get(document.status, "processing")
+    status = _document_ui_status(document)
     sync_status, artifacts = _artifact_manifest(document, storage, commercial_repository)
     selectable = _is_selectable_document(document) and sync_status == "synced"
     safe_summary = document.summary
@@ -504,7 +510,7 @@ def _knowledge_collection_payload(collection) -> dict[str, object]:
 
 
 def _knowledge_document_payload(document, storage: FileStoragePort | None = None, commercial_repository: CommercialHardeningRepository | None = None) -> dict[str, object]:
-    status = "ready" if document.status == "ready" else "failed" if document.status == "failed" else "deleted" if document.status == "deleted" else "processing"
+    status = _document_ui_status(document)
     sync_status, artifacts = _artifact_manifest(document, storage, commercial_repository)
     selectable = _is_selectable_document(document) and sync_status == "synced"
     return {

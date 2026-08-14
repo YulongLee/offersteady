@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -11,6 +12,7 @@ import { App } from "./App";
 import {
   copyTextWithFallback,
   parseReferralActivationInput,
+  referralCopyFeedbackMs,
 } from "./BillingPage";
 import { interviewAppAdapter } from "./app-adapter";
 import { syntheticState } from "./test-state";
@@ -25,7 +27,10 @@ const open = (path: string, authenticated = true) => {
   );
 };
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 describe("device center and referral growth", () => {
   it.each([
@@ -68,6 +73,9 @@ describe("device center and referral growth", () => {
     vi.spyOn(interviewAppAdapter, "getReferralStatus").mockResolvedValue({
       enabled: true,
       rewardPoints: 500,
+      inviterRewardPoints: 500,
+      inviteeRewardPoints: 500,
+      activationWindowDays: 3,
       configVersion: 2,
       referralCode: "syntheticReferralCode",
       shareUrl: "https://example.test/invite/syntheticReferralCode",
@@ -92,15 +100,32 @@ describe("device center and referral growth", () => {
         "https://example.test/invite/syntheticReferralCode",
       ),
     ).toHaveAttribute("readonly");
-    fireEvent.click(within(section!).getByRole("button", { name: "复制链接" }));
-    await waitFor(() =>
-      expect(writeText).toHaveBeenCalledWith(
-        "https://example.test/invite/syntheticReferralCode",
-      ),
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(
+        within(section!).getByRole("button", { name: "复制链接" }),
+      );
+      await Promise.resolve();
+    });
+    expect(writeText).toHaveBeenCalledWith(
+      "https://example.test/invite/syntheticReferralCode",
     );
     expect(
-      await within(section!).findByRole("button", { name: "已复制" }),
+      within(section!).getByRole("button", { name: "已复制" }),
     ).toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(referralCopyFeedbackMs));
+    expect(
+      within(section!).getByRole("button", { name: "复制链接" }),
+    ).toBeEnabled();
+
+    await act(async () => {
+      fireEvent.click(
+        within(section!).getByRole("button", { name: "复制链接" }),
+      );
+      await Promise.resolve();
+    });
+    expect(writeText).toHaveBeenCalledTimes(2);
   });
 
   it("falls back to the legacy copy command when Clipboard API is unavailable", async () => {
@@ -133,13 +158,15 @@ describe("device center and referral growth", () => {
         outcome: "activated",
         replayed: false,
         rewardPoints: 500,
+        inviterRewardPoints: 500,
+        inviteeRewardPoints: 500,
         activatedAtMs: Date.now(),
       });
     open("/invite/syntheticReferralCode", true);
-    expect(await screen.findByText("500 点")).toBeInTheDocument();
+    expect(await screen.findByText("你获得 500 点，分享链接的好友获得 500 点")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "确认激活邀请" }));
     expect(
-      await screen.findByText("邀请已成功激活，奖励已发放给邀请人。"),
+      await screen.findByText("邀请已成功激活，你获得 500 点，好友获得 500 点。"),
     ).toBeInTheDocument();
     expect(activate).toHaveBeenCalledWith(
       "syntheticReferralCode",
@@ -151,6 +178,12 @@ describe("device center and referral growth", () => {
     const initialStatus = {
       enabled: true,
       rewardPoints: 500,
+      inviterRewardPoints: 500,
+      inviteeRewardPoints: 300,
+      activationWindowDays: 3,
+      eligibleToActivate: true,
+      activationDeadlineMs: Date.now() + 86_400_000,
+      activationEligibilityReason: null,
       configVersion: 2,
       referralCode: "currentUsersReferralCode",
       shareUrl: "https://example.test/invite/currentUsersReferralCode",
@@ -168,11 +201,13 @@ describe("device center and referral growth", () => {
         outcome: "activated",
         replayed: false,
         rewardPoints: 500,
+        inviterRewardPoints: 500,
+        inviteeRewardPoints: 300,
         activatedAtMs: Date.now(),
       });
     open("/app/billing");
 
-    const input = await screen.findByLabelText("邀请链接或邀请码");
+    const input = await screen.findByLabelText("邀请链接");
     fireEvent.change(input, {
       target: { value: "https://mianshiwen.cn/invite/friendsReferralCode" },
     });
@@ -185,7 +220,7 @@ describe("device center and referral growth", () => {
       ),
     );
     expect(
-      await screen.findByText("邀请已成功激活，奖励已发放给邀请人。"),
+      await screen.findByText("邀请已成功激活，你获得 300 点，好友获得 500 点。"),
     ).toBeInTheDocument();
     expect(
       await screen.findByText("已激活过邀请，不能再次激活其他链接。"),
@@ -209,15 +244,19 @@ describe("device center and referral growth", () => {
       .mockResolvedValue({ outcome: "self-referral" });
     open("/app/billing");
 
-    const input = await screen.findByLabelText("邀请链接或邀请码");
+    const input = await screen.findByLabelText("邀请链接");
     fireEvent.change(input, { target: { value: "bad" } });
     fireEvent.click(screen.getByRole("button", { name: "确认激活" }));
     expect(
-      await screen.findByText("请输入有效的邀请链接或邀请码。"),
+      await screen.findByText("请输入有效的邀请链接。"),
     ).toBeInTheDocument();
     expect(activate).not.toHaveBeenCalled();
 
-    fireEvent.change(input, { target: { value: "currentUsersReferralCode" } });
+    fireEvent.change(input, {
+      target: {
+        value: "https://mianshiwen.cn/invite/currentUsersReferralCode",
+      },
+    });
     fireEvent.click(screen.getByRole("button", { name: "确认激活" }));
     expect(
       await screen.findByText("不能激活自己的邀请链接。"),
@@ -239,7 +278,7 @@ describe("device center and referral growth", () => {
     expect(
       await screen.findByText("已激活过邀请，不能再次激活其他链接。"),
     ).toBeInTheDocument();
-    expect(screen.queryByLabelText("邀请链接或邀请码")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("邀请链接")).not.toBeInTheDocument();
   });
 
   it("keeps empty activation actionable and explains that a friend link is required", async () => {
@@ -260,8 +299,34 @@ describe("device center and referral growth", () => {
     expect(button).toBeEnabled();
     fireEvent.click(button);
     expect(
-      await screen.findByText("请输入有效的邀请链接或邀请码。"),
+      await screen.findByText("请输入有效的邀请链接。"),
     ).toBeInTheDocument();
     expect(activate).not.toHaveBeenCalled();
+  });
+
+  it("disables referral activation after the authoritative three-day window expires", async () => {
+    vi.spyOn(interviewAppAdapter, "getReferralStatus").mockResolvedValue({
+      enabled: true,
+      rewardPoints: 500,
+      inviterRewardPoints: 500,
+      inviteeRewardPoints: 300,
+      activationWindowDays: 3,
+      eligibleToActivate: false,
+      activationDeadlineMs: Date.now() - 1,
+      activationEligibilityReason: "activation-window-expired",
+      configVersion: 3,
+      referralCode: "currentUsersReferralCode",
+      shareUrl: "https://example.test/invite/currentUsersReferralCode",
+      inviteCount: 0,
+      totalRewardPoints: 0,
+      hasActivatedReferral: false,
+    });
+    open("/app/billing");
+
+    expect(
+      await screen.findByText("邀请链接仅限新用户注册后 3 天内激活，你的激活期限已过。"),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("邀请链接")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "确认激活" })).not.toBeInTheDocument();
   });
 });

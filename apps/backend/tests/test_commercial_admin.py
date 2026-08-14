@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
+import pytest
 
+from app.api.admin import GrowthReferralSettingsRequest
 from app.core.config import Settings, get_settings
 from app.main import create_app
 from app.services.admin_repository import AdminRepository
@@ -32,6 +35,27 @@ def test_admin_role_permissions_are_deny_by_default() -> None:
     assert "resume_text" not in SAFE_DETAIL_KEYS
     assert "access_token" not in SAFE_DETAIL_KEYS
     assert "screenshot" not in SAFE_DETAIL_KEYS
+    assert "invitee_reward_points" in SAFE_DETAIL_KEYS
+
+
+def test_growth_referral_settings_validate_both_rewards() -> None:
+    payload = GrowthReferralSettingsRequest.model_validate({
+        "enabled": True,
+        "rewardPoints": 500,
+        "inviteeRewardPoints": 300,
+        "confirmed": True,
+        "reason": "双向邀请奖励",
+    })
+    assert payload.reward_points == 500
+    assert payload.invitee_reward_points == 300
+    with pytest.raises(ValidationError):
+        GrowthReferralSettingsRequest.model_validate({
+            "enabled": True,
+            "rewardPoints": 500,
+            "inviteeRewardPoints": 0,
+            "confirmed": True,
+            "reason": "无效新用户奖励",
+        })
 
 
 def test_admin_secrets_are_not_ready_when_unconfigured() -> None:

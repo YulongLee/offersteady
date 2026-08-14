@@ -19,6 +19,7 @@ from app.ports.interview_session import (
     SessionUsageRecord,
     SessionUsageTotals,
 )
+from app.services.postgres_migrations import apply_sql_migrations
 
 
 class PostgresInterviewSessionRepository(InterviewSessionRepository):
@@ -261,6 +262,9 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
                 cursor.execute(
                     (REPO_ROOT / "apps/backend/migrations/versions/0016_idle_interview_lifecycle.sql").read_text(encoding="utf8")
                 )
+                apply_sql_migrations(cursor, [
+                    REPO_ROOT / "apps/backend/migrations/versions/0028_restore_unstarted_interviews.sql",
+                ])
             connection.commit()
 
     def _row_to_session(self, row: dict[str, Any]) -> InterviewSessionRecord:

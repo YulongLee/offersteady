@@ -11,8 +11,12 @@
 - **WHEN** 同一用户再次读取邀请状态
 - **THEN** 系统返回原有邀请码和链接，不重复创建或使历史链接失效
 
+#### Scenario: User copies a referral link repeatedly
+- **WHEN** 用户点击复制专属链接并看到复制成功反馈
+- **THEN** 成功反馈短暂显示后自动恢复为可再次操作的“复制链接”，后续点击仍会重新复制同一稳定链接
+
 ### Requirement: Referral activation is explicit and account authenticated
-邀请链接 SHALL 打开说明邀请关系和奖励对象的公开落地页。积分与会员页 SHALL 同时为尚未激活邀请的登录用户提供粘贴完整分享链接或邀请码的入口。两种入口的激活都 MUST 由登录用户明确确认；未登录用户完成登录后 SHALL 能恢复待激活邀请码，但前端缓存本身不得视为成功。
+邀请链接 SHALL 打开说明邀请关系和奖励对象的公开落地页。积分与会员页 SHALL 同时为尚未激活邀请的登录用户提供粘贴完整分享链接的入口，面向用户的文案 SHALL 统一称为“邀请链接”，不得要求用户理解或查找内部邀请码。两种入口的激活都 MUST 由登录用户明确确认；未登录用户完成登录后 SHALL 能恢复待激活邀请码，但前端缓存本身不得视为成功。
 
 #### Scenario: Visitor activates after login
 - **WHEN** 未登录访问者从有效邀请链接选择“登录并激活”并完成登录
@@ -23,7 +27,7 @@
 - **THEN** 页面显示链接不可用且不创建邀请关系或积分流水
 
 #### Scenario: Logged-in user activates from billing
-- **WHEN** 尚未激活邀请的登录用户在积分与会员页粘贴另一用户的完整分享链接或邀请码并确认激活
+- **WHEN** 尚未激活邀请的登录用户在积分与会员页粘贴另一用户的完整分享链接并确认激活
 - **THEN** Web 解析邀请码、调用认证激活接口、显示服务端确认结果并刷新当前邀请状态
 
 #### Scenario: Billing activation is no longer available

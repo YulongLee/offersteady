@@ -250,6 +250,37 @@ class DocumentService:
             raise DomainRequestError("document-service", "get-document", "不能查看其他用户的文档。", 403)
         return self._to_response(record)
 
+    def set_document_enabled(self, *, user_id: str, document_id: str, enabled: bool) -> DocumentRecordResponse:
+        record = self.repository.get_by_id(document_id)
+        if record is None:
+            raise DomainRequestError("document-service", "set-document-availability", "文档不存在。", 404)
+        if record.owner_user_id != user_id:
+            raise DomainRequestError("document-service", "set-document-availability", "不能修改其他用户的文档。", 403)
+        if record.status == "deleted" or record.index_state == "deleted":
+            raise DomainRequestError("document-service", "set-document-availability", "已删除的资料不能重新启用。", 409)
+
+        target_index_state = "indexed" if enabled else "disabled"
+        if record.index_state == target_index_state:
+            return self._to_response(record)
+        if record.status != "ready" or record.index_state not in {"indexed", "disabled"}:
+            raise DomainRequestError(
+                "document-service",
+                "set-document-availability",
+                "只有已完成索引的资料可以启用或停用。",
+                409,
+            )
+
+        now_ms = _now_ms()
+        updated = DocumentRecord(
+            **{
+                **record.__dict__,
+                "index_state": target_index_state,
+                "updated_at_ms": now_ms,
+                "summary": "已恢复使用，可在面试准备中选择。" if enabled else "已停用，不参与后续面试检索。",
+            }
+        )
+        return self._to_response(self.repository.save(updated))
+
     def delete_document(self, *, user_id: str, document_id: str) -> DocumentRecordResponse:
         record = self.repository.get_by_id(document_id)
         if record is None:

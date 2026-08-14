@@ -55,6 +55,7 @@ class GrowthReferralSettingsRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     enabled: bool
     reward_points: int = Field(ge=1, le=100_000, alias="rewardPoints")
+    invitee_reward_points: int = Field(ge=1, le=100_000, alias="inviteeRewardPoints")
     confirmed: bool
     reason: str = Field(min_length=3, max_length=500)
 
@@ -323,6 +324,7 @@ def update_growth_referral_settings(
         result = billing.update_growth_referral_settings(
             enabled=payload.enabled,
             reward_points=payload.reward_points,
+            invitee_reward_points=payload.invitee_reward_points,
             updated_by_user_id=principal.user_id,
         )
         admin_service().audit(
@@ -336,6 +338,7 @@ def update_growth_referral_settings(
             details={
                 "enabled": payload.enabled,
                 "reward_points": payload.reward_points,
+                "invitee_reward_points": payload.invitee_reward_points,
                 "config_version": result["configVersion"],
             },
         )

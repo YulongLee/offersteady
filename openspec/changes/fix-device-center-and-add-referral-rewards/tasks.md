@@ -23,6 +23,8 @@
 - [x] 3.5 Add Web and Admin tests for activation outcomes, copy state, configuration validation and permission gates
 - [x] 3.6 Add a Billing-page activation form that accepts a referral URL or code and refreshes authoritative status after activation
 - [x] 3.7 Add Web regression tests for URL/code parsing, success, invalid input, self-referral and already-activated states
+- [x] 3.8 Reset referral copy feedback automatically and keep repeated copy actions available
+- [x] 3.9 Use “邀请链接” consistently in the Billing activation UI while retaining internal code parsing compatibility
 
 ## 4. Verification and release
 

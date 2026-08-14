@@ -47,7 +47,7 @@ SAFE_DETAIL_KEYS = frozenset({
     "idempotent_replay", "role", "batch_id", "code_count", "points_per_code",
     "expires_at_ms", "campaign", "product_id", "display_name", "price_cents",
     "published", "catalog_version",
-    "enabled", "reward_points", "config_version",
+    "enabled", "reward_points", "invitee_reward_points", "config_version",
 })
 HIGH_RISK_PERMISSIONS = frozenset({
     "users.suspend", "billing.adjust", "catalog.manage", "redemptions.generate", "payments.manage", "payments.reconcile", "growth.manage", "admins.manage",

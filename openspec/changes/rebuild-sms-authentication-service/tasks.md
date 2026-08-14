@@ -43,3 +43,4 @@
 - [x] 6.3 Add frontend tests for SMS login UI states, successful login persistence, unauthenticated guard behavior, token refresh, and logout.
 - [x] 6.4 Add integration verification docs and command coverage for fake provider mode and optional real Aliyun SMS probe.
 - [x] 6.5 Run `openspec validate rebuild-sms-authentication-service --strict` and record any remaining implementation constraints before apply completion.
+- [x] 6.6 Distinguish wrong/expired code, verification rate limiting and provider outages in login feedback, with backend and Web regressions.

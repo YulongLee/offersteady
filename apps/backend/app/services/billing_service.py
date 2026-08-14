@@ -3,14 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import secrets
 from time import time
+from typing import Callable
 from uuid import uuid4
 
 from app.core.config import Settings
+from app.ports.authentication import AuthenticationRepository
 from app.ports.billing_persistence import BillingPersistencePort
 from app.ports.points_redemption import PersistedPointsLedgerEntry, PersistedPointsRedemption, PointsRedemptionRepository
 
 
 WELCOME_GRANT_POINTS = 200
+REFERRAL_ACTIVATION_WINDOW_MS = 72 * 60 * 60 * 1000
 DEFAULT_REDEMPTION_CODE_POINTS = {
     "OFFERSTEADY-DEMO": 120,
     "SYNTHETIC-DEMO": 120,
@@ -147,6 +150,8 @@ class BillingService:
         settings: Settings | None = None,
         redemption_repository: PointsRedemptionRepository | None = None,
         billing_repository: BillingPersistencePort | None = None,
+        authentication_repository: AuthenticationRepository | None = None,
+        now_ms_provider: Callable[[], int] | None = None,
     ) -> None:
         self.settings = settings
         configured_codes = settings.redemption_code_points if settings is not None else {}
@@ -156,6 +161,8 @@ class BillingService:
         }
         self.redemption_repository = redemption_repository
         self.billing_repository = billing_repository
+        self.authentication_repository = authentication_repository
+        self.now_ms_provider = now_ms_provider or _now_ms
         self.support = {
             "wechatId": settings.support_wechat_id if settings is not None else "OneShowAILab",
             "email": settings.support_email if settings is not None else "contact@oneshowailab.com",
@@ -187,10 +194,14 @@ class BillingService:
         self.referral_settings: dict[str, object] = {
             "enabled": False,
             "rewardPoints": 500,
+            "inviterRewardPoints": 500,
+            "inviteeRewardPoints": 500,
+            "activationWindowDays": 3,
             "configVersion": 1,
             "updatedByUserId": None,
             "updatedAtMs": 0,
         }
+        self.referral_registration_ms_by_user: dict[str, int] = {}
 
     def state_for_user(self, *, user_id: str) -> BillingStateRecord:
         self._release_stale_usage_reservations(user_id=user_id)
@@ -223,6 +234,7 @@ class BillingService:
 
     def referral_status(self, *, user_id: str) -> dict[str, object]:
         self._require_persistent_referrals()
+        now_ms = self.now_ms_provider()
         code = self._referral_code_for_user(user_id=user_id)
         if self.billing_repository is not None:
             status = self.billing_repository.referral_status(user_id=user_id)
@@ -231,9 +243,13 @@ class BillingService:
             status = {
                 **self.referral_settings,
                 "inviteCount": len(activations),
-                "totalRewardPoints": sum(int(item["rewardPoints"]) for item in activations),
+                "totalRewardPoints": sum(int(item["inviterRewardPoints"]) for item in activations),
                 "hasActivatedReferral": user_id in self.referral_activations_by_invitee,
+                "activatedReward": self._activated_reward(user_id=user_id),
             }
+        created_at_ms = self._user_created_at_ms(user_id=user_id, observed_at_ms=now_ms)
+        deadline_ms = None if created_at_ms is None else created_at_ms + REFERRAL_ACTIVATION_WINDOW_MS
+        status.update(self._referral_eligibility(status=status, now_ms=now_ms, deadline_ms=deadline_ms))
         public_base_url = (self.settings.public_web_base_url if self.settings is not None else "http://127.0.0.1:5173").rstrip("/")
         return {
             **status,
@@ -254,22 +270,33 @@ class BillingService:
                 "valid": True,
                 "enabled": bool(resolved["enabled"]),
                 "rewardPoints": int(resolved["reward_points"]),
+                "inviterRewardPoints": int(resolved["reward_points"]),
+                "inviteeRewardPoints": int(resolved["invitee_reward_points"]),
+                "activationWindowDays": 3,
             }
         inviter_user_id = self.referral_users_by_code.get(code)
         return {
             "valid": inviter_user_id is not None,
             "enabled": inviter_user_id is not None and bool(self.referral_settings["enabled"]),
             "rewardPoints": int(self.referral_settings["rewardPoints"]),
+            "inviterRewardPoints": int(self.referral_settings["inviterRewardPoints"]),
+            "inviteeRewardPoints": int(self.referral_settings["inviteeRewardPoints"]),
+            "activationWindowDays": 3,
         }
 
     def activate_referral(self, *, invitee_user_id: str, referral_code: str) -> dict[str, object]:
         self._require_persistent_referrals()
         code = referral_code.strip()
+        activated_at_ms = self.now_ms_provider()
+        registered_at_ms = self._user_created_at_ms(user_id=invitee_user_id, observed_at_ms=activated_at_ms)
+        deadline_ms = None if registered_at_ms is None else registered_at_ms + REFERRAL_ACTIVATION_WINDOW_MS
         if self.billing_repository is not None:
             return self.billing_repository.activate_referral(
                 invitee_user_id=invitee_user_id,
                 referral_code=code,
-                activated_at_ms=_now_ms(),
+                activated_at_ms=activated_at_ms,
+                invitee_registered_at_ms=registered_at_ms,
+                activation_deadline_ms=deadline_ms,
             )
         inviter_user_id = self.referral_users_by_code.get(code)
         if inviter_user_id is None:
@@ -283,12 +310,18 @@ class BillingService:
                 "outcome": "activated" if same_code else "already-activated",
                 "replayed": same_code,
                 "rewardPoints": int(existing["rewardPoints"]),
+                "inviterRewardPoints": int(existing["inviterRewardPoints"]),
+                "inviteeRewardPoints": int(existing["inviteeRewardPoints"]),
                 "activatedAtMs": int(existing["activatedAtMs"]),
             }
+        if registered_at_ms is None or deadline_ms is None:
+            return {"outcome": "registration-time-unavailable"}
+        if activated_at_ms > deadline_ms:
+            return {"outcome": "activation-window-expired", "activationDeadlineMs": deadline_ms}
         if not bool(self.referral_settings["enabled"]):
             return {"outcome": "disabled"}
-        reward_points = int(self.referral_settings["rewardPoints"])
-        activated_at_ms = _now_ms()
+        reward_points = int(self.referral_settings["inviterRewardPoints"])
+        invitee_reward_points = int(self.referral_settings["inviteeRewardPoints"])
         activation_id = f"referral-activation-{uuid4().hex}"
         activation = {
             "activationId": activation_id,
@@ -296,16 +329,27 @@ class BillingService:
             "inviteeUserId": invitee_user_id,
             "referralCode": code,
             "rewardPoints": reward_points,
+            "inviterRewardPoints": reward_points,
+            "inviteeRewardPoints": invitee_reward_points,
             "configVersion": int(self.referral_settings["configVersion"]),
+            "activationDeadlineMs": deadline_ms,
             "activatedAtMs": activated_at_ms,
         }
         self._ensure_welcome_grant(user_id=inviter_user_id)
-        reference_id = f"referral:{activation_id}"
-        if not any(item.reference_id == reference_id for item in self.ledger_by_user.get(inviter_user_id, [])):
+        self._ensure_welcome_grant(user_id=invitee_user_id)
+        inviter_reference_id = f"referral:{activation_id}:inviter"
+        invitee_reference_id = f"referral:{activation_id}:invitee"
+        if not any(item.reference_id == inviter_reference_id for item in self.ledger_by_user.get(inviter_user_id, [])):
             self.ledger_by_user.setdefault(inviter_user_id, []).append(PointsLedgerRecord(
                 id=f"ledger-{uuid4().hex}", user_id=inviter_user_id, kind="referral_credit",
-                points=reward_points, created_at_ms=activated_at_ms, reference_id=reference_id,
+                points=reward_points, created_at_ms=activated_at_ms, reference_id=inviter_reference_id,
                 description="邀请好友奖励",
+            ))
+        if not any(item.reference_id == invitee_reference_id for item in self.ledger_by_user.get(invitee_user_id, [])):
+            self.ledger_by_user.setdefault(invitee_user_id, []).append(PointsLedgerRecord(
+                id=f"ledger-{uuid4().hex}", user_id=invitee_user_id, kind="referral_invitee_credit",
+                points=invitee_reward_points, created_at_ms=activated_at_ms, reference_id=invitee_reference_id,
+                description="新用户邀请激活奖励",
             ))
         self.referral_activations_by_invitee[invitee_user_id] = activation
         self.referral_activations_by_inviter.setdefault(inviter_user_id, []).append(activation)
@@ -313,8 +357,11 @@ class BillingService:
             "outcome": "activated",
             "replayed": False,
             "rewardPoints": reward_points,
+            "inviterRewardPoints": reward_points,
+            "inviteeRewardPoints": invitee_reward_points,
             "activatedAtMs": activated_at_ms,
             "inviterBalance": self._balance_for_user(user_id=inviter_user_id),
+            "inviteeBalance": self._balance_for_user(user_id=invitee_user_id),
         }
 
     def growth_referral_settings(self) -> dict[str, object]:
@@ -323,26 +370,69 @@ class BillingService:
             return self.billing_repository.growth_referral_settings()
         return dict(self.referral_settings)
 
-    def update_growth_referral_settings(self, *, enabled: bool, reward_points: int, updated_by_user_id: str) -> dict[str, object]:
+    def update_growth_referral_settings(self, *, enabled: bool, reward_points: int, updated_by_user_id: str, invitee_reward_points: int | None = None) -> dict[str, object]:
         self._require_persistent_referrals()
+        invitee_points = reward_points if invitee_reward_points is None else invitee_reward_points
         if isinstance(reward_points, bool) or reward_points < 1 or reward_points > 100_000:
             raise ValueError("referral_reward_points_invalid")
-        updated_at_ms = _now_ms()
+        if isinstance(invitee_points, bool) or invitee_points < 1 or invitee_points > 100_000:
+            raise ValueError("referral_invitee_reward_points_invalid")
+        updated_at_ms = self.now_ms_provider()
         if self.billing_repository is not None:
             return self.billing_repository.update_growth_referral_settings(
                 enabled=enabled,
                 reward_points=reward_points,
+                invitee_reward_points=invitee_points,
                 updated_by_user_id=updated_by_user_id,
                 updated_at_ms=updated_at_ms,
             )
         self.referral_settings = {
             "enabled": enabled,
             "rewardPoints": reward_points,
+            "inviterRewardPoints": reward_points,
+            "inviteeRewardPoints": invitee_points,
+            "activationWindowDays": 3,
             "configVersion": int(self.referral_settings["configVersion"]) + 1,
             "updatedByUserId": updated_by_user_id,
             "updatedAtMs": updated_at_ms,
         }
         return dict(self.referral_settings)
+
+    def _user_created_at_ms(self, *, user_id: str, observed_at_ms: int) -> int | None:
+        if self.authentication_repository is not None:
+            user = self.authentication_repository.get_user(user_id)
+            return None if user is None else int(user.created_at_ms)
+        return self.referral_registration_ms_by_user.setdefault(user_id, observed_at_ms)
+
+    @staticmethod
+    def _referral_eligibility(*, status: dict[str, object], now_ms: int, deadline_ms: int | None) -> dict[str, object]:
+        has_activated = bool(status.get("hasActivatedReferral"))
+        if has_activated:
+            reason = "already-activated"
+        elif deadline_ms is None:
+            reason = "registration-time-unavailable"
+        elif now_ms > deadline_ms:
+            reason = "activation-window-expired"
+        elif not bool(status.get("enabled")):
+            reason = "activity-disabled"
+        else:
+            reason = None
+        return {
+            "eligibleToActivate": reason is None,
+            "activationDeadlineMs": deadline_ms,
+            "activationEligibilityReason": reason,
+            "activationWindowDays": 3,
+        }
+
+    def _activated_reward(self, *, user_id: str) -> dict[str, object] | None:
+        activation = self.referral_activations_by_invitee.get(user_id)
+        if activation is None:
+            return None
+        return {
+            "inviterRewardPoints": int(activation["inviterRewardPoints"]),
+            "inviteeRewardPoints": int(activation["inviteeRewardPoints"]),
+            "activatedAtMs": int(activation["activatedAtMs"]),
+        }
 
     def _require_persistent_referrals(self) -> None:
         if self.settings is not None and self.settings.environment == "production" and self.billing_repository is None:

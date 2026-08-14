@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { companionPrimaryAction, companionStatusCopy, liveInterviewUrl } from "../src/renderer/CompanionApp";
 
@@ -14,5 +15,12 @@ describe("companion interview wording", () => {
     expect(liveInterviewUrl("https://mianshiwen.cn/app", "session-current")).toBe(
       "https://mianshiwen.cn/app/interviews/session-current/live",
     );
+  });
+
+  it("keeps the screen thumbnail visible without an unnecessary close-preview action", () => {
+    const source = readFileSync(new URL("../src/renderer/CompanionApp.tsx", import.meta.url), "utf8");
+
+    expect(source).toContain('aria-label="屏幕捕捉预览"');
+    expect(source).not.toContain(">关闭预览</button>");
   });
 });

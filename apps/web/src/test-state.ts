@@ -188,18 +188,18 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
 
   async getReferralStatus(signal?: AbortSignal) {
     await delay(signal);
-    return { enabled: true, rewardPoints: 500, configVersion: 1, referralCode: "syntheticReferralCode", shareUrl: "https://example.test/invite/syntheticReferralCode", inviteCount: 0, totalRewardPoints: 0, hasActivatedReferral: false };
+    return { enabled: true, rewardPoints: 500, inviterRewardPoints: 500, inviteeRewardPoints: 500, activationWindowDays: 3, eligibleToActivate: true, activationDeadlineMs: Date.now() + 86_400_000, activationEligibilityReason: null, configVersion: 1, referralCode: "syntheticReferralCode", shareUrl: "https://example.test/invite/syntheticReferralCode", inviteCount: 0, totalRewardPoints: 0, hasActivatedReferral: false };
   }
 
   async resolveReferral(code: string, signal?: AbortSignal) {
     await delay(signal);
-    return { valid: code === "syntheticReferralCode", enabled: true, rewardPoints: 500 };
+    return { valid: code === "syntheticReferralCode", enabled: true, rewardPoints: 500, inviterRewardPoints: 500, inviteeRewardPoints: 500, activationWindowDays: 3 };
   }
 
   async activateReferral(code: string, signal?: AbortSignal) {
     await delay(signal);
     return code === "syntheticReferralCode"
-      ? { outcome: "activated" as const, replayed: false, rewardPoints: 500, activatedAtMs: Date.now() }
+      ? { outcome: "activated" as const, replayed: false, rewardPoints: 500, inviterRewardPoints: 500, inviteeRewardPoints: 500, activatedAtMs: Date.now() }
       : { outcome: "invalid-code" as const };
   }
 

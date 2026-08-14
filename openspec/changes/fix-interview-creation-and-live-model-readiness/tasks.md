@@ -25,3 +25,10 @@
 - [x] 4.3 Add integration coverage proving manual fast-answer hits the real backend runtime contract instead of mock output.
 - [x] 4.4 Run `openspec validate fix-interview-creation-and-live-model-readiness --strict`.
 - [x] 4.5 Add Web regression tests for latest-interview defaults, first-use empty fields and editable prefilled values.
+
+## 5. Preparing-session lifecycle regression
+
+- [x] 5.1 Confirm that the per-session idle reconciliation path incorrectly applies live-session timeout rules to preparing sessions.
+- [x] 5.2 Restrict idle warning and automatic termination to sessions that have actually started and remain live.
+- [x] 5.3 Repair previously auto-ended sessions that never started while preserving deleted and genuinely started sessions.
+- [x] 5.4 Add regression coverage and rerun strict OpenSpec validation.

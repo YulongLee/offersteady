@@ -1,4 +1,5 @@
 import {
+  useRef,
   useState,
   type Dispatch,
   type ReactNode,
@@ -94,6 +95,7 @@ export function LibraryManager({ state, setState }: Props) {
   const [error, setError] = useState("");
   const [operation, setOperation] = useState<LibraryOperation>(null);
   const [submittingUpload, setSubmittingUpload] = useState(false);
+  const refreshGenerationRef = useRef(0);
   const selected =
     state.knowledgeCollections.find((item) => item.id === selectedId) ?? null;
   const documents = state.knowledgeDocuments.filter(
@@ -126,11 +128,15 @@ export function LibraryManager({ state, setState }: Props) {
   const quoteSource =
     allowanceRemaining > 0 ? ("pass_allowance" as const) : ("points" as const);
   const refreshFromBackend = async () => {
+    const generation = ++refreshGenerationRef.current;
     const next = await runAdapterOperation((signal) =>
       interviewAppAdapter.loadState(signal),
     );
-    setState(next);
+    if (generation === refreshGenerationRef.current) setState(next);
     return next;
+  };
+  const invalidatePendingRefreshes = () => {
+    refreshGenerationRef.current += 1;
   };
   const pollDocumentUntilSettled = (documentId: string) => {
     void (async () => {
@@ -542,6 +548,7 @@ export function LibraryManager({ state, setState }: Props) {
     const op = `document:${source.id}` as const;
     setOperation(op);
     setError("");
+    invalidatePendingRefreshes();
     void runAdapterOperation((signal) =>
       materialUploadAdapter.deleteDocument(
         state.account.id,
@@ -568,6 +575,7 @@ export function LibraryManager({ state, setState }: Props) {
     const op = `document:${document.id}` as const;
     setOperation(op);
     setError("");
+    invalidatePendingRefreshes();
     void runAdapterOperation((signal) =>
       materialUploadAdapter.deleteDocument(
         state.account.id,
@@ -593,6 +601,7 @@ export function LibraryManager({ state, setState }: Props) {
     )
       return;
     setOperation("delete-collection");
+    invalidatePendingRefreshes();
     const deletingCollectionId = selected.id;
     void runAdapterOperation((signal) =>
       materialUploadAdapter.deleteKnowledgeCollection(
@@ -624,6 +633,7 @@ export function LibraryManager({ state, setState }: Props) {
     if (!next) return;
     setOperation("rename-collection");
     setError("");
+    invalidatePendingRefreshes();
     void runAdapterOperation((signal) =>
       materialUploadAdapter.renameKnowledgeCollection(
         state.account.id,
@@ -643,10 +653,27 @@ export function LibraryManager({ state, setState }: Props) {
   };
   const updateDocument = (
     document: KnowledgeDocumentVersion,
-    action: "ready" | "retry" | "replace" | "rename" | "disable",
+    action: "ready" | "retry" | "replace" | "rename" | "disable" | "enable",
   ) => {
     const op = `document:${document.id}` as const;
     setOperation(op);
+    setError("");
+    if (action === "disable" || action === "enable") {
+      invalidatePendingRefreshes();
+      void runAdapterOperation((signal) =>
+        materialUploadAdapter.setDocumentEnabled(
+          state.account.id,
+          document.documentId ?? document.id,
+          action === "enable",
+          signal,
+        ),
+      )
+        .then(() => refreshFromBackend())
+        .then(() => setNotice(action === "enable" ? "资料已启用，可在面试准备中选择" : "资料已停用，不参与后续面试"))
+        .catch((error) => setError(error instanceof Error ? error.message : `${action === "enable" ? "启用" : "停用"}资料失败，请稍后重试`))
+        .finally(() => setOperation(null));
+      return;
+    }
     const now = Date.now();
     const nextName =
       action === "rename"
@@ -927,6 +954,14 @@ export function LibraryManager({ state, setState }: Props) {
                               }
                             >
                               停用
+                            </button>
+                          ) : null}
+                          {document.status === "disabled" ? (
+                            <button
+                              disabled={operation !== null}
+                              onClick={() => updateDocument(document, "enable")}
+                            >
+                              {operation === `document:${document.id}` ? "启用中…" : "启用"}
                             </button>
                           ) : null}
                           <button

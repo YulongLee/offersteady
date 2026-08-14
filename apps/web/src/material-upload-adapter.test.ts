@@ -58,4 +58,20 @@ describe("BackendMaterialUploadAdapter knowledge billing confirmation", () => {
     expect(completionBodies[0]).toMatchObject({ confirmIndexCharge: true });
     expect(completionBodies[1]).not.toHaveProperty("confirmIndexCharge");
   });
+
+  it("persists document availability through the owner-scoped backend endpoint", async () => {
+    const requests: Array<{ url: string; init: RequestInit | undefined }> = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      requests.push({ url: String(input), init });
+      return envelope({ documentId: "document-1", indexState: "indexed" });
+    };
+    const adapter = new BackendMaterialUploadAdapter("https://api.example", fetchImpl);
+
+    await adapter.setDocumentEnabled("user-1", "document-1", true);
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.url).toBe("https://api.example/api/v1/documents/document-1/availability");
+    expect(requests[0]?.init?.method).toBe("PATCH");
+    expect(JSON.parse(String(requests[0]?.init?.body))).toEqual({ userId: "user-1", enabled: true });
+  });
 });

@@ -64,7 +64,7 @@ The backend SHALL return stable error codes for user-correctable validation fail
 
 #### Scenario: Code is wrong or expired
 - **WHEN** provider verification reports an invalid or expired code
-- **THEN** the backend SHALL reject login with a verification failure and SHALL NOT issue tokens
+- **THEN** the backend SHALL reject login with a user-correctable verification message, the Web UI SHALL preserve the entered code for correction, and the system SHALL NOT describe the failure as provider unavailability or issue tokens
 
 ### Requirement: Web authentication UI SHALL support SMS registration/login
 The Web app SHALL provide a phone-number login/register flow that calls backend SMS APIs and restores authenticated user state from real backend tokens.

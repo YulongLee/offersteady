@@ -707,21 +707,24 @@ function PaymentPanel({ rows, onChanged, onAuthenticationExpired }: { rows: Row[
 function GrowthPanel({ row, onChanged, onAuthenticationExpired }: { row: Row | undefined; onChanged: () => void; onAuthenticationExpired: (message: string) => void }) {
   const [enabled, setEnabled] = useState(Boolean(row?.enabled));
   const [rewardPoints, setRewardPoints] = useState(String(row?.rewardPoints ?? 500));
+  const [inviteeRewardPoints, setInviteeRewardPoints] = useState(String(row?.inviteeRewardPoints ?? 500));
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   useEffect(() => {
     setEnabled(Boolean(row?.enabled));
     setRewardPoints(String(row?.rewardPoints ?? 500));
-  }, [row?.enabled, row?.rewardPoints]);
+    setInviteeRewardPoints(String(row?.inviteeRewardPoints ?? 500));
+  }, [row?.enabled, row?.rewardPoints, row?.inviteeRewardPoints]);
   const save = async () => {
     const points = Number(rewardPoints);
-    const validation = validateGrowthSettings(rewardPoints, reason);
+    const inviteePoints = Number(inviteeRewardPoints);
+    const validation = validateGrowthSettings(rewardPoints, inviteeRewardPoints, reason);
     if (!validation.valid) { setMessage(validation.message); return; }
     setBusy(true); setMessage("");
     try {
-      const result = await adminApi.saveGrowthReferralSettings({ enabled, rewardPoints: points, confirmed: true, reason: reason.trim() });
-      setMessage(result.enabled ? `邀请奖励已开启，每成功激活 1 人奖励 ${result.rewardPoints} 积分。` : "邀请奖励已关闭，历史关系和已发积分不会撤销。");
+      const result = await adminApi.saveGrowthReferralSettings({ enabled, rewardPoints: points, inviteeRewardPoints: inviteePoints, confirmed: true, reason: reason.trim() });
+      setMessage(result.enabled ? `邀请奖励已开启：分享者 ${result.inviterRewardPoints} 点，新用户 ${result.inviteeRewardPoints} 点。` : "邀请奖励已关闭，历史关系和已发积分不会撤销。");
       setReason("");
       onChanged();
     } catch (error) {
@@ -730,7 +733,7 @@ function GrowthPanel({ row, onChanged, onAuthenticationExpired }: { row: Row | u
       if (isAdminAuthenticationError(error)) onAuthenticationExpired(errorMessage);
     } finally { setBusy(false); }
   };
-  return <section className="growth-settings-card"><div className="growth-settings-head"><div><p className="eyebrow">REFERRAL PROGRAM</p><h3>邀请拉新奖励</h3><p>用户分享专属链接，其他账号首次激活后，邀请人获得积分。每个账号只能激活一次，禁止自邀。</p></div><span className={`status-badge ${enabled ? "active" : "inactive"}`}>{enabled ? "当前已启用" : "当前已关闭"}</span></div><div className="growth-setting-grid"><label><span>允许新邀请激活</span><small>关闭后保留历史数据，仅停止新的激活和奖励</small><input type="checkbox" role="switch" aria-label="允许新邀请激活" checked={enabled} onChange={event => setEnabled(event.target.checked)} /></label><label><span>每次成功邀请奖励</span><small>只奖励邀请人，额度由服务端入账</small><div className="points-input"><input type="number" min="1" max="100000" step="1" value={rewardPoints} onChange={event => setRewardPoints(event.target.value)} /><b>积分</b></div></label></div><label className="growth-reason">配置变更原因<input value={reason} onChange={event => setReason(event.target.value)} placeholder="例如：上线首期邀请活动" /></label><div className="growth-settings-footer"><div><strong>配置版本 v{String(row?.configVersion ?? 1)}</strong><small>{Number(row?.updatedAtMs) > 0 ? `最近更新：${new Date(Number(row?.updatedAtMs)).toLocaleString("zh-CN")}` : "尚未进行运营配置"}</small></div><button className="primary" disabled={busy} onClick={() => void save()}>{busy ? "保存中…" : "保存并立即生效"}</button></div>{message ? <div className="form-message" role="status">{message}</div> : null}</section>;
+  return <section className="growth-settings-card"><div className="growth-settings-head"><div><p className="eyebrow">REFERRAL PROGRAM</p><h3>邀请拉新奖励</h3><p>新用户仅可在注册后 3 天内激活好友链接；成功后分享者与新用户分别获得积分。每个账号只能激活一次，禁止自邀。</p></div><span className={`status-badge ${enabled ? "active" : "inactive"}`}>{enabled ? "当前已启用" : "当前已关闭"}</span></div><div className="growth-setting-grid"><label><span>允许新邀请激活</span><small>固定注册后 3 天内可激活；关闭后仅停止新的激活和奖励</small><input type="checkbox" role="switch" aria-label="允许新邀请激活" checked={enabled} onChange={event => setEnabled(event.target.checked)} /></label><label><span>分享者奖励</span><small>好友在有效期内激活后发放</small><div className="points-input"><input aria-label="分享者奖励积分" type="number" min="1" max="100000" step="1" value={rewardPoints} onChange={event => setRewardPoints(event.target.value)} /><b>积分</b></div></label><label><span>新用户奖励</span><small>新用户成功激活后同步发放</small><div className="points-input"><input aria-label="新用户奖励积分" type="number" min="1" max="100000" step="1" value={inviteeRewardPoints} onChange={event => setInviteeRewardPoints(event.target.value)} /><b>积分</b></div></label></div><label className="growth-reason">配置变更原因<input value={reason} onChange={event => setReason(event.target.value)} placeholder="例如：上线双向邀请奖励" /></label><div className="growth-settings-footer"><div><strong>配置版本 v{String(row?.configVersion ?? 1)}</strong><small>{Number(row?.updatedAtMs) > 0 ? `最近更新：${new Date(Number(row?.updatedAtMs)).toLocaleString("zh-CN")}` : "尚未进行运营配置"}</small></div><button className="primary" disabled={busy} onClick={() => void save()}>{busy ? "保存中…" : "保存并立即生效"}</button></div>{message ? <div className="form-message" role="status">{message}</div> : null}</section>;
 }
 
 export function App() {

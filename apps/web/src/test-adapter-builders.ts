@@ -53,6 +53,7 @@ export const mockSuccessfulMaterialUploadAdapter = () => {
     updatedAtMs: Date.now(),
   }));
   vi.spyOn(materialUploadAdapter, "deleteKnowledgeCollection").mockResolvedValue();
+  vi.spyOn(materialUploadAdapter, "setDocumentEnabled").mockResolvedValue();
   const assertSupported = (file: File) => {
     if (!detectMaterialUploadFormat(file.name)) throw new AppError("validation", `当前仅支持 ${materialUploadFormatLabel}`);
   };

@@ -143,6 +143,17 @@ export interface BillingPresentationState {
 export interface ReferralStatus {
   readonly enabled: boolean;
   readonly rewardPoints: number;
+  readonly inviterRewardPoints?: number;
+  readonly inviteeRewardPoints?: number;
+  readonly activationWindowDays?: number;
+  readonly eligibleToActivate?: boolean;
+  readonly activationDeadlineMs?: number | null;
+  readonly activationEligibilityReason?: "already-activated" | "registration-time-unavailable" | "activation-window-expired" | "activity-disabled" | null;
+  readonly activatedReward?: {
+    readonly inviterRewardPoints: number;
+    readonly inviteeRewardPoints: number;
+    readonly activatedAtMs: number;
+  } | null;
   readonly configVersion: number;
   readonly referralCode: string;
   readonly shareUrl: string;
@@ -152,9 +163,12 @@ export interface ReferralStatus {
 }
 
 export interface ReferralActivationResult {
-  readonly outcome: "activated" | "already-activated" | "invalid-code" | "self-referral" | "disabled";
+  readonly outcome: "activated" | "already-activated" | "invalid-code" | "self-referral" | "disabled" | "activation-window-expired" | "registration-time-unavailable";
   readonly replayed?: boolean;
   readonly rewardPoints?: number;
+  readonly inviterRewardPoints?: number;
+  readonly inviteeRewardPoints?: number;
+  readonly activationDeadlineMs?: number;
   readonly activatedAtMs?: number;
 }
 
@@ -232,7 +246,7 @@ export interface InterviewAppAdapter {
   loadState(signal?: AbortSignal, options?: { readonly auth?: boolean }): Promise<WebAppState>;
   getBillingState(signal?: AbortSignal): Promise<BillingPresentationState>;
   getReferralStatus(signal?: AbortSignal): Promise<ReferralStatus>;
-  resolveReferral(code: string, signal?: AbortSignal): Promise<{ valid: boolean; enabled: boolean; rewardPoints?: number }>;
+  resolveReferral(code: string, signal?: AbortSignal): Promise<{ valid: boolean; enabled: boolean; rewardPoints?: number; inviterRewardPoints?: number; inviteeRewardPoints?: number; activationWindowDays?: number }>;
   activateReferral(code: string, signal?: AbortSignal): Promise<ReferralActivationResult>;
   createDraft(input: { title: string; role: string; company?: string }, signal?: AbortSignal): Promise<InterviewSummary>;
   confirmInterviewMaterials(selection: SessionContextSelection, signal?: AbortSignal): Promise<SessionContextSelection>;

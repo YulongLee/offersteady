@@ -21,6 +21,14 @@
 - **WHEN** 当前账号没有任何历史面试且用户打开新建面试页
 - **THEN** 面试名称、目标岗位和公司保持为空，并要求用户自行填写必填项
 
+#### Scenario: Preparing interview remains resumable after inactivity
+- **WHEN** 用户创建面试后尚未点击开始，并离开准备页超过实时面试空闲超时时间
+- **THEN** 会话继续保持 preparing，用户再次进入准备页时仍可选择资料、连接设备并开始面试
+
+#### Scenario: Recover an incorrectly auto-ended unstarted interview
+- **WHEN** 历史缺陷曾把 `startedAtMs` 为空的 preparing 会话错误标记为 ended
+- **THEN** 系统将该未开始会话恢复为 preparing，且不得把真正开始过或用户已删除的会话恢复
+
 ### Requirement: Confirm the material list without a redundant data-purpose checkbox
 当用户已确认本场资料并点击“开始面试”时，系统 MUST 先完成后端会话启动，再进入实时面试页。若当前模式为 Web 手动输入模式，开始面试 MUST NOT 再要求额外令牌、发布凭证或等价的前置门槛。
 

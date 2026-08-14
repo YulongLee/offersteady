@@ -36,6 +36,7 @@ const officialStatus: Record<OfficialCheckoutOrder["status"], string> = {
   refunded: "已退款",
 };
 const minuteMs = 60_000;
+export const referralCopyFeedbackMs = 1_600;
 
 export const formatMembershipDuration = (durationMs: number) => {
   if (durationMs <= 0) return "0 小时 0 分钟";
@@ -240,7 +241,18 @@ export function BillingPage({ state, setState }: Props) {
     () => successfulOfficialOrders(state.billing.officialOrders),
     [state.billing.officialOrders],
   );
+  const inviterRewardPoints = referral?.inviterRewardPoints ?? referral?.rewardPoints ?? 0;
+  const inviteeRewardPoints = referral?.inviteeRewardPoints ?? referral?.rewardPoints ?? 0;
+  const activationDeadlineMs = referral?.activationDeadlineMs ?? null;
+  const referralEligible = Boolean(
+    referral &&
+      !referral.hasActivatedReferral &&
+      referral.enabled &&
+      (referral.eligibleToActivate ?? true) &&
+      (activationDeadlineMs === null || clockMs <= activationDeadlineMs),
+  );
   const redemptionController = useRef<AbortController | null>(null);
+  const referralCopyTimer = useRef<number | null>(null);
   const refreshBillingState = useCallback(async () => {
     setEntitlementSync("syncing");
     try {
@@ -259,6 +271,8 @@ export function BillingPage({ state, setState }: Props) {
   useEffect(
     () => () => {
       redemptionController.current?.abort();
+      if (referralCopyTimer.current !== null)
+        window.clearTimeout(referralCopyTimer.current);
     },
     [],
   );
@@ -531,6 +545,10 @@ export function BillingPage({ state, setState }: Props) {
   }, [activePass?.endsAtMs, nextPass?.startsAtMs, refreshBillingState]);
   const copyReferralLink = async () => {
     if (!referral) return;
+    if (referralCopyTimer.current !== null) {
+      window.clearTimeout(referralCopyTimer.current);
+      referralCopyTimer.current = null;
+    }
     const copied = await copyTextWithFallback(referral.shareUrl);
     if (!copied) {
       const input = document.querySelector<HTMLInputElement>(
@@ -540,18 +558,25 @@ export function BillingPage({ state, setState }: Props) {
       input?.select();
     }
     setCopyState(copied ? "copied" : "failed");
+    if (copied) {
+      referralCopyTimer.current = window.setTimeout(() => {
+        setCopyState("idle");
+        referralCopyTimer.current = null;
+      }, referralCopyFeedbackMs);
+    }
   };
   const activateReferral = async (event: FormEvent) => {
     event.preventDefault();
     if (
       !referral?.enabled ||
       referral.hasActivatedReferral ||
+      !referralEligible ||
       referralActivationPending
     )
       return;
     const code = parseReferralActivationInput(referralActivationInput);
     if (!code) {
-      setReferralActivationResult("请输入有效的邀请链接或邀请码。");
+      setReferralActivationResult("请输入有效的邀请链接。");
       return;
     }
     setReferralActivationPending(true);
@@ -564,19 +589,23 @@ export function BillingPage({ state, setState }: Props) {
         activation.outcome === "activated"
           ? activation.replayed
             ? "你已经激活过这个邀请，无需重复操作。"
-            : "邀请已成功激活，奖励已发放给邀请人。"
+            : `邀请已成功激活，你获得 ${activation.inviteeRewardPoints ?? inviteeRewardPoints} 点，好友获得 ${activation.inviterRewardPoints ?? activation.rewardPoints ?? inviterRewardPoints} 点。`
           : activation.outcome === "already-activated"
             ? "当前账号已经激活过其他邀请，每个账号只能激活一次。"
             : activation.outcome === "self-referral"
               ? "不能激活自己的邀请链接。"
               : activation.outcome === "disabled"
                 ? "邀请活动目前已暂停。"
-                : "邀请链接无效或已撤销。";
+                : activation.outcome === "activation-window-expired"
+                  ? "邀请链接仅限新用户注册后 3 天内激活，你的激活期限已过。"
+                  : activation.outcome === "registration-time-unavailable"
+                    ? "暂时无法确认账号注册时间，请联系客服处理。"
+                    : "邀请链接无效或已撤销。";
       setReferralActivationResult(message);
       if (activation.outcome === "activated") {
         setNotice(message);
         setReferralActivationInput("");
-        await refreshReferralStatus();
+        await Promise.all([refreshReferralStatus(), refreshBillingState()]);
       }
     } catch (error) {
       setReferralActivationResult(
@@ -693,7 +722,10 @@ export function BillingPage({ state, setState }: Props) {
                 <b>{referral.totalRewardPoints}</b>累计奖励积分
               </span>
               <span>
-                <b>{referral.rewardPoints}</b>每次奖励积分
+                <b>{inviterRewardPoints}</b>每次分享奖励
+              </span>
+              <span>
+                <b>{inviteeRewardPoints}</b>新用户激活奖励
               </span>
             </div>
           ) : null}
@@ -740,7 +772,7 @@ export function BillingPage({ state, setState }: Props) {
                 {copyState === "failed"
                   ? "浏览器没有允许自动复制，请选中链接并按 Ctrl/Cmd+C。"
                   : referral.enabled
-                    ? `好友激活成功，你将获得 ${referral.rewardPoints} 点。`
+                    ? `好友注册后 3 天内激活，你将获得 ${inviterRewardPoints} 点，对方获得 ${inviteeRewardPoints} 点。`
                     : "管理员重新开启活动后，这个链接仍可继续使用。"}
               </small>
               <div className="referral-activation-divider" />
@@ -749,12 +781,27 @@ export function BillingPage({ state, setState }: Props) {
                 <small>
                   {referral.hasActivatedReferral
                     ? "每个账号只能激活一次"
-                    : "支持完整链接或邀请码"}
+                    : referralEligible
+                      ? activationDeadlineMs
+                        ? `请在 ${membershipDateTime(activationDeadlineMs)} 前激活`
+                        : "请粘贴好友分享的完整链接"
+                      : "新用户仅可在注册后 3 天内激活"}
                 </small>
               </div>
               {referral.hasActivatedReferral ? (
                 <div className="referral-activation-complete" role="status">
                   已激活过邀请，不能再次激活其他链接。
+                  {referral.activatedReward
+                    ? ` 本次你已获得 ${referral.activatedReward.inviteeRewardPoints} 点。`
+                    : ""}
+                </div>
+              ) : !referralEligible ? (
+                <div className="referral-activation-complete" role="status">
+                  {referral.activationEligibilityReason === "activity-disabled"
+                    ? "邀请活动目前暂停，暂时不能激活。"
+                    : referral.activationEligibilityReason === "registration-time-unavailable"
+                      ? "暂时无法确认账号注册时间，请联系客服处理。"
+                      : "邀请链接仅限新用户注册后 3 天内激活，你的激活期限已过。"}
                 </div>
               ) : (
                 <form
@@ -762,7 +809,7 @@ export function BillingPage({ state, setState }: Props) {
                   onSubmit={(event) => void activateReferral(event)}
                 >
                   <label htmlFor="referral-activation-input">
-                    邀请链接或邀请码
+                    邀请链接
                   </label>
                   <div className="referral-link-controls">
                     <input
@@ -772,15 +819,15 @@ export function BillingPage({ state, setState }: Props) {
                         setReferralActivationInput(event.target.value);
                         setReferralActivationResult("");
                       }}
-                      disabled={!referral.enabled || referralActivationPending}
+                      disabled={!referralEligible || referralActivationPending}
                       autoComplete="off"
                       spellCheck={false}
-                      placeholder="粘贴好友的邀请链接或邀请码"
+                      placeholder="粘贴好友的邀请链接"
                     />
                     <button
                       className="button primary"
                       type="submit"
-                      disabled={!referral.enabled || referralActivationPending}
+                      disabled={!referralEligible || referralActivationPending}
                     >
                       {referralActivationPending ? "激活中…" : "确认激活"}
                     </button>
@@ -795,9 +842,7 @@ export function BillingPage({ state, setState }: Props) {
                     </div>
                   ) : (
                     <small>
-                      {referral.enabled
-                        ? "请先粘贴好友的邀请链接或邀请码，再点击确认激活。"
-                        : "邀请活动暂停，暂时不能激活。"}
+                      你将获得 {inviteeRewardPoints} 点，分享链接的好友将获得 {inviterRewardPoints} 点。
                     </small>
                   )}
                 </form>

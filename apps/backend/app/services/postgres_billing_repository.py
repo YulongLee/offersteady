@@ -78,7 +78,8 @@ class PostgresBillingRepository:
         with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
                 """
-                SELECT c.referral_code, c.status, s.enabled, s.reward_points, s.config_version
+                SELECT c.referral_code, c.status, s.enabled, s.reward_points,
+                       s.invitee_reward_points, s.config_version
                 FROM growth_referral_codes c
                 CROSS JOIN growth_referral_settings s
                 WHERE c.referral_code = %s AND c.status = 'active' AND s.settings_id = 'default'
@@ -103,7 +104,10 @@ class PostgresBillingRepository:
             )
             summary = dict(cursor.fetchone())
             cursor.execute(
-                "SELECT activation_id FROM growth_referral_activations WHERE invitee_user_id = %s",
+                """
+                SELECT activation_id, reward_points, invitee_reward_points, activated_at_ms
+                FROM growth_referral_activations WHERE invitee_user_id = %s
+                """,
                 (user_id,),
             )
             activation = cursor.fetchone()
@@ -111,13 +115,28 @@ class PostgresBillingRepository:
                 "referralCode": None if code_row is None else str(code_row["referral_code"]),
                 "enabled": bool(settings["enabled"]),
                 "rewardPoints": int(settings["reward_points"]),
+                "inviterRewardPoints": int(settings["reward_points"]),
+                "inviteeRewardPoints": int(settings["invitee_reward_points"]),
                 "configVersion": int(settings["config_version"]),
                 "inviteCount": int(summary["invite_count"]),
                 "totalRewardPoints": int(summary["total_reward_points"]),
                 "hasActivatedReferral": activation is not None,
+                "activatedReward": None if activation is None else {
+                    "inviterRewardPoints": int(activation["reward_points"]),
+                    "inviteeRewardPoints": int(activation["invitee_reward_points"]),
+                    "activatedAtMs": int(activation["activated_at_ms"]),
+                },
             }
 
-    def activate_referral(self, *, invitee_user_id: str, referral_code: str, activated_at_ms: int) -> dict[str, object]:
+    def activate_referral(
+        self,
+        *,
+        invitee_user_id: str,
+        referral_code: str,
+        activated_at_ms: int,
+        invitee_registered_at_ms: int | None,
+        activation_deadline_ms: int | None,
+    ) -> dict[str, object]:
         with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
                 "SELECT user_id, referral_code FROM growth_referral_codes WHERE referral_code = %s AND status = 'active'",
@@ -141,24 +160,38 @@ class PostgresBillingRepository:
                     "outcome": "activated" if str(existing["referral_code"]) == referral_code else "already-activated",
                     "replayed": str(existing["referral_code"]) == referral_code,
                     "rewardPoints": int(existing["reward_points"]),
+                    "inviterRewardPoints": int(existing["reward_points"]),
+                    "inviteeRewardPoints": int(existing["invitee_reward_points"]),
                     "activatedAtMs": int(existing["activated_at_ms"]),
                 }
+            if invitee_registered_at_ms is None or activation_deadline_ms is None:
+                return {"outcome": "registration-time-unavailable"}
+            if activated_at_ms > activation_deadline_ms:
+                return {"outcome": "activation-window-expired", "activationDeadlineMs": activation_deadline_ms}
             cursor.execute("SELECT * FROM growth_referral_settings WHERE settings_id = 'default' FOR SHARE")
             settings = cursor.fetchone()
             if not bool(settings["enabled"]):
                 return {"outcome": "disabled"}
             activation_id = f"referral-activation-{uuid4().hex}"
-            ledger_reference_id = f"referral:{activation_id}"
+            ledger_reference_id = f"referral:{activation_id}:inviter"
+            invitee_ledger_reference_id = f"referral:{activation_id}:invitee"
             reward_points = int(settings["reward_points"])
+            invitee_reward_points = int(settings["invitee_reward_points"])
             cursor.execute(
                 """
                 INSERT INTO growth_referral_activations (
                   activation_id, inviter_user_id, invitee_user_id, referral_code,
-                  reward_points, config_version, ledger_reference_id, activated_at_ms
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                  reward_points, invitee_reward_points, config_version,
+                  ledger_reference_id, invitee_ledger_reference_id,
+                  activation_deadline_ms, activated_at_ms
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """,
-                (activation_id, inviter_user_id, invitee_user_id, referral_code, reward_points,
-                 int(settings["config_version"]), ledger_reference_id, activated_at_ms),
+                (
+                    activation_id, inviter_user_id, invitee_user_id, referral_code,
+                    reward_points, invitee_reward_points, int(settings["config_version"]),
+                    ledger_reference_id, invitee_ledger_reference_id,
+                    activation_deadline_ms, activated_at_ms,
+                ),
             )
             cursor.execute(
                 """
@@ -170,17 +203,36 @@ class PostgresBillingRepository:
                  ledger_reference_id, "邀请好友奖励"),
             )
             cursor.execute(
+                """
+                INSERT INTO points_redemption_ledger (
+                  ledger_entry_id, user_id, kind, points, created_at_ms, reference_id, description
+                ) VALUES (%s,%s,'referral_invitee_credit',%s,%s,%s,%s)
+                """,
+                (
+                    f"ledger-{uuid4().hex}", invitee_user_id, invitee_reward_points,
+                    activated_at_ms, invitee_ledger_reference_id, "新用户邀请激活奖励",
+                ),
+            )
+            cursor.execute(
                 "SELECT COALESCE(SUM(points), 0) AS balance FROM points_redemption_ledger WHERE user_id = %s",
                 (inviter_user_id,),
             )
             inviter_balance = int(cursor.fetchone()["balance"])
+            cursor.execute(
+                "SELECT COALESCE(SUM(points), 0) AS balance FROM points_redemption_ledger WHERE user_id = %s",
+                (invitee_user_id,),
+            )
+            invitee_balance = int(cursor.fetchone()["balance"])
             connection.commit()
             return {
                 "outcome": "activated",
                 "replayed": False,
                 "rewardPoints": reward_points,
+                "inviterRewardPoints": reward_points,
+                "inviteeRewardPoints": invitee_reward_points,
                 "activatedAtMs": activated_at_ms,
                 "inviterBalance": inviter_balance,
+                "inviteeBalance": invitee_balance,
             }
 
     def growth_referral_settings(self) -> dict[str, object]:
@@ -190,28 +242,35 @@ class PostgresBillingRepository:
             return {
                 "enabled": bool(row["enabled"]),
                 "rewardPoints": int(row["reward_points"]),
+                "inviterRewardPoints": int(row["reward_points"]),
+                "inviteeRewardPoints": int(row["invitee_reward_points"]),
+                "activationWindowDays": 3,
                 "configVersion": int(row["config_version"]),
                 "updatedByUserId": row["updated_by_user_id"],
                 "updatedAtMs": int(row["updated_at_ms"]),
             }
 
-    def update_growth_referral_settings(self, *, enabled: bool, reward_points: int, updated_by_user_id: str, updated_at_ms: int) -> dict[str, object]:
+    def update_growth_referral_settings(self, *, enabled: bool, reward_points: int, invitee_reward_points: int, updated_by_user_id: str, updated_at_ms: int) -> dict[str, object]:
         with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
                 """
                 UPDATE growth_referral_settings
-                SET enabled = %s, reward_points = %s, config_version = config_version + 1,
+                SET enabled = %s, reward_points = %s, invitee_reward_points = %s,
+                    config_version = config_version + 1,
                     updated_by_user_id = %s, updated_at_ms = %s
                 WHERE settings_id = 'default'
                 RETURNING *
                 """,
-                (enabled, reward_points, updated_by_user_id, updated_at_ms),
+                (enabled, reward_points, invitee_reward_points, updated_by_user_id, updated_at_ms),
             )
             row = dict(cursor.fetchone())
             connection.commit()
             return {
                 "enabled": bool(row["enabled"]),
                 "rewardPoints": int(row["reward_points"]),
+                "inviterRewardPoints": int(row["reward_points"]),
+                "inviteeRewardPoints": int(row["invitee_reward_points"]),
+                "activationWindowDays": 3,
                 "configVersion": int(row["config_version"]),
                 "updatedByUserId": row["updated_by_user_id"],
                 "updatedAtMs": int(row["updated_at_ms"]),
@@ -949,6 +1008,7 @@ class PostgresBillingRepository:
             Path(REPO_ROOT / "apps/backend/migrations/versions/0023_stale_usage_reservation_recovery.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0025_referral_ledger_constraint_repair_v2.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0027_knowledge_index_billing_sources.sql"),
+            Path(REPO_ROOT / "apps/backend/migrations/versions/0029_early_referral_mutual_rewards.sql"),
         )
         with self._connect() as connection, connection.cursor() as cursor:
             apply_sql_migrations(cursor, migrations)

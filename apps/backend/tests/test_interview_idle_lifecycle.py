@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from app.core.config import Settings
+from app.core.config import REPO_ROOT, Settings
 from app.services.interview_session_repository import InMemoryInterviewSessionRepository
 from app.services.session_service import SessionService
 
@@ -34,6 +34,32 @@ def test_idle_state_warns_then_expires_without_polling_activity() -> None:
 
     assert warning["state"] == "warning"
     assert expired["state"] == "expired"
+
+
+def test_preparing_session_never_expires_before_it_has_started() -> None:
+    sessions, repository = service()
+    created = sessions.create_session(user_id="preparing-user", title="尚未开始的面试")
+    baseline = 1_800_000_000_000
+    repository.sessions[created.session_id] = replace(created, last_activity_at_ms=baseline, updated_at_ms=baseline)
+
+    idle = sessions.idle_status(
+        user_id="preparing-user",
+        session_id=created.session_id,
+        at_ms=baseline + 24 * 60 * 60 * 1000,
+    )
+
+    assert idle["state"] == "active"
+    assert sessions.list_idle_live_sessions(user_id="preparing-user", at_ms=baseline + 24 * 60 * 60 * 1000) == []
+
+
+def test_unstarted_session_repair_migration_is_narrow_and_one_time() -> None:
+    migration = REPO_ROOT / "apps/backend/migrations/versions/0028_restore_unstarted_interviews.sql"
+    sql = migration.read_text(encoding="utf8")
+
+    assert "status = 'ended'" in sql
+    assert "started_at_ms IS NULL" in sql
+    assert "deleted_at_ms IS NULL" in sql
+    assert "status = 'preparing'" in sql
 
 
 def test_continue_refreshes_live_activity_and_end_is_idempotent() -> None:

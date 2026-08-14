@@ -109,6 +109,12 @@ class DeleteDocumentRequest(BaseModel):
     user_id: str = Field(min_length=1, alias="userId")
 
 
+class SetDocumentAvailabilityRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    user_id: str = Field(min_length=1, alias="userId")
+    enabled: bool
+
+
 class DocumentProcessingHandoffResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
     document_id: str = Field(alias="documentId")

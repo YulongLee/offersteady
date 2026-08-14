@@ -709,7 +709,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   }
 
   async resolveReferral(code: string, signal?: AbortSignal) {
-    return this.client.request<{ valid: boolean; enabled: boolean; rewardPoints?: number }>(`/api/v1/billing/referrals/${encodeURIComponent(code)}`, undefined, signal);
+    return this.client.request<{ valid: boolean; enabled: boolean; rewardPoints?: number; inviterRewardPoints?: number; inviteeRewardPoints?: number; activationWindowDays?: number }>(`/api/v1/billing/referrals/${encodeURIComponent(code)}`, undefined, signal);
   }
 
   async activateReferral(code: string, signal?: AbortSignal): Promise<ReferralActivationResult> {

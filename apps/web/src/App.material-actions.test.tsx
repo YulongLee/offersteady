@@ -1,11 +1,13 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { interviewAppAdapter } from "./app-adapter";
 import type { WebAppState } from "./domain";
 import { mockSuccessfulMaterialUploadAdapter } from "./test-adapter-builders";
 import { materialUploadAdapter } from "./material-upload-adapter";
 import { syntheticState } from "./test-state";
+
+afterEach(() => vi.restoreAllMocks());
 
 const open = (path: string, mutate?: (state: WebAppState) => void) => {
   mockSuccessfulMaterialUploadAdapter();
@@ -164,6 +166,55 @@ describe("categorized materials and reachable live actions", () => {
     expect(await screen.findByText(/已重新提交资料处理任务/)).toBeInTheDocument();
     expect(screen.getByText(/完成前不会用于新面试/)).toBeInTheDocument();
   });
+
+  it("re-enables a disabled indexed document through the backend", async () => {
+    const enable = vi.spyOn(materialUploadAdapter, "setDocumentEnabled").mockResolvedValue();
+    vi.spyOn(interviewAppAdapter, "loadState").mockImplementation(async () => {
+      const next = structuredClone(syntheticState);
+      next.knowledgeDocuments = next.knowledgeDocuments.map(item => item.id === "kb-product" ? {
+        ...item,
+        status: "ready",
+        safeSummary: "已恢复使用，可在面试准备中选择。",
+      } : item);
+      next.librarySources = next.librarySources.map(item => item.id === "kb-product" ? {
+        ...item,
+        status: "ready",
+        summary: "已恢复使用，可在面试准备中选择。",
+      } : item);
+      return next;
+    });
+    open("/app/library");
+    const row = screen.getByText("产品方法论笔记").closest("article")!;
+
+    fireEvent.click(within(row).getByRole("button", { name: "启用" }));
+
+    await waitFor(() => expect(enable).toHaveBeenCalledWith("admin", "kb-product", true, expect.any(AbortSignal)));
+    expect(await screen.findByText("资料已启用，可在面试准备中选择")).toBeInTheDocument();
+    expect(within(screen.getByText("产品方法论笔记").closest("article")!).getByRole("button", { name: "停用" })).toBeInTheDocument();
+  });
+
+  it("preserves a disabled sibling after another document is deleted and state is refreshed", async () => {
+    const remove = vi.spyOn(materialUploadAdapter, "deleteDocument").mockResolvedValue();
+    vi.spyOn(interviewAppAdapter, "loadState").mockImplementation(async () => {
+      const next = structuredClone(syntheticState);
+      next.knowledgeDocuments = next.knowledgeDocuments.filter(item => item.id !== "kb-performance");
+      next.librarySources = next.librarySources.filter(item => item.id !== "kb-performance");
+      return next;
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    open("/app/library");
+    const deletedRow = screen.getByText("前端性能治理").closest("article")!;
+
+    fireEvent.click(within(deletedRow).getByRole("button", { name: "删除" }));
+
+    await waitFor(() => expect(remove).toHaveBeenCalledWith("admin", "kb-performance", expect.any(AbortSignal)));
+    expect(await screen.findByText("资料已删除，后端会继续清理 OSS 与向量产物")).toBeInTheDocument();
+    expect(screen.queryByText("前端性能治理")).not.toBeInTheDocument();
+    const disabledRow = screen.getByText("产品方法论笔记").closest("article")!;
+    expect(within(disabledRow).getAllByText(/已停用/).length).toBeGreaterThan(0);
+    expect(within(disabledRow).getByRole("button", { name: "启用" })).toBeInTheDocument();
+  });
+
   it("separates resume, JD and knowledge management without authorizing a new resume", async () => {
     open("/app/library");
     const tabs = screen.getByRole("navigation", { name: "资料类型" });

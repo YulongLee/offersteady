@@ -271,13 +271,16 @@ function ReferralLandingPage() {
   const { code = "" } = useParams();
   const navigate = useNavigate();
   const [status, setStatus] = useState<"loading" | "ready" | "invalid" | "disabled">("loading");
-  const [rewardPoints, setRewardPoints] = useState<number | null>(null);
+  const [rewards, setRewards] = useState<{ inviter: number; invitee: number } | null>(null);
   const [activating, setActivating] = useState(false);
   const [result, setResult] = useState("");
   useEffect(() => {
     const controller = new AbortController();
     void runAdapterOperation(signal => interviewAppAdapter.resolveReferral(code, signal), controller.signal).then(referral => {
-      setRewardPoints(referral.rewardPoints ?? null);
+      setRewards({
+        inviter: referral.inviterRewardPoints ?? referral.rewardPoints ?? 0,
+        invitee: referral.inviteeRewardPoints ?? referral.rewardPoints ?? 0,
+      });
       setStatus(!referral.valid ? "invalid" : referral.enabled ? "ready" : "disabled");
     }).catch(() => setStatus("invalid"));
     return () => controller.abort();
@@ -290,11 +293,11 @@ function ReferralLandingPage() {
     setActivating(true); setResult("");
     try {
       const activation = await runAdapterOperation(signal => interviewAppAdapter.activateReferral(code, signal));
-      setResult(activation.outcome === "activated" ? (activation.replayed ? "你已经激活过这个邀请，无需重复操作。" : "邀请已成功激活，奖励已发放给邀请人。") : activation.outcome === "already-activated" ? "当前账号已经激活过其他邀请，每个账号只能激活一次。" : activation.outcome === "self-referral" ? "不能激活自己的邀请链接。" : activation.outcome === "disabled" ? "邀请活动目前已暂停。" : "邀请链接无效或已撤销。");
+      setResult(activation.outcome === "activated" ? (activation.replayed ? "你已经激活过这个邀请，无需重复操作。" : `邀请已成功激活，你获得 ${activation.inviteeRewardPoints ?? rewards?.invitee ?? 0} 点，好友获得 ${activation.inviterRewardPoints ?? activation.rewardPoints ?? rewards?.inviter ?? 0} 点。`) : activation.outcome === "already-activated" ? "当前账号已经激活过其他邀请，每个账号只能激活一次。" : activation.outcome === "self-referral" ? "不能激活自己的邀请链接。" : activation.outcome === "disabled" ? "邀请活动目前已暂停。" : activation.outcome === "activation-window-expired" ? "邀请链接仅限新用户注册后 3 天内激活，你的激活期限已过。" : activation.outcome === "registration-time-unavailable" ? "暂时无法确认账号注册时间，请联系客服处理。" : "邀请链接无效或已撤销。");
     } catch (error) { setResult(error instanceof Error ? error.message : "激活失败，请稍后重试"); }
     finally { setActivating(false); }
   };
-  return <main className="center-page referral-landing"><section className="referral-landing-card"><Logo /><span className="kicker">INVITATION</span><h1>好友邀请你体验面试稳</h1>{status === "loading" ? <p>正在安全校验邀请链接…</p> : status === "invalid" ? <><p>这个邀请链接无效或已撤销，没有创建任何邀请关系。</p><Link className="button primary full" to={routes.landing}>返回首页</Link></> : status === "disabled" ? <><p>邀请活动目前暂停，历史奖励不会受影响。你仍然可以免费使用产品。</p><Link className="button primary full" to={routes.login}>登录使用</Link></> : <><div className="referral-reward-preview"><strong>{rewardPoints ?? 0} 点</strong><span>成功激活后奖励给邀请人</span></div><p>每个账号只能激活一次其他用户的邀请，不能激活自己的链接。登录后点击确认，服务端才会建立邀请关系。</p><button className="button primary full" disabled={activating} onClick={() => void activate()}>{activating ? "激活中…" : authenticated ? "确认激活邀请" : "登录并激活"}</button></>}{result ? <div className="referral-result" role="status">{result}<Link to={routes.billing}>查看积分与会员</Link></div> : null}<small>邀请关系只记录账号标识和奖励流水，不公开手机号或设备信息。</small></section></main>;
+  return <main className="center-page referral-landing"><section className="referral-landing-card"><Logo /><span className="kicker">INVITATION</span><h1>好友邀请你体验面试稳</h1>{status === "loading" ? <p>正在安全校验邀请链接…</p> : status === "invalid" ? <><p>这个邀请链接无效或已撤销，没有创建任何邀请关系。</p><Link className="button primary full" to={routes.landing}>返回首页</Link></> : status === "disabled" ? <><p>邀请活动目前暂停，历史奖励不会受影响。你仍然可以免费使用产品。</p><Link className="button primary full" to={routes.login}>登录使用</Link></> : <><div className="referral-reward-preview"><strong>双方都有奖励</strong><span>你获得 {rewards?.invitee ?? 0} 点，分享链接的好友获得 {rewards?.inviter ?? 0} 点</span></div><p>仅限注册后 3 天内的新用户激活。每个账号只能激活一次，不能激活自己的链接。</p><button className="button primary full" disabled={activating} onClick={() => void activate()}>{activating ? "激活中…" : authenticated ? "确认激活邀请" : "登录并激活"}</button></>}{result ? <div className="referral-result" role="status">{result}<Link to={routes.billing}>查看积分与会员</Link></div> : null}<small>邀请关系只记录账号标识和奖励流水，不公开手机号或设备信息。</small></section></main>;
 }
 
 function ProtectedRoute() {

@@ -37,6 +37,14 @@ The system SHALL support soft deletion for documents and collections, immediatel
 - **WHEN** the owner renames a knowledge collection
 - **THEN** the new name is persisted by the backend and remains visible after the material library is reloaded
 
+#### Scenario: User re-enables a disabled indexed document
+- **WHEN** the owner enables a previously disabled document whose current version is still ready and indexed
+- **THEN** the system restores that version for future interview selection and retrieval without rebuilding the index or charging points or allowance again
+
+#### Scenario: Deleting one document preserves sibling document states
+- **WHEN** the owner deletes one document while another document in the library is disabled
+- **THEN** the deleted document disappears and the sibling remains disabled after backend refresh, including when older refresh requests finish later
+
 #### Scenario: User deletes a knowledge collection
 - **WHEN** the owner confirms deletion of a knowledge collection, whether it is empty or contains documents
 - **THEN** the collection is soft-deleted, its contained documents become unavailable for future interview selection and retrieval, and the collection remains absent after the material library is reloaded

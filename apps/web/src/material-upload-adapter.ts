@@ -26,6 +26,7 @@ export interface MaterialUploadAdapter {
   createPastedJobDescription(request: CreatePastedJobDescriptionRequest, signal?: AbortSignal): Promise<MaterialUploadCompletionResult>;
   deleteDocument(userId: string, documentId: string, signal?: AbortSignal): Promise<void>;
   retryDocument(userId: string, documentId: string, signal?: AbortSignal): Promise<void>;
+  setDocumentEnabled(userId: string, documentId: string, enabled: boolean, signal?: AbortSignal): Promise<void>;
 }
 
 interface DocumentProcessingStatus {
@@ -122,6 +123,14 @@ export class BackendMaterialUploadAdapter implements MaterialUploadAdapter {
     await this.client.request(
       `/api/v1/document-processing/tasks/${encodeURIComponent(status.latestTask.taskId)}/retry`,
       { method: "POST", headers: authHeaders(), body: JSON.stringify({ userId }) },
+      signal,
+    );
+  }
+
+  async setDocumentEnabled(userId: string, documentId: string, enabled: boolean, signal?: AbortSignal) {
+    await this.client.request(
+      `/api/v1/documents/${encodeURIComponent(documentId)}/availability`,
+      { method: "PATCH", headers: authHeaders(), body: JSON.stringify({ userId, enabled }) },
       signal,
     );
   }

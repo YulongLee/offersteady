@@ -1183,7 +1183,6 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
             ) : (
               <div className="screen-preview-empty">未获取到屏幕预览</div>
             )}
-            {isPreviewing ? <button type="button" className="secondary-button compact" onClick={stopPreview}>关闭预览</button> : null}
           </section>
 
           <section className="connection-card" aria-label="连接管理">

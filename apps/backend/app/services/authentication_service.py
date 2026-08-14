@@ -321,8 +321,15 @@ class AuthenticationService:
         if result.outcome != "verified":
             status = "locked" if attempt_count >= challenge.max_attempts else challenge.status
             self.repository.save_sms_challenge(replace(challenge, status=status, attempt_count=attempt_count, updated_at_ms=_now_ms(), last_error_code=result.error_code or result.outcome))
-            message = "验证码不正确或已过期。" if result.outcome in {"invalid", "expired"} else "短信校验服务暂时不可用，请稍后重试。"
-            status_code = 401 if result.outcome in {"invalid", "expired"} else 503
+            if result.outcome in {"invalid", "expired", "failed"}:
+                message = "验证码不正确或已过期，请检查后重新输入。"
+                status_code = 401
+            elif result.outcome == "rate_limited":
+                message = "验证码校验过于频繁，请稍后再试。"
+                status_code = 429
+            else:
+                message = "短信校验服务暂时不可用，请稍后重试。"
+                status_code = 503
             raise DomainRequestError("authentication", "sms-verify", message, status_code, result.error_code or f"sms_{result.outcome}")
         verified = self.repository.save_sms_challenge(replace(challenge, status="verified", verified_at_ms=_now_ms(), updated_at_ms=_now_ms(), provider_request_id=result.provider_request_id or challenge.provider_request_id))
         user = self._get_or_create_sms_user(phone_e164=phone_e164)

@@ -80,9 +80,9 @@ export const adminApi = {
     request<TrendResponse>(`/api/v1/admin/analytics/trends?range=${range}`),
   capacity: () => request<CapacityResponse>("/api/v1/admin/capacity"),
   paymentRevenue: () => request<PaymentRevenueSummary>("/api/v1/admin/payments/revenue-summary"),
-  growthReferralSettings: () => request<{ enabled: boolean; rewardPoints: number; configVersion: number; updatedAtMs: number }>("/api/v1/admin/growth/referrals"),
-  saveGrowthReferralSettings: (payload: { enabled: boolean; rewardPoints: number; confirmed: boolean; reason: string }) =>
-    request<{ enabled: boolean; rewardPoints: number; configVersion: number; updatedAtMs: number }>("/api/v1/admin/growth/referrals", { method: "PUT", body: JSON.stringify(payload) }),
+  growthReferralSettings: () => request<{ enabled: boolean; rewardPoints: number; inviterRewardPoints: number; inviteeRewardPoints: number; activationWindowDays: number; configVersion: number; updatedAtMs: number }>("/api/v1/admin/growth/referrals"),
+  saveGrowthReferralSettings: (payload: { enabled: boolean; rewardPoints: number; inviteeRewardPoints: number; confirmed: boolean; reason: string }) =>
+    request<{ enabled: boolean; rewardPoints: number; inviterRewardPoints: number; inviteeRewardPoints: number; activationWindowDays: number; configVersion: number; updatedAtMs: number }>("/api/v1/admin/growth/referrals", { method: "PUT", body: JSON.stringify(payload) }),
   serverHealth: () => request<ServerHealthResponse>("/api/v1/admin/server-health"),
   observability: () => request<Record<string, unknown>>("/api/v1/admin/observability"),
   list: (resource: "users" | "orders" | "catalog-products" | "redemption-batches" | "payment-channels" | "materials" | "interviews" | "audit" | "admins", offset = 0) =>

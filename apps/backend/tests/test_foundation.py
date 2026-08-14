@@ -238,6 +238,7 @@ def test_sms_authentication_sends_code_registers_and_reuses_phone_identity() -> 
 
     invalid = client.post("/api/v1/auth/sms/verify-login", json={"phoneNumber": phone, "challengeId": sent["challengeId"], "code": "000000"})
     assert invalid.status_code == 401
+    assert invalid.json()["error"]["message"] == "验证码不正确或已过期，请检查后重新输入。"
 
     verified = unwrap(client.post("/api/v1/auth/sms/verify-login", json={"phoneNumber": phone, "challengeId": sent["challengeId"], "code": "123456", "clientLabel": "web-sms"}))
     assert verified["user"]["loginProvider"] == "sms"
@@ -272,6 +273,8 @@ def test_aliyun_personal_developer_sms_provider_uses_model_verify_result() -> No
         calls.append(payload)
         if payload["Action"] == "SendSmsVerifyCode":
             return {"Code": "OK", "RequestId": "send-request", "Model": {"BizId": "biz-from-model"}}
+        if payload["VerifyCode"] == "000000":
+            return {"Code": "OK", "RequestId": "invalid-request", "Model": {"VerifyResult": "UNKNOWN"}}
         return {"Code": "OK", "RequestId": "verify-request", "Model": {"VerifyResult": "PASS"}}
 
     provider._request = fake_request  # type: ignore[method-assign]
@@ -304,6 +307,10 @@ def test_aliyun_personal_developer_sms_provider_uses_model_verify_result() -> No
     assert calls[1]["PhoneNumber"] == "13900001234"
     assert calls[1]["VerifyCode"] == "123456"
     assert calls[1]["OutId"] == "sms-challenge-test"
+
+    invalid = provider.verify_code(phone_e164="+8613900001234", code="000000", challenge=challenge)
+    assert invalid.outcome == "invalid"
+    assert invalid.provider_request_id == "invalid-request"
 
 
 def test_wechat_authorization_session_expires_and_requires_refresh() -> None:
@@ -489,6 +496,120 @@ def test_document_detail_and_delete_are_permission_controlled() -> None:
     assert unwrap(deleted)["status"] == "deleted"
     listing = unwrap(client.get("/api/v1/documents", params={"userId": "owner-a"}))
     assert all(item["documentId"] != document_id for item in listing)
+
+
+def test_ready_document_can_be_disabled_and_reenabled_without_reprocessing() -> None:
+    intent = unwrap(client.post("/api/v1/job-descriptions/upload-intents", json={
+        "userId": "availability-owner",
+        "filename": "availability.md",
+        "contentType": "text/markdown",
+        "sizeBytes": 256,
+    }))
+    complete = unwrap(client.post("/api/v1/job-descriptions/uploads/complete", json={
+        "userId": "availability-owner",
+        "intentId": intent["intentId"],
+        "objectKey": intent["objectKey"],
+        "contentType": "text/markdown",
+        "sizeBytes": 256,
+    }))
+    document_id = complete["source"]["sourceId"]
+    wait_for_task_stage(document_id, "availability-owner", "COMPLETED")
+
+    disabled = client.patch(f"/api/v1/documents/{document_id}/availability", json={
+        "userId": "availability-owner",
+        "enabled": False,
+    })
+    assert disabled.status_code == 200
+    assert unwrap(disabled)["indexState"] == "disabled"
+
+    forbidden = client.patch(f"/api/v1/documents/{document_id}/availability", json={
+        "userId": "another-owner",
+        "enabled": True,
+    })
+    assert forbidden.status_code == 403
+
+    enabled = client.patch(f"/api/v1/documents/{document_id}/availability", json={
+        "userId": "availability-owner",
+        "enabled": True,
+    })
+    assert enabled.status_code == 200
+    enabled_payload = unwrap(enabled)
+    assert enabled_payload["status"] == "ready"
+    assert enabled_payload["indexState"] == "indexed"
+    assert enabled_payload["summary"] == "已恢复使用，可在面试准备中选择。"
+    status = unwrap(client.get(f"/api/v1/document-processing/documents/{document_id}", params={"userId": "availability-owner"}))
+    assert status["latestTask"]["currentStage"] == "COMPLETED"
+
+
+def test_deleting_one_knowledge_document_preserves_disabled_sibling_state() -> None:
+    stamp = int(time() * 1_000_000)
+    authentication = unwrap(client.post("/api/v1/auth/register", json={
+        "loginId": f"material-state-{stamp}@example.com",
+        "password": "SyntheticMaterialState123@",
+        "displayName": "Material state regression",
+        "clientLabel": "material-state-test",
+    }))
+    owner = authentication["user"]["userId"]
+    headers = {"Authorization": f"Bearer {authentication['tokens']['accessToken']}"}
+    collection = unwrap(client.post("/api/v1/knowledge/collections", json={
+        "userId": owner,
+        "name": "状态保持回归资料库",
+    }, headers=headers))
+
+    document_ids: list[str] = []
+    for index in range(2):
+        intent = unwrap(client.post(
+            f"/api/v1/knowledge/collections/{collection['collectionId']}/upload-intents",
+            json={
+                "userId": owner,
+                "filename": f"state-{index}.md",
+                "contentType": "text/markdown",
+                "sizeBytes": 128,
+            },
+            headers=headers,
+        ))
+        completed = unwrap(client.post(
+            f"/api/v1/knowledge/collections/{collection['collectionId']}/uploads/complete",
+            json={
+                "userId": owner,
+                "intentId": intent["intentId"],
+                "objectKey": intent["objectKey"],
+                "contentType": "text/markdown",
+                "sizeBytes": 128,
+                "etag": f"synthetic-material-state-{index}",
+                "contentSha256": f"{index + 1}" * 64,
+                "confirmIndexCharge": True,
+            },
+            headers=headers,
+        ))
+        document_id = completed["source"]["sourceId"]
+        wait_for_task_stage(document_id, owner, "COMPLETED")
+        document_ids.append(document_id)
+
+    disabled_id, deleted_id = document_ids
+    disabled = client.patch(
+        f"/api/v1/documents/{disabled_id}/availability",
+        json={"userId": owner, "enabled": False},
+        headers=headers,
+    )
+    assert disabled.status_code == 200
+    deleted = client.delete(
+        f"/api/v1/documents/{deleted_id}",
+        params={"userId": owner},
+        headers=headers,
+    )
+    assert deleted.status_code == 200
+
+    refreshed = unwrap(client.get("/api/v1/web/state", headers=headers))
+    sibling_document = next(item for item in refreshed["knowledgeDocuments"] if item["id"] == disabled_id)
+    sibling_source = next(item for item in refreshed["librarySources"] if item["id"] == disabled_id)
+    assert sibling_document["status"] == "disabled"
+    assert sibling_document["indexState"] == "disabled"
+    assert sibling_document["syncStatus"] == "synced"
+    assert sibling_source["status"] == "disabled"
+    assert sibling_source["indexState"] == "disabled"
+    assert sibling_source["syncStatus"] == "synced"
+    assert all(item["id"] != deleted_id for item in refreshed["knowledgeDocuments"])
 
 
 def test_processing_handoff_boundary_exposes_uploaded_knowledge_documents() -> None:

@@ -358,7 +358,12 @@ def billing_service() -> BillingService:
     billing_repository = None
     if settings.database_url and not os.environ.get("PYTEST_CURRENT_TEST"):
         billing_repository = PostgresBillingRepository(settings)
-    return BillingService(settings, redemption_repository=repository, billing_repository=billing_repository)
+    return BillingService(
+        settings,
+        redemption_repository=repository,
+        billing_repository=billing_repository,
+        authentication_repository=authentication_repository(),
+    )
 
 
 @lru_cache(maxsize=1)

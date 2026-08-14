@@ -16,6 +16,7 @@ from app.schemas.document_service import (
     DocumentUploadIntentResponse,
     DocumentValidationPolicyResponse,
     ListDocumentsRequest,
+    SetDocumentAvailabilityRequest,
 )
 from app.schemas.foundation import ApiEnvelope, ModuleDescriptor
 from app.services.document_service import DocumentService
@@ -121,6 +122,22 @@ async def get_document(
 ) -> ApiEnvelope[DocumentRecordResponse]:
     resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
     return success_response(request=request, data=service.get_document(user_id=resolved_user_id, document_id=document_id), timestamp=utc_now_iso())
+
+
+@router.patch("/{document_id}/availability", response_model=ApiEnvelope[DocumentRecordResponse])
+async def set_document_availability(
+    document_id: str,
+    request_context: Request,
+    request: SetDocumentAvailabilityRequest,
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: DocumentService = Depends(document_service),
+) -> ApiEnvelope[DocumentRecordResponse]:
+    user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
+    return success_response(
+        request=request_context,
+        data=service.set_document_enabled(user_id=user_id, document_id=document_id, enabled=request.enabled),
+        timestamp=utc_now_iso(),
+    )
 
 
 @router.delete("/{document_id}", response_model=ApiEnvelope[DocumentRecordResponse])
