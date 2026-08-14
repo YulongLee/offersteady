@@ -29,4 +29,4 @@
 - [x] 5.1 Add backend regression tests for persistent provider session reuse, `session.created → session.update → append / commit` sequencing, partial overwrite behavior, and final-only context persistence.
 - [x] 5.2 Add or update evals / performance checks for TTFT, partial continuity, blank-result suppression, provider reconnection handling, and VAD-to-Manual fallback behavior.
 - [x] 5.3 Run local end-to-end validation with the desktop companion, backend, and live interview page, then record baseline versus improved provider-path results.
-- [ ] 5.4 Run targeted and full regression/build gates, verify unrelated interview, answer, screenshot, billing, and material workflows remain unchanged, and record deployment smoke results.
+- [x] 5.4 Run targeted and full regression/build gates, verify unrelated interview, answer, screenshot, billing, and material workflows remain unchanged, and record deployment smoke results.

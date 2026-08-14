@@ -65,6 +65,14 @@
 - partial/final 连续性、迟到 partial 抑制、断线重发与 token 恢复：自动化回归通过。
 - 30/60 分钟真实桌面稳定性：部署后观察项；本地自动化不能替代真实会议软件、系统权限和蓝牙设备的持续运行。
 
+## 发布后冒烟验证
+
+- 生产提交：`79e6d07`；后端、Web、管理端、PostgreSQL 与 Redis 容器均正常运行，后端健康检查通过。
+- 正式站首页、健康检查、支付状态与实时语音状态接口均返回 HTTP 200；实时语音报告 `websocket-v2` 与 Redis runtime store 正常。
+- 使用 Playwright 验证正式站 1280px 桌面端与 390px 手机端：首页完整渲染，无白屏、横向溢出或区块遮挡。
+- macOS arm64、macOS x64 与 Windows x64 三个 `0.1.7` 正式下载入口均返回短期签名下载地址，线上 manifest 的版本及 SHA-256 与最终安装包一致。
+- 全量回归：JavaScript 404 项、Python 220 项通过（10 项按环境跳过）；所有 workspace typecheck 与 build 通过。
+
 ## 隐私
 
 性能报告只记录时延、计数、状态和错误分类，不保存原始音频或用户语音正文。
