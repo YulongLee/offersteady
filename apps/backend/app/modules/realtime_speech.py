@@ -621,10 +621,28 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
         await websocket.close(code=1008)
         return
     _active_ingest_tokens.add(token)
+    publisher_connected = False
     try:
-        publisher = service.connect_publisher(token=token)
+        try:
+            publisher = service.connect_publisher(token=token)
+            publisher_connected = True
+        except DomainRequestError as exc:
+            await websocket.send_json({
+                "kind": "connection-rejected",
+                "payload": {
+                    "reason": "publisher-credential-rejected",
+                    "message": exc.message,
+                },
+            })
+            await websocket.close(code=1008)
+            return
         if requested_protocol != service.settings.realtime_protocol_version:
             await websocket.send_json({"kind": "protocol-rejected", "payload": {"supported": service.settings.realtime_protocol_version}})
+            try:
+                service.disconnect_publisher(token=token)
+            except DomainRequestError:
+                pass
+            publisher_connected = False
             await websocket.close(code=1002)
             return
         previous_receipts = service.repository.list_frame_receipts_for_session(session_id=publisher.session_id)
@@ -710,11 +728,22 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                     },
                 })
     except WebSocketDisconnect:
-        service.disconnect_publisher(token=token)
+        if publisher_connected:
+            try:
+                service.disconnect_publisher(token=token)
+            except DomainRequestError:
+                pass
     except Exception:
         try:
-            service.disconnect_publisher(token=token, final_state="failed")
+            if publisher_connected:
+                try:
+                    service.disconnect_publisher(token=token, final_state="failed")
+                except DomainRequestError:
+                    pass
         finally:
-            await websocket.close(code=1011)
+            try:
+                await websocket.close(code=1011)
+            except RuntimeError:
+                pass
     finally:
         _active_ingest_tokens.discard(token)

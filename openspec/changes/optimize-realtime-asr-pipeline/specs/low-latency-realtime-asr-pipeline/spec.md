@@ -103,3 +103,10 @@
 #### Scenario: Registered desktop remains open
 - **WHEN** 已登记桌面助手持续运行并保持后端可达
 - **THEN** 主进程周期性发送 heartbeat，设备登记事件不随 heartbeat 周期重复产生
+
+### Requirement: Realtime publisher recovery SHALL reject stale credentials cleanly
+后端 MUST 将重启后或已被替换的发布凭据作为 WebSocket 业务拒绝处理，MUST 使用可识别的终止码通知桌面端刷新凭据，并 MUST NOT 产生 ASGI 异常或高频异常日志。
+
+#### Scenario: Desktop reconnects with a stale publisher token after backend restart
+- **WHEN** 桌面助手使用重启前的 publisher token 重新连接实时音频 WebSocket
+- **THEN** 后端发送 `publisher-credential-rejected` 事件并以 `1008` 关闭连接，桌面端进入既有凭据刷新流程，服务端不抛出二次断开或 HTTP-over-WebSocket 异常

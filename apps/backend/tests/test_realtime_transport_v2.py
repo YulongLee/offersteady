@@ -4,7 +4,9 @@ import base64
 from dataclasses import replace
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from app.main import create_app
 from app.ports.realtime_speech import AudioFrame
@@ -85,6 +87,16 @@ def test_multiplexed_transport_acknowledges_independent_channels_and_gaps():
         gap = websocket.receive_json()
         assert gap["kind"] == "sequence-gap"
         assert gap["payload"] == {"sourceKind": "microphone", "expected": 1, "received": 2}
+
+
+def test_multiplexed_transport_rejects_stale_token_without_asgi_exception():
+    with client.websocket_connect("/api/v1/realtime-speech/ingest-ws?token=rt-stale&protocol=2.0") as websocket:
+        rejected = websocket.receive_json()
+        assert rejected["kind"] == "connection-rejected"
+        assert rejected["payload"]["reason"] == "publisher-credential-rejected"
+        with pytest.raises(WebSocketDisconnect) as closed:
+            websocket.receive_json()
+        assert closed.value.code == 1008
 
 
 def test_realtime_metrics_are_privacy_safe():
