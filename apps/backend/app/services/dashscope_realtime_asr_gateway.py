@@ -51,6 +51,8 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         self._blank_partial_suppressed: dict[str, int] = {}
         self._vad_to_manual_fallbacks: dict[str, int] = {}
         self._idle_session_closures: dict[str, int] = {}
+        self._append_counts: dict[str, int] = {}
+        self._commit_counts: dict[str, int] = {}
         self._mode_by_source: dict[str, str] = {}
         self._connection_state_by_source: dict[str, str] = {}
         self._last_error_by_source: dict[str, str] = {}
@@ -110,6 +112,8 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             "blank_partial_suppressed": self._blank_partial_suppressed.get(source_kind, 0),
             "vad_to_manual_fallbacks": self._vad_to_manual_fallbacks.get(source_kind, 0),
             "idle_session_closures": self._idle_session_closures.get(source_kind, 0),
+            "append_count": self._append_counts.get(source_kind, 0),
+            "commit_count": self._commit_counts.get(source_kind, 0),
             "active_provider_sessions": active_provider_sessions,
         }
 
@@ -139,6 +143,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             with session.lock:
                 self._prepare_segment_state(session, frame)
                 if frame.audio_bytes:
+                    self._append_counts[frame.source_kind] = self._append_counts.get(frame.source_kind, 0) + ((len(frame.audio_bytes) + 6399) // 6400)
                     self._send_audio_chunks(
                         session.connection,
                         frame.audio_bytes,
@@ -150,6 +155,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                         "event_id": f"rt-commit-{frame.segment_id}-{frame.revision}",
                         "type": "input_audio_buffer.commit",
                     }))
+                    self._commit_counts[frame.source_kind] = self._commit_counts.get(frame.source_kind, 0) + 1
                 transcript_text, first_text_at_ms, completed_at_ms = self._wait_for_transcript(
                     session,
                     finalize=frame.is_final,

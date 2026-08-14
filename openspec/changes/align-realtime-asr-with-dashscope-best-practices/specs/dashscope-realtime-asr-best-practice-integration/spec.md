@@ -33,9 +33,9 @@
 ### Requirement: VAD and manual commit modes SHALL be provider-aware
 系统 MUST 将阿里百炼 realtime ASR 的 VAD 与 Manual commit 模式视为可诊断的 provider 策略，而不是只依赖本地静音阈值。系统 SHALL 支持在会话初始化时显式配置 `turn_detection` 或等价 provider 参数，并在必要时从 VAD 回退到 Manual commit。
 
-#### Scenario: Default live interview uses provider VAD
+#### Scenario: Default live interview uses measured low-latency mode
 - **WHEN** 某场实时面试进入常规双通道语音模式
-- **THEN** 系统优先按 provider VAD 模式初始化对应来源的 session，使 partial/final 识别尽早返回
+- **THEN** 系统按已验证的低延迟 Manual commit 模式初始化对应来源的 session，并将 VAD 保留为可灰度、可回退和可诊断的 provider 策略
 
 #### Scenario: Provider VAD proves unstable
 - **WHEN** 某一路来源出现持续误触发、异常静音或 provider VAD 不稳定
@@ -70,3 +70,18 @@
 #### Scenario: Provider final event is missing
 - **WHEN** 某条发言的 commit 发送成功但在允许窗口内没有收到 final transcript
 - **THEN** 系统将该次 provider 调用标记为可诊断失败，并不得把不完整的 partial 当作 final 写入稳定 transcript
+
+### Requirement: Transient desktop transport failures SHALL preserve bounded unacknowledged audio
+桌面端 MUST 为已发送但尚未收到服务端确认的音频帧保留有界恢复窗口。短暂断线或 publisher token 更新后，系统 SHALL 按来源和 sequence 恢复尚未确认的帧。系统 MUST NOT 在没有诊断事件的情况下静默丢弃 final 或语句边界。
+
+#### Scenario: WebSocket reconnects after a short outage
+- **WHEN** 桌面端已经发送音频但尚未收到 ACK，且 WebSocket 在恢复窗口内断开并重连
+- **THEN** 新连接重新发送未确认帧，后端通过 sequence 幂等确认，实时字幕不重复也不缺失
+
+#### Scenario: Publisher credential becomes invalid
+- **WHEN** 实时发布连接因失效凭据被服务端终止
+- **THEN** 桌面端只启动一个凭据恢复流程，创建当前绑定的新 publisher，并把有界未确认帧转移到新连接
+
+#### Scenario: Recovery window overflows
+- **WHEN** 未确认音频超过配置的有界恢复窗口
+- **THEN** 桌面端优先保留 final 和语句边界，发布包含来源、丢帧数量和最老帧龄的 sequence-gap 诊断，不得假装链路连续

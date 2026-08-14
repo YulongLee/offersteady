@@ -12,6 +12,7 @@ interface TransportOptions {
   readonly token: string;
   readonly onEvent: (event: { readonly kind?: string; readonly payload?: Record<string, unknown> }) => void;
   readonly onState: (state: "connected" | "reconnecting" | "failed") => void;
+  readonly onTerminal?: (input: { readonly code: number; readonly reason: string; readonly pending: readonly Record<string, unknown>[] }) => void;
 }
 
 const socketUrl = (apiBaseUrl: string, token: string) => {
@@ -30,7 +31,9 @@ export class MultiplexedRealtimeTransport {
   private sent = new Set<string>();
   private stopped = false;
   private connecting: Promise<void> | null = null;
-  private readonly maximumFrames = 64;
+  private readonly maximumFrames = 256;
+  private readonly droppedFramesBySource = new Map<RealtimeAudioChannel, number>();
+  private reconnectCount = 0;
 
   constructor(private readonly options: TransportOptions) {}
 
@@ -47,10 +50,26 @@ export class MultiplexedRealtimeTransport {
     this.queue.push({ sourceKind, sourceId, sequence, payload: { ...payload, sentAtMs: Date.now() } });
     if (this.queue.length > this.maximumFrames) {
       const firstInterim = this.queue.findIndex(item => item.payload.isFinal !== true);
-      this.queue.splice(firstInterim >= 0 ? firstInterim : 0, 1);
-      this.options.onEvent({ kind: "sequence-gap", payload: { sourceKind, reason: "desktop-buffer-overflow" } });
+      const [dropped] = this.queue.splice(firstInterim >= 0 ? firstInterim : 0, 1);
+      const droppedSource = dropped?.sourceKind ?? sourceKind;
+      const droppedFrames = (this.droppedFramesBySource.get(droppedSource) ?? 0) + 1;
+      this.droppedFramesBySource.set(droppedSource, droppedFrames);
+      this.options.onEvent({ kind: "sequence-gap", payload: {
+        sourceKind: droppedSource,
+        sourceId: dropped?.sourceId ?? sourceId,
+        sequence: dropped?.sequence,
+        reason: "desktop-buffer-overflow",
+        droppedFrames,
+        pendingFrames: this.queue.length,
+        oldestPendingFrameAgeMs: this.oldestPendingFrameAgeMs(),
+      } });
     }
+    this.publishDiagnostics(sourceKind);
     this.flush();
+  }
+
+  pendingPayloads(): readonly Record<string, unknown>[] {
+    return this.queue.map(item => ({ ...item.payload }));
   }
 
   stop(): void {
@@ -73,6 +92,7 @@ export class MultiplexedRealtimeTransport {
         window.clearTimeout(timeout);
         this.reconnectAttempt = 0;
         this.options.onState("connected");
+        this.publishDiagnostics();
         this.flush();
         resolve();
       };
@@ -95,7 +115,16 @@ export class MultiplexedRealtimeTransport {
         this.socket = null;
         this.connecting = null;
         this.sent.clear();
-        if (this.stopped || event.code === 1000 || event.code === 1002 || event.code === 1008) return;
+        if (this.stopped || event.code === 1000) return;
+        if (event.code === 1002 || event.code === 1008) {
+          this.options.onState("failed");
+          this.options.onTerminal?.({
+            code: event.code,
+            reason: event.code === 1008 ? "publisher-credential-rejected" : "protocol-rejected",
+            pending: this.pendingPayloads(),
+          });
+          return;
+        }
         this.scheduleReconnect();
       };
     }).finally(() => { this.connecting = null; });
@@ -105,6 +134,14 @@ export class MultiplexedRealtimeTransport {
   private scheduleReconnect(): void {
     if (this.stopped || this.reconnectTimer !== null) return;
     this.options.onState("reconnecting");
+    this.reconnectCount += 1;
+    this.options.onEvent({ kind: "connection-state", payload: {
+      state: "reconnecting",
+      reconnectCount: this.reconnectCount,
+      reconnectAttempt: this.reconnectAttempt + 1,
+      pendingFrames: this.queue.length,
+      oldestPendingFrameAgeMs: this.oldestPendingFrameAgeMs(),
+    } });
     const delay = Math.min(5000, 250 * 2 ** this.reconnectAttempt) + Math.floor(Math.random() * 150);
     this.reconnectAttempt += 1;
     this.reconnectTimer = window.setTimeout(() => {
@@ -132,6 +169,7 @@ export class MultiplexedRealtimeTransport {
       const [channel, rawSequence] = key.split(":");
       if (channel === sourceKind && Number(rawSequence) <= sequence) this.sent.delete(key);
     }
+    this.publishDiagnostics(sourceKind, Date.now());
   }
 
   private handleGap(payload?: Record<string, unknown>): void {
@@ -141,5 +179,31 @@ export class MultiplexedRealtimeTransport {
     this.queue = this.queue.filter(item => item.sourceKind !== sourceKind || item.sequence >= expected);
     for (const key of this.sent) if (key.startsWith(`${sourceKind}:`)) this.sent.delete(key);
     this.flush();
+  }
+
+  private oldestPendingFrameAgeMs(): number {
+    const capturedAtMs = this.queue
+      .map(item => Number(item.payload.capturedAtMs))
+      .filter(value => Number.isFinite(value) && value > 0);
+    if (capturedAtMs.length === 0) return 0;
+    return Math.max(0, Date.now() - Math.min(...capturedAtMs));
+  }
+
+  private publishDiagnostics(sourceKind?: RealtimeAudioChannel, lastAckAtMs?: number): void {
+    const channels: readonly RealtimeAudioChannel[] = sourceKind ? [sourceKind] : ["microphone", "system"];
+    for (const channel of channels) {
+      const channelQueue = this.queue.filter(item => item.sourceKind === channel);
+      const capturedAtMs = channelQueue
+        .map(item => Number(item.payload.capturedAtMs))
+        .filter(value => Number.isFinite(value) && value > 0);
+      this.options.onEvent({ kind: "delivery-diagnostics", payload: {
+        sourceKind: channel,
+        pendingFrames: channelQueue.length,
+        oldestPendingFrameAgeMs: capturedAtMs.length > 0 ? Math.max(0, Date.now() - Math.min(...capturedAtMs)) : 0,
+        droppedFrames: this.droppedFramesBySource.get(channel) ?? 0,
+        reconnectCount: this.reconnectCount,
+        ...(lastAckAtMs ? { lastAckAtMs } : {}),
+      } });
+    }
   }
 }

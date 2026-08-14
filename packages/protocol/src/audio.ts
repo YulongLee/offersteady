@@ -123,6 +123,14 @@ export interface AudioSourceHealth {
   readonly lastFrameAtMs?: number;
   readonly backendFrameCount?: number;
   readonly lastBackendFrameAtMs?: number;
+  readonly pendingFrameCount?: number;
+  readonly oldestPendingFrameAgeMs?: number;
+  readonly droppedFrameCount?: number;
+  readonly reconnectCount?: number;
+  readonly lastAckAtMs?: number;
+  readonly lastReconnectReason?: string;
+  readonly noiseFloor?: number;
+  readonly captureProcessor?: "audio-worklet" | "script-processor" | "native";
   readonly errorCode?: CompanionErrorCode | "silent-source";
 }
 
@@ -161,6 +169,13 @@ export interface RealtimeRuntimeCounters {
   readonly chunksProduced: number;
   readonly chunksUploaded: number;
   readonly serializedAudioBytes: number;
+  readonly providerAppendCount?: number;
+  readonly providerCommitCount?: number;
+  readonly providerCompletedMissing?: number;
+  readonly blankPartialSuppressed?: number;
+  readonly vadToManualFallbacks?: number;
+  readonly idleProviderSessionClosures?: number;
+  readonly activeProviderSessions?: number;
 }
 
 export interface RealtimeRuntimePerformance {

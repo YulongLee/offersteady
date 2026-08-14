@@ -5,7 +5,7 @@ import json
 import os
 from pathlib import Path
 from statistics import mean
-from time import perf_counter, time
+from time import perf_counter, sleep, time
 
 from fastapi.testclient import TestClient
 
@@ -52,10 +52,16 @@ def run_benchmark() -> dict[str, object]:
     ]
     runtime_snapshots: list[dict[str, object]] = []
 
-    with client.websocket_connect(f"/api/v1/realtime-speech/ws?token={publisher['token']}") as websocket:
-        for segment_id, sequence, text in samples:
+    with client.websocket_connect(
+        f"/api/v1/realtime-speech/ingest-ws?token={publisher['token']}&protocol=2.0"
+    ) as websocket:
+        connection_event = websocket.receive_json()
+        if connection_event.get("kind") != "connection-state":
+            raise RuntimeError(f"missing websocket-v2 connection state: {connection_event}")
+        for sequence, (segment_id, _legacy_sequence, text) in enumerate(samples):
             payload = base64.b64encode(text.encode("utf-8")).decode("utf-8")
             started = perf_counter()
+            captured_at_ms = int(time() * 1000)
             websocket.send_json({
                 "type": "audio-frame",
                 "deviceId": "benchmark-device",
@@ -64,21 +70,33 @@ def run_benchmark() -> dict[str, object]:
                 "sourceKind": "microphone",
                 "segmentId": segment_id,
                 "revision": 1,
-                "capturedAtMs": int(time() * 1000),
-                "startedAtMs": int(time() * 1000),
-                "endedAtMs": int(time() * 1000) + 600,
+                "capturedAtMs": captured_at_ms,
+                "startedAtMs": captured_at_ms,
+                "endedAtMs": captured_at_ms + 600,
                 "durationMs": 600,
                 "codec": "pcm-s16le",
                 "sampleRateHz": 16000,
                 "channels": 1,
                 "isFinal": True,
+                "traceId": f"benchmark:{segment_id}:{sequence}",
+                "sentAtMs": int(time() * 1000),
                 "audioBase64": payload,
             })
             event = websocket.receive_json()
             elapsed_ms = round((perf_counter() - started) * 1000, 2)
-            if event["kind"] != "transcript-updated":
+            if event["kind"] != "frame-accepted":
                 raise RuntimeError(f"unexpected event order: {event}")
             roundtrip_ms.append(elapsed_ms)
+            deadline = perf_counter() + 2
+            runtime = {}
+            while perf_counter() < deadline:
+                runtime = unwrap(client.get(
+                    f"/api/v1/realtime-speech/sessions/{session_id}/runtime",
+                    params={"userId": "benchmark-user"},
+                ))
+                if runtime.get("transcriptCount", 0) >= sequence + 1:
+                    break
+                sleep(0.01)
             runtime_snapshots.append(unwrap(client.get(
                 f"/api/v1/realtime-speech/sessions/{session_id}/runtime",
                 params={"userId": "benchmark-user"},
@@ -99,6 +117,13 @@ def run_benchmark() -> dict[str, object]:
         },
         "latestMicrophoneTiming": microphone_perf,
         "latestMicrophoneCounters": microphone_counters,
+        "transport": "websocket-v2",
+        "acceptance": {
+            "ackP95Under200Ms": percentile(roundtrip_ms, 0.95) <= 200,
+            "queueDepthUnder8": int(microphone_counters.get("queueDepth", 0)) <= 8,
+            "noDroppedPartialUpdates": int(microphone_counters.get("droppedPartialUpdates", 0)) == 0,
+            "allTranscriptsPublished": int(latest_runtime.get("transcriptCount", 0)) == len(samples),
+        },
     }
     return result
 
@@ -108,7 +133,8 @@ def main() -> None:
     result = run_benchmark()
     target = Path("artifacts/realtime-asr-benchmarks")
     target.mkdir(parents=True, exist_ok=True)
-    output = target / "baseline.json"
+    label = os.environ.get("OFFERSTEADY_BENCHMARK_LABEL", "baseline").strip() or "baseline"
+    output = target / f"{label}.json"
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

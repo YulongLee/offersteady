@@ -1497,6 +1497,13 @@ class RealtimeSpeechService:
             diagnostics = self._gateway_diagnostics(source_kind=source_kind)  # type: ignore[arg-type]
             runtime_status = self._gateway_runtime_status(source_kind=source_kind)  # type: ignore[arg-type]
             counter_bucket["connectionRecreations"] = diagnostics.get("connection_recreations", counter_bucket.get("connectionRecreations", 0))
+            counter_bucket["providerAppendCount"] = diagnostics.get("append_count", 0)
+            counter_bucket["providerCommitCount"] = diagnostics.get("commit_count", 0)
+            counter_bucket["providerCompletedMissing"] = diagnostics.get("completed_missing", 0)
+            counter_bucket["blankPartialSuppressed"] = diagnostics.get("blank_partial_suppressed", 0)
+            counter_bucket["vadToManualFallbacks"] = diagnostics.get("vad_to_manual_fallbacks", 0)
+            counter_bucket["idleProviderSessionClosures"] = diagnostics.get("idle_session_closures", 0)
+            counter_bucket["activeProviderSessions"] = diagnostics.get("active_provider_sessions", 0)
             counters_by_source[source_kind] = RealtimeRuntimeCountersResponse(**counter_bucket)
             latest_timing = self._latest_timing(session_id=session_id, source_kind=source_kind)  # type: ignore[arg-type]
             if latest_timing is not None:
@@ -1596,6 +1603,11 @@ class RealtimeSpeechService:
             reasons.append("publisher-no-connect")
         if evidence.get("transcriptEmitted") and not evidence.get("webConsumerSeen"):
             reasons.append("web-no-consumer")
+        for health in source_health:
+            if (health.oldest_pending_frame_age_ms or 0) > 300 or (health.pending_frame_count or 0) > 8:
+                reasons.append(f"{health.source_kind}:desktop_send_backlog")
+            if (health.dropped_frame_count or 0) > 0:
+                reasons.append(f"{health.source_kind}:desktop_audio_gap")
         for source_kind, timing in latest_by_source.items():
             if (timing.capture_to_send_ms or 0) > 180:
                 reasons.append(f"{source_kind}:desktop_send_backlog")
@@ -2015,6 +2027,14 @@ class RealtimeSpeechService:
             lastFrameAtMs=int(item["lastFrameAtMs"]) if item.get("lastFrameAtMs") is not None else None,
             backendFrameCount=int(item["backendFrameCount"]) if item.get("backendFrameCount") is not None else None,
             lastBackendFrameAtMs=int(item["lastBackendFrameAtMs"]) if item.get("lastBackendFrameAtMs") is not None else None,
+            pendingFrameCount=int(item["pendingFrameCount"]) if item.get("pendingFrameCount") is not None else None,
+            oldestPendingFrameAgeMs=int(item["oldestPendingFrameAgeMs"]) if item.get("oldestPendingFrameAgeMs") is not None else None,
+            droppedFrameCount=int(item["droppedFrameCount"]) if item.get("droppedFrameCount") is not None else None,
+            reconnectCount=int(item["reconnectCount"]) if item.get("reconnectCount") is not None else None,
+            lastAckAtMs=int(item["lastAckAtMs"]) if item.get("lastAckAtMs") is not None else None,
+            lastReconnectReason=str(item.get("lastReconnectReason")) if item.get("lastReconnectReason") is not None else None,
+            noiseFloor=float(item["noiseFloor"]) if item.get("noiseFloor") is not None else None,
+            captureProcessor=str(item.get("captureProcessor")) if item.get("captureProcessor") is not None else None,
             errorCode=str(item.get("errorCode")) if item.get("errorCode") is not None else None,
             providerMode=str(item.get("providerMode")) if item.get("providerMode") is not None else None,
             providerConnectionState=str(item.get("providerConnectionState")) if item.get("providerConnectionState") is not None else None,

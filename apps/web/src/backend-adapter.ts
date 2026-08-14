@@ -293,6 +293,13 @@ interface BackendRealtimeRuntimeResponse {
       readonly chunksProduced: number;
       readonly chunksUploaded: number;
       readonly serializedAudioBytes: number;
+      readonly providerAppendCount?: number;
+      readonly providerCommitCount?: number;
+      readonly providerCompletedMissing?: number;
+      readonly blankPartialSuppressed?: number;
+      readonly vadToManualFallbacks?: number;
+      readonly idleProviderSessionClosures?: number;
+      readonly activeProviderSessions?: number;
     }>;
   };
   readonly sourceHealth: readonly {
@@ -305,6 +312,14 @@ interface BackendRealtimeRuntimeResponse {
     readonly errorCode?: string | null;
     readonly frameCount?: number | null;
     readonly backendFrameCount?: number | null;
+    readonly pendingFrameCount?: number | null;
+    readonly oldestPendingFrameAgeMs?: number | null;
+    readonly droppedFrameCount?: number | null;
+    readonly reconnectCount?: number | null;
+    readonly lastAckAtMs?: number | null;
+    readonly lastReconnectReason?: string | null;
+    readonly noiseFloor?: number | null;
+    readonly captureProcessor?: string | null;
   }[];
 }
 
@@ -468,6 +483,7 @@ const runtimeNotice = (runtime: BackendRealtimeRuntimeResponse | null, degradedE
   if (runtime.dominantBottleneck === "web-no-consumer") return { stage: runtime.stage, message: "后端已有实时转写，但当前网页还没有消费到 live session，请刷新页面或检查实时订阅。" };
   if (runtime.dominantBottleneck === "desktop_no_audio_frames") return { stage: runtime.stage, message: "桌面端已绑定，但真实麦克风/电脑输出还没有产生可发送音频帧；请检查伴随程序采集权限和已选输入设备。" };
   if (runtime.dominantBottleneck?.includes("desktop_send_backlog")) return { stage: runtime.stage, message: "桌面端正在采集，但发送积压过高，实时字幕会明显变慢。" };
+  if (runtime.dominantBottleneck?.includes("desktop_audio_gap")) return { stage: runtime.stage, message: "桌面端检测到音频发送缺口，正在自动恢复连接；请保持助手在线并检查当前网络。" };
   if (runtime.dominantBottleneck?.includes("backend_ingest_queue_delayed")) return { stage: runtime.stage, message: "后端已收到音频，但排队等待过长，实时对话正在追赶中。" };
   if (runtime.dominantBottleneck?.includes("provider_partial_timeout")) return { stage: runtime.stage, message: "音频已经送入 ASR，但首段 partial 返回过慢，当前瓶颈在实时识别链路。" };
   if (runtime.dominantBottleneck?.includes("provider_final_timeout")) return { stage: runtime.stage, message: "实时字幕已开始返回，但 final 收束过慢，当前瓶颈在 ASR 完成阶段。" };

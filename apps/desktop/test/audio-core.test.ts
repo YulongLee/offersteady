@@ -66,8 +66,8 @@ describe("speech segmenter", () => {
     expect(segmenter.push(new Uint8Array([0]), 900, 0.001)).toEqual([]);
     const secondPartial = segmenter.push(speech, 950, 0.009);
     expect(secondPartial).toHaveLength(1);
-    expect(segmenter.push(new Uint8Array([0]), 2_049, 0.001)).toEqual([]);
-    const finalized = segmenter.push(new Uint8Array([0]), 2_050, 0.001);
+    expect(segmenter.push(new Uint8Array([0]), 1_799, 0.001)).toEqual([]);
+    const finalized = segmenter.push(new Uint8Array([0]), 1_800, 0.001);
 
     expect(finalized).toHaveLength(1);
     expect(finalized[0]?.isFinal).toBe(true);
@@ -114,6 +114,19 @@ describe("speech segmenter", () => {
     expect(microphone.push(digitalAudio, 100, 0.001)).toEqual([]);
   });
 
+  it("adapts to a quiet microphone after observing a low noise floor", () => {
+    const segmenter = new SpeechSegmenter("microphone");
+    const chunk = new Uint8Array([1, 2]);
+    for (let index = 0; index < 20; index += 1) {
+      expect(segmenter.push(chunk, index * 20, 0.0002)).toEqual([]);
+    }
+    expect(segmenter.push(chunk, 420, 0.0013)).toEqual([]);
+    const partial = segmenter.push(chunk, 500, 0.0013);
+    expect(partial).toHaveLength(1);
+    expect(partial[0]?.isFinal).toBe(false);
+    expect(segmenter.currentNoiseFloor).toBeLessThan(0.00035);
+  });
+
   it("keeps Feishu system speech in one segment across a short digital pause", () => {
     const segmenter = new SpeechSegmenter("system");
     const speech = new Uint8Array([1, 2, 3]);
@@ -125,8 +138,8 @@ describe("speech segmenter", () => {
     const continued = segmenter.push(speech, 430, 0.01);
     expect(continued).toHaveLength(1);
     expect(continued[0]?.segmentId).toBe(firstPartial[0]?.segmentId);
-    expect(segmenter.push(new Uint8Array([0]), 1_229, 0.0001)).toEqual([]);
-    const finalized = segmenter.push(new Uint8Array([0]), 1_230, 0.0001);
+    expect(segmenter.push(new Uint8Array([0]), 1_079, 0.0001)).toEqual([]);
+    const finalized = segmenter.push(new Uint8Array([0]), 1_080, 0.0001);
     expect(finalized).toHaveLength(1);
     expect(finalized[0]?.isFinal).toBe(true);
   });

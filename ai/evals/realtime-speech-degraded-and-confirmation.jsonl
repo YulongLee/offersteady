@@ -1,2 +1,6 @@
 {"input":{"source":"system","text":"__low_conf__ 讲讲你最有挑战的项目？","is_final":true},"expected":{"checks":["creates_question_candidate","requires_manual_confirmation","does_not_auto_trigger_before_confirm"]}}
 {"input":{"source":"system","text":"__asr_fail__ 请介绍一下项目","is_final":true},"expected":{"checks":["returns_asr_failure","does_not_claim_reliable_transcript"]}}
+{"input":{"transport":"websocket-v2","source":"microphone","sequence":[0,1,2],"disconnect_after":1,"reconnect_within_ms":500},"expected":{"checks":["replays_unacknowledged_frames","preserves_final_boundary","does_not_duplicate_transcript"]}}
+{"input":{"transport":"websocket-v2","source":"system","publisher_close_code":1008,"pending_frames":3},"expected":{"checks":["refreshes_publisher_once","restores_pending_frames","reports_credential_recovery"]}}
+{"input":{"source":"microphone","partials":["我叫李","我叫李玉龙，今年","我叫李玉龙，今年二十一岁"],"final":"我叫李玉龙，今年二十一岁。"},"expected":{"checks":["updates_same_segment_in_place","final_wins_over_late_partial","persists_final_only"]}}
+{"input":{"source":"microphone","noise_floor":0.0002,"speech_rms":0.0013,"turn_detection":"manual"},"expected":{"checks":["adapts_speech_threshold","emits_incremental_pcm","finalizes_within_900ms"]}}

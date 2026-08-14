@@ -60,7 +60,7 @@ interface WebAudioSourceRuntime extends RuntimeHandle {
   readonly label: string;
   readonly media: OpenAudioSource;
   readonly context: AudioContext;
-  readonly processor: ScriptProcessorNode;
+  readonly processor: AudioNode;
   readonly sink: GainNode;
   readonly node: MediaStreamAudioSourceNode;
 }
@@ -88,12 +88,12 @@ const MICROPHONE_SPEECH_CONTINUE_THRESHOLD = 0.0018;
 const SYSTEM_SPEECH_START_THRESHOLD = 0.0008;
 const SYSTEM_SPEECH_CONTINUE_THRESHOLD = 0.0005;
 const INTERIM_INTERVAL_MS = 100;
-const MICROPHONE_SILENCE_FINALIZE_MS = 1_100;
-const SYSTEM_SILENCE_FINALIZE_MS = 800;
+const MICROPHONE_SILENCE_FINALIZE_MS = 850;
+const SYSTEM_SILENCE_FINALIZE_MS = 650;
 const MAX_SEGMENT_DURATION_MS = 30_000;
 const MIN_EMIT_SPEECH_MS = 60;
 const PRE_SPEECH_BUFFER_LIMIT = 4;
-const MAX_PENDING_AUDIO_BYTES = 64_000;
+const MAX_PENDING_AUDIO_BYTES = 256_000;
 const MAX_PENDING_UPLOAD_FRAMES = 64;
 const HTTP_PUBLISH_THROTTLE_MS = 12;
 const HTTP_PUBLISH_RETRY_DELAY_MS = 120;
@@ -219,12 +219,58 @@ export const publisherFailureDiagnostic = (sourceKind: AudioSourceKind, error: u
 export const publisherFailureIsTerminal = (error: unknown) =>
   error instanceof Error && /publisher_create_failed_[^_]+_(401|403|404|409|410)$/.test(error.message);
 
-const connectProcessor = (context: AudioContext, processor: ScriptProcessorNode) => {
+const connectProcessor = (context: AudioContext, processor: AudioNode) => {
   const sink = context.createGain();
   sink.gain.value = 0;
   processor.connect(sink);
   sink.connect(context.destination);
   return sink;
+};
+
+interface AudioCaptureProcessor {
+  readonly processor: AudioNode;
+  readonly sink: GainNode;
+  readonly mode: "audio-worklet" | "script-processor";
+  readonly detach: () => void;
+}
+
+const createAudioCaptureProcessor = async (
+  context: AudioContext,
+  onSamples: (samples: Float32Array) => void,
+): Promise<AudioCaptureProcessor> => {
+  if (context.audioWorklet && typeof AudioWorkletNode !== "undefined") {
+    try {
+      await context.audioWorklet.addModule(new URL("./pcm-capture.worklet.js", import.meta.url));
+      const processor = new AudioWorkletNode(context, "offersteady-pcm-capture", {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [1],
+      });
+      processor.port.onmessage = event => {
+        const samples = event.data;
+        if (samples instanceof Float32Array) onSamples(samples);
+      };
+      const sink = connectProcessor(context, processor);
+      return {
+        processor,
+        sink,
+        mode: "audio-worklet",
+        detach: () => { processor.port.onmessage = null; },
+      };
+    } catch {
+      // Older Electron builds and restrictive worklet loaders keep the tested
+      // ScriptProcessor fallback so capture still works instead of failing.
+    }
+  }
+  const processor = context.createScriptProcessor(1024, 1, 1);
+  processor.onaudioprocess = event => onSamples(event.inputBuffer.getChannelData(0));
+  const sink = connectProcessor(context, processor);
+  return {
+    processor,
+    sink,
+    mode: "script-processor",
+    detach: () => { processor.onaudioprocess = null; },
+  };
 };
 
 const sourceLabel = (sourceKind: AudioSourceKind) => sourceKind === "microphone" ? "麦克风" : "电脑输出";
@@ -294,16 +340,38 @@ export class SpeechSegmenter {
   private readonly unsentChunks: Uint8Array[] = [];
   private readonly preSpeechChunks: Uint8Array[] = [];
   private emitted = false;
+  private noiseFloor: number;
 
-  constructor(private readonly sourceKind: AudioSourceKind) {}
+  constructor(private readonly sourceKind: AudioSourceKind) {
+    this.noiseFloor = sourceKind === "system" ? 0.0001 : 0.00035;
+  }
+
+  get currentNoiseFloor(): number {
+    return this.noiseFloor;
+  }
+
+  private thresholds(): { readonly start: number; readonly continuation: number } {
+    if (this.sourceKind === "system") {
+      return {
+        start: Math.min(SYSTEM_SPEECH_START_THRESHOLD, Math.max(0.00035, this.noiseFloor * 3.2)),
+        continuation: Math.min(SYSTEM_SPEECH_CONTINUE_THRESHOLD, Math.max(0.00025, this.noiseFloor * 2)),
+      };
+    }
+    return {
+      start: Math.min(MICROPHONE_SPEECH_START_THRESHOLD, Math.max(0.0012, this.noiseFloor * 3.2)),
+      continuation: Math.min(MICROPHONE_SPEECH_CONTINUE_THRESHOLD, Math.max(0.0011, this.noiseFloor * 2)),
+    };
+  }
+
+  private observeNoise(rms: number): void {
+    const fixedStart = this.sourceKind === "system" ? SYSTEM_SPEECH_START_THRESHOLD : MICROPHONE_SPEECH_START_THRESHOLD;
+    if (!Number.isFinite(rms) || rms < 0 || rms >= fixedStart) return;
+    this.noiseFloor = this.noiseFloor * 0.92 + rms * 0.08;
+  }
 
   push(payload: Uint8Array, nowMs: number, rms: number): SegmentSnapshot[] {
-    const startThreshold = this.sourceKind === "system"
-      ? SYSTEM_SPEECH_START_THRESHOLD
-      : MICROPHONE_SPEECH_START_THRESHOLD;
-    const continueThreshold = this.sourceKind === "system"
-      ? SYSTEM_SPEECH_CONTINUE_THRESHOLD
-      : MICROPHONE_SPEECH_CONTINUE_THRESHOLD;
+    if (!this.segmentId) this.observeNoise(rms);
+    const { start: startThreshold, continuation: continueThreshold } = this.thresholds();
     if (!this.segmentId) {
       if (payload.byteLength > 0) {
         this.preSpeechChunks.push(payload);
@@ -403,6 +471,7 @@ export class DesktopRealtimePublisher {
   private systemRecoveryAttempt = 0;
   private stopped = false;
   private transport: MultiplexedRealtimeTransport | null = null;
+  private transportRecovery: Promise<void> | null = null;
 
   constructor(private readonly options: RealtimePublisherOptions) {
     this.fetchImpl = options.fetchImpl ?? ((input, init) => window.fetch(input, init));
@@ -416,15 +485,7 @@ export class DesktopRealtimePublisher {
     this.stopped = false;
     this.options.onCaptureState("reconnecting");
     try {
-      const transportPublisher = await this.createPublisher("mixed");
-      const transport = new MultiplexedRealtimeTransport({
-        apiBaseUrl: this.options.apiBaseUrl,
-        token: transportPublisher.token,
-        onEvent: event => this.options.onServerEvent?.(event),
-        onState: state => this.options.onCaptureState(state === "failed" ? "error" : state === "connected" ? "capturing" : "reconnecting"),
-      });
-      this.transport = transport;
-      await transport.start();
+      await this.openTransport();
     } catch (error) {
       this.transport?.stop();
       this.transport = null;
@@ -470,6 +531,7 @@ export class DesktopRealtimePublisher {
     this.stopped = true;
     this.transport?.stop();
     this.transport = null;
+    this.transportRecovery = null;
     await Promise.all(this.runtimes.map(runtime => runtime.stop()));
     this.runtimes = [];
     this.latestHealth.clear();
@@ -513,18 +575,13 @@ export class DesktopRealtimePublisher {
       const context = new AudioContext();
       await context.resume().catch(() => undefined);
       const node = context.createMediaStreamSource(openedMedia.stream);
-      const processor = context.createScriptProcessor(1024, 1, 1);
-      const sink = connectProcessor(context, processor);
       const segmenter = new SpeechSegmenter(input.sourceKind);
       const openedAtMs = Date.now();
       let lastProcessAtMs = openedAtMs;
       let closing = false;
 
-      node.connect(processor);
-
-      processor.onaudioprocess = (event) => {
+      const processSamples = (channel: Float32Array) => {
         if (this.stopped) return;
-        const channel = event.inputBuffer.getChannelData(0);
         const rms = calculateRms(channel);
         const nowMs = Date.now();
         lastProcessAtMs = nowMs;
@@ -540,6 +597,7 @@ export class DesktopRealtimePublisher {
           state: rms >= (input.sourceKind === "system" ? SYSTEM_SPEECH_CONTINUE_THRESHOLD : MICROPHONE_SPEECH_CONTINUE_THRESHOLD) ? "receiving" : "silent",
           stage: rms >= (input.sourceKind === "system" ? SYSTEM_SPEECH_CONTINUE_THRESHOLD : MICROPHONE_SPEECH_CONTINUE_THRESHOLD) ? "signal-detected" : "track-live",
           level: Number(rms.toFixed(3)),
+          noiseFloor: Number(segmenter.currentNoiseFloor.toFixed(5)),
           ...(rms >= (input.sourceKind === "system" ? SYSTEM_SPEECH_CONTINUE_THRESHOLD : MICROPHONE_SPEECH_CONTINUE_THRESHOLD) ? { lastSignalAtMs: nowMs } : {}),
           active: true,
         });
@@ -592,6 +650,20 @@ export class DesktopRealtimePublisher {
           this.sendFrameHttp(input.sourceKind, eventPayload, frame, openedMedia.descriptor.id || input.sourceId);
         }
       };
+      const captureProcessor = await createAudioCaptureProcessor(context, processSamples);
+      const { processor, sink } = captureProcessor;
+      node.connect(processor);
+      this.updateHealth({
+        ...(this.latestHealth.get(input.sourceKind) ?? {
+          sourceId: openedMedia.descriptor.id || input.sourceId,
+          sourceKind: input.sourceKind,
+          label: openedMedia.descriptor.label,
+          state: "silent" as const,
+          level: 0,
+          active: true,
+        }),
+        captureProcessor: captureProcessor.mode,
+      });
 
       const audioTrack = openedMedia.stream.getAudioTracks()[0];
       const recoveryTimer = input.sourceKind === "system" && audioTrack
@@ -647,6 +719,7 @@ export class DesktopRealtimePublisher {
             audioBase64: bytesToBase64(snapshot.payload),
           }, frame, openedMedia.descriptor.id || input.sourceId);
         }
+        captureProcessor.detach();
         processor.disconnect();
         sink.disconnect();
         node.disconnect();
@@ -768,6 +841,89 @@ export class DesktopRealtimePublisher {
     return payload.data;
   }
 
+  private async openTransport(pending: readonly Record<string, unknown>[] = []): Promise<void> {
+    const transportPublisher = await this.createPublisher("mixed");
+    let transport: MultiplexedRealtimeTransport;
+    transport = new MultiplexedRealtimeTransport({
+      apiBaseUrl: this.options.apiBaseUrl,
+      token: transportPublisher.token,
+      onEvent: event => this.handleTransportEvent(event),
+      onState: state => this.options.onCaptureState(state === "failed" ? "reconnecting" : state === "connected" ? "capturing" : "reconnecting"),
+      onTerminal: input => {
+        if (this.transport !== transport || this.stopped) return;
+        void this.recoverTransport(input);
+      },
+    });
+    this.transport = transport;
+    await transport.start();
+    for (const payload of pending) transport.enqueue(payload);
+  }
+
+  private recoverTransport(input: { readonly code: number; readonly reason: string; readonly pending: readonly Record<string, unknown>[] }): Promise<void> {
+    if (this.transportRecovery) return this.transportRecovery;
+    const failedTransport = this.transport;
+    this.transportRecovery = (async () => {
+      this.options.onCaptureState("reconnecting");
+      this.options.onServerEvent?.({ kind: "degraded", payload: {
+        reason: input.reason,
+        message: "实时发布凭据已失效，正在自动连接当前面试并恢复未确认音频。",
+        closeCode: input.code,
+        pendingFrames: input.pending.length,
+      } });
+      failedTransport?.stop();
+      if (this.transport === failedTransport) this.transport = null;
+      let lastError: unknown = null;
+      for (let attempt = 1; attempt <= 3 && !this.stopped; attempt += 1) {
+        try {
+          if (attempt > 1) await new Promise<void>(resolve => window.setTimeout(resolve, 250 * attempt));
+          await this.openTransport(input.pending);
+          this.options.onServerEvent?.({ kind: "connection-state", payload: {
+            state: "credential-refreshed",
+            recoveryReason: input.reason,
+            attempt,
+            restoredFrames: input.pending.length,
+          } });
+          return;
+        } catch (error) {
+          lastError = error;
+          this.transport?.stop();
+          this.transport = null;
+        }
+      }
+      if (!this.stopped) {
+        const diagnostic = publisherFailureDiagnostic("microphone", lastError);
+        this.options.onFailure(`实时发布通道自动恢复失败：${diagnostic.displayMessage}`);
+        this.options.onCaptureState("error");
+      }
+    })().finally(() => {
+      this.transportRecovery = null;
+    });
+    return this.transportRecovery;
+  }
+
+  private handleTransportEvent(event: { readonly kind?: string; readonly payload?: Record<string, unknown> }): void {
+    const payload = event.payload ?? {};
+    const sourceKind = payload?.sourceKind;
+    if (sourceKind === "microphone" || sourceKind === "system") {
+      const existing = this.latestHealth.get(sourceKind);
+      if (existing && event.kind === "frame-accepted" && typeof payload.sequence === "number") {
+        this.sendBuffers.get(sourceKind)?.acknowledge(String(payload.sourceId ?? existing.sourceId), payload.sequence);
+      }
+      if (existing && (event.kind === "delivery-diagnostics" || event.kind === "sequence-gap" || event.kind === "frame-accepted")) {
+        this.updateHealth({
+          ...existing,
+          ...(typeof payload.pendingFrames === "number" ? { pendingFrameCount: payload.pendingFrames } : {}),
+          ...(typeof payload.oldestPendingFrameAgeMs === "number" ? { oldestPendingFrameAgeMs: payload.oldestPendingFrameAgeMs } : {}),
+          ...(typeof payload.droppedFrames === "number" ? { droppedFrameCount: payload.droppedFrames } : {}),
+          ...(typeof payload.reconnectCount === "number" ? { reconnectCount: payload.reconnectCount } : {}),
+          ...(typeof payload.lastAckAtMs === "number" ? { lastAckAtMs: payload.lastAckAtMs } : event.kind === "frame-accepted" ? { lastAckAtMs: Date.now() } : {}),
+          ...(typeof payload.reason === "string" ? { lastReconnectReason: payload.reason } : {}),
+        });
+      }
+    }
+    this.options.onServerEvent?.(event);
+  }
+
   private sendFrameHttp(
     sourceKind: AudioSourceKind,
     payload: Record<string, unknown>,
@@ -775,8 +931,7 @@ export class DesktopRealtimePublisher {
     sourceId: string,
   ) {
     if (this.transport) {
-      const droppedFrames = this.sendBuffers.get(sourceKind)?.push(frame) ?? [];
-      if (droppedFrames.length > 0) this._notifyFailure(sourceKind, `${sourceLabel(sourceKind)}网络缓冲超过 2 秒，已丢弃最旧音频并上报缺口。`);
+      this.sendBuffers.get(sourceKind)?.push(frame);
       this.transport.enqueue(payload);
       return;
     }
@@ -956,7 +1111,11 @@ export class DesktopRealtimePublisher {
   }
 
   private updateHealth(next: HealthSnapshot) {
-    this.latestHealth.set(next.sourceKind, next);
+    const merged = {
+      ...this.latestHealth.get(next.sourceKind),
+      ...next,
+    };
+    this.latestHealth.set(next.sourceKind, merged);
     const ordered = [...this.latestHealth.values()]
       .sort((left, right) => left.sourceKind.localeCompare(right.sourceKind))
       .map(({ active, ...health }) => health);

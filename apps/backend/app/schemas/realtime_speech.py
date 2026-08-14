@@ -82,6 +82,14 @@ class RealtimeSourceHealthResponse(BaseModel):
     last_frame_at_ms: int | None = Field(default=None, alias="lastFrameAtMs")
     backend_frame_count: int | None = Field(default=None, alias="backendFrameCount")
     last_backend_frame_at_ms: int | None = Field(default=None, alias="lastBackendFrameAtMs")
+    pending_frame_count: int | None = Field(default=None, alias="pendingFrameCount")
+    oldest_pending_frame_age_ms: int | None = Field(default=None, alias="oldestPendingFrameAgeMs")
+    dropped_frame_count: int | None = Field(default=None, alias="droppedFrameCount")
+    reconnect_count: int | None = Field(default=None, alias="reconnectCount")
+    last_ack_at_ms: int | None = Field(default=None, alias="lastAckAtMs")
+    last_reconnect_reason: str | None = Field(default=None, alias="lastReconnectReason")
+    noise_floor: float | None = Field(default=None, alias="noiseFloor")
+    capture_processor: str | None = Field(default=None, alias="captureProcessor")
     error_code: str | None = Field(default=None, alias="errorCode")
     provider_mode: str | None = Field(default=None, alias="providerMode")
     provider_connection_state: str | None = Field(default=None, alias="providerConnectionState")
@@ -126,6 +134,13 @@ class RealtimeRuntimeCountersResponse(BaseModel):
     chunks_produced: int = Field(alias="chunksProduced")
     chunks_uploaded: int = Field(alias="chunksUploaded")
     serialized_audio_bytes: int = Field(alias="serializedAudioBytes")
+    provider_append_count: int = Field(default=0, alias="providerAppendCount")
+    provider_commit_count: int = Field(default=0, alias="providerCommitCount")
+    provider_completed_missing: int = Field(default=0, alias="providerCompletedMissing")
+    blank_partial_suppressed: int = Field(default=0, alias="blankPartialSuppressed")
+    vad_to_manual_fallbacks: int = Field(default=0, alias="vadToManualFallbacks")
+    idle_provider_session_closures: int = Field(default=0, alias="idleProviderSessionClosures")
+    active_provider_sessions: int = Field(default=0, alias="activeProviderSessions")
 
 
 class RealtimeRuntimePerformanceResponse(BaseModel):

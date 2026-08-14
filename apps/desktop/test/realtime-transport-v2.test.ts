@@ -96,4 +96,48 @@ describe("realtime transport v2", () => {
     expect(FakeWebSocket.instances[1]!.sent).toHaveLength(1);
     transport.stop();
   });
+
+  it("keeps final boundaries when the recovery queue overflows", async () => {
+    vi.stubGlobal("window", { location: { href: "https://mianshiwen.cc/interviews/session" }, setTimeout, clearTimeout });
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const events: Array<{ kind?: string; payload?: Record<string, unknown> }> = [];
+    const transport = new MultiplexedRealtimeTransport({
+      apiBaseUrl: "https://mianshiwen.cc/api/v1",
+      token: "bounded-token",
+      onEvent: event => events.push(event),
+      onState: () => undefined,
+    });
+    await transport.start();
+    transport.enqueue({ sourceKind: "microphone", sourceId: "mic", sequence: 0, isFinal: true, capturedAtMs: Date.now() });
+    for (let sequence = 1; sequence <= 256; sequence += 1) {
+      transport.enqueue({ sourceKind: "microphone", sourceId: "mic", sequence, isFinal: false, capturedAtMs: Date.now() });
+    }
+    const pending = transport.pendingPayloads();
+    expect(pending.some(item => item.sequence === 0 && item.isFinal === true)).toBe(true);
+    expect(pending.some(item => item.sequence === 1)).toBe(false);
+    expect(events).toContainEqual(expect.objectContaining({
+      kind: "sequence-gap",
+      payload: expect.objectContaining({ reason: "desktop-buffer-overflow", sequence: 1, droppedFrames: 1 }),
+    }));
+    transport.stop();
+  });
+
+  it("hands unacknowledged frames to the credential refresh callback", async () => {
+    vi.stubGlobal("window", { location: { href: "https://mianshiwen.cc/interviews/session" }, setTimeout, clearTimeout });
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const terminals: Array<{ code: number; reason: string; pending: readonly Record<string, unknown>[] }> = [];
+    const transport = new MultiplexedRealtimeTransport({
+      apiBaseUrl: "https://mianshiwen.cc/api/v1",
+      token: "expired-token",
+      onEvent: () => undefined,
+      onState: () => undefined,
+      onTerminal: terminal => terminals.push(terminal),
+    });
+    await transport.start();
+    transport.enqueue({ sourceKind: "system", sourceId: "loopback", sequence: 0, isFinal: false, capturedAtMs: Date.now() });
+    FakeWebSocket.instances[0]!.close(1008);
+    expect(terminals).toHaveLength(1);
+    expect(terminals[0]).toMatchObject({ code: 1008, reason: "publisher-credential-rejected" });
+    expect(terminals[0]?.pending).toHaveLength(1);
+  });
 });

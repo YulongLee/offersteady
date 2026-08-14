@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Provider-aware realtime ASR telemetry
-系统 MUST 为每个实时音频来源记录与 provider 调用直接相关的运行指标，至少包括连接重建次数、append 发送次数、commit 完成情况、partial 首字时间、final 完成时间、空白结果抑制次数、VAD/Manual 模式状态和 provider 错误分类。
+系统 MUST 为每个实时音频来源记录与 provider 调用直接相关的运行指标，至少包括连接重建次数、append 发送次数、commit 完成情况、partial 首字时间、final 完成时间、空白结果抑制次数、VAD/Manual 模式状态和 provider 错误分类。桌面送音诊断 MUST 同时包含未确认队列深度、最老帧龄、丢帧数量、最近 ACK 和最近重连原因。
 
 #### Scenario: Runtime is queried during an active session
 - **WHEN** 桌面端或网页端查询当前面试会话的 realtime runtime 状态
@@ -14,6 +14,10 @@
 #### Scenario: Provider mode fallback happens
 - **WHEN** 某一路来源从 provider VAD 模式回退到 Manual commit 模式
 - **THEN** runtime diagnostics 记录该来源的模式变化与触发原因，便于后续定位 provider 调用问题
+
+#### Scenario: Desktop delivery starts to lag
+- **WHEN** 某一路音频已经采集但未确认队列持续增长
+- **THEN** runtime diagnostics 展示该来源的队列深度和最老帧龄，使系统能够区分采集正常与网络发送积压
 
 ### Requirement: Performance baseline SHALL be reproducible locally
 系统 MUST 提供本地可重复执行的基线验证方式，用于记录当前 Realtime ASR pipeline 的关键延迟与 provider 行为指标。该基线 MUST 可用于后续优化前后对比。

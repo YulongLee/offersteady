@@ -59,11 +59,21 @@ Alternative considered: 保留现有 segment 级 request/response 包装，只�
 
 百炼官方实时接口支持服务端 VAD 和手动 commit 两种模式。OfferSteady 不应把它们混成一个不可诊断的“静音阈值实现”，而是要把它们视为两种明确 provider 策略：
 
-- 面试实时对话默认优先尝试 VAD 模式，以更早拿到 partial/final
+- 面试实时对话默认使用 Manual commit。现有真实链路基线中 Manual final 约 0.55 秒，而 provider VAD final 约 8 秒且存在文本不完整，因此 VAD 只作为可观测的灰度策略
 - 当某一路 source 噪声复杂、误触发明显或 provider VAD 不稳定时，允许切回 Manual commit
 - 模式切换必须体现在 provider runtime diagnostics 中
 
 Alternative considered: 始终只用本地静音阈值控制 commit。缺点是与 provider 官方断句机制脱节，难以判断问题到底来自本地门控还是 provider 侧 VAD。
+
+### Decision 7: Preserve unacknowledged audio across transient transport recovery
+
+桌面端为每一路音频维护带 sequence 的短期未确认队列。网络瞬断时复用未确认帧；publisher token 失效时单实例换取新 token，并把尚未确认的帧转移到新连接。队列优先保留 final 和语句边界，只有超过有界恢复窗口时才报告明确的 sequence gap，不能静默丢弃音频。
+
+为同时控制实时性与完整性，正常链路直接发送最新增量帧；短暂积压允许补发，超过恢复窗口时停止突发追赶并从新的语句边界恢复。诊断必须记录队列深度、最老帧龄、丢帧数和重连原因。
+
+### Decision 8: Adapt local speech gating without changing the interview workflow
+
+麦克风与系统音频分别估计静音噪声基线，在安全上下限内动态调整开始和继续阈值。系统仍保留最小语音时长、语句前置缓冲和最大段长，避免低音量用户丢开头，也避免背景噪声持续触发。采集回调优先使用 AudioWorklet；不支持时保留 ScriptProcessor 兼容回退。
 
 ### Decision 4: Separate ingest, provider streaming, and transcript publishing
 
@@ -128,6 +138,9 @@ Alternative considered: 只保留 capture-to-render 的总耗时。缺点是定�
 4. 对齐桌面端送音策略
    - 不再累计整段重传
    - 只发送尚未发送过的 PCM chunk
+   - 短暂断线保留未确认帧，失效 token 自动换新并恢复发送
+   - 暴露队列深度、最老帧龄、丢帧与重连诊断
+   - 使用动态静音基线，并优先把音频处理移出渲染主线程
 
 5. 验证与回滚
    - 通过 feature flag 保留旧网关模式短期回退

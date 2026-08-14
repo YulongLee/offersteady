@@ -169,39 +169,46 @@ def run_remote_paced_probe(*, turn_detection_mode: str, text: str) -> dict[str, 
     final_wall: int | None = None
     history: list[dict[str, object]] = []
 
-    for idx, offset in enumerate(range(0, len(pcm), chunk_size), start=1):
-        target_wall = start_wall + (idx - 1) * 0.1
-        now = time.time()
-        if target_wall > now:
-            time.sleep(target_wall - now)
-        chunk = pcm[offset : offset + chunk_size]
-        duration_ms = int((len(chunk) / 2 / 16000) * 1000)
-        captured_at = start_ms + (idx - 1) * 100
-        sent_at = int(time.time() * 1000)
-        is_final = offset + chunk_size >= len(pcm)
-        _unwrap(client.post("/api/v1/realtime-speech/frames", json={
-            "type": "audio-frame",
-            "token": publisher["token"],
-            "deviceId": f"probe-device-{turn_detection_mode}",
-            "sourceId": "mic-default",
-            "sequence": idx,
-            "sourceKind": "microphone",
-            "segmentId": segment_id,
-            "revision": idx,
-            "capturedAtMs": captured_at,
-            "sentAtMs": sent_at,
-            "startedAtMs": start_ms,
-            "endedAtMs": captured_at + duration_ms,
-            "durationMs": duration_ms,
-            "codec": "pcm-s16le",
-            "sampleRateHz": 16000,
-            "channels": 1,
-            "isFinal": is_final,
-            "traceId": f"trace-{turn_detection_mode}-{idx}",
-            "audioBase64": base64.b64encode(chunk).decode("ascii"),
-        }))
-        poll_deadline = time.time() + 0.12
-        while time.time() < poll_deadline:
+    with client.websocket_connect(
+        f"/api/v1/realtime-speech/ingest-ws?token={publisher['token']}&protocol=2.0"
+    ) as websocket:
+        connection_event = websocket.receive_json()
+        if connection_event.get("kind") != "connection-state":
+            raise RuntimeError(f"missing websocket-v2 connection state: {connection_event}")
+        for sequence, offset in enumerate(range(0, len(pcm), chunk_size)):
+            idx = sequence + 1
+            target_wall = start_wall + sequence * 0.1
+            now = time.time()
+            if target_wall > now:
+                time.sleep(target_wall - now)
+            chunk = pcm[offset : offset + chunk_size]
+            duration_ms = int((len(chunk) / 2 / 16000) * 1000)
+            captured_at = start_ms + sequence * 100
+            sent_at = int(time.time() * 1000)
+            is_final = offset + chunk_size >= len(pcm)
+            websocket.send_json({
+                "type": "audio-frame",
+                "deviceId": f"probe-device-{turn_detection_mode}",
+                "sourceId": "mic-default",
+                "sequence": sequence,
+                "sourceKind": "microphone",
+                "segmentId": segment_id,
+                "revision": idx,
+                "capturedAtMs": captured_at,
+                "sentAtMs": sent_at,
+                "startedAtMs": start_ms,
+                "endedAtMs": captured_at + duration_ms,
+                "durationMs": duration_ms,
+                "codec": "pcm-s16le",
+                "sampleRateHz": 16000,
+                "channels": 1,
+                "isFinal": is_final,
+                "traceId": f"trace-{turn_detection_mode}-{idx}",
+                "audioBase64": base64.b64encode(chunk).decode("ascii"),
+            })
+            ack = websocket.receive_json()
+            if ack.get("kind") != "frame-accepted":
+                raise RuntimeError(f"unexpected websocket-v2 event: {ack}")
             transcripts = _unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/transcripts", params={"userId": f"latency-remote-{turn_detection_mode}"}))
             if transcripts["transcripts"]:
                 latest = transcripts["transcripts"][-1]
@@ -210,17 +217,15 @@ def run_remote_paced_probe(*, turn_detection_mode: str, text: str) -> dict[str, 
                     first_partial_revision = latest["revision"]
                 if latest["isFinal"]:
                     final_wall = int(time.time() * 1000)
-                    break
-            time.sleep(0.01)
-        history.append({
-            "chunk": idx,
-            "isFinalChunk": is_final,
-            "capturedAtMs": captured_at,
-            "sentAtMs": sent_at,
-            "sendDelayMs": max(0, sent_at - captured_at),
-        })
-        if final_wall is not None:
-            break
+            history.append({
+                "chunk": idx,
+                "isFinalChunk": is_final,
+                "capturedAtMs": captured_at,
+                "sentAtMs": sent_at,
+                "sendDelayMs": max(0, sent_at - captured_at),
+            })
+            if final_wall is not None:
+                break
 
     if final_wall is None:
         deadline = time.time() + 8
