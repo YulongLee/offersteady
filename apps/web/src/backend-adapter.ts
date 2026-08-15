@@ -542,6 +542,7 @@ const mapRealtimeState = (
   const pending = candidates.candidates.find(candidate => candidate.state === "needs-confirmation");
   const latestDeviceStatus = [...events.events].reverse().find(event => event.kind === "device-status");
   const latestDegraded = [...events.events].reverse().find(event => event.kind === "degraded");
+  const latestShortcutAccepted = [...events.events].reverse().find(event => event.kind === "screenshot-shortcut-accepted" && typeof event.payload.requestId === "string");
   const captureState = toCaptureState(runtime?.captureState)
     ?? toCaptureState(latestDeviceStatus?.payload.captureState)
     ?? (runtime?.sessionLive && runtime.machineCodeBound ? "capturing" as const : undefined);
@@ -591,7 +592,16 @@ const mapRealtimeState = (
       runtimeNotice: meaningfulTranscripts.length > 0 ? null : runtimeNotice(runtime, latestDegraded),
     },
     ...(captureState ? { captureState } : {}),
-  } satisfies Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>;
+    ...(latestShortcutAccepted ? {
+      shortcutScreenshotUpdate: {
+        requestId: String(latestShortcutAccepted.payload.requestId),
+        status: "requested" as const,
+        screenshotTask: { name: "共享屏幕截取", stage: "waiting-desktop" as const },
+        notificationId: latestShortcutAccepted.eventId,
+        acceptedAtMs: latestShortcutAccepted.createdAtMs,
+      },
+    } : {}),
+  };
 };
 
 const questionStatusFromTask = (task: BackendLiveAnswerTaskResponse): InterviewQuestion["status"] =>
@@ -944,7 +954,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     }, signal);
   }
 
-  async subscribeRealtimeSession(interviewId: string, onUpdate: (state: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => void, signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }) {
+  async subscribeRealtimeSession(interviewId: string, onUpdate: Parameters<InterviewAppAdapter["subscribeRealtimeSession"]>[1], signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }) {
     const cursorKey = `offersteady:realtime-cursor:${interviewId}`;
     const storedCursor = typeof window.sessionStorage?.getItem === "function" ? Number(window.sessionStorage.getItem(cursorKey) ?? "0") : 0;
     const cursor = Number.isFinite(storedCursor) && storedCursor > 0 ? storedCursor : 0;

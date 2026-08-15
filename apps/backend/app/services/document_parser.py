@@ -62,6 +62,23 @@ class DocumentParserService:
     def parse_document(self, *, task: ProcessingTaskRecord, document: DocumentRecord) -> tuple[ProcessingTaskRecord, ParsedDocument]:
         started_at = _now_ms()
         task = self.status_reporter.mark_parsing_started(task)
+        cached = self.load_normalized_artifact(document=document)
+        if cached is not None:
+            parsed = ParsedDocument(
+                markdown=cached,
+                provider_name="normalized-artifact-cache",
+                detected_title=Path(document.display_name).stem,
+                metadata={"parserProfile": "normalized-cache", "fileKind": document.file_kind},
+            )
+            task = self.status_reporter.mark_parsing_succeeded(task, parsed, duration_ms=_now_ms() - started_at)
+            self._record_parser_usage(
+                task=task,
+                document=document,
+                provider=parsed.provider_name,
+                status="succeeded",
+                duration_ms=_now_ms() - started_at,
+            )
+            return task, parsed
         context = DocumentParserContext(
             task_id=task.task_id,
             document_id=document.document_id,
@@ -160,6 +177,79 @@ class DocumentParserService:
             failed_task = self.status_reporter.mark_parsing_failed(task, failure, duration_ms=_now_ms() - started_at)
             self._record_parser_usage(task=failed_task, document=document, provider=failure.provider_name, status="failed", duration_ms=_now_ms() - started_at, safe_error_code=failure.error_code)
             raise ParserExecutionError(task=failed_task, failure=failure) from exc
+
+    def parse_for_quote(self, *, document: DocumentRecord) -> ParsedDocument:
+        cached = self.load_normalized_artifact(document=document)
+        if cached is not None:
+            return ParsedDocument(
+                markdown=cached,
+                provider_name="normalized-artifact-cache",
+                detected_title=Path(document.display_name).stem,
+                metadata={"parserProfile": "normalized-cache", "fileKind": document.file_kind},
+            )
+        context = DocumentParserContext(
+            task_id=f"quote-{document.document_version_id or document.document_id}",
+            document_id=document.document_id,
+            document_kind=document.document_kind,
+            file_kind=document.file_kind,
+            content_type=document.content_type,
+            object_key=document.object_key,
+            display_name=document.display_name,
+            retry_count=0,
+        )
+        try:
+            payload = self.object_storage.load_object_bytes(object_key=document.object_key)
+            parsed = self.binary_parser.parse(context=context, payload=payload)
+            normalized = self.markdown_normalizer.normalize(
+                markdown=parsed.markdown,
+                document_kind=document.document_kind,
+                file_kind=document.file_kind,
+            )
+        except DomainRequestError:
+            raise
+        except UnicodeDecodeError as exc:
+            raise DomainRequestError("knowledge", "quote-upload", "文本文件编码无法识别，请使用 UTF-8 后重新上传。", 422) from exc
+        except Exception as exc:
+            raise DomainRequestError("knowledge", "quote-upload", "文件解析失败，暂时无法计算索引报价。", 422) from exc
+        if not normalized.markdown.strip():
+            raise DomainRequestError("knowledge", "quote-upload", "文件中没有可建立索引的文字内容，不会扣除积分。", 422)
+        self.save_normalized_artifact(document=document, markdown=normalized.markdown)
+        return replace(parsed, markdown=normalized.markdown)
+
+    def load_normalized_artifact(self, *, document: DocumentRecord) -> str | None:
+        if not document.document_version_id:
+            return None
+        object_key = self._normalized_artifact_key(document=document)
+        if not self.object_storage.object_exists(object_key=object_key):
+            return None
+        try:
+            markdown = self.object_storage.load_object_bytes(object_key=object_key).decode("utf-8")
+        except (DomainRequestError, UnicodeDecodeError):
+            return None
+        return markdown if markdown.strip() else None
+
+    def save_normalized_artifact(self, *, document: DocumentRecord, markdown: str) -> None:
+        if not document.document_version_id:
+            return
+        object_key = self._normalized_artifact_key(document=document)
+        payload = markdown.encode("utf-8")
+        self.object_storage.save_object_bytes(
+            object_key=object_key,
+            payload=payload,
+            content_type="text/markdown; charset=utf-8",
+        )
+        self._record_normalized_artifact(document=document, object_key=object_key, size_bytes=len(payload))
+
+    def _normalized_artifact_key(self, *, document: DocumentRecord) -> str:
+        if not document.document_version_id:
+            raise ValueError("A document version is required for normalized artifacts.")
+        return MaterialObjectKeyFactory(self.settings).processed_artifact_key(
+            owner_user_id=document.owner_user_id,
+            document_kind=document.document_kind,
+            document_id=document.document_id,
+            document_version_id=document.document_version_id,
+            artifact_kind="normalized_markdown",
+        )
 
     def _record_normalized_artifact(self, *, document: DocumentRecord, object_key: str, size_bytes: int) -> None:
         if self.commercial_repository is None or not document.document_version_id:

@@ -9,6 +9,13 @@ contextBridge.exposeInMainWorld("offersteady", {
   getNativeRuntimeHealth: () => ipcRenderer.invoke("desktop:get-native-runtime-health"),
   getScreenshotShortcut: () => ipcRenderer.invoke("desktop:get-screenshot-shortcut"),
   setScreenshotShortcut: (accelerator: string) => ipcRenderer.invoke("desktop:set-screenshot-shortcut", accelerator),
+  getScreenshotCaptureLock: () => ipcRenderer.invoke("desktop:get-screenshot-capture-lock"),
+  cancelScreenshotCapture: () => ipcRenderer.invoke("desktop:cancel-screenshot-capture"),
+  onScreenshotCaptureLockChanged: (listener: (state: { locked: boolean; message: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: { locked: boolean; message: string }) => listener(state);
+    ipcRenderer.on("desktop:screenshot-capture-lock-changed", handler);
+    return () => ipcRenderer.removeListener("desktop:screenshot-capture-lock-changed", handler);
+  },
   onScreenshotShortcutNotice: (listener: (message: string) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, message: string) => listener(message);
     ipcRenderer.on("desktop:screenshot-shortcut-notice", handler);

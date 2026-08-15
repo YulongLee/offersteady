@@ -57,6 +57,9 @@ declare global {
       getNativeRuntimeHealth?: () => Promise<DesktopNativeRuntimeHealth>;
       getScreenshotShortcut?: () => Promise<DesktopScreenshotShortcutSettings>;
       setScreenshotShortcut?: (accelerator: string) => Promise<{ ok: boolean; accelerator: string; message: string }>;
+      getScreenshotCaptureLock?: () => Promise<{ locked: boolean; message: string }>;
+      cancelScreenshotCapture?: () => Promise<{ locked: boolean; message: string }>;
+      onScreenshotCaptureLockChanged?: (listener: (state: { locked: boolean; message: string }) => void) => () => void;
       onScreenshotShortcutNotice?: (listener: (message: string) => void) => () => void;
       getPairingIdentity: () => Promise<DesktopPairingIdentity>;
       listScreens?: () => Promise<readonly DesktopScreenSource[]>;

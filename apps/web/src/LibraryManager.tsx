@@ -22,7 +22,8 @@ import {
   managedLibrarySources,
 } from "./context-selection";
 import { runAdapterOperation } from "./api-client";
-import { materialUploadAdapter } from "./material-upload-adapter";
+import { materialUploadAdapter, saveMaterialDownload } from "./material-upload-adapter";
+import type { PreparedKnowledgeUpload } from "./material-upload-adapter";
 import { interviewAppAdapter } from "./app-adapter";
 
 interface Props {
@@ -90,7 +91,9 @@ export function LibraryManager({ state, setState }: Props) {
   const [name, setName] = useState("");
   const [jdText, setJdText] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [quoteIssuedAt, setQuoteIssuedAt] = useState(0);
+  const [preparedKnowledgeUpload, setPreparedKnowledgeUpload] =
+    useState<PreparedKnowledgeUpload | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [operation, setOperation] = useState<LibraryOperation>(null);
@@ -105,28 +108,12 @@ export function LibraryManager({ state, setState }: Props) {
     state.librarySources,
     state.account.id,
   ).filter((source) => source.kind === tab);
-  const allowanceRemaining = state.billing.activePass
-    ? Math.max(
-        0,
-        state.billing.activePass.knowledgeAllowanceGranted -
-          state.billing.activePass.knowledgeAllowanceUsed -
-          state.billing.activePass.knowledgeAllowanceLocked,
-      )
-    : 0;
-  const tokenCount = pendingFile
-    ? Math.max(1, Math.ceil((pendingFile.size || 12_000) / 4))
-    : 0;
+  const serviceQuote = preparedKnowledgeUpload?.quote ?? null;
+  const tokenCount = serviceQuote?.tokenCount ?? 0;
   const knowledgeIndexPointsPer5000Tokens =
     state.billing.rates.knowledgeIndexPointsPer1000Tokens * 5;
-  const billableUnits = tokenCount ? Math.ceil(tokenCount / 5000) : 0;
-  const quotedPoints = tokenCount
-    ? Math.max(
-        state.billing.rates.knowledgeIndexMinimumPoints,
-        billableUnits * knowledgeIndexPointsPer5000Tokens,
-      )
-    : 0;
-  const quoteSource =
-    allowanceRemaining > 0 ? ("pass_allowance" as const) : ("points" as const);
+  const quotedPoints = serviceQuote?.pointCost ?? 0;
+  const quoteSource = serviceQuote?.entitlementSource ?? "points";
   const refreshFromBackend = async () => {
     const generation = ++refreshGenerationRef.current;
     const next = await runAdapterOperation((signal) =>
@@ -220,6 +207,7 @@ export function LibraryManager({ state, setState }: Props) {
     setName("");
     setJdText("");
     setPendingFile(null);
+    setPreparedKnowledgeUpload(null);
     setDialog(tab === "knowledge" ? "create-collection" : "add-source");
   };
   const createCollection = async () => {
@@ -258,7 +246,7 @@ export function LibraryManager({ state, setState }: Props) {
     }
   };
   const uploadKnowledge = async () => {
-    if (!pendingFile || !selected) return;
+    if (!pendingFile || !selected || !preparedKnowledgeUpload) return;
     const fileKind = detectMaterialUploadFormat(
       pendingFile.name,
     ) as KnowledgeFileKind | null;
@@ -266,7 +254,7 @@ export function LibraryManager({ state, setState }: Props) {
       setNotice(`仅支持 ${materialUploadFormatLabel}`);
       return;
     }
-    if (!quoteIssuedAt || Date.now() - quoteIssuedAt >= 15 * 60_000) {
+    if (Date.now() >= preparedKnowledgeUpload.quote.expiresAtMs) {
       setNotice("报价已过期，请刷新后重新确认");
       return;
     }
@@ -318,10 +306,11 @@ export function LibraryManager({ state, setState }: Props) {
     }));
     try {
       const completed = await runAdapterOperation((signal) =>
-        materialUploadAdapter.uploadKnowledgeFile(
+        materialUploadAdapter.confirmKnowledgeFile(
           state.account.id,
           selectedCollection.id,
           uploadFile,
+          preparedKnowledgeUpload,
           signal,
         ),
       );
@@ -330,7 +319,7 @@ export function LibraryManager({ state, setState }: Props) {
         id: completed.source.sourceId,
         collectionId: selectedCollection.id,
         ownerUserId: state.account.id,
-        displayName: uploadFile.name,
+        displayName: completed.source.displayName,
         fileKind,
         sizeBytes: uploadFile.size || 1024,
         contentFingerprint: `prototype:${uploadFile.name}:${uploadFile.size}`,
@@ -392,6 +381,30 @@ export function LibraryManager({ state, setState }: Props) {
       );
     } finally {
       setSubmittingUpload(false);
+    }
+  };
+
+  const prepareKnowledgeQuote = async (file: File | null) => {
+    setPendingFile(file);
+    setPreparedKnowledgeUpload(null);
+    setError("");
+    if (!file || !selected) return;
+    setQuoteLoading(true);
+    try {
+      const prepared = await runAdapterOperation((signal) =>
+        materialUploadAdapter.prepareKnowledgeFile(
+          state.account.id,
+          selected.id,
+          file,
+          signal,
+        ),
+      );
+      setPreparedKnowledgeUpload(prepared);
+      setNotice("服务端已按解析后的正文生成最终报价，请确认后建立索引");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "文件解析或报价失败，请重新选择文件");
+    } finally {
+      setQuoteLoading(false);
     }
   };
   const addSource = async () => {
@@ -465,7 +478,7 @@ export function LibraryManager({ state, setState }: Props) {
         id: completed.source.sourceId,
         ownerUserId: state.account.id,
         kind: materialTab,
-        displayName,
+        displayName: completed.source.displayName,
         version: "v1",
         status: "processing",
         processingState: completed.source.processingState,
@@ -563,6 +576,29 @@ export function LibraryManager({ state, setState }: Props) {
           error instanceof Error ? error.message : "删除资料失败，请稍后重试",
         ),
       )
+      .finally(() => setOperation(null));
+  };
+  const downloadDocument = (documentId: string) => {
+    const op = `document:${documentId}` as const;
+    setOperation(op);
+    setError("");
+    void runAdapterOperation(signal => materialUploadAdapter.downloadDocument(state.account.id, documentId, signal))
+      .then(result => { saveMaterialDownload(result); setNotice("原始资料已开始下载"); })
+      .catch(error => setError(error instanceof Error ? error.message : "资料下载失败，请稍后重试"))
+      .finally(() => setOperation(null));
+  };
+  const renameSource = (source: ContextLibrarySource) => {
+    const nextName = window.prompt("新的资料名称", source.displayName)?.trim();
+    if (!nextName) return;
+    const documentId = source.documentId ?? source.id;
+    const op = `document:${documentId}` as const;
+    setOperation(op);
+    setError("");
+    invalidatePendingRefreshes();
+    void runAdapterOperation(signal => materialUploadAdapter.renameDocument(state.account.id, documentId, nextName, signal))
+      .then(() => refreshFromBackend())
+      .then(() => setNotice("资料已重命名并保存"))
+      .catch(error => setError(error instanceof Error ? error.message : "重命名资料失败，请稍后重试"))
       .finally(() => setOperation(null));
   };
   const removeDocument = (document: KnowledgeDocumentVersion) => {
@@ -681,6 +717,20 @@ export function LibraryManager({ state, setState }: Props) {
         : "";
     if (action === "rename" && !nextName) {
       setOperation(null);
+      return;
+    }
+    if (action === "rename") {
+      invalidatePendingRefreshes();
+      void runAdapterOperation(signal => materialUploadAdapter.renameDocument(
+        state.account.id,
+        document.documentId ?? document.id,
+        nextName!,
+        signal,
+      ))
+        .then(() => refreshFromBackend())
+        .then(() => setNotice("资料已重命名并保存"))
+        .catch(error => setError(error instanceof Error ? error.message : "重命名资料失败，请稍后重试"))
+        .finally(() => setOperation(null));
       return;
     }
     setState((current) => ({
@@ -972,6 +1022,12 @@ export function LibraryManager({ state, setState }: Props) {
                           </button>
                           <button
                             disabled={operation !== null}
+                            onClick={() => downloadDocument(document.documentId ?? document.id)}
+                          >
+                            下载原文件
+                          </button>
+                          <button
+                            disabled={operation !== null}
                             onClick={() => removeDocument(document)}
                           >
                             {operation === `document:${document.id}`
@@ -1068,6 +1124,18 @@ export function LibraryManager({ state, setState }: Props) {
                       </button>
                     ) : null}
                     <button
+                      disabled={operation !== null}
+                      onClick={() => renameSource(source)}
+                    >
+                      重命名
+                    </button>
+                    <button
+                      disabled={operation !== null}
+                      onClick={() => downloadDocument(source.documentId ?? source.id)}
+                    >
+                      下载原文件
+                    </button>
+                    <button
                       className="danger-link"
                       disabled={operation !== null}
                       onClick={() => removeSource(source)}
@@ -1126,7 +1194,7 @@ export function LibraryManager({ state, setState }: Props) {
       {dialog === "upload-knowledge" ? (
         <DialogShell title="添加并建立索引" onClose={() => setDialog(null)}>
           <p>
-            {supportedFormatsLabel}。选择后先显示费用预估，确认时由服务端校验并预留积分或会员额度。
+            {supportedFormatsLabel}。选择后由服务端提取可索引正文并计算最终报价，不会把 PDF 图片、字体或压缩数据计入 Token。
           </p>
           <label className="checkout-field">
             选择文件
@@ -1137,35 +1205,44 @@ export function LibraryManager({ state, setState }: Props) {
               disabled={submittingUpload}
               onChange={(event) => {
                 const file = event.target.files?.[0] ?? null;
-                setPendingFile(file);
-                setQuoteIssuedAt(file ? Date.now() : 0);
+                void prepareKnowledgeQuote(file);
               }}
             />
           </label>
           <div className="index-estimate">
-            <span>{pendingFile ? "预计索引费用" : "等待选择文件"}</span>
+            <span>
+              {quoteLoading
+                ? "正在解析并计算报价"
+                : serviceQuote
+                  ? "服务端最终报价"
+                  : pendingFile
+                    ? "等待服务端报价"
+                    : "等待选择文件"}
+            </span>
             <strong>
-              {pendingFile
+              {quoteLoading
+                ? "解析正文中…"
+                : serviceQuote
                 ? quoteSource === "pass_allowance"
                   ? "使用 1 份会员额度"
                   : `${quotedPoints} 点`
-                : `${state.billing.rates.knowledgeIndexMinimumPoints} 点起`}
+                : "选择文件后自动计算"}
             </strong>
-            {pendingFile ? (
+            {serviceQuote ? (
               <>
                 <small>
-                  {tokenCount.toLocaleString("zh-CN")} Token · {billableUnits}{" "}
-                  个计费单位 · 目录 v{state.billing.rates.catalogVersion}
+                  {tokenCount.toLocaleString("zh-CN")} Token · {serviceQuote.billableUnits}{" "}
+                  个计费单位 · 目录 v{serviceQuote.catalogVersion}
                 </small>
                 <small>
                   {quoteSource === "pass_allowance"
-                    ? `当前剩余 ${allowanceRemaining} 份，成功后剩余 ${allowanceRemaining - 1} 份`
-                    : `当前 ${state.billing.balance} 点 → 成功后 ${state.billing.balance - quotedPoints} 点`}
+                    ? `当前剩余 ${serviceQuote.allowanceRemaining} 份，成功后剩余 ${Math.max(0, serviceQuote.allowanceRemaining - 1)} 份`
+                    : `当前 ${state.billing.balance} 点 → 成功后 ${serviceQuote.projectedBalance} 点`}
                 </small>
                 <button
                   type="button"
-                  disabled={submittingUpload}
-                  onClick={() => setQuoteIssuedAt(Date.now())}
+                  disabled={submittingUpload || quoteLoading || !pendingFile}
+                  onClick={() => void prepareKnowledgeQuote(pendingFile)}
                 >
                   刷新报价
                 </button>
@@ -1183,13 +1260,13 @@ export function LibraryManager({ state, setState }: Props) {
               disabled={submittingUpload}
               onClick={() => {
                 setPendingFile(null);
-                setQuoteIssuedAt(0);
+                setPreparedKnowledgeUpload(null);
                 setDialog(null);
               }}
             >
               取消
             </button>
-            {pendingFile &&
+            {serviceQuote &&
             quoteSource === "points" &&
             state.billing.balance < quotedPoints ? (
               <Link className="button primary" to={routes.billing}>
@@ -1198,10 +1275,16 @@ export function LibraryManager({ state, setState }: Props) {
             ) : (
               <button
                 className="button primary"
-                disabled={!pendingFile || submittingUpload}
+                disabled={!pendingFile || !preparedKnowledgeUpload || submittingUpload || quoteLoading}
                 onClick={uploadKnowledge}
               >
-                {submittingUpload ? "提交中…" : "确认报价并建立索引"}
+                {quoteLoading
+                  ? "正在计算报价…"
+                  : submittingUpload
+                    ? "提交中…"
+                    : serviceQuote
+                      ? "确认报价并建立索引"
+                      : "请等待服务端报价"}
               </button>
             )}
           </div>

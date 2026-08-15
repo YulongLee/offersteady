@@ -64,6 +64,7 @@ class CompleteDocumentUploadRequest(BaseModel):
     content_sha256: str | None = Field(default=None, alias="contentSha256")
     knowledge_collection_id: str | None = Field(default=None, alias="knowledgeCollectionId")
     confirm_index_charge: bool = Field(default=False, alias="confirmIndexCharge")
+    quote_id: str | None = Field(default=None, alias="quoteId")
 
 
 class DocumentRecordResponse(BaseModel):
@@ -113,6 +114,12 @@ class SetDocumentAvailabilityRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
     user_id: str = Field(min_length=1, alias="userId")
     enabled: bool
+
+
+class RenameDocumentRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    user_id: str = Field(min_length=1, alias="userId")
+    display_name: str = Field(min_length=1, max_length=160, alias="displayName")
 
 
 class DocumentProcessingHandoffResponse(BaseModel):

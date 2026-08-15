@@ -7,7 +7,7 @@ from app.core.responses import success_response
 from app.deps import document_service, optional_authenticated_context, resolve_owned_user_id
 from app.ports.authentication import AuthenticatedRequestContext
 from app.schemas.foundation import ApiEnvelope, ModuleDescriptor
-from app.schemas.material_upload import CompleteUploadRequest, CreateKnowledgeCollectionRequest, CreatedKnowledgeCollectionResponse, MaterialUploadCompletionResponse, RenameKnowledgeCollectionRequest, UploadIntentRequest, UploadIntentResponse
+from app.schemas.material_upload import CompleteUploadRequest, CreateKnowledgeCollectionRequest, CreatedKnowledgeCollectionResponse, KnowledgeUploadQuoteResponse, MaterialUploadCompletionResponse, RenameKnowledgeCollectionRequest, UploadIntentRequest, UploadIntentResponse
 from app.services.document_service import DocumentService
 
 
@@ -133,6 +133,7 @@ async def complete_knowledge_upload(
         content_sha256=request.content_sha256,
         knowledge_collection_id=collection_id,
         confirm_index_charge=request.confirm_index_charge,
+        quote_id=request.quote_id,
     )
     return success_response(
         request=request_context,
@@ -155,6 +156,29 @@ async def complete_knowledge_upload(
     )
 
 
+@router.post("/collections/{collection_id}/uploads/quote", response_model=ApiEnvelope[KnowledgeUploadQuoteResponse])
+async def quote_knowledge_upload(
+    request_context: Request,
+    collection_id: str,
+    request: CompleteUploadRequest,
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: DocumentService = Depends(document_service),
+) -> ApiEnvelope[KnowledgeUploadQuoteResponse]:
+    user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
+    return success_response(
+        request=request_context,
+        data=service.quote_knowledge_upload(
+            user_id=user_id,
+            intent_id=request.intent_id,
+            object_key=request.object_key,
+            content_type=request.content_type,
+            size_bytes=request.size_bytes,
+            etag=request.etag,
+            content_sha256=request.content_sha256,
+            knowledge_collection_id=collection_id,
+        ),
+        timestamp=utc_now_iso(),
+    )
 @router.post("/collections/{collection_id}/uploads/proxy", response_model=ApiEnvelope[dict[str, int | str]])
 async def proxy_knowledge_upload(
     request_context: Request,

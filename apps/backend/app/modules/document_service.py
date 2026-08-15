@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
+from urllib.parse import quote
 
 from app.core.logging import utc_now_iso
 from app.core.responses import success_response
@@ -16,6 +17,7 @@ from app.schemas.document_service import (
     DocumentUploadIntentResponse,
     DocumentValidationPolicyResponse,
     ListDocumentsRequest,
+    RenameDocumentRequest,
     SetDocumentAvailabilityRequest,
 )
 from app.schemas.foundation import ApiEnvelope, ModuleDescriptor
@@ -137,6 +139,43 @@ async def set_document_availability(
         request=request_context,
         data=service.set_document_enabled(user_id=user_id, document_id=document_id, enabled=request.enabled),
         timestamp=utc_now_iso(),
+    )
+
+
+@router.patch("/{document_id}/display-name", response_model=ApiEnvelope[DocumentRecordResponse])
+async def rename_document(
+    document_id: str,
+    request_context: Request,
+    request: RenameDocumentRequest,
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: DocumentService = Depends(document_service),
+) -> ApiEnvelope[DocumentRecordResponse]:
+    user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
+    return success_response(
+        request=request_context,
+        data=service.rename_document(user_id=user_id, document_id=document_id, display_name=request.display_name),
+        timestamp=utc_now_iso(),
+    )
+
+
+@router.get("/{document_id}/download", response_class=Response)
+async def download_document(
+    document_id: str,
+    user_id: str | None = Query(default=None, alias="userId"),
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: DocumentService = Depends(document_service),
+) -> Response:
+    resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
+    payload, filename, content_type = service.download_document(user_id=resolved_user_id, document_id=document_id)
+    encoded_filename = quote(filename, safe="")
+    return Response(
+        content=payload,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f"attachment; filename=material-download; filename*=UTF-8''{encoded_filename}",
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 

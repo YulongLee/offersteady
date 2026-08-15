@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from pathlib import PurePath
 from time import time
 from typing import TYPE_CHECKING
 from uuid import uuid4
@@ -28,9 +29,12 @@ from app.schemas.document_service import (
     DocumentValidationPolicyResponse,
 )
 from app.schemas.material_upload import CreatedKnowledgeCollectionResponse
+from app.schemas.material_upload import KnowledgeUploadQuoteResponse
 from app.services.material_deletion import InMemoryMaterialDeletionScheduler
 from app.services.material_object_keys import MaterialObjectKeyFactory
 from app.services.commercial_hardening import artifact_id, job_id
+from app.services.knowledge_index_quote import estimate_normalized_markdown_tokens
+from app.services.billing_service import KNOWLEDGE_INDEX_QUOTE_TTL_MS
 
 if TYPE_CHECKING:
     from app.services.billing_service import BillingService
@@ -66,6 +70,46 @@ class DocumentService:
     commercial_repository: CommercialHardeningRepository | None = None
     billing_service: BillingService | None = None
     max_file_size_bytes: int = 20 * 1024 * 1024
+
+    @staticmethod
+    def _safe_display_name(value: str) -> str:
+        clean = PurePath(value.replace("\\", "/")).name.strip()
+        if not clean:
+            raise DomainRequestError("document-service", "display-name", "资料名称不能为空。")
+        if len(clean) > 160:
+            raise DomainRequestError("document-service", "display-name", "资料名称不能超过 160 个字符。")
+        return clean
+
+    @staticmethod
+    def _numbered_display_name(value: str, number: int) -> str:
+        suffix = PurePath(value).suffix
+        stem = value[: -len(suffix)] if suffix else value
+        return f"{stem} ({number}){suffix}"
+
+    def _unique_display_name(
+        self,
+        *,
+        user_id: str,
+        document_kind: MaterialKind,
+        requested_name: str,
+        exclude_document_id: str | None = None,
+    ) -> str:
+        clean = self._safe_display_name(requested_name)
+        occupied = {
+            item.display_name.casefold()
+            for item in self.repository.list_for_user(
+                user_id=user_id,
+                document_kind=document_kind,
+                include_deleted=False,
+            )
+            if item.document_id != exclude_document_id
+        }
+        if clean.casefold() not in occupied:
+            return clean
+        number = 2
+        while self._numbered_display_name(clean, number).casefold() in occupied:
+            number += 1
+        return self._numbered_display_name(clean, number)
 
     def validation_policy(self) -> DocumentValidationPolicyResponse:
         formats = material_upload_formats()
@@ -150,6 +194,7 @@ class DocumentService:
         content_sha256: str | None = None,
         knowledge_collection_id: str | None = None,
         confirm_index_charge: bool = False,
+        quote_id: str | None = None,
     ) -> CompleteDocumentUploadResponse:
         confirmed = self.storage.confirm_uploaded_object(
             user_id=user_id,
@@ -164,18 +209,26 @@ class DocumentService:
             self._require_collection_access(user_id=user_id, collection_id=knowledge_collection_id)
             if not confirm_index_charge:
                 raise DomainRequestError("knowledge", "complete-upload", "请先确认知识资料索引报价。", 400)
+        prequoted_document: DocumentRecord | None = None
         if confirmed.document_id:
             existing = self.repository.get_by_id(confirmed.document_id)
             if existing is not None:
                 if existing.owner_user_id != user_id:
                     raise DomainRequestError("document-service", "complete-upload", "不能确认其他用户的文档。", 403)
-                return CompleteDocumentUploadResponse(document=self._to_response(existing))
+                if existing.status != "uploaded":
+                    return CompleteDocumentUploadResponse(document=self._to_response(existing))
+                prequoted_document = existing
         now_ms = confirmed.confirmed_at_ms
         document_record = DocumentRecord(
             document_id=confirmed.document_id or f"document-{uuid4().hex}",
             owner_user_id=user_id,
             document_kind=confirmed.material_kind,
-            display_name=confirmed.filename,
+            display_name=self._unique_display_name(
+                user_id=user_id,
+                document_kind=confirmed.material_kind,
+                requested_name=confirmed.filename,
+                exclude_document_id=confirmed.document_id,
+            ),
             file_kind=confirmed.file_kind,
             content_type=confirmed.content_type,
             size_bytes=confirmed.size_bytes,
@@ -194,6 +247,15 @@ class DocumentService:
             original_filename=confirmed.filename,
             index_state="queued",
         )
+        if prequoted_document is not None:
+            document_record = replace(
+                prequoted_document,
+                status="processing_requested",
+                processing_requested_at_ms=now_ms,
+                updated_at_ms=now_ms,
+                summary="文件已上传，后台正在建立可供 AI 使用的文档索引。",
+                index_state="queued",
+            )
         billing_quote_id: str | None = None
         if confirmed.material_kind == "knowledge":
             if self.billing_service is None or not confirmed.document_version_id:
@@ -201,10 +263,27 @@ class DocumentService:
             quote = self.billing_service.quote_knowledge_index(
                 user_id=user_id,
                 document_version_id=confirmed.document_version_id,
-                token_estimate=max(1, (confirmed.size_bytes + 3) // 4),
-                idempotency_key=f"knowledge-index:{confirmed.document_version_id}",
+                token_estimate=self._knowledge_token_estimate(document=document_record),
+                idempotency_key=f"knowledge-index:{confirmed.document_version_id}:legacy",
+            ) if quote_id is None else self.billing_service.knowledge_index_quote(
+                user_id=user_id,
+                quote_id=quote_id,
+                document_version_id=confirmed.document_version_id,
             )
-            reservation = self.billing_service.reserve_knowledge_index(user_id=user_id, quote_id=quote.quote_id)
+            if quote_id is None:
+                rates = self.billing_service.rates()
+                legacy_tokens = max(1, (confirmed.size_bytes + 3) // 4)
+                legacy_points = max(
+                    int(rates["knowledgeIndexMinimumPoints"]),
+                    ((legacy_tokens + 4999) // 5000) * int(rates["knowledgeIndexPointsPer1000Tokens"]) * 5,
+                )
+                if quote.points_required > legacy_points:
+                    raise DomainRequestError("knowledge", "index-billing", "服务端最终报价高于旧版页面估算，请刷新页面后重新确认。", 409)
+            reservation = self.billing_service.reserve_knowledge_index_for_quote(
+                user_id=user_id,
+                quote_id=quote.quote_id,
+                document_version_id=confirmed.document_version_id,
+            )
             if reservation.status != "reserved":
                 raise DomainRequestError("knowledge", "index-billing", "积分或会员知识资料额度不足，文件尚未开始建立索引。", 402)
             billing_quote_id = quote.quote_id
@@ -222,6 +301,126 @@ class DocumentService:
             raise
         return CompleteDocumentUploadResponse(document=self._to_response(document))
 
+    def quote_knowledge_upload(
+        self,
+        *,
+        user_id: str,
+        intent_id: str,
+        object_key: str,
+        content_type: str,
+        size_bytes: int,
+        etag: str | None,
+        content_sha256: str | None,
+        knowledge_collection_id: str,
+    ) -> KnowledgeUploadQuoteResponse:
+        self._require_collection_access(user_id=user_id, collection_id=knowledge_collection_id)
+        if self.billing_service is None or self.processing_service is None:
+            raise DomainRequestError("knowledge", "quote-upload", "知识资料报价服务暂不可用，请稍后重试。", 503)
+        confirmed = self.storage.confirm_uploaded_object(
+            user_id=user_id,
+            intent_id=intent_id,
+            object_key=object_key,
+            content_type=content_type,
+            size_bytes=size_bytes,
+            etag=etag,
+            content_sha256=content_sha256,
+        )
+        if confirmed.material_kind != "knowledge" or not confirmed.document_version_id:
+            raise DomainRequestError("knowledge", "quote-upload", "当前上传对象不是有效的知识资料。", 409)
+        document = self._document_from_confirmed_upload(
+            user_id=user_id,
+            confirmed=confirmed,
+            knowledge_collection_id=knowledge_collection_id,
+            status="uploaded",
+            summary="文件已上传，等待确认服务端索引报价。",
+        )
+        existing = self.repository.get_by_id(document.document_id)
+        if existing is not None:
+            if existing.owner_user_id != user_id:
+                raise DomainRequestError("knowledge", "quote-upload", "不能为其他用户的资料创建报价。", 403)
+            document = existing
+        else:
+            document = self.repository.save(document)
+            self._record_original_artifact(document=document, verified_at_ms=confirmed.confirmed_at_ms)
+        token_estimate = self._knowledge_token_estimate(document=document)
+        quote = self.billing_service.quote_knowledge_index(
+            user_id=user_id,
+            document_version_id=confirmed.document_version_id,
+            token_estimate=token_estimate,
+            idempotency_key=f"knowledge-index:{confirmed.document_version_id}:preview:{_now_ms() // KNOWLEDGE_INDEX_QUOTE_TTL_MS}",
+        )
+        state = self.billing_service.state_for_user(user_id=user_id)
+        active_pass = state.active_pass or {}
+        allowance_remaining = max(
+            0,
+            int(active_pass.get("knowledgeAllowanceGranted", 0))
+            - int(active_pass.get("knowledgeAllowanceUsed", 0))
+            - int(active_pass.get("knowledgeAllowanceLocked", 0)),
+        )
+        return KnowledgeUploadQuoteResponse(
+            quoteId=quote.quote_id,
+            documentVersionId=quote.document_version_id,
+            contentFingerprint=confirmed.content_fingerprint or confirmed.etag or confirmed.document_version_id,
+            tokenCount=quote.token_estimate,
+            billableUnits=(quote.token_estimate + 4999) // 5000,
+            pointCost=quote.points_required,
+            entitlementSource="pass_allowance" if allowance_remaining > 0 else "points",
+            allowanceRemaining=allowance_remaining,
+            catalogVersion=quote.catalog_version,
+            tokenizerVersion=quote.tokenizer_version,
+            createdAtMs=quote.created_at_ms,
+            expiresAtMs=quote.created_at_ms + KNOWLEDGE_INDEX_QUOTE_TTL_MS,
+            projectedBalance=quote.projected_balance,
+        )
+
+    def _knowledge_token_estimate(self, *, document: DocumentRecord) -> int:
+        if self.processing_service is None:
+            raise DomainRequestError("knowledge", "quote-upload", "知识资料解析服务暂不可用，请稍后重试。", 503)
+        markdown = self.processing_service.parse_document_for_quote(document=document)
+        token_estimate = estimate_normalized_markdown_tokens(markdown)
+        if token_estimate <= 0:
+            raise DomainRequestError("knowledge", "quote-upload", "文件中没有可建立索引的文字内容，不会扣除积分。", 422)
+        return token_estimate
+
+    def _document_from_confirmed_upload(
+        self,
+        *,
+        user_id: str,
+        confirmed,
+        knowledge_collection_id: str | None,
+        status: str,
+        summary: str,
+    ) -> DocumentRecord:
+        now_ms = confirmed.confirmed_at_ms
+        return DocumentRecord(
+            document_id=confirmed.document_id or f"document-{uuid4().hex}",
+            owner_user_id=user_id,
+            document_kind=confirmed.material_kind,
+            display_name=self._unique_display_name(
+                user_id=user_id,
+                document_kind=confirmed.material_kind,
+                requested_name=confirmed.filename,
+                exclude_document_id=confirmed.document_id,
+            ),
+            file_kind=confirmed.file_kind,
+            content_type=confirmed.content_type,
+            size_bytes=confirmed.size_bytes,
+            object_key=confirmed.object_key,
+            status=status,
+            knowledge_collection_id=knowledge_collection_id,
+            processing_requested_at_ms=now_ms if status == "processing_requested" else None,
+            deleted_at_ms=None,
+            created_at_ms=now_ms,
+            updated_at_ms=now_ms,
+            summary=summary,
+            object_id=confirmed.object_id,
+            document_version_id=confirmed.document_version_id,
+            version=1,
+            content_fingerprint=confirmed.content_fingerprint,
+            original_filename=confirmed.filename,
+            index_state="queued" if status == "processing_requested" else "not_indexed",
+        )
+
     def list_documents(
         self,
         *,
@@ -232,15 +431,33 @@ class DocumentService:
     ) -> list[DocumentRecordResponse]:
         if knowledge_collection_id is not None:
             self._require_collection_access(user_id=user_id, collection_id=knowledge_collection_id)
-        return [
-            self._to_response(record)
-            for record in self.repository.list_for_user(
-                user_id=user_id,
-                document_kind=document_kind,
-                knowledge_collection_id=knowledge_collection_id,
-                include_deleted=include_deleted,
-            )
-        ]
+        records = self.repository.list_for_user(
+            user_id=user_id,
+            document_kind=document_kind,
+            knowledge_collection_id=knowledge_collection_id,
+            include_deleted=include_deleted,
+        )
+        display_names = self._disambiguated_display_names(records)
+        return [self._to_response(record, display_name=display_names[record.document_id]) for record in records]
+
+    def _disambiguated_display_names(self, records: list[DocumentRecord]) -> dict[str, str]:
+        reserved = {self._safe_display_name(item.display_name).casefold() for item in records}
+        used: set[str] = set()
+        result: dict[str, str] = {}
+        for record in sorted(records, key=lambda item: (item.created_at_ms, item.document_id)):
+            clean = self._safe_display_name(record.display_name)
+            candidate = clean
+            if candidate.casefold() in used:
+                number = 2
+                while True:
+                    numbered = self._numbered_display_name(clean, number)
+                    if numbered.casefold() not in used and numbered.casefold() not in reserved:
+                        candidate = numbered
+                        break
+                    number += 1
+            result[record.document_id] = candidate
+            used.add(candidate.casefold())
+        return result
 
     def get_document(self, *, user_id: str, document_id: str) -> DocumentRecordResponse:
         record = self.repository.get_by_id(document_id)
@@ -249,6 +466,36 @@ class DocumentService:
         if record.owner_user_id != user_id:
             raise DomainRequestError("document-service", "get-document", "不能查看其他用户的文档。", 403)
         return self._to_response(record)
+
+    def rename_document(self, *, user_id: str, document_id: str, display_name: str) -> DocumentRecordResponse:
+        record = self.repository.get_by_id(document_id)
+        if record is None or record.status == "deleted":
+            raise DomainRequestError("document-service", "rename-document", "文档不存在。", 404)
+        if record.owner_user_id != user_id:
+            raise DomainRequestError("document-service", "rename-document", "不能修改其他用户的文档。", 403)
+        unique_name = self._unique_display_name(
+            user_id=user_id,
+            document_kind=record.document_kind,
+            requested_name=display_name,
+            exclude_document_id=document_id,
+        )
+        if unique_name == record.display_name:
+            return self._to_response(record)
+        updated = replace(record, display_name=unique_name, updated_at_ms=_now_ms())
+        return self._to_response(self.repository.save(updated))
+
+    def download_document(self, *, user_id: str, document_id: str) -> tuple[bytes, str, str]:
+        record = self.repository.get_by_id(document_id)
+        if record is None or record.status == "deleted":
+            raise DomainRequestError("document-service", "download-document", "文档不存在。", 404)
+        if record.owner_user_id != user_id:
+            raise DomainRequestError("document-service", "download-document", "不能下载其他用户的文档。", 403)
+        try:
+            payload = self.storage.load_object_bytes(object_key=record.object_key)
+        except Exception as exc:
+            raise DomainRequestError("document-service", "download-document", "原文件暂时不可下载，请稍后重试。", 404) from exc
+        filename = self._safe_display_name(record.original_filename or record.display_name)
+        return payload, filename, record.content_type or "application/octet-stream"
 
     def set_document_enabled(self, *, user_id: str, document_id: str, enabled: bool) -> DocumentRecordResponse:
         record = self.repository.get_by_id(document_id)
@@ -369,6 +616,11 @@ class DocumentService:
         key_factory = MaterialObjectKeyFactory(get_settings())
         object_id = key_factory.new_object_id()
         title = (display_name or cleaned_text.splitlines()[0][:48] or "职位 JD 文本").strip()
+        title = self._unique_display_name(
+            user_id=user_id,
+            document_kind="job_description",
+            requested_name=title,
+        )
         markdown = f"# {title}\n\n{cleaned_text}\n"
         payload = markdown.encode("utf-8")
         object_key = key_factory.original_key(
@@ -495,12 +747,12 @@ class DocumentService:
             raise DomainRequestError("knowledge", "collection", "不能管理其他用户的资料库。", 403)
         return collection
 
-    def _to_response(self, record: DocumentRecord) -> DocumentRecordResponse:
+    def _to_response(self, record: DocumentRecord, *, display_name: str | None = None) -> DocumentRecordResponse:
         return DocumentRecordResponse(
             documentId=record.document_id,
             ownerUserId=record.owner_user_id,
             documentKind=record.document_kind,
-            displayName=record.display_name,
+            displayName=display_name or record.display_name,
             fileKind=record.file_kind,
             contentType=record.content_type,
             sizeBytes=record.size_bytes,

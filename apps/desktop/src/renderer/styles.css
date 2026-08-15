@@ -530,6 +530,12 @@ select:focus {
   font-weight: 700;
 }
 
+.cancel-screenshot-button {
+  min-width: 128px;
+  border-color: rgba(255, 181, 78, .5);
+  color: #ffd08a;
+}
+
 .connection-card {
   padding: 22px;
 }

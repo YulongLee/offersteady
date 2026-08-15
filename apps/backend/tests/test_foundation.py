@@ -672,7 +672,7 @@ def test_document_processing_status_and_retry_api() -> None:
     assert not any(event["eventName"] == "embedding_chunking_started" for event in retried_status["events"])
     assert not any(event["eventName"] == "embedding_started" for event in retried_status["events"])
     assert not any(event["eventName"] == "vector_writing_started" for event in retried_status["events"])
-    assert retried_status["latestTask"]["parserProvider"] in {"text-parser", "inline-text", "mineru"}
+    assert retried_status["latestTask"]["parserProvider"] in {"text-parser", "inline-text", "mineru", "normalized-artifact-cache"}
 
 
 def test_runtime_overview_exposes_infrastructure_boundaries() -> None:
@@ -1689,6 +1689,53 @@ def test_remote_screenshot_capture_request_runs_through_bound_desktop_device() -
         "userId": "remote-screenshot-user",
     }))
     assert any(item["taskId"] == loaded["answerTask"]["taskId"] for item in history)
+
+
+def test_desktop_shortcut_capture_publishes_realtime_acceptance_once() -> None:
+    user_id = "shortcut-feedback-user"
+    device_id = "device-shortcut-feedback"
+    manual_code = "887766"
+    session = unwrap(client.post("/api/v1/sessions", json={"userId": user_id, "title": "快捷键即时反馈"}))
+    session_id = session["sessionId"]
+    unwrap(client.post("/api/v1/realtime-speech/desktop-devices/register", json={
+        "deviceId": device_id,
+        "manualCode": manual_code,
+        "displayName": "面试稳伴随程序 · Mac",
+        "capabilities": {"microphone": True, "systemAudio": True, "screenCapture": True},
+    }))
+    binding = unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/desktop-binding", json={
+        "userId": user_id,
+        "manualCode": manual_code,
+    }))
+    unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/web-heartbeat", json={
+        "userId": user_id,
+        "bindingId": binding["bindingId"],
+        "page": "live",
+    }))
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": user_id}))
+
+    created = unwrap(client.post(
+        f"/api/v1/screenshot-answer/desktop-devices/{device_id}/shortcut-capture-requests",
+        json={"deviceId": device_id, "manualCode": manual_code},
+    ))
+    events = unwrap(client.get(
+        f"/api/v1/realtime-speech/sessions/{session_id}/events",
+        params={"userId": user_id},
+    ))["events"]
+    accepted = [event for event in events if event["kind"] == "screenshot-shortcut-accepted"]
+    assert len(accepted) == 1
+    assert accepted[0]["payload"] == {"requestId": created["requestId"], "status": "requested"}
+
+    duplicate = client.post(
+        f"/api/v1/screenshot-answer/desktop-devices/{device_id}/shortcut-capture-requests",
+        json={"deviceId": device_id, "manualCode": manual_code},
+    )
+    assert duplicate.status_code == 409
+    events_after_rejection = unwrap(client.get(
+        f"/api/v1/realtime-speech/sessions/{session_id}/events",
+        params={"userId": user_id},
+    ))["events"]
+    assert len([event for event in events_after_rejection if event["kind"] == "screenshot-shortcut-accepted"]) == 1
 
 
 def test_remote_screenshot_capture_request_requires_active_desktop_binding() -> None:
@@ -2916,6 +2963,120 @@ def test_realtime_speech_suppresses_interviewer_audio_leaking_into_microphone() 
     ]
     events = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/events", params={"userId": "cross-channel-echo-user"}))
     assert any(item["kind"] == "degraded" and item["payload"]["reason"] == "cross-channel-echo-suppressed" for item in events["events"])
+
+
+def test_realtime_speech_keeps_late_system_final_authoritative_after_microphone_echo() -> None:
+    user_id = "late-system-final-user"
+    session = unwrap(client.post("/api/v1/sessions", json={"userId": user_id, "title": "系统声道最终结果优先"}))
+    session_id = session["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": user_id}))
+    system_publisher = unwrap(client.post("/api/v1/realtime-speech/publishers", json={
+        "userId": user_id, "sessionId": session_id, "sourceKind": "system", "clientName": "system-loopback",
+    }))
+    microphone_publisher = unwrap(client.post("/api/v1/realtime-speech/publishers", json={
+        "userId": user_id, "sessionId": session_id, "sourceKind": "microphone", "clientName": "microphone-echo",
+    }))
+    question = "你有参加过相关项目吗？"
+    payload = base64.b64encode(question.encode("utf-8")).decode("utf-8")
+
+    def publish(*, token: str, source_kind: str, source_id: str, sequence: int, revision: int, is_final: bool) -> None:
+        unwrap(client.post("/api/v1/realtime-speech/frames", json={
+            "type": "audio-frame", "token": token, "deviceId": "device-late-system-final",
+            "sourceId": source_id, "sequence": sequence, "sourceKind": source_kind,
+            "segmentId": "seg-system-question" if source_kind == "system" else "seg-microphone-echo",
+            "revision": revision, "capturedAtMs": 1_000 + sequence * 100,
+            "startedAtMs": 1_000, "endedAtMs": 3_000 + sequence * 100,
+            "durationMs": 2_000, "codec": "pcm-s16le", "sampleRateHz": 16_000,
+            "channels": 1, "isFinal": is_final, "audioBase64": payload,
+        }))
+
+    publish(token=system_publisher["token"], source_kind="system", source_id="system-loopback", sequence=1, revision=1, is_final=False)
+    deadline = time() + 2.0
+    while time() < deadline:
+        transcripts = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/transcripts", params={"userId": user_id}))
+        if any(item["sourceKind"] == "system" and not item["isFinal"] for item in transcripts["transcripts"]):
+            break
+        sleep(0.05)
+    else:
+        raise AssertionError("system partial was not published")
+
+    publish(token=microphone_publisher["token"], source_kind="microphone", source_id="default", sequence=1, revision=1, is_final=True)
+    deadline = time() + 2.0
+    while time() < deadline:
+        transcripts = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/transcripts", params={"userId": user_id}))
+        if any(item["sourceKind"] == "microphone" and item["isFinal"] for item in transcripts["transcripts"]):
+            break
+        sleep(0.05)
+    else:
+        raise AssertionError("microphone echo final was not published")
+
+    publish(token=system_publisher["token"], source_kind="system", source_id="system-loopback", sequence=2, revision=2, is_final=True)
+    deadline = time() + 3.0
+    while time() < deadline:
+        transcripts = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/transcripts", params={"userId": user_id}))
+        history = unwrap(client.get(f"/api/v1/live-answer/sessions/{session_id}/history", params={"userId": user_id}))
+        if any(item["sourceKind"] == "system" and item["isFinal"] for item in transcripts["transcripts"]) and history:
+            break
+        sleep(0.05)
+    else:
+        raise AssertionError("late system final did not trigger an answer")
+
+    assert len(history) == 1
+    assert history[0]["question"] == question
+
+
+def test_realtime_speech_suppressed_final_closes_existing_partial_without_answer() -> None:
+    user_id = "suppressed-final-reconcile-user"
+    session = unwrap(client.post("/api/v1/sessions", json={"userId": user_id, "title": "抑制结果收口"}))
+    session_id = session["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": user_id}))
+    publisher = unwrap(client.post("/api/v1/realtime-speech/publishers", json={
+        "userId": user_id, "sessionId": session_id, "sourceKind": "system", "clientName": "system-loopback",
+    }))
+
+    def publish(segment_id: str, sequence: int, revision: int, text: str, is_final: bool, started_at_ms: int) -> None:
+        unwrap(client.post("/api/v1/realtime-speech/frames", json={
+            "type": "audio-frame", "token": publisher["token"], "deviceId": "device-suppressed-final",
+            "sourceId": "system-loopback", "sequence": sequence, "sourceKind": "system",
+            "segmentId": segment_id, "revision": revision, "capturedAtMs": started_at_ms,
+            "startedAtMs": started_at_ms, "endedAtMs": started_at_ms + 400,
+            "durationMs": 400, "codec": "pcm-s16le", "sampleRateHz": 16_000,
+            "channels": 1, "isFinal": is_final,
+            "audioBase64": base64.b64encode(text.encode("utf-8")).decode("utf-8"),
+        }))
+
+    publish("seg-greeting-primary", 1, 1, "你好", True, 1_000)
+    deadline = time() + 2.0
+    while time() < deadline:
+        transcripts = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/transcripts", params={"userId": user_id}))
+        if any(item["segmentId"] == "seg-greeting-primary" for item in transcripts["transcripts"]):
+            break
+        sleep(0.05)
+
+    publish("seg-greeting-duplicate", 2, 1, "你", False, 2_000)
+    deadline = time() + 2.0
+    while time() < deadline:
+        transcripts = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/transcripts", params={"userId": user_id}))
+        if any(item["segmentId"] == "seg-greeting-duplicate" and not item["isFinal"] for item in transcripts["transcripts"]):
+            break
+        sleep(0.05)
+    else:
+        raise AssertionError("duplicate partial was not published")
+
+    publish("seg-greeting-duplicate", 3, 2, "你好", True, 2_000)
+    deadline = time() + 2.0
+    while time() < deadline:
+        transcripts = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/transcripts", params={"userId": user_id}))
+        duplicate = next((item for item in transcripts["transcripts"] if item["segmentId"] == "seg-greeting-duplicate"), None)
+        if duplicate and duplicate["isFinal"]:
+            break
+        sleep(0.05)
+    else:
+        raise AssertionError("suppressed final did not close its partial")
+
+    assert unwrap(client.get(f"/api/v1/live-answer/sessions/{session_id}/history", params={"userId": user_id})) == []
+    candidates = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/question-candidates", params={"userId": user_id}))
+    assert candidates["candidates"] == []
 
 
 def test_realtime_speech_suppresses_filler_transcript() -> None:

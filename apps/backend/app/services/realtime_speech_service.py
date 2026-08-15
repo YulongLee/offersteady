@@ -1693,6 +1693,16 @@ class RealtimeSpeechService:
             events=[RealtimeEventResponse(eventId=item.event_id, kind=item.kind, payload=item.payload, createdAtMs=item.created_at_ms) for item in events],
         )
 
+    def publish_screenshot_shortcut_accepted(self, *, user_id: str, session_id: str, request_id: str) -> RealtimeEventResponse:
+        self.session_service.get_session(user_id=user_id, session_id=session_id)
+        event = self._save_event(
+            session_id=session_id,
+            owner_user_id=user_id,
+            kind="screenshot-shortcut-accepted",
+            payload={"requestId": request_id, "status": "requested"},
+        )
+        return RealtimeEventResponse(eventId=event.event_id, kind=event.kind, payload=event.payload, createdAtMs=event.created_at_ms)
+
     def session_activity_version(self, *, user_id: str, session_id: str) -> int:
         self.session_service.get_session(user_id=user_id, session_id=session_id)
         return self.repository.get_session_activity_version(session_id=session_id)
@@ -1768,6 +1778,12 @@ class RealtimeSpeechService:
                         frame=frame,
                     )
                 if suppression_reason is not None:
+                    if frame.is_final:
+                        self._finalize_suppressed_partial(
+                            publisher=publisher,
+                            frame=frame,
+                            result=result,
+                        )
                     self.repository.save_publisher(replace(publisher, status="receiving-audio"))
                     return None, replace(result, suppressed_reason=suppression_reason)
                 current = self.repository.get_transcript(frame.session_id, frame.segment_id)
@@ -1831,6 +1847,29 @@ class RealtimeSpeechService:
         )
         error_code = str(last_error) if last_error and str(last_error).strip() else "asr-failed"
         raise DomainRequestError("realtime-speech", "transcribe", "实时语音转写失败。", 502, error_code=error_code)
+
+    def _finalize_suppressed_partial(
+        self,
+        *,
+        publisher: RealtimePublisherRecord,
+        frame: AudioFrame,
+        result: TranscriptResult,
+    ) -> None:
+        """Close an already-visible partial without business side effects."""
+        current = self.repository.get_transcript(frame.session_id, frame.segment_id)
+        if current is None or current.is_final:
+            return
+        self.repository.save_transcript(replace(
+            current,
+            revision=max(frame.revision, current.revision + 1),
+            text=result.text.strip() or current.text,
+            transcript_confidence=result.confidence,
+            ended_at_ms=max(current.ended_at_ms, frame.ended_at_ms),
+            is_final=True,
+            overlap=result.overlap,
+            published_at_ms=_now_ms(),
+            usage=None,
+        ))
 
     def _reset_realtime_session(self, *, session_id: str, retired: bool) -> None:
         self.asr_gateway.close_session(session_id=session_id)
@@ -1988,6 +2027,11 @@ class RealtimeSpeechService:
 
         for previous in reversed(transcripts):
             if previous.source_kind == frame.source_kind:
+                continue
+            # System audio is the authoritative interviewer channel. Speaker
+            # leakage can make a matching microphone final arrive first, but
+            # arrival order must not suppress the later interviewer final.
+            if frame.source_kind == "system":
                 continue
             gap_ms = max(
                 previous.started_at_ms - frame.ended_at_ms,

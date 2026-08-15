@@ -54,6 +54,8 @@ export const mockSuccessfulMaterialUploadAdapter = () => {
   }));
   vi.spyOn(materialUploadAdapter, "deleteKnowledgeCollection").mockResolvedValue();
   vi.spyOn(materialUploadAdapter, "setDocumentEnabled").mockResolvedValue();
+  vi.spyOn(materialUploadAdapter, "renameDocument").mockResolvedValue();
+  vi.spyOn(materialUploadAdapter, "downloadDocument").mockResolvedValue({ blob: new Blob(["synthetic material"]), filename: "synthetic.md" });
   const assertSupported = (file: File) => {
     if (!detectMaterialUploadFormat(file.name)) throw new AppError("validation", `当前仅支持 ${materialUploadFormatLabel}`);
   };
@@ -66,6 +68,47 @@ export const mockSuccessfulMaterialUploadAdapter = () => {
     return buildMaterialCompletion("job_description", userId, file.name);
   });
   vi.spyOn(materialUploadAdapter, "uploadKnowledgeFile").mockImplementation(async (userId, collectionId, file) => {
+    assertSupported(file);
+    return buildMaterialCompletion("knowledge", userId, file.name, collectionId);
+  });
+  vi.spyOn(materialUploadAdapter, "prepareKnowledgeFile").mockImplementation(async (userId, _collectionId, file) => {
+    assertSupported(file);
+    const now = Date.now();
+    return {
+      intent: {
+        intentId: `intent-${file.name}`,
+        userId,
+        documentKind: "knowledge" as const,
+        materialKind: "knowledge" as const,
+        filename: file.name,
+        fileKind: detectMaterialUploadFormat(file.name)!,
+        contentType: file.type || "application/octet-stream",
+        objectKey: `test/${file.name}`,
+        uploadMethod: "POST" as const,
+        uploadUrl: "https://upload.example.test",
+        uploadFields: {},
+        issuedAtMs: now,
+        expiresAtMs: now + 60_000,
+      },
+      quote: {
+        quoteId: `quote-${file.name}`,
+        documentVersionId: `version-${file.name}`,
+        contentFingerprint: `synthetic:${file.name}`,
+        tokenCount: 3,
+        billableUnits: 1,
+        pointCost: 20,
+        entitlementSource: file.name.includes("会员") ? ("pass_allowance" as const) : ("points" as const),
+        allowanceRemaining: file.name.includes("会员") ? 2 : 0,
+        catalogVersion: 5,
+        tokenizerVersion: "mvp-v1",
+        createdAtMs: now,
+        expiresAtMs: now + 15 * 60_000,
+        requiresConfirmation: true,
+        projectedBalance: 180,
+      },
+    };
+  });
+  vi.spyOn(materialUploadAdapter, "confirmKnowledgeFile").mockImplementation(async (userId, collectionId, file) => {
     assertSupported(file);
     return buildMaterialCompletion("knowledge", userId, file.name, collectionId);
   });

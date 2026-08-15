@@ -346,6 +346,11 @@ async def create_desktop_shortcut_capture_request(
         manual_code=request.manual_code,
         instruction="请直接识别当前截图中的题目、代码或系统设计内容，并给出可直接使用的中文回答。[来源:助手快捷键]",
     )
+    realtime.publish_screenshot_shortcut_accepted(
+        user_id=binding.owner_user_id,
+        session_id=binding.session_id,
+        request_id=capture_request.request_id,
+    )
     return success_response(request=request_context, data=_to_remote_capture_request_response(capture_request), timestamp=utc_now_iso())
 
 

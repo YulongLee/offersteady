@@ -1,10 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { interviewAppAdapter } from "./app-adapter";
 import { authClient } from "./auth-client";
 import { syntheticState } from "./test-state";
-import type { WebAppState } from "./domain";
+import type { RealtimeSessionUpdate, WebAppState } from "./domain";
 
 const openLive = (mutate?: (state: WebAppState) => void) => {
   if (!vi.isMockFunction(interviewAppAdapter.submitManualAnswer)) {
@@ -486,6 +486,37 @@ describe("focused live interview workspace", () => {
     await waitFor(() => expect(cancelShortcut).toHaveBeenCalledWith("shortcut-shot-1", expect.any(AbortSignal)));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.getByText("截屏回答已取消")).toBeInTheDocument();
+  });
+
+  it("shows shortcut feedback as soon as realtime acceptance arrives instead of waiting for recovery polling", async () => {
+    vi.spyOn(interviewAppAdapter, "loadDesktopShortcutScreenshotUpdates").mockResolvedValue([]);
+    vi.spyOn(interviewAppAdapter, "sendDesktopSessionHeartbeat").mockImplementation(async command => ({
+      pageInstanceId: command.pageInstanceId ?? null,
+      leaseGeneration: 1,
+      leaseExpiresAtMs: Date.now() + 30_000,
+    }));
+    let publishRealtime: ((update: RealtimeSessionUpdate) => void) | null = null;
+    vi.spyOn(interviewAppAdapter, "subscribeRealtimeSession").mockImplementation(async (_id, onUpdate, signal) => {
+      publishRealtime = onUpdate;
+      await new Promise<void>((_resolve, reject) => signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true }));
+    });
+
+    openLive();
+    await waitFor(() => expect(publishRealtime).not.toBeNull());
+    act(() => publishRealtime?.({
+        speaker: structuredClone(syntheticState.speaker),
+        shortcutScreenshotUpdate: {
+          requestId: "shortcut-instant-1",
+          status: "requested",
+          screenshotTask: { name: "共享屏幕截取", stage: "waiting-desktop" },
+          notificationId: "shortcut-notice-1",
+          acceptedAtMs: Date.now(),
+        },
+      }));
+
+    const dialog = await screen.findByRole("dialog", { name: "等待本地助手" });
+    expect(within(dialog).getByText("网页端已创建截屏任务，正在等待本地助手接收。")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "截屏回答" })).toBeDisabled();
   });
 
   it("can terminate a pending screenshot answer before the local assistant finishes", async () => {

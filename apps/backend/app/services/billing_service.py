@@ -7,6 +7,7 @@ from typing import Callable
 from uuid import uuid4
 
 from app.core.config import Settings
+from app.core.errors import DomainRequestError
 from app.ports.authentication import AuthenticationRepository
 from app.ports.billing_persistence import BillingPersistencePort
 from app.ports.points_redemption import PersistedPointsLedgerEntry, PersistedPointsRedemption, PointsRedemptionRepository
@@ -14,6 +15,7 @@ from app.ports.points_redemption import PersistedPointsLedgerEntry, PersistedPoi
 
 WELCOME_GRANT_POINTS = 200
 REFERRAL_ACTIVATION_WINDOW_MS = 72 * 60 * 60 * 1000
+KNOWLEDGE_INDEX_QUOTE_TTL_MS = 15 * 60 * 1000
 DEFAULT_REDEMPTION_CODE_POINTS = {
     "OFFERSTEADY-DEMO": 120,
     "SYNTHETIC-DEMO": 120,
@@ -770,6 +772,37 @@ class BillingService:
         self.index_quotes_by_user_and_key[request_key] = quote
         self.index_quotes_by_id[quote.quote_id] = quote
         return quote
+
+    def knowledge_index_quote(self, *, user_id: str, quote_id: str, document_version_id: str | None = None) -> KnowledgeIndexQuoteRecord:
+        try:
+            quote = (
+                KnowledgeIndexQuoteRecord(**self.billing_repository.index_quote(quote_id=quote_id))
+                if self.billing_repository is not None
+                else self.index_quotes_by_id[quote_id]
+            )
+        except KeyError as exc:
+            raise DomainRequestError("knowledge", "index-quote", "索引报价不存在或已失效，请重新获取报价。", 404) from exc
+        if quote.user_id != user_id:
+            raise DomainRequestError("knowledge", "index-quote", "索引报价不属于当前用户，请重新获取报价。", 403)
+        if document_version_id is not None and quote.document_version_id != document_version_id:
+            raise DomainRequestError("knowledge", "index-quote", "索引报价与当前文件不匹配，请重新获取报价。", 409)
+        if self.now_ms_provider() - quote.created_at_ms >= KNOWLEDGE_INDEX_QUOTE_TTL_MS:
+            raise DomainRequestError("knowledge", "index-quote", "索引报价已过期，请重新获取报价。", 409)
+        return quote
+
+    def reserve_knowledge_index_for_quote(
+        self,
+        *,
+        user_id: str,
+        quote_id: str,
+        document_version_id: str,
+    ) -> KnowledgeIndexReservationRecord:
+        self.knowledge_index_quote(
+            user_id=user_id,
+            quote_id=quote_id,
+            document_version_id=document_version_id,
+        )
+        return self.reserve_knowledge_index(user_id=user_id, quote_id=quote_id)
 
     def reserve_knowledge_index(self, *, user_id: str, quote_id: str) -> KnowledgeIndexReservationRecord:
         if self.billing_repository is not None:

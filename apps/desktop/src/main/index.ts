@@ -7,6 +7,7 @@ import { DeviceCredentialVault } from "./credential-vault";
 import { DevicePairingIdentityStore } from "./device-pairing";
 import { DEFAULT_SCREENSHOT_SHORTCUT, SCREENSHOT_SHORTCUT_OPTIONS, ScreenshotShortcutStore, isSupportedScreenshotShortcut } from "./screenshot-shortcut";
 import { desktopPollDelayMs } from "./polling-policy";
+import { ScreenshotCaptureLock } from "./screenshot-capture-lock";
 
 // Local ad-hoc builds cannot reliably retain Apple's separate Audio Capture
 // grant across rebuilds. Reuse the Screen & System Audio Recording grant,
@@ -29,6 +30,7 @@ let screenshotShortcutRegistration = {
   message: "截屏回答快捷键尚未注册。",
 };
 let screenshotShortcutTriggerInFlight = false;
+const screenshotCaptureLock = new ScreenshotCaptureLock();
 let lastScreenshotShortcutTriggerAt = 0;
 let registrationInterval: NodeJS.Timeout | null = null;
 let screenshotRequestTimer: NodeJS.Timeout | null = null;
@@ -601,7 +603,39 @@ const updateTray = () => {
   ]));
 };
 
-const captureCurrentScreen = async (screenSourceId: string | null) => {
+const publishScreenshotCaptureLock = () => {
+  const state = screenshotCaptureLock.state();
+  mainWindow?.webContents.send("desktop:screenshot-capture-lock-changed", state);
+  return state;
+};
+
+interface DesktopScreenCaptureResult {
+  readonly name: string;
+  readonly width?: number;
+  readonly height?: number;
+  readonly dataUrl?: string;
+  readonly contentType?: string;
+  readonly byteLength?: number;
+  readonly originalWidth?: number;
+  readonly originalHeight?: number;
+  readonly extension?: string;
+  readonly errorMessage?: string;
+}
+
+const releaseScreenshotCaptureLock = () => {
+  screenshotCaptureLock.release();
+  return publishScreenshotCaptureLock();
+};
+
+const captureCurrentScreen = async (screenSourceId: string | null, lockAlreadyHeld = false): Promise<DesktopScreenCaptureResult> => {
+  if (!lockAlreadyHeld && !screenshotCaptureLock.tryAcquire()) {
+    return { name: "共享屏幕截取", errorMessage: screenshotCaptureLock.state().message };
+  }
+  if (!lockAlreadyHeld) publishScreenshotCaptureLock();
+  const failed = (result: DesktopScreenCaptureResult) => {
+    releaseScreenshotCaptureLock();
+    return result;
+  };
   let sources;
   try {
     sources = await desktopCapturer.getSources({
@@ -609,35 +643,35 @@ const captureCurrentScreen = async (screenSourceId: string | null) => {
       thumbnailSize: { width: 1920, height: 1080 },
     });
   } catch (error) {
-    return {
+    return failed({
       name: "共享屏幕截取",
       errorMessage: error instanceof Error
         ? `获取屏幕源失败：${error.message}。请在系统设置中允许面试稳伴随程序录制屏幕后重启应用。`
         : "获取屏幕源失败，请在系统设置中允许面试稳伴随程序录制屏幕后重启应用。",
-    };
+    });
   }
   const requestedScreenSourceId = screenSourceId || preferredScreenSourceId;
   const selectedScreen = requestedScreenSourceId
     ? sources.find((source) => source.id === requestedScreenSourceId)
     : sources[0];
   if (requestedScreenSourceId && !selectedScreen) {
-    return {
+    return failed({
       name: "共享屏幕截取",
       errorMessage: "当前选择的屏幕源已经不可用，请在本地助手中重新选择显示器后再试。",
-    };
+    });
   }
   if (!selectedScreen) {
-    return { name: "共享屏幕截取", errorMessage: "没有找到可截取的屏幕，请检查屏幕录制权限。" };
+    return failed({ name: "共享屏幕截取", errorMessage: "没有找到可截取的屏幕，请检查屏幕录制权限。" });
   }
   const thumbnail = selectedScreen.thumbnail;
   const size = thumbnail.getSize();
   if (thumbnail.isEmpty()) {
-    return {
+    return failed({
       name: selectedScreen.name || "共享屏幕截取",
       width: size.width,
       height: size.height,
       errorMessage: "屏幕缩略图为空，请在系统设置中允许面试稳伴随程序录制屏幕后重启应用。",
-    };
+    });
   }
   const optimized = optimizeScreenshotForVision(thumbnail);
   return {
@@ -699,20 +733,24 @@ const reportRemoteScreenshotFailure = async (identity: { deviceId: string; manua
   }
 };
 
-const pollRemoteScreenshotRequest = async () => {
+const pollRemoteScreenshotRequest = async (lockAlreadyHeld = false) => {
   if (!pairingIdentityStore || processingRemoteScreenshotRequestId) return;
   const pollingState = await getDesktopScreenshotPollingState();
   if (!pollingState.live || !pollingState.identity) return false;
+  if (screenshotCaptureLock.state().locked && !lockAlreadyHeld) return true;
   const identity = pollingState.identity;
   const response = await fetchWithTimeout(desktopApiUrl(`/screenshot-answer/desktop-devices/${encodeURIComponent(identity.deviceId)}/capture-requests/next?manualCode=${encodeURIComponent(identity.manualCode)}`));
   if (!response.ok) throw new Error(`remote_screenshot_poll_${response.status}`);
   const envelope = await response.json() as { data?: { requestId: string; status: string } | null };
   const request = envelope.data;
-  if (!request || request.status !== "requested") return true;
+  if (!request || request.status !== "requested") {
+    if (lockAlreadyHeld) releaseScreenshotCaptureLock();
+    return true;
+  }
   processingRemoteScreenshotRequestId = request.requestId;
   try {
     mainWindow?.webContents.send("desktop:remote-screenshot-notice", "网页端已请求截图回答，本地助手正在截取当前屏幕。");
-    const capture = await captureCurrentScreen(null);
+    const capture = await captureCurrentScreen(null, lockAlreadyHeld);
     if (capture.errorMessage) throw new Error(capture.errorMessage);
     if (!capture.dataUrl) throw new Error("本地助手未获取到有效共享屏幕画面，请检查屏幕捕捉权限。");
     const extension = capture.extension || (capture.contentType === "image/jpeg" ? "jpg" : capture.contentType === "image/webp" ? "webp" : "png");
@@ -756,6 +794,11 @@ const triggerScreenshotShortcut = async () => {
       shortcutNotice("当前没有已连接且正在进行的面试，本次没有截取屏幕。");
       return;
     }
+    if (!screenshotCaptureLock.tryAcquire()) {
+      shortcutNotice(screenshotCaptureLock.state().message);
+      return;
+    }
+    publishScreenshotCaptureLock();
     const response = await fetchWithTimeout(desktopApiUrl(`/screenshot-answer/desktop-devices/${encodeURIComponent(identity.deviceId)}/shortcut-capture-requests`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -772,11 +815,13 @@ const triggerScreenshotShortcut = async () => {
       } catch {
         // Keep the status-based fallback.
       }
+      releaseScreenshotCaptureLock();
       throw new Error(message);
     }
     shortcutNotice("快捷键已触发，正在截取当前选择的屏幕。");
-    await pollRemoteScreenshotRequest();
+    await pollRemoteScreenshotRequest(true);
   } catch (error) {
+    if (screenshotCaptureLock.state().locked && !processingRemoteScreenshotRequestId) releaseScreenshotCaptureLock();
     shortcutNotice(error instanceof Error ? error.message : "快捷键截屏失败，请稍后重试。");
   } finally {
     screenshotShortcutTriggerInFlight = false;
@@ -954,6 +999,8 @@ ipcMain.handle("desktop:get-screenshot-shortcut", async () => {
   };
 });
 ipcMain.handle("desktop:set-screenshot-shortcut", async (_event, accelerator: string) => registerScreenshotShortcut(accelerator));
+ipcMain.handle("desktop:get-screenshot-capture-lock", async () => screenshotCaptureLock.state());
+ipcMain.handle("desktop:cancel-screenshot-capture", async () => releaseScreenshotCaptureLock());
 
 ipcMain.handle("desktop:get-pairing-identity", async () => {
   if (!pairingIdentityStore) pairingIdentityStore = new DevicePairingIdentityStore(app.getPath("userData"));
@@ -1063,6 +1110,7 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   isQuitting = true;
   captureState = "not-connected";
+  screenshotCaptureLock.release();
   if (registrationInterval) {
     clearInterval(registrationInterval);
     registrationInterval = null;

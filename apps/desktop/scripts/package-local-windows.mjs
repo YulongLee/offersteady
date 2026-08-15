@@ -36,8 +36,8 @@ if (configuredElectronDir) {
   cpSync(resolve(configuredElectronDir), packageDir, { recursive: true });
 } else if (downloadDir) {
   cpSync(downloadDir, packageDir, { recursive: true });
-  renameSync(join(packageDir, "electron.exe"), join(packageDir, "OfferSteady.exe"));
 }
+renameSync(join(packageDir, "electron.exe"), join(packageDir, "OfferSteady.exe"));
 
 const resourcesAppDir = join(packageDir, "resources/app");
 rmSync(resourcesAppDir, { recursive: true, force: true });

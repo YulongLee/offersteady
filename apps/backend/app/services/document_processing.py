@@ -23,6 +23,7 @@ from app.services.document_parser import DocumentParserService, ParserExecutionE
 from app.services.material_availability import MaterialAvailabilityValidator
 from app.services.commercial_hardening import job_id
 from app.services.billing_service import BillingService
+from app.services.knowledge_index_quote import estimate_normalized_markdown_tokens
 
 
 def _now_ms() -> int:
@@ -107,10 +108,14 @@ class DocumentProcessingService:
         if document.document_kind == "knowledge":
             if self.billing_service is None or not document.document_version_id:
                 raise DomainRequestError("document-processing", "retry-task", "知识资料计费服务暂不可用，请稍后重试。", 503)
+            parsed = self.parser_service.parse_for_quote(document=document)
+            token_estimate = estimate_normalized_markdown_tokens(parsed.markdown)
+            if token_estimate <= 0:
+                raise DomainRequestError("document-processing", "retry-task", "资料中没有可建立索引的文字内容，不会扣除积分。", 422)
             quote = self.billing_service.quote_knowledge_index(
                 user_id=user_id,
                 document_version_id=document.document_version_id,
-                token_estimate=max(1, (document.size_bytes + 3) // 4),
+                token_estimate=token_estimate,
                 idempotency_key=f"knowledge-index:{document.document_version_id}:retry:{task.retry_count + 1}",
             )
             reservation = self.billing_service.reserve_knowledge_index(user_id=user_id, quote_id=quote.quote_id)
@@ -134,6 +139,10 @@ class DocumentProcessingService:
         self._ensure_worker()
         self.queue.put(saved.task_id)
         return saved
+
+    def parse_document_for_quote(self, *, document: DocumentRecord) -> str:
+        self._require_supported_document_kind(document.document_kind)
+        return self.parser_service.parse_for_quote(document=document).markdown
 
     def get_task(self, *, task_id: str, user_id: str) -> ProcessingTaskRecord:
         task = self.task_repository.get_task(task_id)

@@ -1,9 +1,9 @@
 import { createContext, Suspense, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { BrowserRouter, Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
-import type { AnswerTaskSnapshot, CaptureState } from "@offersteady/protocol";
+import type { AnswerTaskSnapshot, CaptureState, ContextLibrarySource } from "@offersteady/protocol";
 import { BriefcaseIcon, CaretDownIcon, ChartLineUpIcon, ChatCircleTextIcon, ClipboardTextIcon, CodeIcon, DatabaseIcon, DevicesIcon, GraduationCapIcon, IdentificationCardIcon, PaletteIcon, ScanIcon, UserFocusIcon } from "@phosphor-icons/react";
 
-import type { IdleInterviewStatus, InterviewQuestion, LiveActionState, QuestionStatus, ScreenshotTask, SessionStatus, WebAppState } from "./domain";
+import type { IdleInterviewStatus, InterviewQuestion, LiveActionState, QuestionStatus, RealtimeSessionUpdate, ScreenshotTask, SessionStatus, WebAppState } from "./domain";
 import { runAdapterOperation } from "./api-client";
 import { interviewAppAdapter } from "./app-adapter";
 import { routes } from "./routes";
@@ -19,8 +19,10 @@ import { AnswerActionBar } from "./AnswerActionBar";
 import { ABSOLUTE_MAX_SPLIT_RATIO, ABSOLUTE_MIN_SPLIT_RATIO, clampSplitRatio, initialLiveWorkspaceView, isolateRealtimeSpeakerSession, noteNewAnswer, parseStoredSplitRatio, reconcileAnswerWorkspace, reconcileRealtimeSpeaker, resetTransientInterviewState, serializeSplitRatio, splitRatioBounds, splitRatioStorageKey } from "./live-workspace";
 import { WorkspaceDivider } from "./WorkspaceDivider";
 import { authClient } from "./auth-client";
+import { materialUploadAdapter, saveMaterialDownload } from "./material-upload-adapter";
 import { isInvalidRealtimeSessionStatus, realtimeRetryDelayMs } from "./realtime-recovery";
 import { applyAppearancePreferences, persistAppearancePreferences, readAppearancePreferences, type AppearancePreferences } from "./appearance-preferences";
+import { isFreshShortcutScreenshotAcceptance, SHORTCUT_SCREENSHOT_RECOVERY_POLL_INTERVAL_MS } from "./screenshot-shortcut-feedback";
 import "./styles.css";
 
 
@@ -518,6 +520,15 @@ function PreparationPage() {
       setConfirmingMaterials(false);
     }
   };
+  const downloadMaterial = async (source: ContextLibrarySource) => {
+    setMaterialConfirmError("");
+    try {
+      const result = await runAdapterOperation(signal => materialUploadAdapter.downloadDocument(state.account.id, source.documentId ?? source.id, signal));
+      saveMaterialDownload(result);
+    } catch (error) {
+      setMaterialConfirmError(error instanceof Error ? error.message : "资料下载失败，请稍后重试。");
+    }
+  };
   useEffect(() => {
     const controller = new AbortController();
     void Promise.all([
@@ -617,7 +628,7 @@ function PreparationPage() {
     }
   };
   return <main className="app-page"><Link className="back-link" to={routes.app}>← 返回面试首页</Link><PageHeader eyebrow="PREPARATION" title={interviewTitle} detail="资料与“面试资料”页面保持一致，为本场按需选择。" action={<div className="completion"><strong>{complete}/2</strong><span>可进入</span></div>} />
-    <div className="prepare-grid"><section className="panel"><ContextPicker sources={managedSources} selection={selection} onSave={saveSelection} />{confirmingMaterials ? <div className="context-warning" role="status">正在提交后端校验并保存本场资料…</div> : null}{materialConfirmError ? <div className="context-warning" role="alert">{materialConfirmError}</div> : null}</section>
+    <div className="prepare-grid"><section className="panel"><ContextPicker sources={managedSources} selection={selection} onSave={saveSelection} onDownload={downloadMaterial} />{confirmingMaterials ? <div className="context-warning" role="status">正在提交后端校验并保存本场资料…</div> : null}{materialConfirmError ? <div className="context-warning" role="alert">{materialConfirmError}</div> : null}</section>
       <aside className="panel check-panel"><div className="panel-heading"><h2>开始前检查</h2><span>{canStart ? "可进入" : !selectionReady ? "待确认资料" : "待绑定机器"}</span></div><ul className="check-list"><li className={selectionReady ? "done" : ""}><i>{selectionReady ? "✓" : "1"}</i><div><strong>本场资料</strong><span>{validity === "unconfirmed" ? "请选择资料或确认不使用资料" : validity === "attention-required" ? "所选资料已失效，请处理" : level === "none" ? "已确认不使用个人资料" : level === "personalized" ? "简历与 JD 已选择" : "已确认使用部分资料"}</span></div></li><li className={machineReady ? "done" : ""}><i>{machineReady ? "✓" : "2"}</i><div><strong>收音机器</strong><span>{inputDiagnostic}</span></div></li></ul>
         <div className="machine-code-panel">
           <strong className="connection-choice-title">连接桌面助手</strong>
@@ -660,6 +671,8 @@ function LivePage() {
   const beginInstantScreenshotRef = useRef<() => void>(() => undefined);
   const activeShortcutScreenshotRequest = useRef<string | null>(null);
   const terminalShortcutScreenshotRequests = useRef(new Set<string>());
+  const seenShortcutScreenshotNotifications = useRef(new Set<string>());
+  const livePageMountedAtMs = useRef(Date.now());
   const pageInstanceId = useRef(globalThis.crypto?.randomUUID?.() ?? `page-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const interviewTitle = state.interviews.find(item => item.id === id)?.title ?? "本场面试";
   const active = state.questions[0] ?? emptyLiveQuestion;
@@ -794,7 +807,7 @@ function LivePage() {
       }
     };
     void syncShortcutAnswers();
-    const timer = window.setInterval(() => void syncShortcutAnswers(), 1500);
+    const timer = window.setInterval(() => void syncShortcutAnswers(), SHORTCUT_SCREENSHOT_RECOVERY_POLL_INTERVAL_MS);
     return () => {
       stopped = true;
       controller.abort();
@@ -814,7 +827,7 @@ function LivePage() {
     let realtimeSubscribeInFlight = false;
     let realtimeStreamHealthy = false;
     let realtimeRenderFrame: number | null = null;
-    let pendingRealtime: (Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) | null = null;
+    let pendingRealtime: RealtimeSessionUpdate | null = null;
     let realtimeLoadInFlight = false;
     const realtimeController = new AbortController();
     const channel = typeof BroadcastChannel === "function" ? new BroadcastChannel(`offersteady:live-page:${state.account.id}`) : null;
@@ -840,8 +853,21 @@ function LivePage() {
       if (claim.type === "claim" && claim.sessionId !== id && claim.pageInstanceId && claim.pageInstanceId !== pageInstanceId.current) pauseReplacedPage();
     });
     channel?.postMessage({ type: "claim", sessionId: id, pageInstanceId: pageInstanceId.current });
-    const applyRealtimeState = (realtime: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => {
+    const applyRealtimeState = (realtime: RealtimeSessionUpdate) => {
       if (stopped) return;
+      const shortcut = realtime.shortcutScreenshotUpdate;
+      const notificationId = shortcut?.notificationId;
+      if (
+        shortcut
+        && notificationId
+        && !seenShortcutScreenshotNotifications.current.has(notificationId)
+        && !terminalShortcutScreenshotRequests.current.has(shortcut.requestId)
+        && isFreshShortcutScreenshotAcceptance(shortcut.acceptedAtMs, livePageMountedAtMs.current)
+      ) {
+        seenShortcutScreenshotNotifications.current.add(notificationId);
+        activeShortcutScreenshotRequest.current = shortcut.requestId;
+        setScreenshot(shortcut.screenshotTask);
+      }
       pendingRealtime = pendingRealtime?.captureState && !realtime.captureState
         ? { ...realtime, captureState: pendingRealtime.captureState }
         : realtime;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { nextProgressiveTranscriptText } from "./ConversationMonitor";
+import { nextProgressiveTranscriptText, STALE_TRANSCRIPT_MS, transcriptPresentationState } from "./ConversationMonitor";
 
 describe("progressive realtime transcript", () => {
   it("reveals appended partial text without replacing the whole sentence", () => {
@@ -9,5 +9,12 @@ describe("progressive realtime transcript", () => {
 
   it("recovers from an ASR correction at the first changed character", () => {
     expect(nextProgressiveTranscriptText("项目负责", "项目复盘")).toBe("项目复盘");
+  });
+
+  it("stops claiming an abandoned partial is actively transcribing", () => {
+    const publishedAtMs = 1_800_000_000_000;
+    expect(transcriptPresentationState({ isFinal: false, publishedAtMs, endedAtMs: publishedAtMs }, publishedAtMs + STALE_TRANSCRIPT_MS - 1)).toBe("transcribing");
+    expect(transcriptPresentationState({ isFinal: false, publishedAtMs, endedAtMs: publishedAtMs }, publishedAtMs + STALE_TRANSCRIPT_MS)).toBe("stale");
+    expect(transcriptPresentationState({ isFinal: true, publishedAtMs, endedAtMs: publishedAtMs }, publishedAtMs + STALE_TRANSCRIPT_MS)).toBe("final");
   });
 });

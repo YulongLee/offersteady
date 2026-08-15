@@ -44,6 +44,25 @@ class CompleteUploadRequest(BaseModel):
     etag: str | None = None
     content_sha256: str | None = Field(default=None, alias="contentSha256")
     confirm_index_charge: bool = Field(default=False, alias="confirmIndexCharge")
+    quote_id: str | None = Field(default=None, alias="quoteId")
+
+
+class KnowledgeUploadQuoteResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    quote_id: str = Field(alias="quoteId")
+    document_version_id: str = Field(alias="documentVersionId")
+    content_fingerprint: str = Field(alias="contentFingerprint")
+    token_count: int = Field(alias="tokenCount")
+    billable_units: int = Field(alias="billableUnits")
+    point_cost: int = Field(alias="pointCost")
+    entitlement_source: Literal["points", "pass_allowance"] = Field(alias="entitlementSource")
+    allowance_remaining: int = Field(alias="allowanceRemaining")
+    catalog_version: int = Field(alias="catalogVersion")
+    tokenizer_version: str = Field(alias="tokenizerVersion")
+    created_at_ms: int = Field(alias="createdAtMs")
+    expires_at_ms: int = Field(alias="expiresAtMs")
+    projected_balance: int = Field(alias="projectedBalance")
+    requires_confirmation: bool = Field(default=True, alias="requiresConfirmation")
 
 
 class MaterialSourceRecord(BaseModel):

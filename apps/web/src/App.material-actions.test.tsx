@@ -274,7 +274,7 @@ describe("categorized materials and reachable live actions", () => {
     const dialog = screen.getByRole("dialog");
     const file = new File(["synthetic"], "新知识.md", { type: "text/markdown" });
     fireEvent.change(within(dialog).getByLabelText("选择资料文件"), { target: { files: [file] } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "确认报价并建立索引" }));
+    fireEvent.click(await within(dialog).findByRole("button", { name: "确认报价并建立索引" }));
     expect(await screen.findByText(/报价已由服务端确认并预留/)).toBeInTheDocument();
     window.history.pushState({}, "", "/app/interviews/demo/prepare"); window.dispatchEvent(new PopStateEvent("popstate"));
     expect(await screen.findByRole("checkbox", { name: /新知识.md/ })).toBeDisabled();

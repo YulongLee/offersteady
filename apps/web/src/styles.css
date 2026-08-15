@@ -470,7 +470,7 @@ h1, h2, h3, p { margin-top: 0; }
 .context-group { display: grid; gap: 8px; border: 0; border-top: 1px solid var(--line); padding: 17px 0 0; margin: 0; }
 .context-group legend { padding-right: 10px; font-size: 11px; font-weight: 700; }
 .context-group legend small { color: var(--muted); font-size: 8px; font-weight: 400; }
-.context-option { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 11px; padding: 11px; cursor: pointer; }
+.context-option { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 11px; padding: 11px; cursor: pointer; }
 .context-option.selected { border-color: rgba(110,231,189,.38); background: rgba(110,231,189,.045); }
 .context-option.disabled { opacity: .48; cursor: not-allowed; }
 .context-option input { accent-color: var(--brand); }
@@ -478,6 +478,8 @@ h1, h2, h3, p { margin-top: 0; }
 .context-option strong { font-size: 10px; }
 .context-option small { color: var(--muted); font-size: 8px; line-height: 1.45; }
 .context-option b { color: var(--brand); }
+.context-download { border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; background: transparent; color: var(--brand); cursor: pointer; font-size: 9px; }
+.context-download:hover { border-color: var(--brand); background: rgba(110,231,189,.07); }
 .context-tools { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; }
 .context-tools input, .checkout-field input { border: 1px solid var(--line-strong); border-radius: 9px; outline: 0; background: var(--field-bg); color: var(--text); padding: 9px; font-size: 9px; }
 .context-tools button, .side-title button, .role-actions button, .candidate-question button, .support-card button { border: 0; background: transparent; color: var(--brand); cursor: pointer; font-size: 8px; }

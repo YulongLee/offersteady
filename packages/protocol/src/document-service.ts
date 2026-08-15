@@ -65,6 +65,12 @@ export interface CompleteDocumentUploadRequest {
   readonly contentSha256?: string;
   readonly knowledgeCollectionId?: string;
   readonly confirmIndexCharge?: boolean;
+  readonly quoteId?: string;
+}
+
+export interface RenameDocumentRequest {
+  readonly userId: string;
+  readonly displayName: string;
 }
 
 export interface DocumentRecord {

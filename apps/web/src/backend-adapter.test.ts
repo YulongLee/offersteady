@@ -334,6 +334,49 @@ describe("backend preview adapter", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("maps shortcut acceptance from the existing realtime stream into immediate screenshot feedback", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const acceptedAtMs = Date.now();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(`event: snapshot\ndata: ${JSON.stringify({
+          type: "snapshot",
+          cursor: 9,
+          transcripts: { sessionId: "session-1", transcripts: [] },
+          candidates: { sessionId: "session-1", candidates: [] },
+          events: { sessionId: "session-1", events: [{
+            eventId: "shortcut-accepted-event-1",
+            kind: "screenshot-shortcut-accepted",
+            payload: { requestId: "shortcut-request-1", status: "requested" },
+            createdAtMs: acceptedAtMs,
+          }] },
+          runtime: null,
+        })}\n\n`));
+        controller.close();
+      },
+    });
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", vi.fn(async () => new Response(stream, {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+    })) as typeof fetch);
+    const updates: unknown[] = [];
+
+    await adapter.subscribeRealtimeSession("session-1", update => updates.push(update));
+
+    expect(updates).toHaveLength(1);
+    expect(updates[0]).toMatchObject({
+      shortcutScreenshotUpdate: {
+        requestId: "shortcut-request-1",
+        status: "requested",
+        notificationId: "shortcut-accepted-event-1",
+        acceptedAtMs,
+        screenshotTask: { name: "共享屏幕截取", stage: "waiting-desktop" },
+      },
+    });
+  });
+
   it("carries the active page lease through heartbeat and realtime stream requests", async () => {
     window.localStorage.setItem("offersteady.auth.access_token", "access-token");
     window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");

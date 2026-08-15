@@ -240,7 +240,13 @@ export interface DesktopShortcutScreenshotUpdate {
   readonly status: "requested" | "processing" | "completed" | "failed" | "cancelled";
   readonly screenshotTask: ScreenshotTask;
   readonly result?: SubmitManualAnswerResult;
+  readonly notificationId?: string;
+  readonly acceptedAtMs?: number;
 }
+
+export type RealtimeSessionUpdate = Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">> & {
+  readonly shortcutScreenshotUpdate?: DesktopShortcutScreenshotUpdate;
+};
 
 export interface InterviewAppAdapter {
   loadState(signal?: AbortSignal, options?: { readonly auth?: boolean }): Promise<WebAppState>;
@@ -262,12 +268,12 @@ export interface InterviewAppAdapter {
   listDesktopDevices?(signal?: AbortSignal): Promise<readonly AccountDesktopDevice[]>;
   getDesktopDeviceBinding(interviewId: string, signal?: AbortSignal): Promise<DesktopDeviceBinding | null>;
   sendDesktopSessionHeartbeat(command: { interviewId: string; bindingId?: string | null; page: "preparation" | "live"; pageInstanceId?: string }, signal?: AbortSignal): Promise<{ pageInstanceId: string | null; leaseGeneration: number; leaseExpiresAtMs: number }>;
-  loadRealtimeSession(interviewId: string, signal?: AbortSignal): Promise<Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>>;
+  loadRealtimeSession(interviewId: string, signal?: AbortSignal): Promise<RealtimeSessionUpdate>;
   loadInterviewWorkspace(interviewId: string, signal?: AbortSignal): Promise<InterviewWorkspaceSnapshot>;
   loadInterviewReview(interviewId: string, signal?: AbortSignal): Promise<InterviewReview>;
   loadDesktopShortcutScreenshotUpdates(interviewId: string, signal?: AbortSignal): Promise<readonly DesktopShortcutScreenshotUpdate[]>;
   cancelDesktopShortcutScreenshot(requestId: string, signal?: AbortSignal): Promise<void>;
-  subscribeRealtimeSession(interviewId: string, onUpdate: (state: Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">>) => void, signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }): Promise<void>;
+  subscribeRealtimeSession(interviewId: string, onUpdate: (state: RealtimeSessionUpdate) => void, signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }): Promise<void>;
   deleteInterview(id: string, signal?: AbortSignal): Promise<void>;
   deleteScreenshot(id: string, signal?: AbortSignal): Promise<void>;
   submitManualAnswer(command: SubmitManualAnswerCommand, signal?: AbortSignal, onStreamUpdate?: (update: ManualAnswerStreamUpdate) => void): Promise<SubmitManualAnswerResult>;
