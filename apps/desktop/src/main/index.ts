@@ -884,9 +884,9 @@ const startRemoteScreenshotRequestLoop = () => {
 const createWindow = () => {
   mainWindow = new BrowserWindow({
     width: 780,
-    height: 650,
+    height: 540,
     minWidth: 700,
-    minHeight: 610,
+    minHeight: 500,
     title: "面试稳伴随程序",
     backgroundColor: "#080d18",
     show: false,
