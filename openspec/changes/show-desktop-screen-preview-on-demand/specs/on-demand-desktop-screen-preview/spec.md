@@ -25,6 +25,7 @@
 - **WHEN** 用户关闭屏幕预览弹层
 - **THEN** 系统隐藏屏幕画面并停止该次临时预览的媒体流
 - **AND** 用户可以再次点击“预览”获取最新画面
+- **AND** 弹层仅通过右上角明确的关闭图标提供关闭入口，不显示重复的底部完成按钮
 
 ### Requirement: Capture tasks do not open the preview dialog
 桌面伴随程序 MUST 将手动屏幕预览与正式截屏回答任务分离。

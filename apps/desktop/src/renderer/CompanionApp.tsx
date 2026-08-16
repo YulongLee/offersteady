@@ -1248,7 +1248,6 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
                   )}
                 </div>
                 <p className="screen-preview-privacy">仅用于在本机确认当前捕捉范围，不会因预览自动发送到网页端。</p>
-                <button type="button" className="primary-button" onClick={closeScreenPreview}>完成</button>
               </section>
             </div>
           ) : null}

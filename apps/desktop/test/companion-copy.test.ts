@@ -32,6 +32,7 @@ describe("companion interview wording", () => {
     expect(source).not.toContain('className="preview-row"');
     expect(source).toContain('aria-labelledby="screen-preview-title"');
     expect(source).toContain('aria-label="关闭屏幕预览"');
+    expect(source).not.toContain('<button type="button" className="primary-button" onClick={closeScreenPreview}>完成</button>');
     expect(source).toContain("正在获取最新屏幕画面");
     expect(source).toContain("setShowScreenPreviewDialog(true)");
     expect(source).toContain("previewRequestIdRef.current += 1");
