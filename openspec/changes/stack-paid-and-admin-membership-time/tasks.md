@@ -17,4 +17,4 @@
 - [x] 3.1 Commit and push only the scoped membership-stacking changes.
 - [x] 3.2 Deploy the verified revision and confirm production health.
 - [x] 3.3 Repair the verified overlapping paid entitlement in a guarded transaction and confirm the cumulative final expiry.
-- [ ] 3.4 Commit, push, deploy, and verify the simplified membership page.
+- [x] 3.4 Commit, push, deploy, and verify the simplified membership page.
