@@ -13,5 +13,5 @@
 ## 3. Delivery and repair
 
 - [x] 3.1 Commit and push only the scoped membership-stacking changes.
-- [ ] 3.2 Deploy the verified revision and confirm production health.
+- [x] 3.2 Deploy the verified revision and confirm production health.
 - [x] 3.3 Repair the verified overlapping paid entitlement in a guarded transaction and confirm the cumulative final expiry.
