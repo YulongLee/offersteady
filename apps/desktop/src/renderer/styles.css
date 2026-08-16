@@ -180,8 +180,7 @@ select:focus {
 }
 
 .terminal-row,
-.connection-card,
-.preview-row {
+.connection-card {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: rgba(16, 23, 33, .84);
@@ -312,6 +311,10 @@ select:focus {
   grid-template-columns: minmax(0, 1fr) 72px 112px;
   gap: 10px;
   align-items: center;
+}
+
+.screen-control.is-capture-locked {
+  grid-template-columns: minmax(0, 1fr) 128px 112px;
 }
 
 .shortcut-settings-button {
@@ -465,36 +468,89 @@ select:focus {
   text-underline-offset: 3px;
 }
 
-.preview-row {
+.screen-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
   display: grid;
-  grid-template-columns: minmax(220px, .65fr) minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 18px;
+  place-items: center;
+  padding: 24px;
+  background: rgba(4, 8, 13, .78);
+  backdrop-filter: blur(8px);
 }
 
-.preview-row strong {
-  display: block;
+.screen-preview-sheet {
+  width: min(820px, 92vw);
+  max-height: 88vh;
+  overflow: auto;
+  padding: 24px;
+  border: 1px solid var(--line-strong);
+  border-radius: 20px;
+  background: #111a26;
+  box-shadow: 0 28px 100px rgba(0, 0, 0, .52);
+}
+
+.screen-preview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.screen-preview-head span {
+  color: var(--brand);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .18em;
+}
+
+.screen-preview-head h2 {
+  margin: 6px 0 0;
   color: var(--text);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 20px;
 }
 
-.preview-row span {
-  display: block;
-  margin-top: 5px;
+.screen-preview-head button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
   color: var(--muted);
-  font-size: 10px;
-  line-height: 1.5;
+  background: rgba(255, 255, 255, .03);
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.screen-preview-notice,
+.screen-preview-privacy {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.screen-preview-notice {
+  margin: 14px 0 10px;
+}
+
+.screen-preview-privacy {
+  margin: 10px 0 16px;
+}
+
+.screen-preview-stage {
+  min-height: 300px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #080e16;
 }
 
 .screen-preview {
   display: none;
   width: 100%;
-  height: 96px;
-  object-fit: cover;
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
+  max-height: 58vh;
+  object-fit: contain;
   background: #0b1119;
 }
 
@@ -505,10 +561,8 @@ select:focus {
 .screen-preview-image {
   display: none;
   width: 100%;
-  height: 96px;
-  object-fit: cover;
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
+  max-height: 58vh;
+  object-fit: contain;
   background: #0b1119;
 }
 
@@ -518,20 +572,30 @@ select:focus {
 
 .screen-preview-empty {
   width: 100%;
-  height: 96px;
-  border: 1px dashed var(--line-strong);
-  border-radius: 12px;
+  min-height: 300px;
   color: var(--muted);
-  background: rgba(255, 255, 255, .02);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  gap: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 
+.screen-preview-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(110, 231, 189, .22);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: screen-preview-spin .8s linear infinite;
+}
+
+@keyframes screen-preview-spin {
+  to { transform: rotate(360deg); }
+}
+
 .cancel-screenshot-button {
-  min-width: 128px;
   border-color: rgba(255, 181, 78, .5);
   color: #ffd08a;
 }
@@ -817,6 +881,10 @@ select {
   gap: 7px;
 }
 
+.screen-control.is-capture-locked {
+  grid-template-columns: minmax(0, 1fr) 108px 92px;
+}
+
 .shortcut-settings-button span {
   font-size: 9px;
 }
@@ -841,26 +909,19 @@ select {
   font-size: 10px;
 }
 
-.preview-row {
-  grid-template-columns: minmax(150px, .65fr) minmax(0, 1fr) auto;
-  gap: 9px;
-  padding: 8px 10px;
+.screen-preview-backdrop {
+  padding: 12px;
 }
 
-.screen-preview {
-  height: 58px;
-  border-radius: 10px;
+.screen-preview-sheet {
+  width: min(720px, 94vw);
+  padding: 16px;
+  border-radius: 16px;
 }
 
-.screen-preview-image {
-  height: 58px;
-  border-radius: 10px;
-}
-
+.screen-preview-stage,
 .screen-preview-empty {
-  height: 58px;
-  border-radius: 10px;
-  font-size: 8px;
+  min-height: 220px;
 }
 
 .connection-card {

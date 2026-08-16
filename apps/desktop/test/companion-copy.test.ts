@@ -20,9 +20,19 @@ describe("companion interview wording", () => {
   it("keeps one screenshot locked until the user explicitly cancels it", () => {
     const source = readFileSync(new URL("../src/renderer/CompanionApp.tsx", import.meta.url), "utf8");
 
-    expect(source).toContain('aria-label="屏幕捕捉预览"');
     expect(source).toContain("取消当前截屏");
     expect(source).toContain("disabled={screenshotCaptureLocked}");
     expect(source).toContain("cancelScreenshotCapture");
+  });
+
+  it("shows screen imagery only in an on-demand preview dialog", () => {
+    const source = readFileSync(new URL("../src/renderer/CompanionApp.tsx", import.meta.url), "utf8");
+
+    expect(source).not.toContain('className="preview-row"');
+    expect(source).toContain('aria-labelledby="screen-preview-title"');
+    expect(source).toContain('aria-label="关闭屏幕预览"');
+    expect(source).toContain("正在获取最新屏幕画面");
+    expect(source).toContain("setShowScreenPreviewDialog(true)");
+    expect(source).toContain("previewRequestIdRef.current += 1");
   });
 });

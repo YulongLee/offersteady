@@ -381,6 +381,8 @@ export function CompanionApp() {
   const [screenshotShortcutNotice, setScreenshotShortcutNotice] = useState("仅在已连接并开始面试后生效");
   const [screenshotCaptureLocked, setScreenshotCaptureLocked] = useState(false);
   const [showScreenshotShortcutSettings, setShowScreenshotShortcutSettings] = useState(false);
+  const [showScreenPreviewDialog, setShowScreenPreviewDialog] = useState(false);
+  const [isScreenPreviewLoading, setIsScreenPreviewLoading] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [screenCaptureReady, setScreenCaptureReady] = useState(false);
   const [screenPreviewUrl, setScreenPreviewUrl] = useState<string | null>(null);
@@ -393,6 +395,7 @@ export function CompanionApp() {
   const [publisherRetryNonce, setPublisherRetryNonce] = useState(0);
   const previewRef = useRef<HTMLVideoElement>(null);
   const previewStream = useRef<MediaStream | null>(null);
+  const previewRequestIdRef = useRef(0);
   const publisherRef = useRef<DesktopRealtimePublisher | null>(null);
   const localMonitorRef = useRef<LocalSourceMonitor | null>(null);
   const systemAudioAdapterRef = useRef(new SystemAudioAdapter());
@@ -500,7 +503,6 @@ export function CompanionApp() {
   const effectiveMicrophoneId = selectedMicrophoneId || DEFAULT_MICROPHONE_ID;
   const currentMicrophoneLabel = microphoneSources.find(source => source.id === selectedMicrophoneId)?.label ?? "Default - 当前默认麦克风";
   const currentScreenLabel = screenSources.find(source => source.id === selectedScreenId)?.label ?? "显示器 1";
-  const currentScreenPreview = screenSources.find(source => source.id === selectedScreenId)?.thumbnailDataUrl ?? null;
   const activeScreenshotShortcutLabel = screenshotShortcut.options.find(option => option.accelerator === screenshotShortcut.accelerator)?.label ?? "快捷键设置";
   const microphoneHealth = sourceHealthState.find(item => item.sourceKind === "microphone");
   const systemAudioHealth = sourceHealthState.find(item => item.sourceKind === "system");
@@ -632,10 +634,10 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
 
   useEffect(() => {
     setScreenCaptureReady(false);
-    setScreenPreviewUrl(currentScreenPreview);
-    setIsPreviewing(Boolean(currentScreenPreview));
-    setPreviewNotice(currentScreenPreview ? `已获取缩略图，请点击预览验证屏幕捕捉：${currentScreenLabel}` : `选择要捕捉的屏幕：${currentScreenLabel}`);
-  }, [currentScreenLabel, currentScreenPreview]);
+    setScreenPreviewUrl(null);
+    setIsPreviewing(false);
+    setPreviewNotice(`选择要捕捉的屏幕：${currentScreenLabel}`);
+  }, [currentScreenLabel]);
 
   useEffect(() => {
     const mediaDevices = navigator.mediaDevices;
@@ -962,18 +964,25 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
   useEffect(() => {
     const video = previewRef.current;
     const stream = previewStream.current;
-    if (!isPreviewing || !video || !stream) return;
+    if (!showScreenPreviewDialog || !isPreviewing || !video || !stream) return;
     video.srcObject = stream;
     video.muted = true;
     video.playsInline = true;
     void video.play().catch(() => undefined);
-  }, [isPreviewing, screenPreviewUrl]);
+  }, [isPreviewing, screenPreviewUrl, showScreenPreviewDialog]);
 
   const stopPreview = () => {
     previewStream.current?.getTracks().forEach(track => track.stop());
     previewStream.current = null;
     if (previewRef.current) previewRef.current.srcObject = null;
-    setIsPreviewing(Boolean(screenPreviewUrl));
+    setIsPreviewing(false);
+  };
+
+  const closeScreenPreview = () => {
+    previewRequestIdRef.current += 1;
+    setShowScreenPreviewDialog(false);
+    setIsScreenPreviewLoading(false);
+    stopPreview();
   };
 
   const previewScreen = async () => {
@@ -981,27 +990,42 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       setPreviewNotice("当前截屏尚未取消，请先点击“取消当前截屏”。");
       return;
     }
+    const requestId = previewRequestIdRef.current + 1;
+    previewRequestIdRef.current = requestId;
     stopPreview();
+    setScreenPreviewUrl(null);
+    setShowScreenPreviewDialog(true);
+    setIsScreenPreviewLoading(true);
     setPreviewNotice("正在请求屏幕捕捉权限…");
     try {
       const captured = await window.offersteady.captureCurrentScreen?.(selectedScreenId || null);
+      if (requestId !== previewRequestIdRef.current) return;
       if (captured?.errorMessage) throw new Error(captured.errorMessage);
       if (captured?.dataUrl) {
         setScreenPreviewUrl(captured.dataUrl);
         setIsPreviewing(true);
+        setIsScreenPreviewLoading(false);
         setScreenCaptureReady(true);
         setPreviewNotice(`屏幕捕捉已就绪：${captured.name || currentScreenLabel}`);
         setDesktopNotice("屏幕预览已获取，本地助手可以处理截图回答。");
         return;
       }
       const opened = await systemAudioAdapterRef.current.openScreenPreview();
+      if (requestId !== previewRequestIdRef.current) {
+        opened.stream.getTracks().forEach(track => track.stop());
+        return;
+      }
       previewStream.current = opened.stream;
       setScreenPreviewUrl(null);
       setIsPreviewing(true);
+      setIsScreenPreviewLoading(false);
       setScreenCaptureReady(true);
       setPreviewNotice(`屏幕捕捉已就绪：${currentScreenLabel}`);
       setDesktopNotice("屏幕预览已获取，本地助手可以处理截图回答。");
     } catch (error) {
+      if (requestId !== previewRequestIdRef.current) return;
+      setIsScreenPreviewLoading(false);
+      setIsPreviewing(false);
       setScreenCaptureReady(false);
       setPreviewNotice(`屏幕捕捉预览失败：${describeMediaError(error)}`);
       setDesktopNotice(`屏幕捕捉预览失败：${describeMediaError(error)}`);
@@ -1010,9 +1034,8 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
   };
 
   const cancelCurrentScreenshot = async () => {
-    stopPreview();
-    setScreenPreviewUrl(currentScreenPreview);
-    setIsPreviewing(Boolean(currentScreenPreview));
+    closeScreenPreview();
+    setScreenPreviewUrl(null);
     const lock = await window.offersteady?.cancelScreenshotCapture?.().catch(() => null);
     setScreenshotCaptureLocked(lock?.locked ?? false);
     setPreviewNotice("当前截屏已取消，可以重新截屏。");
@@ -1157,7 +1180,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
           </TerminalRow>
 
           <TerminalRow title="屏幕捕捉" subtitle="选择要捕捉的屏幕" statusLabel="捕捉屏幕" ready={screenReady}>
-            <div className="screen-control">
+            <div className={screenshotCaptureLocked ? "screen-control is-capture-locked" : "screen-control"}>
               <select
                 aria-label="选择屏幕捕捉来源"
                 value={selectedScreenId}
@@ -1168,7 +1191,13 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
                   <option key={source.id} value={source.id}>{source.label}</option>
                 ))}
               </select>
-              <button type="button" className="secondary-button" disabled={screenshotCaptureLocked} onClick={() => { void previewScreen(); }}>{screenshotCaptureLocked ? "等待取消" : "预览"}</button>
+              <button
+                type="button"
+                className={screenshotCaptureLocked ? "secondary-button cancel-screenshot-button" : "secondary-button"}
+                onClick={() => { void (screenshotCaptureLocked ? cancelCurrentScreenshot() : previewScreen()); }}
+              >
+                {screenshotCaptureLocked ? "取消当前截屏" : "预览"}
+              </button>
               <button type="button" className="secondary-button shortcut-settings-button" onClick={() => setShowScreenshotShortcutSettings(true)}>
                 <span>快捷键</span>
                 <small>{screenshotShortcut.registered ? activeScreenshotShortcutLabel : "未生效 · 点击设置"}</small>
@@ -1204,26 +1233,33 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
             </div>
           ) : null}
 
-          <section className="preview-row" aria-label="屏幕捕捉预览">
-            <div>
-              <strong>{currentScreenLabel}</strong>
-              <span>{previewNotice}</span>
+          {showScreenPreviewDialog ? (
+            <div className="screen-preview-backdrop" role="dialog" aria-modal="true" aria-labelledby="screen-preview-title">
+              <section className="screen-preview-sheet">
+                <header className="screen-preview-head">
+                  <div>
+                    <span>SCREEN PREVIEW</span>
+                    <h2 id="screen-preview-title">屏幕预览 · {currentScreenLabel}</h2>
+                  </div>
+                  <button type="button" aria-label="关闭屏幕预览" onClick={closeScreenPreview}>×</button>
+                </header>
+                <p className="screen-preview-notice">{previewNotice}</p>
+                <div className="screen-preview-stage" aria-live="polite">
+                  {isScreenPreviewLoading ? (
+                    <div className="screen-preview-empty"><span className="screen-preview-spinner" />正在获取最新屏幕画面…</div>
+                  ) : screenPreviewUrl ? (
+                    <img src={screenPreviewUrl} alt={`${currentScreenLabel} 预览`} className="screen-preview-image is-visible" />
+                  ) : isPreviewing ? (
+                    <video ref={previewRef} className="screen-preview is-visible" />
+                  ) : (
+                    <div className="screen-preview-empty">{previewNotice}</div>
+                  )}
+                </div>
+                <p className="screen-preview-privacy">仅用于在本机确认当前捕捉范围，不会因预览自动发送到网页端。</p>
+                <button type="button" className="primary-button" onClick={closeScreenPreview}>完成</button>
+              </section>
             </div>
-            {screenPreviewUrl ? (
-              <img
-                src={screenPreviewUrl}
-                alt={`${currentScreenLabel} 预览`}
-                className="screen-preview-image is-visible"
-              />
-            ) : isPreviewing ? (
-              <video ref={previewRef} className={isPreviewing ? "screen-preview is-visible" : "screen-preview"} />
-            ) : (
-              <div className="screen-preview-empty">未获取到屏幕预览</div>
-            )}
-            {screenshotCaptureLocked ? (
-              <button type="button" className="secondary-button cancel-screenshot-button" onClick={() => { void cancelCurrentScreenshot(); }}>取消当前截屏</button>
-            ) : null}
-          </section>
+          ) : null}
 
           <section className="connection-card" aria-label="连接管理">
             <div className="connection-head">
