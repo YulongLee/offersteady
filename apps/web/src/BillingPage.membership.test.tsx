@@ -66,7 +66,7 @@ describe("billing membership visibility", () => {
     expect(within(card).getByText("已包含待生效会员 15 天 0 小时")).toBeInTheDocument();
     expect(within(card).getByText("知识材料额度 1/2")).toBeInTheDocument();
     expect(within(card).getByText("200 点")).toBeInTheDocument();
-    expect(screen.getByText(/1 个 · 共 15 天 0 小时/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "待生效会员" })).not.toBeInTheDocument();
     expect(screen.getAllByText("积分与会员").length).toBeGreaterThan(0);
   });
 

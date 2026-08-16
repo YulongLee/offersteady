@@ -27,8 +27,12 @@
 - **THEN** 系统返回原支付结果且不得再次增加会员时间
 
 ### Requirement: Present purchased extensions without hiding duration
-系统 SHALL 根据服务端会员时间线展示当前有效会员、待生效延长段和累计最终到期时间，且 MUST NOT 因不同权益来源而隐藏已经购买的时长。
+系统 SHALL 根据服务端会员时间线在顶部权益卡展示累计剩余时间、待生效延长时长和累计最终到期时间，且 MUST NOT 因不同权益来源而隐藏已经购买的时长。页面 MUST NOT 重复展示独立的待生效会员明细面板。
 
 #### Scenario: Active member buys an extension
 - **WHEN** 用户已有有效会员并成功购买新的时间会员
 - **THEN** 顶部权益卡按连续时间线展示累计剩余时间和最终到期时间，并展示新权益待生效时长
+
+#### Scenario: User views accumulated membership
+- **WHEN** 顶部权益卡已经展示连续会员的累计结果
+- **THEN** 页面不再展示逐笔待生效会员的独立明细区域

@@ -917,25 +917,6 @@ export function BillingPage({ state, setState }: Props) {
           </div>
         </form>
       </section>
-      {queuedPasses.length ? (
-        <section className="panel queued-entitlements">
-          <div className="panel-heading">
-            <h2>待生效会员</h2>
-            <span>
-              {queuedPasses.length} 个 · 共{" "}
-              {formatMembershipDuration(queuedDurationMs)}
-            </span>
-          </div>
-          {queuedPasses.map((item) => (
-            <p key={item.id}>
-              <strong>{membershipDateTime(item.startsAtMs)} 生效</strong>，至{" "}
-              {membershipDateTime(item.endsAtMs)}；含{" "}
-              {item.knowledgeAllowanceGranted} 份知识材料额度。
-            </p>
-          ))}
-          <small>累计会员有效期至 {membershipDateTime(finalPassEndMs)}</small>
-        </section>
-      ) : null}
       <section className="billing-section">
         <div className="panel-heading">
           <h2>按天会员</h2>
