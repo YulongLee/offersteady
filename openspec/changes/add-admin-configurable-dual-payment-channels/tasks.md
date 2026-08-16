@@ -34,4 +34,4 @@
 - [x] 5.1 Generate provider-compatible merchant order identifiers without breaking local idempotency or callback lookup
 - [x] 5.2 Mark rejected provider checkouts failed and expose only safe WeChat error diagnostics
 - [x] 5.3 Add regression tests for WeChat order constraints, rejected Native requests and failed-order persistence
-- [ ] 5.4 Run focused and full payment verification, deploy, and verify the production Native checkout reaches a real QR response
+- [x] 5.4 Run focused and full payment verification, deploy, and verify the production Native checkout reaches a real QR response
