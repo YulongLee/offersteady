@@ -42,6 +42,31 @@ def test_wallet_order_and_duplicate_callback_survive_restart() -> None:
 
 
 @pytest.mark.skipif(not DATABASE_URL, reason="OFFERSTEADY_TEST_DATABASE_URL is not configured")
+def test_rejected_provider_checkout_is_persisted_as_failed() -> None:
+    user_id = f"billing-provider-failure-{uuid4().hex}"
+    service = service_for_test()
+    order = service.create_checkout_order(
+        user_id=user_id,
+        product_id="pass-1",
+        channel="wechat",
+        provider="wechat",
+        idempotency_key="rejected-native-order",
+        payment_url="#",
+        expires_at_ms=9_999_999_999_999,
+    )
+
+    service.mark_checkout_failed(
+        order_id=order.id,
+        failure_reason="wechat_native_400_param_error",
+    )
+
+    restarted = service_for_test()
+    persisted = restarted.checkout_order_for_user(user_id=user_id, order_id=order.id)
+    assert persisted.status == "failed"
+    assert persisted.action == {"kind": "unavailable"}
+
+
+@pytest.mark.skipif(not DATABASE_URL, reason="OFFERSTEADY_TEST_DATABASE_URL is not configured")
 def test_concurrent_index_reservations_cannot_overspend() -> None:
     user_id = f"billing-reservation-{uuid4().hex}"
     service = service_for_test()

@@ -4,6 +4,7 @@ import base64
 import json
 import secrets
 import time
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
@@ -24,6 +25,17 @@ class WechatPayNotification:
     amount_cents: int
     paid: bool
     verified: bool
+
+
+class WechatPayRequestError(RuntimeError):
+    """A provider failure safe to persist and expose without response secrets."""
+
+    def __init__(self, provider_code: str, *, status_code: int | None = None) -> None:
+        normalized = re.sub(r"[^A-Z0-9_]", "_", provider_code.upper()).strip("_")[:64] or "UNKNOWN"
+        self.provider_code = normalized
+        self.status_code = status_code
+        self.safe_code = f"wechat_native_{status_code or 'network'}_{normalized}".lower()
+        super().__init__(self.safe_code)
 
 
 class WechatPayProvider:
@@ -63,17 +75,26 @@ class WechatPayProvider:
         body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         url = self.settings.wechat_pay_native_url
         authorization = self._authorization("POST", urlparse(url).path, body)
-        response = httpx.post(url, content=body.encode(), headers={"Authorization": authorization, "Accept": "application/json", "Content-Type": "application/json"}, timeout=8.0)
-        response.raise_for_status()
+        try:
+            response = httpx.post(url, content=body.encode(), headers={"Authorization": authorization, "Accept": "application/json", "Content-Type": "application/json"}, timeout=8.0)
+        except httpx.RequestError as exc:
+            raise WechatPayRequestError("NETWORK_ERROR") from exc
+        if response.status_code >= 400:
+            try:
+                response_payload = response.json()
+                provider_code = str(response_payload.get("code") or f"HTTP_{response.status_code}")
+            except (ValueError, TypeError, AttributeError):
+                provider_code = f"HTTP_{response.status_code}"
+            raise WechatPayRequestError(provider_code, status_code=response.status_code)
         response_body = response.text
         response_timestamp = response.headers.get("Wechatpay-Timestamp", "")
         response_nonce = response.headers.get("Wechatpay-Nonce", "")
         response_signature = response.headers.get("Wechatpay-Signature", "")
         if not self._verify(f"{response_timestamp}\n{response_nonce}\n{response_body}\n", response_signature):
-            raise RuntimeError("wechat_pay_response_signature_invalid")
+            raise WechatPayRequestError("RESPONSE_SIGNATURE_INVALID")
         code_url = str(response.json().get("code_url", ""))
         if not code_url:
-            raise RuntimeError("wechat_pay_code_url_missing")
+            raise WechatPayRequestError("CODE_URL_MISSING")
         return code_url
 
     def parse_notification(self, body: bytes, headers: dict[str, str]) -> WechatPayNotification:

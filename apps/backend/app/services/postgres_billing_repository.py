@@ -422,6 +422,27 @@ class PostgresBillingRepository:
             connection.commit()
             return self._order(row)
 
+    def mark_checkout_failed(self, *, order_id: str, failure_reason: str, updated_at_ms: int) -> dict[str, object]:
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                UPDATE billing_checkout_orders
+                SET status = 'failed', failure_reason = %s,
+                    action = '{"kind":"unavailable"}'::jsonb, updated_at_ms = %s
+                WHERE order_id = %s AND status = 'payment_pending'
+                RETURNING *
+                """,
+                (failure_reason, updated_at_ms, order_id),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                cursor.execute("SELECT * FROM billing_checkout_orders WHERE order_id = %s", (order_id,))
+                row = cursor.fetchone()
+            if row is None:
+                raise KeyError(order_id)
+            connection.commit()
+            return self._order(row)
+
     def checkout_order(self, *, order_id: str) -> dict[str, object]:
         with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
             cursor.execute("SELECT * FROM billing_checkout_orders WHERE order_id = %s", (order_id,))

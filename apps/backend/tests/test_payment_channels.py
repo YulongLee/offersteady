@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from textwrap import wrap
 
+import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
@@ -14,7 +16,8 @@ from cryptography.x509.oid import NameOID
 
 from app.core.config import Settings
 from app.services.payment_channel_service import PaymentChannelService
-from app.services.wechat_pay_provider import WechatPayProvider
+from app.services.billing_service import BillingService
+from app.services.wechat_pay_provider import WechatPayProvider, WechatPayRequestError
 
 
 def _keys() -> tuple[str, str, object]:
@@ -259,3 +262,77 @@ def test_wechat_notification_signature_identity_and_aes_gcm_decryption():
     assert notification.paid is True
     assert notification.order_id == "order-1"
     assert notification.amount_cents == 3990
+
+
+def test_new_checkout_order_id_satisfies_wechat_native_constraints() -> None:
+    service = BillingService(Settings(_env_file=None, environment="test"))
+
+    order = service.create_checkout_order(
+        user_id="wechat-order-user",
+        product_id="pass-1",
+        channel="wechat",
+        provider="wechat",
+        idempotency_key="wechat-native-order-id",
+        payment_url="#",
+        expires_at_ms=9_999_999_999_999,
+    )
+
+    assert 6 <= len(order.id) <= 32
+    assert re.fullmatch(r"[0-9A-Za-z_\-|*]+", order.id)
+
+
+def test_rejected_wechat_native_request_returns_only_safe_provider_code(monkeypatch) -> None:
+    merchant_private, platform_public, _ = _keys()
+    provider = WechatPayProvider(Settings(
+        _env_file=None,
+        wechat_pay_mch_id="mch-1",
+        wechat_pay_app_id="app-1",
+        wechat_pay_merchant_serial_no="serial-1",
+        wechat_pay_merchant_private_key=merchant_private,
+        wechat_pay_platform_public_key=platform_public,
+        wechat_pay_api_v3_key="0123456789abcdef0123456789abcdef",
+        wechat_pay_notify_url="https://example.test/wechat/notify",
+    ))
+
+    class RejectedResponse:
+        status_code = 400
+
+        @staticmethod
+        def json() -> dict[str, str]:
+            return {"code": "PARAM_ERROR", "message": "sensitive provider diagnostic"}
+
+    monkeypatch.setattr("app.services.wechat_pay_provider.httpx.post", lambda *args, **kwargs: RejectedResponse())
+
+    with pytest.raises(WechatPayRequestError) as captured:
+        provider.payment_url(
+            order_id="os012345678901234567890123456789",
+            product_name="1 天会员",
+            amount_cents=2990,
+            channel="wechat",
+        )
+
+    assert captured.value.provider_code == "PARAM_ERROR"
+    assert captured.value.safe_code == "wechat_native_400_param_error"
+    assert "sensitive provider diagnostic" not in str(captured.value)
+
+
+def test_rejected_checkout_is_not_left_payment_pending() -> None:
+    service = BillingService(Settings(_env_file=None, environment="test"))
+    order = service.create_checkout_order(
+        user_id="wechat-failed-user",
+        product_id="pass-1",
+        channel="wechat",
+        provider="wechat",
+        idempotency_key="wechat-native-failure",
+        payment_url="#",
+        expires_at_ms=9_999_999_999_999,
+    )
+
+    failed = service.mark_checkout_failed(
+        order_id=order.id,
+        failure_reason="wechat_native_400_param_error",
+    )
+
+    assert failed.status == "failed"
+    assert failed.action == {"kind": "unavailable"}
+    assert service.checkout_order_for_user(user_id="wechat-failed-user", order_id=order.id).status == "failed"

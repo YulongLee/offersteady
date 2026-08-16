@@ -548,7 +548,11 @@ class BillingService:
             raise ValueError("支付提供方不可用")
         now = _now_ms()
         order = OfficialCheckoutOrderRecord(
-            id=f"official-order-{uuid4().hex}",
+            # WeChat Native requires out_trade_no to be 6-32 characters and
+            # limits it to ASCII letters, digits and a small punctuation set.
+            # The local order id is also the provider order id so callbacks can
+            # continue to resolve the order without a second identifier map.
+            id=f"os{uuid4().hex[:30]}",
             user_id=user_id,
             product=product,
             amount_cents=product.price_cents,
@@ -582,6 +586,27 @@ class BillingService:
         updated = OfficialCheckoutOrderRecord(**{**order.__dict__, "action": action})
         self.checkout_orders_by_id[order_id] = updated
         return updated
+
+    def mark_checkout_failed(self, *, order_id: str, failure_reason: str) -> OfficialCheckoutOrderRecord:
+        safe_reason = "".join(character for character in failure_reason if character.isalnum() or character in {"_", "-"})[:96]
+        safe_reason = safe_reason or "payment_provider_request_failed"
+        if self.billing_repository is not None:
+            return self._persisted_order(self.billing_repository.mark_checkout_failed(
+                order_id=order_id,
+                failure_reason=safe_reason,
+                updated_at_ms=_now_ms(),
+            ))
+        order = self.checkout_orders_by_id[order_id]
+        if order.status != "payment_pending":
+            return order
+        failed = OfficialCheckoutOrderRecord(**{
+            **order.__dict__,
+            "status": "failed",
+            "action": {"kind": "unavailable"},
+            "updated_at_ms": _now_ms(),
+        })
+        self.checkout_orders_by_id[order_id] = failed
+        return failed
 
     def checkout_order_for_user(self, *, user_id: str, order_id: str) -> OfficialCheckoutOrderRecord:
         if self.billing_repository is not None:

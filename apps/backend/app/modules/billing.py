@@ -16,6 +16,7 @@ from app.services.alipay_provider import AlipayPaymentProvider
 from app.services.billing_service import BillingService
 from app.services.mzfpay_provider import MzfpayPaymentProvider
 from app.services.payment_channel_service import PaymentChannelService
+from app.services.wechat_pay_provider import WechatPayRequestError
 
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -164,13 +165,20 @@ async def create_checkout_order(
     )
     if order.provider != provider.provider_name:
         return success_response(request=request_context, data=service._official_order_payload(order), timestamp=utc_now_iso())
-    payment_url = provider.payment_url(
-        order_id=order.id,
-        product_name=order.product.display_name,
-        amount_cents=order.amount_cents,
-        channel=order.channel,
-        client_ip=request_context.client.host if request_context.client else None,
-    )
+    try:
+        payment_url = provider.payment_url(
+            order_id=order.id,
+            product_name=order.product.display_name,
+            amount_cents=order.amount_cents,
+            channel=order.channel,
+            client_ip=request_context.client.host if request_context.client else None,
+        )
+    except WechatPayRequestError as exc:
+        service.mark_checkout_failed(order_id=order.id, failure_reason=exc.safe_code)
+        raise HTTPException(
+            status_code=502,
+            detail=f"微信支付暂时无法创建订单，请稍后重试（{exc.provider_code}）",
+        ) from exc
     order = service.replace_checkout_action(order_id=order.id, payment_url=payment_url, expires_at_ms=expires_at_ms,
                                             action_kind="dynamic_qr" if provider.provider_name == "wechat" else "redirect")
     return success_response(request=request_context, data=service._official_order_payload(order), timestamp=utc_now_iso())
