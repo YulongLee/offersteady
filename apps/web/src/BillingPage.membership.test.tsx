@@ -62,7 +62,8 @@ describe("billing membership visibility", () => {
 
     const card = screen.getByRole("region", { name: "我的权益" });
     expect(within(card).getByText("会员使用中")).toBeInTheDocument();
-    expect(within(card).getByText("剩余 6 天 12 小时")).toBeInTheDocument();
+    expect(within(card).getByText("剩余 21 天 12 小时")).toBeInTheDocument();
+    expect(within(card).getByText("已包含待生效会员 15 天 0 小时")).toBeInTheDocument();
     expect(within(card).getByText("知识材料额度 1/2")).toBeInTheDocument();
     expect(within(card).getByText("200 点")).toBeInTheDocument();
     expect(screen.getByText(/1 个 · 共 15 天 0 小时/)).toBeInTheDocument();

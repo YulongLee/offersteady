@@ -2,6 +2,7 @@
 
 - [x] 1.1 Make paid time-pass confirmation use the latest end across paid and admin entitlements.
 - [x] 1.2 Serialize admin time grants with paid grants using the shared per-user advisory lock.
+- [x] 1.3 Show cumulative remaining time and final expiry for continuous queued extensions.
 
 ## 2. Regression verification
 
@@ -11,6 +12,6 @@
 
 ## 3. Delivery and repair
 
-- [ ] 3.1 Commit and push only the scoped membership-stacking changes.
+- [x] 3.1 Commit and push only the scoped membership-stacking changes.
 - [ ] 3.2 Deploy the verified revision and confirm production health.
-- [ ] 3.3 Repair the verified overlapping paid entitlement in a guarded transaction and confirm the cumulative final expiry.
+- [x] 3.3 Repair the verified overlapping paid entitlement in a guarded transaction and confirm the cumulative final expiry.

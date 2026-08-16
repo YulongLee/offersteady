@@ -648,9 +648,14 @@ export function BillingPage({ state, setState }: Props) {
           {activePass ? (
             <>
               <strong className="membership-remaining">
-                剩余 {formatMembershipRemaining(activePass.endsAtMs, clockMs)}
+                剩余 {formatMembershipRemaining(finalPassEndMs, clockMs)}
               </strong>
-              <span>有效期至 {membershipDateTime(activePass.endsAtMs)}</span>
+              <span>有效期至 {membershipDateTime(finalPassEndMs)}</span>
+              {queuedPasses.length ? (
+                <span>
+                  已包含待生效会员 {formatMembershipDuration(queuedDurationMs)}
+                </span>
+              ) : null}
               <span>会员期内回答与截图不扣积分</span>
               {activePass.knowledgeAllowanceGranted ? (
                 <span>
