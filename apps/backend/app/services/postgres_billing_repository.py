@@ -494,7 +494,15 @@ class PostgresBillingRepository:
                     "SELECT COALESCE(MAX(ends_at_ms), %s) AS latest_end FROM billing_time_pass_entitlements WHERE user_id = %s AND ends_at_ms > %s",
                     (paid_at_ms, user_id, paid_at_ms),
                 )
-                starts_at_ms = max(paid_at_ms, int(cursor.fetchone()["latest_end"]))
+                latest_end_ms = max(paid_at_ms, int(cursor.fetchone()["latest_end"]))
+                cursor.execute("SELECT to_regclass('admin_time_entitlements') IS NOT NULL AS available")
+                if bool(cursor.fetchone()["available"]):
+                    cursor.execute(
+                        "SELECT COALESCE(MAX(ends_at_ms), %s) AS latest_end FROM admin_time_entitlements WHERE user_id = %s AND ends_at_ms > %s",
+                        (paid_at_ms, user_id, paid_at_ms),
+                    )
+                    latest_end_ms = max(latest_end_ms, int(cursor.fetchone()["latest_end"]))
+                starts_at_ms = latest_end_ms
                 ends_at_ms = starts_at_ms + int(product.get("duration_days") or 0) * 86_400_000
                 cursor.execute(
                     """

@@ -5,10 +5,13 @@ from concurrent.futures import ThreadPoolExecutor
 from time import time
 from uuid import uuid4
 
+import psycopg
 import pytest
 
 from app.core.config import Settings
+from app.ports.authentication import UserRecord
 from app.services.billing_service import BillingService, TimePassEntitlementRecord
+from app.services.postgres_authentication_repository import PostgresAuthenticationRepository
 from app.services.postgres_billing_repository import PostgresBillingRepository
 
 
@@ -39,6 +42,85 @@ def test_wallet_order_and_duplicate_callback_survive_restart() -> None:
     assert len([item for item in state.ledger if item.kind == "welcome_grant"]) == 1
     assert len([item for item in state.ledger if item.kind == "purchase_credit"]) == 1
     assert state.official_orders[0]["status"] == "paid"
+
+
+@pytest.mark.skipif(not DATABASE_URL, reason="OFFERSTEADY_TEST_DATABASE_URL is not configured")
+def test_paid_pass_stacks_after_active_admin_entitlement_and_remains_idempotent() -> None:
+    settings = Settings(_env_file=None, database_url=DATABASE_URL, environment="test")
+    user_id = f"billing-cross-source-pass-{uuid4().hex}"
+    admin_reference = f"admin-pass-{uuid4().hex}"
+    auth = PostgresAuthenticationRepository(settings)
+    current_ms = int(time() * 1000)
+    auth.save_user(UserRecord(
+        user_id=user_id,
+        login_id=f"{user_id}@example.invalid",
+        password_hash="synthetic-not-a-real-password",
+        display_name="Synthetic membership test user",
+        avatar_url=None,
+        last_login_provider="prototype",
+        last_login_at_ms=current_ms,
+        created_at_ms=current_ms,
+        updated_at_ms=current_ms,
+    ))
+    admin_end_ms = current_ms + 6 * 86_400_000
+    with psycopg.connect(DATABASE_URL) as connection, connection.cursor() as cursor:
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS admin_time_entitlements (
+              entitlement_id TEXT PRIMARY KEY,
+              user_id TEXT NOT NULL,
+              product_id TEXT NOT NULL DEFAULT 'admin-time-adjustment',
+              starts_at_ms BIGINT NOT NULL,
+              ends_at_ms BIGINT NOT NULL,
+              reference_id TEXT NOT NULL UNIQUE,
+              reason TEXT NOT NULL,
+              created_by_user_id TEXT NOT NULL,
+              created_at_ms BIGINT NOT NULL
+            )
+            """
+        )
+        cursor.execute(
+            """
+            INSERT INTO admin_time_entitlements (
+              entitlement_id, user_id, starts_at_ms, ends_at_ms, reference_id,
+              reason, created_by_user_id, created_at_ms
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (
+                f"admin-entitlement-{uuid4().hex}", user_id, current_ms, admin_end_ms,
+                admin_reference, "synthetic cross-source stacking test", "synthetic-admin", current_ms,
+            ),
+        )
+        connection.commit()
+    service = BillingService(settings, billing_repository=PostgresBillingRepository(settings))
+    order = service.create_checkout_order(
+        user_id=user_id,
+        product_id="pass-1",
+        channel="wechat",
+        idempotency_key="cross-source-pass",
+        payment_url="#",
+        expires_at_ms=9_999_999_999_999,
+    )
+    first = service.confirm_checkout_paid(
+        order_id=order.id,
+        amount_cents=order.amount_cents,
+        provider_trade_no=f"trade-{uuid4().hex}",
+    )
+    replay = service.confirm_checkout_paid(
+        order_id=order.id,
+        amount_cents=order.amount_cents,
+        provider_trade_no=f"duplicate-{uuid4().hex}",
+    )
+
+    state = service_for_test().state_for_user(user_id=user_id)
+    assert first.status == replay.status == "paid"
+    assert state.active_pass is not None
+    assert state.active_pass["orderId"] == admin_reference
+    assert len(state.queued_passes) == 1
+    paid_entitlement = state.queued_passes[0]
+    assert paid_entitlement["orderId"] == order.id
+    assert paid_entitlement["startsAtMs"] == admin_end_ms
+    assert paid_entitlement["endsAtMs"] - paid_entitlement["startsAtMs"] == 86_400_000
 
 
 @pytest.mark.skipif(not DATABASE_URL, reason="OFFERSTEADY_TEST_DATABASE_URL is not configured")

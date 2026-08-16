@@ -941,6 +941,10 @@ class AdminRepository:
         current = now_ms()
         with self.connect() as connection, connection.cursor() as cursor:
             cursor.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                (f"billing-user:{user_id}",),
+            )
+            cursor.execute(
                 """
                 SELECT GREATEST(
                   %s,
