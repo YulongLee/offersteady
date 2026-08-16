@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { syntheticState } from "./test-state";
+import { interviewAppAdapter } from "./app-adapter";
 
 vi.mock("./app-adapter", async () => {
   const { fixtureAdapter } = await import("./test-state");
@@ -33,6 +34,7 @@ describe("spec-driven interview features", () => {
 
   it("creates an official checkout without collecting manual payment proof", async () => {
     const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
+    const checkoutSpy = vi.spyOn(interviewAppAdapter, "createCheckoutOrder");
     open("/app/billing");
     expect(screen.getByText("200 点", { selector: ".balance-card strong" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "3 天会员" })).toBeInTheDocument();
@@ -40,11 +42,21 @@ describe("spec-driven interview features", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "购买" })[0]!);
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).queryByLabelText("交易单号")).not.toBeInTheDocument(); expect(within(dialog).queryByLabelText("付款截图")).not.toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("button", { name: "支付宝支付" }));
+    const wechat = within(dialog).getByRole("button", { name: "微信支付" });
+    const alipay = within(dialog).getByRole("button", { name: "支付宝支付" });
+    expect(wechat).toHaveClass("checkout-channel-card", "wechat");
+    expect(alipay).toHaveClass("checkout-channel-card", "alipay");
+    expect(within(wechat).getByText("打开微信，扫描订单二维码")).toBeInTheDocument();
+    expect(within(alipay).getByText("跳转支付宝官方收银台")).toBeInTheDocument();
+    expect(wechat.querySelector("img")).toHaveAttribute("src", "/assets/payments/wechat-channel.svg");
+    expect(alipay.querySelector("img")).toHaveAttribute("src", "/assets/payments/alipay-channel.svg");
+    fireEvent.click(alipay);
     await waitFor(() => expect(within(dialog).getByRole("link", { name: "打开支付宝官方收银台" })).toBeInTheDocument());
+    expect(checkoutSpy).toHaveBeenCalledWith(expect.objectContaining({ channel: "alipay" }), expect.any(AbortSignal));
     expect(openSpy).toHaveBeenCalledWith(expect.stringContaining("pay.mzfpay.com"), "_blank", "noopener,noreferrer");
     expect(within(dialog).getByText(/等待服务端验签通知/)).toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: "模拟服务端验签通知" })).not.toBeInTheDocument();
+    checkoutSpy.mockRestore();
     openSpy.mockRestore();
   });
 

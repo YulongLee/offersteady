@@ -19,6 +19,7 @@ import type { ReferralStatus, WebAppState } from "./domain";
 import { routes } from "./routes";
 import { interviewAppAdapter } from "./app-adapter";
 import { runAdapterOperation } from "./api-client";
+import { assetUrl } from "./assets";
 import QRCode from "qrcode";
 
 interface Props {
@@ -1130,18 +1131,30 @@ export function BillingPage({ state, setState }: Props) {
               <div className="checkout-channel-actions">
                 {state.billing.availablePaymentChannels.includes("wechat") ? (
                   <button
-                    className="button primary full"
+                    className="checkout-channel-card wechat"
+                    aria-label="微信支付"
                     onClick={() => void startCheckout(product, "wechat")}
                   >
-                    微信支付
+                    <img src={assetUrl("payments.wechat")} alt="" />
+                    <span>
+                      <strong>微信支付</strong>
+                      <small>打开微信，扫描订单二维码</small>
+                    </span>
+                    <i aria-hidden="true">→</i>
                   </button>
                 ) : null}
                 {state.billing.availablePaymentChannels.includes("alipay") ? (
                   <button
-                    className="button primary full"
+                    className="checkout-channel-card alipay"
+                    aria-label="支付宝支付"
                     onClick={() => void startCheckout(product, "alipay")}
                   >
-                    支付宝支付
+                    <img src={assetUrl("payments.alipay")} alt="" />
+                    <span>
+                      <strong>支付宝支付</strong>
+                      <small>跳转支付宝官方收银台</small>
+                    </span>
+                    <i aria-hidden="true">→</i>
                   </button>
                 ) : null}
               </div>
