@@ -313,9 +313,6 @@ select:focus {
   align-items: center;
 }
 
-.screen-control.is-capture-locked {
-  grid-template-columns: minmax(0, 1fr) 128px 112px;
-}
 
 .shortcut-settings-button {
   display: flex;
@@ -595,10 +592,6 @@ select:focus {
   to { transform: rotate(360deg); }
 }
 
-.cancel-screenshot-button {
-  border-color: rgba(255, 181, 78, .5);
-  color: #ffd08a;
-}
 
 .connection-card {
   padding: 22px;
@@ -881,9 +874,6 @@ select {
   gap: 7px;
 }
 
-.screen-control.is-capture-locked {
-  grid-template-columns: minmax(0, 1fr) 108px 92px;
-}
 
 .shortcut-settings-button span {
   font-size: 9px;

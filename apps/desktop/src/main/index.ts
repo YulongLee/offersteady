@@ -627,7 +627,11 @@ const releaseScreenshotCaptureLock = () => {
   return publishScreenshotCaptureLock();
 };
 
-const captureCurrentScreen = async (screenSourceId: string | null, lockAlreadyHeld = false): Promise<DesktopScreenCaptureResult> => {
+const captureCurrentScreen = async (
+  screenSourceId: string | null,
+  lockAlreadyHeld = false,
+  releaseAfterCapture = false,
+): Promise<DesktopScreenCaptureResult> => {
   if (!lockAlreadyHeld && !screenshotCaptureLock.tryAcquire()) {
     return { name: "共享屏幕截取", errorMessage: screenshotCaptureLock.state().message };
   }
@@ -674,7 +678,7 @@ const captureCurrentScreen = async (screenSourceId: string | null, lockAlreadyHe
     });
   }
   const optimized = optimizeScreenshotForVision(thumbnail);
-  return {
+  const result = {
     name: selectedScreen.name || "共享屏幕截取",
     width: optimized.width,
     height: optimized.height,
@@ -685,6 +689,8 @@ const captureCurrentScreen = async (screenSourceId: string | null, lockAlreadyHe
     originalHeight: size.height,
     extension: optimized.extension,
   };
+  if (releaseAfterCapture) releaseScreenshotCaptureLock();
+  return result;
 };
 
 const uploadScreenshotCapture = async (request: {
@@ -770,6 +776,7 @@ const pollRemoteScreenshotRequest = async (lockAlreadyHeld = false) => {
     mainWindow?.webContents.send("desktop:remote-screenshot-notice", `截图失败：${message}`);
   } finally {
     processingRemoteScreenshotRequestId = null;
+    if (screenshotCaptureLock.state().locked) releaseScreenshotCaptureLock();
   }
   return true;
 };
@@ -1000,7 +1007,6 @@ ipcMain.handle("desktop:get-screenshot-shortcut", async () => {
 });
 ipcMain.handle("desktop:set-screenshot-shortcut", async (_event, accelerator: string) => registerScreenshotShortcut(accelerator));
 ipcMain.handle("desktop:get-screenshot-capture-lock", async () => screenshotCaptureLock.state());
-ipcMain.handle("desktop:cancel-screenshot-capture", async () => releaseScreenshotCaptureLock());
 
 ipcMain.handle("desktop:get-pairing-identity", async () => {
   if (!pairingIdentityStore) pairingIdentityStore = new DevicePairingIdentityStore(app.getPath("userData"));
@@ -1036,7 +1042,7 @@ ipcMain.handle("desktop:set-preferred-screen", async (_event, screenSourceId: st
 });
 
 ipcMain.handle("desktop:capture-current-screen", async (_event, screenSourceId: string | null) => {
-  return captureCurrentScreen(screenSourceId);
+  return captureCurrentScreen(screenSourceId, false, true);
 });
 
 ipcMain.handle("desktop:upload-screenshot-capture", async (_event, request: {

@@ -17,12 +17,13 @@ describe("companion interview wording", () => {
     );
   });
 
-  it("keeps one screenshot locked until the user explicitly cancels it", () => {
+  it("keeps preview wording stable while a screenshot is processing", () => {
     const source = readFileSync(new URL("../src/renderer/CompanionApp.tsx", import.meta.url), "utf8");
 
-    expect(source).toContain("取消当前截屏");
     expect(source).toContain("disabled={screenshotCaptureLocked}");
-    expect(source).toContain("cancelScreenshotCapture");
+    expect(source).toContain(">\n                预览\n              </button>");
+    expect(source).not.toContain("取消当前截屏");
+    expect(source).not.toContain("cancelScreenshotCapture");
   });
 
   it("shows screen imagery only in an on-demand preview dialog", () => {

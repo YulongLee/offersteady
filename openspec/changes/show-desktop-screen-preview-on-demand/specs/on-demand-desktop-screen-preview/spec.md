@@ -34,10 +34,11 @@
 - **THEN** 本地助手不得自动打开屏幕预览弹层
 - **AND** 既有截屏回答链路继续执行
 
-### Requirement: Locked capture remains cancellable without a preview row
-桌面伴随程序 SHALL 在正式截屏任务锁定期间禁止切换屏幕或再次预览，并 SHALL 在屏幕控制区提供“取消当前截屏”操作。
+### Requirement: Capture processing keeps a stable preview control
+桌面伴随程序 SHALL 在截屏任务处理期间禁止切换屏幕或再次预览，但预览按钮 SHALL 始终显示“预览”，不得向用户展示“取消当前截屏”。
 
-#### Scenario: User cancels a locked screenshot
-- **WHEN** 当前截屏任务被锁定且用户点击“取消当前截屏”
-- **THEN** 系统释放截屏锁并恢复屏幕选择与预览入口
-- **AND** 不需要显示常驻预览区域
+#### Scenario: Screenshot is being processed
+- **WHEN** 当前截屏任务正在处理
+- **THEN** 屏幕来源和“预览”按钮临时禁用
+- **AND** 按钮文案仍为“预览”
+- **AND** 主页面不显示“取消当前截屏”操作

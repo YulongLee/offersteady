@@ -4,7 +4,7 @@ export interface ScreenshotCaptureLockState {
 }
 
 const unlockedMessage = "可以开始新的截屏。";
-const lockedMessage = "当前截屏尚未取消，请先点击“取消当前截屏”。";
+const lockedMessage = "上一笔截屏仍在处理中，请稍候。";
 
 export class ScreenshotCaptureLock {
   private locked = false;

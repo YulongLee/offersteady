@@ -987,7 +987,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
 
   const previewScreen = async () => {
     if (screenshotCaptureLocked) {
-      setPreviewNotice("当前截屏尚未取消，请先点击“取消当前截屏”。");
+      setPreviewNotice("上一笔截屏仍在处理中，请稍后再预览。");
       return;
     }
     const requestId = previewRequestIdRef.current + 1;
@@ -1031,15 +1031,6 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       setDesktopNotice(`屏幕捕捉预览失败：${describeMediaError(error)}`);
       if (activeBinding) setConnectionInfo("如已在系统设置中授权，请退出并重新打开伴随程序");
     }
-  };
-
-  const cancelCurrentScreenshot = async () => {
-    closeScreenPreview();
-    setScreenPreviewUrl(null);
-    const lock = await window.offersteady?.cancelScreenshotCapture?.().catch(() => null);
-    setScreenshotCaptureLocked(lock?.locked ?? false);
-    setPreviewNotice("当前截屏已取消，可以重新截屏。");
-    setDesktopNotice("当前截屏已取消；已提交的截图答案会继续生成。");
   };
 
   const updateScreenshotShortcut = async (accelerator: string) => {
@@ -1180,7 +1171,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
           </TerminalRow>
 
           <TerminalRow title="屏幕捕捉" subtitle="选择要捕捉的屏幕" statusLabel="捕捉屏幕" ready={screenReady}>
-            <div className={screenshotCaptureLocked ? "screen-control is-capture-locked" : "screen-control"}>
+            <div className="screen-control">
               <select
                 aria-label="选择屏幕捕捉来源"
                 value={selectedScreenId}
@@ -1193,10 +1184,11 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
               </select>
               <button
                 type="button"
-                className={screenshotCaptureLocked ? "secondary-button cancel-screenshot-button" : "secondary-button"}
-                onClick={() => { void (screenshotCaptureLocked ? cancelCurrentScreenshot() : previewScreen()); }}
+                className="secondary-button"
+                disabled={screenshotCaptureLocked}
+                onClick={() => { void previewScreen(); }}
               >
-                {screenshotCaptureLocked ? "取消当前截屏" : "预览"}
+                预览
               </button>
               <button type="button" className="secondary-button shortcut-settings-button" onClick={() => setShowScreenshotShortcutSettings(true)}>
                 <span>快捷键</span>

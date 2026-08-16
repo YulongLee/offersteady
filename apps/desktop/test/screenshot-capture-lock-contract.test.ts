@@ -8,7 +8,8 @@ describe("desktop screenshot lock wiring", () => {
     expect(source).toContain("captureCurrentScreen = async");
     expect(source).toContain("screenshotCaptureLock.tryAcquire()");
     expect(source).toContain("screenshotCaptureLock.state().locked && !lockAlreadyHeld");
-    expect(source).toContain("desktop:cancel-screenshot-capture");
+    expect(source).toContain("releaseAfterCapture");
+    expect(source).toContain("if (screenshotCaptureLock.state().locked) releaseScreenshotCaptureLock()");
     expect(source).toContain("await pollRemoteScreenshotRequest(true)");
   });
 
@@ -16,7 +17,7 @@ describe("desktop screenshot lock wiring", () => {
     const source = readFileSync(new URL("../src/main/preload.ts", import.meta.url), "utf8");
 
     expect(source).toContain("getScreenshotCaptureLock");
-    expect(source).toContain("cancelScreenshotCapture");
     expect(source).toContain("onScreenshotCaptureLockChanged");
+    expect(source).not.toContain("cancelScreenshotCapture");
   });
 });
