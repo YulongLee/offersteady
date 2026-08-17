@@ -27,6 +27,21 @@ describe("appearance styles", () => {
     expect(styles).toMatch(/\.conversation-turn p[^}]*font-size: 10px/);
   });
 
+  it("keeps destructive and disabled actions visible in the bright theme", () => {
+    expect(styles).toMatch(
+      /:root\[data-theme="bright"\][^{]*\.button\.danger \{[^}]*color: #9f1239;[^}]*border-color: #f1aeb8;[^}]*background: #fff1f2;/,
+    );
+    expect(styles).toMatch(
+      /:root\[data-theme="bright"\][^{]*\.button\.danger:not\(:disabled\):hover \{[^}]*color: #881337;[^}]*background: #ffe4e6;/,
+    );
+    expect(styles).toMatch(
+      /:root\[data-theme="bright"\][^{]*\.button\.danger:focus-visible \{[^}]*outline-color: rgba\(159,18,57,.42\);/,
+    );
+    expect(styles).toMatch(
+      /:root\[data-theme="bright"\][^{]*\.button:disabled \{[^}]*opacity: \.58;/,
+    );
+  });
+
   it("keeps the mobile answer in the page scroll flow without a covering action bar", () => {
     expect(styles).toMatch(/\.focused-live-grid \{[^}]*overflow-y: auto[^}]*-webkit-overflow-scrolling: touch[^}]*touch-action: pan-y/);
     expect(styles).toMatch(/\.answer-workspace, \.answer-workspace\.mobile-answer-expanded \{[^}]*overflow: visible/);

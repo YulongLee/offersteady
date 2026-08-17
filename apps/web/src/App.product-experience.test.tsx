@@ -179,7 +179,7 @@ describe("optimized product experience", () => {
     open("/app/billing"); expect(screen.getByRole("heading", { name: "1 天会员" }).parentElement).toHaveTextContent("¥29.90"); expect(screen.getByRole("heading", { name: "3 天会员" }).parentElement).toHaveTextContent("知识材料按点"); expect(screen.getByRole("heading", { name: "30 天会员" }).parentElement).toHaveTextContent("含 2 份知识材料"); expect(screen.getByRole("heading", { name: "1000 积分" }).parentElement).toHaveTextContent("¥99.90"); expect(screen.getByRole("heading", { name: "66666 积分" })).toBeInTheDocument(); expect(screen.getByText("点数消费说明")).toBeInTheDocument(); expect(screen.getByText(/每 5,000 Token 20 点/)).toBeInTheDocument();
   });
 
-  it("shows when a queued long pass and its knowledge allowance will activate", () => {
+  it("includes queued membership time in the consolidated entitlement card", () => {
     const now = Date.now();
     open("/app/billing", true, state => {
       state.billing = {
@@ -188,9 +188,10 @@ describe("optimized product experience", () => {
         queuedPasses: [{ id: "member-15", userId: state.account.id, productId: "pass-15", orderId: "queued-order", startsAtMs: now + 7 * 86_400_000, endsAtMs: now + 22 * 86_400_000, knowledgeAllowanceGranted: 2, knowledgeAllowanceUsed: 0, knowledgeAllowanceLocked: 0 }],
       };
     });
-    const queued = screen.getByRole("heading", { name: "待生效会员" }).closest("section");
-    expect(queued).not.toBeNull();
-    expect(within(queued!).getByText(/含 2 份知识材料额度/)).toBeInTheDocument();
+    const entitlement = screen.getByRole("region", { name: "我的权益" });
+    expect(within(entitlement).getByText(/剩余 22 天 0 小时/)).toBeInTheDocument();
+    expect(within(entitlement).getByText(/已包含待生效会员 15 天 0 小时/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "待生效会员" })).not.toBeInTheDocument();
   });
 
   it("shows a long-pass allowance quote before knowledge indexing starts", async () => {

@@ -84,6 +84,10 @@
 :root[data-theme="bright"] :is(.app-shell, .live-page) :is(.form-panel label, .machine-code-panel label, .live-side h2, .advice-card details summary) { color: var(--text); }
 :root[data-theme="bright"] :is(.app-shell, .live-page) :is(.privacy-note, .side-privacy, .advice-card details p, .evidence-box p, .advice-footer > span, .transcript-list p, .guide-article section p) { color: var(--muted); }
 :root[data-theme="bright"] :is(.app-shell, .live-page) .inline-error { color: var(--danger); border-color: rgba(180,35,54,.18); background: #fff4f5; }
+:root[data-theme="bright"] :is(.app-shell, .live-page) .button.danger { color: #9f1239; border-color: #f1aeb8; background: #fff1f2; }
+:root[data-theme="bright"] :is(.app-shell, .live-page) .button.danger:not(:disabled):hover { color: #881337; border-color: #e88998; background: #ffe4e6; }
+:root[data-theme="bright"] :is(.app-shell, .live-page) .button.danger:focus-visible { outline-color: rgba(159,18,57,.42); }
+:root[data-theme="bright"] :is(.app-shell, .live-page) .button:disabled { opacity: .58; }
 :root[data-theme="bright"] :is(.app-shell, .live-page) .global-live-alert { border-color: #ead4aa; background: #fff9ed; box-shadow: 0 14px 38px rgba(87,58,11,.12); }
 :root[data-theme="bright"] :is(.app-shell, .live-page) .global-live-alert span { color: #765f39; }
 :root[data-theme="bright"] :is(.app-shell, .live-page) .answer-markdown pre { background: #f3f5f7; }

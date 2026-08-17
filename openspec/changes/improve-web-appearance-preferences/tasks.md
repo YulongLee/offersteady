@@ -15,8 +15,10 @@
 - [x] 3.2 Add a controlled dark/bright theme setting with clear labels and immediate persistence.
 - [x] 3.3 Replace live-answer fixed sizes with scoped variables and add complete bright-theme colors for the app shell, live workspace, forms, cards and overlays.
 - [x] 3.4 Add Web component/style regressions for settings controls, font-size scope, theme application and responsive layouts.
+- [x] 3.5 Restore visible danger-button and disabled-button contrast in the bright theme, including hover and keyboard-focus states.
 
 ## 4. Verification
 
 - [x] 4.1 Run focused and full Web tests, typecheck, production build, diff checks and strict OpenSpec validation.
 - [x] 4.2 Confirm no Backend, database, desktop companion or AI prompt/eval changes are required.
+- [x] 4.3 Run the bright-theme contrast regression, full Web verification and production-build checks.
