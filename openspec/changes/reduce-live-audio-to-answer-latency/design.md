@@ -49,7 +49,7 @@ Use 500 ms for system audio and 700 ms for microphone audio. Existing question-t
 
 ### Keep SSE transport and public routes stable
 
-The current 100 ms idle cursor check and proxy buffering protections remain. This change optimizes the dominant waits first; replacing repository cursor polling with a pub/sub primitive is deferred to avoid architecture expansion.
+The current 100 ms Redis-backed event cursor check and proxy buffering protections remain. Database-backed session/lease validation is cached for two seconds per connected stream instead of reopening database work on every 100 ms cursor check. Revocation therefore remains bounded while idle streams stop creating avoidable connection churn. Replacing repository cursor polling with a pub/sub primitive is deferred to avoid architecture expansion.
 
 ## Risks / Trade-offs
 

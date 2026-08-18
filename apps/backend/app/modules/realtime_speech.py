@@ -36,6 +36,7 @@ from app.services.realtime_speech_service import RealtimeSpeechService
 
 
 router = APIRouter(prefix="/realtime-speech", tags=["realtime-speech"])
+REALTIME_SESSION_VALIDATION_INTERVAL_SECONDS = 2.0
 _active_ingest_tokens: set[str] = set()
 descriptor = ModuleDescriptor(
     feature="realtime-speech",
@@ -44,6 +45,10 @@ descriptor = ModuleDescriptor(
     mode="active",
     notes="Session-bound realtime speech orchestration for subtitles, question detection, and Chat Service handoff.",
 )
+
+
+def should_validate_realtime_session(*, last_validated_at: float, now: float) -> bool:
+    return now - last_validated_at >= REALTIME_SESSION_VALIDATION_INTERVAL_SECONDS
 
 
 def _sse_frame(event: str, payload: dict[str, object], *, cursor: int | None = None) -> str:
@@ -357,24 +362,28 @@ async def stream_session_runtime(
         idle_polls = 0
         cached_runtime = None
         runtime_refreshed_at = 0.0
+        session_validated_at = asyncio.get_running_loop().time()
         while True:
             if await request.is_disconnected():
                 break
-            try:
-                await asyncio.to_thread(
-                    service.require_active_realtime_session,
-                    user_id=resolved_user_id,
-                    session_id=session_id,
-                    page_instance_id=page_instance_id,
-                    lease_generation=lease_generation,
-                )
-            except DomainRequestError:
-                yield _sse_frame("revoked", {
-                    "type": "revoked",
-                    "sessionId": session_id,
-                    "reason": "session-replaced",
-                })
-                break
+            loop_now = asyncio.get_running_loop().time()
+            if should_validate_realtime_session(last_validated_at=session_validated_at, now=loop_now):
+                try:
+                    await asyncio.to_thread(
+                        service.require_active_realtime_session,
+                        user_id=resolved_user_id,
+                        session_id=session_id,
+                        page_instance_id=page_instance_id,
+                        lease_generation=lease_generation,
+                    )
+                    session_validated_at = loop_now
+                except DomainRequestError:
+                    yield _sse_frame("revoked", {
+                        "type": "revoked",
+                        "sessionId": session_id,
+                        "reason": "session-replaced",
+                    })
+                    break
             stream_cursor = getattr(service.repository, "get_event_stream_version", None)
             current_cursor = await asyncio.to_thread(
                 stream_cursor if callable(stream_cursor) else service.repository.get_session_activity_version,
@@ -388,7 +397,7 @@ async def stream_session_runtime(
                 await asyncio.sleep(0.1)
                 continue
             idle_polls = 0
-            now = asyncio.get_running_loop().time()
+            now = loop_now
             refresh_runtime = initial or cached_runtime is None or now - runtime_refreshed_at >= 2.0
             if refresh_runtime:
                 runtime, transcripts, candidates, events = await asyncio.gather(

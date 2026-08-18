@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Settings, get_settings
 from app.main import create_app
+from app.modules.realtime_speech import should_validate_realtime_session
 from app.deps import realtime_speech_service
 from app.ports.authentication import SmsChallengeRecord
 from app.ports.realtime_speech import AudioFrame, RealtimeEvent
@@ -19,6 +20,11 @@ from app.services.chat_service import NonRetryableChatError, QwenCompatibleGatew
 from app.services.dashscope_realtime_asr_gateway import DashScopeRealtimeAsrGateway
 from app.services.realtime_speech_repository import InMemoryRealtimeSpeechRepository
 from app.services.sms_verification_provider import AliyunDypnsSmsVerificationProvider
+
+
+def test_realtime_stream_throttles_database_backed_session_validation() -> None:
+    assert should_validate_realtime_session(last_validated_at=10.0, now=11.999) is False
+    assert should_validate_realtime_session(last_validated_at=10.0, now=12.0) is True
 
 
 client = TestClient(create_app())

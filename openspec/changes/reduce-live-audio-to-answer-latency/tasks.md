@@ -4,6 +4,7 @@
 - [x] 1.2 Move confirmed-question answer generation to a bounded background executor so the realtime audio worker returns before model completion.
 - [x] 1.3 Publish compact automatic-answer start/progress/terminal snapshots through the realtime event stream with candidate/task idempotency.
 - [x] 1.4 Add backend regression tests for first-chunk-before-completion, continued audio ingest, failure/cancellation, history, and single billing settlement.
+- [x] 1.5 Throttle database-backed session validation independently from the 100 ms Redis event cursor check.
 
 ## 2. Web Reconciliation and Transcript Rendering
 

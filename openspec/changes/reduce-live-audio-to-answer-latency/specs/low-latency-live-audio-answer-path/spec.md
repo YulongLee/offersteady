@@ -55,3 +55,12 @@ The system SHALL provide automated evidence for capture segmentation, transcript
 #### Scenario: Synthetic end-to-end performance validation
 - **WHEN** the latency test uses synthetic interview audio and the configured providers
 - **THEN** the report separates silence wait, ASR finalization, session publication, visible transcript catch-up, answer first chunk, and answer completion timings
+
+### Requirement: Idle realtime streams avoid database polling churn
+Realtime event cursors SHALL remain responsive without validating the database-backed session lease on every cursor poll.
+
+#### Scenario: Connected stream has no new event
+- **WHEN** a live page remains connected without new transcript or answer events
+- **THEN** Redis-backed cursor checks MAY continue at the existing cadence
+- **AND** database-backed session/lease validation SHALL run no more than once every two seconds per stream
+- **AND** a replaced session SHALL receive a revocation event after the next bounded validation
