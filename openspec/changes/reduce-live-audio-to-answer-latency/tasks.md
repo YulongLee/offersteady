@@ -21,4 +21,4 @@
 - [x] 4.1 Add or update AI eval coverage for streamed automatic-answer completeness and safe partial failure.
 - [x] 4.2 Run focused backend, web, desktop, typecheck, build, and synthetic latency tests; record before/after timings.
 - [x] 4.3 Run `openspec validate reduce-live-audio-to-answer-latency --strict` and review the production diff for unrelated changes.
-- [ ] 4.4 Commit only the scoped performance change, push it to Git, deploy with the guarded release workflow, and verify production health plus the live audio-to-answer path.
+- [x] 4.4 Commit only the scoped performance change, push it to Git, deploy with the guarded release workflow, and verify production health plus the live audio-to-answer path.

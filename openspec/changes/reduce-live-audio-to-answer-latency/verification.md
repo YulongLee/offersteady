@@ -19,3 +19,11 @@ The answer model, ASR provider, prompts, billing rates, page layout, and user co
 - Desktop: 59 passed.
 - Workspace typecheck: passed.
 - Production build with guarded environment: passed.
+
+## Production release evidence
+
+- Runtime commit: `33e8bccff960a0fe17e7c3887e924c8aaf8500ab`.
+- Public `/healthz`, billing status, Web state, and homepage: healthy after container replacement.
+- Desktop release manifest: macOS arm64, macOS x64, and Windows x64 all published as `0.1.13`.
+- All three public download routes return a signed-URL redirect.
+- Post-deploy backend log scan found no traceback, deadlock, or automatic-answer failure.
