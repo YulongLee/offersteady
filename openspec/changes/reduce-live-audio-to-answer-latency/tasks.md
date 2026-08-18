@@ -5,6 +5,7 @@
 - [x] 1.3 Publish compact automatic-answer start/progress/terminal snapshots through the realtime event stream with candidate/task idempotency.
 - [x] 1.4 Add backend regression tests for first-chunk-before-completion, continued audio ingest, failure/cancellation, history, and single billing settlement.
 - [x] 1.5 Throttle database-backed session validation independently from the 100 ms Redis event cursor check.
+- [x] 1.6 Make cold-start interview schema initialization single-flight to prevent concurrent desktop reconnect deadlocks.
 
 ## 2. Web Reconciliation and Transcript Rendering
 

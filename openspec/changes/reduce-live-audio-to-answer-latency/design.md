@@ -51,6 +51,8 @@ Use 500 ms for system audio and 700 ms for microphone audio. Existing question-t
 
 The current 100 ms Redis-backed event cursor check and proxy buffering protections remain. Database-backed session/lease validation is cached for two seconds per connected stream instead of reopening database work on every 100 ms cursor check. Revocation therefore remains bounded while idle streams stop creating avoidable connection churn. Replacing repository cursor polling with a pub/sub primitive is deferred to avoid architecture expansion.
 
+Cold-start construction of the PostgreSQL interview repository uses a process-local single-flight schema guard. Concurrent desktop WebSocket reconnects can no longer run the same data migration twice and deadlock each other while the dependency cache is warming.
+
 ## Risks / Trade-offs
 
 - [Shorter silence windows can create more final segments] → Keep conservative thresholds and verify adjacent interviewer segments still assemble into one question without duplicate answers.

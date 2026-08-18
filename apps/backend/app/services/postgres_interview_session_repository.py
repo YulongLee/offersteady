@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from threading import Lock
 from typing import Any
 
 import psycopg
@@ -23,9 +24,16 @@ from app.services.postgres_migrations import apply_sql_migrations
 
 
 class PostgresInterviewSessionRepository(InterviewSessionRepository):
+    _schema_lock = Lock()
+    _schema_ready_for: set[str] = set()
+
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self._ensure_tables()
+        database_key = str(settings.database_url or "")
+        with self._schema_lock:
+            if database_key not in self._schema_ready_for:
+                self._ensure_tables()
+                self._schema_ready_for.add(database_key)
 
     def save_session(self, session: InterviewSessionRecord) -> InterviewSessionRecord:
         with self._connect() as connection:

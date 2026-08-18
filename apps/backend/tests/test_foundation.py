@@ -27,6 +27,28 @@ def test_realtime_stream_throttles_database_backed_session_validation() -> None:
     assert should_validate_realtime_session(last_validated_at=10.0, now=12.0) is True
 
 
+def test_postgres_interview_schema_initialization_is_single_flight(monkeypatch) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.services.postgres_interview_session_repository import PostgresInterviewSessionRepository
+
+    settings = get_settings().model_copy(update={"database_url": "postgresql://synthetic-single-flight"})
+    calls: list[int] = []
+
+    def synthetic_ensure_tables(_repository) -> None:
+        calls.append(1)
+        sleep(0.03)
+
+    monkeypatch.setattr(PostgresInterviewSessionRepository, "_ensure_tables", synthetic_ensure_tables)
+    with PostgresInterviewSessionRepository._schema_lock:
+        PostgresInterviewSessionRepository._schema_ready_for.discard(str(settings.database_url))
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        repositories = list(executor.map(lambda _index: PostgresInterviewSessionRepository(settings), range(4)))
+
+    assert len(repositories) == 4
+    assert len(calls) == 1
+
+
 client = TestClient(create_app())
 
 
