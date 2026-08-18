@@ -7,6 +7,15 @@ describe("progressive realtime transcript", () => {
     expect(nextProgressiveTranscriptText("你好", "你好，请介绍项目")).toBe("你好，请");
   });
 
+  it("catches up a 100-character partial transcript within 250ms", () => {
+    const target = "面".repeat(100);
+    let visible = "";
+    for (let elapsed = 32; elapsed <= 224; elapsed += 32) {
+      visible = nextProgressiveTranscriptText(visible, target);
+    }
+    expect(visible).toBe(target);
+  });
+
   it("recovers from an ASR correction at the first changed character", () => {
     expect(nextProgressiveTranscriptText("项目负责", "项目复盘")).toBe("项目复盘");
   });

@@ -63,11 +63,11 @@ describe("speech segmenter", () => {
     expect(segmenter.push(speech, 0, 0.013)).toEqual([]);
     const firstPartial = segmenter.push(speech, 130, 0.010);
     expect(firstPartial).toHaveLength(1);
-    expect(segmenter.push(new Uint8Array([0]), 900, 0.001)).toEqual([]);
-    const secondPartial = segmenter.push(speech, 950, 0.009);
+    expect(segmenter.push(new Uint8Array([0]), 800, 0.001)).toEqual([]);
+    const secondPartial = segmenter.push(speech, 830, 0.009);
     expect(secondPartial).toHaveLength(1);
-    expect(segmenter.push(new Uint8Array([0]), 1_799, 0.001)).toEqual([]);
-    const finalized = segmenter.push(new Uint8Array([0]), 1_800, 0.001);
+    expect(segmenter.push(new Uint8Array([0]), 1_529, 0.001)).toEqual([]);
+    const finalized = segmenter.push(new Uint8Array([0]), 1_530, 0.001);
 
     expect(finalized).toHaveLength(1);
     expect(finalized[0]?.isFinal).toBe(true);
@@ -138,8 +138,8 @@ describe("speech segmenter", () => {
     const continued = segmenter.push(speech, 430, 0.01);
     expect(continued).toHaveLength(1);
     expect(continued[0]?.segmentId).toBe(firstPartial[0]?.segmentId);
-    expect(segmenter.push(new Uint8Array([0]), 1_079, 0.0001)).toEqual([]);
-    const finalized = segmenter.push(new Uint8Array([0]), 1_080, 0.0001);
+    expect(segmenter.push(new Uint8Array([0]), 929, 0.0001)).toEqual([]);
+    const finalized = segmenter.push(new Uint8Array([0]), 930, 0.0001);
     expect(finalized).toHaveLength(1);
     expect(finalized[0]?.isFinal).toBe(true);
   });

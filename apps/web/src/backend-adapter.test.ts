@@ -317,6 +317,45 @@ describe("backend preview adapter", () => {
     expect(JSON.stringify(updates[0])).not.toContain("旧 session 的问题不应出现");
   });
 
+  it("maps automatic answer stream progress into the existing answer workspace shape", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const task = {
+      taskId: "auto-task-1", sessionId: "session-1", ownerUserId: "user-1",
+      question: "请介绍最近的项目", answerText: "我先说明项目背景。",
+      status: "streaming", updatedAtMs: 123, chunks: [],
+    };
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(`event: snapshot\ndata: ${JSON.stringify({
+          type: "snapshot",
+          transcripts: { sessionId: "session-1", transcripts: [] },
+          candidates: { sessionId: "session-1", candidates: [] },
+          events: { sessionId: "session-1", events: [{
+            eventId: "answer-stream-1", kind: "answer-stream",
+            payload: { phase: "chunk", task }, createdAtMs: 123,
+          }] },
+          runtime: null,
+        })}\n\n`));
+        controller.close();
+      },
+    });
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", vi.fn(async () => new Response(stream, {
+      status: 200, headers: { "Content-Type": "text/event-stream" },
+    })) as typeof fetch);
+    const updates: unknown[] = [];
+
+    await adapter.subscribeRealtimeSession("session-1", update => updates.push(update));
+
+    expect(updates[0]).toMatchObject({
+      automaticAnswerUpdate: {
+        question: { id: "auto-task-1", input: "desktop-audio", status: "streaming", advice: { detail: "我先说明项目背景。" } },
+        task: { id: "auto-task-1", status: "generating", partialText: "我先说明项目背景。" },
+      },
+    });
+  });
+
   it("preserves the realtime stream status so callers can stop invalid-session reconnect storms", async () => {
     window.localStorage.setItem("offersteady.auth.access_token", "access-token");
     window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");

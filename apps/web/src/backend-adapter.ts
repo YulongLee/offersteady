@@ -543,6 +543,7 @@ const mapRealtimeState = (
   const latestDeviceStatus = [...events.events].reverse().find(event => event.kind === "device-status");
   const latestDegraded = [...events.events].reverse().find(event => event.kind === "degraded");
   const latestShortcutAccepted = [...events.events].reverse().find(event => event.kind === "screenshot-shortcut-accepted" && typeof event.payload.requestId === "string");
+  const latestAutomaticAnswer = [...events.events].reverse().find(event => event.kind === "answer-stream" && typeof event.payload.task === "object" && event.payload.task !== null);
   const captureState = toCaptureState(runtime?.captureState)
     ?? toCaptureState(latestDeviceStatus?.payload.captureState)
     ?? (runtime?.sessionLive && runtime.machineCodeBound ? "capturing" as const : undefined);
@@ -601,20 +602,29 @@ const mapRealtimeState = (
         acceptedAtMs: latestShortcutAccepted.createdAtMs,
       },
     } : {}),
+    ...(latestAutomaticAnswer ? {
+      automaticAnswerUpdate: toSubmitManualAnswerResult(
+        latestAutomaticAnswer.payload.task as unknown as BackendLiveAnswerTaskResponse,
+        "desktop-audio",
+      ),
+    } : {}),
   };
 };
 
 const questionStatusFromTask = (task: BackendLiveAnswerTaskResponse): InterviewQuestion["status"] =>
   task.status === "completed" ? "confirmed" : task.status === "failed" ? "failed" : task.status === "cancelled" ? "cancelled" : task.status === "streaming" ? "streaming" : "generating";
 
-const toSubmitManualAnswerResult = (task: BackendLiveAnswerTaskResponse): SubmitManualAnswerResult => ({
+const toSubmitManualAnswerResult = (
+  task: BackendLiveAnswerTaskResponse,
+  input: InterviewQuestion["input"] = "manual",
+): SubmitManualAnswerResult => ({
   question: {
     id: task.taskId,
     askedAt: "刚刚",
     text: task.normalizedQuestion?.trim() || task.question,
     ...(task.rawQuestion ? { rawText: task.rawQuestion } : {}),
     ...(task.questionNormalizationStatus ? { questionNormalizationStatus: task.questionNormalizationStatus } : {}),
-    input: "manual",
+    input,
     status: questionStatusFromTask(task),
     advice: adviceFromLiveAnswerTask(task),
   },

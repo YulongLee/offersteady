@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import logging
 from pathlib import Path
+from threading import Event
 from time import sleep, time
 
 import httpx
@@ -1315,6 +1316,95 @@ def test_live_answer_stream_cancellation_isolates_late_chunks() -> None:
     assert persisted.answer_text == ""
 
 
+def test_automatic_answer_stream_preserves_single_stage_prompt_and_persists_chunks() -> None:
+    from app.deps import chat_service as chat_service_dep
+
+    session = unwrap(client.post("/api/v1/sessions", json={
+        "userId": "chat-automatic-stream-user",
+        "title": "自动回答流式测试",
+    }))
+    session_id = session["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": "chat-automatic-stream-user"}))
+    service = chat_service_dep()
+
+    events = list(service.stream_automatic_answer_question(
+        user_id="chat-automatic-stream-user",
+        session_id=session_id,
+        question="请介绍一个最有挑战的项目",
+    ))
+
+    assert events[0]["type"] == "task-started"
+    chunks = [event["chunk"] for event in events if event["type"] == "chunk"]
+    assert chunks
+    assert [chunk.sequence for chunk in chunks] == list(range(1, len(chunks) + 1))
+    assert events[-1]["type"] == "completed"
+    completed = events[-1]["task"]
+    assert completed.status == "completed"
+    assert completed.prompt_template_id == "interview-chat-system"
+    assert completed.answer_text
+    persisted = service.get_task(user_id="chat-automatic-stream-user", task_id=completed.task_id)
+    assert persisted.answer_text == completed.answer_text
+    assert persisted.chunks[-1].is_final is True
+    usage_id = service.billing_usage_by_task[completed.task_id]
+    assert service.billing_service is not None
+    assert service.billing_service.usage_reservations_by_id[usage_id].status == "settled"
+
+
+def test_automatic_answer_stream_failure_preserves_partial_and_releases_reservation() -> None:
+    from app.deps import chat_service as chat_service_dep
+
+    session = unwrap(client.post("/api/v1/sessions", json={
+        "userId": "chat-automatic-stream-fail-user",
+        "title": "自动回答流式失败测试",
+    }))
+    session_id = session["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": "chat-automatic-stream-fail-user"}))
+    service = chat_service_dep()
+
+    events = list(service.stream_automatic_answer_question(
+        user_id="chat-automatic-stream-fail-user",
+        session_id=session_id,
+        question="__stream_fail_after_chunk__ 触发部分失败",
+    ))
+
+    assert any(event["type"] == "chunk" for event in events)
+    assert events[-1]["type"] == "failed"
+    assert events[-1]["task"].status == "failed"
+    assert events[-1]["partial_text"]
+    usage_id = service.billing_usage_by_task[events[-1]["task"].task_id]
+    assert service.billing_service is not None
+    assert service.billing_service.usage_reservations_by_id[usage_id].status == "released"
+
+
+def test_automatic_answer_stream_cancellation_stops_late_chunks() -> None:
+    from app.deps import chat_service as chat_service_dep
+
+    session = unwrap(client.post("/api/v1/sessions", json={
+        "userId": "chat-automatic-stream-cancel-user",
+        "title": "自动回答流式取消测试",
+    }))
+    session_id = session["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": "chat-automatic-stream-cancel-user"}))
+    service = chat_service_dep()
+    stream = service.stream_automatic_answer_question(
+        user_id="chat-automatic-stream-cancel-user",
+        session_id=session_id,
+        question="请生成随后取消的自动回答",
+    )
+    started = next(stream)
+    task_id = started["task"].task_id
+
+    outcome, _ = service.cancel_task(user_id="chat-automatic-stream-cancel-user", task_id=task_id)
+    remaining = list(stream)
+
+    assert outcome == "cancelled"
+    assert remaining[0]["type"] == "cancelled"
+    assert service.get_task(user_id="chat-automatic-stream-cancel-user", task_id=task_id).answer_text == ""
+    usage_id = service.billing_usage_by_task[task_id]
+    assert service.billing_service is not None
+    assert service.billing_service.usage_reservations_by_id[usage_id].status == "released"
+
+
 def test_live_answer_stream_continues_quick_and_detail_length_truncation(monkeypatch) -> None:
     from app.deps import llm_gateway_port
 
@@ -1872,14 +1962,21 @@ def test_realtime_speech_websocket_generates_transcript_question_and_answer() ->
         })
         first = websocket.receive_json()
         second = websocket.receive_json()
-        third = websocket.receive_json()
 
     assert first["kind"] == "transcript-updated"
     assert first["payload"]["role"] == "interviewer"
     assert second["kind"] == "question-confirmed"
     assert second["payload"]["text"] == question_text
-    assert third["kind"] == "answer-completed"
-    assert third["payload"]["status"] == "completed"
+    answer_events = []
+    for _ in range(100):
+        answer_events = unwrap(client.get(
+            f"/api/v1/realtime-speech/sessions/{session_id}/events",
+            params={"userId": "realtime-user"},
+        ))["events"]
+        if any(item["kind"] == "answer-stream" and item["payload"].get("phase") == "completed" for item in answer_events):
+            break
+        sleep(0.01)
+    assert any(item["kind"] == "answer-stream" and item["payload"].get("phase") == "completed" for item in answer_events)
 
     runtime = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/runtime", params={"userId": "realtime-user"}))
     assert runtime["transcriptCount"] == 1
@@ -1896,7 +1993,59 @@ def test_realtime_speech_websocket_generates_transcript_question_and_answer() ->
     usage = unwrap(client.get(f"/api/v1/sessions/{session_id}/usage", params={"userId": "realtime-user"}))
     assert any(item["providerName"] == "qwen-realtime-asr-compatible" for item in usage["records"])
     events = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/events", params={"userId": "realtime-user"}))
-    assert any(item["kind"] == "answer-completed" for item in events["events"])
+    assert any(item["kind"] == "answer-stream" for item in events["events"])
+
+
+def test_realtime_automatic_answer_does_not_block_audio_ingest_and_is_idempotent(monkeypatch) -> None:
+    service = realtime_speech_service()
+    answer_started = Event()
+    release_answer = Event()
+
+    def slow_automatic_stream(**_kwargs):
+        answer_started.set()
+        release_answer.wait(timeout=2)
+        if False:
+            yield None
+
+    monkeypatch.setattr(service.chat_service, "stream_automatic_answer_question", slow_automatic_stream)
+    session = unwrap(client.post("/api/v1/sessions", json={
+        "userId": "realtime-nonblocking-user",
+        "title": "实时回答不阻塞收音测试",
+    }))
+    session_id = session["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": "realtime-nonblocking-user"}))
+    publisher = unwrap(client.post("/api/v1/realtime-speech/publishers", json={
+        "userId": "realtime-nonblocking-user",
+        "sessionId": session_id,
+        "sourceKind": "system",
+        "clientName": "desktop-companion",
+    }))
+    payload = base64.b64encode("请介绍一个最近的项目".encode("utf-8")).decode("utf-8")
+
+    started_at = time()
+    with client.websocket_connect(f"/api/v1/realtime-speech/ws?token={publisher['token']}") as websocket:
+        websocket.send_json({
+            "type": "audio-frame", "deviceId": "device-realtime-nonblocking",
+            "sourceId": "system-loopback", "sequence": 0, "sourceKind": "system",
+            "segmentId": "seg-system-nonblocking", "revision": 1,
+            "capturedAtMs": 1000, "startedAtMs": 1000, "endedAtMs": 3000,
+            "durationMs": 2000, "codec": "opus", "sampleRateHz": 48000,
+            "channels": 1, "isFinal": True, "audioBase64": payload,
+        })
+        assert websocket.receive_json()["kind"] == "transcript-updated"
+        assert websocket.receive_json()["kind"] == "question-confirmed"
+    ingest_elapsed_ms = (time() - started_at) * 1000
+
+    assert ingest_elapsed_ms < 250
+    assert answer_started.wait(timeout=1)
+    candidate = service.list_candidates(user_id="realtime-nonblocking-user", session_id=session_id).candidates[0]
+    assert service._start_automatic_answer(candidate) is False
+    release_answer.set()
+    for _ in range(100):
+        if candidate.candidate_id not in service._automatic_answer_candidates:
+            break
+        sleep(0.01)
+    assert candidate.candidate_id not in service._automatic_answer_candidates
 
 
 def test_realtime_speech_websocket_reports_asr_degraded_without_closing_stream() -> None:

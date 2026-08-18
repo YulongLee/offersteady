@@ -826,8 +826,6 @@ function LivePage() {
     let invalidSessionSuspended = false;
     let realtimeSubscribeInFlight = false;
     let realtimeStreamHealthy = false;
-    let realtimeRenderFrame: number | null = null;
-    let pendingRealtime: RealtimeSessionUpdate | null = null;
     let realtimeLoadInFlight = false;
     const realtimeController = new AbortController();
     const channel = typeof BroadcastChannel === "function" ? new BroadcastChannel(`offersteady:live-page:${state.account.id}`) : null;
@@ -868,20 +866,23 @@ function LivePage() {
         activeShortcutScreenshotRequest.current = shortcut.requestId;
         setScreenshot(shortcut.screenshotTask);
       }
-      pendingRealtime = pendingRealtime?.captureState && !realtime.captureState
-        ? { ...realtime, captureState: pendingRealtime.captureState }
-        : realtime;
-      if (realtimeRenderFrame !== null) return;
-      realtimeRenderFrame = window.requestAnimationFrame(() => {
-        realtimeRenderFrame = null;
-        const next = pendingRealtime;
-        pendingRealtime = null;
-        if (!next || stopped) return;
-        setState(current => ({
+      setState(current => {
+        const workspace = realtime.automaticAnswerUpdate
+          ? reconcileAnswerWorkspace(
+              { questions: current.questions, activeAnswerTask: current.activeAnswerTask },
+              {
+                questions: [realtime.automaticAnswerUpdate.question],
+                activeAnswerTask: realtime.automaticAnswerUpdate.task,
+              },
+              { preferIncomingTask: true },
+            )
+          : { questions: current.questions, activeAnswerTask: current.activeAnswerTask };
+        return {
           ...current,
-          speaker: reconcileRealtimeSpeaker(current.speaker, next.speaker, id),
-          ...(next.captureState ? { captureState: next.captureState } : {}),
-        }));
+          ...workspace,
+          speaker: reconcileRealtimeSpeaker(current.speaker, realtime.speaker, id),
+          ...(realtime.captureState ? { captureState: realtime.captureState } : {}),
+        };
       });
     };
     const sendHeartbeat = async () => {
@@ -1003,7 +1004,6 @@ function LivePage() {
       stopped = true;
       realtimeController.abort();
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
-      if (realtimeRenderFrame !== null) window.cancelAnimationFrame(realtimeRenderFrame);
       if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);
       if (realtimePollTimer !== null) window.clearInterval(realtimePollTimer);
       channel?.close();

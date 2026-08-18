@@ -15,16 +15,17 @@ export const formatTranscriptTimestamp = (milliseconds: number) => {
   }
   return `[${String(Math.floor(milliseconds / 60_000)).padStart(2, "0")}:${String(Math.floor(milliseconds / 1_000) % 60).padStart(2, "0")}]`;
 };
-export const nextProgressiveTranscriptText = (current: string, target: string, step = 2) => {
+export const nextProgressiveTranscriptText = (current: string, target: string, step?: number) => {
   if (current === target) return current;
-  if (target.startsWith(current)) return target.slice(0, current.length + Math.max(1, step));
+  const catchUpStep = Math.max(1, step ?? Math.max(2, Math.ceil(target.length / 6)));
+  if (target.startsWith(current)) return target.slice(0, current.length + catchUpStep);
   let commonPrefixLength = 0;
   while (
     commonPrefixLength < current.length
     && commonPrefixLength < target.length
     && current[commonPrefixLength] === target[commonPrefixLength]
   ) commonPrefixLength += 1;
-  return target.slice(0, Math.min(target.length, commonPrefixLength + Math.max(1, step)));
+  return target.slice(0, Math.min(target.length, commonPrefixLength + catchUpStep));
 };
 
 export const STALE_TRANSCRIPT_MS = 8_000;
