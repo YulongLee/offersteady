@@ -14,7 +14,7 @@ The answer model, ASR provider, prompts, billing rates, page layout, and user co
 
 ## Test evidence
 
-- Backend: 247 passed, 13 skipped.
+- Backend: 249 passed, 13 skipped.
 - Web: 263 passed.
 - Desktop: 59 passed.
 - Workspace typecheck: passed.
@@ -22,8 +22,11 @@ The answer model, ASR provider, prompts, billing rates, page layout, and user co
 
 ## Production release evidence
 
-- Runtime commit: `33e8bccff960a0fe17e7c3887e924c8aaf8500ab`.
+- Runtime commit: `154516428e5b92f63c138c2dc91ee07a0b6a718e`.
 - Public `/healthz`, billing status, Web state, and homepage: healthy after container replacement.
+- Five consecutive public `/healthz` checks returned HTTP 200 in 90-100 ms; the homepage returned HTTP 200 in 101 ms.
+- Database-backed session validation is limited to once every two seconds per event stream while Redis event delivery remains at 100 ms. After the release, local health checks completed in 4-5 ms and the observed backend/PostgreSQL CPU usage was approximately 6%/0%.
+- Concurrent cold-start repository construction is single-flight; the post-restart desktop reconnect window produced no traceback or PostgreSQL deadlock.
 - Desktop release manifest: macOS arm64, macOS x64, and Windows x64 all published as `0.1.13`.
 - All three public download routes return a signed-URL redirect.
 - Post-deploy backend log scan found no traceback, deadlock, or automatic-answer failure.
