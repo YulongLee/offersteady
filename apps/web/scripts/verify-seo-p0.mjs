@@ -30,7 +30,12 @@ const guideRoutes = new Map([
   ["/guides/feishu-audio-setup", "public/seo/feishu-audio-setup.html"],
   ["/guides/tencent-meeting-audio-setup", "public/seo/tencent-meeting-audio-setup.html"],
   ["/guides/star-interview-answer", "public/seo/star-interview-answer.html"],
+  ["/guides/self-introduction", "public/seo/self-introduction.html"],
+  ["/guides/project-experience", "public/seo/project-experience.html"],
+  ["/guides/technical-interview", "public/seo/technical-interview.html"],
+  ["/guides/common-interview-questions", "public/seo/common-interview-questions.html"],
 ]);
+const coreGuideRoutes = new Set(["/guides/self-introduction", "/guides/project-experience", "/guides/technical-interview", "/guides/common-interview-questions"]);
 const topicRoutes = new Map([...hubRoutes, ...featureRoutes, ...commercialRoutes, ...guideRoutes]);
 const readWeb = (path) => readFile(resolve(webRoot, path), "utf8");
 const [indexHtml, guideHtml, robots, sitemap, notFound, nginx, llms, llmsFull, factsText, appSource, shareCard] = await Promise.all([
@@ -74,7 +79,7 @@ for (const [route, html] of topicDocuments) {
   assert.deepEqual(graph.map((node) => node["@type"]), [expectedPageType, "BreadcrumbList"], `Unexpected topic schema for ${route}`);
   assert.doesNotMatch(html, /(?:可以|能够|将|会)保证(?:面试|录用)|百分之百|绝对准确|(?:属于|已经|现为|达成)官方合作|(?:已经|现已|完成)直接集成|真实用户评价/);
   assert.match(html, /class="boundary"/);
-  assert.ok(Buffer.byteLength(html) <= 12_000, `Topic HTML budget exceeded for ${route}`);
+  assert.ok(Buffer.byteLength(html) <= (coreGuideRoutes.has(route) ? 20_000 : 12_000), `Topic HTML budget exceeded for ${route}`);
 }
 for (const route of guideRoutes.keys()) {
   const html = topicDocuments.get(route);
@@ -135,7 +140,7 @@ assert.match(nginx, /if \(\$host = www\.mianshiwen\.cn\)[\s\S]*?return 308 https
 assert.ok(nginx.includes("location ~ ^/features/(ai-interview-assistant|realtime-interview|screenshot-answer|interview-review)/?$"));
 assert.ok(nginx.includes("location ~ ^/(features|guides|interview-questions)/?$"));
 assert.ok(nginx.includes("location ~ ^/(pricing|download|security|about|contact)/?$"));
-assert.ok(nginx.includes("location ~ ^/guides/(audio-troubleshooting|interview-preparation|macos-permissions|feishu-audio-setup|tencent-meeting-audio-setup|star-interview-answer)/?$"));
+assert.ok(nginx.includes("location ~ ^/guides/(audio-troubleshooting|interview-preparation|macos-permissions|feishu-audio-setup|tencent-meeting-audio-setup|star-interview-answer|self-introduction|project-experience|technical-interview|common-interview-questions)/?$"));
 for (const resource of ["llms.txt", "llms-full.txt", "public-facts.json"]) assert.ok(nginx.includes(`location = /${resource}`), `Missing Nginx route for ${resource}`);
 assert.match(nginx, /location ~\* "\^\/assets\/[\s\S]*?Cache-Control "public, max-age=31536000, immutable"/);
 assert.match(nginx, /location ~ \^\/\(\?:login\|terms\|privacy\|error\|invite\/[\s\S]*?Cache-Control "no-store"[\s\S]*?X-Robots-Tag "noindex, follow"/);

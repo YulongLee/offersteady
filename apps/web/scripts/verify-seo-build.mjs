@@ -11,6 +11,8 @@ const staticOutputs = [
   "seo/pricing.html", "seo/download.html", "seo/security.html", "seo/about.html", "seo/contact.html",
   "seo/macos-permissions.html", "seo/feishu-audio-setup.html", "seo/tencent-meeting-audio-setup.html",
   "seo/star-interview-answer.html",
+  "seo/self-introduction.html", "seo/project-experience.html", "seo/technical-interview.html",
+  "seo/common-interview-questions.html",
   "seo/public-search.css", "llms.txt", "llms-full.txt", "public-facts.json", "robots.txt", "sitemap.xml", "404.html",
 ];
 const [homepage, guide] = await Promise.all([readFile(resolve(dist, "index.html"), "utf8"), readFile(resolve(dist, "guide.html"), "utf8")]);
