@@ -17,6 +17,8 @@
 - [x] 3.1 Batch small streamed-answer visual updates and immediately flush terminal events without clearing already visible content.
 - [x] 3.2 Update answer-section rendering so placeholders do not flash or remain after a terminal answer with no detailed section.
 - [x] 3.3 Give quick-answer and screenshot-answer buttons clear ready, processing, success, failure, cancellation, disabled, and accessible live-status states.
+- [x] 3.4 Keep question-normalization metadata internal so its pending/completed transition cannot shift the visible answer layout.
+- [x] 3.5 Isolate answer-body rendering from unrelated realtime updates and defer full Markdown parsing until stream completion.
 
 ## 4. Automatic Question Answering
 

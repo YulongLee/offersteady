@@ -42,6 +42,20 @@ The system SHALL batch small answer-stream updates into short visual intervals w
 - **WHEN** an answer finishes with only a simple section
 - **THEN** the workspace does not continue displaying a message that claims detailed content is still being generated
 
+#### Scenario: Internal question normalization state changes
+- **WHEN** a question moves from normalization pending to completed or fallback while its answer is visible
+- **THEN** the workspace keeps normalization metadata internal and does not insert an additional normalization label above the question
+- **AND** the question heading does not shift because of that internal state transition
+
+#### Scenario: Unrelated realtime transcript update arrives during an answer
+- **WHEN** microphone or system-audio partial transcripts update while the visible answer text is unchanged
+- **THEN** the answer body is not reparsed or structurally rebuilt
+
+#### Scenario: Markdown answer is still streaming
+- **WHEN** an incomplete Markdown fragment is received during answer generation
+- **THEN** the workspace updates it in a stable text container without repeatedly rebuilding lists, code blocks, or formulas
+- **AND** applies full Markdown formatting once the answer reaches a terminal completed state
+
 ### Requirement: Quick answer provides explicit operation feedback
 The system SHALL present quick answer as a visually identifiable button and SHALL communicate ready, processing, success, and failure states next to or within the action while preventing duplicate in-flight submission.
 

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkMath from "remark-math";
@@ -44,7 +45,7 @@ export const normalizeMathMarkdown = (value: string) => {
     .join("");
 };
 
-export function AnswerMarkdown({ content }: Props) {
+export const AnswerMarkdown = memo(function AnswerMarkdown({ content }: Props) {
   return <div className="answer-markdown">
     <ReactMarkdown
       remarkPlugins={[remarkMath]}
@@ -53,4 +54,4 @@ export function AnswerMarkdown({ content }: Props) {
       {normalizeMathMarkdown(content)}
     </ReactMarkdown>
   </div>;
-}
+});
