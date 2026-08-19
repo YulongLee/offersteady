@@ -11,6 +11,11 @@ const featureRoutes = new Map([
   ["/features/screenshot-answer", "public/seo/screenshot-answer.html"],
   ["/features/interview-review", "public/seo/interview-review.html"],
 ]);
+const hubRoutes = new Map([
+  ["/features", "public/seo/features.html"],
+  ["/guides", "public/seo/guides.html"],
+  ["/interview-questions", "public/seo/interview-questions.html"],
+]);
 const commercialRoutes = new Map([
   ["/pricing", "public/seo/pricing.html"],
   ["/download", "public/seo/download.html"],
@@ -26,7 +31,7 @@ const guideRoutes = new Map([
   ["/guides/tencent-meeting-audio-setup", "public/seo/tencent-meeting-audio-setup.html"],
   ["/guides/star-interview-answer", "public/seo/star-interview-answer.html"],
 ]);
-const topicRoutes = new Map([...featureRoutes, ...commercialRoutes, ...guideRoutes]);
+const topicRoutes = new Map([...hubRoutes, ...featureRoutes, ...commercialRoutes, ...guideRoutes]);
 const readWeb = (path) => readFile(resolve(webRoot, path), "utf8");
 const [indexHtml, guideHtml, robots, sitemap, notFound, nginx, llms, llmsFull, factsText, appSource, shareCard] = await Promise.all([
   readWeb("index.html"), readWeb("guide.html"), readWeb("public/robots.txt"), readWeb("public/sitemap.xml"),
@@ -128,6 +133,7 @@ for (const url of ["https://mianshiwen.cn/guide", "https://mianshiwen.cn/privacy
 assert.match(notFound, /<meta name="robots" content="noindex, follow"\s*\/>/);
 assert.match(nginx, /if \(\$host = www\.mianshiwen\.cn\)[\s\S]*?return 308 https:\/\/mianshiwen\.cn\$request_uri;/);
 assert.ok(nginx.includes("location ~ ^/features/(ai-interview-assistant|realtime-interview|screenshot-answer|interview-review)/?$"));
+assert.ok(nginx.includes("location ~ ^/(features|guides|interview-questions)/?$"));
 assert.ok(nginx.includes("location ~ ^/(pricing|download|security|about|contact)/?$"));
 assert.ok(nginx.includes("location ~ ^/guides/(audio-troubleshooting|interview-preparation|macos-permissions|feishu-audio-setup|tencent-meeting-audio-setup|star-interview-answer)/?$"));
 for (const resource of ["llms.txt", "llms-full.txt", "public-facts.json"]) assert.ok(nginx.includes(`location = /${resource}`), `Missing Nginx route for ${resource}`);

@@ -34,6 +34,9 @@ describe("optimized product experience", () => {
     expect(footer).toHaveTextContent("每天 09:00–21:00");
     expect(within(footer!).getByRole("link", { name: "使用手册" })).toHaveAttribute("href", "/guide");
     expect(within(footer!).getByRole("link", { name: "下载安装说明" })).toHaveAttribute("href", "/guide#desktop");
+    expect(within(footer!).getByRole("link", { name: "产品功能" })).toHaveAttribute("href", "/features");
+    expect(within(footer!).getByRole("link", { name: "面试题与专题" })).toHaveAttribute("href", "/interview-questions");
+    expect(within(footer!).getByRole("link", { name: "面试指南" })).toHaveAttribute("href", "/guides");
     expect(within(footer!).getByRole("link", { name: "AI 面试助手" })).toHaveAttribute("href", "/features/ai-interview-assistant");
     expect(within(footer!).getByRole("link", { name: "实时面试辅助" })).toHaveAttribute("href", "/features/realtime-interview");
     expect(within(footer!).getByRole("link", { name: "截图回答" })).toHaveAttribute("href", "/features/screenshot-answer");

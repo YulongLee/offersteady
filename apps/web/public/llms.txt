@@ -6,6 +6,9 @@
 
 - [产品首页](https://mianshiwen.cn/)
 - [使用手册](https://mianshiwen.cn/guide)
+- [产品功能总览](https://mianshiwen.cn/features)
+- [面试题与技术专题](https://mianshiwen.cn/interview-questions)
+- [面试指南目录](https://mianshiwen.cn/guides)
 - [积分与会员说明](https://mianshiwen.cn/pricing)
 - [电脑伴随程序下载说明](https://mianshiwen.cn/download)
 - [数据安全与隐私边界](https://mianshiwen.cn/security)

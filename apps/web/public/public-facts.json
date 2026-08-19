@@ -48,6 +48,9 @@
   "officialPages": {
     "homepage": "https://mianshiwen.cn/",
     "guide": "https://mianshiwen.cn/guide",
+    "features": "https://mianshiwen.cn/features",
+    "interviewQuestions": "https://mianshiwen.cn/interview-questions",
+    "guides": "https://mianshiwen.cn/guides",
     "pricing": "https://mianshiwen.cn/pricing",
     "download": "https://mianshiwen.cn/download",
     "security": "https://mianshiwen.cn/security",
@@ -65,6 +68,20 @@
     "https://mianshiwen.cn/guides/macos-permissions",
     "https://mianshiwen.cn/guides/feishu-audio-setup",
     "https://mianshiwen.cn/guides/tencent-meeting-audio-setup"
+  ],
+  "contentHubs": [
+    {
+      "name": "产品功能",
+      "url": "https://mianshiwen.cn/features"
+    },
+    {
+      "name": "面试题与技术专题",
+      "url": "https://mianshiwen.cn/interview-questions"
+    },
+    {
+      "name": "面试指南",
+      "url": "https://mianshiwen.cn/guides"
+    }
   ],
   "entityBoundaries": {
     "productNameVerified": true,
