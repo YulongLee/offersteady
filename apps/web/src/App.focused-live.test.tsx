@@ -429,6 +429,61 @@ describe("focused live interview workspace", () => {
     expect(await screen.findByText("快答已完成")).toBeInTheDocument();
   });
 
+  it("does not let workspace polling shorten a visible streamed quick answer", async () => {
+    let finishStream!: () => void;
+    const completion = new Promise<void>(resolve => { finishStream = resolve; });
+    let staleWorkspace: Awaited<ReturnType<typeof interviewAppAdapter.loadInterviewWorkspace>> | null = null;
+    vi.spyOn(interviewAppAdapter, "loadInterviewWorkspace").mockImplementation(async () => staleWorkspace ?? {
+      questions: structuredClone(syntheticState.questions),
+      activeAnswerTask: null,
+    });
+    vi.spyOn(interviewAppAdapter, "submitManualAnswer").mockImplementation(async (command, _signal, onStreamUpdate) => {
+      const streamed = {
+        question: {
+          id: "stream-race-task",
+          askedAt: "刚刚",
+          text: command.question,
+          input: "manual" as const,
+          status: "streaming" as const,
+          advice: { outline: [], detail: "这是已经稳定展示的较长合成回答。", sourceTypes: [], inference: "", uncertain: false, provenance: { selectionRevision: 0, usedSources: [] } },
+        },
+        task: {
+          id: "stream-race-task",
+          interviewId: command.interviewId,
+          userId: "prototype-user",
+          billingUsageId: "live-answer:stream-race-task",
+          questionId: "stream-race-task",
+          revision: 1,
+          status: "generating" as const,
+          question: command.question,
+          partialText: "这是已经稳定展示的较长合成回答。",
+          updatedAtMs: 300,
+        },
+      };
+      staleWorkspace = {
+        questions: [{ ...streamed.question, advice: { ...streamed.question.advice, detail: "较短旧快照" } }],
+        activeAnswerTask: { ...streamed.task, partialText: "较短旧快照", updatedAtMs: 200 },
+      };
+      onStreamUpdate?.({ result: streamed, event: { type: "chunk", task: {}, chunk: { sequence: 1, text: streamed.task.partialText, isFinal: false } } });
+      await completion;
+      return {
+        question: { ...streamed.question, status: "confirmed" as const },
+        task: { ...streamed.task, status: "completed" as const, completedText: streamed.task.partialText },
+      };
+    });
+
+    openLive();
+    fireEvent.change(screen.getByRole("textbox", { name: "手动输入面试官的问题" }), { target: { value: "验证轮询竞态的合成问题" } });
+    fireEvent.click(screen.getByRole("button", { name: "快答" }));
+
+    expect(await screen.findByText("这是已经稳定展示的较长合成回答。")).toBeInTheDocument();
+    await waitFor(() => expect(interviewAppAdapter.loadInterviewWorkspace).toHaveBeenCalledTimes(2), { timeout: 2_500 });
+    expect(screen.getByLabelText("回答正文")).toHaveTextContent("这是已经稳定展示的较长合成回答。");
+    expect(screen.queryByText("较短旧快照")).not.toBeInTheDocument();
+    finishStream();
+    expect(await screen.findByText("快答已完成")).toBeInTheDocument();
+  });
+
   it("stops the active answer without stopping capture and releases reserved points", async () => {
     openLive();
     fireEvent.click(screen.getByRole("button", { name: "开始面试" }));

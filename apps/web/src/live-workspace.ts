@@ -86,7 +86,7 @@ export const mergeAnswerTask = (current: AnswerTaskSnapshot | null, incoming: An
   };
 };
 
-const mergeQuestion = (current: InterviewQuestion, incoming: InterviewQuestion, preferCurrent: boolean): InterviewQuestion => {
+const mergeQuestion = (current: InterviewQuestion, incoming: InterviewQuestion, preferCurrent: boolean, preserveLongestDetail = false): InterviewQuestion => {
   const chosen = preferCurrent ? current : incoming;
   const other = preferCurrent ? incoming : current;
   return {
@@ -95,7 +95,7 @@ const mergeQuestion = (current: InterviewQuestion, incoming: InterviewQuestion, 
     advice: {
       ...other.advice,
       ...chosen.advice,
-      detail: preferCurrent ? longerText(current.advice.detail, incoming.advice.detail) ?? chosen.advice.detail : chosen.advice.detail,
+      detail: preferCurrent || preserveLongestDetail ? longerText(current.advice.detail, incoming.advice.detail) ?? chosen.advice.detail : chosen.advice.detail,
     },
   };
 };
@@ -112,16 +112,23 @@ export const reconcileAnswerWorkspace = (
   const incomingIds = new Set(incoming.questions.map(question => question.id));
   const currentTask = current.activeAnswerTask;
   const incomingTask = incoming.activeAnswerTask;
+  const sameTask = Boolean(currentTask && incomingTask && currentTask.id === incomingTask.id);
+  const currentTaskTerminal = Boolean(currentTask && terminalAnswerStatuses.has(currentTask.status));
+  const incomingTaskTerminal = Boolean(incomingTask && terminalAnswerStatuses.has(incomingTask.status));
   const preferCurrentTask = Boolean(currentTask && activeAnswerTask?.id === currentTask.id && (
     !incomingTask
     || incomingTask.id !== currentTask.id
     || currentTask.revision > incomingTask.revision
-    || (terminalAnswerStatuses.has(currentTask.status) && !terminalAnswerStatuses.has(incomingTask.status))
+    || (currentTaskTerminal && !incomingTaskTerminal)
+    || (currentTask.revision === incomingTask.revision && currentTaskTerminal === incomingTaskTerminal && currentTask.updatedAtMs > incomingTask.updatedAtMs)
   ));
   const preferCurrentQuestionId = preferCurrentTask ? currentTask?.questionId ?? null : null;
+  const preserveLongestQuestionId = sameTask && !(incomingTaskTerminal && !currentTaskTerminal)
+    ? currentTask?.questionId ?? null
+    : null;
   const mergedIncoming = incoming.questions.map(question => {
     const existing = currentById.get(question.id);
-    return existing ? mergeQuestion(existing, question, question.id === preferCurrentQuestionId) : question;
+    return existing ? mergeQuestion(existing, question, question.id === preferCurrentQuestionId, question.id === preserveLongestQuestionId) : question;
   });
   const localOnly = current.questions.filter(question => !incomingIds.has(question.id));
   const questions = [...mergedIncoming, ...localOnly];

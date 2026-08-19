@@ -3,12 +3,14 @@
 - [x] 1.1 Add synthetic unit tests for answer-task ordering, monotonic lifecycle transitions, and stale/shorter stream updates.
 - [x] 1.2 Add focused live-workspace component tests for newest-answer ownership, history viewing, quick-answer feedback, and screenshot staged feedback.
 - [x] 1.3 Add or update backend tests for complete final system questions, uncertain candidates, and duplicate automatic-answer events.
+- [x] 1.4 Add a regression test for an older same-task workspace snapshot arriving between streamed answer updates.
 
 ## 2. Deterministic Live Answer State
 
 - [x] 2.1 Implement a shared deterministic merge helper for questions and answer tasks using identity, revision, lifecycle stage, update time, and explicit local ownership.
 - [x] 2.2 Replace workspace refresh, streaming callback, and assistant-shortcut merge paths so late events can enrich history but cannot replace a newer current task or shorten its text.
 - [x] 2.3 Make explicit quick, manual, and screenshot actions immediately select their placeholder/current answer while preserving intentional history viewing for passive automatic answers.
+- [x] 2.4 Keep same-task question text monotonic when polling and streaming updates race at the same revision.
 
 ## 3. Smooth Rendering and Action Feedback
 

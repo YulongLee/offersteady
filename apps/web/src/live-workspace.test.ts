@@ -144,6 +144,34 @@ describe("live workspace answer pagination", () => {
     expect(reconciled.questions[0]?.status).toBe("confirmed");
   });
 
+  it("keeps the longer streamed answer when an older same-task workspace snapshot arrives", () => {
+    const question = syntheticState.questions[0]!;
+    const streamedQuestion = {
+      ...question,
+      status: "streaming" as const,
+      advice: { ...question.advice, detail: "这是已经展示的较长合成回答，后续内容仍在生成。" },
+    };
+    const staleQuestion = {
+      ...question,
+      status: "streaming" as const,
+      advice: { ...question.advice, detail: "较短回答" },
+    };
+    const streamedTask = {
+      id: "answer-same", interviewId: "demo", userId: "synthetic-user", billingUsageId: "usage",
+      questionId: question.id, question: question.text, revision: 1, status: "generating" as const,
+      partialText: streamedQuestion.advice.detail, updatedAtMs: 300,
+    };
+    const staleTask = { ...streamedTask, partialText: staleQuestion.advice.detail, updatedAtMs: 200 };
+
+    const reconciled = reconcileAnswerWorkspace(
+      { questions: [streamedQuestion], activeAnswerTask: streamedTask },
+      { questions: [staleQuestion], activeAnswerTask: staleTask },
+    );
+
+    expect(reconciled.activeAnswerTask?.partialText).toBe(streamedQuestion.advice.detail);
+    expect(reconciled.questions[0]?.advice.detail).toBe(streamedQuestion.advice.detail);
+  });
+
   it("lets an explicit server task replace its local placeholder despite client clock skew", () => {
     const localQuestion = syntheticState.questions[0]!;
     const serverQuestion = { ...localQuestion, id: "server-question", text: "显式提交后的合成问题" };
