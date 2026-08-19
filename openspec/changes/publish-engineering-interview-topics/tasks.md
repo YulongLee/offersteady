@@ -16,4 +16,4 @@
 ## 4. Verification and Release
 
 - [x] 4.1 Run strict OpenSpec, focused SEO, full Web tests, workspace type checks, production build checks, and topic Lighthouse
-- [ ] 4.2 Commit and push only this topic package, deploy Web, and verify all 30 public routes plus noindex/404 controls online
+- [x] 4.2 Commit and push only this topic package, deploy Web, and verify all 30 public routes plus noindex/404 controls online
