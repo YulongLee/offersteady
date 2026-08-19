@@ -45,6 +45,16 @@ RAG面试题：https://mianshiwen.cn/interview-questions/rag
 
 AI Agent面试题：https://mianshiwen.cn/interview-questions/ai-agent
 
+### 工程岗位面试专题
+
+Java后端专题连接语言、并发和JVM基础与数据库、缓存、消息及系统可靠性；前端专题连接Web平台机制与状态、性能、可访问性和测试；算法专题强调澄清、数据结构、不变量、复杂度、实现与边界测试。内容不包含泄露题库，也不把模板包装成用户真实经验。
+
+Java后端面试题：https://mianshiwen.cn/interview-questions/java-backend
+
+前端面试题：https://mianshiwen.cn/interview-questions/frontend
+
+算法与工程实现：https://mianshiwen.cn/interview-questions/algorithms
+
 ### 实时面试辅助
 
 电脑伴随程序在用户明确授权系统权限后，可分别处理麦克风与电脑输出音频。网页展示对话状态，并在确认问题后生成回答建议。收音与转写效果同时受到本地设备、操作系统权限、会议软件设置、网络和服务状态影响。

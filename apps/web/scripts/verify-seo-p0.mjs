@@ -41,9 +41,14 @@ const aiTopicRoutes = new Map([
   ["/interview-questions/rag", "public/seo/rag.html"],
   ["/interview-questions/ai-agent", "public/seo/ai-agent.html"],
 ]);
-const articleRoutes = new Set([...guideRoutes.keys(), ...aiTopicRoutes.keys()]);
-const deepArticleRoutes = new Set([...coreGuideRoutes, ...aiTopicRoutes.keys()]);
-const topicRoutes = new Map([...hubRoutes, ...featureRoutes, ...commercialRoutes, ...guideRoutes, ...aiTopicRoutes]);
+const engineeringTopicRoutes = new Map([
+  ["/interview-questions/java-backend", "public/seo/java-backend.html"],
+  ["/interview-questions/frontend", "public/seo/frontend.html"],
+  ["/interview-questions/algorithms", "public/seo/algorithms.html"],
+]);
+const articleRoutes = new Set([...guideRoutes.keys(), ...aiTopicRoutes.keys(), ...engineeringTopicRoutes.keys()]);
+const deepArticleRoutes = new Set([...coreGuideRoutes, ...aiTopicRoutes.keys(), ...engineeringTopicRoutes.keys()]);
+const topicRoutes = new Map([...hubRoutes, ...featureRoutes, ...commercialRoutes, ...guideRoutes, ...aiTopicRoutes, ...engineeringTopicRoutes]);
 const readWeb = (path) => readFile(resolve(webRoot, path), "utf8");
 const [indexHtml, guideHtml, robots, sitemap, notFound, nginx, llms, llmsFull, factsText, appSource, shareCard] = await Promise.all([
   readWeb("index.html"), readWeb("guide.html"), readWeb("public/robots.txt"), readWeb("public/sitemap.xml"),
@@ -149,6 +154,7 @@ assert.ok(nginx.includes("location ~ ^/(features|guides|interview-questions)/?$"
 assert.ok(nginx.includes("location ~ ^/(pricing|download|security|about|contact)/?$"));
 assert.ok(nginx.includes("location ~ ^/guides/(audio-troubleshooting|interview-preparation|macos-permissions|feishu-audio-setup|tencent-meeting-audio-setup|star-interview-answer|self-introduction|project-experience|technical-interview|common-interview-questions)/?$"));
 assert.ok(nginx.includes("location ~ ^/interview-questions/(llm|rag|ai-agent)/?$"));
+assert.ok(nginx.includes("location ~ ^/interview-questions/(java-backend|frontend|algorithms)/?$"));
 for (const resource of ["llms.txt", "llms-full.txt", "public-facts.json"]) assert.ok(nginx.includes(`location = /${resource}`), `Missing Nginx route for ${resource}`);
 assert.match(nginx, /location ~\* "\^\/assets\/[\s\S]*?Cache-Control "public, max-age=31536000, immutable"/);
 assert.match(nginx, /location ~ \^\/\(\?:login\|terms\|privacy\|error\|invite\/[\s\S]*?Cache-Control "no-store"[\s\S]*?X-Robots-Tag "noindex, follow"/);

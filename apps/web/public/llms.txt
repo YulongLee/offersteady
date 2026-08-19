@@ -31,6 +31,9 @@
 - [大模型面试题](https://mianshiwen.cn/interview-questions/llm)
 - [RAG面试题](https://mianshiwen.cn/interview-questions/rag)
 - [AI Agent面试题](https://mianshiwen.cn/interview-questions/ai-agent)
+- [Java后端面试题](https://mianshiwen.cn/interview-questions/java-backend)
+- [前端面试题](https://mianshiwen.cn/interview-questions/frontend)
+- [算法与工程实现面试题](https://mianshiwen.cn/interview-questions/algorithms)
 - [隐私政策](https://mianshiwen.cn/privacy)
 - [用户协议](https://mianshiwen.cn/terms)
 

@@ -14,6 +14,7 @@ const staticOutputs = [
   "seo/self-introduction.html", "seo/project-experience.html", "seo/technical-interview.html",
   "seo/common-interview-questions.html",
   "seo/llm.html", "seo/rag.html", "seo/ai-agent.html",
+  "seo/java-backend.html", "seo/frontend.html", "seo/algorithms.html",
   "seo/public-search.css", "llms.txt", "llms-full.txt", "public-facts.json", "robots.txt", "sitemap.xml", "404.html",
 ];
 const [homepage, guide] = await Promise.all([readFile(resolve(dist, "index.html"), "utf8"), readFile(resolve(dist, "guide.html"), "utf8")]);
