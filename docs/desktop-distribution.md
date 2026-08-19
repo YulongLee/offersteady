@@ -137,11 +137,11 @@ PCM probe 只在内存中生成短合成音频并记录帧回执、ASR 状态、
 
 ### 空闲轮询与服务端负载
 
-远程截图请求只由 Electron 主进程查询。renderer 负责展示绑定和音频状态，不得再并行查询下一笔截图任务。主进程只有在 `pairing-status` 确认设备已登记、绑定有效且 session 为 `live` 时，才以低延迟间隔查询截图；未绑定或非 live 时改为 10 秒绑定探测，连续网络失败最多退避到 30 秒。
+远程截图请求只由 Electron 主进程处理。renderer 负责展示绑定和音频状态，不得并行获取下一笔截图任务。当前助手在设备已登记、绑定有效且 session 为 `live` 时保持一条可取消的 SSE 订阅；快捷键创建成功后会直接处理响应中的请求 ID，不再等待下一轮查询。
 
-`GET /api/v1/screenshot-answer/desktop-devices/<deviceId>/capture-requests/next` 对未登记、未绑定、绑定失效、非 live 和暂无截图统一返回 HTTP 200 与空 `data`。这些是正常空闲状态，不应记录为 `desktop-capture-binding` 告警。截图上传、失败回报和快捷键创建等写操作仍必须执行严格设备与绑定校验。
+`GET /api/v1/screenshot-answer/desktop-devices/<deviceId>/capture-requests/next` 只保留给旧版助手和推送断线恢复。新版助手仅在 SSE 异常后执行一次非重叠回退查询，然后按退避策略重连；健康推送期间不得轮询。未登记、未绑定、绑定失效、非 live 和暂无截图统一返回 HTTP 200 与空 `data`，不应记录为 `desktop-capture-binding` 告警。截图上传、失败回报和快捷键创建等写操作仍必须执行严格设备与绑定校验。
 
-发布后应同时观察该接口请求量、`desktop-capture-binding` 告警和 PostgreSQL deadlock。空闲设备不应保持一秒级请求，绑定/截图查询也不得更新面试业务活动时间。
+发布后应同时观察设备 SSE 连接数、请求到领取延迟、回退查询次数、`desktop-capture-binding` 告警和 PostgreSQL deadlock。健康连接的回退查询次数应接近零，空闲设备不应保持一秒级请求，绑定/截图查询也不得更新面试业务活动时间。回滚时可继续使用兼容的 `next` 接口，无需回滚数据库结构。
 
 下载包名称不代表运行能力。客户端连接后仍需报告麦克风、系统音频和协议能力；Windows 系统音频不可用时，网页保留麦克风、手动输入和截图路径。支持的最低 Windows 版本将在物理设备验证后从 Windows 10 22H2 或 Windows 11 中确定。
 

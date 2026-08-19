@@ -4,7 +4,7 @@ import { isFreshShortcutScreenshotAcceptance, SHORTCUT_SCREENSHOT_RECOVERY_POLL_
 
 describe("shortcut screenshot feedback policy", () => {
   it("keeps recovery polling low-frequency because realtime acceptance provides immediate feedback", () => {
-    expect(SHORTCUT_SCREENSHOT_RECOVERY_POLL_INTERVAL_MS).toBe(1_500);
+    expect(SHORTCUT_SCREENSHOT_RECOVERY_POLL_INTERVAL_MS).toBe(15_000);
   });
 
   it("accepts current realtime notices but ignores stale history events", () => {

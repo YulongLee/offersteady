@@ -5,7 +5,7 @@ from typing import Literal, Protocol
 
 
 RealtimeConnectionState = Literal["connected", "receiving-audio", "transcribing", "degraded", "reconnecting", "answer-streaming", "failed", "closed"]
-RealtimeEventKind = Literal["connection-state", "transcript-updated", "question-candidate", "question-confirmed", "answer-stream", "answer-completed", "degraded", "device-status", "capture-control", "screenshot-shortcut-accepted"]
+RealtimeEventKind = Literal["connection-state", "transcript-updated", "question-candidate", "question-confirmed", "answer-stream", "answer-completed", "answer-task-updated", "screenshot-capture-updated", "degraded", "device-status", "capture-control", "screenshot-shortcut-accepted"]
 RealtimeSourceKind = Literal["microphone", "system", "mixed"]
 TranscriptRole = Literal["candidate", "interviewer"]
 QuestionCandidateState = Literal["needs-confirmation", "confirmed", "dismissed"]
@@ -246,5 +246,7 @@ class RealtimeSpeechRepository(Protocol):
     def save_event(self, event: RealtimeEvent) -> RealtimeEvent: ...
 
     def list_events_for_session(self, *, session_id: str) -> list[RealtimeEvent]: ...
+
+    def list_events_after(self, *, session_id: str, cursor: int) -> tuple[int, list[RealtimeEvent], bool]: ...
 
     def get_session_activity_version(self, *, session_id: str) -> int: ...

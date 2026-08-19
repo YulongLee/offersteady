@@ -10,7 +10,8 @@ describe("desktop screenshot lock wiring", () => {
     expect(source).toContain("screenshotCaptureLock.state().locked && !lockAlreadyHeld");
     expect(source).toContain("releaseAfterCapture");
     expect(source).toContain("if (screenshotCaptureLock.state().locked) releaseScreenshotCaptureLock()");
-    expect(source).toContain("await pollRemoteScreenshotRequest(true)");
+    expect(source).toContain("await processRemoteScreenshotRequest(identity, requestId, true)");
+    expect(source).toContain("DesktopCaptureEventParser");
   });
 
   it("exposes authoritative lock synchronization through preload", () => {
@@ -19,5 +20,15 @@ describe("desktop screenshot lock wiring", () => {
     expect(source).toContain("getScreenshotCaptureLock");
     expect(source).toContain("onScreenshotCaptureLockChanged");
     expect(source).not.toContain("cancelScreenshotCapture");
+  });
+
+  it("uses one cancellable push stream and only polls after that stream fails", () => {
+    const source = readFileSync(new URL("../src/main/index.ts", import.meta.url), "utf8");
+
+    expect(source).toContain("await consumeRemoteScreenshotEventStream(state.identity, streamController.signal)");
+    expect(source).toContain("if (streamController?.signal.aborted)");
+    expect(source).toContain("await pollRemoteScreenshotRequest()");
+    expect(source).toContain('schedule(desktopPollDelayMs("failure", remoteScreenshotPollFailureCount))');
+    expect(source).toContain("if (state !== previousState) startRemoteScreenshotRequestLoop()");
   });
 });

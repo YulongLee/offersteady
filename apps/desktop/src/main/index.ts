@@ -8,6 +8,7 @@ import { DevicePairingIdentityStore } from "./device-pairing";
 import { DEFAULT_SCREENSHOT_SHORTCUT, SCREENSHOT_SHORTCUT_OPTIONS, ScreenshotShortcutStore, isSupportedScreenshotShortcut } from "./screenshot-shortcut";
 import { desktopPollDelayMs } from "./polling-policy";
 import { ScreenshotCaptureLock } from "./screenshot-capture-lock";
+import { DesktopCaptureEventParser } from "./capture-event-stream";
 
 // Local ad-hoc builds cannot reliably retain Apple's separate Audio Capture
 // grant across rebuilds. Reuse the Screen & System Audio Recording grant,
@@ -56,6 +57,7 @@ let rendererOwnsNativeAudio = false;
 let desktopRegistrationInFlight = false;
 let remoteScreenshotPollInFlight = false;
 let remoteScreenshotPollFailureCount = 0;
+let remoteScreenshotStreamController: AbortController | null = null;
 let displayMediaFailureBackoffUntil = 0;
 const activeDesktopRequestControllers = new Set<AbortController>();
 const desktopApiRequestsInFlight = new Map<string, Promise<DesktopApiRequestResult>>();
@@ -739,6 +741,43 @@ const reportRemoteScreenshotFailure = async (identity: { deviceId: string; manua
   }
 };
 
+const processRemoteScreenshotRequest = async (
+  identity: { deviceId: string; manualCode: string },
+  requestId: string,
+  lockAlreadyHeld = false,
+) => {
+  if (!requestId || processingRemoteScreenshotRequestId === requestId) return true;
+  if (processingRemoteScreenshotRequestId) return true;
+  if (!lockAlreadyHeld && !screenshotCaptureLock.tryAcquire()) return true;
+  if (!lockAlreadyHeld) publishScreenshotCaptureLock();
+  processingRemoteScreenshotRequestId = requestId;
+  try {
+    mainWindow?.webContents.send("desktop:remote-screenshot-notice", "网页端已请求截图回答，本地助手正在截取当前屏幕。");
+    const capture = await captureCurrentScreen(null, true);
+    if (capture.errorMessage) throw new Error(capture.errorMessage);
+    if (!capture.dataUrl) throw new Error("本地助手未获取到有效共享屏幕画面，请检查屏幕捕捉权限。");
+    const extension = capture.extension || (capture.contentType === "image/jpeg" ? "jpg" : capture.contentType === "image/webp" ? "webp" : "png");
+    const filename = `${(capture.name || "current-screen").replace(/[\\/:*?"<>|]+/g, "-")}.${extension}`;
+    const upload = await uploadScreenshotCapture({
+      url: desktopApiUrl(`/screenshot-answer/capture-requests/${encodeURIComponent(requestId)}/desktop-upload`),
+      deviceId: identity.deviceId,
+      manualCode: identity.manualCode,
+      dataUrl: capture.dataUrl,
+      filename,
+    });
+    if (!upload.ok) throw new Error(upload.bodyText || `截图上传失败：${upload.status}`);
+    mainWindow?.webContents.send("desktop:remote-screenshot-notice", "本地助手已完成截图并回传后端。");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "本地助手执行截图回答失败";
+    await reportRemoteScreenshotFailure(identity, requestId, message, message.includes("上传") ? "upload-failed" : "capture-failed");
+    mainWindow?.webContents.send("desktop:remote-screenshot-notice", `截图失败：${message}`);
+  } finally {
+    processingRemoteScreenshotRequestId = null;
+    if (screenshotCaptureLock.state().locked) releaseScreenshotCaptureLock();
+  }
+  return true;
+};
+
 const pollRemoteScreenshotRequest = async (lockAlreadyHeld = false) => {
   if (!pairingIdentityStore || processingRemoteScreenshotRequestId) return;
   const pollingState = await getDesktopScreenshotPollingState();
@@ -753,32 +792,7 @@ const pollRemoteScreenshotRequest = async (lockAlreadyHeld = false) => {
     if (lockAlreadyHeld) releaseScreenshotCaptureLock();
     return true;
   }
-  processingRemoteScreenshotRequestId = request.requestId;
-  try {
-    mainWindow?.webContents.send("desktop:remote-screenshot-notice", "网页端已请求截图回答，本地助手正在截取当前屏幕。");
-    const capture = await captureCurrentScreen(null, lockAlreadyHeld);
-    if (capture.errorMessage) throw new Error(capture.errorMessage);
-    if (!capture.dataUrl) throw new Error("本地助手未获取到有效共享屏幕画面，请检查屏幕捕捉权限。");
-    const extension = capture.extension || (capture.contentType === "image/jpeg" ? "jpg" : capture.contentType === "image/webp" ? "webp" : "png");
-    const filename = `${(capture.name || "current-screen").replace(/[\\/:*?"<>|]+/g, "-")}.${extension}`;
-    const upload = await uploadScreenshotCapture({
-      url: desktopApiUrl(`/screenshot-answer/capture-requests/${encodeURIComponent(request.requestId)}/desktop-upload`),
-      deviceId: identity.deviceId,
-      manualCode: identity.manualCode,
-      dataUrl: capture.dataUrl,
-      filename,
-    });
-    if (!upload.ok) throw new Error(upload.bodyText || `截图上传失败：${upload.status}`);
-    mainWindow?.webContents.send("desktop:remote-screenshot-notice", "本地助手已完成截图并回传后端。");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "本地助手执行截图回答失败";
-    await reportRemoteScreenshotFailure(identity, request.requestId, message, message.includes("上传") ? "upload-failed" : "capture-failed");
-    mainWindow?.webContents.send("desktop:remote-screenshot-notice", `截图失败：${message}`);
-  } finally {
-    processingRemoteScreenshotRequestId = null;
-    if (screenshotCaptureLock.state().locked) releaseScreenshotCaptureLock();
-  }
-  return true;
+  return processRemoteScreenshotRequest(identity, request.requestId, lockAlreadyHeld);
 };
 
 const shortcutNotice = (message: string) => {
@@ -826,7 +840,13 @@ const triggerScreenshotShortcut = async () => {
       throw new Error(message);
     }
     shortcutNotice("快捷键已触发，正在截取当前选择的屏幕。");
-    await pollRemoteScreenshotRequest(true);
+    const payload = await response.json() as { data?: { requestId?: string } };
+    const requestId = payload.data?.requestId;
+    if (!requestId) {
+      releaseScreenshotCaptureLock();
+      throw new Error("快捷键截屏请求缺少任务标识，请稍后重试。");
+    }
+    await processRemoteScreenshotRequest(identity, requestId, true);
   } catch (error) {
     if (screenshotCaptureLock.state().locked && !processingRemoteScreenshotRequestId) releaseScreenshotCaptureLock();
     shortcutNotice(error instanceof Error ? error.message : "快捷键截屏失败，请稍后重试。");
@@ -857,8 +877,31 @@ const registerScreenshotShortcut = async (accelerator: string) => {
   return screenshotShortcutRegistration;
 };
 
+const consumeRemoteScreenshotEventStream = async (
+  identity: { deviceId: string; manualCode: string },
+  signal: AbortSignal,
+) => {
+  const url = desktopApiUrl(`/screenshot-answer/desktop-devices/${encodeURIComponent(identity.deviceId)}/capture-requests/stream?manualCode=${encodeURIComponent(identity.manualCode)}`);
+  const response = await fetch(url, { headers: { Accept: "text/event-stream" }, signal });
+  if (!response.ok) throw new Error(`remote_screenshot_stream_${response.status}`);
+  if (!response.body) throw new Error("remote_screenshot_stream_body_missing");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const parser = new DesktopCaptureEventParser();
+  while (!signal.aborted) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    for (const captureRequest of parser.push(decoder.decode(value, { stream: true }))) {
+      void processRemoteScreenshotRequest(identity, captureRequest.requestId);
+    }
+  }
+  if (!signal.aborted) throw new Error("remote_screenshot_stream_closed");
+};
+
 const startRemoteScreenshotRequestLoop = () => {
   if (screenshotRequestTimer) clearTimeout(screenshotRequestTimer);
+  remoteScreenshotStreamController?.abort();
+  remoteScreenshotStreamController = null;
   remoteScreenshotPollFailureCount = 0;
   const schedule = (delayMs: number) => {
     screenshotRequestTimer = setTimeout(() => void run(), delayMs);
@@ -866,15 +909,34 @@ const startRemoteScreenshotRequestLoop = () => {
   const run = async () => {
     if (remoteScreenshotPollInFlight || isQuitting) return;
     remoteScreenshotPollInFlight = true;
+    let streamController: AbortController | null = null;
     try {
-      const live = await pollRemoteScreenshotRequest();
+      const state = await getDesktopScreenshotPollingState();
+      if (!state.live || !state.identity) {
+        remoteScreenshotPollFailureCount = 0;
+        schedule(desktopPollDelayMs("idle"));
+        return;
+      }
+      streamController = new AbortController();
+      remoteScreenshotStreamController = streamController;
       remoteScreenshotPollFailureCount = 0;
-      schedule(desktopPollDelayMs(live ? "live" : "idle"));
+      await consumeRemoteScreenshotEventStream(state.identity, streamController.signal);
     } catch (error) {
+      if (isQuitting) return;
+      if (streamController?.signal.aborted) {
+        schedule(0);
+        return;
+      }
       console.warn("[remote-screenshot] poll failed", error);
       remoteScreenshotPollFailureCount += 1;
+      try {
+        await pollRemoteScreenshotRequest();
+      } catch (fallbackError) {
+        console.warn("[remote-screenshot] fallback poll failed", fallbackError);
+      }
       schedule(desktopPollDelayMs("failure", remoteScreenshotPollFailureCount));
     } finally {
+      if (remoteScreenshotStreamController === streamController) remoteScreenshotStreamController = null;
       remoteScreenshotPollInFlight = false;
     }
   };
@@ -976,7 +1038,7 @@ ipcMain.on("capture:set-state", (_event, state: CaptureState) => {
   const previousState = captureState;
   captureState = state;
   updateTray();
-  if ((state === "capturing" || state === "error") && state !== previousState) startRemoteScreenshotRequestLoop();
+  if (state !== previousState) startRemoteScreenshotRequestLoop();
 });
 
 ipcMain.on("app:close", () => {
@@ -1125,6 +1187,8 @@ app.on("before-quit", () => {
     clearTimeout(screenshotRequestTimer);
     screenshotRequestTimer = null;
   }
+  remoteScreenshotStreamController?.abort();
+  remoteScreenshotStreamController = null;
   if (realtimeAudioInterval) {
     clearInterval(realtimeAudioInterval);
     realtimeAudioInterval = null;

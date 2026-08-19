@@ -8,11 +8,12 @@ from fastapi.responses import StreamingResponse
 
 from app.core.logging import utc_now_iso
 from app.core.responses import success_response
-from app.deps import chat_service, optional_authenticated_context, resolve_owned_user_id
+from app.deps import chat_service, optional_authenticated_context, realtime_speech_service, resolve_owned_user_id
 from app.ports.authentication import AuthenticatedRequestContext
 from app.schemas.foundation import ApiEnvelope, ModuleDescriptor
 from app.schemas.live_answer import CancelLiveAnswerRequest, CancelLiveAnswerResponse, LiveAnswerQuestionRequest, LiveAnswerResponse, LiveAnswerStreamEvent, LiveAnswerTaskResponse, LiveAnswerChunkResponse
 from app.services.chat_service import ChatService
+from app.services.realtime_speech_service import RealtimeSpeechService
 
 
 router = APIRouter(prefix="/live-answer", tags=["live-answer"])
@@ -79,6 +80,28 @@ def _sse_frame(event: LiveAnswerStreamEvent) -> str:
     return f"event: {event.type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def _publish_answer_task_event(
+    realtime: RealtimeSpeechService,
+    *,
+    user_id: str,
+    session_id: str,
+    phase: str,
+    task,
+) -> None:
+    if task is None:
+        return
+    realtime.publish_session_event(
+        user_id=user_id,
+        session_id=session_id,
+        kind="answer-task-updated",
+        payload={
+            "phase": phase,
+            "trigger": "manual",
+            "task": _to_task_response(task).model_dump(by_alias=True),
+        },
+    )
+
+
 @router.get("/status", response_model=ApiEnvelope[dict[str, str]])
 async def status(request: Request) -> ApiEnvelope[dict[str, str]]:
     return success_response(
@@ -94,14 +117,17 @@ async def start_live_answer(
     request: LiveAnswerQuestionRequest,
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: ChatService = Depends(chat_service),
+    realtime: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[LiveAnswerResponse]:
+    user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
     task, retrieval = service.answer_question(
-        user_id=resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context),
+        user_id=user_id,
         session_id=request.session_id,
         question=request.question,
         stream=request.stream,
         usage_id=request.idempotency_key,
     )
+    _publish_answer_task_event(realtime, user_id=user_id, session_id=request.session_id, phase=task.status, task=task)
     return success_response(
         request=request_context,
         data=LiveAnswerResponse(task=_to_task_response(task), retrieval=retrieval),
@@ -114,6 +140,7 @@ async def stream_live_answer(
     request: LiveAnswerQuestionRequest,
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: ChatService = Depends(chat_service),
+    realtime: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> StreamingResponse:
     user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
 
@@ -121,6 +148,15 @@ async def stream_live_answer(
         for payload in service.stream_answer_question(
             user_id=user_id, session_id=request.session_id, question=request.question, usage_id=request.idempotency_key
         ):
+            phase = str(payload.get("type") or "update")
+            if phase in {"task-started", "retrieval", "complete", "completed", "error", "failed", "cancelled"}:
+                _publish_answer_task_event(
+                    realtime,
+                    user_id=user_id,
+                    session_id=request.session_id,
+                    phase=phase,
+                    task=payload.get("task"),
+                )
             yield _sse_frame(_to_stream_event(payload))
 
     return StreamingResponse(
@@ -152,12 +188,15 @@ async def cancel_live_answer_task(
     request: CancelLiveAnswerRequest,
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: ChatService = Depends(chat_service),
+    realtime: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[CancelLiveAnswerResponse]:
+    user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
     outcome, task = service.cancel_task(
-        user_id=resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context),
+        user_id=user_id,
         task_id=task_id,
         expected_revision=request.expected_revision,
     )
+    _publish_answer_task_event(realtime, user_id=user_id, session_id=task.session_id, phase=task.status, task=task)
     return success_response(
         request=request_context,
         data=CancelLiveAnswerResponse(

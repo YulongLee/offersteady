@@ -266,6 +266,20 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
                 records.append(RealtimeEvent(**json.loads(raw)))
         return records
 
+    def list_events_after(self, *, session_id: str, cursor: int) -> tuple[int, list[RealtimeEvent], bool]:
+        stream_key = f"offersteady:realtime:events:{session_id}"
+        rows = self._redis.xrange(stream_key)
+        retained: list[tuple[int, RealtimeEvent]] = []
+        for _stream_id, fields in rows:
+            raw = fields.get("event")
+            if not raw:
+                continue
+            retained.append((int(fields.get("cursor", "0")), RealtimeEvent(**json.loads(raw))))
+        current_cursor = self.get_event_stream_version(session_id=session_id)
+        positive_cursors = [item_cursor for item_cursor, _item in retained if item_cursor > 0]
+        resumable = cursor <= 0 or not positive_cursors or cursor >= min(positive_cursors) - 1
+        return current_cursor, [item for item_cursor, item in retained if item_cursor > cursor], resumable
+
     def get_session_activity_version(self, *, session_id):
         activity_version = int(self._redis.hget(self._activity_key, session_id) or 0)
         items = self._redis.xrevrange(f"offersteady:realtime:events:{session_id}", count=1)

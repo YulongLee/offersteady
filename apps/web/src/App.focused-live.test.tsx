@@ -477,7 +477,8 @@ describe("focused live interview workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "快答" }));
 
     expect(await screen.findByText("这是已经稳定展示的较长合成回答。")).toBeInTheDocument();
-    await waitFor(() => expect(interviewAppAdapter.loadInterviewWorkspace).toHaveBeenCalledTimes(2), { timeout: 2_500 });
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(interviewAppAdapter.loadInterviewWorkspace).toHaveBeenCalledTimes(2));
     expect(screen.getByLabelText("回答正文")).toHaveTextContent("这是已经稳定展示的较长合成回答。");
     expect(screen.queryByText("较短旧快照")).not.toBeInTheDocument();
     finishStream();

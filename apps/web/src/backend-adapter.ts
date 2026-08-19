@@ -2,7 +2,7 @@ import type { CaptureState, FoundationIndexResponse } from "@offersteady/protoco
 
 import type { AnswerProvenance, AnswerSourceReference, AnswerTaskSnapshot, CancelAnswerResult, OfficialCheckoutOrder, PointsRedemptionResult } from "@offersteady/protocol";
 import { AppError } from "./domain";
-import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, DesktopDeviceBinding, IdleInterviewStatus, InterviewAppAdapter, InterviewQuestion, InterviewReview, InterviewSummary, InterviewWorkspaceSnapshot, ReferralActivationResult, ReferralStatus, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
+import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, DesktopDeviceBinding, DesktopShortcutScreenshotUpdate, IdleInterviewStatus, InterviewAppAdapter, InterviewQuestion, InterviewReview, InterviewSummary, InterviewWorkspaceSnapshot, ReferralActivationResult, ReferralStatus, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
 import { createJsonClient, withBaseUrl } from "./api-client";
 import { authClient } from "./auth-client";
 import { createSseParser, type LiveAnswerStreamEvent, type ManualAnswerStreamUpdate } from "./live-answer-stream";
@@ -324,7 +324,7 @@ interface BackendRealtimeRuntimeResponse {
 }
 
 interface BackendRealtimeSessionStreamEvent {
-  readonly type: "snapshot";
+  readonly type: "snapshot" | "update";
   readonly cursor?: number;
   readonly transcripts: BackendRealtimeTranscriptListResponse;
   readonly candidates: BackendRealtimeQuestionCandidateListResponse;
@@ -543,7 +543,8 @@ const mapRealtimeState = (
   const latestDeviceStatus = [...events.events].reverse().find(event => event.kind === "device-status");
   const latestDegraded = [...events.events].reverse().find(event => event.kind === "degraded");
   const latestShortcutAccepted = [...events.events].reverse().find(event => event.kind === "screenshot-shortcut-accepted" && typeof event.payload.requestId === "string");
-  const latestAutomaticAnswer = [...events.events].reverse().find(event => event.kind === "answer-stream" && typeof event.payload.task === "object" && event.payload.task !== null);
+  const latestScreenshotUpdate = [...events.events].reverse().find(event => event.kind === "screenshot-capture-updated" && typeof event.payload.requestId === "string");
+  const latestAnswerUpdate = [...events.events].reverse().find(event => event.kind === "answer-task-updated" && typeof event.payload.task === "object" && event.payload.task !== null);
   const captureState = toCaptureState(runtime?.captureState)
     ?? toCaptureState(latestDeviceStatus?.payload.captureState)
     ?? (runtime?.sessionLive && runtime.machineCodeBound ? "capturing" as const : undefined);
@@ -593,7 +594,9 @@ const mapRealtimeState = (
       runtimeNotice: meaningfulTranscripts.length > 0 ? null : runtimeNotice(runtime, latestDegraded),
     },
     ...(captureState ? { captureState } : {}),
-    ...(latestShortcutAccepted ? {
+    ...(latestScreenshotUpdate ? {
+      shortcutScreenshotUpdate: screenshotEventToUpdate(latestScreenshotUpdate),
+    } : latestShortcutAccepted ? {
       shortcutScreenshotUpdate: {
         requestId: String(latestShortcutAccepted.payload.requestId),
         status: "requested" as const,
@@ -602,10 +605,10 @@ const mapRealtimeState = (
         acceptedAtMs: latestShortcutAccepted.createdAtMs,
       },
     } : {}),
-    ...(latestAutomaticAnswer ? {
-      automaticAnswerUpdate: toSubmitManualAnswerResult(
-        latestAutomaticAnswer.payload.task as unknown as BackendLiveAnswerTaskResponse,
-        "desktop-audio",
+    ...(latestAnswerUpdate ? {
+      answerUpdate: toSubmitManualAnswerResult(
+        latestAnswerUpdate.payload.task as unknown as BackendLiveAnswerTaskResponse,
+        "manual",
       ),
     } : {}),
   };
@@ -697,11 +700,78 @@ const screenshotStageToTask = (current: BackendRemoteScreenshotCaptureRequestRes
   return { name: current.capturedFilename || "共享屏幕截取", stage: mapped, ...(message ? { errorMessage: message } : {}) };
 };
 
+const screenshotEventToTask = (payload: Record<string, unknown>): ScreenshotTask => {
+  const status = String(payload.status ?? "processing");
+  const stage = String(payload.stage ?? status);
+  const mapped: ScreenshotTask["stage"] =
+    stage === "requested" || stage === "waiting-desktop" ? "waiting-desktop"
+      : stage === "claimed" ? "uploading"
+        : stage === "uploaded" ? "uploaded"
+          : stage === "vision-running" ? "generating"
+            : stage === "completed" ? "completed"
+              : stage === "cancelled" ? "cancelled"
+                : status === "failed" || stage.includes("failed") ? "failed" : "recognizing";
+  const errorMessage = typeof payload.errorMessage === "string" ? payload.errorMessage : undefined;
+  return { name: "共享屏幕截取", stage: mapped, ...(errorMessage ? { errorMessage } : {}) };
+};
+
+const screenshotEventToUpdate = (event: BackendRealtimeEventListResponse["events"][number]): DesktopShortcutScreenshotUpdate => {
+  const payload = event.payload;
+  const status = String(payload.status ?? "processing") as DesktopShortcutScreenshotUpdate["status"];
+  const answerTask = payload.answerTask && typeof payload.answerTask === "object"
+    ? payload.answerTask as BackendScreenshotAnswerTaskResponse
+    : null;
+  return {
+    requestId: String(payload.requestId),
+    status,
+    screenshotTask: screenshotEventToTask(payload),
+    notificationId: event.eventId,
+    ...(answerTask ? { result: toSubmitScreenshotAnswerResult(answerTask, answerTask.visionSummaryTitle?.trim() || answerTask.instruction) } : {}),
+  };
+};
+
 export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   private readonly client;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
   private foundation: FoundationIndexResponse | null = null;
+  private readonly captureEventWaiters = new Map<string, Set<(payload: Record<string, unknown>) => void>>();
+
+  private publishCaptureEvents(events: BackendRealtimeEventListResponse) {
+    for (const event of events.events) {
+      if (event.kind !== "screenshot-capture-updated") continue;
+      const requestId = typeof event.payload.requestId === "string" ? event.payload.requestId : "";
+      if (!requestId) continue;
+      for (const listener of this.captureEventWaiters.get(requestId) ?? []) listener(event.payload);
+    }
+  }
+
+  private waitForCaptureEvent(requestId: string, timeoutMs: number, signal?: AbortSignal): Promise<Record<string, unknown> | null> {
+    return new Promise((resolve, reject) => {
+      const listeners = this.captureEventWaiters.get(requestId) ?? new Set();
+      const cleanup = () => {
+        window.clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
+        listeners.delete(onEvent);
+        if (listeners.size === 0) this.captureEventWaiters.delete(requestId);
+      };
+      const onEvent = (payload: Record<string, unknown>) => {
+        cleanup();
+        resolve(payload);
+      };
+      const onAbort = () => {
+        cleanup();
+        reject(new DOMException("Aborted", "AbortError"));
+      };
+      const timer = window.setTimeout(() => {
+        cleanup();
+        resolve(null);
+      }, timeoutMs);
+      listeners.add(onEvent);
+      this.captureEventWaiters.set(requestId, listeners);
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
+  }
 
   constructor(baseUrl: string, fetchImpl?: typeof fetch) {
     this.baseUrl = baseUrl;
@@ -997,8 +1067,9 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         flushHandle = null;
         const payload = pendingSnapshot;
         pendingSnapshot = null;
-        if (!payload || payload.type !== "snapshot") return;
+        if (!payload || (payload.type !== "snapshot" && payload.type !== "update")) return;
         if (typeof payload.cursor === "number") window.sessionStorage?.setItem(cursorKey, String(payload.cursor));
+        this.publishCaptureEvents(payload.events);
         onUpdate(mapRealtimeState(interviewId, payload.transcripts, payload.candidates, payload.events, payload.runtime));
       };
       flushHandle = typeof requestAnimationFrame === "function"
@@ -1012,9 +1083,20 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         pendingSnapshot = null;
         return;
       }
-      if (realtimeEvent.type !== "snapshot") return;
+      if (realtimeEvent.type !== "snapshot" && realtimeEvent.type !== "update") return;
       const payload = realtimeEvent as BackendRealtimeSessionStreamEvent;
-      pendingSnapshot = payload;
+      pendingSnapshot = pendingSnapshot
+        ? {
+            ...payload,
+            cursor: Math.max(pendingSnapshot.cursor ?? 0, payload.cursor ?? 0),
+            events: {
+              ...payload.events,
+              events: [...pendingSnapshot.events.events, ...payload.events.events].filter(
+                (item, index, items) => items.findIndex(candidate => candidate.eventId === item.eventId) === index,
+              ),
+            },
+          }
+        : payload;
       scheduleFlush();
     });
     while (true) {
@@ -1026,6 +1108,8 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     parser.flush();
     const finalSnapshot = pendingSnapshot as BackendRealtimeSessionStreamEvent | null;
     if (finalSnapshot) {
+      if (typeof finalSnapshot.cursor === "number") window.sessionStorage?.setItem(cursorKey, String(finalSnapshot.cursor));
+      this.publishCaptureEvents(finalSnapshot.events);
       onUpdate(mapRealtimeState(interviewId, finalSnapshot.transcripts, finalSnapshot.candidates, finalSnapshot.events, finalSnapshot.runtime));
       pendingSnapshot = null;
     }
@@ -1144,8 +1228,22 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     };
     try {
       const deadlineAt = Date.now() + 120000;
+      let recoveryDelayMs = 1000;
       while (Date.now() < deadlineAt) {
         if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+        const pushed = await this.waitForCaptureEvent(captureRequest.requestId, recoveryDelayMs, signal);
+        if (pushed) {
+          onStage?.(screenshotEventToTask(pushed));
+          const pushedStatus = String(pushed.status ?? "processing");
+          const pushedTask = pushed.answerTask && typeof pushed.answerTask === "object"
+            ? pushed.answerTask as BackendScreenshotAnswerTaskResponse
+            : null;
+          if (pushedStatus === "completed" && pushedTask) return toSubmitScreenshotAnswerResult(pushedTask, command.instruction);
+          if (pushedStatus === "cancelled") throw new DOMException("Aborted", "AbortError");
+          if (pushedStatus === "failed") throw new AppError("validation", `${pushed.stage ? `截图阶段 ${String(pushed.stage)} 失败：` : ""}${String(pushed.errorMessage || "伴随程序截屏回答失败，请检查本地助手状态后重试。")}`);
+          recoveryDelayMs = 1000;
+          continue;
+        }
         const current = await this.client.request<BackendRemoteScreenshotCaptureRequestResponse>(`/api/v1/screenshot-answer/capture-requests/${captureRequest.requestId}?userId=${encodeURIComponent(requireUserId())}`, {
           method: "GET",
           headers: authHeaders(),
@@ -1154,13 +1252,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         if (current.status === "completed" && current.answerTask) return toSubmitScreenshotAnswerResult(current.answerTask, command.instruction);
         if (current.status === "cancelled") throw new DOMException("Aborted", "AbortError");
         if (current.status === "failed") throw new AppError("validation", `${current.stage ? `截图阶段 ${current.stage} 失败：` : ""}${current.errorMessage || "伴随程序截屏回答失败，请检查本地助手状态后重试。"}`);
-        await new Promise<void>((resolve, reject) => {
-          const timer = window.setTimeout(resolve, 200);
-          signal?.addEventListener("abort", () => {
-            window.clearTimeout(timer);
-            reject(new DOMException("Aborted", "AbortError"));
-          }, { once: true });
-        });
+        recoveryDelayMs = Math.min(recoveryDelayMs * 2, 8000);
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {

@@ -26,6 +26,7 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
         self.transcripts: dict[str, dict[str, TranscriptSegmentRecord]] = {}
         self.candidates: dict[str, QuestionCandidateRecord] = {}
         self.events: dict[str, list[RealtimeEvent]] = {}
+        self.event_cursors: dict[str, dict[str, int]] = {}
         self.session_activity_versions: dict[str, int] = {}
         self.desktop_devices_by_id: dict[str, DesktopDeviceRecord] = {}
         self.desktop_devices_by_code: dict[str, str] = {}
@@ -214,11 +215,35 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
         entries = self.events.setdefault(stored.session_id, [])
         entries.append(stored)
         entries.sort(key=lambda item: (item.created_at_ms, item.event_id))
-        self._bump_session_activity(stored.session_id)
+        cursor = self._bump_session_activity(stored.session_id)
+        self.event_cursors.setdefault(stored.session_id, {})[stored.event_id] = cursor
         return replace(stored)
 
     def list_events_for_session(self, *, session_id: str) -> list[RealtimeEvent]:
-        return [replace(item) for item in self.events.get(session_id, [])]
+        cursors = self.event_cursors.get(session_id, {})
+        return [
+            replace(item)
+            for item in sorted(
+                self.events.get(session_id, []),
+                key=lambda item: (cursors.get(item.event_id, 0), item.created_at_ms, item.event_id),
+            )
+        ]
+
+    def list_events_after(self, *, session_id: str, cursor: int) -> tuple[int, list[RealtimeEvent], bool]:
+        current_cursor = self.get_session_activity_version(session_id=session_id)
+        entries = self.events.get(session_id, [])
+        cursors = self.event_cursors.get(session_id, {})
+        retained = sorted(
+            ((cursors.get(item.event_id, 0), item) for item in entries),
+            key=lambda entry: entry[0],
+        )
+        positive_cursors = [item_cursor for item_cursor, _item in retained if item_cursor > 0]
+        resumable = cursor <= 0 or not positive_cursors or cursor >= min(positive_cursors) - 1
+        return (
+            current_cursor,
+            [replace(item) for item_cursor, item in retained if item_cursor > cursor],
+            resumable,
+        )
 
     def get_session_activity_version(self, *, session_id: str) -> int:
         return self.session_activity_versions.get(session_id, 0)

@@ -246,7 +246,7 @@ export interface DesktopShortcutScreenshotUpdate {
 
 export type RealtimeSessionUpdate = Pick<WebAppState, "speaker"> & Partial<Pick<WebAppState, "captureState">> & {
   readonly shortcutScreenshotUpdate?: DesktopShortcutScreenshotUpdate;
-  readonly automaticAnswerUpdate?: SubmitManualAnswerResult;
+  readonly answerUpdate?: SubmitManualAnswerResult;
 };
 
 export interface InterviewAppAdapter {

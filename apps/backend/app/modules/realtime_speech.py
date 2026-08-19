@@ -384,10 +384,11 @@ async def stream_session_runtime(
                         "reason": "session-replaced",
                     })
                     break
-            stream_cursor = getattr(service.repository, "get_event_stream_version", None)
-            current_cursor = await asyncio.to_thread(
-                stream_cursor if callable(stream_cursor) else service.repository.get_session_activity_version,
+            current_cursor, incremental_events, resumable = await asyncio.to_thread(
+                service.list_session_events_after,
+                user_id=resolved_user_id,
                 session_id=session_id,
+                cursor=last_cursor,
             )
             if not initial and current_cursor <= last_cursor:
                 idle_polls += 1
@@ -415,16 +416,20 @@ async def stream_session_runtime(
                     asyncio.to_thread(service.list_events, user_id=resolved_user_id, session_id=session_id),
                 )
                 runtime = cached_runtime
+            payload_type = "snapshot" if initial or not resumable else "update"
             payload = {
-                "type": "snapshot",
+                "type": payload_type,
                 "transcripts": transcripts.model_dump(by_alias=True),
                 "candidates": candidates.model_dump(by_alias=True),
-                "events": [item.model_dump(by_alias=True) for item in events.events],
+                "events": [
+                    item.model_dump(by_alias=True)
+                    for item in (events.events if payload_type == "snapshot" else [service.event_response(event) for event in incremental_events])
+                ],
                 "runtime": runtime.model_dump(by_alias=True),
                 "ownerUserId": resolved_user_id,
                 "cursor": current_cursor,
             }
-            yield _sse_frame("snapshot", payload, cursor=current_cursor)
+            yield _sse_frame(payload_type, payload, cursor=current_cursor)
             last_cursor = current_cursor
             initial = False
             await asyncio.sleep(0.05)

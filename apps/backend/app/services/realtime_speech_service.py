@@ -17,7 +17,6 @@ from app.core.config import Settings
 from app.core.errors import DomainRequestError
 from app.core.logging import log_event
 from app.ports.commercial_hardening import AiUsageRecord, CommercialHardeningRepository
-from app.ports.chat import ChatAnswerTaskRecord
 from app.ports.realtime_speech import (
     AccountDesktopDeviceRecord,
     AsrUsageReport,
@@ -52,7 +51,6 @@ from app.schemas.realtime_speech import (
     TranscriptSegmentResponse,
 )
 from app.ports.interview_session import InterviewSessionRecord
-from app.services.chat_service import ChatService
 from app.services.session_service import SessionService
 
 
@@ -111,7 +109,6 @@ class RealtimeSpeechService:
         logger: logging.Logger,
         repository: RealtimeSpeechRepository,
         session_service: SessionService,
-        chat_service: ChatService,
         asr_gateway: RealtimeAsrGatewayPort,
         commercial_repository: CommercialHardeningRepository | None = None,
     ) -> None:
@@ -119,19 +116,15 @@ class RealtimeSpeechService:
         self.logger = logger
         self.repository = repository
         self.session_service = session_service
-        self.chat_service = chat_service
         self.asr_gateway = asr_gateway
         self.commercial_repository = commercial_repository
         self._asr_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="realtime-asr")
-        self._answer_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="realtime-answer")
         self._latest_timings_by_session_source: dict[tuple[str, RealtimeSourceKind], dict[str, int | None]] = {}
         self._counters_by_session_source: dict[tuple[str, RealtimeSourceKind], dict[str, int]] = {}
         self._active_requests_by_session_source: dict[tuple[str, RealtimeSourceKind], int] = {}
         self._frame_worker_lock = threading.Lock()
         self._frame_workers: dict[tuple[str, RealtimeSourceKind], threading.Thread] = {}
         self._frame_queues: dict[tuple[str, RealtimeSourceKind], "queue.Queue[dict[str, object]]"] = {}
-        self._automatic_answer_lock = threading.Lock()
-        self._automatic_answer_candidates: set[str] = set()
         self._retired_session_ids: set[str] = set()
 
     def _record_speech_usage(
@@ -1674,7 +1667,16 @@ class RealtimeSpeechService:
         events = [item for item in self.repository.list_events_for_session(session_id=session_id) if item.owner_user_id == user_id]
         return RealtimeEventListResponse(
             sessionId=session_id,
-            events=[RealtimeEventResponse(eventId=item.event_id, kind=item.kind, payload=item.payload, createdAtMs=item.created_at_ms) for item in events],
+            events=[self.event_response(item) for item in events],
+        )
+
+    @staticmethod
+    def event_response(event: RealtimeEvent) -> RealtimeEventResponse:
+        return RealtimeEventResponse(
+            eventId=event.event_id,
+            kind=event.kind,
+            payload=event.payload,
+            createdAtMs=event.created_at_ms,
         )
 
     def publish_screenshot_shortcut_accepted(self, *, user_id: str, session_id: str, request_id: str) -> RealtimeEventResponse:
@@ -2042,146 +2044,6 @@ class RealtimeSpeechService:
         return re.sub(r"[，。！？、；：,.!?;:~～…·\-—_]+", "", compact)
 
     @staticmethod
-    def _automatic_answer_task_payload(task: ChatAnswerTaskRecord) -> dict[str, object]:
-        return {
-            "taskId": task.task_id,
-            "sessionId": task.session_id,
-            "ownerUserId": task.owner_user_id,
-            "question": task.question,
-            "rawQuestion": task.raw_question,
-            "normalizedQuestion": task.normalized_question,
-            "questionNormalizationStatus": task.question_normalization_status,
-            "answerText": task.answer_text,
-            "status": task.status,
-            "streamMode": task.stream_mode,
-            "providerName": task.provider_name,
-            "modelName": task.model_name,
-            "promptTemplateId": task.prompt_template_id,
-            "promptVersion": task.prompt_version,
-            "retrievalExcerptCount": task.retrieval_excerpt_count,
-            "materialContextStatus": task.material_context_status,
-            "fixedSourceCount": task.fixed_source_count,
-            "retrievedSourceCount": task.retrieved_source_count,
-            "materialProvenance": task.material_provenance,
-            "unavailableMaterialSources": task.unavailable_material_sources,
-            "retryCount": task.retry_count,
-            "errorCode": task.error_code,
-            "errorMessage": task.error_message,
-            "createdAtMs": task.created_at_ms,
-            "updatedAtMs": task.updated_at_ms,
-            "completedAtMs": task.completed_at_ms,
-            # The cumulative answerText is sufficient for realtime reconciliation;
-            # full ordered chunks remain available from live-answer history.
-            "chunks": [],
-        }
-
-    def _publish_automatic_answer_progress(
-        self,
-        *,
-        candidate: QuestionCandidateRecord,
-        phase: str,
-        task: ChatAnswerTaskRecord | None,
-        chunk_sequence: int | None = None,
-        safe_error_code: str | None = None,
-        safe_error_message: str | None = None,
-    ) -> None:
-        payload: dict[str, object] = {
-            "candidateId": candidate.candidate_id,
-            "phase": phase,
-            "question": candidate.text,
-        }
-        if task is not None:
-            payload["task"] = self._automatic_answer_task_payload(task)
-        if chunk_sequence is not None:
-            payload["chunkSequence"] = chunk_sequence
-        if safe_error_code:
-            payload["errorCode"] = safe_error_code
-        if safe_error_message:
-            payload["errorMessage"] = safe_error_message[:240]
-        self._save_event(
-            session_id=candidate.session_id,
-            owner_user_id=candidate.owner_user_id,
-            kind="answer-stream",
-            payload=payload,
-        )
-
-    def _run_automatic_answer(self, candidate: QuestionCandidateRecord) -> None:
-        last_published_at_ms = 0
-        last_published_answer_length = 0
-        try:
-            stream = self.chat_service.stream_automatic_answer_question(
-                user_id=candidate.owner_user_id,
-                session_id=candidate.session_id,
-                question=candidate.text,
-                usage_id=f"live-answer:auto:{candidate.candidate_id}",
-            )
-            for progress in stream:
-                task = progress.get("task")
-                if not isinstance(task, ChatAnswerTaskRecord):
-                    continue
-                phase = str(progress.get("type") or "chunk")
-                if phase == "task-started":
-                    current = self.repository.get_candidate(candidate.candidate_id) or candidate
-                    if current.answer_task_id not in {None, task.task_id}:
-                        self.chat_service.cancel_task(user_id=candidate.owner_user_id, task_id=task.task_id)
-                        return
-                    candidate = self.repository.save_candidate(
-                        replace(current, answer_task_id=task.task_id, updated_at_ms=_now_ms())
-                    )
-                chunk = progress.get("chunk")
-                now_ms = _now_ms()
-                if (
-                    phase == "chunk"
-                    and last_published_at_ms > 0
-                    and last_published_answer_length > 0
-                    and now_ms - last_published_at_ms < 100
-                    and len(task.answer_text) - last_published_answer_length < 80
-                ):
-                    continue
-                self._publish_automatic_answer_progress(
-                    candidate=candidate,
-                    phase=phase,
-                    task=task,
-                    chunk_sequence=getattr(chunk, "sequence", None),
-                    safe_error_code=str(progress.get("error_code")) if progress.get("error_code") else None,
-                    safe_error_message=str(progress.get("error_message")) if progress.get("error_message") else None,
-                )
-                last_published_at_ms = now_ms
-                last_published_answer_length = len(task.answer_text)
-        except Exception as exc:
-            self._publish_automatic_answer_progress(
-                candidate=candidate,
-                phase="failed",
-                task=None,
-                safe_error_code=exc.__class__.__name__,
-                safe_error_message=str(exc),
-            )
-            self._log(
-                logging.WARNING,
-                "realtime_speech.automatic_answer_failed",
-                session_id=candidate.session_id,
-                publisher_id=None,
-                state="answer-failed",
-                error_code=exc.__class__.__name__,
-            )
-        finally:
-            with self._automatic_answer_lock:
-                self._automatic_answer_candidates.discard(candidate.candidate_id)
-
-    def _start_automatic_answer(self, candidate: QuestionCandidateRecord) -> bool:
-        with self._automatic_answer_lock:
-            if candidate.answer_task_id is not None or candidate.candidate_id in self._automatic_answer_candidates:
-                return False
-            self._automatic_answer_candidates.add(candidate.candidate_id)
-        try:
-            self._answer_executor.submit(self._run_automatic_answer, candidate)
-            return True
-        except Exception:
-            with self._automatic_answer_lock:
-                self._automatic_answer_candidates.discard(candidate.candidate_id)
-            raise
-
-    @staticmethod
     def _runtime_source_health(item: dict[str, object]) -> RealtimeSourceHealthResponse:
         return RealtimeSourceHealthResponse(
             sourceId=str(item.get("sourceId", "")),
@@ -2358,6 +2220,37 @@ class RealtimeSpeechService:
                 created_at_ms=_now_ms(),
             )
         )
+
+    def publish_session_event(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        kind,
+        payload: dict[str, object],
+    ) -> RealtimeEvent:
+        """Publish a safe cross-module event into the session's canonical stream."""
+        self.session_service.get_session(user_id=user_id, session_id=session_id)
+        return self._save_event(
+            session_id=session_id,
+            owner_user_id=user_id,
+            kind=kind,
+            payload=payload,
+        )
+
+    def list_session_events_after(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        cursor: int,
+    ) -> tuple[int, list[RealtimeEvent], bool]:
+        self.session_service.get_session(user_id=user_id, session_id=session_id)
+        current_cursor, events, resumable = self.repository.list_events_after(
+            session_id=session_id,
+            cursor=cursor,
+        )
+        return current_cursor, [event for event in events if event.owner_user_id == user_id], resumable
 
     @staticmethod
     def _event_payload(event: RealtimeEvent) -> dict[str, object]:

@@ -461,7 +461,6 @@ def realtime_speech_service() -> RealtimeSpeechService:
         logger=logger(),
         repository=realtime_speech_repository(),
         session_service=session_service(),
-        chat_service=chat_service(),
         asr_gateway=realtime_asr_gateway(),
         commercial_repository=commercial_hardening_repository(),
     )

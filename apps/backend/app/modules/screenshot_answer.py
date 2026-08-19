@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+import json
+
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, Request, UploadFile
+from fastapi.responses import StreamingResponse
 
 from app.core.logging import utc_now_iso
 from app.core.responses import success_response
@@ -36,6 +40,11 @@ descriptor = ModuleDescriptor(
     mode="active",
     notes="Screenshot upload, vision grounding, retrieval enhancement, and streaming interview answer generation.",
 )
+
+
+def _sse_frame(event: str, payload: dict[str, object], *, cursor: int | None = None) -> str:
+    identifier = f"id: {cursor}\n" if cursor is not None else ""
+    return f"{identifier}event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
 def _to_upload_response(upload) -> ScreenshotUploadResponse:
@@ -132,6 +141,30 @@ def _to_remote_capture_request_response(request, task=None) -> RemoteScreenshotC
         completedAtMs=request.completed_at_ms,
         telemetry=_to_telemetry_response(request.telemetry),
         answerTask=_to_task_response(task) if task is not None else None,
+    )
+
+
+def _publish_capture_event(realtime: RealtimeSpeechService, capture_request, task=None) -> None:
+    payload: dict[str, object] = {
+        "requestId": capture_request.request_id,
+        "deviceId": capture_request.device_id,
+        "status": capture_request.status,
+        "stage": capture_request.stage,
+        "updatedAtMs": capture_request.updated_at_ms,
+    }
+    if capture_request.claimed_at_ms is not None:
+        payload["claimedAtMs"] = capture_request.claimed_at_ms
+    if capture_request.completed_at_ms is not None:
+        payload["completedAtMs"] = capture_request.completed_at_ms
+    if capture_request.error_message:
+        payload["errorMessage"] = capture_request.error_message[:240]
+    if task is not None:
+        payload["answerTask"] = _to_task_response(task).model_dump(by_alias=True)
+    realtime.publish_session_event(
+        user_id=capture_request.owner_user_id,
+        session_id=capture_request.session_id,
+        kind="screenshot-capture-updated",
+        payload=payload,
     )
 
 
@@ -299,6 +332,7 @@ async def create_remote_capture_request(
         manual_code=binding.manual_code,
         instruction=request.instruction,
     )
+    _publish_capture_event(realtime, capture_request)
     return success_response(request=request_context, data=_to_remote_capture_request_response(capture_request), timestamp=utc_now_iso())
 
 
@@ -346,6 +380,7 @@ async def create_desktop_shortcut_capture_request(
         manual_code=request.manual_code,
         instruction="请直接识别当前截图中的题目、代码或系统设计内容，并给出可直接使用的中文回答。[来源:助手快捷键]",
     )
+    _publish_capture_event(realtime, capture_request)
     realtime.publish_screenshot_shortcut_accepted(
         user_id=binding.owner_user_id,
         session_id=binding.session_id,
@@ -375,10 +410,12 @@ async def cancel_remote_capture_request(
     request: CancelRemoteScreenshotCaptureRequest,
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: ScreenshotAnswerService = Depends(screenshot_answer_service),
+    realtime: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[RemoteScreenshotCaptureRequestResponse]:
     resolved_user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
     capture_request = service.cancel_remote_capture_request(user_id=resolved_user_id, request_id=request_id)
     task = service.get_task(user_id=resolved_user_id, task_id=capture_request.answer_task_id) if capture_request.answer_task_id else None
+    _publish_capture_event(realtime, capture_request, task)
     return success_response(request=request_context, data=_to_remote_capture_request_response(capture_request, task), timestamp=utc_now_iso())
 
 
@@ -395,6 +432,102 @@ async def get_next_remote_capture_request(
         return success_response(request=request, data=None, timestamp=utc_now_iso())
     capture_request = service.get_next_remote_capture_request(device_id=device_id, manual_code=manual_code)
     return success_response(request=request, data=_to_remote_capture_request_response(capture_request) if capture_request is not None else None, timestamp=utc_now_iso())
+
+
+@router.get("/desktop-devices/{device_id}/capture-requests/stream")
+async def stream_desktop_capture_requests(
+    device_id: str,
+    request: Request,
+    manual_code: str = Query(alias="manualCode"),
+    cursor: int = Query(default=0, ge=0),
+    service: ScreenshotAnswerService = Depends(screenshot_answer_service),
+    realtime: RealtimeSpeechService = Depends(realtime_speech_service),
+) -> StreamingResponse:
+    binding = realtime.get_desktop_capture_binding(device_id=device_id, manual_code=manual_code)
+    session = realtime.session_service.get_session(user_id=binding.owner_user_id, session_id=binding.session_id)
+    if session.status != "live":
+        from app.core.errors import DomainRequestError
+        raise DomainRequestError("screenshot-answer", "desktop-stream", "当前设备没有连接正在进行的面试。", 409)
+
+    async def event_stream():
+        last_cursor = cursor
+        pending = await asyncio.to_thread(
+            service.get_next_remote_capture_request,
+            device_id=device_id,
+            manual_code=manual_code,
+        )
+        current_cursor, _events, _resumable = await asyncio.to_thread(
+            realtime.list_session_events_after,
+            user_id=binding.owner_user_id,
+            session_id=binding.session_id,
+            cursor=last_cursor,
+        )
+        if pending is not None:
+            yield _sse_frame("capture-request", {
+                "requestId": pending.request_id,
+                "status": pending.status,
+                "stage": pending.stage,
+            }, cursor=current_cursor)
+        last_cursor = current_cursor
+        idle_ticks = 0
+        binding_check_ticks = 0
+        while True:
+            if await request.is_disconnected():
+                break
+            binding_check_ticks += 1
+            if binding_check_ticks >= 50:
+                pairing_status = await asyncio.to_thread(
+                    realtime.get_desktop_pairing_status,
+                    manual_code=manual_code,
+                    device_id=device_id,
+                )
+                if pairing_status.get("bound") is not True or pairing_status.get("sessionStatus") != "live":
+                    break
+                binding_check_ticks = 0
+            current_cursor, events, resumable = await asyncio.to_thread(
+                realtime.list_session_events_after,
+                user_id=binding.owner_user_id,
+                session_id=binding.session_id,
+                cursor=last_cursor,
+            )
+            if not resumable:
+                pending = await asyncio.to_thread(
+                    service.get_next_remote_capture_request,
+                    device_id=device_id,
+                    manual_code=manual_code,
+                )
+                if pending is not None:
+                    yield _sse_frame("capture-request", {
+                        "requestId": pending.request_id,
+                        "status": pending.status,
+                        "stage": pending.stage,
+                    }, cursor=current_cursor)
+            for event in events:
+                if event.kind != "screenshot-capture-updated":
+                    continue
+                if event.payload.get("deviceId") != device_id or event.payload.get("status") != "requested":
+                    continue
+                yield _sse_frame("capture-request", {
+                    "requestId": str(event.payload.get("requestId") or ""),
+                    "status": "requested",
+                    "stage": str(event.payload.get("stage") or "waiting-desktop"),
+                    "eventId": event.event_id,
+                }, cursor=current_cursor)
+            if current_cursor > last_cursor:
+                last_cursor = current_cursor
+                idle_ticks = 0
+            else:
+                idle_ticks += 1
+                if idle_ticks >= 150:
+                    yield ": keepalive\n\n"
+                    idle_ticks = 0
+            await asyncio.sleep(0.1)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/capture-requests/{request_id}/desktop-upload", response_model=ApiEnvelope[RemoteScreenshotCaptureRequestResponse])
@@ -415,6 +548,7 @@ async def complete_remote_capture_request(
         device_id=device_id,
         manual_code=manual_code,
     )
+    _publish_capture_event(realtime, capture_request)
     background_tasks.add_task(
         service.complete_remote_capture_request_safely,
         request_id=request_id,
@@ -423,6 +557,7 @@ async def complete_remote_capture_request(
         filename=screenshot.filename or "current-screen.png",
         content_type=screenshot.content_type or "image/png",
         payload=payload,
+        on_transition=lambda updated, task: _publish_capture_event(realtime, updated, task),
     )
     return success_response(request=request_context, data=_to_remote_capture_request_response(capture_request), timestamp=utc_now_iso())
 
@@ -443,4 +578,5 @@ async def fail_remote_capture_request(
         message=request.message,
         stage=request.stage,
     )
+    _publish_capture_event(realtime, capture_request)
     return success_response(request=request_context, data=_to_remote_capture_request_response(capture_request), timestamp=utc_now_iso())

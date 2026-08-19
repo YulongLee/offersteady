@@ -6,6 +6,7 @@ import io
 import json
 import logging
 import re
+from collections.abc import Callable
 from json import JSONDecodeError
 from dataclasses import replace
 from pathlib import Path
@@ -1007,6 +1008,7 @@ class ScreenshotAnswerService:
         filename: str,
         content_type: str,
         payload: bytes,
+        on_transition: Callable[[RemoteScreenshotCaptureRequest, ScreenshotAnswerTaskRecord | None], None] | None = None,
     ) -> tuple[RemoteScreenshotCaptureRequest, ScreenshotAnswerTaskRecord]:
         background_started = perf_counter()
         metrics: dict[str, object] = {"upload_accepted_ms": 0.0}
@@ -1029,12 +1031,16 @@ class ScreenshotAnswerService:
             captured_filename=filename,
             telemetry=self._telemetry_from_metrics(metrics),
         ))
+        if on_transition is not None:
+            on_transition(request, None)
         request = self.repository.save_remote_capture_request(replace(
             request,
             stage="vision-running",
             updated_at_ms=_now_ms(),
             telemetry=self._telemetry_from_metrics(metrics),
         ))
+        if on_transition is not None:
+            on_transition(request, None)
         task, _ = self.answer_screenshots(
             user_id=request.owner_user_id,
             session_id=request.session_id,
@@ -1056,7 +1062,10 @@ class ScreenshotAnswerService:
             error_message=task.error_message,
             telemetry=final_telemetry,
         )
-        return self.repository.save_remote_capture_request(replace(completed, stage="completed" if task.status == "completed" else "failed")), task
+        final_request = self.repository.save_remote_capture_request(replace(completed, stage="completed" if task.status == "completed" else "failed"))
+        if on_transition is not None:
+            on_transition(final_request, task)
+        return final_request, task
 
     def complete_remote_capture_request_safely(
         self,
@@ -1067,6 +1076,7 @@ class ScreenshotAnswerService:
         filename: str,
         content_type: str,
         payload: bytes,
+        on_transition: Callable[[RemoteScreenshotCaptureRequest, ScreenshotAnswerTaskRecord | None], None] | None = None,
     ) -> None:
         try:
             self.complete_remote_capture_request(
@@ -1076,6 +1086,7 @@ class ScreenshotAnswerService:
                 filename=filename,
                 content_type=content_type,
                 payload=payload,
+                on_transition=on_transition,
             )
         except Exception as exc:
             failed_phase = "background"
@@ -1100,7 +1111,9 @@ class ScreenshotAnswerService:
                     message=str(exc) or "截图上传到 OSS 失败，请稍后重试。",
                     stage=stage,
                 )
-                self.repository.save_remote_capture_request(replace(failed, telemetry=telemetry))
+                failed = self.repository.save_remote_capture_request(replace(failed, telemetry=telemetry))
+                if on_transition is not None:
+                    on_transition(failed, None)
             except Exception:
                 self._log(
                     logging.WARNING,

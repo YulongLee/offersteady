@@ -317,7 +317,7 @@ describe("backend preview adapter", () => {
     expect(JSON.stringify(updates[0])).not.toContain("旧 session 的问题不应出现");
   });
 
-  it("maps automatic answer stream progress into the existing answer workspace shape", async () => {
+  it("maps explicitly requested answer lifecycle events into the existing answer workspace shape", async () => {
     window.localStorage.setItem("offersteady.auth.access_token", "access-token");
     window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
     window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
@@ -333,8 +333,8 @@ describe("backend preview adapter", () => {
           transcripts: { sessionId: "session-1", transcripts: [] },
           candidates: { sessionId: "session-1", candidates: [] },
           events: { sessionId: "session-1", events: [{
-            eventId: "answer-stream-1", kind: "answer-stream",
-            payload: { phase: "chunk", task }, createdAtMs: 123,
+            eventId: "answer-task-1", kind: "answer-task-updated",
+            payload: { phase: "complete", trigger: "manual", task }, createdAtMs: 123,
           }] },
           runtime: null,
         })}\n\n`));
@@ -349,8 +349,8 @@ describe("backend preview adapter", () => {
     await adapter.subscribeRealtimeSession("session-1", update => updates.push(update));
 
     expect(updates[0]).toMatchObject({
-      automaticAnswerUpdate: {
-        question: { id: "auto-task-1", input: "desktop-audio", status: "streaming", advice: { detail: "我先说明项目背景。" } },
+      answerUpdate: {
+        question: { id: "auto-task-1", input: "manual", status: "streaming", advice: { detail: "我先说明项目背景。" } },
         task: { id: "auto-task-1", status: "generating", partialText: "我先说明项目背景。" },
       },
     });
@@ -534,6 +534,48 @@ describe("backend preview adapter", () => {
         body: JSON.stringify({ userId: "user-1" }),
       }),
     );
+  });
+
+  it("completes screenshot answers from the unified session stream without high-frequency task polling", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    let streamController: ReadableStreamDefaultController<Uint8Array> | null = null;
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({ start(controller) { streamController = controller; } });
+    const task = {
+      taskId: "shot-task-1", sessionId: "session-1", ownerUserId: "user-1", instruction: "回答截图",
+      answerText: "这是截图答案。", status: "completed", streamMode: true, imageIds: ["image-1"], imageCount: 1,
+      providerName: "synthetic", modelName: "synthetic", visionProviderName: "synthetic", visionModelName: "synthetic",
+      promptTemplateId: "screenshot", promptVersion: "v1", retrievalExcerptCount: 0, materialContextStatus: "unused",
+      fixedSourceCount: 0, retrievedSourceCount: 0, materialProvenance: [], unavailableMaterialSources: [], retryCount: 0,
+      errorCode: null, errorMessage: null, createdAtMs: 1, updatedAtMs: 2, completedAtMs: 2,
+      visionSummaryTitle: "截图题目", telemetry: {}, chunks: [],
+    };
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/realtime-speech/sessions/session-1/stream")) return new Response(stream, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+      if (url.endsWith("/screenshot-answer/sessions/session-1/remote-capture-requests")) {
+        return new Response(JSON.stringify(envelope({ requestId: "shot-request-1", sessionId: "session-1", ownerUserId: "user-1", deviceId: "device-1", manualCode: "123456", instruction: "回答截图", status: "requested", stage: "requested", createdAtMs: 1, updatedAtMs: 1, telemetry: {} })), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+    const subscription = adapter.subscribeRealtimeSession("session-1", () => undefined);
+    await Promise.resolve();
+    const answer = adapter.submitScreenshotAnswer({ interviewId: "session-1", instruction: "回答截图" });
+    await Promise.resolve();
+    streamController!.enqueue(encoder.encode(`event: update\ndata: ${JSON.stringify({
+      type: "update", cursor: 2,
+      transcripts: { sessionId: "session-1", transcripts: [] },
+      candidates: { sessionId: "session-1", candidates: [] },
+      events: { sessionId: "session-1", events: [{ eventId: "shot-event-1", kind: "screenshot-capture-updated", payload: { requestId: "shot-request-1", status: "completed", stage: "completed", answerTask: task }, createdAtMs: 2 }] },
+      runtime: null,
+    })}\n\n`));
+    await expect(answer).resolves.toMatchObject({ question: { text: "回答截图", advice: { detail: "这是截图答案。" } } });
+    streamController!.close();
+    await subscription;
+    expect(fetchImpl.mock.calls.some(([input]) => String(input).includes("/capture-requests/shot-request-1?"))).toBe(false);
   });
 
   it("persists pause and resume through the realtime capture control API", async () => {

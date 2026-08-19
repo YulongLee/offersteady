@@ -688,6 +688,7 @@ function LivePage() {
   const activeShortcutScreenshotRequest = useRef<string | null>(null);
   const terminalShortcutScreenshotRequests = useRef(new Set<string>());
   const seenShortcutScreenshotNotifications = useRef(new Set<string>());
+  const realtimeHealthyRef = useRef(false);
   const livePageMountedAtMs = useRef(Date.now());
   const pageInstanceId = useRef(globalThis.crypto?.randomUUID?.() ?? `page-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const interviewTitle = state.interviews.find(item => item.id === id)?.title ?? "本场面试";
@@ -749,11 +750,16 @@ function LivePage() {
       }
     };
     void syncWorkspace();
-    const timer = window.setInterval(() => void syncWorkspace(), 1500);
+    const refreshOnReturn = () => {
+      if (document.visibilityState === "visible") void syncWorkspace();
+    };
+    document.addEventListener("visibilitychange", refreshOnReturn);
+    window.addEventListener("focus", refreshOnReturn);
     return () => {
       stopped = true;
       controller.abort();
-      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshOnReturn);
+      window.removeEventListener("focus", refreshOnReturn);
     };
   }, [id, setState]);
   useEffect(() => {
@@ -787,7 +793,7 @@ function LivePage() {
     let stopped = false;
     let inFlight = false;
     const syncShortcutAnswers = async () => {
-      if (stopped || inFlight || document.visibilityState !== "visible") return;
+      if (stopped || inFlight || realtimeHealthyRef.current || document.visibilityState !== "visible") return;
       inFlight = true;
       try {
         const updates = await runAdapterOperation(
@@ -861,6 +867,7 @@ function LivePage() {
     const pauseReplacedPage = () => {
       if (stopped) return;
       stopped = true;
+      realtimeHealthyRef.current = false;
       setPageLeaseStatus("replaced");
       setNotice("");
       realtimeController.abort();
@@ -890,13 +897,24 @@ function LivePage() {
         activeShortcutScreenshotRequest.current = shortcut.requestId;
         setScreenshot(shortcut.screenshotTask);
       }
+      if (shortcut && shortcut.acceptedAtMs === undefined) {
+        if (shortcut.status === "requested" || shortcut.status === "processing") {
+          activeShortcutScreenshotRequest.current = shortcut.requestId;
+          setScreenshot(shortcut.screenshotTask);
+        } else if (!terminalShortcutScreenshotRequests.current.has(shortcut.requestId)) {
+          terminalShortcutScreenshotRequests.current.add(shortcut.requestId);
+          if (activeShortcutScreenshotRequest.current === shortcut.requestId) activeShortcutScreenshotRequest.current = null;
+          setScreenshot(shortcut.status === "completed" ? null : shortcut.screenshotTask);
+        }
+      }
       setState(current => {
-        const workspace = realtime.automaticAnswerUpdate
+        const answerResult = realtime.answerUpdate ?? shortcut?.result;
+        const workspace = answerResult
           ? reconcileAnswerWorkspace(
               { questions: current.questions, activeAnswerTask: current.activeAnswerTask },
               {
-                questions: [realtime.automaticAnswerUpdate.question],
-                activeAnswerTask: realtime.automaticAnswerUpdate.task,
+                questions: [answerResult.question],
+                activeAnswerTask: answerResult.task,
               },
               { preferIncomingTask: true },
             )
@@ -968,15 +986,18 @@ function LivePage() {
       try {
         await runAdapterOperation(signal => interviewAppAdapter.subscribeRealtimeSession(id, realtime => {
           realtimeStreamHealthy = true;
+          realtimeHealthyRef.current = true;
           invalidSessionSuspended = false;
           reconnectAttempt = 0;
           applyRealtimeState(realtime);
         }, signal, { pageInstanceId: pageInstanceId.current, leaseGeneration: activeLeaseGeneration }), realtimeController.signal);
         realtimeStreamHealthy = false;
+        realtimeHealthyRef.current = false;
         if (!stopped && !realtimeController.signal.aborted) scheduleReconnect();
       } catch (error) {
         if (stopped || realtimeController.signal.aborted) return;
         realtimeStreamHealthy = false;
+        realtimeHealthyRef.current = false;
         const status = realtimeErrorStatus(error);
         if (isInvalidRealtimeSessionStatus(status)) {
           window.sessionStorage?.removeItem(`offersteady:realtime-cursor:${id}`);
@@ -1026,6 +1047,7 @@ function LivePage() {
     });
     return () => {
       stopped = true;
+      realtimeHealthyRef.current = false;
       realtimeController.abort();
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);

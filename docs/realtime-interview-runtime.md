@@ -9,7 +9,8 @@ Electron microphone + display loopback system audio
   -> bounded FastAPI ingress queues per role
   -> persistent Qwen realtime ASR sessions per role
   -> Redis runtime snapshot and bounded event stream
-  -> cursor-based SSE web consumer
+  -> one cursor-based session SSE for transcript, explicit answer and screenshot lifecycle state
+  -> monotonic web reducer and task-specific answer SSE for first-token delivery
 ```
 
 The current packaged desktop uses one Electron renderer as the production capture and transport owner. The bundled Swift runtime remains an inactive migration path and must not run beside the renderer owner. Raw PCM stays in bounded memory and is never stored in Redis, PostgreSQL, OSS, diagnostics, or support reports.
@@ -24,7 +25,10 @@ The renderer treats `ended`, `muted`, a suspended/closed AudioContext, a stalled
 - The desktop keeps at most 64 frames, approximately two seconds of 16 kHz mono PCM, and drops the oldest interim frame first.
 - A reconnect reuses the publisher token and resumes from backend receipts for that publisher.
 - Web presence is diagnostic only. Refreshing the page does not revoke the desktop media lease.
-- The web consumer stores the latest activity cursor in session storage and resumes SSE snapshots from that cursor.
+- The web consumer stores the latest activity cursor in session storage, hydrates once, and then consumes ordered incremental events. A cursor outside the retained Redis range forces a fresh snapshot.
+- Transcript confirmation never creates an answer task. Only a user click on quick answer, manual answer, or screenshot answer may start answer generation.
+- The dedicated answer SSE remains responsible for token-by-token first response. Its lifecycle is also published into the session stream so reconnects and cross-device views converge on the same terminal state.
+- Screenshot request stages (`requested`, `claimed`, `uploaded`, `vision-running`, terminal) use the same session event stream. Events contain identifiers and safe metadata only; screenshots and audio are never embedded.
 
 ## State ownership
 
@@ -54,9 +58,13 @@ Redis runtime snapshots and event streams expire after two hours by default. App
 
 Rollback enables the legacy HTTP flag only for sessions pinned to the old protocol. A running session must not switch protocols midway.
 
+For screenshot delivery, current desktop packages subscribe to the authenticated device event stream. The legacy `capture-requests/next` endpoint remains a compatibility and recovery path: the desktop performs a single non-overlapping check only after the push stream fails, then reconnects with bounded backoff. Older packages therefore remain usable during a staged rollout.
+
 ## Privacy-safe diagnostics
 
 Allowed diagnostics include trace IDs, session-safe IDs, channel, sequence, queue depth, durations, dropped-frame counts, reconnect counts and provider error codes. Logs and reports must not contain PCM payloads, access tokens or transcript text.
+
+Recommended event-flow metrics are session-stream reconnect count, resume success rate, event cursor lag, screenshot request-to-claim latency, screenshot terminal latency, fallback poll count, and duplicate event suppression count. A rise in fallback polls or cursor resets indicates push-path degradation even when the user-visible workflow still succeeds.
 
 ## Release gates
 
