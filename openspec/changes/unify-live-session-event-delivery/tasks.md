@@ -34,4 +34,4 @@
 - [x] 6.1 Run focused backend, web, desktop, AI eval, typecheck, and production build verification after each area
 - [x] 6.2 Run the complete backend/web/desktop regression suite and validate this OpenSpec change strictly
 - [x] 6.3 Update realtime runtime and desktop distribution documentation with the new event flow, metrics, compatibility, and rollback behavior
-- [ ] 6.4 Commit scoped files, push Git, deploy Backend then Web, publish current desktop packages, and verify production health and event latency
+- [x] 6.4 Commit scoped files, push Git, deploy Backend then Web, publish current desktop packages, and verify production health and event latency
