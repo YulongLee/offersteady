@@ -20,4 +20,4 @@
 - [x] 4.1 Run focused hub/source tests and strict OpenSpec validation
 - [x] 4.2 Run the full Web test suite, workspace type checks, and production build verification
 - [x] 4.3 Measure a representative hub with mobile and desktop Lighthouse and record results
-- [ ] 4.4 Commit and push only this change, deploy the Web surface, and verify all 20 public routes plus noindex/404 controls online
+- [x] 4.4 Commit and push only this change, deploy the Web surface, and verify all 20 public routes plus noindex/404 controls online
