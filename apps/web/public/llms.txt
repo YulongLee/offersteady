@@ -28,6 +28,9 @@
 - [项目经历回答方法](https://mianshiwen.cn/guides/project-experience)
 - [技术面试准备指南](https://mianshiwen.cn/guides/technical-interview)
 - [面试常见问题分类](https://mianshiwen.cn/guides/common-interview-questions)
+- [大模型面试题](https://mianshiwen.cn/interview-questions/llm)
+- [RAG面试题](https://mianshiwen.cn/interview-questions/rag)
+- [AI Agent面试题](https://mianshiwen.cn/interview-questions/ai-agent)
 - [隐私政策](https://mianshiwen.cn/privacy)
 - [用户协议](https://mianshiwen.cn/terms)
 

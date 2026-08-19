@@ -36,7 +36,14 @@ const guideRoutes = new Map([
   ["/guides/common-interview-questions", "public/seo/common-interview-questions.html"],
 ]);
 const coreGuideRoutes = new Set(["/guides/self-introduction", "/guides/project-experience", "/guides/technical-interview", "/guides/common-interview-questions"]);
-const topicRoutes = new Map([...hubRoutes, ...featureRoutes, ...commercialRoutes, ...guideRoutes]);
+const aiTopicRoutes = new Map([
+  ["/interview-questions/llm", "public/seo/llm.html"],
+  ["/interview-questions/rag", "public/seo/rag.html"],
+  ["/interview-questions/ai-agent", "public/seo/ai-agent.html"],
+]);
+const articleRoutes = new Set([...guideRoutes.keys(), ...aiTopicRoutes.keys()]);
+const deepArticleRoutes = new Set([...coreGuideRoutes, ...aiTopicRoutes.keys()]);
+const topicRoutes = new Map([...hubRoutes, ...featureRoutes, ...commercialRoutes, ...guideRoutes, ...aiTopicRoutes]);
 const readWeb = (path) => readFile(resolve(webRoot, path), "utf8");
 const [indexHtml, guideHtml, robots, sitemap, notFound, nginx, llms, llmsFull, factsText, appSource, shareCard] = await Promise.all([
   readWeb("index.html"), readWeb("guide.html"), readWeb("public/robots.txt"), readWeb("public/sitemap.xml"),
@@ -75,13 +82,13 @@ assert.deepEqual([...indexHtml.matchAll(/<script type="application\/ld\+json">(.
 assert.deepEqual([...guideHtml.matchAll(/<script type="application\/ld\+json">(.+?)<\/script>/g)].map((match) => JSON.parse(match[1])["@type"]), ["WebPage", "BreadcrumbList"]);
 for (const [route, html] of topicDocuments) {
   const graph = JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1])["@graph"];
-  const expectedPageType = guideRoutes.has(route) ? "Article" : route === "/about" ? "AboutPage" : route === "/contact" ? "ContactPage" : "WebPage";
+  const expectedPageType = articleRoutes.has(route) ? "Article" : route === "/about" ? "AboutPage" : route === "/contact" ? "ContactPage" : "WebPage";
   assert.deepEqual(graph.map((node) => node["@type"]), [expectedPageType, "BreadcrumbList"], `Unexpected topic schema for ${route}`);
   assert.doesNotMatch(html, /(?:可以|能够|将|会)保证(?:面试|录用)|百分之百|绝对准确|(?:属于|已经|现为|达成)官方合作|(?:已经|现已|完成)直接集成|真实用户评价/);
   assert.match(html, /class="boundary"/);
-  assert.ok(Buffer.byteLength(html) <= (coreGuideRoutes.has(route) ? 20_000 : 12_000), `Topic HTML budget exceeded for ${route}`);
+  assert.ok(Buffer.byteLength(html) <= (deepArticleRoutes.has(route) ? 20_000 : 12_000), `Topic HTML budget exceeded for ${route}`);
 }
-for (const route of guideRoutes.keys()) {
+for (const route of articleRoutes) {
   const html = topicDocuments.get(route);
   assert.match(html, /面试稳产品与支持团队/);
   assert.match(html, /datePublished|dateModified/);
@@ -113,7 +120,7 @@ assert.equal(sitemapEntries.length, publicEntries.size);
 assert.ok(sitemapEntries.every(({ lastmod }) => lastmod === "2026-08-19"));
 assert.doesNotMatch(sitemap, /\/login|\/app/);
 
-const discoveryHtml = `${indexHtml}\n${guideHtml}`;
+const discoveryHtml = `${indexHtml}\n${guideHtml}\n${[...hubRoutes.keys()].map((route) => topicDocuments.get(route)).join("\n")}`;
 for (const route of topicRoutes.keys()) {
   assert.ok(discoveryHtml.includes(`href="${route}"`), `Topic is not linked from homepage or guide: ${route}`);
   assert.ok(llms.includes(canonicalUrl(route)), `llms.txt missing ${route}`);
@@ -141,6 +148,7 @@ assert.ok(nginx.includes("location ~ ^/features/(ai-interview-assistant|realtime
 assert.ok(nginx.includes("location ~ ^/(features|guides|interview-questions)/?$"));
 assert.ok(nginx.includes("location ~ ^/(pricing|download|security|about|contact)/?$"));
 assert.ok(nginx.includes("location ~ ^/guides/(audio-troubleshooting|interview-preparation|macos-permissions|feishu-audio-setup|tencent-meeting-audio-setup|star-interview-answer|self-introduction|project-experience|technical-interview|common-interview-questions)/?$"));
+assert.ok(nginx.includes("location ~ ^/interview-questions/(llm|rag|ai-agent)/?$"));
 for (const resource of ["llms.txt", "llms-full.txt", "public-facts.json"]) assert.ok(nginx.includes(`location = /${resource}`), `Missing Nginx route for ${resource}`);
 assert.match(nginx, /location ~\* "\^\/assets\/[\s\S]*?Cache-Control "public, max-age=31536000, immutable"/);
 assert.match(nginx, /location ~ \^\/\(\?:login\|terms\|privacy\|error\|invite\/[\s\S]*?Cache-Control "no-store"[\s\S]*?X-Robots-Tag "noindex, follow"/);

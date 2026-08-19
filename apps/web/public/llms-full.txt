@@ -35,6 +35,16 @@ STAR 回答结构：https://mianshiwen.cn/guides/star-interview-answer
 
 面试常见问题：https://mianshiwen.cn/guides/common-interview-questions
 
+### AI 技术面试专题
+
+大模型面试题覆盖 Transformer、自注意力、训练与推理、上下文、幻觉和评测；RAG 面试题覆盖文档摄取、切分、召回、重排、生成、引用和故障定位；AI Agent 面试题覆盖工作流、工具、状态、恢复、权限与可观测性。专题用于理解稳定概念和组织真实项目回答，不代表特定公司的官方题库。
+
+大模型面试题：https://mianshiwen.cn/interview-questions/llm
+
+RAG面试题：https://mianshiwen.cn/interview-questions/rag
+
+AI Agent面试题：https://mianshiwen.cn/interview-questions/ai-agent
+
 ### 实时面试辅助
 
 电脑伴随程序在用户明确授权系统权限后，可分别处理麦克风与电脑输出音频。网页展示对话状态，并在确认问题后生成回答建议。收音与转写效果同时受到本地设备、操作系统权限、会议软件设置、网络和服务状态影响。

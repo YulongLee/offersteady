@@ -73,6 +73,11 @@
     "https://mianshiwen.cn/guides/technical-interview",
     "https://mianshiwen.cn/guides/common-interview-questions"
   ],
+  "technicalTopics": [
+    "https://mianshiwen.cn/interview-questions/llm",
+    "https://mianshiwen.cn/interview-questions/rag",
+    "https://mianshiwen.cn/interview-questions/ai-agent"
+  ],
   "contentHubs": [
     {
       "name": "产品功能",
