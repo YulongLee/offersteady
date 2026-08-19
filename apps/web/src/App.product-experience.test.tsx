@@ -29,6 +29,11 @@ describe("optimized product experience", () => {
     });
     const footer = document.querySelector<HTMLElement>(".public-footer");
     expect(footer).not.toBeNull();
+    const moreResources = within(footer!).getByText("查看更多资源").closest("details");
+    expect(moreResources).not.toBeNull();
+    expect(moreResources).not.toHaveAttribute("open");
+    fireEvent.click(within(footer!).getByText("查看更多资源"));
+    expect(moreResources).toHaveAttribute("open");
     expect(within(footer!).getByText("configured-wechat")).toBeInTheDocument();
     expect(within(footer!).getByRole("link", { name: "help@example.test" })).toHaveAttribute("href", "mailto:help@example.test");
     expect(footer).toHaveTextContent("每天 09:00–21:00");
