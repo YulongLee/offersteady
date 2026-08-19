@@ -29,4 +29,4 @@
 
 - [x] 5.1 Validate the OpenSpec change strictly and review scoped diffs
 - [x] 5.2 Commit and push the approved files without including unrelated local changes
-- [ ] 5.3 Deploy the web/backend release and verify health plus all desktop download entries
+- [x] 5.3 Deploy the web/backend release and verify health plus all desktop download entries
