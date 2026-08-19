@@ -224,6 +224,49 @@ describe("focused live interview workspace", () => {
     expect(workspace).not.toHaveClass("mobile-answer-expanded");
   });
 
+  it("uses an answer-first tab workspace on phones instead of stacking the full page", () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    openLive();
+
+    expect(screen.getByRole("tab", { name: "回答" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "回答" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "实时对话" })).not.toBeInTheDocument();
+    expect(screen.queryByText("面试进行中")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: /对话/ }));
+    expect(screen.getByRole("heading", { name: "实时对话" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "回答" })).not.toBeInTheDocument();
+  });
+
+  it("keeps phone actions in one compact region and returns to the answer for quick replies", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    openLive();
+    fireEvent.click(screen.getByRole("tab", { name: /对话/ }));
+
+    const actions = screen.getByRole("region", { name: "面试操作" });
+    const input = within(actions).getByRole("textbox", { name: "手动输入面试官的问题" });
+    fireEvent.change(input, { target: { value: "手机端合成测试问题" } });
+    fireEvent.click(within(actions).getByRole("button", { name: "快答" }));
+
+    expect(screen.getByRole("tab", { name: /回答/ })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("heading", { name: "手机端合成测试问题" })).toBeInTheDocument();
+    expect(interviewAppAdapter.submitManualAnswer).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the phone header compact and exposes low-frequency actions from more", () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    openLive();
+
+    expect(screen.getByRole("button", { name: "开始面试" })).toBeInTheDocument();
+    const more = document.querySelector(".mobile-live-more");
+    expect(more).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByLabelText("更多面试操作"));
+    expect(more).toHaveAttribute("open");
+    expect(screen.getByRole("link", { name: "积分与会员" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "用户设置" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "结束面试" })).toBeInTheDocument();
+  });
+
   it("keeps compact actions free of point-price labels", () => {
     openLive();
     const actions = screen.getByRole("region", { name: "面试操作" });

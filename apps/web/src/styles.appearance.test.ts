@@ -42,11 +42,12 @@ describe("appearance styles", () => {
     );
   });
 
-  it("keeps the mobile answer in the page scroll flow without a covering action bar", () => {
-    expect(styles).toMatch(/\.focused-live-grid \{[^}]*overflow-y: auto[^}]*-webkit-overflow-scrolling: touch[^}]*touch-action: pan-y/);
-    expect(styles).toMatch(/\.answer-workspace, \.answer-workspace\.mobile-answer-expanded \{[^}]*overflow: visible/);
+  it("keeps the mobile answer in an independent scroll panel above safe-area actions", () => {
+    expect(styles).toMatch(/\.mobile-live-workspace \{[^}]*grid-template-rows: 48px minmax\(0, 1fr\) auto[^}]*overflow: hidden/);
+    expect(styles).toMatch(/\.mobile-live-panel \{[^}]*overflow-y: auto[^}]*-webkit-overflow-scrolling: touch/);
+    expect(styles).toMatch(/\.mobile-live-panel \.answer-workspace, \.mobile-live-panel \.answer-workspace\.mobile-answer-expanded \{[^}]*overflow: visible/);
     expect(styles).toMatch(/\.answer-workspace-head \{[^}]*position: static/);
-    expect(styles).toMatch(/\.answer-action-bar \{[^}]*position: static/);
-    expect(styles).not.toMatch(/\.answer-action-bar \{[^}]*position: sticky/);
+    expect(styles).toMatch(/\.mobile-interview-controls \{[^}]*env\(safe-area-inset-bottom\)/);
+    expect(styles).toMatch(/\.mobile-live-page \.session-bar \{[^}]*display: none/);
   });
 });

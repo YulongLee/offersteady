@@ -482,16 +482,18 @@ describe("OfferSteady web application", () => {
     expect(screen.getByText("完整旅程测试问题")).toBeInTheDocument();
   });
 
-  it("uses one mobile workspace without a material drawer or desktop divider", async () => {
+  it("uses an answer-first mobile workspace without a material drawer or desktop divider", async () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     window.history.pushState({}, "", "/app/interviews/demo/live");
     render(<App initialAuthenticated initialState={clonedState()} />);
-    expect(await screen.findByRole("heading", { name: "实时对话" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "回答" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "回答" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "实时对话" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /对话/ }));
+    expect(screen.getByRole("heading", { name: "实时对话" })).toBeInTheDocument();
     expect(screen.queryByRole("separator")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /资料/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "开始面试" }));
     fireEvent.click(screen.getByRole("button", { name: "暂停收音" }));
-    expect(await screen.findByText("面试已暂停")).toBeInTheDocument();
+    expect(await screen.findByText("收音已暂停")).toBeInTheDocument();
   });
 });

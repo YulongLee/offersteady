@@ -39,4 +39,13 @@ describe("desktop application icon", () => {
     const macPackager = readFileSync(path.join(desktopRoot, "scripts/package-local-mac.mjs"), "utf8");
     expect(macPackager).toContain('join(desktopDir, "resources/app-icon.png")');
   });
+
+  it("builds the Windows installer path from the current package version", () => {
+    const desktopRoot = path.resolve(import.meta.dirname, "..");
+    const desktopPackage = JSON.parse(readFileSync(path.join(desktopRoot, "package.json"), "utf8"));
+    expect(desktopPackage.scripts["package:win:installer:x64"]).not.toContain("0.1.13");
+    const installerScript = readFileSync(path.join(desktopRoot, "scripts/package-windows-installer.mjs"), "utf8");
+    expect(installerScript).toContain("desktopPackage.version");
+    expect(installerScript).toContain("electron-builder.yml");
+  });
 });
