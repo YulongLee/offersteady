@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "1.0",
+  "lastUpdated": "2026-08-19",
+  "canonicalSite": "https://mianshiwen.cn/",
+  "product": {
+    "name": "面试稳AI助手",
+    "alternateName": "面试稳",
+    "operatorLabel": "OneShow AI Lab",
+    "category": "AI 面试辅助工具",
+    "languages": ["zh-CN"],
+    "surfaces": ["Web", "macOS 电脑伴随程序", "Windows 电脑伴随程序"],
+    "summary": "结合用户选择的简历、岗位 JD 和知识材料，辅助整理实时面试问题、截图题回答与面试复盘。"
+  },
+  "capabilities": [
+    {
+      "id": "interview-preparation",
+      "name": "面试资料准备",
+      "url": "https://mianshiwen.cn/guides/interview-preparation"
+    },
+    {
+      "id": "realtime-interview",
+      "name": "实时面试辅助",
+      "url": "https://mianshiwen.cn/features/realtime-interview"
+    },
+    {
+      "id": "screenshot-answer",
+      "name": "截图回答",
+      "url": "https://mianshiwen.cn/features/screenshot-answer"
+    },
+    {
+      "id": "interview-review",
+      "name": "面试记录与复盘",
+      "url": "https://mianshiwen.cn/features/interview-review"
+    }
+  ],
+  "inputMethods": ["获得授权后的语音", "手动输入", "用户主动发起的屏幕截图"],
+  "dataBoundaries": {
+    "rawAudioStoredByDefault": false,
+    "aiOutputIsReferenceOnly": true,
+    "guaranteesInterviewOutcome": false,
+    "detailsUrl": "https://mianshiwen.cn/privacy"
+  },
+  "dynamicFacts": {
+    "pricing": "以登录后的积分与会员页面为准",
+    "paymentChannels": "以登录后的积分与会员页面为准",
+    "desktopDownloads": "以产品下载页当前发布状态为准"
+  },
+  "officialPages": {
+    "homepage": "https://mianshiwen.cn/",
+    "guide": "https://mianshiwen.cn/guide",
+    "privacy": "https://mianshiwen.cn/privacy",
+    "terms": "https://mianshiwen.cn/terms",
+    "llms": "https://mianshiwen.cn/llms.txt",
+    "llmsFull": "https://mianshiwen.cn/llms-full.txt"
+  },
+  "contact": {
+    "email": "contact@oneshowailab.com",
+    "filingNumber": "浙ICP备2026052190号-1",
+    "filingUrl": "https://beian.miit.gov.cn"
+  }
+}

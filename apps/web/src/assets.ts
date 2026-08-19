@@ -2,7 +2,7 @@ import type { ProductAssetEntry, ProductAssetManifest } from "@offersteady/proto
 
 export const productAssets: ProductAssetManifest = { version: 1, entries: [
   { id: "brand.logo", category: "brand", path: "/assets/brand/logo.svg", purpose: "应用导航品牌标识", alt: "面试稳", width: 240, height: 64, sha256: "b0e5ac6bdaf3211c410c0772ac9bda61050723d629b43e315c76b489f0db2023", version: 1, public: true },
-  { id: "brand.app-icon", category: "brand", path: "/assets/brand/app-icon.png", purpose: "应用图标", alt: "面试稳应用图标", width: 512, height: 512, sha256: "4937f4ef85235137a03d99ba1cac80ee43ebd2fdbc57ee8a383001be6912f66f", version: 2, public: true },
+  { id: "brand.app-icon", category: "brand", path: "/assets/brand/app-icon-96.png", purpose: "应用导航与登录页图标", alt: "面试稳应用图标", width: 96, height: 96, sha256: "a60444614a351147c173fd2686b6eaf9eeb0a1297747c787cfb3bdb1b8967a85", version: 3, public: true },
   { id: "brand.favicon", category: "brand", path: "/assets/brand/favicon.png", purpose: "浏览器页签图标", alt: "面试稳", width: 64, height: 64, sha256: "d05ede3067dd27965ed4a572d5f7b4538385f68479c174c18ffb2a421605a686", version: 2, public: true },
   { id: "brand.share-card", category: "brand", path: "/assets/brand/share-card.png", purpose: "社交分享图", alt: "AI 面试助手，助你更从容地冲刺 Offer", width: 1200, height: 630, sha256: "d8b07f7af7035c9934d4a0779708fe81d600824efc69a2f47e9b1a5578413cbd", version: 2, public: true },
   { id: "payments.wechat", category: "payments", path: "/assets/payments/wechat-channel.svg", purpose: "微信支付渠道标识", alt: "微信支付", width: 96, height: 96, sha256: "2b8986520f5db2d5d919fef8f356ae7ac6086d613a1a8b4ed7d45201c36512dc", version: 1, public: true },
@@ -11,4 +11,4 @@ export const productAssets: ProductAssetManifest = { version: 1, entries: [
   { id: "support.customer-group", category: "support", path: "/assets/support/customer-group-placeholder.svg", purpose: "客服群合成占位", alt: "客服群二维码占位图", width: 320, height: 320, sha256: "a0809bfd304c25f6d4cb120ef7e1dd4907b3bb7ee397228465f37029e377c4f9", version: 1, public: true },
 ] };
 export const resolveAsset = (id: string, nowMs = Date.now(), manifest = productAssets): ProductAssetEntry | null => manifest.entries.find(item => item.id === id && item.public && (!item.expiresAtMs || item.expiresAtMs > nowMs) && /^[a-f0-9]{64}$/i.test(item.sha256)) ?? null;
-export const assetUrl = (id: string, fallback = "/assets/brand/app-icon.png") => resolveAsset(id)?.path ?? fallback;
+export const assetUrl = (id: string, fallback = "/assets/brand/app-icon-96.png") => resolveAsset(id)?.path ?? fallback;

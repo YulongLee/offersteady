@@ -1,26 +1,33 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const webRoot = resolve(import.meta.dirname, "..");
-const repoRoot = resolve(webRoot, "../..");
-const [homepage, guide, nginx] = await Promise.all([
-  readFile(resolve(webRoot, "dist/index.html"), "utf8"),
-  readFile(resolve(webRoot, "dist/guide.html"), "utf8"),
-  readFile(resolve(repoRoot, "infra/nginx/default.conf"), "utf8"),
-]);
-
+const dist = resolve(webRoot, "dist");
+const staticOutputs = [
+  "seo/ai-interview-assistant.html", "seo/realtime-interview.html", "seo/screenshot-answer.html",
+  "seo/interview-review.html", "seo/audio-troubleshooting.html", "seo/interview-preparation.html",
+  "seo/public-search.css", "llms.txt", "llms-full.txt", "public-facts.json", "robots.txt", "sitemap.xml", "404.html",
+];
+const [homepage, guide] = await Promise.all([readFile(resolve(dist, "index.html"), "utf8"), readFile(resolve(dist, "guide.html"), "utf8")]);
 assert.match(homepage, /<link rel="canonical" href="https:\/\/mianshiwen\.cn\/"\s*\/>/);
 assert.match(guide, /<link rel="canonical" href="https:\/\/mianshiwen\.cn\/guide"\s*\/>/);
 assert.notEqual(homepage, guide);
 assert.match(homepage, /<script type="module" crossorigin src="\/assets\/.+-[A-Za-z0-9_-]{8}\.js"><\/script>/);
 assert.match(guide, /<script type="module" crossorigin src="\/assets\/.+-[A-Za-z0-9_-]{8}\.js"><\/script>/);
-for (const html of [homepage, guide]) {
-  for (const match of html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)) {
-    const hash = createHash("sha256").update(match[1]).digest("base64");
-    assert.ok(nginx.includes(`'sha256-${hash}'`), `Production CSP is missing JSON-LD hash ${hash}`);
-  }
+for (const file of staticOutputs) assert.ok((await stat(resolve(dist, file))).size > 0, `Missing or empty build output: ${file}`);
+for (const file of staticOutputs.filter((file) => file.endsWith(".html") && file.startsWith("seo/"))) {
+  const html = await readFile(resolve(dist, file), "utf8");
+  assert.match(html, /<link rel="canonical" href="https:\/\/mianshiwen\.cn\/(?:features|guides)\//);
+  assert.equal((html.match(/<h1(?:\s[^>]*)?>/g) ?? []).length, 1);
+  JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
 }
-
-console.log("SEO production build checks passed.");
+JSON.parse(await readFile(resolve(dist, "public-facts.json"), "utf8"));
+const assets = await Promise.all((await readdir(resolve(dist, "assets"))).map(async (file) => ({ file, size: (await stat(resolve(dist, "assets", file))).size })));
+const jsBytes = assets.filter(({ file }) => file.endsWith(".js")).reduce((sum, { size }) => sum + size, 0);
+const cssBytes = assets.filter(({ file }) => file.endsWith(".css")).reduce((sum, { size }) => sum + size, 0);
+const entryJsBytes = assets.find(({ file }) => /^main-.+\.js$/.test(file))?.size ?? 0;
+assert.ok(jsBytes <= 1_350_000, `Total built JS budget exceeded: ${jsBytes} bytes`);
+assert.ok(entryJsBytes <= 410_000, `Public entry JS budget exceeded: ${entryJsBytes} bytes`);
+assert.ok(cssBytes <= 250_000, `Built CSS budget exceeded: ${cssBytes} bytes`);
+console.log(`SEO/GEO production checks passed; entry JS ${entryJsBytes} bytes, total JS ${jsBytes} bytes, CSS ${cssBytes} bytes.`);

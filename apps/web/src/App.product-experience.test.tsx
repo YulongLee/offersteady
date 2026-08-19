@@ -34,6 +34,12 @@ describe("optimized product experience", () => {
     expect(footer).toHaveTextContent("每天 09:00–21:00");
     expect(within(footer!).getByRole("link", { name: "使用手册" })).toHaveAttribute("href", "/guide");
     expect(within(footer!).getByRole("link", { name: "下载安装说明" })).toHaveAttribute("href", "/guide#desktop");
+    expect(within(footer!).getByRole("link", { name: "AI 面试助手" })).toHaveAttribute("href", "/features/ai-interview-assistant");
+    expect(within(footer!).getByRole("link", { name: "实时面试辅助" })).toHaveAttribute("href", "/features/realtime-interview");
+    expect(within(footer!).getByRole("link", { name: "截图回答" })).toHaveAttribute("href", "/features/screenshot-answer");
+    expect(within(footer!).getByRole("link", { name: "面试复盘" })).toHaveAttribute("href", "/features/interview-review");
+    expect(within(footer!).getByRole("link", { name: "面试准备清单" })).toHaveAttribute("href", "/guides/interview-preparation");
+    expect(within(footer!).getByRole("link", { name: "收音问题排查" })).toHaveAttribute("href", "/guides/audio-troubleshooting");
     expect(within(footer!).getByRole("link", { name: "用户协议" })).toHaveAttribute("href", "/terms");
     expect(within(footer!).getByRole("link", { name: "隐私政策" })).toHaveAttribute("href", "/privacy");
     expect(within(footer!).getByRole("link", { name: "浙ICP备2026052190号-1" })).toHaveAttribute("href", "https://beian.miit.gov.cn");
@@ -82,6 +88,8 @@ describe("optimized product experience", () => {
     ["Zoom", "Google Meet", "Microsoft Teams", "腾讯会议", "飞书", "钉钉", "企业微信", "力扣", "牛客", "Slack"].forEach(platform => {
       expect(within(section!).getByText(platform, { selector: "strong" })).toBeInTheDocument();
       expect(within(section!).getByRole("img", { name: `${platform} 品牌标识` })).toHaveAttribute("src", expect.stringMatching(/^https:\/\//));
+      expect(within(section!).getByRole("img", { name: `${platform} 品牌标识` })).toHaveAttribute("width", "180");
+      expect(within(section!).getByRole("img", { name: `${platform} 品牌标识` })).toHaveAttribute("height", "48");
     });
     expect(section!.querySelectorAll("[data-brand-source^='https://']")).toHaveLength(10);
     expect(section!.querySelectorAll(".platform-brand-wordmark")).toHaveLength(1);
