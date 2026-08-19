@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "1.1",
   "lastUpdated": "2026-08-19",
   "canonicalSite": "https://mianshiwen.cn/",
   "product": {
@@ -48,10 +48,29 @@
   "officialPages": {
     "homepage": "https://mianshiwen.cn/",
     "guide": "https://mianshiwen.cn/guide",
+    "pricing": "https://mianshiwen.cn/pricing",
+    "download": "https://mianshiwen.cn/download",
+    "security": "https://mianshiwen.cn/security",
+    "about": "https://mianshiwen.cn/about",
+    "contact": "https://mianshiwen.cn/contact",
     "privacy": "https://mianshiwen.cn/privacy",
     "terms": "https://mianshiwen.cn/terms",
     "llms": "https://mianshiwen.cn/llms.txt",
     "llmsFull": "https://mianshiwen.cn/llms-full.txt"
+  },
+  "maintainedGuides": [
+    "https://mianshiwen.cn/guides/interview-preparation",
+    "https://mianshiwen.cn/guides/star-interview-answer",
+    "https://mianshiwen.cn/guides/audio-troubleshooting",
+    "https://mianshiwen.cn/guides/macos-permissions",
+    "https://mianshiwen.cn/guides/feishu-audio-setup",
+    "https://mianshiwen.cn/guides/tencent-meeting-audio-setup"
+  ],
+  "entityBoundaries": {
+    "productNameVerified": true,
+    "publicTeamLabel": "OneShow AI Lab",
+    "registeredLegalOperatorVerified": false,
+    "platformNamesIndicateAffiliation": false
   },
   "contact": {
     "email": "contact@oneshowailab.com",

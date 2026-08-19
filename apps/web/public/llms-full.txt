@@ -15,12 +15,20 @@
 
 官方说明：https://mianshiwen.cn/guides/interview-preparation
 
+STAR 回答结构：https://mianshiwen.cn/guides/star-interview-answer
+
 ### 实时面试辅助
 
 电脑伴随程序在用户明确授权系统权限后，可分别处理麦克风与电脑输出音频。网页展示对话状态，并在确认问题后生成回答建议。收音与转写效果同时受到本地设备、操作系统权限、会议软件设置、网络和服务状态影响。
 
 官方说明：https://mianshiwen.cn/features/realtime-interview
 排查指南：https://mianshiwen.cn/guides/audio-troubleshooting
+
+macOS 权限：https://mianshiwen.cn/guides/macos-permissions
+
+飞书音频设置：https://mianshiwen.cn/guides/feishu-audio-setup
+
+腾讯会议音频设置：https://mianshiwen.cn/guides/tencent-meeting-audio-setup
 
 ### 截图回答
 
@@ -44,6 +52,28 @@
 6. 面试结束后查看记录与复盘。
 
 完整手册：https://mianshiwen.cn/guide
+
+## 购买与下载
+
+- 积分适合按功能、低频使用；按天会员适合短期密集面试。
+- 当前商品、价格、积分消耗、会员权益和支付渠道以登录后的积分与会员页面为准。
+- 当前桌面版本、架构、签名、校验信息和正式安装包以产品下载中心为准。
+
+计费说明：https://mianshiwen.cn/pricing
+
+下载说明：https://mianshiwen.cn/download
+
+## 产品身份与支持
+
+- 面试稳AI助手是产品名称，OneShow AI Lab 是当前公开团队标识。
+- 注册运营主体在完成正式核验前不从短信签名或其他配置中推断。
+- 产品与数据边界以安全说明、隐私政策和用户协议为准。
+
+关于产品：https://mianshiwen.cn/about
+
+安全说明：https://mianshiwen.cn/security
+
+联系支持：https://mianshiwen.cn/contact
 
 ## 数据、隐私与安全边界
 

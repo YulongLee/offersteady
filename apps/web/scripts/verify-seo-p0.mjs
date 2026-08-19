@@ -5,14 +5,28 @@ import { resolve } from "node:path";
 
 const webRoot = resolve(import.meta.dirname, "..");
 const repoRoot = resolve(webRoot, "../..");
-const topicRoutes = new Map([
+const featureRoutes = new Map([
   ["/features/ai-interview-assistant", "public/seo/ai-interview-assistant.html"],
   ["/features/realtime-interview", "public/seo/realtime-interview.html"],
   ["/features/screenshot-answer", "public/seo/screenshot-answer.html"],
   ["/features/interview-review", "public/seo/interview-review.html"],
+]);
+const commercialRoutes = new Map([
+  ["/pricing", "public/seo/pricing.html"],
+  ["/download", "public/seo/download.html"],
+  ["/security", "public/seo/security.html"],
+  ["/about", "public/seo/about.html"],
+  ["/contact", "public/seo/contact.html"],
+]);
+const guideRoutes = new Map([
   ["/guides/audio-troubleshooting", "public/seo/audio-troubleshooting.html"],
   ["/guides/interview-preparation", "public/seo/interview-preparation.html"],
+  ["/guides/macos-permissions", "public/seo/macos-permissions.html"],
+  ["/guides/feishu-audio-setup", "public/seo/feishu-audio-setup.html"],
+  ["/guides/tencent-meeting-audio-setup", "public/seo/tencent-meeting-audio-setup.html"],
+  ["/guides/star-interview-answer", "public/seo/star-interview-answer.html"],
 ]);
+const topicRoutes = new Map([...featureRoutes, ...commercialRoutes, ...guideRoutes]);
 const readWeb = (path) => readFile(resolve(webRoot, path), "utf8");
 const [indexHtml, guideHtml, robots, sitemap, notFound, nginx, llms, llmsFull, factsText, appSource, shareCard] = await Promise.all([
   readWeb("index.html"), readWeb("guide.html"), readWeb("public/robots.txt"), readWeb("public/sitemap.xml"),
@@ -51,10 +65,23 @@ assert.deepEqual([...indexHtml.matchAll(/<script type="application\/ld\+json">(.
 assert.deepEqual([...guideHtml.matchAll(/<script type="application\/ld\+json">(.+?)<\/script>/g)].map((match) => JSON.parse(match[1])["@type"]), ["WebPage", "BreadcrumbList"]);
 for (const [route, html] of topicDocuments) {
   const graph = JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1])["@graph"];
-  assert.deepEqual(graph.map((node) => node["@type"]), ["WebPage", "BreadcrumbList"], `Unexpected topic schema for ${route}`);
-  assert.doesNotMatch(html, /(?<!不)保证(?:面试|录用)|百分之百|绝对准确|官方合作|直接集成|真实用户评价/);
+  const expectedPageType = guideRoutes.has(route) ? "Article" : route === "/about" ? "AboutPage" : route === "/contact" ? "ContactPage" : "WebPage";
+  assert.deepEqual(graph.map((node) => node["@type"]), [expectedPageType, "BreadcrumbList"], `Unexpected topic schema for ${route}`);
+  assert.doesNotMatch(html, /(?:可以|能够|将|会)保证(?:面试|录用)|百分之百|绝对准确|(?:属于|已经|现为|达成)官方合作|(?:已经|现已|完成)直接集成|真实用户评价/);
   assert.match(html, /class="boundary"/);
   assert.ok(Buffer.byteLength(html) <= 12_000, `Topic HTML budget exceeded for ${route}`);
+}
+for (const route of guideRoutes.keys()) {
+  const html = topicDocuments.get(route);
+  assert.match(html, /面试稳产品与支持团队/);
+  assert.match(html, /datePublished|dateModified/);
+  assert.match(html, /class="answer-block"/);
+  assert.match(html, /class="[^"]*\bsource-note\b[^"]*"/);
+}
+for (const route of commercialRoutes.keys()) {
+  const html = topicDocuments.get(route);
+  assert.match(html, /登录|产品内|下载页|联系/);
+  assert.match(html, /href="\/(?:login|guide|pricing|download|security|about|contact)/, `Missing crawlable CTA for ${route}`);
 }
 
 assert.equal(shareCard.subarray(1, 4).toString("ascii"), "PNG");
@@ -66,9 +93,13 @@ assert.ok((await stat(resolve(webRoot, "public/seo/public-search.css"))).size <=
 assert.match(appSource, /brand\.app-icon[^>]+width="44" height="44"[^>]+decoding="async"/);
 assert.match(appSource, /platform\.logoUrl[^>]+width="180" height="48"[^>]+loading="lazy" decoding="async"/);
 
-assert.equal(robots.trim(), "User-agent: *\nAllow: /\n\nSitemap: https://mianshiwen.cn/sitemap.xml");
+for (const agent of ["*", "GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "PerplexityBot"]) {
+  assert.match(robots, new RegExp(`User-agent: ${agent === "*" ? "\\*" : agent}\\nAllow: /`), `Missing allow policy for ${agent}`);
+}
+assert.match(robots, /Sitemap: https:\/\/mianshiwen\.cn\/sitemap\.xml/);
 const sitemapEntries = [...sitemap.matchAll(/<url>\s*<loc>(https:\/\/mianshiwen\.cn(?:\/[^<]*)?)<\/loc>\s*<lastmod>(\d{4}-\d{2}-\d{2})<\/lastmod>/g)].map((match) => ({ url: new URL(match[1]), lastmod: match[2] }));
-assert.deepEqual(sitemapEntries.map(({ url }) => url.pathname), [...publicEntries.keys()]);
+assert.deepEqual(new Set(sitemapEntries.map(({ url }) => url.pathname)), new Set(publicEntries.keys()));
+assert.equal(sitemapEntries.length, publicEntries.size);
 assert.ok(sitemapEntries.every(({ lastmod }) => lastmod === "2026-08-19"));
 assert.doesNotMatch(sitemap, /\/login|\/app/);
 
@@ -81,11 +112,13 @@ assert.match(llms, /AI 输出仅供参考/);
 assert.match(llmsFull, /价格.*积分消耗.*支付渠道.*调整/);
 assert.doesNotMatch(`${llms}\n${llmsFull}`, /\/api\/|AccessKey|Secret|private key|BEGIN .* KEY/iu);
 const facts = JSON.parse(factsText);
-assert.equal(facts.schemaVersion, "1.0");
+assert.equal(facts.schemaVersion, "1.1");
 assert.equal(facts.canonicalSite, "https://mianshiwen.cn/");
 assert.equal(facts.product.name, "面试稳AI助手");
 assert.equal(facts.dataBoundaries.rawAudioStoredByDefault, false);
 assert.equal(facts.dataBoundaries.guaranteesInterviewOutcome, false);
+assert.equal(facts.entityBoundaries.registeredLegalOperatorVerified, false);
+assert.equal(facts.entityBoundaries.platformNamesIndicateAffiliation, false);
 assert.doesNotMatch(factsText, /\/api\/|access.?key|secret|password|token/iu);
 for (const url of ["https://mianshiwen.cn/guide", "https://mianshiwen.cn/privacy", "https://mianshiwen.cn/terms"]) {
   assert.ok(llms.includes(url) || llmsFull.includes(url));
@@ -95,7 +128,8 @@ for (const url of ["https://mianshiwen.cn/guide", "https://mianshiwen.cn/privacy
 assert.match(notFound, /<meta name="robots" content="noindex, follow"\s*\/>/);
 assert.match(nginx, /if \(\$host = www\.mianshiwen\.cn\)[\s\S]*?return 308 https:\/\/mianshiwen\.cn\$request_uri;/);
 assert.ok(nginx.includes("location ~ ^/features/(ai-interview-assistant|realtime-interview|screenshot-answer|interview-review)/?$"));
-assert.ok(nginx.includes("location ~ ^/guides/(audio-troubleshooting|interview-preparation)/?$"));
+assert.ok(nginx.includes("location ~ ^/(pricing|download|security|about|contact)/?$"));
+assert.ok(nginx.includes("location ~ ^/guides/(audio-troubleshooting|interview-preparation|macos-permissions|feishu-audio-setup|tencent-meeting-audio-setup|star-interview-answer)/?$"));
 for (const resource of ["llms.txt", "llms-full.txt", "public-facts.json"]) assert.ok(nginx.includes(`location = /${resource}`), `Missing Nginx route for ${resource}`);
 assert.match(nginx, /location ~\* "\^\/assets\/[\s\S]*?Cache-Control "public, max-age=31536000, immutable"/);
 assert.match(nginx, /location ~ \^\/\(\?:login\|terms\|privacy\|error\|invite\/[\s\S]*?Cache-Control "no-store"[\s\S]*?X-Robots-Tag "noindex, follow"/);

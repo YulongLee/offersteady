@@ -38,8 +38,14 @@ describe("optimized product experience", () => {
     expect(within(footer!).getByRole("link", { name: "实时面试辅助" })).toHaveAttribute("href", "/features/realtime-interview");
     expect(within(footer!).getByRole("link", { name: "截图回答" })).toHaveAttribute("href", "/features/screenshot-answer");
     expect(within(footer!).getByRole("link", { name: "面试复盘" })).toHaveAttribute("href", "/features/interview-review");
+    expect(within(footer!).getByRole("link", { name: "积分与会员" })).toHaveAttribute("href", "/pricing");
+    expect(within(footer!).getByRole("link", { name: "下载助手" })).toHaveAttribute("href", "/download");
     expect(within(footer!).getByRole("link", { name: "面试准备清单" })).toHaveAttribute("href", "/guides/interview-preparation");
+    expect(within(footer!).getByRole("link", { name: "STAR 回答结构" })).toHaveAttribute("href", "/guides/star-interview-answer");
     expect(within(footer!).getByRole("link", { name: "收音问题排查" })).toHaveAttribute("href", "/guides/audio-troubleshooting");
+    expect(within(footer!).getByRole("link", { name: "安全说明" })).toHaveAttribute("href", "/security");
+    expect(within(footer!).getByRole("link", { name: "关于产品" })).toHaveAttribute("href", "/about");
+    expect(within(footer!).getByRole("link", { name: "联系我们" })).toHaveAttribute("href", "/contact");
     expect(within(footer!).getByRole("link", { name: "用户协议" })).toHaveAttribute("href", "/terms");
     expect(within(footer!).getByRole("link", { name: "隐私政策" })).toHaveAttribute("href", "/privacy");
     expect(within(footer!).getByRole("link", { name: "浙ICP备2026052190号-1" })).toHaveAttribute("href", "https://beian.miit.gov.cn");

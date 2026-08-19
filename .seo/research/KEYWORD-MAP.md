@@ -11,6 +11,15 @@
 | 面试收音问题 | 系统音频、麦克风权限、收音排查 | `/guides/audio-troubleshooting` | 高意图故障排查 |
 | 面试准备 | 简历 JD、知识库、面试资料 | `/guides/interview-preparation` | 面试前准备指南 |
 | 产品安装与完整操作 | Windows、macOS、积分会员、支付 | `/guide` | 权威使用手册 |
+| 积分与会员 | AI 面试助手收费、积分消耗、会员权益 | `/pricing` | 稳定计费逻辑与动态价格入口 |
+| 电脑助手下载 | macOS 面试助手、Windows 面试助手、安装权限 | `/download` | 下载决策与安装入口 |
+| 数据安全与隐私 | 面试录音保存、截图隐私、资料安全 | `/security` | 数据处理与安全边界 |
+| 产品身份 | 面试稳是什么、面试稳AI助手 | `/about` | 产品定位与公开身份 |
+| 产品支持 | 面试稳客服、订单问题、安装问题 | `/contact` | 官方支持入口 |
+| macOS 面试权限 | 麦克风权限、屏幕与系统音频录制 | `/guides/macos-permissions` | macOS 权限排查 |
+| 飞书面试收音 | 飞书面试官声音、飞书音频设置 | `/guides/feishu-audio-setup` | 飞书用户侧设置指南 |
+| 腾讯会议面试收音 | 腾讯会议面试官声音、会议音频设置 | `/guides/tencent-meeting-audio-setup` | 腾讯会议用户侧设置指南 |
+| STAR 面试回答 | STAR 法则、结构化面试回答 | `/guides/star-interview-answer` | 面试表达方法指南 |
 
 ## 映射规则
 

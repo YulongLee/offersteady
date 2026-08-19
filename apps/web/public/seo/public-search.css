@@ -37,6 +37,20 @@ p, li { color: var(--muted); font-size: 17px; line-height: 1.85; }
 ol, ul { padding-left: 1.4em; }
 .fact-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 0; list-style: none; }
 .fact-list li { padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.decision-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 24px 0; }
+.decision-card { padding: 22px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.decision-card h3 { margin-top: 0; }
+.decision-card p:last-child { margin-bottom: 0; }
+.answer-block { padding: 22px; border-left: 4px solid var(--accent); border-radius: 0 14px 14px 0; background: rgba(104, 227, 189, .07); }
+.answer-block p:first-of-type { margin-top: 0; }
+.answer-block p:last-child { margin-bottom: 0; }
+.meta-strip { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 20px 0 0; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+.source-note { padding: 18px; border: 1px dashed var(--line); border-radius: 14px; background: rgba(255, 255, 255, .02); }
+.source-note h2 { font-size: 20px; }
+.data-table { width: 100%; margin: 22px 0; border-collapse: collapse; }
+.data-table th, .data-table td { padding: 14px; border: 1px solid var(--line); color: var(--muted); text-align: left; vertical-align: top; }
+.data-table th { color: var(--text); background: var(--surface-strong); }
+.muted-note { color: var(--muted); font-size: 14px; }
 .boundary { padding: 20px; border: 1px solid rgba(244, 201, 104, .45); border-radius: 14px; background: rgba(244, 201, 104, .07); }
 .boundary strong { color: var(--warning); }
 .side-card { position: sticky; top: 22px; padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
@@ -53,4 +67,6 @@ ol, ul { padding-left: 1.4em; }
   .content-grid { grid-template-columns: 1fr; }
   .side-card { position: static; }
   .fact-list { grid-template-columns: 1fr; }
+  .decision-grid { grid-template-columns: 1fr; }
+  .data-table { display: block; overflow-x: auto; }
 }

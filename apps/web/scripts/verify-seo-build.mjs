@@ -7,6 +7,9 @@ const dist = resolve(webRoot, "dist");
 const staticOutputs = [
   "seo/ai-interview-assistant.html", "seo/realtime-interview.html", "seo/screenshot-answer.html",
   "seo/interview-review.html", "seo/audio-troubleshooting.html", "seo/interview-preparation.html",
+  "seo/pricing.html", "seo/download.html", "seo/security.html", "seo/about.html", "seo/contact.html",
+  "seo/macos-permissions.html", "seo/feishu-audio-setup.html", "seo/tencent-meeting-audio-setup.html",
+  "seo/star-interview-answer.html",
   "seo/public-search.css", "llms.txt", "llms-full.txt", "public-facts.json", "robots.txt", "sitemap.xml", "404.html",
 ];
 const [homepage, guide] = await Promise.all([readFile(resolve(dist, "index.html"), "utf8"), readFile(resolve(dist, "guide.html"), "utf8")]);
@@ -18,7 +21,7 @@ assert.match(guide, /<script type="module" crossorigin src="\/assets\/.+-[A-Za-z
 for (const file of staticOutputs) assert.ok((await stat(resolve(dist, file))).size > 0, `Missing or empty build output: ${file}`);
 for (const file of staticOutputs.filter((file) => file.endsWith(".html") && file.startsWith("seo/"))) {
   const html = await readFile(resolve(dist, file), "utf8");
-  assert.match(html, /<link rel="canonical" href="https:\/\/mianshiwen\.cn\/(?:features|guides)\//);
+  assert.match(html, /<link rel="canonical" href="https:\/\/mianshiwen\.cn\/(?:features\/|guides\/|pricing|download|security|about|contact)/);
   assert.equal((html.match(/<h1(?:\s[^>]*)?>/g) ?? []).length, 1);
   JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
 }

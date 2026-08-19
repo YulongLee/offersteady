@@ -1,5 +1,30 @@
 # 面试稳 SEO / GEO 执行记录
 
+## 2026-08-19：商业决策页与高意图内容权威
+
+### 已实施
+
+- 5 个静态商业决策页：积分与会员、电脑助手下载、安全说明、关于产品、联系支持。
+- 4 个高意图指南：macOS 权限、飞书音频、腾讯会议音频、STAR 回答结构。
+- 两个既有指南升级为 Article，补充组织审核者、发布日期、更新日期、直接答案和来源范围。
+- sitemap 扩展到 17 个 URL；robots 显式允许 GPTBot、OAI-SearchBot、ChatGPT-User、ClaudeBot 与 PerplexityBot。
+- `llms.txt`、`llms-full.txt`、`public-facts.json` 增加商业页面、维护指南、动态事实和实体边界。
+- 首页社交分享标题缩短；公开导航、Nginx 路由、CSP 哈希和构建后校验同步更新。
+
+### 验证结果
+
+- SEO/GEO 源码检查：17 个公开页面通过。
+- Web 测试：38 个文件、263 条用例通过；所有工作区 TypeScript 检查通过。
+- 生产构建与构建后检查通过：入口 JS 394,838 bytes；全部 JS 1,288,685 bytes；CSS 95,023 bytes。
+- 代表性 `/pricing` Lighthouse：移动端和桌面端 Performance、Accessibility、Best Practices、SEO 均为 100；移动 LCP 0.903 秒，桌面 LCP 0.251 秒，TBT 0、CLS 0。
+- OpenSpec `expand-commercial-seo-geo-conversion --strict` 通过。
+
+### 环境限制
+
+- 通用 schema 校验器不识别合法的顶层 `@graph`，项目校验已逐个解析图节点并验证 context、类型、日期和 CSP 哈希。
+- 本机 Docker 守护进程未启动，未执行容器内 `nginx -t`；Nginx 映射、缓存、敏感路由 noindex/no-store 与真实 404 由源码级发布门禁覆盖。
+- Search Console、百度、GA4、CrUX 字段指标、排名、流量和转化仍未知。
+
 ## 2026-08-19：公开主题集群与 GEO 基础
 
 ### 已实施
