@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import logging
 from pathlib import Path
-from threading import Event
 from time import sleep, time
 
 import httpx
@@ -1953,7 +1952,7 @@ def test_remote_screenshot_capture_request_can_be_cancelled_before_desktop_uploa
     assert queued is None
 
 
-def test_realtime_speech_websocket_generates_transcript_question_and_answer() -> None:
+def test_realtime_speech_websocket_detects_question_without_generating_answer() -> None:
     session = unwrap(client.post("/api/v1/sessions", json={
         "userId": "realtime-user",
         "title": "实时语音测试",
@@ -1995,17 +1994,6 @@ def test_realtime_speech_websocket_generates_transcript_question_and_answer() ->
     assert first["payload"]["role"] == "interviewer"
     assert second["kind"] == "question-confirmed"
     assert second["payload"]["text"] == question_text
-    answer_events = []
-    for _ in range(100):
-        answer_events = unwrap(client.get(
-            f"/api/v1/realtime-speech/sessions/{session_id}/events",
-            params={"userId": "realtime-user"},
-        ))["events"]
-        if any(item["kind"] == "answer-stream" and item["payload"].get("phase") == "completed" for item in answer_events):
-            break
-        sleep(0.01)
-    assert any(item["kind"] == "answer-stream" and item["payload"].get("phase") == "completed" for item in answer_events)
-
     runtime = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/runtime", params={"userId": "realtime-user"}))
     assert runtime["transcriptCount"] == 1
     assert runtime["questionCandidateCount"] == 1
@@ -2013,29 +2001,22 @@ def test_realtime_speech_websocket_generates_transcript_question_and_answer() ->
     assert transcripts["transcripts"][0]["text"] == question_text
     candidates = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/question-candidates", params={"userId": "realtime-user"}))
     assert candidates["candidates"][0]["state"] == "confirmed"
+    assert candidates["candidates"][0]["answerTaskId"] is None
     history = unwrap(client.get(f"/api/v1/live-answer/sessions/{session_id}/history", params={"userId": "realtime-user"}))
-    assert history[0]["question"] == question_text
+    assert history == []
     context = unwrap(client.get(f"/api/v1/sessions/{session_id}/context", params={"userId": "realtime-user"}))
     assert any(item["role"] == "interviewer" and item["content"] == question_text for item in context["entries"])
-    assert any(item["role"] == "assistant" for item in context["entries"])
+    assert not any(item["role"] == "assistant" for item in context["entries"])
     usage = unwrap(client.get(f"/api/v1/sessions/{session_id}/usage", params={"userId": "realtime-user"}))
     assert any(item["providerName"] == "qwen-realtime-asr-compatible" for item in usage["records"])
     events = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/events", params={"userId": "realtime-user"}))
-    assert any(item["kind"] == "answer-stream" for item in events["events"])
+    assert not any(item["kind"] == "answer-stream" for item in events["events"])
 
 
-def test_realtime_automatic_answer_does_not_block_audio_ingest_and_is_idempotent(monkeypatch) -> None:
+def test_realtime_question_confirmation_does_not_start_answer(monkeypatch) -> None:
     service = realtime_speech_service()
-    answer_started = Event()
-    release_answer = Event()
-
-    def slow_automatic_stream(**_kwargs):
-        answer_started.set()
-        release_answer.wait(timeout=2)
-        if False:
-            yield None
-
-    monkeypatch.setattr(service.chat_service, "stream_automatic_answer_question", slow_automatic_stream)
+    automatic_starts: list[str] = []
+    monkeypatch.setattr(service, "_start_automatic_answer", lambda candidate: automatic_starts.append(candidate.candidate_id) or True)
     session = unwrap(client.post("/api/v1/sessions", json={
         "userId": "realtime-nonblocking-user",
         "title": "实时回答不阻塞收音测试",
@@ -2050,7 +2031,6 @@ def test_realtime_automatic_answer_does_not_block_audio_ingest_and_is_idempotent
     }))
     payload = base64.b64encode("请介绍一个最近的项目".encode("utf-8")).decode("utf-8")
 
-    started_at = time()
     with client.websocket_connect(f"/api/v1/realtime-speech/ws?token={publisher['token']}") as websocket:
         websocket.send_json({
             "type": "audio-frame", "deviceId": "device-realtime-nonblocking",
@@ -2062,18 +2042,10 @@ def test_realtime_automatic_answer_does_not_block_audio_ingest_and_is_idempotent
         })
         assert websocket.receive_json()["kind"] == "transcript-updated"
         assert websocket.receive_json()["kind"] == "question-confirmed"
-    ingest_elapsed_ms = (time() - started_at) * 1000
-
-    assert ingest_elapsed_ms < 250
-    assert answer_started.wait(timeout=1)
     candidate = service.list_candidates(user_id="realtime-nonblocking-user", session_id=session_id).candidates[0]
-    assert service._start_automatic_answer(candidate) is False
-    release_answer.set()
-    for _ in range(100):
-        if candidate.candidate_id not in service._automatic_answer_candidates:
-            break
-        sleep(0.01)
-    assert candidate.candidate_id not in service._automatic_answer_candidates
+    assert candidate.state == "confirmed"
+    assert candidate.answer_task_id is None
+    assert automatic_starts == []
 
 
 def test_realtime_speech_websocket_reports_asr_degraded_without_closing_stream() -> None:
@@ -3191,15 +3163,17 @@ def test_realtime_speech_keeps_late_system_final_authoritative_after_microphone_
     deadline = time() + 3.0
     while time() < deadline:
         transcripts = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/transcripts", params={"userId": user_id}))
-        history = unwrap(client.get(f"/api/v1/live-answer/sessions/{session_id}/history", params={"userId": user_id}))
-        if any(item["sourceKind"] == "system" and item["isFinal"] for item in transcripts["transcripts"]) and history:
+        candidates = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/question-candidates", params={"userId": user_id}))
+        if any(item["sourceKind"] == "system" and item["isFinal"] for item in transcripts["transcripts"]) and candidates["candidates"]:
             break
         sleep(0.05)
     else:
-        raise AssertionError("late system final did not trigger an answer")
+        raise AssertionError("late system final did not produce a question candidate")
 
-    assert len(history) == 1
-    assert history[0]["question"] == question
+    assert candidates["candidates"][0]["text"] == question
+    assert candidates["candidates"][0]["answerTaskId"] is None
+    history = unwrap(client.get(f"/api/v1/live-answer/sessions/{session_id}/history", params={"userId": user_id}))
+    assert history == []
 
 
 def test_realtime_speech_suppressed_final_closes_existing_partial_without_answer() -> None:
@@ -3374,7 +3348,9 @@ def test_realtime_speech_low_confidence_requires_confirmation_and_mixed_source_d
     assert candidates["candidates"][0]["state"] == "needs-confirmation"
     confirmed = unwrap(client.post(f"/api/v1/realtime-speech/question-candidates/{candidate_id}/confirm", json={"userId": "realtime-confirm-user"}))
     assert confirmed["state"] == "confirmed"
-    assert confirmed["answerTaskId"]
+    assert confirmed["answerTaskId"] is None
+    history = unwrap(client.get(f"/api/v1/live-answer/sessions/{session_id}/history", params={"userId": "realtime-confirm-user"}))
+    assert history == []
 
     mixed_payload = base64.b64encode("这是一段混合音频".encode("utf-8")).decode("utf-8")
     with client.websocket_connect(f"/api/v1/realtime-speech/ws?token={mixed_publisher['token']}") as websocket:

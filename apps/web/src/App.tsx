@@ -161,7 +161,7 @@ function LandingPage() {
       </section>
       <section id="workflow" className="public-section">
         <div className="section-intro"><span className="kicker">YOUR INTERVIEW RHYTHM</span><h2>从准备到现场，少一点慌乱</h2></div>
-        <div className="workflow-grid"><article><b>01 · PERSONAL</b><h3>理解你的真实经历</h3><p>每场面试单独选择简历、JD 和知识材料，减少无关内容，也不替你虚构经历。</p></article><article><b>02 · REAL-TIME</b><h3>听懂问题，也看懂截图</h3><p>支持授权语音、手动输入和截图题；系统优先聚焦面试官问题，来源不清时会暂停自动回答并提示你改用手动输入。</p></article><article><b>03 · TRACEABLE</b><h3>知道建议从哪里来</h3><p>每条回答显示实际使用的资料名称与版本，资料和模型推断保持清晰分离。</p></article></div>
+        <div className="workflow-grid"><article><b>01 · PERSONAL</b><h3>理解你的真实经历</h3><p>每场面试单独选择简历、JD 和知识材料，减少无关内容，也不替你虚构经历。</p></article><article><b>02 · REAL-TIME</b><h3>听懂问题，也看懂截图</h3><p>支持授权语音、手动输入和截图题；系统持续整理面试官问题，由你点击快答或截屏回答后生成答案。</p></article><article><b>03 · TRACEABLE</b><h3>知道建议从哪里来</h3><p>每条回答显示实际使用的资料名称与版本，资料和模型推断保持清晰分离。</p></article></div>
         <div className="advantage-strip"><div><strong>电脑端</strong><span>macOS 双芯片已规划，Windows 版本按签名状态逐步开放</span></div><div><strong>手机端</strong><span>同步查看回答和会话状态，不被单一设备绑住</span></div><div><strong>你的数据</strong><span>资料可管理、可删除，原始音频默认不保存</span></div></div>
       </section>
       <section id="core-capabilities" className="public-section core-capabilities" aria-labelledby="core-capabilities-title">

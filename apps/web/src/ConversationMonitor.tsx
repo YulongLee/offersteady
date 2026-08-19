@@ -90,7 +90,7 @@ export function ConversationMonitor({ state, onConfirmQuestion, onDismissQuestio
   const pendingSegmentIds = new Set(state.speaker.pendingQuestion?.sourceSegmentIds ?? []);
   return <section className={`conversation-monitor ${transcripts.length === 0 ? "is-empty" : "has-transcripts"}`} aria-labelledby="conversation-title">
     <header><div><span className="kicker">LIVE CONVERSATION</span><h2 id="conversation-title">实时对话</h2></div><span className="conversation-mode"><i className={state.speaker.mode === "dual-channel" ? "online-dot" : "recording-dot"} />{state.speaker.mode === "dual-channel" ? "双通道 · 两角色" : "仅手动提问"}</span></header>
-    {state.speaker.degradation ? <div className="source-degradation" role="status"><strong>音频来源无法区分</strong><span>自动回答已暂停，请检查桌面程序或使用右侧手动提问。</span></div> : null}
+    {state.speaker.degradation ? <div className="source-degradation" role="status"><strong>音频来源无法区分</strong><span>面试官问题识别已暂停，请检查桌面程序或使用右侧手动提问。</span></div> : null}
     {!state.speaker.degradation && state.speaker.runtimeNotice ? <div className="source-degradation" role="status"><strong>当前 session 尚未收到实时对话</strong><span>{state.speaker.runtimeNotice.message}</span></div> : null}
     <div className="conversation-list" ref={viewport} onScroll={event => { const node = event.currentTarget; followLatest.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48; }}>
       {transcripts.length === 0 ? <div className="conversation-empty"><strong>等待当前面试的实时对话</strong><span>{state.speaker.runtimeNotice?.message ?? "桌面伴随助手连上当前 session 后，这里会按“面试官 / 我”实时显示转录。"}</span></div> : null}

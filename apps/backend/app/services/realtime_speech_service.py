@@ -1405,28 +1405,20 @@ class RealtimeSpeechService:
                     kind="question-candidate" if candidate.state == "needs-confirmation" else "question-confirmed",
                     payload={"candidateId": candidate.candidate_id, "state": candidate.state, "text": candidate.text, "confidence": candidate.confidence},
                 )))
-                if candidate.state == "confirmed" and candidate.answer_task_id is None:
-                    self._start_automatic_answer(candidate)
         return events
 
     def confirm_candidate(self, *, user_id: str, candidate_id: str) -> QuestionCandidateRecord:
         candidate = self._require_candidate(user_id=user_id, candidate_id=candidate_id)
         if candidate.state != "needs-confirmation":
             return candidate
-        answer_task, _ = self.chat_service.answer_question(
-            user_id=user_id,
-            session_id=candidate.session_id,
-            question=candidate.text,
-            stream=True,
-        )
         confirmed = self.repository.save_candidate(
-            replace(candidate, state="confirmed", reason="user-confirmed", answer_task_id=answer_task.task_id, updated_at_ms=_now_ms())
+            replace(candidate, state="confirmed", reason="user-confirmed", updated_at_ms=_now_ms())
         )
         self._save_event(
             session_id=confirmed.session_id,
             owner_user_id=user_id,
             kind="question-confirmed",
-            payload={"candidateId": confirmed.candidate_id, "taskId": answer_task.task_id, "text": confirmed.text},
+            payload={"candidateId": confirmed.candidate_id, "text": confirmed.text},
         )
         return confirmed
 

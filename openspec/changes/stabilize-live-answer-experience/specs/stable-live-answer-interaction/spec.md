@@ -13,8 +13,8 @@ The system SHALL make a newly initiated answer task the current answer immediate
 - **THEN** the older records are merged into history without changing the current task or reducing its answer text
 
 #### Scenario: User is intentionally viewing history
-- **WHEN** a passive automatic answer arrives while the user is viewing a historical answer
-- **THEN** the historical answer remains visible and the workspace displays a control for returning to the new answer
+- **WHEN** a new explicitly requested answer arrives while the user is viewing a historical answer
+- **THEN** the explicitly requested answer becomes current and the historical answer remains available through navigation
 
 ### Requirement: Answer task state and text progress monotonically
 The system SHALL merge updates for the same answer task by revision and lifecycle stage, and SHALL preserve the longest valid streamed prefix so stale updates cannot move the task backward or shorten visible content.
@@ -88,23 +88,28 @@ The system SHALL present screenshot answer as a visually identifiable button and
 - **WHEN** capture, upload, recognition, or generation fails or the user cancels it
 - **THEN** the button area and current answer show the terminal state and provide a safe retry path
 
-### Requirement: Complete interviewer questions automatically start one answer
-The system SHALL automatically confirm and start an answer exactly once for a stable question candidate from the system/interviewer channel when it is final, semantically complete, uniquely attributable, and meets the configured confidence rules. The system MUST keep incomplete, conflicting, non-final, or low-confidence candidates available for manual confirmation instead of auto-answering them.
+### Requirement: Answer generation requires an explicit user action
+The system SHALL use realtime speech only to update transcripts and identify interviewer-question candidates. It MUST NOT start an answer task or bill answer generation until the user explicitly activates quick answer or screenshot answer.
 
-#### Scenario: Complete final interviewer question arrives without punctuation
-- **WHEN** the system channel produces a final, high-confidence, semantically complete interviewer question that lacks a trailing question mark
-- **THEN** the system starts one answer without requiring the user to press the answer button
+#### Scenario: Complete final interviewer question arrives
+- **WHEN** the system channel produces a final, high-confidence interviewer question
+- **THEN** the system records and confirms the candidate without starting an answer task
+- **AND** quick answer can use that question after the user activates it
 
-#### Scenario: Duplicate final event arrives
-- **WHEN** the same confirmed candidate is delivered more than once
-- **THEN** only one answer task and one billable generation are created
+#### Scenario: User has not selected an answer action
+- **WHEN** transcripts and confirmed question candidates continue to arrive without a quick-answer or screenshot-answer action
+- **THEN** no answer task, assistant context, answer usage, or answer-stream event is created
 
-#### Scenario: Candidate is incomplete or uncertain
-- **WHEN** a candidate is non-final, truncated, conflicting, or below the confidence threshold
-- **THEN** the system does not auto-generate an answer and clearly leaves the candidate in a confirmable state
+#### Scenario: User explicitly activates quick answer
+- **WHEN** the user activates quick answer with a manual question or usable recent interviewer question
+- **THEN** the system starts exactly one answer task for that explicit action
+
+#### Scenario: User explicitly activates screenshot answer
+- **WHEN** the user activates screenshot answer and the screenshot workflow succeeds
+- **THEN** the system starts exactly one screenshot answer task for that explicit action
 
 ### Requirement: Interaction regressions use synthetic data
-The system MUST verify current-task ownership, stream ordering, automatic trigger, quick answer, and screenshot feedback using synthetic or anonymized fixtures and SHALL NOT add logs containing complete real interview questions, answers, audio, or screenshot bodies.
+The system MUST verify current-task ownership, stream ordering, the no-automatic-answer boundary, quick answer, and screenshot feedback using synthetic or anonymized fixtures and SHALL NOT add logs containing complete real interview questions, answers, audio, or screenshot bodies.
 
 #### Scenario: Regression suite runs
 - **WHEN** the live-answer regression tests execute
