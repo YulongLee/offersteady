@@ -1,6 +1,7 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
@@ -11,6 +12,12 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     target: "chrome86",
+    rollupOptions: {
+      input: {
+        main: resolve(import.meta.dirname, "index.html"),
+        guide: resolve(import.meta.dirname, "guide.html"),
+      },
+    },
   },
   server: {
     host: "127.0.0.1",

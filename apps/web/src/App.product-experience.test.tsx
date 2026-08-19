@@ -11,7 +11,7 @@ const open = (path: string, authenticated = true, mutate?: (state: WebAppState) 
 describe("optimized product experience", () => {
   it("matches the filed website name and exposes the MIIT filing link", () => {
     open("/", false);
-    expect(document.title).toBe("面试稳AI助手");
+    expect(document.title).toBe("AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳");
     expect(screen.getAllByText("面试稳AI助手").length).toBeGreaterThan(0);
     const filing = screen.getByRole("link", { name: "浙ICP备2026052190号-1" });
     expect(filing).toHaveAttribute("href", "https://beian.miit.gov.cn");
@@ -54,6 +54,7 @@ describe("optimized product experience", () => {
     const hero = screen.getByRole("heading", { name: /更从容地冲刺 Offer/ }).closest("section");
     fireEvent.click(within(hero!).getByRole("link", { name: "使用手册" }));
     expect(screen.getByRole("heading", { name: "使用说明" })).toBeInTheDocument();
+    expect(document.title).toBe("面试稳AI助手使用手册｜安装、收音、截图回答与支付说明");
     expect(screen.getByPlaceholderText(/Windows、支付未到账/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "免费使用" })).toHaveAttribute("href", "/login");
   });

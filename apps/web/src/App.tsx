@@ -1525,11 +1525,26 @@ export function AppRoutes() {
   return <Routes><Route element={<PublicLayout />}><Route path={routes.landing} element={<LandingPage />} /><Route path={routes.login} element={<LoginPage />} /><Route path={routes.publicGuide} element={<GuideRoutePage />} /><Route path={routes.invite()} element={<ReferralLandingPage />} /><Route path={routes.terms} element={<LegalPage kind="terms" />} /><Route path={routes.privacy} element={<LegalPage kind="privacy" />} /></Route><Route element={<ProtectedRoute />}><Route path="/app" element={<AppLayout />}><Route index element={<HomePage />} /><Route path="interviews/new" element={<NewInterviewPage />} /><Route path="interviews/:id/prepare" element={<PreparationPage />} /><Route path="interviews/:id/review" element={<ReviewPage />} /><Route path="library" element={<LibraryPage />} /><Route path="billing" element={<BillingRoutePage />} /><Route path="guide" element={<GuideRoutePage />} /><Route path="devices" element={<DevicesPage />} /><Route path="settings" element={<SettingsPage />} /></Route><Route path="/app/interviews/:id/live" element={<LivePage />} /></Route><Route path="/error" element={<RouteErrorPage />} /><Route path="*" element={<NotFoundPage />} /></Routes>;
 }
 
+function DocumentTitleManager() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    if (pathname === routes.landing) {
+      document.title = "AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳";
+    } else if (pathname === routes.publicGuide) {
+      document.title = "面试稳AI助手使用手册｜安装、收音、截图回答与支付说明";
+    } else if (pathname === routes.terms) {
+      document.title = "用户协议 - 面试稳AI助手";
+    } else if (pathname === routes.privacy) {
+      document.title = "隐私政策 - 面试稳AI助手";
+    } else {
+      document.title = "面试稳AI助手";
+    }
+  }, [pathname]);
+  return null;
+}
+
 export interface AppProps { readonly initialAuthenticated?: boolean; readonly initialState?: WebAppState }
 
 export function App({ initialAuthenticated, initialState }: AppProps) {
-  useEffect(() => {
-    document.title = "面试稳AI助手";
-  }, []);
-  return <BrowserRouter><PrototypeProvider initialAuthenticated={initialAuthenticated} initialState={initialState}><Suspense fallback={<RouteLoadingPage />}><AppRoutes /></Suspense></PrototypeProvider></BrowserRouter>;
+  return <BrowserRouter><DocumentTitleManager /><PrototypeProvider initialAuthenticated={initialAuthenticated} initialState={initialState}><Suspense fallback={<RouteLoadingPage />}><AppRoutes /></Suspense></PrototypeProvider></BrowserRouter>;
 }

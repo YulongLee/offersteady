@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Link } from "react-router-dom";
 
 import { routes } from "./routes";
@@ -76,11 +75,6 @@ export function LegalPage({ kind }: { readonly kind: LegalKind }) {
   const terms = kind === "terms";
   const title = terms ? "用户协议" : "隐私政策";
   const sections = terms ? termsSections : privacySections;
-
-  useEffect(() => {
-    document.title = `${title} - 面试稳AI助手`;
-    return () => { document.title = "面试稳AI助手"; };
-  }, [title]);
 
   return (
     <main className="legal-page">
