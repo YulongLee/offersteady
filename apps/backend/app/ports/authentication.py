@@ -109,6 +109,7 @@ class SmsChallengeRecord:
     updated_at_ms: int
     last_error_code: str | None = None
     verified_at_ms: int | None = None
+    code_digest: str | None = None
 
 
 @dataclass(frozen=True)
@@ -119,6 +120,7 @@ class SmsSendResult:
     error_code: str | None = None
     error_message: str | None = None
     latency_ms: int = 0
+    verification_code_digest: str | None = None
 
 
 @dataclass(frozen=True)

@@ -293,6 +293,7 @@ class AuthenticationService:
             status=status,
             provider_biz_id=result.provider_biz_id,
             provider_request_id=result.provider_request_id,
+            code_digest=result.verification_code_digest,
             last_error_code=result.error_code,
             updated_at_ms=_now_ms(),
         ))

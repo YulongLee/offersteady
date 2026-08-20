@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import json
+import secrets
 import time
 from time import perf_counter
 from urllib.parse import quote
@@ -176,3 +177,49 @@ class AliyunDypnsSmsVerificationProvider(SmsVerificationProviderPort):
         if "invalid" in code or "incorrect" in code or "错误" in message:
             return "invalid"
         return "failed"
+
+
+class AliyunDysmsSmsVerificationProvider(AliyunDypnsSmsVerificationProvider):
+    """Aliyun Dysmsapi sender with local digest-only code verification."""
+
+    def provider_name(self) -> str:
+        return "aliyun-dysmsapi"
+
+    def send_code(self, *, phone_e164: str, challenge_id: str) -> SmsSendResult:
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        payload = {
+            "Action": "SendSms",
+            "PhoneNumbers": phone_e164.removeprefix("+86"),
+            "SignName": self._require(self.settings.auth_sms_aliyun_sign_name, "sign_name"),
+            "TemplateCode": self._require(self.settings.auth_sms_aliyun_template_code, "template_code"),
+            "TemplateParam": json.dumps({"code": code}, separators=(",", ":")),
+            "OutId": challenge_id,
+        }
+        started = perf_counter()
+        try:
+            data = self._request(payload)
+        except Exception as exc:
+            return SmsSendResult(outcome="provider_unavailable", error_code=exc.__class__.__name__, error_message=str(exc), latency_ms=int((perf_counter() - started) * 1000))
+        latency_ms = int((perf_counter() - started) * 1000)
+        if str(data.get("Code", "")).upper() in {"OK", "SUCCESS"}:
+            return SmsSendResult(
+                outcome="sent",
+                provider_biz_id=str(data.get("BizId") or challenge_id),
+                provider_request_id=self._request_id(data),
+                latency_ms=latency_ms,
+                verification_code_digest=self._code_digest(phone_e164=phone_e164, challenge_id=challenge_id, code=code),
+            )
+        return SmsSendResult(outcome=self._provider_outcome(data), provider_request_id=self._request_id(data), error_code=str(data.get("Code") or "provider_failed"), error_message=str(data.get("Message") or "短信发送失败。"), latency_ms=latency_ms)
+
+    def verify_code(self, *, phone_e164: str, code: str, challenge: SmsChallengeRecord) -> SmsVerifyResult:
+        if not challenge.code_digest:
+            return SmsVerifyResult(outcome="failed", error_code="sms_code_digest_missing", error_message="验证码会话无效。")
+        candidate = self._code_digest(phone_e164=phone_e164, challenge_id=challenge.challenge_id, code=code)
+        if hmac.compare_digest(candidate, challenge.code_digest):
+            return SmsVerifyResult(outcome="verified", provider_request_id=challenge.provider_request_id)
+        return SmsVerifyResult(outcome="invalid", provider_request_id=challenge.provider_request_id, error_code="invalid_code", error_message="验证码不正确。")
+
+    def _code_digest(self, *, phone_e164: str, challenge_id: str, code: str) -> str:
+        pepper = self._require(self.settings.auth_sms_code_pepper, "code_pepper")
+        message = f"{challenge_id}:{phone_e164}:{code}".encode("utf-8")
+        return hmac.new(pepper.encode("utf-8"), message, hashlib.sha256).hexdigest()

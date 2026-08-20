@@ -9,7 +9,7 @@ from app.services.document_processing_adapters import SyntheticEmbeddingAdapter
 from app.services.knowledge_retrieval import HeuristicRerankerAdapter, SyntheticQueryEmbeddingAdapter
 from app.services.realtime_speech_service import SyntheticRealtimeAsrGateway
 from app.services.screenshot_answer_service import SyntheticVisionGateway
-from app.services.sms_verification_provider import FakeSmsVerificationProvider
+from app.services.sms_verification_provider import AliyunDysmsSmsVerificationProvider, FakeSmsVerificationProvider
 from app.services.billing_service import BillingService
 
 
@@ -89,6 +89,20 @@ def test_development_provider_factories_keep_synthetic_adapters(monkeypatch) -> 
     assert isinstance(deps.embedding_adapter(), SyntheticEmbeddingAdapter)
     assert isinstance(deps.query_embedding_adapter(), SyntheticQueryEmbeddingAdapter)
     assert isinstance(deps.reranker_adapter(), HeuristicRerankerAdapter)
+
+
+def test_production_accepts_complete_dysmsapi_configuration(monkeypatch) -> None:
+    settings = isolated_settings("production").model_copy(update={
+        "auth_sms_provider_mode": "aliyun-dysmsapi",
+        "auth_sms_aliyun_endpoint": "https://dysmsapi.aliyuncs.com",
+        "auth_sms_aliyun_access_key_id": "synthetic-access-key",
+        "auth_sms_aliyun_access_key_secret": "synthetic-access-secret",
+        "auth_sms_aliyun_sign_name": "合成测试签名",
+        "auth_sms_aliyun_template_code": "SMS_000000000",
+        "auth_sms_code_pepper": "synthetic-code-pepper-at-least-32-bytes",
+    })
+    monkeypatch.setattr(deps, "get_settings", lambda: settings)
+    assert isinstance(deps.sms_verification_provider(), AliyunDysmsSmsVerificationProvider)
 
 
 def test_production_validation_names_missing_variable_without_secret_value() -> None:

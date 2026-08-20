@@ -17,6 +17,7 @@ from app.ports.authentication import (
     WechatAuthorizationSessionRecord,
 )
 from app.services.authentication_repository import InMemoryAuthenticationRepository
+from app.services.postgres_migrations import apply_sql_migrations
 
 
 class PostgresAuthenticationRepository(AuthenticationRepository):
@@ -195,8 +196,8 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
                     INSERT INTO auth_sms_challenges (
                       challenge_id, phone_e164, phone_hash, provider, status, provider_biz_id,
                       provider_request_id, attempt_count, max_attempts, expires_at_ms,
-                      created_at_ms, updated_at_ms, last_error_code, verified_at_ms
-                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                      created_at_ms, updated_at_ms, last_error_code, verified_at_ms, code_digest
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     ON CONFLICT (challenge_id) DO UPDATE SET
                       status = EXCLUDED.status,
                       provider_biz_id = EXCLUDED.provider_biz_id,
@@ -204,7 +205,8 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
                       attempt_count = EXCLUDED.attempt_count,
                       updated_at_ms = EXCLUDED.updated_at_ms,
                       last_error_code = EXCLUDED.last_error_code,
-                      verified_at_ms = EXCLUDED.verified_at_ms
+                      verified_at_ms = EXCLUDED.verified_at_ms,
+                      code_digest = EXCLUDED.code_digest
                     """,
                     (
                         challenge.challenge_id,
@@ -221,6 +223,7 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
                         challenge.updated_at_ms,
                         challenge.last_error_code,
                         challenge.verified_at_ms,
+                        challenge.code_digest,
                     ),
                 )
             connection.commit()
@@ -333,6 +336,7 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
             updated_at_ms=int(row["updated_at_ms"]),
             last_error_code=row["last_error_code"],
             verified_at_ms=int(row["verified_at_ms"]) if row["verified_at_ms"] is not None else None,
+            code_digest=row.get("code_digest"),
         )
 
     def _connect(self):
@@ -348,6 +352,8 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(open(self._migration_path(), encoding="utf8").read())
+                from app.core.config import REPO_ROOT
+                apply_sql_migrations(cursor, [REPO_ROOT / "apps/backend/migrations/versions/0030_dysmsapi_code_digest.sql"])
             connection.commit()
 
     @staticmethod

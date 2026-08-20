@@ -47,7 +47,7 @@ from .services.chat_service import ChatService, FilePromptTemplateAdapter, Inter
 from .services.authentication_repository import InMemoryAuthenticationRepository
 from .services.postgres_authentication_repository import PostgresAuthenticationRepository
 from .services.authentication_service import AuthenticationService, CompatibleWechatLoginProvider, JWTAccessTokenCodec, PBKDF2PasswordHasher
-from .services.sms_verification_provider import AliyunDypnsSmsVerificationProvider, FakeSmsVerificationProvider
+from .services.sms_verification_provider import AliyunDypnsSmsVerificationProvider, AliyunDysmsSmsVerificationProvider, FakeSmsVerificationProvider
 from .services.billing_service import BillingService
 from .services.postgres_billing_repository import PostgresBillingRepository
 from .services.postgres_points_redemption_repository import PostgresPointsRedemptionRepository
@@ -319,8 +319,17 @@ def sms_verification_provider() -> SmsVerificationProviderPort:
             "OFFERSTEADY_AUTH_SMS_ALIYUN_TEMPLATE_CODE": settings.auth_sms_aliyun_template_code,
         })
         return AliyunDypnsSmsVerificationProvider(settings)
+    if settings.auth_sms_provider_mode == "aliyun-dysmsapi":
+        _require_production_provider(settings, "sms", {
+            "OFFERSTEADY_AUTH_SMS_ALIYUN_ACCESS_KEY_ID": settings.auth_sms_aliyun_access_key_id,
+            "OFFERSTEADY_AUTH_SMS_ALIYUN_ACCESS_KEY_SECRET": settings.auth_sms_aliyun_access_key_secret,
+            "OFFERSTEADY_AUTH_SMS_ALIYUN_SIGN_NAME": settings.auth_sms_aliyun_sign_name,
+            "OFFERSTEADY_AUTH_SMS_ALIYUN_TEMPLATE_CODE": settings.auth_sms_aliyun_template_code,
+            "OFFERSTEADY_AUTH_SMS_CODE_PEPPER": settings.auth_sms_code_pepper,
+        })
+        return AliyunDysmsSmsVerificationProvider(settings)
     if settings.environment == "production":
-        raise RuntimeError("sms production configuration requires OFFERSTEADY_AUTH_SMS_PROVIDER_MODE=aliyun")
+        raise RuntimeError("sms production configuration requires an Aliyun SMS provider mode")
     return FakeSmsVerificationProvider(settings)
 
 

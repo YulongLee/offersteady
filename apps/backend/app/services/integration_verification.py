@@ -866,30 +866,32 @@ class PgvectorVerifier(BaseVerifier):
 class SmsAuthenticationVerifier(BaseVerifier):
     item_id = "sms_auth"
     title = "SMS Authentication Provider Readiness"
-    provider_name = "aliyun-dypnsapi-or-fake"
+    provider_name = "aliyun-sms-or-fake"
 
     def verify(self, context: VerificationContext) -> VerificationItemResult:
         recorder = VerificationItemRecorder(context=context, item_id=self.item_id, title=self.title, provider_name=self.provider_name)
         settings = context.settings
 
         def config_check() -> dict[str, Any]:
-            if settings.auth_sms_provider_mode == "aliyun":
+            if settings.auth_sms_provider_mode in {"aliyun", "aliyun-dysmsapi"}:
                 self._require(settings.auth_sms_aliyun_access_key_id and settings.auth_sms_aliyun_access_key_secret, code="sms_credentials_missing", message="Aliyun SMS credentials are not configured.")
                 self._require(settings.auth_sms_aliyun_sign_name and settings.auth_sms_aliyun_template_code, code="sms_template_missing", message="Aliyun SMS sign name or template code is not configured.")
+                if settings.auth_sms_provider_mode == "aliyun-dysmsapi":
+                    self._require(settings.auth_sms_code_pepper, code="sms_code_pepper_missing", message="Dysmsapi code pepper is not configured.")
             return {
                 "mode": settings.auth_sms_provider_mode,
-                "endpoint": settings.auth_sms_aliyun_endpoint if settings.auth_sms_provider_mode == "aliyun" else "fake",
+                "endpoint": settings.auth_sms_aliyun_endpoint if settings.auth_sms_provider_mode in {"aliyun", "aliyun-dysmsapi"} else "fake",
                 "testPhoneConfigured": bool(settings.auth_sms_test_phone_number),
             }
 
         recorder.run_step("sms_config", config_check, success_summary="SMS auth configuration is readable.")
 
         def probe_policy() -> dict[str, Any]:
-            if settings.auth_sms_provider_mode != "aliyun":
+            if settings.auth_sms_provider_mode not in {"aliyun", "aliyun-dysmsapi"}:
                 return {"provider": "fake", "fakeCodeConfigured": bool(settings.auth_sms_fake_code)}
             if not settings.auth_sms_test_phone_number:
-                return {"provider": "aliyun", "realSendSkipped": True, "reason": "OFFERSTEADY_AUTH_SMS_TEST_PHONE_NUMBER is not configured"}
-            return {"provider": "aliyun", "realSendSkipped": True, "reason": "Real SMS sending must be triggered by a dedicated manual test, not the default verifier"}
+                return {"provider": settings.auth_sms_provider_mode, "realSendSkipped": True, "reason": "OFFERSTEADY_AUTH_SMS_TEST_PHONE_NUMBER is not configured"}
+            return {"provider": settings.auth_sms_provider_mode, "realSendSkipped": True, "reason": "Real SMS sending must be triggered by a dedicated manual test, not the default verifier"}
 
         recorder.run_step("sms_probe_policy", probe_policy, success_summary="SMS auth probe policy is safe.")
         return recorder.finalize(status="passed", attempts=1, summary="SMS authentication provider configuration is ready.")

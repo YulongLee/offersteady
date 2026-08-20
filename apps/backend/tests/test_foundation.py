@@ -18,7 +18,7 @@ from app.ports.chat import ChatAnswerChunk, PromptBuildResult, PromptConfig
 from app.services.chat_service import NonRetryableChatError, QwenCompatibleGateway, RetryableChatError
 from app.services.dashscope_realtime_asr_gateway import DashScopeRealtimeAsrGateway
 from app.services.realtime_speech_repository import InMemoryRealtimeSpeechRepository
-from app.services.sms_verification_provider import AliyunDypnsSmsVerificationProvider
+from app.services.sms_verification_provider import AliyunDypnsSmsVerificationProvider, AliyunDysmsSmsVerificationProvider
 
 
 def test_realtime_stream_throttles_database_backed_session_validation() -> None:
@@ -339,6 +339,57 @@ def test_aliyun_personal_developer_sms_provider_uses_model_verify_result() -> No
     invalid = provider.verify_code(phone_e164="+8613900001234", code="000000", challenge=challenge)
     assert invalid.outcome == "invalid"
     assert invalid.provider_request_id == "invalid-request"
+
+
+def test_aliyun_dysmsapi_provider_sends_code_and_verifies_digest_only(monkeypatch) -> None:
+    settings = Settings(
+        auth_sms_provider_mode="aliyun-dysmsapi",
+        auth_sms_aliyun_endpoint="https://dysmsapi.aliyuncs.com",
+        auth_sms_aliyun_region_id="cn-qingdao",
+        auth_sms_aliyun_access_key_id="test-key",
+        auth_sms_aliyun_access_key_secret="test-secret",
+        auth_sms_aliyun_sign_name="杭州临平知界智能技术",
+        auth_sms_aliyun_template_code="SMS_336645096",
+        auth_sms_code_pepper="test-only-code-pepper-at-least-32-bytes",
+    )
+    provider = AliyunDysmsSmsVerificationProvider(settings)
+    calls: list[dict[str, str]] = []
+    monkeypatch.setattr("app.services.sms_verification_provider.secrets.randbelow", lambda _limit: 123456)
+
+    def fake_request(payload: dict[str, str]) -> dict:
+        calls.append(payload)
+        return {"Code": "OK", "RequestId": "send-request", "BizId": "send-biz"}
+
+    provider._request = fake_request  # type: ignore[method-assign]
+    sent = provider.send_code(phone_e164="+8613900001234", challenge_id="sms-challenge-dysms")
+    assert sent.outcome == "sent"
+    assert sent.verification_code_digest
+    assert "123456" not in sent.verification_code_digest
+    assert calls == [{
+        "Action": "SendSms",
+        "PhoneNumbers": "13900001234",
+        "SignName": "杭州临平知界智能技术",
+        "TemplateCode": "SMS_336645096",
+        "TemplateParam": '{"code":"123456"}',
+        "OutId": "sms-challenge-dysms",
+    }]
+    challenge = SmsChallengeRecord(
+        challenge_id="sms-challenge-dysms",
+        phone_e164="+8613900001234",
+        phone_hash="phone-hash",
+        provider="aliyun-dysmsapi",
+        status="sent",
+        provider_biz_id=sent.provider_biz_id,
+        provider_request_id=sent.provider_request_id,
+        attempt_count=0,
+        max_attempts=5,
+        expires_at_ms=9999999999999,
+        created_at_ms=1,
+        updated_at_ms=1,
+        code_digest=sent.verification_code_digest,
+    )
+    assert provider.verify_code(phone_e164="+8613900001234", code="123456", challenge=challenge).outcome == "verified"
+    assert provider.verify_code(phone_e164="+8613900001234", code="654321", challenge=challenge).outcome == "invalid"
 
 
 def test_wechat_authorization_session_expires_and_requires_refresh() -> None:

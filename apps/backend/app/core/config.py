@@ -167,6 +167,7 @@ class Settings(BaseSettings):
     auth_sms_aliyun_access_key_secret: str | None = None
     auth_sms_aliyun_sign_name: str | None = None
     auth_sms_aliyun_template_code: str | None = None
+    auth_sms_code_pepper: str | None = None
     auth_sms_ttl_seconds: int = 300
     auth_sms_send_interval_seconds: int = 30
     auth_sms_daily_limit: int = 20

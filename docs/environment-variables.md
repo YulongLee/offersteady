@@ -62,6 +62,7 @@
 - `OFFERSTEADY_AUTH_SMS_ALIYUN_REGION_ID`
 - `OFFERSTEADY_AUTH_SMS_ALIYUN_SIGN_NAME`
 - `OFFERSTEADY_AUTH_SMS_ALIYUN_TEMPLATE_CODE`
+- `OFFERSTEADY_AUTH_SMS_CODE_PEPPER`
 - `OFFERSTEADY_AUTH_SMS_TTL_SECONDS`
 - `OFFERSTEADY_AUTH_SMS_SEND_INTERVAL_SECONDS`
 - `OFFERSTEADY_AUTH_SMS_DAILY_LIMIT`
@@ -234,11 +235,13 @@ RAG 运行边界由以下变量控制：
 
 - `OFFERSTEADY_AUTH_SMS_PROVIDER_MODE=fake` 用于本地开发和自动化测试，默认验证码由 `OFFERSTEADY_AUTH_SMS_FAKE_CODE` 控制，默认 `123456`。
 - `OFFERSTEADY_AUTH_SMS_PROVIDER_MODE=aliyun` 时，后端通过阿里云号码认证服务 `Dypnsapi` 调用 `SendSmsVerifyCode` 和 `CheckSmsVerifyCode`。
+- `OFFERSTEADY_AUTH_SMS_PROVIDER_MODE=aliyun-dysmsapi` 时，后端通过阿里云短信服务 `Dysmsapi SendSms` 发送验证码，并只保存带 `OFFERSTEADY_AUTH_SMS_CODE_PEPPER` 的 HMAC 摘要进行本地校验。
 - 个人开发者应按阿里云“个人开发者如何接入短信验证码服务”流程开通短信认证；该流程不需要企业营业执照、不需要自定义企业短信签名或自定义模板。
 - `OFFERSTEADY_AUTH_SMS_ALIYUN_SIGN_NAME` 填阿里云号码认证服务控制台赠送/预置的系统签名名称。
 - `OFFERSTEADY_AUTH_SMS_ALIYUN_TEMPLATE_CODE` 填同一控制台赠送/预置的标准验证码模板编号。
 - `OFFERSTEADY_AUTH_SMS_ALIYUN_ACCESS_KEY_ID` 与 `OFFERSTEADY_AUTH_SMS_ALIYUN_ACCESS_KEY_SECRET` 只能放在后端环境或密钥管理系统，不得进入浏览器、`VITE_` 变量或前端源码。
 - 阿里云短信验证码由阿里云托管生成和校验，模板参数中的验证码占位使用 `##code##`；后端不生成、不保存、不记录验证码明文。
+- Dysmsapi 模式的模板变量为 `code`；服务端使用安全随机数生成六位验证码，不保存或记录明文，`OFFERSTEADY_AUTH_SMS_CODE_PEPPER` 必须使用独立高强度随机值。
 - 当前产品只支持中国大陆手机号，后端会以 `CountryCode=86` 调用阿里云接口。
 - `OFFERSTEADY_AUTH_SMS_TEST_PHONE_NUMBER` 只用于显式运行真实短信集成验收，普通单元测试不得调用真实短信 API。
 - 日志只允许记录手机号哈希、脱敏手机号、challenge id、provider request id、耗时和错误码，不能记录验证码明文。
