@@ -73,16 +73,18 @@ The system SHALL present quick answer as a visually identifiable button and SHAL
 - **THEN** the action area reports the failure and allows a deliberate retry without silently duplicating the failed request
 
 ### Requirement: Screenshot answer provides explicit staged feedback
-The system SHALL present screenshot answer as a visually identifiable button and SHALL expose capture, upload, recognition, generation, completion, failure, and cancellation feedback while preventing duplicate active capture requests.
+The system SHALL present screenshot answer as a visually identifiable button whose visible label and supporting copy remain stable across ready, processing, completion, failure, and cancellation states. The system SHALL expose capture, upload, recognition, generation, completion, failure, and cancellation feedback in the answer workspace or processing dialog while preventing duplicate active capture requests. It MUST NOT turn the screenshot action button itself into a visible status indicator.
 
 #### Scenario: Screenshot answer starts
 - **WHEN** the user activates screenshot answer
 - **THEN** a current placeholder answer is created immediately
-- **AND** the action reports the active screenshot stage until completion
+- **AND** the answer workspace or processing dialog reports the active screenshot stage until completion
+- **AND** the screenshot button continues to display its normal action label and supporting copy
 
 #### Scenario: Screenshot action is already active
 - **WHEN** the user activates screenshot answer while the same screenshot workflow is still active
 - **THEN** the system keeps the existing workflow and does not create a duplicate request
+- **AND** the screenshot button is disabled without changing its visible label into a processing or completion message
 
 #### Scenario: Screenshot answer fails or is cancelled
 - **WHEN** capture, upload, recognition, or generation fails or the user cancels it

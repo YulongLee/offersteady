@@ -65,7 +65,7 @@ export function MobileInterviewControls({
         {quickBusy ? "生成中…" : "快答"}
       </button>
       <button className="button ghost" aria-label="截屏回答" disabled={disabled || screenshotBusy} onClick={onScreenshot}>
-        {screenshotBusy ? "截屏中…" : "截屏回答"}
+        截屏回答
       </button>
     </div>
     <small className="mobile-interview-status" aria-live="polite">{statusText}</small>

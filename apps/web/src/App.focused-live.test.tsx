@@ -537,7 +537,11 @@ describe("focused live interview workspace", () => {
     openLive();
     const submitScreenshot = vi.mocked(interviewAppAdapter.submitScreenshotAnswer);
     fireEvent.click(screen.getByRole("button", { name: "截屏回答" }));
-    expect(screen.getByRole("button", { name: "截屏回答" })).toBeDisabled();
+    const screenshotButton = screen.getByRole("button", { name: "截屏回答" });
+    expect(screenshotButton).toBeDisabled();
+    expect(screenshotButton).toHaveTextContent("截屏回答");
+    expect(screenshotButton).toHaveTextContent("直接截取共享屏幕并进入回答");
+    expect(screenshotButton).not.toHaveTextContent(/处理中|已回答/);
     expect((await screen.findAllByText("请设计一个支持实时协作的 Web 系统。")).length).toBeGreaterThan(0);
     expect(await screen.findByText("截屏回答已完成，答案已显示")).toBeInTheDocument();
     expect(screen.queryByText("上传并识别")).not.toBeInTheDocument();
@@ -577,8 +581,11 @@ describe("focused live interview workspace", () => {
 
     const dialog = await screen.findByRole("dialog", { name: "正在生成答案" });
     expect(within(dialog).queryByText(/视觉模型|模型 API/)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "截屏回答" })).toBeDisabled();
-    expect(screen.getAllByText("正在生成截图答案")).toHaveLength(2);
+    const screenshotButton = screen.getByRole("button", { name: "截屏回答" });
+    expect(screenshotButton).toBeDisabled();
+    expect(screenshotButton).toHaveTextContent("截屏回答");
+    expect(screenshotButton).not.toHaveTextContent("正在生成截图答案");
+    expect(screen.getAllByText("正在生成截图答案")).toHaveLength(1);
 
     fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
 
@@ -615,7 +622,31 @@ describe("focused live interview workspace", () => {
 
     const dialog = await screen.findByRole("dialog", { name: "等待本地助手" });
     expect(within(dialog).getByText("网页端已创建截屏任务，正在等待本地助手接收。")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "截屏回答" })).toBeDisabled();
+    const screenshotButton = screen.getByRole("button", { name: "截屏回答" });
+    expect(screenshotButton).toBeDisabled();
+    expect(screenshotButton).toHaveTextContent("截屏回答");
+    expect(screenshotButton).not.toHaveTextContent(/处理中|已回答/);
+  });
+
+  it("keeps the mobile screenshot button label stable while capture is active", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    vi.spyOn(interviewAppAdapter, "submitScreenshotAnswer").mockImplementation(async (_command, signal, onStage) => {
+      onStage?.({ name: "共享屏幕截取", stage: "waiting-desktop" });
+      await new Promise<void>((_resolve, reject) => {
+        signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+      });
+      return {} as never;
+    });
+    openLive();
+
+    const screenshotButton = screen.getByRole("button", { name: "截屏回答" });
+    fireEvent.click(screenshotButton);
+
+    expect(screenshotButton).toBeDisabled();
+    expect(screenshotButton).toHaveTextContent("截屏回答");
+    expect(screenshotButton).not.toHaveTextContent(/截屏中|处理中|已回答/);
+    fireEvent.click(await screen.findByRole("button", { name: "取消" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
   it("keeps a completed screenshot current when an older speech answer arrives in the same realtime update", async () => {

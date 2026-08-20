@@ -21,6 +21,7 @@
 - [x] 3.3 Give quick-answer and screenshot-answer buttons clear ready, processing, success, failure, cancellation, disabled, and accessible live-status states.
 - [x] 3.4 Keep question-normalization metadata internal so its pending/completed transition cannot shift the visible answer layout.
 - [x] 3.5 Isolate answer-body rendering from unrelated realtime updates and defer full Markdown parsing until stream completion.
+- [x] 3.6 Keep desktop and mobile screenshot-action labels stable while retaining disabled duplicate protection and separate accessible progress feedback.
 
 ## 4. Explicit Answer Triggering
 

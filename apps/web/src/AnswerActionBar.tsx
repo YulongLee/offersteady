@@ -50,8 +50,8 @@ export function AnswerActionBar({ manualDraft, latestInterviewerQuestion = "", s
         title="直接截取你选择的共享屏幕并回答"
         onClick={onScreenshot}
       >
-        <strong>{screenshotBusy ? "截屏处理中…" : screenshotAnswerStatus === "success" ? "截屏已回答" : "截屏回答"}</strong>
-        <small>{screenshotBusy ? screenshotStatus(screenshotTask) : "直接截取共享屏幕并进入回答"}</small>
+        <strong>截屏回答</strong>
+        <small>直接截取共享屏幕并进入回答</small>
       </button>
     </div>
     <div className="answer-action-status" aria-live="polite">{quickStatusText || screenshotStatusText}</div>
