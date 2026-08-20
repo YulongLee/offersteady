@@ -540,11 +540,17 @@ const mapRealtimeState = (
   runtime: BackendRealtimeRuntimeResponse | null,
 ) => {
   const pending = candidates.candidates.find(candidate => candidate.state === "needs-confirmation");
-  const latestDeviceStatus = [...events.events].reverse().find(event => event.kind === "device-status");
-  const latestDegraded = [...events.events].reverse().find(event => event.kind === "degraded");
-  const latestShortcutAccepted = [...events.events].reverse().find(event => event.kind === "screenshot-shortcut-accepted" && typeof event.payload.requestId === "string");
-  const latestScreenshotUpdate = [...events.events].reverse().find(event => event.kind === "screenshot-capture-updated" && typeof event.payload.requestId === "string");
-  const latestAnswerUpdate = [...events.events].reverse().find(event => event.kind === "answer-task-updated" && typeof event.payload.task === "object" && event.payload.task !== null);
+  const newestEvents = [...events.events].sort((left, right) => right.createdAtMs - left.createdAtMs);
+  const latestDeviceStatus = newestEvents.find(event => event.kind === "device-status");
+  const latestDegraded = newestEvents.find(event => event.kind === "degraded");
+  const latestShortcutAccepted = newestEvents.find(event => event.kind === "screenshot-shortcut-accepted" && typeof event.payload.requestId === "string");
+  const latestScreenshotUpdate = newestEvents.find(event => event.kind === "screenshot-capture-updated" && typeof event.payload.requestId === "string");
+  const latestAnswerUpdate = newestEvents.find(event => event.kind === "answer-task-updated" && typeof event.payload.task === "object" && event.payload.task !== null);
+  const useScreenshotUpdate = Boolean(latestScreenshotUpdate && (
+    !latestShortcutAccepted
+    || latestScreenshotUpdate.createdAtMs >= latestShortcutAccepted.createdAtMs
+    || latestScreenshotUpdate.payload.requestId === latestShortcutAccepted.payload.requestId
+  ));
   const captureState = toCaptureState(runtime?.captureState)
     ?? toCaptureState(latestDeviceStatus?.payload.captureState)
     ?? (runtime?.sessionLive && runtime.machineCodeBound ? "capturing" as const : undefined);
@@ -594,7 +600,7 @@ const mapRealtimeState = (
       runtimeNotice: meaningfulTranscripts.length > 0 ? null : runtimeNotice(runtime, latestDegraded),
     },
     ...(captureState ? { captureState } : {}),
-    ...(latestScreenshotUpdate ? {
+    ...(useScreenshotUpdate && latestScreenshotUpdate ? {
       shortcutScreenshotUpdate: screenshotEventToUpdate(latestScreenshotUpdate),
     } : latestShortcutAccepted ? {
       shortcutScreenshotUpdate: {

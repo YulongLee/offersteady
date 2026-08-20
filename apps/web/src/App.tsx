@@ -802,10 +802,11 @@ function LivePage() {
         );
         if (stopped || updates.length === 0) return;
         const latest = updates[updates.length - 1]!;
-        if ((latest.status === "requested" || latest.status === "processing") && !terminalShortcutScreenshotRequests.current.has(latest.requestId)) {
+        const latestAlreadyTerminal = terminalShortcutScreenshotRequests.current.has(latest.requestId);
+        if ((latest.status === "requested" || latest.status === "processing") && !latestAlreadyTerminal) {
           activeShortcutScreenshotRequest.current = latest.requestId;
           setScreenshot(latest.screenshotTask);
-        } else if (!terminalShortcutScreenshotRequests.current.has(latest.requestId)) {
+        } else if (!latestAlreadyTerminal) {
           terminalShortcutScreenshotRequests.current.add(latest.requestId);
           if (activeShortcutScreenshotRequest.current === latest.requestId) {
             activeShortcutScreenshotRequest.current = null;
@@ -818,15 +819,13 @@ function LivePage() {
         }
         const results = updates.flatMap(update => update.result ? [update.result] : []);
         setState(current => {
-          const existingIds = new Set(current.questions.map(question => question.id));
-          const unseen = results.filter(result => !existingIds.has(result.question.id));
-          if (unseen.length === 0) return current;
-          const newest = unseen.reduce((latest, result) => result.task.updatedAtMs > latest.task.updatedAtMs ? result : latest);
+          if (results.length === 0) return current;
+          const newest = results.reduce((latest, result) => result.task.updatedAtMs > latest.task.updatedAtMs ? result : latest);
           return {
             ...current,
             ...reconcileAnswerWorkspace(
               { questions: current.questions, activeAnswerTask: current.activeAnswerTask },
-              { questions: unseen.map(result => result.question), activeAnswerTask: newest.task },
+              { questions: results.map(result => result.question), activeAnswerTask: newest.task },
             ),
           };
         });
@@ -898,25 +897,34 @@ function LivePage() {
         setScreenshot(shortcut.screenshotTask);
       }
       if (shortcut && shortcut.acceptedAtMs === undefined) {
-        if (shortcut.status === "requested" || shortcut.status === "processing") {
+        const alreadyTerminal = terminalShortcutScreenshotRequests.current.has(shortcut.requestId);
+        if ((shortcut.status === "requested" || shortcut.status === "processing") && !alreadyTerminal) {
           activeShortcutScreenshotRequest.current = shortcut.requestId;
           setScreenshot(shortcut.screenshotTask);
-        } else if (!terminalShortcutScreenshotRequests.current.has(shortcut.requestId)) {
+        } else if (!alreadyTerminal) {
           terminalShortcutScreenshotRequests.current.add(shortcut.requestId);
           if (activeShortcutScreenshotRequest.current === shortcut.requestId) activeShortcutScreenshotRequest.current = null;
-          setScreenshot(shortcut.status === "completed" ? null : shortcut.screenshotTask);
+          if (shortcut.status === "completed") {
+            setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "success" }));
+          } else if (shortcut.status === "cancelled") {
+            setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "cancelled" }));
+          } else {
+            setScreenshot(shortcut.screenshotTask);
+          }
         }
       }
       setState(current => {
-        const answerResult = realtime.answerUpdate ?? shortcut?.result;
-        const workspace = answerResult
+        const answerResults = [realtime.answerUpdate, shortcut?.result].filter((result): result is NonNullable<typeof result> => Boolean(result));
+        const newestAnswer = answerResults.length > 0
+          ? answerResults.reduce((latest, result) => result.task.updatedAtMs > latest.task.updatedAtMs ? result : latest)
+          : null;
+        const workspace = newestAnswer
           ? reconcileAnswerWorkspace(
               { questions: current.questions, activeAnswerTask: current.activeAnswerTask },
               {
-                questions: [answerResult.question],
-                activeAnswerTask: answerResult.task,
+                questions: answerResults.map(result => result.question),
+                activeAnswerTask: newestAnswer.task,
               },
-              { preferIncomingTask: true },
             )
           : { questions: current.questions, activeAnswerTask: current.activeAnswerTask };
         return {
@@ -1258,8 +1266,14 @@ function LivePage() {
       }, signal, task => setScreenshot(task)), screenshotController.current?.signal);
       setState(current => ({
         ...current,
-        questions: current.questions.map(item => item.id === placeholderId ? result.question : item),
-        activeAnswerTask: result.task,
+        ...reconcileAnswerWorkspace(
+          {
+            questions: current.questions.filter(item => item.id !== placeholderId),
+            activeAnswerTask: current.activeAnswerTask?.questionId === placeholderId ? null : current.activeAnswerTask,
+          },
+          { questions: [result.question], activeAnswerTask: result.task },
+          { preferIncomingTask: true },
+        ),
       }));
       setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "success" }));
       if (result.task.status === "completed") void syncBilling();
@@ -1387,10 +1401,7 @@ function LivePage() {
   const dismissPending = () => setState(current => ({ ...current, speaker: { ...current.speaker, pendingQuestion: null } }));
   const confirmPending = () => {
     const candidate = state.speaker.pendingQuestion; if (!candidate) return;
-    const question: InterviewQuestion = { ...active, id: candidate.id, text: candidate.text, askedAt: "刚刚", input: "desktop-audio", status: "generating", advice: scopedAdvice };
-    const task = activeTaskFor(question, candidate.id);
-    setState(current => ({ ...current, questions: current.questions.some(item => item.id === candidate.id) ? current.questions : [question, ...current.questions], speaker: { ...current.speaker, pendingQuestion: null }, activeAnswerTask: task }));
-    setView(current => ({ ...current, viewingAnswerId: null, newAnswerAvailable: false }));
+    setState(current => ({ ...current, speaker: { ...current.speaker, pendingQuestion: null } }));
   };
   const stopAnswer = async () => {
     const task = state.activeAnswerTask;

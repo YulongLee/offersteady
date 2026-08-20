@@ -186,6 +186,9 @@ const permissionFromHealth = (health: AudioSourceHealth | undefined, current: Au
   return current;
 };
 
+export const screenCaptureReadyForPermission = (permission: AudioPermission, previewReady: boolean) =>
+  permission === "granted" || previewReady;
+
 const microphonePreferenceScore = (source: AudioSourceDescriptor) => {
   const id = source.id.toLowerCase();
   const label = source.label.toLowerCase();
@@ -369,6 +372,7 @@ export function CompanionApp() {
   const [selectedSystemAudioId, setSelectedSystemAudioId] = useState(systemAudioOptions[0]?.id ?? "");
   const [selectedScreenId, setSelectedScreenId] = useState(defaultScreens[0]?.id ?? "");
   const [permissions, setPermissions] = useState<{ microphone: AudioPermission; systemAudio: AudioPermission }>({ microphone: "unknown", systemAudio: "unknown" });
+  const [screenPermission, setScreenPermission] = useState<AudioPermission>("unknown");
   const [connectionNotice, setConnectionNotice] = useState("正在生成本机连接码…");
   const [connectionInfo, setConnectionInfo] = useState("暂无连接设备");
   const bindingFailureCountRef = useRef(0);
@@ -512,7 +516,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
   state === "receiving" || state === "silent";
   const microphoneReady = isCaptureSourceReady(microphoneHealth?.state);
   const systemAudioReady = isCaptureSourceReady(systemAudioHealth?.state);
-  const screenReady = screenCaptureReady;
+  const screenReady = screenCaptureReadyForPermission(screenPermission, screenCaptureReady);
   const nativeRuntimeReady = nativeRuntimeHealth?.ready === true;
   const isWindows = config?.platform === "windows";
 
@@ -605,6 +609,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
         .then(async microphoneGranted => {
           const screenGranted = await window.offersteady?.requestScreenCaptureAccess?.().catch(() => false) ?? false;
           if (!mounted) return;
+          setScreenPermission(screenGranted ? "granted" : "denied");
           setPermissions({
             microphone: microphoneGranted ? "granted" : "denied",
             systemAudio: screenGranted ? "granted" : "denied",
@@ -1006,6 +1011,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
         setIsPreviewing(true);
         setIsScreenPreviewLoading(false);
         setScreenCaptureReady(true);
+        setScreenPermission("granted");
         setPreviewNotice(`屏幕捕捉已就绪：${captured.name || currentScreenLabel}`);
         setDesktopNotice("屏幕预览已获取，本地助手可以处理截图回答。");
         return;
@@ -1020,6 +1026,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       setIsPreviewing(true);
       setIsScreenPreviewLoading(false);
       setScreenCaptureReady(true);
+      setScreenPermission("granted");
       setPreviewNotice(`屏幕捕捉已就绪：${currentScreenLabel}`);
       setDesktopNotice("屏幕预览已获取，本地助手可以处理截图回答。");
     } catch (error) {
@@ -1057,6 +1064,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       setDesktopNotice("正在检查系统权限，机器码和设备身份不会改变…");
       const microphoneGranted = await window.offersteady?.requestMicrophoneAccess().catch(() => false) ?? false;
       const screenGranted = await window.offersteady?.requestScreenCaptureAccess?.().catch(() => false) ?? false;
+      setScreenPermission(screenGranted ? "granted" : "denied");
       setPermissions({
         microphone: microphoneGranted ? "granted" : "denied",
         systemAudio: screenGranted ? "granted" : "denied",

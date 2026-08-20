@@ -618,6 +618,106 @@ describe("focused live interview workspace", () => {
     expect(screen.getByRole("button", { name: "截屏回答" })).toBeDisabled();
   });
 
+  it("keeps a completed screenshot current when an older speech answer arrives in the same realtime update", async () => {
+    vi.spyOn(interviewAppAdapter, "loadDesktopShortcutScreenshotUpdates").mockResolvedValue([]);
+    vi.spyOn(interviewAppAdapter, "sendDesktopSessionHeartbeat").mockImplementation(async command => ({
+      pageInstanceId: command.pageInstanceId ?? null,
+      leaseGeneration: 1,
+      leaseExpiresAtMs: Date.now() + 30_000,
+    }));
+    let publishRealtime: ((update: RealtimeSessionUpdate) => void) | null = null;
+    vi.spyOn(interviewAppAdapter, "subscribeRealtimeSession").mockImplementation(async (_id, onUpdate, signal) => {
+      publishRealtime = onUpdate;
+      await new Promise<void>((_resolve, reject) => signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true }));
+    });
+    const speaker = { ...structuredClone(syntheticState.speaker), pendingQuestion: null };
+    const oldSpeechResult = {
+      question: {
+        id: "speech-answer-old",
+        askedAt: "刚刚",
+        text: "旧的面试官问题",
+        input: "manual" as const,
+        status: "confirmed" as const,
+        advice: { outline: [], detail: "旧的语音回答", sourceTypes: [], inference: "", uncertain: false, provenance: { selectionRevision: 0, usedSources: [] } },
+      },
+      task: {
+        id: "speech-answer-old",
+        interviewId: "demo",
+        userId: "prototype-user",
+        billingUsageId: "live-answer:speech-answer-old",
+        questionId: "speech-answer-old",
+        revision: 1,
+        status: "completed" as const,
+        question: "旧的面试官问题",
+        completedText: "旧的语音回答",
+        updatedAtMs: 100,
+      },
+    };
+    const screenshotResult = {
+      question: {
+        id: "screenshot-answer-new",
+        askedAt: "刚刚",
+        text: "截图中的算法题",
+        input: "screenshot" as const,
+        status: "confirmed" as const,
+        advice: { outline: [], detail: "新的截图回答", sourceTypes: [], inference: "", uncertain: false, provenance: { selectionRevision: 0, usedSources: [] } },
+      },
+      task: {
+        id: "screenshot-answer-new",
+        interviewId: "demo",
+        userId: "prototype-user",
+        billingUsageId: "screenshot-answer:screenshot-answer-new",
+        questionId: "screenshot-answer-new",
+        revision: 1,
+        status: "completed" as const,
+        question: "截图中的算法题",
+        completedText: "新的截图回答",
+        updatedAtMs: 200,
+      },
+    };
+
+    openLive();
+    await waitFor(() => expect(publishRealtime).not.toBeNull());
+    act(() => publishRealtime?.({
+      speaker,
+      answerUpdate: oldSpeechResult,
+      shortcutScreenshotUpdate: {
+        requestId: "screenshot-request-new",
+        status: "completed",
+        screenshotTask: { name: "共享屏幕截取", stage: "completed" },
+        result: screenshotResult,
+      },
+    }));
+
+    expect(await screen.findByText("新的截图回答")).toBeInTheDocument();
+    expect(screen.getByText("截屏回答已完成，答案已显示")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    act(() => publishRealtime?.({
+      speaker,
+      shortcutScreenshotUpdate: {
+        requestId: "screenshot-request-new",
+        status: "processing",
+        screenshotTask: { name: "共享屏幕截取", stage: "recognizing" },
+      },
+    }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("截屏回答已完成，答案已显示")).toBeInTheDocument();
+  });
+
+  it("confirms detected question text without creating an answer before quick answer is clicked", () => {
+    const submitManual = vi.spyOn(interviewAppAdapter, "submitManualAnswer");
+    const currentQuestion = syntheticState.questions[0]!.text;
+    openLive();
+
+    fireEvent.click(screen.getByRole("button", { name: "确认问题" }));
+
+    expect(screen.queryByRole("button", { name: "确认问题" })).not.toBeInTheDocument();
+    expect(screen.getAllByText(currentQuestion).length).toBeGreaterThan(0);
+    expect(submitManual).not.toHaveBeenCalled();
+  });
+
   it("can terminate a pending screenshot answer before the local assistant finishes", async () => {
     vi.spyOn(interviewAppAdapter, "submitScreenshotAnswer").mockImplementation(async (_command, signal) => {
       await new Promise<void>((resolve, reject) => {

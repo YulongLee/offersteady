@@ -4,6 +4,7 @@
 - [x] 1.2 Add focused live-workspace component tests for newest-answer ownership, history viewing, quick-answer feedback, and screenshot staged feedback.
 - [x] 1.3 Add or update backend tests for complete final system questions, uncertain candidates, and the no-automatic-answer boundary.
 - [x] 1.4 Add a regression test for an older same-task workspace snapshot arriving between streamed answer updates.
+- [x] 1.5 Add regressions for screenshot completion racing with an older answer event and terminal screenshot state receiving a stale processing event.
 
 ## 2. Deterministic Live Answer State
 
@@ -11,6 +12,7 @@
 - [x] 2.2 Replace workspace refresh, streaming callback, and assistant-shortcut merge paths so late events can enrich history but cannot replace a newer current task or shorten its text.
 - [x] 2.3 Make explicit quick, manual, and screenshot actions immediately select their placeholder/current answer while preserving history navigation.
 - [x] 2.4 Keep same-task question text monotonic when polling and streaming updates race at the same revision.
+- [x] 2.5 Merge simultaneous screenshot and speech-answer updates without losing either result, and prevent a completed screenshot request from returning to processing.
 
 ## 3. Smooth Rendering and Action Feedback
 

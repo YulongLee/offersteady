@@ -88,6 +88,16 @@ The system SHALL present screenshot answer as a visually identifiable button and
 - **WHEN** capture, upload, recognition, or generation fails or the user cancels it
 - **THEN** the button area and current answer show the terminal state and provide a safe retry path
 
+#### Scenario: Screen preview has not been opened
+- **WHEN** the desktop companion already has screen-recording permission and the user activates screenshot answer without opening preview
+- **THEN** the companion captures the selected screen directly
+- **AND** preview remains an optional local inspection action rather than a capture prerequisite
+
+#### Scenario: Screenshot completion races with an older answer update
+- **WHEN** a completed screenshot result and an older speech-answer update arrive in the same or adjacent realtime snapshots
+- **THEN** both records remain in answer history
+- **AND** the newer screenshot task becomes current and its terminal state cannot return to processing
+
 ### Requirement: Answer generation requires an explicit user action
 The system SHALL use realtime speech only to update transcripts and identify interviewer-question candidates. It MUST NOT start an answer task or bill answer generation until the user explicitly activates quick answer or screenshot answer.
 
