@@ -33,7 +33,7 @@ const termsSections = [
   ]],
   ["七、终止与联系", [
     "你可以停止使用服务，并通过产品内入口管理或删除现有资料和会话记录。严重违反本协议或危害服务安全时，我们可能限制相关账号或操作。",
-    "如对本协议有疑问，请通过客服微信 OneShowAILab 或邮箱 contact@oneshowailab.com 联系。",
+    "如对本协议有疑问，请通过客服微信 mianshiwen-cn 或邮箱 contact@oneshowailab.com 联系。",
   ]],
 ] as const;
 
@@ -67,7 +67,7 @@ const privacySections = [
   ]],
   ["七、更新与联系", [
     "数据流程、服务能力、运营主体或主要服务提供方发生重要变化时，我们会及时更新本政策并标注更新时间；涉及你权益的重要变化将通过页面提示或其他合理方式告知。",
-    "隐私问题可通过客服微信 OneShowAILab 或邮箱 contact@oneshowailab.com 联系。请勿通过客服渠道发送密码、验证码或完整身份证件。",
+    "隐私问题可通过客服微信 mianshiwen-cn 或邮箱 contact@oneshowailab.com 联系。请勿通过客服渠道发送密码、验证码或完整身份证件。",
   ]],
 ] as const;
 

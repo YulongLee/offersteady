@@ -166,7 +166,7 @@ class BillingService:
         self.authentication_repository = authentication_repository
         self.now_ms_provider = now_ms_provider or _now_ms
         self.support = {
-            "wechatId": settings.support_wechat_id if settings is not None else "OneShowAILab",
+            "wechatId": settings.support_wechat_id if settings is not None else "mianshiwen-cn",
             "email": settings.support_email if settings is not None else "contact@oneshowailab.com",
             "qrAssetPath": "",
             "serviceHours": "工作日 10:00-18:00",
