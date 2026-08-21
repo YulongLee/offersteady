@@ -14,4 +14,4 @@
 - [x] 3.1 Add regression tests proving inline mode never writes OSS and sends a Data URL to the vision gateway
 - [x] 3.2 Add regression tests for terminal cleanup, telemetry privacy and OSS rollback mode
 - [x] 3.3 Run screenshot-focused tests, backend test suite, type checks or compile checks, and strict OpenSpec validation
-- [ ] 3.4 Deploy only the affected backend service and verify production health plus screenshot model compatibility
+- [x] 3.4 Deploy only the affected backend service and verify production health plus screenshot model compatibility
