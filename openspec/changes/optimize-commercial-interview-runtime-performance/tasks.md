@@ -41,4 +41,4 @@
 - [x] 7.1 Run focused backend, web, desktop, protocol, AI eval, typecheck, build, and synthetic performance tests after each affected stage.
 - [x] 7.2 Run the complete repository regression suite and validate the OpenSpec change with strict mode.
 - [x] 7.3 Document pre/post timing evidence, feature flags, rollback steps, and remaining physical-device acceptance requirements.
-- [ ] 7.4 Commit only scoped files, push main, deploy affected services without rebuilding unrelated services, and verify production health/logs/synthetic probes.
+- [x] 7.4 Commit only scoped files, push main, deploy affected services without rebuilding unrelated services, and verify production health/logs/synthetic probes.
