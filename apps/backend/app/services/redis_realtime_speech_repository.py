@@ -253,32 +253,149 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         with self._runtime_lock:
             stored = super().save_event(event)
         stream_key = f"offersteady:realtime:events:{stored.session_id}"
+        cursor_index_key = self._event_cursor_index_key(stored.session_id)
         cursor = self.session_activity_versions.get(stored.session_id, 0)
-        self._redis.xadd(stream_key, {"cursor": str(cursor), "event": json.dumps(asdict(stored), ensure_ascii=True)}, maxlen=self._event_retention, approximate=True)
-        self._redis.expire(stream_key, self._runtime_ttl_seconds)
+        stream_id = self._redis.xadd(
+            stream_key,
+            {"cursor": str(cursor), "event": json.dumps(asdict(stored), ensure_ascii=True)},
+            maxlen=self._event_retention,
+            approximate=True,
+        )
+        pipeline = self._redis.pipeline()
+        pipeline.zadd(cursor_index_key, {stream_id: cursor})
+        pipeline.hset(
+            self._latest_event_key(stored.session_id),
+            stored.kind,
+            json.dumps(asdict(stored), ensure_ascii=True),
+        )
+        pipeline.zremrangebyrank(cursor_index_key, 0, -(self._event_retention + 1))
+        pipeline.expire(cursor_index_key, self._runtime_ttl_seconds)
+        pipeline.expire(self._latest_event_key(stored.session_id), self._runtime_ttl_seconds)
+        pipeline.expire(stream_key, self._runtime_ttl_seconds)
+        pipeline.execute()
         return stored
 
-    def list_events_for_session(self, *, session_id):
-        records = []
-        for _stream_id, fields in self._redis.xrange(f"offersteady:realtime:events:{session_id}"):
-            raw = fields.get("event")
-            if raw:
-                records.append(RealtimeEvent(**json.loads(raw)))
-        return records
+    @staticmethod
+    def _event_cursor_index_key(session_id: str) -> str:
+        return f"offersteady:realtime:event-cursors:{session_id}"
 
-    def list_events_after(self, *, session_id: str, cursor: int) -> tuple[int, list[RealtimeEvent], bool]:
-        stream_key = f"offersteady:realtime:events:{session_id}"
-        rows = self._redis.xrange(stream_key)
-        retained: list[tuple[int, RealtimeEvent]] = []
+    @staticmethod
+    def _latest_event_key(session_id: str) -> str:
+        return f"offersteady:realtime:latest-events:{session_id}"
+
+    @staticmethod
+    def _decode_event_rows(rows) -> list[tuple[int, RealtimeEvent]]:
+        decoded: list[tuple[int, RealtimeEvent]] = []
         for _stream_id, fields in rows:
             raw = fields.get("event")
             if not raw:
                 continue
-            retained.append((int(fields.get("cursor", "0")), RealtimeEvent(**json.loads(raw))))
+            decoded.append((int(fields.get("cursor", "0")), RealtimeEvent(**json.loads(raw))))
+        return decoded
+
+    def _index_event_rows(self, *, session_id: str, rows) -> None:
+        mapping = {
+            stream_id: int(fields.get("cursor", "0"))
+            for stream_id, fields in rows
+            if int(fields.get("cursor", "0")) > 0
+        }
+        if not mapping:
+            return
+        cursor_index_key = self._event_cursor_index_key(session_id)
+        pipeline = self._redis.pipeline()
+        pipeline.zadd(cursor_index_key, mapping)
+        pipeline.zremrangebyrank(cursor_index_key, 0, -(self._event_retention + 1))
+        pipeline.expire(cursor_index_key, self._runtime_ttl_seconds)
+        pipeline.execute()
+
+    def _stream_id_at_or_before_cursor(self, *, session_id: str, cursor: int) -> str | None:
+        values = self._redis.zrevrangebyscore(
+            self._event_cursor_index_key(session_id),
+            cursor,
+            "-inf",
+            start=0,
+            num=1,
+        )
+        return str(values[0]) if values else None
+
+    def _legacy_stream_id_at_or_before_cursor(self, *, session_id: str, cursor: int) -> str | None:
+        rows = self._redis.xrange(f"offersteady:realtime:events:{session_id}")
+        self._index_event_rows(session_id=session_id, rows=rows)
+        matching = [
+            stream_id
+            for stream_id, fields in rows
+            if int(fields.get("cursor", "0")) <= cursor
+        ]
+        return str(matching[-1]) if matching else None
+
+    def _stream_bounds(self, *, session_id: str) -> tuple[int | None, int]:
+        stream_key = f"offersteady:realtime:events:{session_id}"
+        first_rows = self._redis.xrange(stream_key, count=1)
         current_cursor = self.get_event_stream_version(session_id=session_id)
-        positive_cursors = [item_cursor for item_cursor, _item in retained if item_cursor > 0]
-        resumable = cursor <= 0 or not positive_cursors or cursor >= min(positive_cursors) - 1
-        return current_cursor, [item for item_cursor, item in retained if item_cursor > cursor], resumable
+        if not first_rows:
+            return None, current_cursor
+        return int(first_rows[0][1].get("cursor", "0")), current_cursor
+
+    def list_events_for_session(self, *, session_id):
+        return [
+            event for _cursor, event in self._decode_event_rows(
+                self._redis.xrange(f"offersteady:realtime:events:{session_id}")
+            )
+        ]
+
+    def list_latest_events_for_session(self, *, session_id: str, kinds: set[str]):
+        if not kinds:
+            return []
+        ordered_kinds = sorted(kinds)
+        cache_key = self._latest_event_key(session_id)
+        raw_values = self._redis.hmget(cache_key, ordered_kinds)
+        cached = dict(zip(ordered_kinds, raw_values, strict=True))
+        latest = {
+            kind: RealtimeEvent(**json.loads(raw))
+            for kind, raw in cached.items()
+            if raw is not None and raw != "null"
+        }
+        missing = {kind for kind, raw in cached.items() if raw is None}
+        if missing:
+            for item in reversed(self.list_events_for_session(session_id=session_id)):
+                if item.kind in missing:
+                    latest[item.kind] = item
+                    missing.remove(item.kind)
+                    if not missing:
+                        break
+            pipeline = self._redis.pipeline()
+            for kind in kinds:
+                item = latest.get(kind)
+                pipeline.hset(
+                    cache_key,
+                    kind,
+                    json.dumps(asdict(item), ensure_ascii=True) if item is not None else "null",
+                )
+            pipeline.expire(cache_key, self._runtime_ttl_seconds)
+            pipeline.execute()
+        return [latest[kind] for kind in ordered_kinds if kind in latest]
+
+    def list_events_after(self, *, session_id: str, cursor: int) -> tuple[int, list[RealtimeEvent], bool]:
+        stream_key = f"offersteady:realtime:events:{session_id}"
+        first_cursor, current_cursor = self._stream_bounds(session_id=session_id)
+        if first_cursor is None:
+            return current_cursor, [], True
+        resumable = cursor <= 0 or cursor >= first_cursor - 1
+        if not resumable:
+            return current_cursor, [], False
+        if cursor <= 0:
+            rows = self._redis.xrange(stream_key, count=self._event_retention)
+        else:
+            start_id = self._stream_id_at_or_before_cursor(session_id=session_id, cursor=cursor)
+            if start_id is None:
+                start_id = self._legacy_stream_id_at_or_before_cursor(session_id=session_id, cursor=cursor)
+            rows = self._redis.xrange(
+                stream_key,
+                min=f"({start_id}" if start_id else "-",
+                count=self._event_retention,
+            )
+        retained = self._decode_event_rows(rows)
+        return current_cursor, [item for item_cursor, item in retained if item_cursor > cursor], True
 
     def wait_for_events_after(
         self, *, session_id: str, cursor: int, timeout_ms: int
@@ -287,19 +404,21 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         if immediate[1] or not immediate[2] or timeout_ms <= 0:
             return immediate
         stream_key = f"offersteady:realtime:events:{session_id}"
-        rows = self._redis.xrange(stream_key)
-        start_id = "0-0"
-        for stream_id, fields in rows:
-            if int(fields.get("cursor", "0")) <= cursor:
-                start_id = stream_id
-        if rows and start_id == "0-0":
-            start_id = rows[-1][0]
-        self._redis.xread(
+        start_id = self._stream_id_at_or_before_cursor(session_id=session_id, cursor=cursor)
+        if start_id is None:
+            start_id = self._legacy_stream_id_at_or_before_cursor(session_id=session_id, cursor=cursor) or "0-0"
+        streams = self._redis.xread(
             {stream_key: start_id},
             count=self._event_retention,
             block=max(1, timeout_ms),
         )
-        return self.list_events_after(session_id=session_id, cursor=cursor)
+        rows = streams[0][1] if streams else []
+        retained = self._decode_event_rows(rows)
+        current_cursor = max(
+            self.get_event_stream_version(session_id=session_id),
+            max((item_cursor for item_cursor, _event in retained), default=cursor),
+        )
+        return current_cursor, [item for item_cursor, item in retained if item_cursor > cursor], True
 
     def get_session_activity_version(self, *, session_id):
         activity_version = int(self._redis.hget(self._activity_key, session_id) or 0)

@@ -30,6 +30,7 @@ from app.schemas.screenshot_answer import (
     FailRemoteScreenshotCaptureRequest,
 )
 from app.services.screenshot_answer_service import ScreenshotAnswerService
+from app.services.realtime_event_wait import run_realtime_event_wait
 
 
 router = APIRouter(prefix="/screenshot-answer", tags=["screenshot-answer"])
@@ -486,7 +487,8 @@ async def stream_desktop_capture_requests(
                 if pairing_status.get("bound") is not True or pairing_status.get("sessionStatus") != "live":
                     break
                 binding_check_ticks = 0
-            current_cursor, events, resumable = await asyncio.to_thread(
+            current_cursor, events, resumable = await run_realtime_event_wait(
+                request,
                 realtime.wait_for_session_events_after,
                 user_id=binding.owner_user_id,
                 session_id=binding.session_id,

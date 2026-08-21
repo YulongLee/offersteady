@@ -233,6 +233,17 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
             )
         ]
 
+    def list_latest_events_for_session(
+        self, *, session_id: str, kinds: set[str]
+    ) -> list[RealtimeEvent]:
+        latest: dict[str, RealtimeEvent] = {}
+        for item in reversed(self.list_events_for_session(session_id=session_id)):
+            if item.kind in kinds and item.kind not in latest:
+                latest[item.kind] = item
+                if len(latest) == len(kinds):
+                    break
+        return [replace(latest[kind]) for kind in kinds if kind in latest]
+
     def list_events_after(self, *, session_id: str, cursor: int) -> tuple[int, list[RealtimeEvent], bool]:
         current_cursor = self.get_session_activity_version(session_id=session_id)
         entries = self.events.get(session_id, [])

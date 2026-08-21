@@ -76,7 +76,7 @@ The system SHALL coordinate material creation and deletion across database recor
 
 #### Scenario: User deletes a material
 - **WHEN** the user deletes a material from the library
-- **THEN** the backend marks the document deleted and unselectable immediately, removes it from frontend selectable lists, and schedules OSS and vector cleanup
+- **THEN** the backend marks the document deleted and unselectable immediately, removes it from frontend selectable lists, and schedules OSS and vector cleanup without exposing backend cleanup details in a success notice
 
 #### Scenario: OSS cleanup fails after deletion
 - **WHEN** the database delete marker is saved but OSS artifact cleanup fails

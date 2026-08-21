@@ -34,6 +34,7 @@ from app.schemas.realtime_speech import (
     WebSessionHeartbeatRequest,
 )
 from app.services.realtime_speech_service import RealtimeSpeechService
+from app.services.realtime_event_wait import run_realtime_event_wait
 
 
 router = APIRouter(prefix="/realtime-speech", tags=["realtime-speech"])
@@ -50,6 +51,18 @@ descriptor = ModuleDescriptor(
 
 def should_validate_realtime_session(*, last_validated_at: float, now: float) -> bool:
     return now - last_validated_at >= REALTIME_SESSION_VALIDATION_INTERVAL_SECONDS
+
+
+def session_stream_refresh_plan(*, payload_type: str, event_kinds: set[str]) -> dict[str, bool]:
+    snapshot = payload_type == "snapshot"
+    return {
+        "runtime": snapshot or bool(event_kinds & {
+            "connection-state", "transcript-updated", "degraded", "device-status", "capture-control",
+        }),
+        "transcripts": snapshot or "transcript-updated" in event_kinds,
+        "candidates": snapshot or bool(event_kinds & {"question-candidate", "question-confirmed"}),
+        "events": snapshot,
+    }
 
 
 def _sse_frame(event: str, payload: dict[str, object], *, cursor: int | None = None) -> str:
@@ -386,6 +399,8 @@ async def stream_session_runtime(
         initial = True
         idle_polls = 0
         cached_runtime = None
+        cached_transcripts = None
+        cached_candidates = None
         runtime_refreshed_at = 0.0
         session_validated_at = asyncio.get_running_loop().time()
         while True:
@@ -417,7 +432,8 @@ async def stream_session_runtime(
             }
             if not initial:
                 reader_kwargs["timeout_ms"] = max(100, service.settings.realtime_event_block_ms)
-            current_cursor, incremental_events, resumable = await asyncio.to_thread(
+            current_cursor, incremental_events, resumable = await run_realtime_event_wait(
+                request,
                 event_reader,
                 **reader_kwargs,
             )
@@ -429,32 +445,68 @@ async def stream_session_runtime(
                     idle_polls = 0
                 continue
             idle_polls = 0
-            now = loop_now
-            refresh_runtime = initial or cached_runtime is None or now - runtime_refreshed_at >= 2.0
-            if refresh_runtime:
-                runtime, transcripts, candidates, events = await asyncio.gather(
+            now = asyncio.get_running_loop().time()
+            payload_type = "snapshot" if initial or not resumable else "update"
+            refresh_plan = session_stream_refresh_plan(
+                payload_type=payload_type,
+                event_kinds={event.kind for event in incremental_events},
+            )
+            if payload_type == "snapshot":
+                runtime, transcripts, candidates, snapshot_events = await asyncio.gather(
                     asyncio.to_thread(service.get_runtime, user_id=resolved_user_id, session_id=session_id),
                     asyncio.to_thread(service.list_transcripts, user_id=resolved_user_id, session_id=session_id),
                     asyncio.to_thread(service.list_candidates, user_id=resolved_user_id, session_id=session_id),
                     asyncio.to_thread(service.list_events, user_id=resolved_user_id, session_id=session_id),
                 )
                 cached_runtime = runtime
+                cached_transcripts = transcripts
+                cached_candidates = candidates
                 runtime_refreshed_at = now
             else:
-                transcripts, candidates, events = await asyncio.gather(
-                    asyncio.to_thread(service.list_transcripts, user_id=resolved_user_id, session_id=session_id),
-                    asyncio.to_thread(service.list_candidates, user_id=resolved_user_id, session_id=session_id),
-                    asyncio.to_thread(service.list_events, user_id=resolved_user_id, session_id=session_id),
+                refresh_runtime = cached_runtime is None or (
+                    refresh_plan["runtime"] and now - runtime_refreshed_at >= 2.0
                 )
+                refresh_transcripts = cached_transcripts is None or refresh_plan["transcripts"]
+                refresh_candidates = cached_candidates is None or refresh_plan["candidates"]
+                refreshers = {}
+                if refresh_runtime:
+                    refreshers["runtime"] = asyncio.to_thread(
+                        service.get_runtime, user_id=resolved_user_id, session_id=session_id
+                    )
+                if refresh_transcripts:
+                    refreshers["transcripts"] = asyncio.to_thread(
+                        service.list_transcripts, user_id=resolved_user_id, session_id=session_id
+                    )
+                if refresh_candidates:
+                    refreshers["candidates"] = asyncio.to_thread(
+                        service.list_candidates, user_id=resolved_user_id, session_id=session_id
+                    )
+                if refreshers:
+                    refreshed_values = await asyncio.gather(*refreshers.values())
+                    refreshed = dict(zip(refreshers, refreshed_values, strict=True))
+                    if "runtime" in refreshed:
+                        cached_runtime = refreshed["runtime"]
+                        runtime_refreshed_at = now
+                    if "transcripts" in refreshed:
+                        cached_transcripts = refreshed["transcripts"]
+                    if "candidates" in refreshed:
+                        cached_candidates = refreshed["candidates"]
                 runtime = cached_runtime
-            payload_type = "snapshot" if initial or not resumable else "update"
+                transcripts = cached_transcripts
+                candidates = cached_candidates
+                snapshot_events = None
+            assert runtime is not None and transcripts is not None and candidates is not None
             payload = {
                 "type": payload_type,
                 "transcripts": transcripts.model_dump(by_alias=True),
                 "candidates": candidates.model_dump(by_alias=True),
                 "events": [
                     item.model_dump(by_alias=True)
-                    for item in (events.events if payload_type == "snapshot" else [service.event_response(event) for event in incremental_events])
+                    for item in (
+                        snapshot_events.events
+                        if snapshot_events is not None
+                        else [service.event_response(event) for event in incremental_events]
+                    )
                 ],
                 "runtime": runtime.model_dump(by_alias=True),
                 "ownerUserId": resolved_user_id,

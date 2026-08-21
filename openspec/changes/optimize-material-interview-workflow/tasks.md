@@ -54,6 +54,7 @@
 - [ ] 7.4 Update answer cards to show fixed source count, retrieved Knowledge count, unavailable sources and no-selected-material state
 - [ ] 7.5 Keep the existing prototype layout and navigation structure while improving status and grounding clarity
 - [x] 7.6 Connect the failed-material recovery action to the real backend processing retry endpoint and provide actionable fallback guidance
+- [x] 7.7 Remove the technical OSS/vector cleanup success notice after an individual material is deleted while preserving failure feedback
 
 ## 8. Tests, Evals and Verification
 

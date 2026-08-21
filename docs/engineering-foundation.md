@@ -59,7 +59,7 @@
 
 1. `npm run typecheck -w @offersteady/web`
 2. `npm run test -w @offersteady/web`
-3. `npm run build -w @offersteady/web`
+3. `VITE_APP_ENV=production VITE_API_BASE_URL=/ VITE_PUBLIC_APP_VERSION=0.1.0 npm run build -w @offersteady/web`
 4. 启动本地 Web 预览服务后，再运行 `npm run review:live -w @offersteady/web`
 
 注意：`review:live` 依赖浏览器访问中的 Web 页面；若预览服务未启动，脚本会把“服务不可达”表现为页面审查失败，不能直接作为页面回归结论。

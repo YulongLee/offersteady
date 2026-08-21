@@ -247,6 +247,10 @@ class RealtimeSpeechRepository(Protocol):
 
     def list_events_for_session(self, *, session_id: str) -> list[RealtimeEvent]: ...
 
+    def list_latest_events_for_session(
+        self, *, session_id: str, kinds: set[RealtimeEventKind]
+    ) -> list[RealtimeEvent]: ...
+
     def list_events_after(self, *, session_id: str, cursor: int) -> tuple[int, list[RealtimeEvent], bool]: ...
 
     def wait_for_events_after(

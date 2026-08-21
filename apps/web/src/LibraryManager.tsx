@@ -561,6 +561,7 @@ export function LibraryManager({ state, setState }: Props) {
     const op = `document:${source.id}` as const;
     setOperation(op);
     setError("");
+    setNotice("");
     invalidatePendingRefreshes();
     void runAdapterOperation((signal) =>
       materialUploadAdapter.deleteDocument(
@@ -570,7 +571,6 @@ export function LibraryManager({ state, setState }: Props) {
       ),
     )
       .then(() => refreshFromBackend())
-      .then(() => setNotice("资料已删除，后端会继续清理 OSS 与向量产物"))
       .catch((error) =>
         setError(
           error instanceof Error ? error.message : "删除资料失败，请稍后重试",
@@ -611,6 +611,7 @@ export function LibraryManager({ state, setState }: Props) {
     const op = `document:${document.id}` as const;
     setOperation(op);
     setError("");
+    setNotice("");
     invalidatePendingRefreshes();
     void runAdapterOperation((signal) =>
       materialUploadAdapter.deleteDocument(
@@ -620,7 +621,6 @@ export function LibraryManager({ state, setState }: Props) {
       ),
     )
       .then(() => refreshFromBackend())
-      .then(() => setNotice("资料已删除，后端会继续清理 OSS 与向量产物"))
       .catch((error) =>
         setError(
           error instanceof Error ? error.message : "删除资料失败，请稍后重试",

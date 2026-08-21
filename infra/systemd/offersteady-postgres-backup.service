@@ -1,0 +1,23 @@
+[Unit]
+Description=OfferSteady PostgreSQL backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Environment=OFFERSTEADY_BACKUP_DIR=/opt/offersteady/backups
+Environment=OFFERSTEADY_POSTGRES_CONTAINER=compose-postgres-1
+Environment=OFFERSTEADY_BACKUP_RETENTION_DAYS=14
+ExecStart=/usr/local/sbin/offersteady-postgres-backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/offersteady/backups
+
+[Install]
+WantedBy=multi-user.target

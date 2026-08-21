@@ -80,3 +80,33 @@ The v0.1 release SHALL document how to stop services, view logs, restart service
 #### Scenario: Configuration changes
 - **WHEN** payment URLs, OSS settings, model keys, SMS settings, or CORS origins change
 - **THEN** the operator updates the server environment file, restarts affected services, and records the configuration version in the release notes without exposing secret values.
+
+### Requirement: Fail closed on invalid production Web configuration
+The production Web build MUST stop when its public runtime configuration is missing, identifies a non-production environment, or points API requests at localhost.
+
+#### Scenario: Production build omits API configuration
+- **WHEN** a production Web build runs without an explicit `VITE_API_BASE_URL`
+- **THEN** the build fails before producing deployable assets and explains which public variable must be supplied.
+
+#### Scenario: Production build points at a developer machine
+- **WHEN** a production Web build uses `localhost`, `127.0.0.1`, or another loopback address as its API base URL
+- **THEN** the build fails and the deployment is not restarted with that image.
+
+#### Scenario: Deployment smoke test checks the browser API path
+- **WHEN** a new Web image has been started
+- **THEN** the deployment verifies the public Web state API through the same public origin and rejects a production build manifest containing a loopback API address.
+
+### Requirement: Back up the production PostgreSQL database automatically
+The single-server deployment MUST create validated PostgreSQL backups on a recurring schedule without embedding database credentials in backup files or service definitions.
+
+#### Scenario: Daily backup succeeds
+- **WHEN** the systemd backup timer runs
+- **THEN** it creates a timestamped custom-format PostgreSQL archive, verifies that `pg_restore` can read its catalog, writes a checksum, and records a successful service result.
+
+#### Scenario: Backup retention is enforced
+- **WHEN** validated backups exceed the configured retention period
+- **THEN** only expired OfferSteady backup archives and their checksums are removed, while recent backups and PostgreSQL volumes remain untouched.
+
+#### Scenario: Backup fails
+- **WHEN** `pg_dump`, archive validation, checksum creation, or final installation fails
+- **THEN** the timer service exits unsuccessfully, keeps the last known-good backups, and does not publish a partial archive as a valid backup.

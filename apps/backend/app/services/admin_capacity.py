@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 from collections import deque
@@ -17,6 +18,8 @@ from app.core.config import Settings
 CAPACITY_KEY = "offersteady:admin:capacity:v1"
 REQUEST_WINDOW_MS = 5 * 60 * 1000
 DISPLAY_WINDOW_MS = 60 * 60 * 1000
+PEAK_PERSISTENCE_WARNING_INTERVAL_MS = 5 * 60 * 1000
+logger = logging.getLogger(__name__)
 
 
 def _now_ms() -> int:
@@ -84,6 +87,7 @@ class AdminCapacityMonitor:
         self._previous_cpu: tuple[int, float] | None = None
         self._server_cache: dict[str, Any] | None = None
         self._server_cache_at_ms = 0
+        self._last_peak_persistence_warning_at_ms = 0
         self._redis = (
             redis.Redis.from_url(
                 settings.redis_url,
@@ -116,8 +120,15 @@ class AdminCapacityMonitor:
                     at_ms=current,
                     active_interviews=active_interviews,
                 )
-            except Exception:
-                pass
+                sample["capacityPeakPersistence"] = "healthy"
+            except Exception as exc:
+                sample["capacityPeakPersistence"] = "degraded"
+                if current - self._last_peak_persistence_warning_at_ms >= PEAK_PERSISTENCE_WARNING_INTERVAL_MS:
+                    logger.warning(
+                        "admin_capacity_peak_persistence_failed",
+                        extra={"error_code": type(exc).__name__},
+                    )
+                    self._last_peak_persistence_warning_at_ms = current
         with self._lock:
             self._samples.append(sample)
         self._persist(sample)

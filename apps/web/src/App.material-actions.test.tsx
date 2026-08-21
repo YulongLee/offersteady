@@ -208,11 +208,30 @@ describe("categorized materials and reachable live actions", () => {
     fireEvent.click(within(deletedRow).getByRole("button", { name: "删除" }));
 
     await waitFor(() => expect(remove).toHaveBeenCalledWith("admin", "kb-performance", expect.any(AbortSignal)));
-    expect(await screen.findByText("资料已删除，后端会继续清理 OSS 与向量产物")).toBeInTheDocument();
-    expect(screen.queryByText("前端性能治理")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("前端性能治理")).not.toBeInTheDocument());
+    expect(screen.queryByText(/后端会继续清理 OSS 与向量产物/)).not.toBeInTheDocument();
     const disabledRow = screen.getByText("产品方法论笔记").closest("article")!;
     expect(within(disabledRow).getAllByText(/已停用/).length).toBeGreaterThan(0);
     expect(within(disabledRow).getByRole("button", { name: "启用" })).toBeInTheDocument();
+  });
+
+  it("removes a resume without showing backend cleanup details", async () => {
+    const remove = vi.spyOn(materialUploadAdapter, "deleteDocument").mockResolvedValue();
+    vi.spyOn(interviewAppAdapter, "loadState").mockImplementation(async () => {
+      const next = structuredClone(syntheticState);
+      next.librarySources = next.librarySources.filter(item => item.id !== "resume-frontend");
+      return next;
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    open("/app/library");
+    fireEvent.click(screen.getByRole("button", { name: /简历/ }));
+    const deletedRow = screen.getByText("高级前端工程师简历（合成）").closest("article")!;
+
+    fireEvent.click(within(deletedRow).getByRole("button", { name: "删除" }));
+
+    await waitFor(() => expect(remove).toHaveBeenCalledWith("admin", "resume-frontend", expect.any(AbortSignal)));
+    await waitFor(() => expect(screen.queryByText("高级前端工程师简历（合成）")).not.toBeInTheDocument());
+    expect(screen.queryByText(/后端会继续清理 OSS 与向量产物/)).not.toBeInTheDocument();
   });
 
   it("separates resume, JD and knowledge management without authorizing a new resume", async () => {

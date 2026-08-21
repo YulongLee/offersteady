@@ -8,6 +8,8 @@ OfferSteady 已经完成一轮原型功能开发，并开始接入短信登录�
 - 明确 v0.1 是“早期商业化验证版本”，允许部分能力仍为 MVP/内存实现，但必须标注风险、禁止泄露密钥，并保证用户可访问 Web 与 Backend。
 - 将码支付回调公网化纳入发布前检查：`notify_url` 和 `return_url` 必须指向服务器公网地址，而不是本地 `127.0.0.1`。
 - 建立封板前验证清单：前端 typecheck/build、关键页面冒烟、后端健康检查、Docker 构建、API 可访问、支付订单创建、OSS/数据库/模型配置存在性检查。
+- 为单机 PostgreSQL 增加自动备份、保留和备份归档可读性校验，避免只依赖部署前手工备份。
+- 为生产 Web 构建增加失败即停止的运行时配置门禁，并在部署后验证浏览器入口不会请求本机 API 地址。
 - 定义发布后不在 v0.1 范围内的硬化项：完整 CI/CD、蓝绿部署、自动扩缩容、正式证书自动续期、全量数据库迁移体系、全功能压测和审计后台。
 - 补充 GitHub 上传前的安全要求：`.env`、密钥、OSS/短信/模型/支付密钥不得进入仓库；只提交 `.env.example` 和部署变量说明。
 
@@ -28,4 +30,4 @@ OfferSteady 已经完成一轮原型功能开发，并开始接入短信登录�
 - 影响根目录配置：需要确保 `.gitignore`、`.env.example`、README 本地/部署说明不误导用户提交密钥。
 - 影响后端配置：`OFFERSTEADY_PUBLIC_WEB_BASE_URL`、`OFFERSTEADY_MZFPAY_NOTIFY_URL`、`OFFERSTEADY_MZFPAY_RETURN_URL`、CORS、OSS、短信、模型和数据库配置需要可由服务器环境注入。
 - 影响前端配置：`VITE_API_BASE_URL` 需要在 Docker 构建或运行方案中明确指向后端公网入口。
-- 影响运维流程：v0.1 需要可在用户提供的 Ubuntu 24.04 服务器上通过 GitHub 拉代码并以 Docker/Compose 启动。
+- 影响运维流程：v0.1 需要可在用户提供的 Ubuntu 24.04 服务器上通过 GitHub 拉代码并以 Docker/Compose 启动，并通过 systemd timer 定期备份 PostgreSQL。

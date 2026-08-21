@@ -88,3 +88,32 @@ def test_memory_collector_falls_back_to_host_total_without_cgroup_limit(monkeypa
 
     monkeypatch.setattr(Path, "read_text", read_text)
     assert AdminCapacityMonitor._memory_percent() == 40.0
+
+
+def test_capacity_peak_failure_is_degraded_and_never_breaks_sampling(monkeypatch, caplog) -> None:
+    class BrokenPeakRepository(HealthRepository):
+        def record_capacity_peak(self, **values):
+            del values
+            raise RuntimeError("synthetic constraint rejection")
+
+    monitor = AdminCapacityMonitor(Settings(redis_url=None), BrokenPeakRepository())
+    monkeypatch.setattr(monitor, "_resource_counts", lambda: {})
+    first = monitor.sample()
+    second = monitor.sample()
+
+    assert first["capacityPeakPersistence"] == "degraded"
+    assert second["capacityPeakPersistence"] == "degraded"
+    assert [record.message for record in caplog.records].count("admin_capacity_peak_persistence_failed") == 1
+
+
+def test_capacity_granularity_migration_is_wired_and_idempotent() -> None:
+    migration = Path("apps/backend/migrations/versions/0031_capacity_metric_granularity.sql").read_text(encoding="utf8")
+    repository_source = Path("apps/backend/app/services/admin_repository.py").read_text(encoding="utf8")
+
+    assert "capacity_5m" in migration
+    assert "'hourly'" in migration
+    assert "'daily'" in migration
+    assert "DROP CONSTRAINT IF EXISTS admin_metric_snapshots_granularity_check" in migration
+    assert "NOT VALID" in migration
+    assert "VALIDATE CONSTRAINT" in migration
+    assert "0031_capacity_metric_granularity.sql" in repository_source

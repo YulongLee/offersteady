@@ -100,6 +100,8 @@ docker compose --env-file .env.production -f infra/compose/docker-compose.founda
 docker compose --env-file .env.production -f infra/compose/docker-compose.foundation.yml logs -f web
 ```
 
+生产 Web 构建会执行失败即停止的配置校验。必须显式提供 `VITE_APP_ENV=production`、`VITE_API_BASE_URL` 和 `VITE_PUBLIC_APP_VERSION`；同域部署推荐把 API 地址设为 `/`。缺少变量、使用非生产环境、指向 localhost/loopback 或使用非 HTTPS 外部地址时，构建会直接失败。构建会生成只包含公开配置的 `offersteady-build.json`，部署脚本会同时检查该清单和 `/api/v1/web/state`，避免错误产物重新上线。
+
 ## 5. Smoke Tests
 
 服务器本机：
@@ -162,7 +164,42 @@ docker compose --env-file .env.production -f infra/compose/docker-compose.founda
 
 PostgreSQL数据卷保存用户身份、积分流水、会员权益和订单状态。日常更新、重启和回滚均不得执行 `down -v`；数据库不可用时认证和积分接口会故障关闭，不会创建临时内存用户或重新发放200点。
 
-## 8. Rollback
+## 8. PostgreSQL Automated Backup
+
+仓库提供每日备份的 systemd service 与 timer。应用部署在 `/opt/offersteady/app` 且 PostgreSQL 容器名为 `compose-postgres-1` 时安装：
+
+```bash
+sudo install -m 0755 scripts/backup-postgres.sh /usr/local/sbin/offersteady-postgres-backup
+sudo install -m 0644 infra/systemd/offersteady-postgres-backup.service /etc/systemd/system/
+sudo install -m 0644 infra/systemd/offersteady-postgres-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now offersteady-postgres-backup.timer
+sudo systemctl start offersteady-postgres-backup.service
+```
+
+默认每天北京时间 02:30 后随机延迟最多 20 分钟执行，归档写入 `/opt/offersteady/backups`，保留 14 天。脚本使用容器内数据库环境，不把密码复制到 unit 或归档文件。只有 `pg_restore --list` 能读取归档并生成 SHA-256 校验文件后，临时文件才会原子安装为正式备份。
+
+检查状态和归档：
+
+```bash
+systemctl status offersteady-postgres-backup.timer --no-pager
+systemctl status offersteady-postgres-backup.service --no-pager
+journalctl -u offersteady-postgres-backup.service -n 100 --no-pager
+ls -lh /opt/offersteady/backups/offersteady-postgres-*.dump*
+cd /opt/offersteady/backups
+sha256sum -c "$(ls -1t offersteady-postgres-*.dump.sha256 | head -1)"
+```
+
+恢复不能直接覆盖线上数据库。先使用最新归档创建临时数据库完成恢复演练：
+
+```bash
+latest="$(ls -1t /opt/offersteady/backups/offersteady-postgres-*.dump | head -1)"
+docker exec compose-postgres-1 sh -lc 'dropdb -U "$POSTGRES_USER" --if-exists offersteady_restore_check && createdb -U "$POSTGRES_USER" offersteady_restore_check'
+docker exec -i compose-postgres-1 sh -lc 'pg_restore -U "$POSTGRES_USER" -d offersteady_restore_check --no-owner --no-privileges' < "$latest"
+docker exec compose-postgres-1 sh -lc 'psql -U "$POSTGRES_USER" -d offersteady_restore_check -c "SELECT 1" && dropdb -U "$POSTGRES_USER" offersteady_restore_check'
+```
+
+## 9. Rollback
 
 ```bash
 cd /opt/offersteady/app

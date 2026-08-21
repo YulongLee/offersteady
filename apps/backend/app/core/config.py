@@ -133,6 +133,7 @@ class Settings(BaseSettings):
     realtime_ingress_coalesce_max_frames: int = 4
     realtime_event_retention: int = 1000
     realtime_event_block_ms: int = 1000
+    realtime_event_wait_workers: int = 32
     realtime_runtime_ttl_seconds: int = 7200
     live_task_runtime_ttl_seconds: int = 7200
     live_task_stale_seconds: int = 180

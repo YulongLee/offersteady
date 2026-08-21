@@ -66,6 +66,14 @@ OFFERSTEADY_PUBLIC_WEB_BASE_URL=https://<server-host>
 
 若某些能力仍是 MVP 级实现，例如账务订单未完全持久化、实时语音链路不稳定、桌面助手权限需要手动处理，可以进入 v0.1 内测，但必须在发布清单中标注状态、影响和规避方式。用户可见的付费、资料和账号能力不得静默丢失数据。
 
+### 7. 生产 Web 配置采用构建前校验和部署后冒烟双门禁
+
+Vite 生产构建在读取环境变量后立即校验 `VITE_APP_ENV`、`VITE_API_BASE_URL` 和版本号。生产 API 可以使用同源 `/`，但不得缺失或指向 localhost/loopback。构建同时生成只包含公开字段的 `offersteady-build.json`；部署脚本在容器启动后再次请求公开的 `/api/v1/web/state` 并校验该清单，以同时覆盖错误环境变量和错误构建产物，避免搜索压缩 bundle 中未生效的开发常量产生误报。
+
+### 8. PostgreSQL 使用宿主机 systemd timer 调度逻辑备份
+
+备份脚本通过现有 PostgreSQL 容器内的环境变量运行 `pg_dump --format=custom`，宿主机不保存重复数据库密码。文件先写入同目录临时文件，经 `pg_restore --list` 和 SHA-256 校验后原子重命名为正式归档。默认每天执行一次并保留 14 天；systemd 的失败状态进入系统日志，便于监控。备份不会删除 Docker volume，也不会自动覆盖数据库。
+
 ## Risks / Trade-offs
 
 - [服务器公网 IP 暴露 HTTP 服务] → 优先使用 Nginx 单入口并限制只暴露 80/443；若无 HTTPS，限定内测范围并尽快补证书。

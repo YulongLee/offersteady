@@ -15,6 +15,7 @@ from app.core.errors import install_exception_handlers
 from app.middleware.request_context import RequestContextMiddleware
 from app.schemas.foundation import HealthResponse
 from app.services.admin_capacity import AdminCapacityMonitor
+from app.services.realtime_event_wait import RealtimeEventWaitExecutor
 
 
 def create_app() -> FastAPI:
@@ -24,6 +25,10 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(application: FastAPI):
         task: asyncio.Task[None] | None = None
+        realtime_event_wait_executor = RealtimeEventWaitExecutor(
+            max_workers=settings.realtime_event_wait_workers,
+        )
+        application.state.realtime_event_wait_executor = realtime_event_wait_executor
         if settings.admin_enabled and settings.database_url:
             try:
                 monitor = AdminCapacityMonitor(settings, admin_service().repository)
@@ -40,11 +45,14 @@ def create_app() -> FastAPI:
                 task = asyncio.create_task(sample_capacity())
             except Exception:
                 logger.warning("admin_capacity_monitor_unavailable")
-        yield
-        if task is not None:
-            task.cancel()
-            with suppress(asyncio.CancelledError):
-                await task
+        try:
+            yield
+        finally:
+            if task is not None:
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
+            realtime_event_wait_executor.shutdown()
 
     application = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
     application.add_middleware(

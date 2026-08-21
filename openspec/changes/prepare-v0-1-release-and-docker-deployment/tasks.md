@@ -47,3 +47,16 @@
 - [x] 6.3 Document rollback to the previous known-good branch/tag or local-only operation if deployment fails.
 - [x] 6.4 Record the final v0.1 commit/tag, server host, exposed ports, validation status, and known limitations.
 - [x] 6.5 Provide the user with final frontend and backend URLs for acceptance testing.
+
+## 7. Production Web Build Guard
+
+- [x] 7.1 Add a production-only Vite configuration guard that rejects missing, non-production, or loopback API settings.
+- [x] 7.2 Add regression tests for valid same-origin production configuration and rejected localhost production configuration.
+- [x] 7.3 Emit a public production build manifest and extend the deployment smoke test to verify Web state and reject loopback configuration.
+
+## 8. PostgreSQL Automated Backup
+
+- [x] 8.1 Add a credential-safe PostgreSQL backup script with archive validation, checksum generation, locking, and bounded retention.
+- [x] 8.2 Add systemd service/timer units and document installation, status checks, manual execution, restore verification, and retention.
+- [x] 8.3 Install the timer on the production server, create and validate an initial backup, and confirm the next scheduled run.
+- [x] 8.4 Run shell checks, focused Web tests/build checks, and strict OpenSpec validation.

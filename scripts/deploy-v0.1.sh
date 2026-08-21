@@ -88,6 +88,17 @@ else
   curl -fsS "http://127.0.0.1:8000/api/v1/billing/status" >/dev/null || fail "Billing status check failed"
 fi
 
+log "Checking public Web state through the browser entrypoint"
+curl -fsS "${PUBLIC_WEB_BASE_URL%/}/api/v1/web/state" >/dev/null || fail "Public Web state API check failed"
+
+BUILD_MANIFEST="$(curl -fsS "${PUBLIC_WEB_BASE_URL%/}/offersteady-build.json")" || fail "Unable to download deployed Web build manifest"
+if ! printf '%s' "$BUILD_MANIFEST" | grep -F '"appEnv":"production"' >/dev/null; then
+  fail "Deployed Web build manifest is not production"
+fi
+if printf '%s' "$BUILD_MANIFEST" | grep -Eq 'localhost|127\.0\.0\.1|0\.0\.0\.0|::1'; then
+  fail "Deployed Web build manifest contains a loopback API address"
+fi
+
 log "Deployment completed"
 printf '%s\n' "$CURRENT_COMMIT" > "$DEPLOYED_COMMIT_FILE"
 printf '\nFrontend: %s/\n' "${PUBLIC_WEB_BASE_URL%/}"

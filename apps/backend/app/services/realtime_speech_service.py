@@ -1434,7 +1434,14 @@ class RealtimeSpeechService:
         publishers = [item for item in self.repository.list_publishers_for_session(session_id=session_id) if item.owner_user_id == user_id]
         transcripts = [item for item in self.repository.list_transcripts_for_session(session_id=session_id) if item.owner_user_id == user_id]
         candidates = [item for item in self.repository.list_candidates_for_session(session_id=session_id) if item.owner_user_id == user_id]
-        events = [item for item in self.repository.list_events_for_session(session_id=session_id) if item.owner_user_id == user_id]
+        events = [
+            item
+            for item in self.repository.list_latest_events_for_session(
+                session_id=session_id,
+                kinds={"device-status", "degraded"},
+            )
+            if item.owner_user_id == user_id
+        ]
         latest_device_status = next((item for item in reversed(events) if item.kind == "device-status"), None)
         web_heartbeat = self.repository.get_web_session_heartbeat(user_id=user_id, session_id=session_id)
         raw_health = latest_device_status.payload.get("sourceHealth", []) if latest_device_status is not None else []
