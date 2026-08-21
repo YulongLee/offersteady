@@ -65,6 +65,7 @@ def _to_upload_response(upload) -> ScreenshotUploadResponse:
 
 def _to_telemetry_response(telemetry) -> ScreenshotTimingTelemetryResponse:
     return ScreenshotTimingTelemetryResponse(
+        deliveryMode=telemetry.delivery_mode,
         uploadAcceptedMs=telemetry.upload_accepted_ms,
         imageOptimizeMs=telemetry.image_optimize_ms,
         ossWriteMs=telemetry.oss_write_ms,

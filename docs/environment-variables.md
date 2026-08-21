@@ -92,6 +92,7 @@
 - `OFFERSTEADY_INTEGRATION_MINERU_POLL_INTERVAL_MS`
 - `OFFERSTEADY_CHAT_QWEN_BASE_URL`
 - `OFFERSTEADY_SCREENSHOT_VISION_BASE_URL`
+- `OFFERSTEADY_SCREENSHOT_VISION_DELIVERY_MODE`：`inline`（默认，不写 OSS）或 `oss`（兼容回滚模式）
 - `OFFERSTEADY_EMBEDDING_BASE_URL`
 - `OFFERSTEADY_EMBEDDING_MODEL`
 - `OFFERSTEADY_EMBEDDING_DIMENSION`
@@ -192,6 +193,8 @@ v0.1 默认只允许管理员/内部账号小额验证码支付链路。支付�
 ## 商业化资料与 RAG 补充
 
 Prompt版本由`OFFERSTEADY_CHAT_PROMPT_TEMPLATE_PATH`、`OFFERSTEADY_CHAT_PROMPT_VERSION`、`OFFERSTEADY_SCREENSHOT_PROMPT_TEMPLATE_PATH`和`OFFERSTEADY_SCREENSHOT_PROMPT_VERSION`控制。默认使用Chat v4和Screenshot v2；上一稳定版本分别为`system-v3.md`/v3和`system-v1.md`/v1。原始Prompt、资料、截图和完整回答不得写入日志。
+
+截图视觉传输默认使用 `OFFERSTEADY_SCREENSHOT_VISION_DELIVERY_MODE=inline`：服务端校验和压缩后，以临时 Data URL 调用视觉模型，不把截图保存到 OSS。只有模型供应商不兼容内联图片或需要紧急回滚时才切换为 `oss`；该变量仅在服务端读取，修改后需重启后端。
 
 资料上传、解析、索引和 RAG 只由后端读取服务端变量。浏览器只能拿到上传意图、资料状态和安全来源摘要，不能读取 OSS 密钥、数据库连接串、完整对象路径策略、Embedding/Rerank/Chat 密钥或 Prompt。
 

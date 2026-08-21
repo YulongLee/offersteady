@@ -14,6 +14,7 @@ RemoteCaptureRequestStage = Literal["requested", "claimed", "capture-failed", "u
 
 @dataclass(frozen=True)
 class ScreenshotTimingTelemetry:
+    delivery_mode: Literal["inline", "oss"] | None = None
     upload_accepted_ms: float | None = None
     image_optimize_ms: float | None = None
     oss_write_ms: float | None = None
@@ -183,6 +184,8 @@ class ScreenshotUploadPort(Protocol):
     ) -> None: ...
 
     def load_image_bytes(self, *, image: ConfirmedScreenshotUpload) -> bytes: ...
+
+    def release_image_bytes(self, *, image: ConfirmedScreenshotUpload) -> None: ...
 
 
 class VisionGatewayPort(Protocol):

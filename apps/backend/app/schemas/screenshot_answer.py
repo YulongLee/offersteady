@@ -84,6 +84,7 @@ class ScreenshotAnswerChunkResponse(BaseModel):
 
 class ScreenshotTimingTelemetryResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    delivery_mode: Literal["inline", "oss"] | None = Field(default=None, alias="deliveryMode")
     upload_accepted_ms: float | None = Field(default=None, alias="uploadAcceptedMs")
     image_optimize_ms: float | None = Field(default=None, alias="imageOptimizeMs")
     oss_write_ms: float | None = Field(default=None, alias="ossWriteMs")

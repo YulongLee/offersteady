@@ -1684,10 +1684,25 @@ def test_screenshot_answer_retries_then_fails() -> None:
     assert retried["task"]["status"] == "completed"
     assert retried["task"]["retryCount"] == 1
 
+    failed_upload_intent = unwrap(client.post("/api/v1/screenshot-answer/upload-intents", json={
+        "userId": "screenshot-retry-user",
+        "sessionId": session_id,
+        "filename": "permanent-fail-shot.png",
+        "contentType": "image/png",
+        "sizeBytes": 1024,
+    }))
+    failed_upload = unwrap(client.post("/api/v1/screenshot-answer/uploads/complete", json={
+        "userId": "screenshot-retry-user",
+        "sessionId": session_id,
+        "intentId": failed_upload_intent["intentId"],
+        "objectKey": failed_upload_intent["objectKey"],
+        "contentType": "image/png",
+        "sizeBytes": 1024,
+    }))
     failed = unwrap(client.post("/api/v1/screenshot-answer/tasks", json={
         "userId": "screenshot-retry-user",
         "sessionId": session_id,
-        "imageIds": [upload["imageId"]],
+        "imageIds": [failed_upload["imageId"]],
         "instruction": "__permanent_fail__ 触发视觉失败",
         "stream": True,
     }))

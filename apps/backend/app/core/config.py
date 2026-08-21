@@ -114,6 +114,7 @@ class Settings(BaseSettings):
     screenshot_max_file_size_bytes: int = 10 * 1024 * 1024
     screenshot_vision_provider: str = "qwen-vision-compatible"
     screenshot_vision_model: str = "qwen-vl-plus"
+    screenshot_vision_delivery_mode: Literal["inline", "oss"] = "inline"
     screenshot_oss_key_prefix: str = "screenshots"
     screenshot_signed_url_ttl_seconds: int = 600
     screenshot_use_signed_url_for_vision: bool = True

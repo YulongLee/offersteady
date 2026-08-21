@@ -226,6 +226,17 @@ class InMemoryScreenshotUploadPort(ScreenshotUploadPort):
             raise DomainRequestError("screenshot-answer", "load-image", "截图对象不存在或尚未可读。", 404)
         return payload
 
+    def release_image_bytes(self, *, image: ConfirmedScreenshotUpload) -> None:
+        self.uploaded_images.pop(image.image_id, None)
+        matching_intents = [
+            intent_id
+            for intent_id, reservation in self.issued_intents.items()
+            if reservation.object_key == image.object_key
+        ]
+        for intent_id in matching_intents:
+            self.pending_upload_payloads.pop(intent_id, None)
+            self.issued_intents.pop(intent_id, None)
+
     @classmethod
     def _sanitize_filename(cls, filename: str) -> str:
         cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", filename).strip("-.")
@@ -623,17 +634,21 @@ class ScreenshotAnswerService:
             size_bytes=len(stored_payload),
             etag=f"{stored_filename}:{len(stored_payload)}",
         )
-        oss_started = perf_counter()
-        self.object_storage.save_object_bytes(
-            object_key=upload.object_key,
-            payload=stored_payload,
-            content_type=stored_content_type,
-        )
-        oss_write_ms = _elapsed_ms(oss_started)
+        delivery_mode = self.settings.screenshot_vision_delivery_mode
+        oss_write_ms = 0.0
+        if delivery_mode == "oss":
+            oss_started = perf_counter()
+            self.object_storage.save_object_bytes(
+                object_key=upload.object_key,
+                payload=stored_payload,
+                content_type=stored_content_type,
+            )
+            oss_write_ms = _elapsed_ms(oss_started)
         if telemetry is not None:
             dimensions = self._image_dimensions(payload)
             stored_dimensions = self._image_dimensions(stored_payload)
             telemetry.update({
+                "delivery_mode": delivery_mode,
                 "image_optimize_ms": image_optimize_ms,
                 "oss_write_ms": oss_write_ms,
                 "original_width": dimensions[0],
@@ -702,6 +717,7 @@ class ScreenshotAnswerService:
             value = values.get(name)
             return str(value) if isinstance(value, str) and value else None
         return ScreenshotTimingTelemetry(
+            delivery_mode=string("delivery_mode"),  # type: ignore[arg-type]
             upload_accepted_ms=number("upload_accepted_ms"),
             image_optimize_ms=number("image_optimize_ms"),
             oss_write_ms=number("oss_write_ms"),
@@ -723,6 +739,12 @@ class ScreenshotAnswerService:
     def list_uploads(self, *, user_id: str, session_id: str) -> list[ConfirmedScreenshotUpload]:
         self.session_service.get_session(user_id=user_id, session_id=session_id)
         return [item for item in self.repository.list_uploads_for_session(session_id=session_id) if item.owner_user_id == user_id and item.status != "deleted"]
+
+    def _release_transient_uploads(self, uploads: list[ConfirmedScreenshotUpload]) -> None:
+        released_at_ms = _now_ms()
+        for upload in uploads:
+            self.upload_port.release_image_bytes(image=upload)
+            self.repository.save_upload(replace(upload, status="deleted", deleted_at_ms=released_at_ms))
 
     def answer_screenshots(
         self,
@@ -751,14 +773,21 @@ class ScreenshotAnswerService:
         task_id = f"screenshot-answer-{uuid4().hex}"
         billing_usage_id = f"screenshot-answer:{session_id}:{':'.join(sorted(image_ids))}"
         prepare_started = perf_counter()
-        prepared = self.preprocessor.preprocess(
-            uploads=uploads,
-            upload_port=self.upload_port,
-            object_storage=self.object_storage,
-            signed_url_ttl_seconds=self.settings.screenshot_signed_url_ttl_seconds,
-            use_signed_url=self.settings.screenshot_use_signed_url_for_vision,
-        )
+        try:
+            prepared = self.preprocessor.preprocess(
+                uploads=uploads,
+                upload_port=self.upload_port,
+                object_storage=self.object_storage,
+                signed_url_ttl_seconds=self.settings.screenshot_signed_url_ttl_seconds,
+                use_signed_url=(
+                    self.settings.screenshot_vision_delivery_mode == "oss"
+                    and self.settings.screenshot_use_signed_url_for_vision
+                ),
+            )
+        finally:
+            self._release_transient_uploads(uploads)
         if telemetry is not None:
+            telemetry.setdefault("delivery_mode", self.settings.screenshot_vision_delivery_mode)
             telemetry["signed_url_ms"] = _elapsed_ms(prepare_started)
         if self.billing_service is not None:
             reservation = self.billing_service.reserve_usage(
