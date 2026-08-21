@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.ports.realtime_speech import QuestionCandidateState, RealtimeConnectionState, RealtimeEventKind, RealtimeSourceKind, TranscriptRole
@@ -295,3 +297,12 @@ class DesktopDeviceBindingResponse(BaseModel):
     device_presence: str = Field(default="online", alias="devicePresence")
     account_bound: bool = Field(default=True, alias="accountBound")
     session_connection: str = Field(default="connected", alias="sessionConnection")
+
+
+class RuntimePerformanceAcknowledgementRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True, extra="forbid")
+    user_id: str = Field(min_length=1, max_length=128, alias="userId")
+    trace_id: str = Field(min_length=1, max_length=128, alias="traceId", pattern=r"^[A-Za-z0-9:._-]+$")
+    stage: Literal["transcript-render", "screenshot-first-render", "answer-first-render"]
+    duration_ms: int = Field(ge=0, le=120_000, alias="durationMs")
+    task_id: str | None = Field(default=None, min_length=1, max_length=128, alias="taskId", pattern=r"^[A-Za-z0-9:._-]+$")

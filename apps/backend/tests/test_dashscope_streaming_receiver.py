@@ -98,6 +98,7 @@ def test_gateway_receives_partial_on_background_pump_and_reuses_connection(monke
             realtime_asr_api_key="test-key",
             realtime_asr_partial_timeout_seconds=0.2,
             realtime_asr_finalize_timeout_seconds=0.5,
+            realtime_asr_nonblocking_partials_enabled=False,
         ),
         logging.getLogger("test-streaming-receiver"),
     )
@@ -133,6 +134,34 @@ def test_gateway_delivers_partial_that_arrives_between_audio_frames(monkeypatch)
     second = gateway.transcribe(frame=_frame(revision=2, is_final=False, audio=b"second"), attempt=0)
 
     assert second.text == "持续流式识别"
+    gateway._close_source_session("session-stream:microphone")
+
+
+def test_gateway_does_not_wait_for_provider_partial_after_audio_append(monkeypatch) -> None:
+    socket = _StreamingFakeWebSocket()
+    monkeypatch.setattr(
+        "app.services.dashscope_realtime_asr_gateway.connect",
+        lambda *args, **kwargs: socket,
+    )
+    gateway = DashScopeRealtimeAsrGateway(
+        Settings(
+            realtime_asr_api_key="test-key",
+            realtime_asr_partial_timeout_seconds=0.5,
+            realtime_asr_finalize_timeout_seconds=0.5,
+            realtime_asr_nonblocking_partials_enabled=True,
+        ),
+        logging.getLogger("test-nonblocking-partial"),
+    )
+
+    started_at = time.monotonic()
+    partial = gateway.transcribe(frame=_frame(revision=1, is_final=False, audio=b"partial"), attempt=0)
+    elapsed = time.monotonic() - started_at
+
+    assert partial.text == ""
+    assert elapsed < 0.1
+    time.sleep(0.03)
+    delivered = gateway.transcribe(frame=_frame(revision=2, is_final=False, audio=b"next"), attempt=0)
+    assert delivered.text == "持续流式识别"
     gateway._close_source_session("session-stream:microphone")
 
 

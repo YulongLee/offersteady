@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import threading
+import time
+
 from app.ports.realtime_speech import RealtimeEvent
 from app.services.realtime_speech_repository import InMemoryRealtimeSpeechRepository
 
@@ -39,3 +42,43 @@ def test_session_event_payload_does_not_require_binary_content() -> None:
     assert events[0].payload == {"requestId": "request-safe", "status": "requested"}
     assert "audio" not in events[0].payload
     assert "screenshot" not in events[0].payload
+
+
+def test_wait_for_session_events_wakes_when_event_is_saved() -> None:
+    repository = InMemoryRealtimeSpeechRepository()
+
+    def publish() -> None:
+        time.sleep(0.03)
+        repository.save_event(_event("event-wakeup", 30))
+
+    worker = threading.Thread(target=publish)
+    worker.start()
+    started = time.perf_counter()
+    cursor, events, resumable = repository.wait_for_events_after(
+        session_id="session-unified-events",
+        cursor=0,
+        timeout_ms=500,
+    )
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    worker.join()
+
+    assert elapsed_ms < 300
+    assert cursor == 1
+    assert resumable is True
+    assert [event.event_id for event in events] == ["event-wakeup"]
+
+
+def test_wait_for_session_events_returns_after_bounded_timeout() -> None:
+    repository = InMemoryRealtimeSpeechRepository()
+    started = time.perf_counter()
+    cursor, events, resumable = repository.wait_for_events_after(
+        session_id="session-unified-events",
+        cursor=0,
+        timeout_ms=30,
+    )
+    elapsed_ms = (time.perf_counter() - started) * 1000
+
+    assert 20 <= elapsed_ms < 250
+    assert cursor == 0
+    assert events == []
+    assert resumable is True

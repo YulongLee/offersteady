@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from dataclasses import replace
 from pathlib import Path
 
@@ -33,6 +34,7 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
         self.account_desktop_devices: dict[tuple[str, str], AccountDesktopDeviceRecord] = {}
         self.session_bindings: dict[tuple[str, str], SessionDesktopBindingRecord] = {}
         self.web_session_heartbeats: dict[tuple[str, str], WebSessionHeartbeatRecord] = {}
+        self._event_condition = threading.Condition()
         self.state_file = Path(state_file).expanduser() if state_file else None
         self._load_state()
 
@@ -211,13 +213,15 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
         return [replace(item) for item in sorted(items, key=lambda item: item.created_at_ms)]
 
     def save_event(self, event: RealtimeEvent) -> RealtimeEvent:
-        stored = replace(event)
-        entries = self.events.setdefault(stored.session_id, [])
-        entries.append(stored)
-        entries.sort(key=lambda item: (item.created_at_ms, item.event_id))
-        cursor = self._bump_session_activity(stored.session_id)
-        self.event_cursors.setdefault(stored.session_id, {})[stored.event_id] = cursor
-        return replace(stored)
+        with self._event_condition:
+            stored = replace(event)
+            entries = self.events.setdefault(stored.session_id, [])
+            entries.append(stored)
+            entries.sort(key=lambda item: (item.created_at_ms, item.event_id))
+            cursor = self._bump_session_activity(stored.session_id)
+            self.event_cursors.setdefault(stored.session_id, {})[stored.event_id] = cursor
+            self._event_condition.notify_all()
+            return replace(stored)
 
     def list_events_for_session(self, *, session_id: str) -> list[RealtimeEvent]:
         cursors = self.event_cursors.get(session_id, {})
@@ -244,6 +248,16 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
             [replace(item) for item_cursor, item in retained if item_cursor > cursor],
             resumable,
         )
+
+    def wait_for_events_after(
+        self, *, session_id: str, cursor: int, timeout_ms: int
+    ) -> tuple[int, list[RealtimeEvent], bool]:
+        with self._event_condition:
+            result = self.list_events_after(session_id=session_id, cursor=cursor)
+            if result[1] or not result[2] or timeout_ms <= 0:
+                return result
+            self._event_condition.wait(timeout=max(0, timeout_ms) / 1000)
+            return self.list_events_after(session_id=session_id, cursor=cursor)
 
     def get_session_activity_version(self, *, session_id: str) -> int:
         return self.session_activity_versions.get(session_id, 0)

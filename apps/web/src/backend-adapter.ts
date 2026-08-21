@@ -105,6 +105,8 @@ interface BackendRemoteScreenshotCaptureRequestResponse {
   readonly deviceId: string;
   readonly manualCode: string;
   readonly instruction: string;
+  readonly createdAtMs: number;
+  readonly updatedAtMs: number;
   readonly status: "requested" | "processing" | "completed" | "failed" | "cancelled";
   readonly stage?: string | null;
   readonly telemetry?: Record<string, unknown> | null;
@@ -742,6 +744,47 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   private readonly fetchImpl: typeof fetch;
   private foundation: FoundationIndexResponse | null = null;
   private readonly captureEventWaiters = new Map<string, Set<(payload: Record<string, unknown>) => void>>();
+  private readonly acknowledgedPerformanceTraces = new Set<string>();
+
+  private acknowledgeRuntimePerformance(
+    interviewId: string,
+    traceId: string,
+    stage: "transcript-render" | "screenshot-first-render" | "answer-first-render",
+    startedAtMs: number,
+    taskId?: string,
+  ) {
+    const key = `${stage}:${traceId}`;
+    if (!traceId || this.acknowledgedPerformanceTraces.has(key)) return;
+    this.acknowledgedPerformanceTraces.add(key);
+    const send = () => {
+      void this.client.request(`/api/v1/realtime-speech/sessions/${interviewId}/performance-ack`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          userId: requireUserId(), traceId, stage,
+          durationMs: Math.max(0, Math.min(120_000, Date.now() - startedAtMs)),
+          ...(taskId ? { taskId } : {}),
+        }),
+      }).catch(() => {
+        this.acknowledgedPerformanceTraces.delete(key);
+      });
+    };
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(send);
+    else window.setTimeout(send, 0);
+  }
+
+  private acknowledgeRenderedTranscripts(interviewId: string, transcripts: BackendRealtimeTranscriptListResponse) {
+    for (const transcript of transcripts.transcripts) {
+      const traceId = transcript.performance?.traceId;
+      if (!traceId) continue;
+      this.acknowledgeRuntimePerformance(
+        interviewId,
+        traceId,
+        "transcript-render",
+        transcript.publishedAtMs ?? Date.now(),
+      );
+    }
+  }
 
   private publishCaptureEvents(events: BackendRealtimeEventListResponse) {
     for (const event of events.events) {
@@ -1077,6 +1120,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         if (typeof payload.cursor === "number") window.sessionStorage?.setItem(cursorKey, String(payload.cursor));
         this.publishCaptureEvents(payload.events);
         onUpdate(mapRealtimeState(interviewId, payload.transcripts, payload.candidates, payload.events, payload.runtime));
+        this.acknowledgeRenderedTranscripts(interviewId, payload.transcripts);
       };
       flushHandle = typeof requestAnimationFrame === "function"
         ? requestAnimationFrame(flush)
@@ -1117,6 +1161,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       if (typeof finalSnapshot.cursor === "number") window.sessionStorage?.setItem(cursorKey, String(finalSnapshot.cursor));
       this.publishCaptureEvents(finalSnapshot.events);
       onUpdate(mapRealtimeState(interviewId, finalSnapshot.transcripts, finalSnapshot.candidates, finalSnapshot.events, finalSnapshot.runtime));
+      this.acknowledgeRenderedTranscripts(interviewId, finalSnapshot.transcripts);
       pendingSnapshot = null;
     }
     if (flushHandle !== null) {
@@ -1207,7 +1252,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     return latest;
   }
 
-  async submitScreenshotAnswer(command: Parameters<InterviewAppAdapter["submitScreenshotAnswer"]>[0], signal?: AbortSignal, onStage?: (task: ScreenshotTask) => void) {
+  async submitScreenshotAnswer(command: Parameters<InterviewAppAdapter["submitScreenshotAnswer"]>[0], signal?: AbortSignal, onStage?: (task: ScreenshotTask) => void, onAnswerUpdate?: (result: SubmitManualAnswerResult) => void) {
     let captureRequest: BackendRemoteScreenshotCaptureRequestResponse;
     try {
       captureRequest = await this.client.request<BackendRemoteScreenshotCaptureRequestResponse>(`/api/v1/screenshot-answer/sessions/${command.interviewId}/remote-capture-requests`, {
@@ -1244,6 +1289,18 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
           const pushedTask = pushed.answerTask && typeof pushed.answerTask === "object"
             ? pushed.answerTask as BackendScreenshotAnswerTaskResponse
             : null;
+          if (pushedTask) {
+            onAnswerUpdate?.(toSubmitScreenshotAnswerResult(pushedTask, command.instruction));
+            if (screenshotAnswerText(pushedTask)) {
+              this.acknowledgeRuntimePerformance(
+                command.interviewId,
+                captureRequest.requestId,
+                "screenshot-first-render",
+                captureRequest.createdAtMs,
+                pushedTask.taskId,
+              );
+            }
+          }
           if (pushedStatus === "completed" && pushedTask) return toSubmitScreenshotAnswerResult(pushedTask, command.instruction);
           if (pushedStatus === "cancelled") throw new DOMException("Aborted", "AbortError");
           if (pushedStatus === "failed") throw new AppError("validation", `${pushed.stage ? `截图阶段 ${String(pushed.stage)} 失败：` : ""}${String(pushed.errorMessage || "伴随程序截屏回答失败，请检查本地助手状态后重试。")}`);
@@ -1255,6 +1312,18 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
           headers: authHeaders(),
         }, signal);
         onStage?.(screenshotStageToTask(current));
+        if (current.answerTask) {
+          onAnswerUpdate?.(toSubmitScreenshotAnswerResult(current.answerTask, command.instruction));
+          if (screenshotAnswerText(current.answerTask)) {
+            this.acknowledgeRuntimePerformance(
+              command.interviewId,
+              captureRequest.requestId,
+              "screenshot-first-render",
+              captureRequest.createdAtMs,
+              current.answerTask.taskId,
+            );
+          }
+        }
         if (current.status === "completed" && current.answerTask) return toSubmitScreenshotAnswerResult(current.answerTask, command.instruction);
         if (current.status === "cancelled") throw new DOMException("Aborted", "AbortError");
         if (current.status === "failed") throw new AppError("validation", `${current.stage ? `截图阶段 ${current.stage} 失败：` : ""}${current.errorMessage || "伴随程序截屏回答失败，请检查本地助手状态后重试。"}`);

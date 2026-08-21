@@ -563,8 +563,24 @@ describe("backend preview adapter", () => {
     const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
     const subscription = adapter.subscribeRealtimeSession("session-1", () => undefined);
     await Promise.resolve();
-    const answer = adapter.submitScreenshotAnswer({ interviewId: "session-1", instruction: "回答截图" });
+    const onAnswerUpdate = vi.fn();
+    const answer = adapter.submitScreenshotAnswer(
+      { interviewId: "session-1", instruction: "回答截图" },
+      undefined,
+      undefined,
+      onAnswerUpdate,
+    );
     await Promise.resolve();
+    const partialTask = { ...task, answerText: "这是部分", status: "streaming", updatedAtMs: 1, completedAtMs: null };
+    streamController!.enqueue(encoder.encode(`event: update\ndata: ${JSON.stringify({
+      type: "update", cursor: 1,
+      transcripts: { sessionId: "session-1", transcripts: [] },
+      candidates: { sessionId: "session-1", candidates: [] },
+      events: { sessionId: "session-1", events: [{ eventId: "shot-event-partial", kind: "screenshot-capture-updated", payload: { requestId: "shot-request-1", status: "processing", stage: "vision-running", answerTask: partialTask }, createdAtMs: 1 }] },
+      runtime: null,
+    })}\n\n`));
+    await vi.waitUntil(() => onAnswerUpdate.mock.calls.length > 0);
+    expect(onAnswerUpdate).toHaveBeenCalledWith(expect.objectContaining({ task: expect.objectContaining({ partialText: "这是部分" }) }));
     streamController!.enqueue(encoder.encode(`event: update\ndata: ${JSON.stringify({
       type: "update", cursor: 2,
       transcripts: { sessionId: "session-1", transcripts: [] },

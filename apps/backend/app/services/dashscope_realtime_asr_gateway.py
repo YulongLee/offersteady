@@ -156,10 +156,15 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                         "type": "input_audio_buffer.commit",
                     }))
                     self._commit_counts[frame.source_kind] = self._commit_counts.get(frame.source_kind, 0) + 1
-                transcript_text, first_text_at_ms, completed_at_ms = self._wait_for_transcript(
-                    session,
-                    finalize=frame.is_final,
-                )
+                if frame.is_final or not self.settings.realtime_asr_nonblocking_partials_enabled:
+                    transcript_text, first_text_at_ms, completed_at_ms = self._wait_for_transcript(
+                        session,
+                        finalize=frame.is_final,
+                    )
+                else:
+                    transcript_text, first_text_at_ms, completed_at_ms = self._latest_available_transcript(
+                        session
+                    )
                 if frame.is_final:
                     with session.event_condition:
                         # Freeze a completed utterance before releasing the source
@@ -353,6 +358,25 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             self._completed_missing[session.source_kind] = self._completed_missing.get(session.source_kind, 0) + 1
             raise RetryableAsrError("realtime_asr_transcript_missing")
         return transcript_text, first_text_at_ms, completed_at_ms
+
+    @staticmethod
+    def _latest_available_transcript(
+        session: _SourceRealtimeSession,
+    ) -> tuple[str, int | None, int | None]:
+        """Return an already-received partial without delaying audio publication.
+
+        The provider receiver owns transcript arrival. Audio append calls must not
+        wait for that independent network event; a later append or the final
+        commit will deliver the newest authoritative revision.
+        """
+        with session.event_condition:
+            if session.receiver_error is not None:
+                raise RetryableAsrError("realtime_asr_connection_failed") from session.receiver_error
+            has_new_revision = session.event_revision > session.delivered_revision
+            transcript_text = session.transcript_text if has_new_revision else ""
+            if has_new_revision:
+                session.delivered_revision = session.event_revision
+            return transcript_text, session.first_text_at_ms, session.completed_at_ms
 
     def _receive_events(self, session: _SourceRealtimeSession) -> None:
         while True:

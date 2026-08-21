@@ -278,7 +278,7 @@ export interface InterviewAppAdapter {
   deleteInterview(id: string, signal?: AbortSignal): Promise<void>;
   deleteScreenshot(id: string, signal?: AbortSignal): Promise<void>;
   submitManualAnswer(command: SubmitManualAnswerCommand, signal?: AbortSignal, onStreamUpdate?: (update: ManualAnswerStreamUpdate) => void): Promise<SubmitManualAnswerResult>;
-  submitScreenshotAnswer(command: SubmitScreenshotAnswerCommand, signal?: AbortSignal, onStage?: (task: ScreenshotTask) => void): Promise<SubmitManualAnswerResult>;
+  submitScreenshotAnswer(command: SubmitScreenshotAnswerCommand, signal?: AbortSignal, onStage?: (task: ScreenshotTask) => void, onAnswerUpdate?: (result: SubmitManualAnswerResult) => void): Promise<SubmitManualAnswerResult>;
   cancelAnswer(command: CancelAnswerCommand, current: AnswerTaskSnapshot, signal?: AbortSignal): Promise<CancelAnswerResult>;
   redeemPoints(request: PointsRedemptionRequest, signal?: AbortSignal): Promise<PointsRedemptionResult>;
   createCheckoutOrder(request: { productId: string; channel: "wechat" | "alipay"; idempotencyKey: string }, signal?: AbortSignal): Promise<OfficialCheckoutOrder>;

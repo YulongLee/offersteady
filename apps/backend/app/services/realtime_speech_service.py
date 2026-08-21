@@ -2252,6 +2252,66 @@ class RealtimeSpeechService:
         )
         return current_cursor, [event for event in events if event.owner_user_id == user_id], resumable
 
+    def wait_for_session_events_after(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        cursor: int,
+        timeout_ms: int,
+    ) -> tuple[int, list[RealtimeEvent], bool]:
+        self.session_service.get_session(user_id=user_id, session_id=session_id)
+        current_cursor, events, resumable = self.repository.wait_for_events_after(
+            session_id=session_id,
+            cursor=cursor,
+            timeout_ms=timeout_ms,
+        )
+        return current_cursor, [event for event in events if event.owner_user_id == user_id], resumable
+
+    def acknowledge_runtime_timing(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        trace_id: str,
+        stage: str,
+        duration_ms: int,
+        task_id: str | None = None,
+    ) -> RealtimeEvent:
+        self.session_service.get_session(user_id=user_id, session_id=session_id)
+        if stage == "transcript-render":
+            for source_kind in ("microphone", "system"):
+                timing = self._latest_timing(session_id=session_id, source_kind=source_kind)  # type: ignore[arg-type]
+                if timing is not None and timing.get("traceId") == trace_id:
+                    self._set_latest_timing(
+                        session_id=session_id,
+                        source_kind=source_kind,  # type: ignore[arg-type]
+                        timing={**timing, "frontendRenderMs": duration_ms},
+                    )
+        event = self._save_event(
+            session_id=session_id,
+            owner_user_id=user_id,
+            kind="performance-ack",
+            payload={
+                "traceId": trace_id,
+                "stage": stage,
+                "durationMs": duration_ms,
+                **({"taskId": task_id} if task_id else {}),
+            },
+        )
+        log_event(
+            self.logger,
+            logging.INFO,
+            settings=self.settings,
+            event="runtime.performance_acknowledged",
+            feature="runtime-performance",
+            action=stage,
+            session_id=session_id,
+            task_id=task_id,
+            duration_ms=duration_ms,
+        )
+        return event
+
     @staticmethod
     def _event_payload(event: RealtimeEvent) -> dict[str, object]:
         return {"kind": event.kind, "payload": event.payload, "eventId": event.event_id, "createdAtMs": event.created_at_ms}

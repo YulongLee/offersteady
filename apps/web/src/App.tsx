@@ -1263,7 +1263,19 @@ function LivePage() {
       const result = await runAdapterOperation(signal => interviewAppAdapter.submitScreenshotAnswer({
         interviewId: id,
         instruction: screenshotInstruction,
-      }, signal, task => setScreenshot(task)), screenshotController.current?.signal);
+      }, signal, task => setScreenshot(task), streamed => {
+        setState(current => ({
+          ...current,
+          ...reconcileAnswerWorkspace(
+            {
+              questions: current.questions.filter(item => item.id !== placeholderId),
+              activeAnswerTask: current.activeAnswerTask?.questionId === placeholderId ? null : current.activeAnswerTask,
+            },
+            { questions: [streamed.question], activeAnswerTask: streamed.task },
+            { preferIncomingTask: true },
+          ),
+        }));
+      }), screenshotController.current?.signal);
       setState(current => ({
         ...current,
         ...reconcileAnswerWorkspace(

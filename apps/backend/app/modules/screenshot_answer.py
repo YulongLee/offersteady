@@ -70,6 +70,7 @@ def _to_telemetry_response(telemetry) -> ScreenshotTimingTelemetryResponse:
         imageOptimizeMs=telemetry.image_optimize_ms,
         ossWriteMs=telemetry.oss_write_ms,
         signedUrlMs=telemetry.signed_url_ms,
+        firstTextMs=telemetry.first_text_ms,
         visionModelMs=telemetry.vision_model_ms,
         answerPersistMs=telemetry.answer_persist_ms,
         totalBackgroundMs=telemetry.total_background_ms,
@@ -486,10 +487,11 @@ async def stream_desktop_capture_requests(
                     break
                 binding_check_ticks = 0
             current_cursor, events, resumable = await asyncio.to_thread(
-                realtime.list_session_events_after,
+                realtime.wait_for_session_events_after,
                 user_id=binding.owner_user_id,
                 session_id=binding.session_id,
                 cursor=last_cursor,
+                timeout_ms=max(100, realtime.settings.realtime_event_block_ms),
             )
             if not resumable:
                 pending = await asyncio.to_thread(
@@ -519,10 +521,10 @@ async def stream_desktop_capture_requests(
                 idle_ticks = 0
             else:
                 idle_ticks += 1
-                if idle_ticks >= 150:
+                keepalive_ticks = max(1, 15_000 // max(100, realtime.settings.realtime_event_block_ms))
+                if idle_ticks >= keepalive_ticks:
                     yield ": keepalive\n\n"
                     idle_ticks = 0
-            await asyncio.sleep(0.1)
 
     return StreamingResponse(
         event_stream(),

@@ -89,6 +89,7 @@ class ScreenshotTimingTelemetryResponse(BaseModel):
     image_optimize_ms: float | None = Field(default=None, alias="imageOptimizeMs")
     oss_write_ms: float | None = Field(default=None, alias="ossWriteMs")
     signed_url_ms: float | None = Field(default=None, alias="signedUrlMs")
+    first_text_ms: float | None = Field(default=None, alias="firstTextMs")
     vision_model_ms: float | None = Field(default=None, alias="visionModelMs")
     answer_persist_ms: float | None = Field(default=None, alias="answerPersistMs")
     total_background_ms: float | None = Field(default=None, alias="totalBackgroundMs")

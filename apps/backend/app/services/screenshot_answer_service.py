@@ -363,10 +363,51 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
         attempt: int,
     ) -> VisionSummary:
         _ = session_id, attempt
-        screenshot_instruction = _screenshot_only_instruction(instruction)
         if not self.settings.screenshot_vision_base_url or not self.settings.screenshot_vision_api_key:
             raise NonRetryableVisionError("当前多模识别模型未配置完成，请检查服务端 .env 配置。")
         url = f"{self.settings.screenshot_vision_base_url.rstrip('/')}/chat/completions"
+        payload = self._request_payload(instruction=instruction, images=images, stream=False)
+        try:
+            with httpx.Client(timeout=max(self.settings.integration_http_timeout_seconds, 60.0)) as client:
+                response = client.post(url, headers={"Authorization": f"Bearer {self.settings.screenshot_vision_api_key}"}, json=payload)
+        except httpx.HTTPError as exc:
+            raise RetryableVisionError("截图识别服务暂时不可用，请稍后重试。") from exc
+        self._raise_for_status(response.status_code)
+        try:
+            body = response.json()
+        except JSONDecodeError as exc:
+            raise NonRetryableVisionError("截图识别模型返回了无法解析的结果。") from exc
+        text = self._extract_first_text(body)
+        if not text:
+            raise NonRetryableVisionError("截图识别模型没有返回可读取的内容。")
+        return self._summary_from_text(text=text, images=images, usage_payload=body.get("usage", {}))
+
+    def stream_analyze(
+        self,
+        *,
+        session_id: str,
+        instruction: str,
+        images: list[PreparedScreenshotImage],
+        attempt: int,
+    ):
+        _ = session_id, attempt
+        if not self.settings.screenshot_vision_base_url or not self.settings.screenshot_vision_api_key:
+            raise NonRetryableVisionError("当前多模识别模型未配置完成，请检查服务端 .env 配置。")
+        url = f"{self.settings.screenshot_vision_base_url.rstrip('/')}/chat/completions"
+        payload = self._request_payload(instruction=instruction, images=images, stream=True)
+        try:
+            with httpx.Client(timeout=max(self.settings.integration_http_timeout_seconds, 60.0)) as client:
+                with client.stream("POST", url, headers={"Authorization": f"Bearer {self.settings.screenshot_vision_api_key}"}, json=payload) as response:
+                    self._raise_for_status(response.status_code)
+                    for line in response.iter_lines():
+                        text = self._extract_stream_text(line)
+                        if text:
+                            yield text
+        except httpx.HTTPError as exc:
+            raise RetryableVisionError("截图识别服务暂时不可用，请稍后重试。") from exc
+
+    def _request_payload(self, *, instruction: str, images: list[PreparedScreenshotImage], stream: bool) -> dict[str, object]:
+        screenshot_instruction = _screenshot_only_instruction(instruction)
         content: list[dict[str, object]] = [
             {
                 "type": "text",
@@ -387,29 +428,23 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
                 content.append({"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{encoded}"}})
         payload = {
             "model": self.settings.screenshot_vision_model,
-            "stream": False,
+            "stream": stream,
             "temperature": 0.1,
             "messages": [
                 {"role": "system", "content": self._load_system_prompt()},
                 {"role": "user", "content": content},
             ],
         }
-        try:
-            with httpx.Client(timeout=max(self.settings.integration_http_timeout_seconds, 60.0)) as client:
-                response = client.post(url, headers={"Authorization": f"Bearer {self.settings.screenshot_vision_api_key}"}, json=payload)
-        except httpx.HTTPError as exc:
-            raise RetryableVisionError("截图识别服务暂时不可用，请稍后重试。") from exc
-        if response.status_code >= 500:
-            raise RetryableVisionError(f"截图识别服务暂时不可用（HTTP {response.status_code}）。")
-        if response.status_code >= 400:
-            raise NonRetryableVisionError(f"截图识别服务返回异常（HTTP {response.status_code}）。")
-        try:
-            body = response.json()
-        except JSONDecodeError as exc:
-            raise NonRetryableVisionError("截图识别模型返回了无法解析的结果。") from exc
-        text = self._extract_first_text(body)
-        if not text:
-            raise NonRetryableVisionError("截图识别模型没有返回可读取的内容。")
+        return payload
+
+    @staticmethod
+    def _raise_for_status(status_code: int) -> None:
+        if status_code >= 500:
+            raise RetryableVisionError(f"截图识别服务暂时不可用（HTTP {status_code}）。")
+        if status_code >= 400:
+            raise NonRetryableVisionError(f"截图识别服务返回异常（HTTP {status_code}）。")
+
+    def _summary_from_text(self, *, text: str, images: list[PreparedScreenshotImage], usage_payload: object = None) -> VisionSummary:
         title = "截图题目理解"
         summary_text = "已仅根据当前截图识别题目并生成回答。"
         derived_question = "请根据截图内容直接给出本题的回答。"
@@ -420,7 +455,7 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
             derived_question = str(parsed.get("derived_question") or derived_question).strip() or derived_question
         except ValueError:
             pass
-        usage_payload = body.get("usage", {}) if isinstance(body, dict) else {}
+        usage_payload = usage_payload if isinstance(usage_payload, dict) else {}
         usage = VisionUsageReport(
             visual_tokens=max(1, int(usage_payload.get("prompt_tokens", 0) or 1)),
             total_tokens=max(1, int(usage_payload.get("total_tokens", 0) or 1)),
@@ -438,6 +473,33 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
             provider_name=self.settings.screenshot_vision_provider,
             model_name=self.settings.screenshot_vision_model,
         )
+
+    def summary_from_stream(self, *, text: str, images: list[PreparedScreenshotImage]) -> VisionSummary:
+        return self._summary_from_text(text=text, images=images)
+
+    @staticmethod
+    def _extract_stream_text(line: str) -> str:
+        payload = line.strip()
+        if not payload:
+            return ""
+        if payload.startswith("data:"):
+            payload = payload[5:].strip()
+        if payload == "[DONE]":
+            return ""
+        try:
+            body = json.loads(payload)
+        except JSONDecodeError:
+            return ""
+        choices = body.get("choices")
+        if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+            return ""
+        delta = choices[0].get("delta") or choices[0].get("message") or {}
+        content = delta.get("content") if isinstance(delta, dict) else None
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            return "".join(str(item.get("text") or "") for item in content if isinstance(item, dict))
+        return ""
 
     @staticmethod
     def _extract_first_text(body: dict) -> str | None:
@@ -722,6 +784,7 @@ class ScreenshotAnswerService:
             image_optimize_ms=number("image_optimize_ms"),
             oss_write_ms=number("oss_write_ms"),
             signed_url_ms=number("signed_url_ms"),
+            first_text_ms=number("first_text_ms"),
             vision_model_ms=number("vision_model_ms"),
             answer_persist_ms=number("answer_persist_ms"),
             total_background_ms=number("total_background_ms"),
@@ -755,6 +818,7 @@ class ScreenshotAnswerService:
         instruction: str,
         stream: bool,
         telemetry: dict[str, object] | None = None,
+        on_task_update: Callable[[ScreenshotAnswerTaskRecord], None] | None = None,
     ) -> tuple[ScreenshotAnswerTaskRecord, RetrievalResponse]:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         screenshot_instruction = _screenshot_only_instruction(instruction)
@@ -823,9 +887,70 @@ class ScreenshotAnswerService:
         )
         for attempt in range(self.settings.screenshot_retry_max_attempts + 1):
             try:
+                using_streaming_gateway = False
                 current = self.repository.save_task(replace(current, status="vision-running", updated_at_ms=_now_ms(), retry_count=attempt))
                 vision_started = perf_counter()
-                vision = self.vision_gateway.analyze(session_id=session_id, instruction=screenshot_instruction, images=prepared, attempt=attempt)
+                stream_analyze = getattr(self.vision_gateway, "stream_analyze", None)
+                summarize_stream = getattr(self.vision_gateway, "summary_from_stream", None)
+                if (
+                    stream
+                    and self.settings.screenshot_vision_streaming_enabled
+                    and callable(stream_analyze)
+                    and callable(summarize_stream)
+                ):
+                    using_streaming_gateway = True
+                    current = self.repository.save_task(replace(
+                        current,
+                        status="streaming",
+                        prompt_template_id="screenshot-vision-direct",
+                        prompt_version=self.settings.screenshot_prompt_version,
+                        material_context_status="not-used",
+                        material_provenance={"selectionRevision": session.material_binding.revision, "usedSources": [], "noPersonalMaterialUsed": True},
+                        updated_at_ms=_now_ms(),
+                    ))
+                    answer_parts: list[str] = []
+                    chunks: list[ChatAnswerChunk] = []
+                    last_emit_at = perf_counter()
+                    try:
+                        for text_part in stream_analyze(
+                            session_id=session_id,
+                            instruction=screenshot_instruction,
+                            images=prepared,
+                            attempt=attempt,
+                        ):
+                            answer_parts.append(text_part)
+                            if telemetry is not None and telemetry.get("first_text_ms") is None:
+                                telemetry["first_text_ms"] = _elapsed_ms(vision_started)
+                            chunks.append(ChatAnswerChunk(sequence=len(chunks) + 1, text=text_part, is_final=False))
+                            elapsed_since_emit_ms = (perf_counter() - last_emit_at) * 1000
+                            if len(chunks) == 1 or elapsed_since_emit_ms >= max(20, self.settings.screenshot_progress_emit_interval_ms):
+                                current = self.repository.save_task(replace(
+                                    current,
+                                    answer_text="".join(answer_parts),
+                                    chunks=chunks.copy(),
+                                    updated_at_ms=_now_ms(),
+                                ))
+                                if on_task_update is not None:
+                                    on_task_update(current)
+                                last_emit_at = perf_counter()
+                    except (RetryableVisionError, NonRetryableVisionError):
+                        if answer_parts:
+                            raise
+                        using_streaming_gateway = False
+                        vision = self.vision_gateway.analyze(
+                            session_id=session_id, instruction=screenshot_instruction, images=prepared, attempt=attempt
+                        )
+                    else:
+                        streamed_text = "".join(answer_parts).strip()
+                        if not streamed_text:
+                            using_streaming_gateway = False
+                            vision = self.vision_gateway.analyze(
+                                session_id=session_id, instruction=screenshot_instruction, images=prepared, attempt=attempt
+                            )
+                        else:
+                            vision = summarize_stream(text=streamed_text, images=prepared)
+                else:
+                    vision = self.vision_gateway.analyze(session_id=session_id, instruction=screenshot_instruction, images=prepared, attempt=attempt)
                 if telemetry is not None:
                     telemetry["vision_model_ms"] = _elapsed_ms(vision_started)
                 current = self.repository.save_task(
@@ -848,6 +973,8 @@ class ScreenshotAnswerService:
                 )
                 persist_started = perf_counter()
                 completed = self._complete_vision_direct_task(task=current, vision=vision, retry_count=attempt)
+                if using_streaming_gateway and on_task_update is not None:
+                    on_task_update(completed)
                 self.session_service.append_context(
                     user_id=user_id,
                     session_id=session_id,
@@ -1077,6 +1204,11 @@ class ScreenshotAnswerService:
             instruction=request.instruction,
             stream=True,
             telemetry=metrics,
+            on_task_update=(
+                (lambda updated_task: on_transition(request, updated_task))
+                if on_transition is not None
+                else None
+            ),
         )
         metrics["total_background_ms"] = _elapsed_ms(background_started)
         final_telemetry = self._telemetry_from_metrics(metrics)

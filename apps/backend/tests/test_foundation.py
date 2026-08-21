@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import logging
 from pathlib import Path
-from time import sleep, time
+from time import perf_counter, sleep, time
 
 import httpx
 from fastapi.testclient import TestClient
@@ -15,6 +15,7 @@ from app.deps import realtime_speech_service
 from app.ports.authentication import SmsChallengeRecord
 from app.ports.realtime_speech import AudioFrame, RealtimeEvent
 from app.ports.chat import ChatAnswerChunk, PromptBuildResult, PromptConfig
+from app.ports.retrieval import RetrievalContext
 from app.services.chat_service import NonRetryableChatError, QwenCompatibleGateway, RetryableChatError
 from app.services.dashscope_realtime_asr_gateway import DashScopeRealtimeAsrGateway
 from app.services.realtime_speech_repository import InMemoryRealtimeSpeechRepository
@@ -24,6 +25,36 @@ from app.services.sms_verification_provider import AliyunDypnsSmsVerificationPro
 def test_realtime_stream_throttles_database_backed_session_validation() -> None:
     assert should_validate_realtime_session(last_validated_at=10.0, now=11.999) is False
     assert should_validate_realtime_session(last_validated_at=10.0, now=12.0) is True
+
+
+def test_runtime_performance_ack_accepts_only_allowlisted_metadata() -> None:
+    session = unwrap(client.post("/api/v1/sessions", json={
+        "userId": "performance-ack-user", "title": "性能确认测试",
+    }))
+    session_id = session["sessionId"]
+    accepted = client.post(f"/api/v1/realtime-speech/sessions/{session_id}/performance-ack", json={
+        "userId": "performance-ack-user",
+        "traceId": "trace-safe-1",
+        "stage": "transcript-render",
+        "durationMs": 42,
+        "taskId": "task-safe-1",
+    })
+    assert accepted.status_code == 200
+    events = unwrap(client.get(
+        f"/api/v1/realtime-speech/sessions/{session_id}/events",
+        params={"userId": "performance-ack-user"},
+    ))["events"]
+    payload = events[-1]["payload"]
+    assert payload == {
+        "traceId": "trace-safe-1", "stage": "transcript-render", "durationMs": 42, "taskId": "task-safe-1",
+    }
+
+    rejected = client.post(f"/api/v1/realtime-speech/sessions/{session_id}/performance-ack", json={
+        "userId": "performance-ack-user", "traceId": "trace-safe-2",
+        "stage": "transcript-render", "durationMs": 10,
+        "content": "不允许上传转写或截图内容",
+    })
+    assert rejected.status_code == 422
 
 
 def test_postgres_interview_schema_initialization_is_single_flight(monkeypatch) -> None:
@@ -1352,6 +1383,52 @@ def test_live_answer_stream_emits_ordered_events_and_persists_completion() -> No
     assert answer_events[0]["payload"]["trigger"] == "manual"
     assert answer_events[-1]["payload"]["task"]["status"] == "completed"
     assert not any(event["kind"] == "answer-stream" for event in session_events)
+
+
+def test_live_answer_prefetches_detail_retrieval_during_quick_generation(monkeypatch) -> None:
+    from app.deps import chat_service as chat_service_dep
+
+    service = chat_service_dep()
+    timeline: dict[str, float] = {}
+
+    def scripted_stream_generate(*, question, prompt, attempt):
+        _ = attempt
+        if prompt.prompt_config.template_id == "interview-chat-quick":
+            yield ChatAnswerChunk(
+                sequence=1,
+                text=f"<normalized_question>{question}</normalized_question>先给结论。",
+                is_final=False,
+            )
+            sleep(0.08)
+            timeline["quick_completed"] = perf_counter()
+            yield ChatAnswerChunk(sequence=2, text="再说明依据。", is_final=True)
+            return
+        yield ChatAnswerChunk(sequence=1, text="详细回答内容。", is_final=True)
+
+    def delayed_retrieval(*, user_id, session, question):
+        _ = user_id, session
+        timeline["retrieval_started"] = perf_counter()
+        sleep(0.04)
+        timeline["retrieval_completed"] = perf_counter()
+        return RetrievalContext(
+            normalized_question=question,
+            context_text="",
+            chunks=[], candidate_count=0, final_count=0, strategy="filtered-first",
+        )
+
+    monkeypatch.setattr(service.llm_gateway, "stream_generate", scripted_stream_generate)
+    monkeypatch.setattr(service, "_retrieve_context", delayed_retrieval)
+    session = unwrap(client.post("/api/v1/sessions", json={"userId": "chat-prefetch-user", "title": "预取测试"}))
+    session_id = session["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": "chat-prefetch-user"}))
+
+    events = list(service.stream_answer_question(
+        user_id="chat-prefetch-user", session_id=session_id, question="如何优化链路？"
+    ))
+
+    assert events[-1]["type"] == "completed"
+    assert timeline["retrieval_started"] < timeline["quick_completed"]
+    assert timeline["retrieval_completed"] <= timeline["quick_completed"]
 
 
 def test_live_answer_stream_failure_preserves_partial_output() -> None:

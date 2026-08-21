@@ -80,6 +80,7 @@ from .services.screenshot_answer_service import (
 )
 from .services.realtime_speech_repository import InMemoryRealtimeSpeechRepository
 from .services.redis_realtime_speech_repository import RedisRealtimeSpeechRepository
+from .services.redis_live_task_repositories import RedisChatRepository, RedisScreenshotAnswerRepository
 from .services.dashscope_realtime_asr_gateway import DashScopeRealtimeAsrGateway
 from .services.realtime_speech_service import RealtimeSpeechService, SyntheticRealtimeAsrGateway
 
@@ -243,6 +244,9 @@ def session_service() -> SessionService:
 
 @lru_cache(maxsize=1)
 def chat_repository() -> ChatRepository:
+    settings = get_settings()
+    if settings.redis_url and not os.environ.get("PYTEST_CURRENT_TEST"):
+        return RedisChatRepository(settings)
     return InMemoryChatRepository()
 
 
@@ -377,6 +381,9 @@ def billing_service() -> BillingService:
 
 @lru_cache(maxsize=1)
 def screenshot_answer_repository() -> ScreenshotAnswerRepository:
+    settings = get_settings()
+    if settings.redis_url and not os.environ.get("PYTEST_CURRENT_TEST"):
+        return RedisScreenshotAnswerRepository(settings)
     return InMemoryScreenshotAnswerRepository()
 
 

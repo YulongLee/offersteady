@@ -19,6 +19,7 @@ class ScreenshotTimingTelemetry:
     image_optimize_ms: float | None = None
     oss_write_ms: float | None = None
     signed_url_ms: float | None = None
+    first_text_ms: float | None = None
     vision_model_ms: float | None = None
     answer_persist_ms: float | None = None
     total_background_ms: float | None = None

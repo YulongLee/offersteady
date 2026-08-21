@@ -27,6 +27,7 @@ from app.schemas.realtime_speech import (
     RealtimeQuestionCandidateListResponse,
     RealtimeSessionRuntimeResponse,
     RealtimeTranscriptListResponse,
+    RuntimePerformanceAcknowledgementRequest,
     RealtimeFrameIngestRequest,
     RealtimeFrameRequest,
     RegisterDesktopDeviceRequest,
@@ -93,6 +94,30 @@ async def realtime_metrics(request: Request, service: RealtimeSpeechService = De
             "activeDesktopTransports": len(_active_ingest_tokens),
             "protocolVersion": service.settings.realtime_protocol_version,
         },
+        timestamp=utc_now_iso(),
+    )
+
+
+@router.post("/sessions/{session_id}/performance-ack", response_model=ApiEnvelope[dict[str, object]])
+async def acknowledge_runtime_performance(
+    session_id: str,
+    request_context: Request,
+    request: RuntimePerformanceAcknowledgementRequest,
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: RealtimeSpeechService = Depends(realtime_speech_service),
+) -> ApiEnvelope[dict[str, object]]:
+    resolved_user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
+    event = service.acknowledge_runtime_timing(
+        user_id=resolved_user_id,
+        session_id=session_id,
+        trace_id=request.trace_id,
+        stage=request.stage,
+        duration_ms=request.duration_ms,
+        task_id=request.task_id,
+    )
+    return success_response(
+        request=request_context,
+        data={"accepted": True, "eventId": event.event_id},
         timestamp=utc_now_iso(),
     )
 
@@ -384,18 +409,24 @@ async def stream_session_runtime(
                         "reason": "session-replaced",
                     })
                     break
+            event_reader = service.list_session_events_after if initial else service.wait_for_session_events_after
+            reader_kwargs = {
+                "user_id": resolved_user_id,
+                "session_id": session_id,
+                "cursor": last_cursor,
+            }
+            if not initial:
+                reader_kwargs["timeout_ms"] = max(100, service.settings.realtime_event_block_ms)
             current_cursor, incremental_events, resumable = await asyncio.to_thread(
-                service.list_session_events_after,
-                user_id=resolved_user_id,
-                session_id=session_id,
-                cursor=last_cursor,
+                event_reader,
+                **reader_kwargs,
             )
             if not initial and current_cursor <= last_cursor:
                 idle_polls += 1
-                if idle_polls >= 100:
+                keepalive_polls = max(1, 15_000 // max(100, service.settings.realtime_event_block_ms))
+                if idle_polls >= keepalive_polls:
                     yield ": keepalive\n\n"
                     idle_polls = 0
-                await asyncio.sleep(0.1)
                 continue
             idle_polls = 0
             now = loop_now

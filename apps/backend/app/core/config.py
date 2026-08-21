@@ -102,6 +102,7 @@ class Settings(BaseSettings):
     chat_detail_max_tokens: int = 1400
     chat_continuation_max_tokens: int = 900
     chat_continuation_max_attempts: int = 2
+    chat_detail_retrieval_prefetch_enabled: bool = True
     chat_provider: str = "qwen-compatible"
     chat_qwen_model: str = "qwen-plus"
     chat_qwen_api_key: str | None = None
@@ -121,6 +122,8 @@ class Settings(BaseSettings):
     screenshot_optimize_before_vision: bool = True
     screenshot_vision_max_long_edge: int = 1600
     screenshot_vision_jpeg_quality: int = 72
+    screenshot_vision_streaming_enabled: bool = True
+    screenshot_progress_emit_interval_ms: int = 120
     realtime_publisher_ttl_seconds: int = 1800
     realtime_protocol_version: str = "2.0"
     realtime_transport_mode: str = "websocket-v2"
@@ -129,7 +132,10 @@ class Settings(BaseSettings):
     realtime_ingress_max_frames_per_second: int = 120
     realtime_ingress_coalesce_max_frames: int = 4
     realtime_event_retention: int = 1000
+    realtime_event_block_ms: int = 1000
     realtime_runtime_ttl_seconds: int = 7200
+    live_task_runtime_ttl_seconds: int = 7200
+    live_task_stale_seconds: int = 180
     realtime_transcript_persistence_enabled: bool = False
     realtime_transcript_retention_days: int = 30
     realtime_asr_session_idle_seconds: int = 300
@@ -148,9 +154,13 @@ class Settings(BaseSettings):
     realtime_asr_finalize_timeout_seconds: float = 8.0
     realtime_asr_retry_max_attempts: int = 1
     realtime_asr_persistent_sessions_enabled: bool = True
+    realtime_asr_nonblocking_partials_enabled: bool = True
     realtime_asr_provider: str = "qwen-realtime-asr-compatible"
     realtime_asr_model: str = "qwen-realtime"
     realtime_question_auto_confirm_threshold: float = 0.85
+    runtime_performance_telemetry_enabled: bool = True
+    runtime_performance_telemetry_ttl_seconds: int = 7 * 24 * 60 * 60
+    runtime_performance_telemetry_sample_rate: float = 1.0
     auth_jwt_secret: str = "offersteady-dev-jwt-secret"
     auth_jwt_issuer: str = "offersteady-backend"
     auth_access_token_ttl_seconds: int = 900

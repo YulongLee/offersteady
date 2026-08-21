@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+from concurrent.futures import Future, ThreadPoolExecutor
 from collections.abc import Iterator
 from dataclasses import replace
 from json import JSONDecodeError
@@ -46,6 +47,7 @@ def _now_ms() -> int:
 _NORMALIZED_QUESTION_OPEN = "<normalized_question>"
 _NORMALIZED_QUESTION_CLOSE = "</normalized_question>"
 _NORMALIZATION_BUFFER_LIMIT = 800
+_DETAIL_RETRIEVAL_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="chat-detail-retrieval")
 
 
 def _clean_question_text(value: str) -> str:
@@ -907,6 +909,7 @@ class ChatService:
         last_error: Exception | None = None
         stream_started_at_ms = _now_ms()
         first_token_at_ms: int | None = None
+        detail_retrieval_future: Future[RetrievalContext] | None = None
         for attempt in range(self.settings.chat_retry_max_attempts + 1):
             try:
                 if self._is_task_cancelled(current_task.task_id):
@@ -944,6 +947,13 @@ class ChatService:
                                 updated_at_ms=_now_ms(),
                             )
                         )
+                        if self.settings.chat_detail_retrieval_prefetch_enabled:
+                            detail_retrieval_future = _DETAIL_RETRIEVAL_EXECUTOR.submit(
+                                self._retrieve_context,
+                                user_id=user_id,
+                                session=session,
+                                question=normalized_question,
+                            )
                         yield {"type": "question-normalized", "task": current_task}
                         visible_text = f"简单回答\n{visible_text}"
                     if not visible_text:
@@ -971,6 +981,13 @@ class ChatService:
                             updated_at_ms=_now_ms(),
                         )
                     )
+                    if self.settings.chat_detail_retrieval_prefetch_enabled:
+                        detail_retrieval_future = _DETAIL_RETRIEVAL_EXECUTOR.submit(
+                            self._retrieve_context,
+                            user_id=user_id,
+                            session=session,
+                            question=normalized_question,
+                        )
                     yield {"type": "question-normalized", "task": current_task}
                     normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=f"简单回答\n{visible_text}", is_final=False)
                     chunks.append(normalized)
@@ -999,7 +1016,11 @@ class ChatService:
                         replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
                     )
                     yield {"type": "chunk", "task": current_task, "chunk": normalized}
-                retrieval = self._retrieve_context(user_id=user_id, session=session, question=normalized_question)
+                retrieval = (
+                    detail_retrieval_future.result()
+                    if detail_retrieval_future is not None
+                    else self._retrieve_context(user_id=user_id, session=session, question=normalized_question)
+                )
                 if self._is_task_cancelled(current_task.task_id):
                     cancelled = self.repository.get_task(current_task.task_id) or current_task
                     yield {"type": "cancelled", "task": cancelled}

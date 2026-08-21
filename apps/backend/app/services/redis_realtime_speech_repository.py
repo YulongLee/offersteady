@@ -280,6 +280,27 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         resumable = cursor <= 0 or not positive_cursors or cursor >= min(positive_cursors) - 1
         return current_cursor, [item for item_cursor, item in retained if item_cursor > cursor], resumable
 
+    def wait_for_events_after(
+        self, *, session_id: str, cursor: int, timeout_ms: int
+    ) -> tuple[int, list[RealtimeEvent], bool]:
+        immediate = self.list_events_after(session_id=session_id, cursor=cursor)
+        if immediate[1] or not immediate[2] or timeout_ms <= 0:
+            return immediate
+        stream_key = f"offersteady:realtime:events:{session_id}"
+        rows = self._redis.xrange(stream_key)
+        start_id = "0-0"
+        for stream_id, fields in rows:
+            if int(fields.get("cursor", "0")) <= cursor:
+                start_id = stream_id
+        if rows and start_id == "0-0":
+            start_id = rows[-1][0]
+        self._redis.xread(
+            {stream_key: start_id},
+            count=self._event_retention,
+            block=max(1, timeout_ms),
+        )
+        return self.list_events_after(session_id=session_id, cursor=cursor)
+
     def get_session_activity_version(self, *, session_id):
         activity_version = int(self._redis.hget(self._activity_key, session_id) or 0)
         items = self._redis.xrevrange(f"offersteady:realtime:events:{session_id}", count=1)

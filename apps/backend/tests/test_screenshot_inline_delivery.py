@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import time
 from types import SimpleNamespace
 
 import httpx
@@ -82,6 +83,27 @@ class CapturingVisionGateway:
             provider_name="synthetic",
             model_name="synthetic-vision",
         )
+
+
+class StreamingVisionGateway(CapturingVisionGateway):
+    def stream_analyze(self, **kwargs):  # noqa: ANN003
+        self.images = kwargs["images"]
+        yield "简要回答\n先说明核心思路。"
+        time.sleep(0.03)
+        yield "\n\n---\n\n详细回答\n再给出完整实现。"
+
+    def summary_from_stream(self, *, text: str, images: list[PreparedScreenshotImage]) -> VisionSummary:
+        return VisionSummary(
+            title="流式截图题", summary_text="流式截图内容", derived_question="请回答流式截图题",
+            final_answer=text, image_count=len(images), provider_name="synthetic", model_name="streaming-vision",
+        )
+
+
+class UnsupportedStreamingVisionGateway(StreamingVisionGateway):
+    def stream_analyze(self, **kwargs):  # noqa: ANN003
+        _ = kwargs
+        raise NonRetryableVisionError("provider_streaming_unsupported")
+        yield ""  # pragma: no cover
 
 
 def build_service(*, delivery_mode: str, fail_vision: bool = False):
@@ -229,3 +251,36 @@ def test_vision_gateway_embeds_payload_as_data_url_without_logging_content(monke
 def test_invalid_screenshot_delivery_mode_is_rejected() -> None:
     with pytest.raises(ValidationError):
         Settings(_env_file=None, screenshot_vision_delivery_mode="unsupported")
+
+
+def test_streaming_screenshot_publishes_partial_before_terminal_completion() -> None:
+    service, _storage, _repository, _upload_port, _vision = build_service(delivery_mode="inline")
+    service.settings.screenshot_progress_emit_interval_ms = 20
+    service.vision_gateway = StreamingVisionGateway()
+    upload = upload_synthetic_image(service, {})
+    updates = []
+
+    task, _ = service.answer_screenshots(
+        user_id="user-inline", session_id="session-inline", image_ids=[upload.image_id],
+        instruction="只回答截图", stream=True, on_task_update=updates.append,
+    )
+
+    partials = [item for item in updates if item.status == "streaming" and item.answer_text]
+    assert partials
+    assert partials[0].answer_text.startswith("简要回答")
+    assert task.status == "completed"
+    assert task.answer_text.endswith("再给出完整实现。")
+
+
+def test_streaming_screenshot_falls_back_to_complete_response_before_any_chunk() -> None:
+    service, _storage, _repository, _upload_port, _vision = build_service(delivery_mode="inline")
+    service.vision_gateway = UnsupportedStreamingVisionGateway()
+    upload = upload_synthetic_image(service, {})
+
+    task, _ = service.answer_screenshots(
+        user_id="user-inline", session_id="session-inline", image_ids=[upload.image_id],
+        instruction="只回答截图", stream=True,
+    )
+
+    assert task.status == "completed"
+    assert "合成详细答案" in task.answer_text
