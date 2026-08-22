@@ -25,6 +25,12 @@ export function isAdminAuthenticationError(error: unknown): error is AdminAuthen
   return error instanceof AdminAuthenticationError;
 }
 
+export function adminGatewayMessage(status: number): string | null {
+  return [502, 503, 504].includes(status)
+    ? "管理后台暂时无法连接后端服务，请稍后重试；无需重新输入手机号或获取新的验证码。"
+    : null;
+}
+
 async function request<T>(path: string, init: RequestInit = {}, admin = true): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
@@ -41,7 +47,7 @@ async function request<T>(path: string, init: RequestInit = {}, admin = true): P
       sessionStorage.removeItem(adminTokenKey);
       throw new AdminAuthenticationError(authenticationMessage);
     }
-    throw new Error(detail || `请求失败 (${response.status})`);
+    throw new Error(adminGatewayMessage(response.status) || detail || `请求失败 (${response.status})`);
   }
   return (payload as Envelope<T>).data;
 }

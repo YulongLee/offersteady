@@ -7,7 +7,7 @@
 ```env
 OFFERSTEADY_ADMIN_ENABLED=false
 OFFERSTEADY_ADMIN_ALLOWED_ORIGINS=["https://admin.mianshiwen.cn"]
-OFFERSTEADY_ADMIN_SESSION_TTL_SECONDS=1800
+OFFERSTEADY_ADMIN_SESSION_TTL_SECONDS=28800
 OFFERSTEADY_ADMIN_RECENT_MFA_TTL_SECONDS=300
 OFFERSTEADY_ADMIN_SESSION_SIGNING_SECRET=<至少 32 字节随机值>
 OFFERSTEADY_ADMIN_ENCRYPTION_KEY=<至少 32 字节随机值>
@@ -18,6 +18,21 @@ OFFERSTEADY_ADMIN_MAX_CONCURRENT_QUERIES=4
 ```
 
 两个管理密钥只能进入服务器 Secret，不能提交 Git、写入 `VITE_` 变量或发送到浏览器。
+
+管理会话默认覆盖 8 小时工作日，但令牌仍只保存在当前浏览器标签页会话中；关闭标签页后需要重新登录。高风险操作的近期验证窗口仍为 5 分钟，不能因为管理会话尚未过期而跳过。登录页的“记住手机号”只在管理员主动选择后保存规范化手机号，不保存验证码、普通访问令牌或管理令牌。
+
+## 登录连续性与短信故障判断
+
+管理前端 Nginx 使用 Docker 内置 DNS 动态解析 `backend` 服务。只重建 Backend 容器时，Admin 会在短 DNS 有效期内自动连接新地址，不应要求重启用户端 Web。如果管理端发送验证码出现 502/503/504，而同一时刻用户端验证码正常，优先检查 Admin 代理和 Docker 服务发现，不要轮换阿里云短信密钥。
+
+排查顺序：
+
+1. 请求 Backend `/healthz`，确认后端进程已经可用。
+2. 在 Admin 容器内解析 `backend` 并请求 `/api/v1/auth/sms/send-code`，确认代理已拿到新地址。
+3. 检查 Admin Nginx 错误日志中是否仍访问旧容器 IP。
+4. 只有 Backend 自身返回短信供应商错误时，才检查阿里云签名、模板、AccessKey 和限流。
+
+手机号已记忆但管理会话过期时，登录页会预填手机号；这是正常安全边界，不代表短信服务不可用。短信发送成功后按钮会按服务端冷却时间倒计时，倒计时期间不要重复请求。
 
 ## 首位管理员
 
@@ -38,6 +53,8 @@ offersteady-admin-bootstrap --login-id 'sms:<该账号在数据库中的登录�
 5. 使用 `docker compose --profile admin` 启动管理前端。
 6. 设置管理来源并将总开关改为 `true`，只向首位管理员开放。
 7. 检查审计完整性、错误率和查询延迟后再增加其他角色。
+
+Backend 单独发布或重建后，应额外验证 Admin 验证码请求；无需重建 Web 或桌面助手。若生产环境显式配置了 `OFFERSTEADY_ADMIN_SESSION_TTL_SECONDS`，该配置优先于镜像默认值，发布时应确认仍为预期的 `28800` 秒。
 
 ## 回滚
 

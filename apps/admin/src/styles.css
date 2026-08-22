@@ -31,6 +31,9 @@ input:focus { border-color: var(--mint); box-shadow: 0 0 0 3px rgba(99,230,181,.
 .primary { margin-top: 12px; border: 0; background: var(--mint); color: #082217; }
 .secondary { border: 1px solid #335348; color: #cfe6dc; background: transparent; }
 button:disabled { opacity: .45; cursor: not-allowed; }
+.remember-phone { display: flex; align-items: center; gap: 9px; margin: -4px 0 16px; cursor: pointer; }
+.remember-phone input { width: 16px; height: 16px; margin: 0; padding: 0; accent-color: var(--mint); }
+.remember-phone span { color: #9fb8ae; font-size: 12px; }
 .form-message { min-height: 42px; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .admin-shell { min-height: 100vh; display: grid; grid-template-columns: 250px 1fr; }
 aside { position: sticky; top: 0; height: 100vh; padding: 26px 18px; border-right: 1px solid var(--line); background: rgba(5,14,11,.8); backdrop-filter: blur(22px); }

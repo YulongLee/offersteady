@@ -7,6 +7,13 @@ import { paymentAcceptanceOutcomeLabel, paymentChannelStatus } from "./payment-c
 import { diagnosticLabel, formatCny, type PaymentRevenueSummary } from "./payment-monitoring";
 import { formatUptime, type ServerHealthResponse } from "./server-health";
 import { validateGrowthSettings } from "./growth-settings";
+import {
+  clearRememberedAdminPhone,
+  isValidAdminPhone,
+  normalizeAdminPhone,
+  readRememberedAdminPhone,
+  saveRememberedAdminPhone,
+} from "./login-preferences";
 
 type View = "dashboard" | "server" | "users" | "orders" | "payments" | "growth" | "pricing" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
 type Row = Record<string, unknown>;
@@ -44,18 +51,53 @@ const display = (value: unknown) => {
 };
 
 function Login({ onReady, initialMessage = "" }: { onReady: () => void; initialMessage?: string }) {
-  const [phone, setPhone] = useState("");
+  const rememberedPhone = useMemo(() => readRememberedAdminPhone(), []);
+  const [phone, setPhone] = useState(rememberedPhone);
+  const [rememberPhone, setRememberPhone] = useState(Boolean(rememberedPhone));
   const [challengeId, setChallengeId] = useState("");
   const [smsCode, setSmsCode] = useState("");
   const [message, setMessage] = useState(initialMessage || "使用已授权的管理员手机号和短信验证码登录。");
   const [busy, setBusy] = useState(false);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const normalizedPhone = normalizeAdminPhone(phone);
+  const phoneValid = isValidAdminPhone(normalizedPhone);
+
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return;
+    const timer = window.setInterval(() => {
+      setCooldownSeconds(current => Math.max(0, current - 1));
+    }, 1_000);
+    return () => window.clearInterval(timer);
+  }, [cooldownSeconds > 0]);
+
+  const updatePhone = (value: string) => {
+    setPhone(value);
+    if (challengeId) {
+      setChallengeId("");
+      setSmsCode("");
+    }
+    setCooldownSeconds(0);
+  };
+
+  const updateRememberPhone = (checked: boolean) => {
+    setRememberPhone(checked);
+    if (checked && phoneValid) saveRememberedAdminPhone(normalizedPhone);
+    if (!checked) clearRememberedAdminPhone();
+  };
 
   const send = async () => {
+    if (!phoneValid) {
+      setMessage("请输入有效的 11 位中国大陆手机号。");
+      return;
+    }
     setBusy(true);
     try {
-      const result = await adminApi.sendSms(phone);
+      const result = await adminApi.sendSms(normalizedPhone);
       setChallengeId(result.challengeId);
-      setMessage(`验证码已发送，${result.cooldownSeconds} 秒后可重新获取。`);
+      const seconds = Math.max(0, Math.ceil(result.cooldownSeconds));
+      setCooldownSeconds(seconds);
+      if (rememberPhone) saveRememberedAdminPhone(normalizedPhone);
+      setMessage(`验证码已发送，${seconds} 秒后可重新获取。`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "验证码发送失败");
     } finally {
@@ -65,10 +107,15 @@ function Login({ onReady, initialMessage = "" }: { onReady: () => void; initialM
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (!phoneValid) {
+      setMessage("请输入有效的 11 位中国大陆手机号。");
+      return;
+    }
     setBusy(true);
     try {
-      const user = await adminApi.verifySms(phone, challengeId, smsCode);
+      const user = await adminApi.verifySms(normalizedPhone, challengeId, smsCode);
       await adminApi.login(user.tokens.accessToken);
+      if (rememberPhone) saveRememberedAdminPhone(normalizedPhone);
       onReady();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "管理身份验证失败");
@@ -89,8 +136,9 @@ function Login({ onReady, initialMessage = "" }: { onReady: () => void; initialM
       <form className="login-card" onSubmit={submit}>
         <p className="eyebrow">SECURE ACCESS</p>
         <h2>管理员验证</h2>
-        <label>手机号<input value={phone} onChange={event => setPhone(event.target.value)} placeholder="请输入已授权手机号" /></label>
-        <button className="secondary" type="button" onClick={send} disabled={busy || phone.length < 11}>获取短信验证码</button>
+        <label>手机号<input value={phone} onChange={event => updatePhone(event.target.value)} placeholder="请输入已授权手机号" inputMode="tel" autoComplete="tel" /></label>
+        <label className="remember-phone"><input type="checkbox" checked={rememberPhone} onChange={event => updateRememberPhone(event.target.checked)} /><span>在这台浏览器记住手机号</span></label>
+        <button className="secondary" type="button" onClick={send} disabled={busy || !phoneValid || cooldownSeconds > 0}>{cooldownSeconds > 0 ? `${cooldownSeconds} 秒后重新获取` : "获取短信验证码"}</button>
         <label>短信验证码<input value={smsCode} onChange={event => setSmsCode(event.target.value)} placeholder="6 位验证码" maxLength={6} /></label>
         <button className="primary" disabled={busy || !challengeId || smsCode.length !== 6}>进入运营中心</button>
         <p className="form-message">{message}</p>

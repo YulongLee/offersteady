@@ -188,7 +188,7 @@ class Settings(BaseSettings):
     auth_sms_test_phone_number: str | None = None
     admin_enabled: bool = False
     admin_allowed_origins: list[str] = Field(default_factory=list)
-    admin_session_ttl_seconds: int = 30 * 60
+    admin_session_ttl_seconds: int = 8 * 60 * 60
     admin_recent_mfa_ttl_seconds: int = 5 * 60
     admin_session_signing_secret: str | None = None
     admin_encryption_key: str | None = None
