@@ -191,6 +191,14 @@ class TranscriptResult:
 
 
 class RealtimeAsrGatewayPort(Protocol):
+    def warm_session(
+        self,
+        *,
+        session_id: str,
+        source_kind: RealtimeSourceKind,
+        sample_rate_hz: int = 16_000,
+    ) -> None: ...
+
     def transcribe(self, *, frame: AudioFrame, attempt: int) -> TranscriptResult: ...
 
     def finalize(self, *, frame: AudioFrame, attempt: int) -> TranscriptResult: ...

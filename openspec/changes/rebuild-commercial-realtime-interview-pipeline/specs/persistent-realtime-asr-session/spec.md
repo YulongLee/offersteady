@@ -3,6 +3,11 @@
 ### Requirement: One persistent provider session per active role
 The ASR gateway SHALL maintain at most one provider connection for each enabled role channel in an active interview.
 
+#### Scenario: Interview becomes live
+- **WHEN** an authorized interview transitions into the live and capturing state
+- **THEN** the gateway asynchronously prewarms one candidate and one interviewer provider connection without sending synthetic audio or creating transcript segments
+- **AND** the first real audio frame reuses the prewarmed role connection
+
 #### Scenario: Candidate channel begins streaming
 - **WHEN** candidate audio first arrives for an active session
 - **THEN** the gateway creates or resumes one candidate ASR connection and appends subsequent ordered audio to it
@@ -54,3 +59,21 @@ The system SHALL isolate Qwen-specific protocol details behind an ASR adapter an
 #### Scenario: Provider connection drops
 - **WHEN** a provider WebSocket closes transiently during an active interview
 - **THEN** the adapter reconnects with bounded backoff, exposes a degraded state, and resumes from current audio without replaying an acknowledged final transcript
+
+### Requirement: Session-scoped realtime minute metering
+The commercial runtime SHALL meter realtime ASR use once per active interview minute, independent of the number of enabled role channels.
+
+#### Scenario: A new active minute starts
+- **WHEN** a live interview is capturing during a minute index that has not been settled
+- **THEN** the billing service settles exactly one realtime-minute usage with a price of 5 points
+- **AND** an active time pass takes priority and settles the usage without deducting points
+
+#### Scenario: Runtime signals repeat
+- **WHEN** refreshes, reconnects, duplicate timers, or multiple backend workers observe the same session minute
+- **THEN** the stable session-and-minute usage identifier prevents duplicate ledger entries
+
+#### Scenario: Capture is paused or balance is insufficient
+- **WHEN** capture remains paused
+- **THEN** no new realtime-minute usage is created
+- **AND WHEN** a new minute cannot reserve five points
+- **THEN** capture transitions to paused, provider connections close, and a billing-specific runtime event is emitted

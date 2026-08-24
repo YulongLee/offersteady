@@ -83,6 +83,10 @@ Provider-specific event formats stay inside a replaceable ASR adapter. Domain tr
 
 Alternative considered: submit each chunk as a standalone ASR request. Rejected because service time exceeded arrival rate and produced unbounded queues and phantom short transcripts.
 
+The control plane prewarms both enabled role connections as soon as a session enters `live`. Prewarming carries no audio and does not create a transcript segment. The first real frame therefore appends to an already configured provider session. Prewarm is idempotent and may fall back to the existing first-frame lazy creation if the provider is temporarily unavailable.
+
+Realtime ASR usage is metered once per active session minute, not once per channel. A stable usage identifier composed from session id and wall-clock minute index makes settlement idempotent across duplicate timers, browser refreshes, desktop reconnects, and backend workers. An active time pass has priority and records zero-point pass usage; otherwise each minute costs five points. Paused capture does not open a new billable minute. Insufficient balance pauses capture and closes provider sessions instead of allowing unbounded unpaid usage.
+
 ### 5. Use Redis for ephemeral runtime and PostgreSQL for durable product data
 
 Redis stores session leases, device presence, transport resume offsets, active publisher metadata, bounded transcript event streams, consumer cursors, and short-lived idempotency keys. PostgreSQL stores durable session metadata and approved final transcript records. Raw audio is not written to either store.
@@ -143,7 +147,7 @@ Each channel sends negotiated 20-100 ms frames as soon as they are available. It
 - [Redis adds operational complexity] -> Use one managed or Compose Redis instance for MVP, persistence only where needed, health checks, and documented backup/eviction policy.
 - [WebSocket infrastructure is more complex than HTTP] -> Keep the protocol small, versioned, load-tested, and isolated in a dedicated gateway module.
 - [Provider VAD may split interview speech imperfectly] -> Retain configurable client noise gating, provider VAD settings, transcript revision handling, and synthetic eval fixtures.
-- [Two provider sessions increase ASR cost] -> Create a role session only when its channel is enabled and receiving signal; expose per-session usage metrics.
+- [Two prewarmed provider sessions increase idle ASR cost] -> Open them only for a live, capturing interview, meter one session minute rather than two channels, close them on pause/end, and expose per-session usage metrics.
 - [Migration can temporarily support two protocols] -> Feature-flag legacy ingestion, prevent mixed ownership per session, and remove legacy code immediately after acceptance.
 
 ## Migration Plan

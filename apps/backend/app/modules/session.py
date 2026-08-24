@@ -284,9 +284,12 @@ async def start_session(
     request_context: Request,
     request: SessionCommandRequest,
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
-    service: SessionService = Depends(session_service),
+    service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[InterviewSessionResponse]:
-    session = service.start_session(user_id=resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context), session_id=session_id)
+    session = service.start_live_session(
+        user_id=resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context),
+        session_id=session_id,
+    )
     return success_response(request=request_context, data=_to_session_response(session), timestamp=utc_now_iso())
 
 

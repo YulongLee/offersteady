@@ -1,7 +1,7 @@
 import type { BillableOperationKind, BillingOrder, BillingProduct, BillingSupportConfig, LedgerEntryKind, PaymentChannel, PointsLedgerEntry, TimePassEntitlement, UsageCharge, UsageRates } from "@offersteady/protocol";
 
 const DAY_MS = 86_400_000;
-export const defaultUsageRates: UsageRates = { catalogVersion: 3, answerPoints: 5, screenshotAnswerPoints: 15, knowledgeIndexMinimumPoints: 200, knowledgeIndexPointsPer1000Tokens: 20, tokenizerVersion: "synthetic-v1" };
+export const defaultUsageRates: UsageRates = { catalogVersion: 3, answerPoints: 5, screenshotAnswerPoints: 15, realtimeMinutePoints: 5, knowledgeIndexMinimumPoints: 200, knowledgeIndexPointsPer1000Tokens: 20, tokenizerVersion: "synthetic-v1" };
 export const defaultBillingProducts: readonly BillingProduct[] = [
   { id: "pass-3", catalogVersion: 3, kind: "time_pass", displayName: "3 天会员", priceCents: 6990, durationDays: 3, knowledgeIndexAllowance: 0, published: true },
   { id: "pass-7", catalogVersion: 3, kind: "time_pass", displayName: "7 天会员", priceCents: 12990, durationDays: 7, knowledgeIndexAllowance: 0, published: true },
@@ -66,7 +66,7 @@ export class BillingService {
   reserveUsage(userId: string, usageId: string, kind: BillableOperationKind, nowMs = Date.now(), documentVersionId?: string, pointsOverride?: number, quote?: { quoteId: string; tokenCount: number; tokenizerVersion: string }): UsageCharge {
     const existing = this.usages.get(usageId); if (existing) return existing;
     const pass = this.activePass(userId, nowMs);
-    const points = pointsOverride ?? (kind === "answer" ? this.rates.answerPoints : kind === "screenshot_answer" ? this.rates.screenshotAnswerPoints : this.rates.knowledgeIndexMinimumPoints);
+    const points = pointsOverride ?? (kind === "answer" ? this.rates.answerPoints : kind === "screenshot_answer" ? this.rates.screenshotAnswerPoints : kind === "realtime_minute" ? this.rates.realtimeMinutePoints : this.rates.knowledgeIndexMinimumPoints);
     if (pass && kind !== "knowledge_index") { const charge: UsageCharge = { usageId, userId, kind, points: 0, source: "time_pass", status: "reserved", catalogVersion: this.rates.catalogVersion }; this.usages.set(usageId, charge); return charge; }
     const allowance = kind === "knowledge_index" ? this.knowledgeAllowance(userId, nowMs) : null;
     if (allowance && allowance.remaining > 0) {
@@ -75,7 +75,7 @@ export class BillingService {
       this.usages.set(usageId, charge); return charge;
     }
     if (this.balance(userId) < points) throw new BillingError("insufficient-balance", "积分不足");
-    const label = kind === "answer" ? "普通回答" : kind === "screenshot_answer" ? "截图回答" : "资料索引";
+    const label = kind === "answer" ? "普通回答" : kind === "screenshot_answer" ? "截图回答" : kind === "realtime_minute" ? "实时面试分钟" : "资料索引";
     this.addEntry(userId, "usage_reserve", -points, usageId, `${label}预留`, nowMs);
     const charge: UsageCharge = { usageId, userId, kind, points, source: "points", status: "reserved", catalogVersion: this.rates.catalogVersion, ...(documentVersionId ? { documentVersionId } : {}), ...(quote ? quote : {}) }; this.usages.set(usageId, charge); return charge;
   }

@@ -76,6 +76,35 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         """Publish provider partials from the receive pump, independent of audio appends."""
         self._partial_listener = listener
 
+    def warm_session(
+        self,
+        *,
+        session_id: str,
+        source_kind: str,
+        sample_rate_hz: int = 16_000,
+    ) -> None:
+        """Create the role provider session without sending synthetic audio."""
+        now_ms = int(time.time() * 1000)
+        self._get_or_create_source_session(AudioFrame(
+            publisher_id=f"prewarm:{session_id}:{source_kind}",
+            session_id=session_id,
+            device_id="prewarm",
+            source_id=f"prewarm:{source_kind}",
+            source_kind=source_kind,  # type: ignore[arg-type]
+            segment_id=f"prewarm:{source_kind}",
+            revision=0,
+            sequence=0,
+            captured_at_ms=now_ms,
+            started_at_ms=now_ms,
+            ended_at_ms=now_ms,
+            duration_ms=0,
+            codec="pcm-s16le",
+            sample_rate_hz=sample_rate_hz,
+            channels=1,
+            is_final=False,
+            audio_bytes=b"",
+        ))
+
     @staticmethod
     def _normalize_audio_codec(codec: str) -> str:
         normalized = (codec or "").strip().lower().replace("_", "-")
@@ -591,6 +620,11 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         )
 
     def _sweep_stale_sessions_locked(self) -> None:
+        # A commercial persistent session follows the interview lifecycle. Do
+        # not deliberately introduce a cold reconnect after a quiet interval;
+        # explicit pause/end and provider/network failures own closure.
+        if getattr(self.settings, "realtime_asr_persistent_sessions_enabled", False):
+            return
         now = time.monotonic()
         stale_session_keys = [
             source_session_key

@@ -763,6 +763,10 @@ class BillingService:
             "catalogVersion": max((item.catalog_version for item in catalog), default=5),
             "answerPoints": 5,
             "screenshotAnswerPoints": 15,
+            "realtimeMinutePoints": max(
+                1,
+                int(self.settings.realtime_asr_points_per_minute) if self.settings is not None else 5,
+            ),
             "knowledgeIndexMinimumPoints": 20,
             "knowledgeIndexPointsPer1000Tokens": 4,
             "tokenizerVersion": "mvp-v1",
@@ -960,11 +964,16 @@ class BillingService:
         return self.release_knowledge_index(quote_id=reservation.quote_id)
 
     def reserve_usage(self, *, user_id: str, usage_id: str, usage_kind: str) -> UsageReservationRecord:
-        if usage_kind not in {"answer", "screenshot_answer"}:
+        if usage_kind not in {"answer", "screenshot_answer", "realtime_minute"}:
             raise ValueError(f"Unsupported billable usage kind: {usage_kind}")
         self._release_stale_usage_reservations(user_id=user_id)
         self._ensure_welcome_grant(user_id=user_id)
-        points = int(self.rates()["answerPoints" if usage_kind == "answer" else "screenshotAnswerPoints"])
+        rate_key = {
+            "answer": "answerPoints",
+            "screenshot_answer": "screenshotAnswerPoints",
+            "realtime_minute": "realtimeMinutePoints",
+        }[usage_kind]
+        points = int(self.rates()[rate_key])
         created_at_ms = _now_ms()
         usage = {
             "reservation_id": f"usage-reservation-{uuid4().hex}",
@@ -1025,8 +1034,16 @@ class BillingService:
                     points=-reservation.points_reserved,
                     created_at_ms=settled_at_ms,
                     reference_id=reference_id,
-                    description="会员权益回答使用" if reservation.billing_source == "time_pass" else (
-                        "截图回答积分结算" if reservation.usage_kind == "screenshot_answer" else "面试回答积分结算"
+                    description=(
+                        "会员权益实时面试使用"
+                        if reservation.billing_source == "time_pass" and reservation.usage_kind == "realtime_minute"
+                        else "会员权益回答使用"
+                        if reservation.billing_source == "time_pass"
+                        else "实时面试分钟积分结算"
+                        if reservation.usage_kind == "realtime_minute"
+                        else "截图回答积分结算"
+                        if reservation.usage_kind == "screenshot_answer"
+                        else "面试回答积分结算"
                     ),
                 )
             )

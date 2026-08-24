@@ -54,6 +54,7 @@ from app.schemas.realtime_speech import (
 )
 from app.ports.interview_session import InterviewSessionRecord
 from app.services.session_service import SessionService
+from app.services.billing_service import BillingService, UsageReservationRecord
 
 
 def _now_ms() -> int:
@@ -99,6 +100,15 @@ class SyntheticRealtimeAsrGateway(RealtimeAsrGatewayPort):
             completed_at_ms=completed_at_ms,
         )
 
+    def warm_session(
+        self,
+        *,
+        session_id: str,
+        source_kind: RealtimeSourceKind,
+        sample_rate_hz: int = 16_000,
+    ) -> None:
+        return None
+
     def close_session(self, *, session_id: str) -> int:
         return 0
 
@@ -118,6 +128,7 @@ class RealtimeSpeechService:
         repository: RealtimeSpeechRepository,
         session_service: SessionService,
         asr_gateway: RealtimeAsrGatewayPort,
+        billing_service: BillingService | None = None,
         commercial_repository: CommercialHardeningRepository | None = None,
         question_prefetcher: Callable[..., object] | None = None,
     ) -> None:
@@ -126,6 +137,7 @@ class RealtimeSpeechService:
         self.repository = repository
         self.session_service = session_service
         self.asr_gateway = asr_gateway
+        self.billing_service = billing_service
         self.commercial_repository = commercial_repository
         self.question_prefetcher = question_prefetcher
         self._asr_executor = concurrent.futures.ThreadPoolExecutor(
@@ -161,9 +173,216 @@ class RealtimeSpeechService:
         self._trace_order: deque[str] = deque(maxlen=4096)
         self._queue_wait_samples: dict[tuple[str, RealtimeSourceKind], deque[int]] = {}
         self._provider_partial_publish_lock = threading.Lock()
+        self._meter_lock = threading.Lock()
+        self._meter_stops: dict[str, threading.Event] = {}
+        self._meter_threads: dict[str, threading.Thread] = {}
         partial_listener_setter = getattr(self.asr_gateway, "set_partial_listener", None)
         if callable(partial_listener_setter):
             partial_listener_setter(self._publish_provider_partial)
+
+    def start_live_session(self, *, user_id: str, session_id: str) -> InterviewSessionRecord:
+        """Start one commercial interview, charge its first minute and prewarm ASR."""
+        reservation = self._reserve_realtime_minute(
+            user_id=user_id,
+            session_id=session_id,
+            minute_index=0,
+        )
+        if reservation is not None and reservation.status == "insufficient_balance":
+            raise DomainRequestError(
+                "billing",
+                "realtime-minute",
+                "积分不足，实时面试每分钟需要 5 点，请充值或购买会员后重试。",
+                402,
+                error_code="realtime_minute_insufficient_balance",
+            )
+        try:
+            session = self.session_service.start_session(user_id=user_id, session_id=session_id)
+        except Exception:
+            if reservation is not None and reservation.status == "reserved":
+                self.billing_service.release_usage(usage_id=reservation.usage_id)  # type: ignore[union-attr]
+            raise
+        if reservation is not None and reservation.status == "reserved":
+            self.billing_service.settle_usage(usage_id=reservation.usage_id)  # type: ignore[union-attr]
+        self._capture_control_cache[session_id] = "capturing"
+        self._ensure_realtime_metering(user_id=user_id, session_id=session_id)
+        self._prewarm_asr_session(session_id=session_id)
+        return session
+
+    def _realtime_minute_usage_id(self, *, session_id: str, minute_index: int) -> str:
+        return f"realtime-minute:{session_id}:{max(0, minute_index)}"
+
+    def _reserve_realtime_minute(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        minute_index: int,
+    ) -> UsageReservationRecord | None:
+        if self.billing_service is None:
+            return None
+        return self.billing_service.reserve_usage(
+            user_id=user_id,
+            usage_id=self._realtime_minute_usage_id(session_id=session_id, minute_index=minute_index),
+            usage_kind="realtime_minute",
+        )
+
+    def _settle_realtime_minute(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        observed_at_ms: int | None = None,
+    ) -> bool:
+        if self.billing_service is None:
+            return True
+        session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        if session.status != "live" or session.started_at_ms is None:
+            return False
+        now_ms = observed_at_ms or _now_ms()
+        minute_index = max(0, (now_ms - session.started_at_ms) // 60_000)
+        reservation = self._reserve_realtime_minute(
+            user_id=user_id,
+            session_id=session_id,
+            minute_index=minute_index,
+        )
+        if reservation is None:
+            return True
+        if reservation.status == "insufficient_balance":
+            self._pause_for_insufficient_realtime_balance(user_id=user_id, session_id=session_id)
+            return False
+        if reservation.status == "reserved":
+            self.billing_service.settle_usage(usage_id=reservation.usage_id)
+        return True
+
+    def _ensure_realtime_metering(self, *, user_id: str, session_id: str) -> None:
+        if self.billing_service is None:
+            return
+        with self._meter_lock:
+            current = self._meter_threads.get(session_id)
+            if current is not None and current.is_alive():
+                return
+            stop_event = threading.Event()
+            worker = threading.Thread(
+                target=self._realtime_meter_loop,
+                kwargs={"user_id": user_id, "session_id": session_id, "stop_event": stop_event},
+                name=f"realtime-meter-{session_id[-8:]}",
+                daemon=True,
+            )
+            self._meter_stops[session_id] = stop_event
+            self._meter_threads[session_id] = worker
+            worker.start()
+
+    def _realtime_meter_loop(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        stop_event: threading.Event,
+    ) -> None:
+        try:
+            while not stop_event.is_set():
+                try:
+                    session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+                except Exception:
+                    return
+                if session.status != "live":
+                    return
+                if self.capture_control_state(session_id=session_id) == "capturing":
+                    if not self._settle_realtime_minute(user_id=user_id, session_id=session_id):
+                        return
+                now_ms = _now_ms()
+                next_boundary_ms = (
+                    ((now_ms - (session.started_at_ms or now_ms)) // 60_000 + 1) * 60_000
+                    + (session.started_at_ms or now_ms)
+                )
+                # Sleep directly to the next billing boundary. The stop event
+                # still wakes immediately on pause/end, so metering adds no
+                # periodic database polling to the realtime hot path.
+                stop_event.wait(timeout=max(1.0, (next_boundary_ms - now_ms) / 1000))
+        finally:
+            with self._meter_lock:
+                if self._meter_stops.get(session_id) is stop_event:
+                    self._meter_stops.pop(session_id, None)
+                    self._meter_threads.pop(session_id, None)
+
+    def _stop_realtime_metering(self, *, session_id: str) -> None:
+        with self._meter_lock:
+            stop_event = self._meter_stops.pop(session_id, None)
+            self._meter_threads.pop(session_id, None)
+        if stop_event is not None:
+            stop_event.set()
+
+    def _prewarm_asr_session(self, *, session_id: str) -> None:
+        if not self.settings.realtime_asr_prewarm_enabled:
+            return
+        warm_session = getattr(self.asr_gateway, "warm_session", None)
+        if not callable(warm_session):
+            return
+        for source_kind in ("microphone", "system"):
+            future = self._asr_executor.submit(
+                warm_session,
+                session_id=session_id,
+                source_kind=source_kind,
+                sample_rate_hz=16_000,
+            )
+            future.add_done_callback(
+                lambda completed, kind=source_kind: self._observe_asr_prewarm(
+                    completed,
+                    session_id=session_id,
+                    source_kind=kind,
+                )
+            )
+
+    def _observe_asr_prewarm(
+        self,
+        future: concurrent.futures.Future[object],
+        *,
+        session_id: str,
+        source_kind: str,
+    ) -> None:
+        try:
+            future.result()
+        except Exception as exc:
+            self._log(
+                logging.WARNING,
+                "realtime_speech.asr_prewarm_failed",
+                session_id=session_id,
+                publisher_id=None,
+                state="prewarm-failed",
+                error_code=exc.__class__.__name__,
+            )
+            return
+        self._log(
+            logging.INFO,
+            "realtime_speech.asr_prewarm_ready",
+            session_id=session_id,
+            publisher_id=None,
+            state=f"{source_kind}-ready",
+        )
+
+    def _pause_for_insufficient_realtime_balance(self, *, user_id: str, session_id: str) -> None:
+        if self.capture_control_state(session_id=session_id) != "paused":
+            self._save_event(
+                session_id=session_id,
+                owner_user_id=user_id,
+                kind="capture-control",
+                payload={
+                    "action": "pause",
+                    "captureState": "paused",
+                    "reason": "realtime-minute-insufficient-balance",
+                },
+            )
+            self._save_event(
+                session_id=session_id,
+                owner_user_id=user_id,
+                kind="degraded",
+                payload={
+                    "reason": "realtime-minute-insufficient-balance",
+                    "message": "积分不足，实时收音已暂停。",
+                },
+            )
+        self._capture_control_cache[session_id] = "paused"
+        self.asr_gateway.close_session(session_id=session_id)
 
     def _publish_provider_partial(self, frame: AudioFrame, result: TranscriptResult) -> None:
         """Publish Qwen partials directly from its receive pump.
@@ -900,6 +1119,7 @@ class RealtimeSpeechService:
                     replace(publisher, disconnected_at_ms=now_ms, status="closed")
                 )
                 closed_publishers += 1
+        self._stop_realtime_metering(session_id=session_id)
         self._reset_realtime_session(session_id=session_id, retired=True)
         self._save_event(
             session_id=session_id,
@@ -1171,6 +1391,14 @@ class RealtimeSpeechService:
             raise DomainRequestError("realtime-speech", "capture-control", "只有进行中的面试可以暂停或恢复收音。", 409, "session_not_live")
         if action not in {"pause", "resume"}:
             raise DomainRequestError("realtime-speech", "capture-control", "不支持的收音控制操作。", 400, "capture_control_invalid")
+        if action == "resume" and not self._settle_realtime_minute(user_id=user_id, session_id=session_id):
+            raise DomainRequestError(
+                "billing",
+                "realtime-minute",
+                "积分不足，实时面试每分钟需要 5 点，请充值或购买会员后恢复收音。",
+                402,
+                error_code="realtime_minute_insufficient_balance",
+            )
         capture_state = "paused" if action == "pause" else "capturing"
         if self.capture_control_state(session_id=session_id) != capture_state:
             self._save_event(
@@ -1180,6 +1408,12 @@ class RealtimeSpeechService:
                 payload={"action": action, "captureState": capture_state},
             )
         self._capture_control_cache[session_id] = capture_state
+        if action == "pause":
+            self._stop_realtime_metering(session_id=session_id)
+            self.asr_gateway.close_session(session_id=session_id)
+        else:
+            self._ensure_realtime_metering(user_id=user_id, session_id=session_id)
+            self._prewarm_asr_session(session_id=session_id)
         self.session_service.touch_activity(user_id=user_id, session_id=session_id, force=True)
         return {"sessionId": session_id, "captureState": capture_state}
 
@@ -1298,6 +1532,7 @@ class RealtimeSpeechService:
             raise DomainRequestError("realtime-speech", "create-publisher", "只有进行中的面试会话才能创建实时语音发布者。", 400)
         if self.capture_control_state(session_id=session_id) == "paused":
             raise DomainRequestError("realtime-speech", "create-publisher", "当前面试已暂停收音，请先在网页端恢复收音。", 409, "capture_paused")
+        self._ensure_realtime_metering(user_id=user_id, session_id=session_id)
         now_ms = _now_ms()
         safe_client_name = client_name.strip()
         for previous in self.repository.list_publishers_for_session(session_id=session_id):
@@ -2680,6 +2915,8 @@ class RealtimeSpeechService:
         ))
 
     def _reset_realtime_session(self, *, session_id: str, retired: bool) -> None:
+        if retired:
+            self._stop_realtime_metering(session_id=session_id)
         self.asr_gateway.close_session(session_id=session_id)
         with self._frame_worker_lock:
             if retired:

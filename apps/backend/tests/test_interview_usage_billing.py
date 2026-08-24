@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.deps import billing_service
 from app.main import app
-from app.services.billing_service import BillingService
+from app.services.billing_service import BillingService, TimePassEntitlementRecord
 from app.core.config import Settings
 
 
@@ -35,6 +35,55 @@ def test_screenshot_failure_releases_without_charging() -> None:
     assert reservation.points_reserved == 15
     service.release_usage(usage_id="screenshot-command-1")
 
+    assert service.state_for_user(user_id=user_id).balance == 200
+
+
+def test_realtime_minute_settles_once_per_stable_usage_id() -> None:
+    service = BillingService()
+    user_id = "synthetic-realtime-minute-user"
+
+    first = service.reserve_usage(
+        user_id=user_id,
+        usage_id="realtime-minute:session-1:0",
+        usage_kind="realtime_minute",
+    )
+    replay = service.reserve_usage(
+        user_id=user_id,
+        usage_id="realtime-minute:session-1:0",
+        usage_kind="realtime_minute",
+    )
+
+    assert first.reservation_id == replay.reservation_id
+    assert first.points_reserved == 5
+    service.settle_usage(usage_id=first.usage_id)
+    service.settle_usage(usage_id=first.usage_id)
+    state = service.state_for_user(user_id=user_id)
+    assert state.balance == 195
+    assert len([item for item in state.ledger if item.reference_id == f"usage:{first.usage_id}"]) == 1
+
+
+def test_realtime_minute_uses_active_pass_without_deducting_points() -> None:
+    service = BillingService()
+    user_id = "synthetic-realtime-pass-user"
+    now_ms = service.now_ms_provider()
+    service.pass_entitlements_by_user[user_id] = [TimePassEntitlementRecord(
+        id="pass-entitlement-1",
+        user_id=user_id,
+        product_id="pass-1",
+        starts_at_ms=now_ms - 1_000,
+        ends_at_ms=now_ms + 60_000,
+        order_id="order-1",
+        knowledge_allowance_granted=0,
+    )]
+
+    reservation = service.reserve_usage(
+        user_id=user_id,
+        usage_id="realtime-minute:session-pass:0",
+        usage_kind="realtime_minute",
+    )
+    assert reservation.billing_source == "time_pass"
+    assert reservation.points_reserved == 0
+    service.settle_usage(usage_id=reservation.usage_id)
     assert service.state_for_user(user_id=user_id).balance == 200
 
 
@@ -86,4 +135,31 @@ def test_live_answer_endpoint_settles_answer_points() -> None:
 
     response.raise_for_status()
     assert response.json()["data"]["task"]["status"] == "completed"
-    assert billing_service().state_for_user(user_id=user_id).balance == 195
+    assert billing_service().state_for_user(user_id=user_id).balance == 190
+    client.post(f"/api/v1/sessions/{session_id}/end", json={"userId": user_id}).raise_for_status()
+
+
+def test_realtime_start_requires_first_minute_balance_before_session_goes_live() -> None:
+    user_id = "synthetic-realtime-start-insufficient-user"
+    service = billing_service()
+    for index in range(40):
+        usage_id = f"drain-answer:{user_id}:{index}"
+        reservation = service.reserve_usage(user_id=user_id, usage_id=usage_id, usage_kind="answer")
+        assert reservation.status == "reserved"
+        service.settle_usage(usage_id=usage_id)
+    created = client.post(
+        "/api/v1/sessions",
+        json={"userId": user_id, "title": "余额不足不启动实时 ASR"},
+    ).json()["data"]
+
+    response = client.post(
+        f"/api/v1/sessions/{created['sessionId']}/start",
+        json={"userId": user_id},
+    )
+
+    assert response.status_code == 402
+    session = client.get(
+        f"/api/v1/sessions/{created['sessionId']}",
+        params={"userId": user_id},
+    ).json()["data"]
+    assert session["status"] == "preparing"

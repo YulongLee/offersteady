@@ -7,6 +7,7 @@ The current realtime interview assistant couples native capture, Electron pollin
 - Replace overlapping main-process, renderer, and fallback capture ownership with one supervised native macOS capture runtime for microphone and system-output channels.
 - Replace per-frame HTTP ingestion with bounded, long-lived realtime transport and explicit backpressure, reconnect, and session-resume behavior.
 - Maintain one persistent Qwen ASR Realtime session per active audio role, using streaming append events and VAD/utterance commits instead of treating short PCM frames as independent recognition jobs.
+- Prewarm the enabled microphone and system-audio provider sessions when the interview becomes live, and meter active realtime interview minutes through the existing idempotent membership/points ledger at 5 points per minute.
 - Separate desktop capture lifecycle from web-page presence so a transient page heartbeat failure does not silently destroy the audio session.
 - Persist recoverable realtime session, device binding, publisher, consumer cursor, and lease state outside a backend worker process.
 - Make the web live page reconnect automatically, resume from its last event cursor, and render an authoritative runtime state instead of inferring health from polling side effects.
@@ -33,7 +34,7 @@ The current realtime interview assistant couples native capture, Electron pollin
 - Multi-device audio mixing for one interview.
 - Long-term raw audio recording, meeting recording, or post-interview audio playback.
 - Automatic speaker diarization inside a mixed channel; roles remain channel-derived.
-- Changing screenshot-answer semantics, manual-question semantics, billing rules, authentication, or the explicit user action required to generate an answer.
+- Changing screenshot-answer semantics, manual-question semantics, authentication, or the explicit user action required to generate an answer.
 
 ## Capabilities
 
@@ -58,6 +59,7 @@ None. Existing main specs do not yet define the realtime desktop-to-web contract
 - Backend: realtime gateway, ASR adapter lifecycle, bounded queues, session ownership, Redis-backed leases/events, transcript persistence, and health/readiness behavior.
 - Web: live-session subscription, heartbeat semantics, cursor storage, reconnect behavior, and runtime status presentation.
 - Answer fast path: question-revision snapshots and prepared-context reuse without enabling automatic answers.
+- Billing: one session-scoped realtime-minute usage unit per active minute, with time-pass priority, five-point fallback charging, and idempotent settlement across refreshes and reconnects.
 - Infrastructure: Redis becomes required for commercial realtime deployment; reverse proxy must support WebSocket upgrades and long-lived connections.
 - Protocol: versioned desktop handshake, audio envelope, control events, transcript events, resume cursors, and explicit compatibility window for legacy clients.
 - Privacy: raw PCM/Opus remains memory-only with short bounded buffers; logs and diagnostics retain counts, timings, identifiers, and error codes but not audio payloads or transcript text by default.

@@ -678,7 +678,7 @@ export function BillingPage({ state, setState }: Props) {
             <>
               <strong>{state.billing.balance} 点</strong>
               <span>
-                回答 {state.billing.rates.answerPoints} 点 · 截图{" "}
+                实时面试 {state.billing.rates.realtimeMinutePoints} 点/分钟 · 回答 {state.billing.rates.answerPoints} 点 · 截图{" "}
                 {state.billing.rates.screenshotAnswerPoints} 点 · 知识材料{" "}
                 {state.billing.rates.knowledgeIndexMinimumPoints} 点起
               </span>
@@ -937,6 +937,11 @@ export function BillingPage({ state, setState }: Props) {
           <Link to={`${routes.guide}#billing`}>查看支付说明</Link>
         </div>
         <div className="consumption-grid">
+          <article>
+            <b>{state.billing.rates.realtimeMinutePoints} 点/分钟</b>
+            <strong>实时面试收音</strong>
+            <p>进入正式面试即预热实时识别；暂停收音不产生新的分钟费用，会员期内为 0 点。</p>
+          </article>
           <article>
             <b>{state.billing.rates.answerPoints} 点</b>
             <strong>普通回答</strong>

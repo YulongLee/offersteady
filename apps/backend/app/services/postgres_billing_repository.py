@@ -767,8 +767,16 @@ class PostgresBillingRepository:
             if row["status"] != "reserved":
                 return self._usage_reservation(row)
             ledger_kind = "pass_usage" if row["billing_source"] == "time_pass" else f"{row['usage_kind']}_settlement"
-            description = "会员权益回答使用" if row["billing_source"] == "time_pass" else (
-                "截图回答积分结算" if row["usage_kind"] == "screenshot_answer" else "面试回答积分结算"
+            description = (
+                "会员权益实时面试使用"
+                if row["billing_source"] == "time_pass" and row["usage_kind"] == "realtime_minute"
+                else "会员权益回答使用"
+                if row["billing_source"] == "time_pass"
+                else "实时面试分钟积分结算"
+                if row["usage_kind"] == "realtime_minute"
+                else "截图回答积分结算"
+                if row["usage_kind"] == "screenshot_answer"
+                else "面试回答积分结算"
             )
             cursor.execute(
                 """
@@ -1038,6 +1046,7 @@ class PostgresBillingRepository:
             Path(REPO_ROOT / "apps/backend/migrations/versions/0025_referral_ledger_constraint_repair_v2.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0027_knowledge_index_billing_sources.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0029_early_referral_mutual_rewards.sql"),
+            Path(REPO_ROOT / "apps/backend/migrations/versions/0032_realtime_minute_billing.sql"),
         )
         with self._connect() as connection, connection.cursor() as cursor:
             apply_sql_migrations(cursor, migrations)

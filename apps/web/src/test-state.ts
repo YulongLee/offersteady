@@ -141,7 +141,7 @@ export const syntheticState: WebAppState = {
   billing: {
     availablePaymentChannels: ["wechat", "alipay"],
     catalog: billingProducts,
-    rates: { catalogVersion: 5, answerPoints: 5, screenshotAnswerPoints: 15, knowledgeIndexMinimumPoints: 20, knowledgeIndexPointsPer1000Tokens: 4, tokenizerVersion: "synthetic-v1" },
+    rates: { catalogVersion: 5, answerPoints: 5, screenshotAnswerPoints: 15, realtimeMinutePoints: 5, knowledgeIndexMinimumPoints: 20, knowledgeIndexPointsPer1000Tokens: 4, tokenizerVersion: "synthetic-v1" },
     balance: 200,
     ledger: [{ id: "ledger-welcome", userId: "admin", kind: "welcome_grant", points: 200, createdAtMs: 1_719_734_400_000, referenceId: "welcome:admin", description: "新用户赠送积分" }],
     activePass: null,

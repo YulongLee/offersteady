@@ -37,6 +37,31 @@ def test_stale_provider_session_is_closed_and_reported(monkeypatch) -> None:
     assert gateway._connection_state_by_source["microphone"] == "idle"
 
 
+def test_persistent_provider_session_is_not_closed_only_because_interview_is_quiet(monkeypatch) -> None:
+    gateway = object.__new__(DashScopeRealtimeAsrGateway)
+    gateway.settings = SimpleNamespace(
+        realtime_asr_session_idle_seconds=30,
+        realtime_asr_persistent_sessions_enabled=True,
+    )
+    gateway._source_sessions = {}
+    connection = FakeConnection()
+    session = _SourceRealtimeSession(
+        connection=connection,
+        sample_rate_hz=16_000,
+        created_at_monotonic=1.0,
+        updated_at_monotonic=1.0,
+        source_session_key="session-persistent:microphone",
+        source_kind="microphone",
+    )
+    gateway._source_sessions[session.source_session_key] = session
+    monkeypatch.setattr("app.services.dashscope_realtime_asr_gateway.time.monotonic", lambda: 3_601.0)
+
+    gateway._sweep_stale_sessions_locked()
+
+    assert gateway._source_sessions == {session.source_session_key: session}
+    assert connection.closed is False
+
+
 def test_close_session_only_closes_provider_connections_for_target_session() -> None:
     gateway = object.__new__(DashScopeRealtimeAsrGateway)
     gateway._source_sessions = {}
@@ -90,3 +115,18 @@ def test_close_source_does_not_interrupt_the_other_channel() -> None:
     assert system.closed is True
     assert microphone.closed is False
     assert list(gateway._source_sessions) == ["session-target:microphone"]
+
+
+def test_warm_session_opens_provider_without_sending_audio(monkeypatch) -> None:
+    gateway = object.__new__(DashScopeRealtimeAsrGateway)
+    captured = []
+    monkeypatch.setattr(gateway, "_get_or_create_source_session", lambda frame: captured.append(frame))
+
+    gateway.warm_session(session_id="session-warm", source_kind="system")
+
+    assert len(captured) == 1
+    frame = captured[0]
+    assert frame.session_id == "session-warm"
+    assert frame.source_kind == "system"
+    assert frame.audio_bytes == b""
+    assert frame.revision == 0
