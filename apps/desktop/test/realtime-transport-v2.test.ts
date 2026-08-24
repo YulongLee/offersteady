@@ -8,7 +8,7 @@ class FakeWebSocket {
   static readonly OPEN = 1;
   static instances: FakeWebSocket[] = [];
   readyState = 0;
-  sent: string[] = [];
+  sent: Array<string | ArrayBuffer> = [];
   onopen: (() => void) | null = null;
   onmessage: ((event: { data: string }) => void) | null = null;
   onerror: (() => void) | null = null;
@@ -22,10 +22,17 @@ class FakeWebSocket {
     });
   }
 
-  send(payload: string) { this.sent.push(payload); }
+  send(payload: string | ArrayBuffer) { this.sent.push(payload); }
   close(code = 1000) { this.readyState = 3; this.onclose?.({ code }); }
   serverEvent(payload: object) { this.onmessage?.({ data: JSON.stringify(payload) }); }
 }
+
+const decodeEnvelope = (payload: string | ArrayBuffer) => {
+  expect(payload).toBeInstanceOf(ArrayBuffer);
+  const bytes = new Uint8Array(payload as ArrayBuffer);
+  const headerLength = new DataView(bytes.buffer).getUint32(0, false);
+  return JSON.parse(new TextDecoder().decode(bytes.slice(4, 4 + headerLength))) as Record<string, unknown>;
+};
 
 
 describe("realtime transport v2", () => {
@@ -54,7 +61,8 @@ describe("realtime transport v2", () => {
     transport.enqueue({ sourceKind: "system", sourceId: "system", sequence: 0, isFinal: false });
     expect(FakeWebSocket.instances).toHaveLength(1);
     expect(FakeWebSocket.instances[0]!.url).toContain("protocol=2.0");
-    expect(FakeWebSocket.instances[0]!.sent.map(item => JSON.parse(item).sourceKind)).toEqual(["microphone", "system"]);
+    expect(FakeWebSocket.instances[0]!.url).toContain("media=binary-v1");
+    expect(FakeWebSocket.instances[0]!.sent.map(item => decodeEnvelope(item).sourceKind)).toEqual(["microphone", "system"]);
     FakeWebSocket.instances[0]!.serverEvent({ kind: "sequence-gap", payload: { sourceKind: "microphone", expected: 0, received: 2 } });
     expect(events).toContainEqual({ kind: "sequence-gap", payload: { sourceKind: "microphone", expected: 0, received: 2 } });
     transport.stop();

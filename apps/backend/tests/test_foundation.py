@@ -23,8 +23,8 @@ from app.services.sms_verification_provider import AliyunDypnsSmsVerificationPro
 
 
 def test_realtime_stream_throttles_database_backed_session_validation() -> None:
-    assert should_validate_realtime_session(last_validated_at=10.0, now=11.999) is False
-    assert should_validate_realtime_session(last_validated_at=10.0, now=12.0) is True
+    assert should_validate_realtime_session(last_validated_at=10.0, now=24.999) is False
+    assert should_validate_realtime_session(last_validated_at=10.0, now=25.0) is True
 
 
 def test_realtime_session_snapshot_is_authorized_complete_and_lease_aware() -> None:
@@ -107,10 +107,9 @@ def test_runtime_performance_ack_accepts_only_allowlisted_metadata() -> None:
         f"/api/v1/realtime-speech/sessions/{session_id}/events",
         params={"userId": "performance-ack-user"},
     ))["events"]
-    payload = events[-1]["payload"]
-    assert payload == {
-        "traceId": "trace-safe-1", "stage": "transcript-render", "durationMs": 42, "taskId": "task-safe-1",
-    }
+    # Rendering acknowledgements are metrics and must not be echoed into the
+    # product event stream, otherwise every rendered transcript amplifies SSE.
+    assert events == []
 
     rejected = client.post(f"/api/v1/realtime-speech/sessions/{session_id}/performance-ack", json={
         "userId": "performance-ack-user", "traceId": "trace-safe-2",

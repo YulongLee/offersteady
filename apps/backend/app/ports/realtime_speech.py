@@ -5,7 +5,7 @@ from typing import Literal, Protocol
 
 
 RealtimeConnectionState = Literal["connected", "receiving-audio", "transcribing", "degraded", "reconnecting", "answer-streaming", "failed", "closed"]
-RealtimeEventKind = Literal["connection-state", "transcript-updated", "question-candidate", "question-confirmed", "answer-stream", "answer-completed", "answer-task-updated", "screenshot-capture-updated", "performance-ack", "degraded", "device-status", "capture-control", "screenshot-shortcut-accepted"]
+RealtimeEventKind = Literal["connection-state", "transcript-updated", "question-stable", "question-candidate", "question-confirmed", "answer-stream", "answer-completed", "answer-task-updated", "screenshot-capture-updated", "performance-ack", "degraded", "device-status", "capture-control", "screenshot-shortcut-accepted"]
 RealtimeSourceKind = Literal["microphone", "system", "mixed"]
 TranscriptRole = Literal["candidate", "interviewer"]
 QuestionCandidateState = Literal["needs-confirmation", "confirmed", "dismissed"]
@@ -239,9 +239,13 @@ class RealtimeSpeechRepository(Protocol):
 
     def save_frame_receipt(self, receipt: RealtimeFrameReceiptRecord) -> RealtimeFrameReceiptRecord: ...
 
+    def get_frame_receipt(self, *, session_id: str, source_kind: str, source_id: str) -> RealtimeFrameReceiptRecord | None: ...
+
     def list_frame_receipts_for_session(self, *, session_id: str) -> list[RealtimeFrameReceiptRecord]: ...
 
     def save_transcript(self, segment: TranscriptSegmentRecord) -> TranscriptSegmentRecord: ...
+
+    def persist_transcript(self, segment: TranscriptSegmentRecord) -> None: ...
 
     def get_transcript(self, session_id: str, segment_id: str) -> TranscriptSegmentRecord | None: ...
 

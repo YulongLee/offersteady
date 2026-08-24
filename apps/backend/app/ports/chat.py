@@ -92,6 +92,10 @@ class ChatAnswerTaskRecord:
     raw_question: str | None = None
     normalized_question: str | None = None
     question_normalization_status: QuestionNormalizationStatus = "not-requested"
+    question_id: str | None = None
+    question_revision: int | None = None
+    clicked_at_ms: int | None = None
+    prefetch_revision: int | None = None
     provider_name: str | None = None
     model_name: str | None = None
     prompt_template_id: str | None = None

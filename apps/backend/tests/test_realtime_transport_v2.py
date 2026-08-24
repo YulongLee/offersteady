@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import queue
 from dataclasses import replace
 from uuid import uuid4
@@ -89,6 +90,68 @@ def test_multiplexed_transport_acknowledges_independent_channels_and_gaps():
         gap = websocket.receive_json()
         assert gap["kind"] == "sequence-gap"
         assert gap["payload"] == {"sourceKind": "microphone", "expected": 1, "received": 2}
+
+
+def test_multiplexed_transport_accepts_negotiated_binary_audio_without_base64():
+    _user_id, session_id, device_id, publisher = create_live_binding()
+    payload = frame(device_id=device_id, source_kind="system", sequence=0)
+    audio = base64.b64decode(payload.pop("audioBase64"))
+    header = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    envelope = len(header).to_bytes(4, byteorder="big") + header + audio
+
+    with client.websocket_connect(
+        f"/api/v1/realtime-speech/ingest-ws?token={publisher['token']}&protocol=2.0&media=binary-v1"
+    ) as websocket:
+        handshake = websocket.receive_json()
+        assert handshake["payload"]["mediaMode"] == "binary-v1"
+        websocket.send_bytes(envelope)
+        accepted = websocket.receive_json()
+        assert accepted["kind"] == "frame-accepted"
+        assert accepted["payload"]["sourceKind"] == "system"
+
+    queued = realtime_speech_service()._frame_queues.get((session_id, "system"))
+    if queued is not None:
+        queued.join()
+    transcript = realtime_speech_service().repository.get_transcript(session_id, "segment-system-0")
+    assert transcript is not None
+
+
+def test_authenticated_audio_hot_path_does_not_reload_session_from_database():
+    _user_id, _session_id, device_id, publisher_payload = create_live_binding()
+    service = realtime_speech_service()
+    publisher = service.connect_publisher(token=publisher_payload["token"])
+    original_get_session = service.session_service.get_session
+    service.session_service.get_session = lambda **_kwargs: (_ for _ in ()).throw(AssertionError("database access on frame hot path"))  # type: ignore[method-assign]
+    try:
+        prepared = service._prepare_audio_frame(
+            token=publisher.token,
+            device_id=device_id,
+            source_id="native-system",
+            sequence=0,
+            source_kind="system",
+            segment_id="hot-path-segment",
+            revision=1,
+            captured_at_ms=1_000,
+            started_at_ms=1_000,
+            ended_at_ms=1_020,
+            duration_ms=20,
+            codec="pcm-s16le",
+            sample_rate_hz=16_000,
+            channels=1,
+            is_final=False,
+            turn_state=None,
+            finalization_reason=None,
+            source_generation=None,
+            terminal_id=None,
+            trace_id="hot-path-trace",
+            sent_at_ms=1_010,
+            audio_bytes=b"synthetic-system",
+            authenticated_publisher=publisher,
+        )
+        assert prepared["frame"].audio_bytes == b"synthetic-system"  # type: ignore[union-attr]
+    finally:
+        service.session_service.get_session = original_get_session  # type: ignore[method-assign]
+        service.disconnect_publisher(token=publisher.token)
 
 
 def test_terminal_is_acknowledged_idempotently_and_stale_generation_is_rejected():

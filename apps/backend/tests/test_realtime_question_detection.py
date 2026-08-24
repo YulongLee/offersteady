@@ -168,3 +168,43 @@ def test_following_fragment_updates_existing_turn_candidate_without_duplicate() 
     assert updated.answer_task_id == "answer-existing"
     assert updated.text == "请介绍一下你的项目 以及你承担的主要职责"
     assert len(repository.list_candidates_for_session(session_id="synthetic-session")) == 1
+
+
+def test_only_stable_interviewer_partial_triggers_context_prefetch() -> None:
+    repository = InMemoryRealtimeSpeechRepository()
+    prefetched: list[dict[str, object]] = []
+    service = service_with_repository(repository)
+    service._stable_question_state = {}
+    service.question_prefetcher = lambda **kwargs: prefetched.append(kwargs)
+    service._submit_cold = lambda operation, /, *args, **kwargs: operation(*args, **kwargs)  # type: ignore[method-assign]
+
+    first = TranscriptSegmentRecord(**{
+        **synthetic_system_transcript("请介绍一下你最近", segment_id="partial-question").__dict__,
+        "is_final": False,
+        "revision": 1,
+    })
+    second = TranscriptSegmentRecord(**{
+        **first.__dict__,
+        "text": "请介绍一下你最近做的项目",
+        "revision": 2,
+    })
+    candidate = TranscriptSegmentRecord(**{
+        **second.__dict__,
+        "segment_id": "candidate-speech",
+        "source_kind": "microphone",
+        "role": "candidate",
+    })
+
+    assert service._observe_stable_interviewer_partial(first) is None
+    stable = service._observe_stable_interviewer_partial(second)
+    assert stable is not None
+    assert stable.payload["questionText"] == "请介绍一下你最近"
+    assert prefetched == [{
+        "user_id": "synthetic-user",
+        "session_id": "synthetic-session",
+        "question_id": "question:synthetic-session:partial-question",
+        "revision": 2,
+        "question": "请介绍一下你最近",
+    }]
+    assert service._observe_stable_interviewer_partial(candidate) is None
+    assert len(prefetched) == 1

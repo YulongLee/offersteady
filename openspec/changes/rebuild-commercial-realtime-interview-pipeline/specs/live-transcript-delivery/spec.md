@@ -35,3 +35,21 @@ The web workspace SHALL show the authoritative failing stage and SHALL keep unaf
 #### Scenario: ASR provider is degraded
 - **WHEN** audio transport is connected but ASR is unavailable
 - **THEN** the page reports an ASR-specific degraded state rather than claiming that the microphone is disconnected
+
+### Requirement: Minimal incremental delivery
+Normal realtime updates SHALL carry only newly published events and SHALL NOT rebuild or retransmit the complete transcript, candidate and runtime snapshot for each partial revision.
+
+#### Scenario: Partial transcript advances
+- **WHEN** a higher revision arrives for an existing segment
+- **THEN** SSE delivers that revision as one monotonic delta and the browser replaces the segment locally
+
+#### Scenario: Recovery cursor expired
+- **WHEN** the stored cursor is older than retained events
+- **THEN** and only then the consumer loads an authoritative full snapshot before resuming deltas
+
+### Requirement: Metrics do not amplify product events
+Frontend render acknowledgements SHALL be recorded outside the product event stream.
+
+#### Scenario: Browser acknowledges a rendered transcript
+- **WHEN** the render metric reaches the backend
+- **THEN** it updates telemetry without publishing another realtime session event

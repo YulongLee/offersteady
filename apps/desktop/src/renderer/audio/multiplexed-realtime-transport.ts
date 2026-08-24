@@ -21,7 +21,7 @@ const socketUrl = (apiBaseUrl: string, token: string) => {
   const base = new URL(apiBaseUrl, window.location.href);
   base.protocol = base.protocol === "https:" ? "wss:" : "ws:";
   base.pathname = `${base.pathname.replace(/\/$/, "")}/realtime-speech/ingest-ws`;
-  base.search = new URLSearchParams({ token, protocol: REALTIME_PROTOCOL_VERSION }).toString();
+  base.search = new URLSearchParams({ token, protocol: REALTIME_PROTOCOL_VERSION, media: "binary-v1" }).toString();
   return base.toString();
 };
 
@@ -173,13 +173,26 @@ export class MultiplexedRealtimeTransport {
     for (const item of this.queue) {
       const key = `${item.sourceKind}:${item.sequence}`;
       if (this.sent.has(key)) continue;
-      this.socket.send(JSON.stringify(item.payload));
+      this.socket.send(this.binaryEnvelope(item.payload));
       this.sent.add(key);
       if (item.terminalId) {
         const resendCount = this.terminalResends.get(item.terminalId) ?? 0;
         this.terminalResends.set(item.terminalId, resendCount + 1);
       }
     }
+  }
+
+  private binaryEnvelope(payload: Record<string, unknown>): ArrayBuffer {
+    const audioBase64 = typeof payload.audioBase64 === "string" ? payload.audioBase64 : "";
+    const headerPayload = { ...payload };
+    delete headerPayload.audioBase64;
+    const header = new TextEncoder().encode(JSON.stringify(headerPayload));
+    const binary = atob(audioBase64);
+    const output = new Uint8Array(4 + header.byteLength + binary.length);
+    new DataView(output.buffer).setUint32(0, header.byteLength, false);
+    output.set(header, 4);
+    for (let index = 0; index < binary.length; index += 1) output[4 + header.byteLength + index] = binary.charCodeAt(index);
+    return output.buffer;
   }
 
   private acknowledge(payload?: Record<string, unknown>): void {

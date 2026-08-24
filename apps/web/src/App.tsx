@@ -1143,7 +1143,11 @@ function LivePage() {
       uncertain: true,
     },
   });
-  const submitManualText = async (text: string, replaceQuestionId?: string) => {
+  const submitManualText = async (
+    text: string,
+    replaceQuestionId?: string,
+    frozenQuestion?: { readonly questionId: string; readonly questionRevision: number; readonly clickedAtMs: number; readonly prefetchRevision: number },
+  ) => {
     const trimmed = text.trim(); if (!trimmed) return;
     const command = `manual:${id}:${trimmed}`; if (submittedCommands.current.has(command)) return;
     submittedCommands.current.add(command); setNotice("");
@@ -1181,7 +1185,7 @@ function LivePage() {
       manualAnswerController.current?.abort();
       const controller = new AbortController();
       manualAnswerController.current = controller;
-      const result = await runAdapterOperation(signal => interviewAppAdapter.submitManualAnswer({ interviewId: id, question: trimmed, idempotencyKey: command }, signal, update => {
+      const result = await runAdapterOperation(signal => interviewAppAdapter.submitManualAnswer({ interviewId: id, question: trimmed, idempotencyKey: command, ...frozenQuestion }, signal, update => {
         pendingStreamUpdate = update;
         if (["completed", "failed", "cancelled"].includes(update.event.type)) flushStreamUpdate();
         else if (streamRenderTimer === null) streamRenderTimer = window.setTimeout(flushStreamUpdate, 100);
@@ -1216,7 +1220,22 @@ function LivePage() {
     const fallback = latestInterviewerQuestion();
     const question = actionState.manualDraft.trim() || fallback;
     if (!question) { setNotice("还没有可用于快答的面试官问题，请先输入问题或等待实时对话同步。"); return; }
-    void submitManualText(question);
+    const source = [...state.speaker.transcripts]
+      .reverse()
+      .find(item => item.sourceKind === "system" || item.role === "interviewer");
+    const candidate = state.speaker.pendingQuestion;
+    const revision = candidate?.revision ?? source?.revision;
+    const questionId = candidate?.id ?? source?.id;
+    void submitManualText(
+      question,
+      undefined,
+      questionId && revision ? {
+        questionId,
+        questionRevision: revision,
+        clickedAtMs: Date.now(),
+        prefetchRevision: revision,
+      } : undefined,
+    );
   };
   const setCapture = (captureState: CaptureState, status: SessionStatus) => setState(current => current.captureState === captureState ? current : ({ ...current, captureState, interviews: current.interviews.map(item => item.id === id ? { ...item, status } : item) }));
   const controlCapture = async (action: "pause" | "resume") => {

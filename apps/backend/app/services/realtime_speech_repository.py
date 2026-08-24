@@ -180,6 +180,10 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
         self.frame_receipts.setdefault(stored.session_id, {})[(stored.source_kind, stored.source_id)] = stored
         return replace(stored)
 
+    def get_frame_receipt(self, *, session_id: str, source_kind: str, source_id: str) -> RealtimeFrameReceiptRecord | None:
+        record = self.frame_receipts.get(session_id, {}).get((source_kind, source_id))
+        return replace(record) if record else None
+
     def list_frame_receipts_for_session(self, *, session_id: str) -> list[RealtimeFrameReceiptRecord]:
         items = list(self.frame_receipts.get(session_id, {}).values())
         return [replace(item) for item in sorted(items, key=lambda item: (item.source_kind, item.source_id))]
@@ -189,6 +193,9 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
         self.transcripts.setdefault(stored.session_id, {})[stored.segment_id] = stored
         self._bump_session_activity(stored.session_id)
         return replace(stored)
+
+    def persist_transcript(self, segment: TranscriptSegmentRecord) -> None:
+        return None
 
     def get_transcript(self, session_id: str, segment_id: str) -> TranscriptSegmentRecord | None:
         record = self.transcripts.get(session_id, {}).get(segment_id)

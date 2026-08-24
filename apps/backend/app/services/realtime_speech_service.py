@@ -11,7 +11,7 @@ from collections import Counter
 from dataclasses import replace
 from difflib import SequenceMatcher
 from time import sleep, time
-from typing import Any
+from typing import Any, Callable
 from uuid import uuid4
 
 from app.core.config import Settings
@@ -119,6 +119,7 @@ class RealtimeSpeechService:
         session_service: SessionService,
         asr_gateway: RealtimeAsrGatewayPort,
         commercial_repository: CommercialHardeningRepository | None = None,
+        question_prefetcher: Callable[..., object] | None = None,
     ) -> None:
         self.settings = settings
         self.logger = logger
@@ -126,7 +127,17 @@ class RealtimeSpeechService:
         self.session_service = session_service
         self.asr_gateway = asr_gateway
         self.commercial_repository = commercial_repository
-        self._asr_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="realtime-asr")
+        self.question_prefetcher = question_prefetcher
+        self._asr_executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=max(2, settings.realtime_asr_worker_count),
+            thread_name_prefix="realtime-asr",
+        )
+        self._cold_executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=max(1, settings.realtime_cold_path_worker_count),
+            thread_name_prefix="realtime-cold",
+        )
+        self._asr_slots = threading.BoundedSemaphore(max(4, settings.realtime_asr_worker_count * 2))
+        self._cold_slots = threading.BoundedSemaphore(max(8, settings.realtime_cold_path_queue_max))
         self._latest_timings_by_session_source: dict[tuple[str, RealtimeSourceKind], dict[str, int | None]] = {}
         self._counters_by_session_source: dict[tuple[str, RealtimeSourceKind], dict[str, int]] = {}
         self._active_requests_by_session_source: dict[tuple[str, RealtimeSourceKind], int] = {}
@@ -142,6 +153,82 @@ class RealtimeSpeechService:
         self._watchdog_lock = threading.Lock()
         self._active_source_turns: dict[tuple[str, RealtimeSourceKind], dict[str, object]] = {}
         self._watchdog_thread: threading.Thread | None = None
+        self._capture_control_cache: dict[str, str] = {}
+        self._publisher_status_cache: dict[str, str] = {}
+        self._stable_question_state: dict[tuple[str, str], dict[str, object]] = {}
+
+    def _submit_cold(self, operation, /, *args, **kwargs) -> None:
+        """Run optional persistence/metrics outside the realtime publication path."""
+        if not self._cold_slots.acquire(blocking=False):
+            self.logger.warning("realtime_speech.cold_path_queue_full")
+            return
+        try:
+            future = self._cold_executor.submit(operation, *args, **kwargs)
+            future.add_done_callback(lambda _future: self._cold_slots.release())
+        except RuntimeError:
+            self._cold_slots.release()
+            self.logger.warning("realtime_speech.cold_path_rejected")
+
+    def _transition_publisher_status(self, publisher: RealtimePublisherRecord, status: str) -> RealtimePublisherRecord:
+        current = self._publisher_status_cache.get(publisher.publisher_id, publisher.status)
+        if current == status:
+            return publisher if publisher.status == status else replace(publisher, status=status)
+        updated = self.repository.save_publisher(replace(publisher, status=status))
+        self._publisher_status_cache[publisher.publisher_id] = status
+        return updated
+
+    def _observe_stable_interviewer_partial(self, transcript: TranscriptSegmentRecord) -> RealtimeEvent | None:
+        if transcript.source_kind != "system" or not self._is_meaningful_transcript(transcript.text):
+            return None
+        key = (transcript.session_id, transcript.segment_id)
+        previous = self._stable_question_state.get(key)
+        previous_text = str(previous.get("text", "")) if previous else ""
+        current_text = transcript.text.strip()
+        if transcript.is_final:
+            stable_text = current_text
+        elif previous_text and current_text.startswith(previous_text):
+            stable_text = previous_text
+        else:
+            prefix_length = 0
+            for left, right in zip(previous_text, current_text):
+                if left != right:
+                    break
+                prefix_length += 1
+            stable_text = current_text[:prefix_length].rstrip("，。！？、；：,.!?;: ")
+        previous_stable = str(previous.get("stableText", "")) if previous else ""
+        self._stable_question_state[key] = {
+            "text": current_text,
+            "stableText": stable_text or previous_stable,
+            "revision": transcript.revision,
+            "updatedAtMs": _now_ms(),
+        }
+        if len(self._stable_question_state) > 256:
+            oldest = min(self._stable_question_state, key=lambda item: int(self._stable_question_state[item].get("updatedAtMs", 0)))
+            self._stable_question_state.pop(oldest, None)
+        if len(stable_text) < 4 or stable_text == previous_stable:
+            return None
+        question_id = f"question:{transcript.session_id}:{transcript.segment_id}"
+        event = self._save_event(
+            session_id=transcript.session_id,
+            owner_user_id=transcript.owner_user_id,
+            kind="question-stable",
+            payload={
+                "questionId": question_id,
+                "questionRevision": transcript.revision,
+                "questionText": stable_text,
+                "sourceSegmentId": transcript.segment_id,
+            },
+        )
+        if self.question_prefetcher is not None:
+            self._submit_cold(
+                self.question_prefetcher,
+                user_id=transcript.owner_user_id,
+                session_id=transcript.session_id,
+                question_id=question_id,
+                revision=transcript.revision,
+                question=stable_text,
+            )
+        return event
 
     def _record_speech_usage(
         self,
@@ -790,6 +877,9 @@ class RealtimeSpeechService:
         }
 
     def capture_control_state(self, *, session_id: str) -> str:
+        cached = self._capture_control_cache.get(session_id)
+        if cached is not None:
+            return cached
         latest = next(
             (
                 event for event in reversed(self.repository.list_events_for_session(session_id=session_id))
@@ -798,7 +888,9 @@ class RealtimeSpeechService:
             None,
         )
         state = latest.payload.get("captureState") if latest is not None else None
-        return "paused" if state == "paused" else "capturing"
+        resolved = "paused" if state == "paused" else "capturing"
+        self._capture_control_cache[session_id] = resolved
+        return resolved
 
     def control_capture(self, *, user_id: str, session_id: str, action: str) -> dict[str, object]:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
@@ -814,6 +906,7 @@ class RealtimeSpeechService:
                 kind="capture-control",
                 payload={"action": action, "captureState": capture_state},
             )
+        self._capture_control_cache[session_id] = capture_state
         self.session_service.touch_activity(user_id=user_id, session_id=session_id, force=True)
         return {"sessionId": session_id, "captureState": capture_state}
 
@@ -975,6 +1068,7 @@ class RealtimeSpeechService:
         if _now_ms() > publisher.expires_at_ms:
             raise DomainRequestError("realtime-speech", "connect", "实时语音发布令牌已过期。", 410)
         connected = self.repository.save_publisher(replace(publisher, connected_at_ms=_now_ms(), status="connected"))
+        self._publisher_status_cache[connected.publisher_id] = connected.status
         self._save_event(
             session_id=connected.session_id,
             owner_user_id=connected.owner_user_id,
@@ -991,6 +1085,7 @@ class RealtimeSpeechService:
         if publisher.status in {"closed", "failed"}:
             return publisher
         updated = self.repository.save_publisher(replace(publisher, disconnected_at_ms=_now_ms(), status=final_state))  # type: ignore[arg-type]
+        self._publisher_status_cache.pop(updated.publisher_id, None)
         self._save_event(
             session_id=updated.session_id,
             owner_user_id=updated.owner_user_id,
@@ -1074,11 +1169,13 @@ class RealtimeSpeechService:
         is_final: bool,
         trace_id: str | None,
         sent_at_ms: int | None,
-        audio_base64: str,
+        audio_base64: str = "",
+        audio_bytes: bytes | None = None,
         turn_state: str | None = None,
         finalization_reason: str | None = None,
         source_generation: int | None = None,
         terminal_id: str | None = None,
+        authenticated_publisher: RealtimePublisherRecord | None = None,
     ) -> list[dict[str, object]]:
         prepared = self._prepare_audio_frame(
             token=token,
@@ -1103,11 +1200,11 @@ class RealtimeSpeechService:
             trace_id=trace_id,
             sent_at_ms=sent_at_ms,
             audio_base64=audio_base64,
+            audio_bytes=audio_bytes,
+            authenticated_publisher=authenticated_publisher,
         )
         publisher = prepared.get("publisher")
-        if isinstance(publisher, RealtimePublisherRecord):
-            self.session_service.touch_activity(user_id=publisher.owner_user_id, session_id=publisher.session_id)
-        else:
+        if not isinstance(publisher, RealtimePublisherRecord):
             return self._process_prepared_audio_frame(prepared)
         key = self._session_source_key(prepared["publisher"].session_id, prepared["frame"].source_kind)  # type: ignore[index]
         with self._frame_worker_lock:
@@ -1389,11 +1486,16 @@ class RealtimeSpeechService:
         terminal_id: str | None,
         trace_id: str | None,
         sent_at_ms: int | None,
-        audio_base64: str,
+        audio_base64: str = "",
+        audio_bytes: bytes | None = None,
+        authenticated_publisher: RealtimePublisherRecord | None = None,
     ) -> dict[str, object]:
-        publisher = self._require_publisher_token(token)
-        session = self.session_service.get_session(user_id=publisher.owner_user_id, session_id=publisher.session_id)
-        if session.status != "live" or self.capture_control_state(session_id=publisher.session_id) == "paused":
+        publisher = authenticated_publisher or self._require_publisher_token(token)
+        if authenticated_publisher is None:
+            session = self.session_service.get_session(user_id=publisher.owner_user_id, session_id=publisher.session_id)
+            if session.status != "live":
+                return {"early_events": []}
+        if self.capture_control_state(session_id=publisher.session_id) == "paused":
             return {"early_events": []}
         ingest_received_at_ms = _now_ms()
         if source_kind == "mixed":
@@ -1437,7 +1539,7 @@ class RealtimeSpeechService:
                     "acceptedAtMs": accepted_at_ms,
                     "duplicate": True,
                 }}]}
-        audio_bytes = base64.b64decode(audio_base64.encode("utf-8"))
+        decoded_audio = audio_bytes if audio_bytes is not None else base64.b64decode(audio_base64.encode("utf-8"))
         frame = AudioFrame(
             publisher_id=publisher.publisher_id,
             session_id=publisher.session_id,
@@ -1461,7 +1563,7 @@ class RealtimeSpeechService:
             terminal_id=terminal_id,
             trace_id=trace_id,
             sent_at_ms=sent_at_ms,
-            audio_bytes=audio_bytes,
+            audio_bytes=decoded_audio,
         )
         if not frame.audio_bytes:
             degraded = self._save_event(
@@ -1479,9 +1581,12 @@ class RealtimeSpeechService:
         counter_bucket = self._counter_bucket(session_id=publisher.session_id, source_kind=source_kind)
         counter_bucket["chunksProduced"] += 1
         counter_bucket["chunksUploaded"] += 1
-        counter_bucket["serializedAudioBytes"] += len(audio_bytes)
-        previous_receipts = self.repository.list_frame_receipts_for_session(session_id=publisher.session_id)
-        previous = next((item for item in previous_receipts if item.source_kind == source_kind and item.source_id == source_id), None)
+        counter_bucket["serializedAudioBytes"] += len(decoded_audio)
+        previous = self.repository.get_frame_receipt(
+            session_id=publisher.session_id,
+            source_kind=source_kind,
+            source_id=source_id,
+        )
         pending_receipt = self.repository.save_frame_receipt(RealtimeFrameReceiptRecord(
             session_id=publisher.session_id,
             owner_user_id=publisher.owner_user_id,
@@ -1558,7 +1663,7 @@ class RealtimeSpeechService:
             transcript, transcript_result = self._transcribe_frame(publisher=publisher, frame=frame)
             self.repository.save_frame_receipt(replace(pending_receipt, asr_status="accepted"))
         except DomainRequestError as exc:
-            self._record_speech_usage(
+            self._submit_cold(self._record_speech_usage,
                 publisher=publisher,
                 frame=frame,
                 result=None,
@@ -1596,7 +1701,7 @@ class RealtimeSpeechService:
             "frontendRenderMs": None,
         }
         self._set_latest_timing(session_id=publisher.session_id, source_kind=source_kind, timing=timing)
-        self._record_speech_usage(
+        self._submit_cold(self._record_speech_usage,
             publisher=publisher,
             frame=frame,
             result=transcript_result,
@@ -1658,18 +1763,27 @@ class RealtimeSpeechService:
             kind="transcript-updated",
             payload={
                 "segmentId": transcript.segment_id,
+                "sourceId": transcript.source_id,
+                "sourceKind": transcript.source_kind,
                 "revision": transcript.revision,
                 "role": transcript.role,
                 "text": transcript.text,
+                "transcriptConfidence": transcript.transcript_confidence,
+                "startedAtMs": transcript.started_at_ms,
+                "endedAtMs": transcript.ended_at_ms,
                 "isFinal": transcript.is_final,
+                "overlap": transcript.overlap,
                 "terminalState": transcript.terminal_state,
                 "finalizationReason": transcript.finalization_reason,
                 "publishedAtMs": transcript.published_at_ms,
                 "performance": transcript.performance,
             },
         )))
+        stable_event = self._observe_stable_interviewer_partial(transcript)
+        if transcript.is_final:
+            self._submit_cold(self.repository.persist_transcript, transcript)
         if transcript.usage is not None:
-            self.session_service.record_usage(
+            self._submit_cold(self.session_service.record_usage,
                 user_id=publisher.owner_user_id,
                 session_id=publisher.session_id,
                 usage_kind="other",
@@ -1681,7 +1795,7 @@ class RealtimeSpeechService:
                 related_task_id=transcript.segment_id,
             )
         if transcript.is_final and transcript.terminal_state != "incomplete":
-            self.session_service.append_context(
+            self._submit_cold(self.session_service.append_context,
                 user_id=publisher.owner_user_id,
                 session_id=publisher.session_id,
                 role=transcript.role,
@@ -1696,8 +1810,18 @@ class RealtimeSpeechService:
                     session_id=publisher.session_id,
                     owner_user_id=publisher.owner_user_id,
                     kind="question-candidate" if candidate.state == "needs-confirmation" else "question-confirmed",
-                    payload={"candidateId": candidate.candidate_id, "state": candidate.state, "text": candidate.text, "confidence": candidate.confidence},
+                    payload={
+                        "candidateId": candidate.candidate_id,
+                        "state": candidate.state,
+                        "text": candidate.text,
+                        "confidence": candidate.confidence,
+                        "candidate": self._candidate_response(candidate).model_dump(by_alias=True),
+                    },
                 )))
+        # Keep the established transcript -> question event order for released
+        # clients. Stable-question is additive and is delivered afterwards.
+        if stable_event is not None:
+            events.append(self._event_payload(stable_event))
         return events
 
     def confirm_candidate(self, *, user_id: str, candidate_id: str) -> QuestionCandidateRecord:
@@ -2092,13 +2216,19 @@ class RealtimeSpeechService:
         asr_timeout_seconds = self._asr_timeout_seconds(frame)
         for attempt in range(self.settings.realtime_asr_retry_max_attempts + 1):
             try:
-                self.repository.save_publisher(replace(publisher, status="transcribing"))
                 provider_operation = (
                     getattr(self.asr_gateway, "finalize", self.asr_gateway.transcribe)
                     if frame.is_final
                     else self.asr_gateway.transcribe
                 )
-                future = self._asr_executor.submit(provider_operation, frame=frame, attempt=attempt)
+                if not self._asr_slots.acquire(timeout=asr_timeout_seconds):
+                    raise RetryableAsrError("asr_capacity_timeout")
+                try:
+                    future = self._asr_executor.submit(provider_operation, frame=frame, attempt=attempt)
+                    future.add_done_callback(lambda _future: self._asr_slots.release())
+                except RuntimeError:
+                    self._asr_slots.release()
+                    raise
                 try:
                     result = future.result(timeout=asr_timeout_seconds)
                 except concurrent.futures.TimeoutError as exc:
@@ -2120,7 +2250,6 @@ class RealtimeSpeechService:
                             frame=frame,
                             result=result,
                         )
-                    self.repository.save_publisher(replace(publisher, status="receiving-audio"))
                     return None, replace(result, suppressed_reason=suppression_reason)
                 current = self.repository.get_transcript(frame.session_id, frame.segment_id)
                 created_at_ms = current.created_at_ms if current is not None else _now_ms()
@@ -2161,7 +2290,6 @@ class RealtimeSpeechService:
                         usage=result.usage,
                     )
                 )
-                self.repository.save_publisher(replace(publisher, status="receiving-audio"))
                 return stored, result
             except RetryableAsrError as exc:
                 self._log(logging.WARNING, "realtime_speech.transcribe_retry", session_id=publisher.session_id, publisher_id=publisher.publisher_id, state="transcribe-retry", error_code=str(exc))
@@ -2179,7 +2307,7 @@ class RealtimeSpeechService:
                 self._log(logging.ERROR, "realtime_speech.transcribe_error", session_id=publisher.session_id, publisher_id=publisher.publisher_id, state="transcribe-error", error_code=str(exc))
                 last_error = exc
                 break
-        degraded = self.repository.save_publisher(replace(publisher, status="degraded"))
+        degraded = self._transition_publisher_status(publisher, "degraded")
         self._save_event(
             session_id=degraded.session_id,
             owner_user_id=degraded.owner_user_id,
@@ -2615,7 +2743,6 @@ class RealtimeSpeechService:
         session_id: str,
         cursor: int,
     ) -> tuple[int, list[RealtimeEvent], bool]:
-        self.session_service.get_session(user_id=user_id, session_id=session_id)
         current_cursor, events, resumable = self.repository.list_events_after(
             session_id=session_id,
             cursor=cursor,
@@ -2630,7 +2757,6 @@ class RealtimeSpeechService:
         cursor: int,
         timeout_ms: int,
     ) -> tuple[int, list[RealtimeEvent], bool]:
-        self.session_service.get_session(user_id=user_id, session_id=session_id)
         current_cursor, events, resumable = self.repository.wait_for_events_after(
             session_id=session_id,
             cursor=cursor,
@@ -2658,17 +2784,6 @@ class RealtimeSpeechService:
                         source_kind=source_kind,  # type: ignore[arg-type]
                         timing={**timing, "frontendRenderMs": duration_ms},
                     )
-        event = self._save_event(
-            session_id=session_id,
-            owner_user_id=user_id,
-            kind="performance-ack",
-            payload={
-                "traceId": trace_id,
-                "stage": stage,
-                "durationMs": duration_ms,
-                **({"taskId": task_id} if task_id else {}),
-            },
-        )
         log_event(
             self.logger,
             logging.INFO,
@@ -2680,7 +2795,14 @@ class RealtimeSpeechService:
             task_id=task_id,
             duration_ms=duration_ms,
         )
-        return event
+        return RealtimeEvent(
+            event_id=f"metric:{trace_id}:{stage}",
+            session_id=session_id,
+            owner_user_id=user_id,
+            kind="performance-ack",
+            payload={"traceId": trace_id, "stage": stage, "durationMs": duration_ms},
+            created_at_ms=_now_ms(),
+        )
 
     @staticmethod
     def _event_payload(event: RealtimeEvent) -> dict[str, object]:

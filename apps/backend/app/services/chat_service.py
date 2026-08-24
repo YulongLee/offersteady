@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from collections.abc import Iterator
 from dataclasses import replace
@@ -492,6 +493,66 @@ class ChatService:
         self.billing_service = billing_service
         self.commercial_repository = commercial_repository
         self.billing_usage_by_task: dict[str, str] = {}
+        self._prepared_context_lock = threading.Lock()
+        self._prepared_context: dict[tuple[str, str, int], dict[str, object]] = {}
+        self._latest_prefetch_revision: dict[tuple[str, str], int] = {}
+
+    def prefetch_question_context(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        question_id: str,
+        revision: int,
+        question: str,
+    ) -> None:
+        """Prepare retrieval off the media path; failures fall back on click."""
+        try:
+            question_key = (session_id, question_id)
+            with self._prepared_context_lock:
+                latest = self._latest_prefetch_revision.get(question_key, -1)
+                if revision < latest:
+                    return
+                self._latest_prefetch_revision[question_key] = revision
+            session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+            retrieval = self._retrieve_context(user_id=user_id, session=session, question=question)
+            prepared = {
+                "question": question.strip(),
+                "retrieval": retrieval,
+                "createdAtMs": _now_ms(),
+            }
+            with self._prepared_context_lock:
+                if self._latest_prefetch_revision.get(question_key) != revision:
+                    return
+                for key in tuple(self._prepared_context):
+                    if key[:2] == question_key and key[2] < revision:
+                        self._prepared_context.pop(key, None)
+                self._prepared_context[(session_id, question_id, revision)] = prepared
+                if len(self._prepared_context) > 128:
+                    oldest = min(self._prepared_context, key=lambda item: int(self._prepared_context[item].get("createdAtMs", 0)))
+                    self._prepared_context.pop(oldest, None)
+        except Exception as exc:
+            self.logger.info("chat.question_prefetch_skipped", extra={"safe_error_code": exc.__class__.__name__})
+
+    def _prepared_retrieval(
+        self,
+        *,
+        session_id: str,
+        question_id: str | None,
+        revision: int | None,
+        question: str,
+    ) -> RetrievalContext | None:
+        if not question_id or revision is None:
+            return None
+        with self._prepared_context_lock:
+            prepared = self._prepared_context.get((session_id, question_id, revision))
+        if not prepared or _now_ms() - int(prepared.get("createdAtMs", 0)) > 60_000:
+            return None
+        prepared_question = str(prepared.get("question", "")).strip()
+        if prepared_question not in question.strip() and question.strip() not in prepared_question:
+            return None
+        retrieval = prepared.get("retrieval")
+        return retrieval if isinstance(retrieval, RetrievalContext) else None
 
     def _reserve_answer_usage(self, *, user_id: str, usage_id: str) -> None:
         if self.billing_service is None:
@@ -816,7 +877,9 @@ class ChatService:
         return failed, self._to_retrieval_response(retrieval)
 
     def stream_answer_question(
-        self, *, user_id: str, session_id: str, question: str, usage_id: str | None = None
+        self, *, user_id: str, session_id: str, question: str, usage_id: str | None = None,
+        question_id: str | None = None, question_revision: int | None = None,
+        clicked_at_ms: int | None = None, prefetch_revision: int | None = None,
     ) -> Iterator[dict]:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         if session.status != "live":
@@ -838,6 +901,10 @@ class ChatService:
                 stream_mode=True,
                 raw_question=question.strip(),
                 question_normalization_status="pending",
+                question_id=question_id,
+                question_revision=question_revision,
+                clicked_at_ms=clicked_at_ms or now_ms,
+                prefetch_revision=prefetch_revision,
                 created_at_ms=now_ms,
                 updated_at_ms=now_ms,
             )
@@ -852,7 +919,12 @@ class ChatService:
             visibility="session",
             related_task_id=task.task_id,
         )
-        quick_retrieval = RetrievalContext(
+        quick_retrieval = self._prepared_retrieval(
+            session_id=session_id,
+            question_id=question_id,
+            revision=prefetch_revision,
+            question=question,
+        ) or RetrievalContext(
             normalized_question=question.strip(),
             context_text="",
             chunks=[],

@@ -330,11 +330,102 @@ interface BackendRealtimeRuntimeResponse {
 interface BackendRealtimeSessionStreamEvent {
   readonly type: "snapshot" | "update";
   readonly cursor?: number;
+  readonly transcripts?: BackendRealtimeTranscriptListResponse;
+  readonly candidates?: BackendRealtimeQuestionCandidateListResponse;
+  readonly events: BackendRealtimeEventListResponse;
+  readonly runtime?: BackendRealtimeRuntimeResponse | null;
+}
+
+interface MaterializedRealtimeSessionStreamEvent extends BackendRealtimeSessionStreamEvent {
   readonly transcripts: BackendRealtimeTranscriptListResponse;
   readonly candidates: BackendRealtimeQuestionCandidateListResponse;
-  readonly events: BackendRealtimeEventListResponse;
   readonly runtime: BackendRealtimeRuntimeResponse | null;
 }
+
+type BackendRealtimeTranscript = BackendRealtimeTranscriptListResponse["transcripts"][number];
+type BackendRealtimeCandidate = BackendRealtimeQuestionCandidateListResponse["candidates"][number];
+
+const materializeRealtimeDelta = (
+  interviewId: string,
+  current: MaterializedRealtimeSessionStreamEvent | null,
+  incoming: BackendRealtimeSessionStreamEvent,
+): MaterializedRealtimeSessionStreamEvent | null => {
+  if (incoming.type === "snapshot") {
+    if (!incoming.transcripts || !incoming.candidates || incoming.runtime === undefined) return null;
+    return incoming as MaterializedRealtimeSessionStreamEvent;
+  }
+  // Compatibility with servers from the migration window that labelled a
+  // complete payload as an update.
+  if (!current && incoming.transcripts && incoming.candidates && incoming.runtime !== undefined) {
+    return incoming as MaterializedRealtimeSessionStreamEvent;
+  }
+  if (!current) return null;
+  const transcriptById = new Map(current.transcripts.transcripts.map(item => [item.segmentId, item]));
+  const candidateById = new Map(current.candidates.candidates.map(item => [item.candidateId, item]));
+  let runtime = current.runtime;
+  for (const event of incoming.events.events) {
+    if (event.kind === "transcript-updated") {
+      const payload = event.payload;
+      const segmentId = typeof payload.segmentId === "string" ? payload.segmentId : "";
+      const existing = segmentId ? transcriptById.get(segmentId) : undefined;
+      const revision = typeof payload.revision === "number" ? payload.revision : 0;
+      const isFinal = payload.isFinal === true;
+      if (!segmentId || (existing && (revision < existing.revision || (revision === existing.revision && existing.isFinal) || (existing.isFinal && !isFinal)))) continue;
+      const sourceKind = payload.sourceKind === "microphone" || payload.sourceKind === "system" || payload.sourceKind === "mixed"
+        ? payload.sourceKind
+        : existing?.sourceKind;
+      const role = payload.role === "candidate" || payload.role === "interviewer" ? payload.role : existing?.role;
+      if (!sourceKind || !role) continue;
+      const finalizationReason = typeof payload.finalizationReason === "string" && [
+        "silence", "max-duration", "capture-stop", "source-recovery", "backend-watchdog", "provider-completed", "provider-timeout",
+      ].includes(payload.finalizationReason)
+        ? payload.finalizationReason as NonNullable<BackendRealtimeTranscript["finalizationReason"]>
+        : undefined;
+      const next: BackendRealtimeTranscript = {
+        segmentId,
+        sourceId: typeof payload.sourceId === "string" ? payload.sourceId : existing?.sourceId ?? segmentId,
+        sourceKind,
+        role,
+        revision,
+        text: typeof payload.text === "string" ? payload.text : existing?.text ?? "",
+        transcriptConfidence: typeof payload.transcriptConfidence === "number" ? payload.transcriptConfidence : existing?.transcriptConfidence ?? 0,
+        startedAtMs: typeof payload.startedAtMs === "number" ? payload.startedAtMs : existing?.startedAtMs ?? event.createdAtMs,
+        endedAtMs: typeof payload.endedAtMs === "number" ? payload.endedAtMs : existing?.endedAtMs ?? event.createdAtMs,
+        isFinal,
+        overlap: typeof payload.overlap === "boolean" ? payload.overlap : existing?.overlap ?? false,
+        ...(payload.terminalState === "final" || payload.terminalState === "incomplete" ? { terminalState: payload.terminalState } : {}),
+        ...(finalizationReason ? { finalizationReason } : {}),
+        ...(typeof payload.publishedAtMs === "number" ? { publishedAtMs: payload.publishedAtMs } : {}),
+        ...(typeof payload.performance === "object" && payload.performance !== null ? { performance: payload.performance as NonNullable<BackendRealtimeTranscript["performance"]> } : {}),
+      };
+      transcriptById.set(segmentId, next);
+    }
+    if ((event.kind === "question-candidate" || event.kind === "question-confirmed") && typeof event.payload.candidate === "object" && event.payload.candidate !== null) {
+      const candidate = event.payload.candidate as BackendRealtimeCandidate;
+      if (typeof candidate.candidateId === "string") candidateById.set(candidate.candidateId, candidate);
+    }
+    if (runtime && event.kind === "capture-control" && (event.payload.captureState === "paused" || event.payload.captureState === "capturing")) {
+      runtime = { ...runtime, captureState: event.payload.captureState };
+    }
+    if (runtime && event.kind === "connection-state" && typeof event.payload.status === "string") {
+      runtime = { ...runtime, latestState: event.payload.status };
+    }
+  }
+  const events = [...current.events.events, ...incoming.events.events]
+    .filter((item, index, items) => items.findIndex(candidate => candidate.eventId === item.eventId) === index)
+    .sort((left, right) => left.createdAtMs - right.createdAtMs)
+    .slice(-128);
+  const transcripts = [...transcriptById.values()].sort((left, right) => left.startedAtMs - right.startedAtMs || left.segmentId.localeCompare(right.segmentId));
+  const candidates = [...candidateById.values()];
+  return {
+    type: "update",
+    cursor: Math.max(current.cursor ?? 0, incoming.cursor ?? 0),
+    transcripts: { sessionId: current.transcripts.sessionId || interviewId, transcripts },
+    candidates: { sessionId: current.candidates.sessionId || interviewId, candidates },
+    events: { sessionId: current.events.sessionId || interviewId, events },
+    runtime: runtime ? { ...runtime, transcriptCount: transcripts.length, questionCandidateCount: candidates.length } : null,
+  };
+};
 
 interface BackendRealtimeSessionSnapshotResponse {
   readonly sessionId: string;
@@ -1149,7 +1240,9 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     this.recordRealtimeDeliveryMetric(interviewId, "connect", { durationMs: connectedAt - connectStartedAt, reason: "opened" });
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    let pendingSnapshot: BackendRealtimeSessionStreamEvent | null = null;
+    let streamSnapshot: MaterializedRealtimeSessionStreamEvent | null = null;
+    let pendingSnapshot: MaterializedRealtimeSessionStreamEvent | null = null;
+    let pendingDeliveryEvents: BackendRealtimeEventListResponse["events"] = [];
     let terminalStatus: number | null = null;
     let flushHandle: number | null = null;
     const scheduleFlush = () => {
@@ -1160,7 +1253,9 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         pendingSnapshot = null;
         if (!payload || (payload.type !== "snapshot" && payload.type !== "update")) return;
         if (typeof payload.cursor === "number") window.sessionStorage?.setItem(cursorKey, String(payload.cursor));
-        this.publishCaptureEvents(payload.events);
+        const deliveryEvents = pendingDeliveryEvents;
+        pendingDeliveryEvents = [];
+        this.publishCaptureEvents({ sessionId: payload.events.sessionId, events: deliveryEvents });
         onUpdate(
           mapRealtimeState(interviewId, payload.transcripts, payload.candidates, payload.events, payload.runtime),
           { type: payload.type, cursor: payload.cursor ?? 0 },
@@ -1184,18 +1279,11 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         firstSnapshotRecorded = true;
         this.recordRealtimeDeliveryMetric(interviewId, "first-snapshot", { durationMs: Date.now() - connectStartedAt, reason: "opened" });
       }
-      pendingSnapshot = pendingSnapshot
-        ? {
-            ...payload,
-            cursor: Math.max(pendingSnapshot.cursor ?? 0, payload.cursor ?? 0),
-            events: {
-              ...payload.events,
-              events: [...pendingSnapshot.events.events, ...payload.events.events].filter(
-                (item, index, items) => items.findIndex(candidate => candidate.eventId === item.eventId) === index,
-              ),
-            },
-          }
-        : payload;
+      streamSnapshot = materializeRealtimeDelta(interviewId, streamSnapshot, payload);
+      pendingSnapshot = streamSnapshot;
+      pendingDeliveryEvents = [...pendingDeliveryEvents, ...payload.events.events].filter(
+        (item, index, items) => items.findIndex(candidate => candidate.eventId === item.eventId) === index,
+      );
       scheduleFlush();
     });
     while (true) {
@@ -1205,10 +1293,11 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     }
     parser.push(decoder.decode());
     parser.flush();
-    const finalSnapshot = pendingSnapshot as BackendRealtimeSessionStreamEvent | null;
+    const finalSnapshot = pendingSnapshot as MaterializedRealtimeSessionStreamEvent | null;
     if (finalSnapshot) {
       if (typeof finalSnapshot.cursor === "number") window.sessionStorage?.setItem(cursorKey, String(finalSnapshot.cursor));
-      this.publishCaptureEvents(finalSnapshot.events);
+      this.publishCaptureEvents({ sessionId: finalSnapshot.events.sessionId, events: pendingDeliveryEvents });
+      pendingDeliveryEvents = [];
       onUpdate(
         mapRealtimeState(interviewId, finalSnapshot.transcripts, finalSnapshot.candidates, finalSnapshot.events, finalSnapshot.runtime),
         { type: finalSnapshot.type, cursor: finalSnapshot.cursor ?? 0 },
@@ -1258,6 +1347,10 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         question: command.question,
         stream: true,
         idempotencyKey: command.idempotencyKey,
+        ...(command.questionId ? { questionId: command.questionId } : {}),
+        ...(command.questionRevision ? { questionRevision: command.questionRevision } : {}),
+        ...(command.clickedAtMs ? { clickedAtMs: command.clickedAtMs } : {}),
+        ...(command.prefetchRevision ? { prefetchRevision: command.prefetchRevision } : {}),
       }),
     }, signal);
     return toSubmitManualAnswerResult(result.task);
@@ -1288,6 +1381,10 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         question: command.question,
         stream: true,
         idempotencyKey: command.idempotencyKey,
+        ...(command.questionId ? { questionId: command.questionId } : {}),
+        ...(command.questionRevision ? { questionRevision: command.questionRevision } : {}),
+        ...(command.clickedAtMs ? { clickedAtMs: command.clickedAtMs } : {}),
+        ...(command.prefetchRevision ? { prefetchRevision: command.prefetchRevision } : {}),
       }),
     };
     if (signal) requestInit.signal = signal;

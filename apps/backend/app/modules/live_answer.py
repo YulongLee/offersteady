@@ -35,6 +35,10 @@ def _to_task_response(task) -> LiveAnswerTaskResponse:
         rawQuestion=task.raw_question,
         normalizedQuestion=task.normalized_question,
         questionNormalizationStatus=task.question_normalization_status,
+        questionId=task.question_id,
+        questionRevision=task.question_revision,
+        clickedAtMs=task.clicked_at_ms,
+        prefetchRevision=task.prefetch_revision,
         answerText=task.answer_text,
         status=task.status,
         streamMode=task.stream_mode,
@@ -146,7 +150,14 @@ async def stream_live_answer(
 
     def events() -> Iterator[str]:
         for payload in service.stream_answer_question(
-            user_id=user_id, session_id=request.session_id, question=request.question, usage_id=request.idempotency_key
+            user_id=user_id,
+            session_id=request.session_id,
+            question=request.question,
+            usage_id=request.idempotency_key,
+            question_id=request.question_id,
+            question_revision=request.question_revision,
+            clicked_at_ms=request.clicked_at_ms,
+            prefetch_revision=request.prefetch_revision,
         ):
             phase = str(payload.get("type") or "update")
             if phase in {"task-started", "retrieval", "complete", "completed", "error", "failed", "cancelled"}:

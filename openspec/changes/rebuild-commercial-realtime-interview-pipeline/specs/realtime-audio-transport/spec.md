@@ -43,3 +43,14 @@ The desktop SHALL reconnect with the last acknowledged sequence and SHALL replay
 #### Scenario: Buffer window expires
 - **WHEN** connectivity returns after old audio has been dropped
 - **THEN** transport resumes from current audio and emits an explicit gap event
+
+### Requirement: Immediate binary media frames
+The commercial transport SHALL send negotiated 20-100 ms audio frames immediately as binary WebSocket messages, while retaining the rolling buffer only for acknowledgement recovery.
+
+#### Scenario: A normal frame is captured
+- **WHEN** an enabled role channel produces a complete transport frame
+- **THEN** it is enqueued for immediate transmission and is also retained in the bounded recovery window
+
+#### Scenario: Published protocol-v2 client connects
+- **WHEN** a released client supports only JSON/base64 frames
+- **THEN** the gateway accepts that bounded compatibility mode without mixing it with binary framing inside the same session

@@ -15,6 +15,10 @@ class LiveAnswerQuestionRequest(BaseModel):
     question: str = Field(min_length=1)
     stream: bool = True
     idempotency_key: str | None = Field(default=None, min_length=1, alias="idempotencyKey")
+    question_id: str | None = Field(default=None, min_length=1, alias="questionId")
+    question_revision: int | None = Field(default=None, ge=1, alias="questionRevision")
+    clicked_at_ms: int | None = Field(default=None, ge=1, alias="clickedAtMs")
+    prefetch_revision: int | None = Field(default=None, ge=1, alias="prefetchRevision")
 
 
 class LiveAnswerChunkResponse(BaseModel):
@@ -33,6 +37,10 @@ class LiveAnswerTaskResponse(BaseModel):
     raw_question: str | None = Field(default=None, alias="rawQuestion")
     normalized_question: str | None = Field(default=None, alias="normalizedQuestion")
     question_normalization_status: QuestionNormalizationStatus = Field(default="not-requested", alias="questionNormalizationStatus")
+    question_id: str | None = Field(default=None, alias="questionId")
+    question_revision: int | None = Field(default=None, alias="questionRevision")
+    clicked_at_ms: int | None = Field(default=None, alias="clickedAtMs")
+    prefetch_revision: int | None = Field(default=None, alias="prefetchRevision")
     answer_text: str = Field(alias="answerText")
     status: AnswerTaskStatus
     stream_mode: bool = Field(alias="streamMode")

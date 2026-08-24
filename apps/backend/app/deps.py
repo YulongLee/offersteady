@@ -479,6 +479,9 @@ def realtime_speech_service() -> RealtimeSpeechService:
         session_service=session_service(),
         asr_gateway=realtime_asr_gateway(),
         commercial_repository=commercial_hardening_repository(),
+        # Resolve chat/retrieval lazily on a cold-path worker. Realtime audio
+        # startup must not depend on Redis-backed chat task initialization.
+        question_prefetcher=lambda **kwargs: chat_service().prefetch_question_context(**kwargs),
     )
 
 

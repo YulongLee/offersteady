@@ -208,6 +208,10 @@ export interface SubmitManualAnswerCommand {
   readonly interviewId: string;
   readonly question: string;
   readonly idempotencyKey: string;
+  readonly questionId?: string;
+  readonly questionRevision?: number;
+  readonly clickedAtMs?: number;
+  readonly prefetchRevision?: number;
 }
 
 export interface SubmitScreenshotAnswerCommand {

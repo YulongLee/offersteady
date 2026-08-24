@@ -42,3 +42,14 @@ The runtime SHALL persist an explicit session-scoped capture control state, and 
 #### Scenario: User resumes capture explicitly
 - **WHEN** the owner selects resume for the same live interview
 - **THEN** the backend records `capturing` and the bound desktop may create one authoritative publisher and resume both role channels
+
+### Requirement: Session-scoped realtime hot state
+The runtime SHALL validate transport ownership at connection time and SHALL keep accepted per-frame work independent from PostgreSQL and global Redis snapshot serialization.
+
+#### Scenario: Audio frame is accepted
+- **WHEN** an authenticated connection sends the next valid channel sequence
+- **THEN** the gateway updates session-local sequence and receipt state without opening a PostgreSQL connection or rewriting unrelated sessions
+
+#### Scenario: Publisher lifecycle is unchanged
+- **WHEN** another partial audio revision is processed successfully
+- **THEN** no redundant publisher lifecycle snapshot is written

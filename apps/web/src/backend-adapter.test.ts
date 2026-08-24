@@ -205,7 +205,10 @@ describe("backend preview adapter", () => {
     const updates: string[] = [];
     const questionUpdates: string[] = [];
     const result = await adapter.submitManualAnswer(
-      { interviewId: "session-1", question: "如何设计流式回答？", idempotencyKey: "manual:stream" },
+      {
+        interviewId: "session-1", question: "如何设计流式回答？", idempotencyKey: "manual:stream",
+        questionId: "question:session-1:segment-1", questionRevision: 3, clickedAtMs: 1234, prefetchRevision: 3,
+      },
       undefined,
       update => {
         updates.push(update.result.question.advice.detail);
@@ -215,6 +218,10 @@ describe("backend preview adapter", () => {
     expect(fetchImpl).toHaveBeenCalledWith("http://localhost:8000/api/v1/live-answer/questions/stream", expect.objectContaining({
       method: "POST",
       headers: expect.objectContaining({ Accept: "text/event-stream" }),
+      body: JSON.stringify({
+        userId: "user-1", sessionId: "session-1", question: "如何设计流式回答？", stream: true, idempotencyKey: "manual:stream",
+        questionId: "question:session-1:segment-1", questionRevision: 3, clickedAtMs: 1234, prefetchRevision: 3,
+      }),
     }));
     expect(updates).toContain("先展示首段。");
     expect(questionUpdates).toContain("如何设计流式回答？");
@@ -389,6 +396,45 @@ describe("backend preview adapter", () => {
         task: { id: "auto-task-1", status: "generating", partialText: "我先说明项目背景。" },
       },
     });
+  });
+
+  it("merges delta transcript events monotonically and never lets a late partial overwrite final text", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const event = (revision: number, text: string, isFinal: boolean) => ({
+      eventId: `transcript-${revision}-${isFinal}`,
+      kind: "transcript-updated",
+      createdAtMs: revision,
+      payload: {
+        segmentId: "segment-1", sourceId: "system", sourceKind: "system", role: "interviewer",
+        revision, text, isFinal, transcriptConfidence: 0.9, startedAtMs: 1, endedAtMs: 2, overlap: false,
+      },
+    });
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const push = (name: string, data: unknown) => controller.enqueue(new TextEncoder().encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`));
+        push("snapshot", {
+          type: "snapshot", cursor: 0,
+          transcripts: { sessionId: "session-1", transcripts: [] },
+          candidates: { sessionId: "session-1", candidates: [] },
+          events: { sessionId: "session-1", events: [] }, runtime: null,
+        });
+        push("update", { type: "update", cursor: 1, events: { sessionId: "session-1", events: [event(2, "请介绍项目", true)] } });
+        push("update", { type: "update", cursor: 2, events: { sessionId: "session-1", events: [event(1, "请介绍", false)] } });
+        controller.close();
+      },
+    });
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", vi.fn(async () => new Response(stream, {
+      status: 200, headers: { "Content-Type": "text/event-stream" },
+    })) as typeof fetch);
+    const updates: Array<{ speaker: { transcripts: readonly { text: string; isFinal: boolean; revision: number }[] } }> = [];
+
+    await adapter.subscribeRealtimeSession("session-1", update => updates.push(update as typeof updates[number]));
+
+    expect(updates.at(-1)?.speaker.transcripts).toEqual([
+      expect.objectContaining({ text: "请介绍项目", isFinal: true, revision: 2 }),
+    ]);
   });
 
   it("preserves the realtime stream status so callers can stop invalid-session reconnect storms", async () => {

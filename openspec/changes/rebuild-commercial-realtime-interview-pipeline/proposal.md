@@ -11,6 +11,9 @@ The current realtime interview assistant couples native capture, Electron pollin
 - Persist recoverable realtime session, device binding, publisher, consumer cursor, and lease state outside a backend worker process.
 - Make the web live page reconnect automatically, resume from its last event cursor, and render an authoritative runtime state instead of inferring health from polling side effects.
 - Add bounded queues, overload shedding, end-to-end trace identifiers, stage timings, health checks, and commercial acceptance SLOs.
+- Remove PostgreSQL lookups, global Redis snapshot rewrites, and whole-workspace refreshes from the per-frame transcript hot path.
+- Stabilize interviewer partial revisions, prefetch resume/JD/knowledge context in parallel, and freeze the authoritative question revision only when the user explicitly selects quick answer.
+- Deliver transcript and answer deltas through one ordered event stream while keeping snapshots exclusively for initial load and bounded recovery.
 - Stabilize desktop device identity and permission behavior across relaunches and production upgrades.
 - **BREAKING**: retire legacy HTTP-per-audio-frame publishing and duplicate renderer/main-process capture ownership after migration validation.
 - Keep raw interview audio ephemeral by default; persist only user-approved transcripts and operational metadata required for recovery and diagnostics.
@@ -30,7 +33,7 @@ The current realtime interview assistant couples native capture, Electron pollin
 - Multi-device audio mixing for one interview.
 - Long-term raw audio recording, meeting recording, or post-interview audio playback.
 - Automatic speaker diarization inside a mixed channel; roles remain channel-derived.
-- Replacing screenshot answers, manual questions, answer generation, RAG, billing, or authentication flows.
+- Changing screenshot-answer semantics, manual-question semantics, billing rules, authentication, or the explicit user action required to generate an answer.
 
 ## Capabilities
 
@@ -42,6 +45,8 @@ The current realtime interview assistant couples native capture, Electron pollin
 - `resilient-interview-runtime`: Persist realtime leases, bindings, runtime state, and event cursors so desktop, web, and backend processes can recover independently.
 - `live-transcript-delivery`: Deliver ordered, role-labelled transcript events to the live web workspace with cursor replay, deduplication, and visible degraded states.
 - `realtime-pipeline-observability`: Enforce queue limits, connection limits, stage metrics, trace correlation, privacy-safe diagnostics, health checks, and release SLO gates.
+- `stable-question-prefetch`: Stabilize interviewer partials, predict retrieval queries, prepare bounded context, and freeze a question revision only on explicit quick-answer activation.
+- `realtime-hot-path`: Keep media ingestion and incremental delivery independent from PostgreSQL and global runtime snapshots.
 
 ### Modified Capabilities
 
@@ -52,6 +57,7 @@ None. Existing main specs do not yet define the realtime desktop-to-web contract
 - Desktop: Swift capture runtime, Electron IPC boundary, device identity storage, permissions, release signing, and removal of duplicate capture/poll loops.
 - Backend: realtime gateway, ASR adapter lifecycle, bounded queues, session ownership, Redis-backed leases/events, transcript persistence, and health/readiness behavior.
 - Web: live-session subscription, heartbeat semantics, cursor storage, reconnect behavior, and runtime status presentation.
+- Answer fast path: question-revision snapshots and prepared-context reuse without enabling automatic answers.
 - Infrastructure: Redis becomes required for commercial realtime deployment; reverse proxy must support WebSocket upgrades and long-lived connections.
 - Protocol: versioned desktop handshake, audio envelope, control events, transcript events, resume cursors, and explicit compatibility window for legacy clients.
 - Privacy: raw PCM/Opus remains memory-only with short bounded buffers; logs and diagnostics retain counts, timings, identifiers, and error codes but not audio payloads or transcript text by default.

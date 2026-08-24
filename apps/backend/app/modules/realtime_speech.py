@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections import deque
 from time import time
 
@@ -40,7 +41,10 @@ from app.services.realtime_event_wait import run_realtime_event_wait
 
 
 router = APIRouter(prefix="/realtime-speech", tags=["realtime-speech"])
-REALTIME_SESSION_VALIDATION_INTERVAL_SECONDS = 2.0
+logger = logging.getLogger("offersteady.backend.realtime_speech")
+REALTIME_SESSION_VALIDATION_INTERVAL_SECONDS = 15.0
+REALTIME_BINARY_HEADER_MAX_BYTES = 64 * 1024
+REALTIME_BINARY_AUDIO_MAX_BYTES = 2 * 1024 * 1024
 _active_ingest_tokens: set[str] = set()
 descriptor = ModuleDescriptor(
     feature="realtime-speech",
@@ -503,12 +507,7 @@ async def stream_session_runtime(
                     idle_polls = 0
                 continue
             idle_polls = 0
-            now = asyncio.get_running_loop().time()
             payload_type = "snapshot" if initial or not resumable else "update"
-            refresh_plan = session_stream_refresh_plan(
-                payload_type=payload_type,
-                event_kinds={event.kind for event in incremental_events},
-            )
             if payload_type == "snapshot":
                 runtime, transcripts, candidates, snapshot_events = await asyncio.gather(
                     asyncio.to_thread(service.get_runtime, user_id=resolved_user_id, session_id=session_id),
@@ -519,57 +518,28 @@ async def stream_session_runtime(
                 cached_runtime = runtime
                 cached_transcripts = transcripts
                 cached_candidates = candidates
-                runtime_refreshed_at = now
+                runtime_refreshed_at = asyncio.get_running_loop().time()
+                payload = {
+                    "type": payload_type,
+                    "transcripts": transcripts.model_dump(by_alias=True),
+                    "candidates": candidates.model_dump(by_alias=True),
+                    "events": snapshot_events.model_dump(by_alias=True),
+                    "runtime": runtime.model_dump(by_alias=True),
+                    "ownerUserId": resolved_user_id,
+                    "cursor": current_cursor,
+                }
             else:
-                refresh_runtime = cached_runtime is None or (
-                    refresh_plan["runtime"] and now - runtime_refreshed_at >= 2.0
-                )
-                refresh_transcripts = cached_transcripts is None or refresh_plan["transcripts"]
-                refresh_candidates = cached_candidates is None or refresh_plan["candidates"]
-                refreshers = {}
-                if refresh_runtime:
-                    refreshers["runtime"] = asyncio.to_thread(
-                        service.get_runtime, user_id=resolved_user_id, session_id=session_id
-                    )
-                if refresh_transcripts:
-                    refreshers["transcripts"] = asyncio.to_thread(
-                        service.list_transcripts, user_id=resolved_user_id, session_id=session_id
-                    )
-                if refresh_candidates:
-                    refreshers["candidates"] = asyncio.to_thread(
-                        service.list_candidates, user_id=resolved_user_id, session_id=session_id
-                    )
-                if refreshers:
-                    refreshed_values = await asyncio.gather(*refreshers.values())
-                    refreshed = dict(zip(refreshers, refreshed_values, strict=True))
-                    if "runtime" in refreshed:
-                        cached_runtime = refreshed["runtime"]
-                        runtime_refreshed_at = now
-                    if "transcripts" in refreshed:
-                        cached_transcripts = refreshed["transcripts"]
-                    if "candidates" in refreshed:
-                        cached_candidates = refreshed["candidates"]
-                runtime = cached_runtime
-                transcripts = cached_transcripts
-                candidates = cached_candidates
-                snapshot_events = None
-            assert runtime is not None and transcripts is not None and candidates is not None
-            payload = {
-                "type": payload_type,
-                "transcripts": transcripts.model_dump(by_alias=True),
-                "candidates": candidates.model_dump(by_alias=True),
-                "events": [
-                    item.model_dump(by_alias=True)
-                    for item in (
-                        snapshot_events.events
-                        if snapshot_events is not None
-                        else [service.event_response(event) for event in incremental_events]
-                    )
-                ],
-                "runtime": runtime.model_dump(by_alias=True),
-                "ownerUserId": resolved_user_id,
-                "cursor": current_cursor,
-            }
+                # Normal updates are event deltas. Full state is reserved for
+                # initial entry and expired-cursor recovery.
+                payload = {
+                    "type": payload_type,
+                    "events": {
+                        "sessionId": session_id,
+                        "events": [service.event_response(event).model_dump(by_alias=True) for event in incremental_events],
+                    },
+                    "ownerUserId": resolved_user_id,
+                    "cursor": current_cursor,
+                }
             yield _sse_frame(payload_type, payload, cursor=current_cursor)
             last_cursor = current_cursor
             initial = False
@@ -767,6 +737,7 @@ async def realtime_ws(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         service.disconnect_publisher(token=token)
     except Exception:
+        logger.exception("Legacy realtime websocket failed")
         try:
             service.disconnect_publisher(token=token, final_state="failed")
         finally:
@@ -777,6 +748,7 @@ async def realtime_ws(websocket: WebSocket) -> None:
 async def realtime_ingest_ws(websocket: WebSocket) -> None:
     token = websocket.query_params.get("token", "")
     requested_protocol = websocket.query_params.get("protocol", "2.0")
+    requested_media = websocket.query_params.get("media", "json-base64")
     service = realtime_speech_service()
     await websocket.accept()
     if token in _active_ingest_tokens:
@@ -808,6 +780,12 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
             publisher_connected = False
             await websocket.close(code=1002)
             return
+        if requested_media not in {"json-base64", "binary-v1"}:
+            await websocket.send_json({"kind": "protocol-rejected", "payload": {"supportedMedia": ["json-base64", "binary-v1"]}})
+            service.disconnect_publisher(token=token)
+            publisher_connected = False
+            await websocket.close(code=1002)
+            return
         previous_receipts = service.repository.list_frame_receipts_for_session(session_id=publisher.session_id)
         expected_sequence: dict[str, int] = {"microphone": 0, "system": 0}
         for receipt in previous_receipts:
@@ -823,11 +801,42 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                 "transport": "websocket-v2-multiplexed",
                 "protocolVersion": service.settings.realtime_protocol_version,
                 "channels": ["microphone", "system"],
+                "mediaMode": requested_media,
                 "resumeOffsets": {channel: sequence - 1 for channel, sequence in expected_sequence.items()},
             },
         })
         while True:
-            payload = RealtimeFrameRequest.model_validate(await websocket.receive_json())
+            audio_bytes: bytes | None = None
+            if requested_media == "binary-v1":
+                message = await websocket.receive()
+                raw = message.get("bytes")
+                if not isinstance(raw, bytes) or len(raw) < 4:
+                    await websocket.close(code=1002, reason="binary-frame-required")
+                    return
+                header_size = int.from_bytes(raw[:4], byteorder="big", signed=False)
+                if header_size < 2 or header_size > REALTIME_BINARY_HEADER_MAX_BYTES or 4 + header_size > len(raw):
+                    await websocket.close(code=1002, reason="invalid-binary-header")
+                    return
+                audio_bytes = raw[4 + header_size:]
+                if not audio_bytes or len(audio_bytes) > REALTIME_BINARY_AUDIO_MAX_BYTES:
+                    await websocket.close(code=1009, reason="invalid-audio-size")
+                    return
+                try:
+                    header = json.loads(raw[4:4 + header_size].decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    await websocket.close(code=1002, reason="invalid-binary-header-json")
+                    return
+                if not isinstance(header, dict) or "audioBase64" in header:
+                    await websocket.close(code=1002, reason="invalid-binary-envelope")
+                    return
+                payload = RealtimeFrameRequest.model_validate({**header, "audioBase64": ""})
+            else:
+                message = await websocket.receive()
+                raw_text = message.get("text")
+                if not isinstance(raw_text, str):
+                    await websocket.close(code=1002, reason="json-frame-required")
+                    return
+                payload = RealtimeFrameRequest.model_validate(json.loads(raw_text))
             try:
                 now = time()
                 while frame_arrivals and now - frame_arrivals[0] >= 1:
@@ -881,6 +890,8 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                     trace_id=payload.trace_id,
                     sent_at_ms=payload.sent_at_ms,
                     audio_base64=payload.audio_base64,
+                    audio_bytes=audio_bytes,
+                    authenticated_publisher=publisher,
                 )
                 terminal_event = next((event for event in admission_events if event.get("kind") in {"terminal-accepted", "degraded"}), None)
                 if terminal_event is not None and (payload.is_final or terminal_event.get("kind") == "degraded"):
@@ -919,6 +930,7 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
             except DomainRequestError:
                 pass
     except Exception:
+        logger.exception("Realtime ingest websocket failed")
         try:
             if publisher_connected:
                 try:

@@ -20,6 +20,8 @@ macOS native capture supervisor
                                   |                                         |
                                   +--------------------+--------------------+
                                                        v
+                                  stable partial + context prefetch
+                                                       |
                                             Redis event stream
                                                        |
                                       cursor-based web subscription
@@ -36,6 +38,8 @@ macOS native capture supervisor
 - Preserve session and cursor state across backend worker or container restart.
 - Make every stage observable without logging raw audio or transcript text by default.
 - Deliver a macOS Apple Silicon MVP that can pass soak, reconnect, and latency acceptance gates.
+- Keep per-frame media processing on session-local memory and direct Redis keys rather than PostgreSQL or a global serialized snapshot.
+- Preserve explicit answer activation: realtime speech may prepare context but never starts an LLM answer before a user click.
 
 **Non-Goals:**
 
@@ -73,7 +77,7 @@ Alternative considered: use web heartbeat as the media authorization gate. Rejec
 
 ### 4. Maintain one persistent ASR connection per role
 
-The realtime gateway creates at most one ASR adapter session for each active `candidate` and `interviewer` channel. Audio is appended to that provider session in order. Qwen server VAD is the default; client-side VAD remains a bandwidth and noise gate, not a replacement for provider session lifecycle. Manual commit is allowed only for a complete client-detected utterance.
+The realtime gateway creates at most one ASR adapter session for each active `candidate` and `interviewer` channel. Audio is appended to that provider session in order. The client endpoint controller is authoritative for the commercial path because measured provider VAD finalization has a materially longer tail. Provider VAD and semantic completeness remain advisory signals; a bounded hard timeout always closes an abandoned turn. Manual commit is allowed only for a complete client-detected utterance.
 
 Provider-specific event formats stay inside a replaceable ASR adapter. Domain transcript events do not expose Qwen-specific fields.
 
@@ -109,6 +113,28 @@ The commercial app uses one fixed bundle identifier, Developer ID signature, not
 ### 9. Establish measurable release gates
 
 Under the supported reference environment, speech-to-web transcript latency must be p95 at or below two seconds, control requests p95 at or below 500 ms, and transport reconnect at or below five seconds. A 30-minute two-channel soak must show bounded file descriptors, connections, memory, queues, and duplicate transcript rate.
+
+### 10. Keep the media and transcript hot path session-local
+
+WebSocket authentication, user ownership and interview lifecycle are validated when a transport is established and periodically on a coarse control-plane lease. An accepted audio frame must not open a PostgreSQL connection. Per-channel sequence, receipt and publisher activity are updated with bounded session-scoped memory and direct Redis hash fields. Publisher lifecycle state is written only when it changes, never twice per audio revision.
+
+Redis recovery data is split by session, publisher and device. The commercial path must not acquire one global lock and serialize every device, binding, heartbeat and publisher for each frame.
+
+### 11. Deliver minimal monotonic deltas
+
+Transcript, candidate-question and answer-token events carry a global cursor plus stable segment/task identity and revision. A normal SSE update contains only new events. Full transcripts, candidates, runtime and answer state are read only for initial entry, expired-cursor recovery or an explicit diagnostic snapshot.
+
+The browser applies higher cursors and higher segment revisions monotonically. A final transcript cannot be replaced by a late partial. Performance acknowledgements are metrics and do not re-enter the product event stream.
+
+### 12. Stabilize interviewer partials and prefetch context without automatic answers
+
+Only the interviewer channel feeds a stable-partial detector. Stable prefixes may update a predicted retrieval query and prepare resume, JD and knowledge context in a short-lived session cache. Candidate-channel speech remains available for captions and review but cannot become the active interviewer question.
+
+Turn completion produces an authoritative candidate question. The system still waits for explicit user activation. When the user selects quick answer, the backend freezes `questionId`, `questionRevision`, `questionText`, `clickedAtMs` and the compatible prefetch revision. Later ASR revisions cannot mutate the answer already in progress.
+
+### 13. Send audio immediately and retain only a rolling recovery window
+
+Each channel sends negotiated 20-100 ms frames as soon as they are available. Its two-second ring buffer is a rolling copy for acknowledgement recovery and pre-speech context; it is never a batching delay. Binary WebSocket audio frames are preferred after protocol negotiation, while protocol-v2 JSON/base64 remains a bounded compatibility mode for already published clients.
 
 ## Risks / Trade-offs
 

@@ -49,6 +49,8 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         self._snapshot_key = "offersteady:realtime:runtime:v2"
         self._lock_key = f"{self._snapshot_key}:lock"
         self._receipt_key = f"{self._snapshot_key}:receipts"
+        self._publisher_key = f"{self._snapshot_key}:publishers"
+        self._publisher_token_key = f"{self._snapshot_key}:publisher-tokens"
         self._transcript_key = f"{self._snapshot_key}:transcripts"
         self._activity_key = f"{self._snapshot_key}:activity"
         self._runtime_lock = threading.RLock()
@@ -60,7 +62,9 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
 
     def _snapshot(self) -> dict[str, object]:
         return {
-            "publishers": [asdict(item) for item in self.publishers_by_id.values()],
+            # Publishers are stored as entity-scoped hashes. Keep this field empty
+            # so an audio lifecycle update never expands the global snapshot.
+            "publishers": [],
             "receipts": [],
             "transcripts": [],
             "candidates": [asdict(item) for item in self.candidates.values()],
@@ -79,8 +83,28 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         payload = json.loads(raw)
         self.publishers_by_id = {}
         self.publishers_by_token = {}
-        for item in payload.get("publishers", []):
+        legacy_publishers = payload.get("publishers", [])
+        for item in legacy_publishers:
             record = RealtimePublisherRecord(**item)
+            self.publishers_by_id[record.publisher_id] = record
+            self.publishers_by_token[record.token] = record.publisher_id
+        if legacy_publishers:
+            # One-time, idempotent migration keeps reconnect tokens valid while
+            # publisher lifecycle updates move away from the global snapshot.
+            pipeline = self._redis.pipeline()
+            for item in legacy_publishers:
+                record = RealtimePublisherRecord(**item)
+                pipeline.hset(
+                    self._publisher_key,
+                    record.publisher_id,
+                    json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":")),
+                )
+                pipeline.hset(self._publisher_token_key, record.token, record.publisher_id)
+            pipeline.expire(self._publisher_key, self._runtime_ttl_seconds)
+            pipeline.expire(self._publisher_token_key, self._runtime_ttl_seconds)
+            pipeline.execute()
+        for _publisher_id, raw_publisher in self._redis.hscan_iter(self._publisher_key):
+            record = RealtimePublisherRecord(**json.loads(raw_publisher))
             self.publishers_by_id[record.publisher_id] = record
             self.publishers_by_token[record.token] = record.publisher_id
         self.frame_receipts = {}
@@ -173,11 +197,55 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
     def get_web_session_heartbeat(self, *, user_id, session_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_web_session_heartbeat(user_id=user_id, session_id=session_id))
     def claim_live_web_session(self, heartbeat): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).claim_live_web_session(heartbeat))
     def get_active_live_web_session(self, *, user_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_active_live_web_session(user_id=user_id))
-    def save_publisher(self, publisher): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_publisher(publisher))
-    def get_publisher_by_token(self, token): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_publisher_by_token(token))
-    def get_publisher(self, publisher_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_publisher(publisher_id))
-    def list_publishers_for_session(self, *, session_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_publishers_for_session(session_id=session_id))
-    def prune_publishers_for_session(self, *, session_id, keep_publisher_ids): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).prune_publishers_for_session(session_id=session_id, keep_publisher_ids=keep_publisher_ids))
+    def save_publisher(self, publisher):
+        with self._runtime_lock:
+            stored = super().save_publisher(publisher)
+        payload = json.dumps(asdict(stored), ensure_ascii=True, separators=(",", ":"))
+        pipeline = self._redis.pipeline()
+        pipeline.hset(self._publisher_key, stored.publisher_id, payload)
+        pipeline.hset(self._publisher_token_key, stored.token, stored.publisher_id)
+        pipeline.expire(self._publisher_key, self._runtime_ttl_seconds)
+        pipeline.expire(self._publisher_token_key, self._runtime_ttl_seconds)
+        pipeline.execute()
+        return stored
+
+    def get_publisher_by_token(self, token):
+        publisher_id = self._redis.hget(self._publisher_token_key, token)
+        if publisher_id:
+            return self.get_publisher(publisher_id)
+        return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_publisher_by_token(token))
+
+    def get_publisher(self, publisher_id):
+        raw = self._redis.hget(self._publisher_key, publisher_id)
+        if raw:
+            return RealtimePublisherRecord(**json.loads(raw))
+        return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_publisher(publisher_id))
+
+    def list_publishers_for_session(self, *, session_id):
+        records = []
+        for _field, raw in self._redis.hscan_iter(self._publisher_key):
+            payload = json.loads(raw)
+            if payload.get("session_id") == session_id:
+                records.append(RealtimePublisherRecord(**payload))
+        if records:
+            return sorted(records, key=lambda item: item.issued_at_ms)
+        return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_publishers_for_session(session_id=session_id))
+
+    def prune_publishers_for_session(self, *, session_id, keep_publisher_ids):
+        removable = [
+            item for item in self.list_publishers_for_session(session_id=session_id)
+            if item.publisher_id not in keep_publisher_ids
+        ]
+        if not removable:
+            return None
+        with self._runtime_lock:
+            super().prune_publishers_for_session(session_id=session_id, keep_publisher_ids=keep_publisher_ids)
+        pipeline = self._redis.pipeline()
+        for item in removable:
+            pipeline.hdel(self._publisher_key, item.publisher_id)
+            pipeline.hdel(self._publisher_token_key, item.token)
+        pipeline.execute()
+        return None
     def save_frame_receipt(self, receipt):
         with self._runtime_lock:
             stored = super().save_frame_receipt(receipt)
@@ -185,6 +253,12 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         self._redis.hset(self._receipt_key, field, json.dumps(asdict(stored), ensure_ascii=True, separators=(",", ":")))
         self._redis.expire(self._receipt_key, self._runtime_ttl_seconds)
         return stored
+
+    def get_frame_receipt(self, *, session_id, source_kind, source_id):
+        raw = self._redis.hget(self._receipt_key, f"{session_id}:{source_kind}:{source_id}")
+        if raw:
+            return RealtimeFrameReceiptRecord(**json.loads(raw))
+        return None
 
     def list_frame_receipts_for_session(self, *, session_id):
         prefix = f"{session_id}:"
@@ -209,6 +283,9 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         self._redis.expire(self._transcript_key, self._runtime_ttl_seconds)
         self._redis.hset(self._activity_key, stored.session_id, activity_version)
         self._redis.expire(self._activity_key, self._runtime_ttl_seconds)
+        return stored
+
+    def persist_transcript(self, stored):
         if stored.is_final and self._settings.realtime_transcript_persistence_enabled and self._settings.database_url:
             expires_at_ms = int(time.time() * 1000) + self._settings.realtime_transcript_retention_days * 86_400_000
             with psycopg.connect(self._settings.database_url) as connection:
@@ -225,7 +302,7 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
                         """,
                         (stored.session_id, stored.owner_user_id, stored.segment_id, stored.role, stored.text, stored.created_at_ms, expires_at_ms),
                     )
-        return stored
+        return None
 
     @staticmethod
     def _decode_transcript(raw: str) -> TranscriptSegmentRecord:
