@@ -28,4 +28,4 @@
 - [x] 5.1 Run focused backend and web tests after each implementation area and validate the OpenSpec change strictly
 - [x] 5.2 Run full backend/web regressions, typecheck, production build, and synthetic 1/5/10-session plus disconnect load tests
 - [x] 5.3 Document before/after request rate, P95/P99, CPU, reconnect, fallback, errors, compatibility, rollout, and rollback results
-- [ ] 5.4 Commit and push scoped changes, deploy Backend before Web with health gates, verify production endpoints and logs, and retain the prior images for immediate rollback
+- [x] 5.4 Commit and push scoped changes, deploy Backend before Web with health gates, verify production endpoints and logs, and retain the prior images for immediate rollback

@@ -81,3 +81,15 @@
 - 30 分钟连续面试中是否保持实时转写、快答、截图回答和结束面试功能正常。
 
 只有生产观察窗口完成后，才应把新的线上 P95/P99 和 CPU 降幅作为商业 SLA 数据。
+
+## 本次生产发布结果
+
+- 运行代码提交：`1c5c4fca0927a83b826109982ce05ddfce579802`。
+- Backend 先发布并通过容器健康、本机和公网 `/healthz`、计费状态、`/api/v1/web/state` 门禁后，才发布 Web。
+- 新聚合快照路由已存在；未授权探测返回预期的 HTTP 401，而不是 404。
+- Web 生产清单为 `appEnv=production`、`apiBaseUrl=/`、`appVersion=0.1.0`。
+- 发布后连续 20 轮公网 `/healthz` 与 `/app` 探测全部成功。
+- 发布后检查窗口内 Backend 与 Web 日志未发现 HTTP 5xx、`ERROR` 或 `Traceback`。
+- 发布后空闲瞬时资源样本：Backend CPU 0.72%、Web CPU 0.13%。这是单点运行样本，不代表高峰或长期 P95。
+- 发布前镜像已保留为 `offersteady-backend:rollback-04f3ecc` 和 `offersteady-web:rollback-04f3ecc`。
+- PostgreSQL、Redis、Admin、Analytics 与 Desktop 未重建；没有数据库迁移。
