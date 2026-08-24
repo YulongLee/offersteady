@@ -6,7 +6,7 @@ import threading
 import time
 from dataclasses import asdict
 
-from app.modules.realtime_speech import session_stream_refresh_plan
+from app.modules.realtime_speech import run_sync_service_call, session_stream_refresh_plan
 from app.ports.realtime_speech import RealtimeEvent
 from app.services.realtime_event_wait import RealtimeEventWaitExecutor
 from app.services.redis_realtime_speech_repository import RedisRealtimeSpeechRepository
@@ -304,3 +304,15 @@ def test_blocking_wait_executor_does_not_starve_default_executor() -> None:
         return elapsed_ms
 
     assert asyncio.run(scenario()) < 100
+
+
+def test_sync_realtime_service_call_does_not_block_event_loop() -> None:
+    async def scenario() -> float:
+        release = threading.Event()
+        loop = asyncio.get_running_loop()
+        loop.call_later(0.02, release.set)
+        started = time.perf_counter()
+        assert await run_sync_service_call(release.wait, 0.5) is True
+        return (time.perf_counter() - started) * 1_000
+
+    assert asyncio.run(scenario()) < 200

@@ -1083,7 +1083,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     }, signal);
   }
 
-  async subscribeRealtimeSession(interviewId: string, onUpdate: Parameters<InterviewAppAdapter["subscribeRealtimeSession"]>[1], signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }) {
+  async subscribeRealtimeSession(interviewId: string, onUpdate: Parameters<InterviewAppAdapter["subscribeRealtimeSession"]>[1], signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number; readonly onTransportConnected?: () => void }) {
     const cursorKey = `offersteady:realtime-cursor:${interviewId}`;
     const storedCursor = typeof window.sessionStorage?.getItem === "function" ? Number(window.sessionStorage.getItem(cursorKey) ?? "0") : 0;
     const cursor = Number.isFinite(storedCursor) && storedCursor > 0 ? storedCursor : 0;
@@ -1105,6 +1105,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       throw error;
     }
     if (!response.body) throw new AppError("network", "当前浏览器不支持实时对话订阅读取");
+    lease?.onTransportConnected?.();
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let pendingSnapshot: BackendRealtimeSessionStreamEvent | null = null;

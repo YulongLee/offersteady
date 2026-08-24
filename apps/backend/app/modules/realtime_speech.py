@@ -4,6 +4,7 @@ import asyncio
 import json
 from collections import deque
 from time import time
+from typing import Callable, ParamSpec, TypeVar
 
 from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
@@ -47,6 +48,13 @@ descriptor = ModuleDescriptor(
     mode="active",
     notes="Session-bound realtime speech orchestration for subtitles, question detection, and Chat Service handoff.",
 )
+P = ParamSpec("P")
+T = TypeVar("T")
+
+
+async def run_sync_service_call(operation: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs) -> T:
+    """Keep synchronous repository/service I/O off the shared FastAPI event loop."""
+    return await asyncio.to_thread(operation, *args, **kwargs)
 
 
 def should_validate_realtime_session(*, last_validated_at: float, now: float) -> bool:
@@ -200,7 +208,8 @@ async def desktop_device_heartbeat(
     request: DesktopDeviceHeartbeatRequest,
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[dict[str, object]]:
-    device = service.record_desktop_device_heartbeat(
+    device = await run_sync_service_call(
+        service.record_desktop_device_heartbeat,
         device_id=device_id,
         manual_code=request.manual_code,
         display_name=request.display_name,
@@ -269,7 +278,8 @@ async def web_session_heartbeat(
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[dict[str, object]]:
     user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
-    heartbeat = service.record_web_session_heartbeat(
+    heartbeat = await run_sync_service_call(
+        service.record_web_session_heartbeat,
         user_id=user_id,
         session_id=session_id,
         binding_id=request.binding_id,
@@ -301,7 +311,7 @@ async def get_desktop_binding(
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[DesktopDeviceBindingResponse]:
     resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
-    binding = service.get_desktop_binding(user_id=resolved_user_id, session_id=session_id)
+    binding = await run_sync_service_call(service.get_desktop_binding, user_id=resolved_user_id, session_id=session_id)
     return success_response(request=request, data=service.desktop_binding_response(binding), timestamp=utc_now_iso())
 
 
@@ -344,7 +354,11 @@ async def get_desktop_active_connection(
     manual_code: str = Query(alias="manualCode"),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[dict[str, object]]:
-    connection = service.get_desktop_active_connection(device_id=device_id, manual_code=manual_code)
+    connection = await run_sync_service_call(
+        service.get_desktop_active_connection,
+        device_id=device_id,
+        manual_code=manual_code,
+    )
     return success_response(request=request, data=connection, timestamp=utc_now_iso())
 
 
@@ -357,7 +371,7 @@ async def get_runtime(
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[RealtimeSessionRuntimeResponse]:
     resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
-    runtime = service.get_runtime(user_id=resolved_user_id, session_id=session_id)
+    runtime = await run_sync_service_call(service.get_runtime, user_id=resolved_user_id, session_id=session_id)
     return success_response(request=request, data=runtime, timestamp=utc_now_iso())
 
 
@@ -370,7 +384,12 @@ async def control_session_capture(
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[dict[str, object]]:
     user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
-    result = service.control_capture(user_id=user_id, session_id=session_id, action=request.action)
+    result = await run_sync_service_call(
+        service.control_capture,
+        user_id=user_id,
+        session_id=session_id,
+        action=request.action,
+    )
     return success_response(request=request_context, data=result, timestamp=utc_now_iso())
 
 
@@ -536,7 +555,9 @@ async def list_transcripts(
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[RealtimeTranscriptListResponse]:
-    return success_response(request=request, data=service.list_transcripts(user_id=resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context), session_id=session_id), timestamp=utc_now_iso())
+    resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
+    transcripts = await run_sync_service_call(service.list_transcripts, user_id=resolved_user_id, session_id=session_id)
+    return success_response(request=request, data=transcripts, timestamp=utc_now_iso())
 
 
 @router.get("/sessions/{session_id}/question-candidates", response_model=ApiEnvelope[RealtimeQuestionCandidateListResponse])
@@ -547,7 +568,9 @@ async def list_candidates(
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[RealtimeQuestionCandidateListResponse]:
-    return success_response(request=request, data=service.list_candidates(user_id=resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context), session_id=session_id), timestamp=utc_now_iso())
+    resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
+    candidates = await run_sync_service_call(service.list_candidates, user_id=resolved_user_id, session_id=session_id)
+    return success_response(request=request, data=candidates, timestamp=utc_now_iso())
 
 
 @router.post("/question-candidates/{candidate_id}/confirm", response_model=ApiEnvelope[dict[str, object]])
@@ -590,7 +613,9 @@ async def list_events(
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[RealtimeEventListResponse]:
-    return success_response(request=request, data=service.list_events(user_id=resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context), session_id=session_id), timestamp=utc_now_iso())
+    resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
+    events = await run_sync_service_call(service.list_events, user_id=resolved_user_id, session_id=session_id)
+    return success_response(request=request, data=events, timestamp=utc_now_iso())
 
 
 @router.post("/sessions/{session_id}/device-status", response_model=ApiEnvelope[dict[str, object]])
@@ -601,27 +626,33 @@ async def publish_device_status(
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[dict[str, object]]:
-    if request.manual_code is not None:
-        binding = service.get_desktop_active_binding(device_id=request.device_id, manual_code=request.manual_code)
-        if binding.session_id != session_id:
-            raise DomainRequestError(
-                "realtime-speech",
-                "device-status",
-                "该设备已连接到另一场面试，请刷新当前连接。",
-                410,
-                "desktop_binding_replaced",
-            )
-        resolved_user_id = binding.owner_user_id
-    else:
-        resolved_user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
-    event = service.publish_device_status(
-        user_id=resolved_user_id,
-        session_id=session_id,
-        device_id=request.device_id,
-        capture_state=str(request.capture_state),
-        source_health=request.source_health,
-        capabilities=request.capabilities,
-    )
+    explicit_user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context) if request.manual_code is None else None
+
+    def publish_status():
+        if request.manual_code is not None:
+            binding = service.get_desktop_active_binding(device_id=request.device_id, manual_code=request.manual_code)
+            if binding.session_id != session_id:
+                raise DomainRequestError(
+                    "realtime-speech",
+                    "device-status",
+                    "该设备已连接到另一场面试，请刷新当前连接。",
+                    410,
+                    "desktop_binding_replaced",
+                )
+            resolved_user_id = binding.owner_user_id
+        else:
+            assert explicit_user_id is not None
+            resolved_user_id = explicit_user_id
+        return service.publish_device_status(
+            user_id=resolved_user_id,
+            session_id=session_id,
+            device_id=request.device_id,
+            capture_state=str(request.capture_state),
+            source_health=request.source_health,
+            capabilities=request.capabilities,
+        )
+
+    event = await run_sync_service_call(publish_status)
     return success_response(request=request_context, data=event.model_dump(by_alias=True), timestamp=utc_now_iso())
 
 

@@ -443,10 +443,14 @@ describe("backend preview adapter", () => {
       page: "live",
       pageInstanceId: "page-instance-1",
     });
+    const onTransportConnected = vi.fn();
     await adapter.subscribeRealtimeSession("session-1", () => undefined, undefined, {
       pageInstanceId: lease.pageInstanceId!,
       leaseGeneration: lease.leaseGeneration,
+      onTransportConnected,
     });
+
+    expect(onTransportConnected).toHaveBeenCalledTimes(1);
 
     expect(fetchImpl).toHaveBeenNthCalledWith(1,
       "http://localhost:8000/api/v1/realtime-speech/sessions/session-1/web-heartbeat",
