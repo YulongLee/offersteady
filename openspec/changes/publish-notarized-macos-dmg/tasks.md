@@ -8,5 +8,5 @@
 
 - [x] 2.1 Run desktop and backend tests plus strict OpenSpec validation.
 - [x] 2.2 Revalidate both 0.1.16 production DMGs and generate checksum-backed publication metadata.
-- [ ] 2.3 Upload both DMGs, verify the manifest preserves Windows, then commit and deploy the manifest without changing desktop runtime code.
-- [ ] 2.4 Verify the public arm64 and x64 download redirects, downloaded checksums, and DMG Gatekeeper/stapler status.
+- [x] 2.3 Upload both DMGs, verify the manifest preserves Windows, then commit and deploy the manifest without changing desktop runtime code.
+- [x] 2.4 Verify the public arm64 and x64 download redirects, downloaded checksums, and DMG Gatekeeper/stapler status.
