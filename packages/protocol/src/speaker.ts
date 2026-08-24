@@ -28,6 +28,20 @@ export interface SpeakerTranscriptSegment {
   readonly overlap: boolean;
   readonly publishedAtMs?: number;
   readonly performance?: {
+    readonly traceId?: string;
+    readonly eventId?: string;
+    readonly speechStartAtMs?: number;
+    readonly desktopWsSendAtMs?: number;
+    readonly backendWsReceiveAtMs?: number;
+    readonly qwenAudioAppendAtMs?: number;
+    readonly qwenPartialReceivedAtMs?: number;
+    readonly redisEventXaddAtMs?: number;
+    readonly redisEventXreadAtMs?: number;
+    readonly redisReadMode?: string;
+    readonly sseEventSendAtMs?: number;
+    readonly browserEventReceiveAtMs?: number;
+    readonly browserStateUpdateAtMs?: number;
+    readonly browserRenderAtMs?: number;
     readonly captureToIngestMs?: number;
     readonly queueWaitMs?: number;
     readonly asrTtftMs?: number;

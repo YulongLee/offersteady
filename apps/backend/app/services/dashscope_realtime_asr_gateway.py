@@ -6,6 +6,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, field, replace
+from typing import Callable
 from urllib.parse import urlencode
 
 from websockets.sync.client import connect
@@ -32,11 +33,15 @@ class _SourceRealtimeSession:
     event_revision: int = 0
     delivered_revision: int = 0
     first_text_at_ms: int | None = None
+    latest_text_at_ms: int | None = None
     completed_at_ms: int | None = None
     receiver_error: Exception | None = None
     accepting_transcript_events: bool = True
     closed: bool = False
     receiver_thread: threading.Thread | None = None
+    latest_frame: AudioFrame | None = None
+    latest_audio_appended_at_ms: int | None = None
+    first_partial_observed_for_segment: bool = False
 
 
 class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
@@ -46,6 +51,13 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         self._source_sessions: dict[str, _SourceRealtimeSession] = {}
         self._source_sessions_lock = threading.Lock()
         self._connection_recreations: dict[str, int] = {}
+        self._connection_create_counts: dict[str, int] = {}
+        self._connection_reconnect_counts: dict[str, int] = {}
+        self._connection_lifetime_total_ms: dict[str, int] = {}
+        self._connection_lifetime_max_ms: dict[str, int] = {}
+        self._connection_closed_counts: dict[str, int] = {}
+        self._connected_source_keys: set[str] = set()
+        self._utterance_counts: dict[str, int] = {}
         self._session_created_missing: dict[str, int] = {}
         self._session_update_failures: dict[str, int] = {}
         self._completed_missing: dict[str, int] = {}
@@ -57,6 +69,12 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         self._mode_by_source: dict[str, str] = {}
         self._connection_state_by_source: dict[str, str] = {}
         self._last_error_by_source: dict[str, str] = {}
+        self._frames_before_first_partial: dict[str, int] = {}
+        self._partial_listener: Callable[[AudioFrame, TranscriptResult], None] | None = None
+
+    def set_partial_listener(self, listener: Callable[[AudioFrame, TranscriptResult], None]) -> None:
+        """Publish provider partials from the receive pump, independent of audio appends."""
+        self._partial_listener = listener
 
     @staticmethod
     def _normalize_audio_codec(codec: str) -> str:
@@ -82,7 +100,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         if frame.codec != normalized_codec:
             normalized_frame = replace(frame, codec=normalized_codec)
         try:
-            text, first_text_at_ms, completed_at_ms = self._roundtrip(normalized_frame)
+            text, first_text_at_ms, partial_received_at_ms, completed_at_ms, audio_appended_at_ms, commit_sent_at_ms = self._roundtrip(normalized_frame)
         finally:
             if not self.settings.realtime_asr_persistent_sessions_enabled:
                 self._close_source_session(self._source_session_key(normalized_frame))
@@ -97,20 +115,42 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                 model_name=self.settings.realtime_asr_model,
             ),
             first_text_at_ms=first_text_at_ms,
+            partial_received_at_ms=partial_received_at_ms,
             completed_at_ms=completed_at_ms,
+            audio_appended_at_ms=audio_appended_at_ms,
+            commit_sent_at_ms=commit_sent_at_ms,
         )
 
     def finalize(self, *, frame: AudioFrame, attempt: int) -> TranscriptResult:
         """Provider boundary for an authoritative application-side turn commit."""
         return self.transcribe(frame=frame, attempt=attempt)
 
-    def diagnostics(self, source_kind: str) -> dict[str, int]:
+    def diagnostics(self, source_kind: str) -> dict[str, int | float]:
+        now = time.monotonic()
         with self._source_sessions_lock:
-            active_provider_sessions = sum(
-                1 for session in self._source_sessions.values() if session.source_kind == source_kind
+            active_sessions = [
+                session for session in self._source_sessions.values() if session.source_kind == source_kind
+            ]
+            active_provider_sessions = len(active_sessions)
+            active_lifetime_ms = max(
+                (int((now - session.created_at_monotonic) * 1000) for session in active_sessions),
+                default=0,
             )
+        create_count = self._connection_create_counts.get(source_kind, 0)
+        utterance_count = self._utterance_counts.get(source_kind, 0)
+        closed_count = self._connection_closed_counts.get(source_kind, 0)
+        lifetime_total_ms = self._connection_lifetime_total_ms.get(source_kind, 0)
         return {
             "connection_recreations": self._connection_recreations.get(source_kind, 0),
+            "asr_connection_create_count": create_count,
+            "asr_connection_reconnect_count": self._connection_reconnect_counts.get(source_kind, 0),
+            "asr_connection_lifetime_ms": active_lifetime_ms,
+            "asr_connection_completed_lifetime_avg_ms": (
+                int(lifetime_total_ms / closed_count) if closed_count else 0
+            ),
+            "asr_connection_completed_lifetime_max_ms": self._connection_lifetime_max_ms.get(source_kind, 0),
+            "utterance_count": utterance_count,
+            "utterances_per_connection": round(utterance_count / create_count, 3) if create_count else 0.0,
             "session_created_missing": self._session_created_missing.get(source_kind, 0),
             "session_update_failures": self._session_update_failures.get(source_kind, 0),
             "completed_missing": self._completed_missing.get(source_kind, 0),
@@ -120,6 +160,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             "append_count": self._append_counts.get(source_kind, 0),
             "commit_count": self._commit_counts.get(source_kind, 0),
             "active_provider_sessions": active_provider_sessions,
+            "frames_before_first_partial": self._frames_before_first_partial.get(source_kind, 0),
         }
 
     def runtime_status(self, source_kind: str) -> dict[str, str | int | None]:
@@ -149,11 +190,15 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         self._close_source_session(source_session_key)
         return 1 if exists else 0
 
-    def _roundtrip(self, frame: AudioFrame) -> tuple[str, int | None, int | None]:
+    def _roundtrip(self, frame: AudioFrame) -> tuple[str, int | None, int | None, int | None, int | None, int | None]:
         session = self._get_or_create_source_session(frame)
+        audio_appended_at_ms: int | None = None
+        commit_sent_at_ms: int | None = None
         try:
             with session.lock:
                 self._prepare_segment_state(session, frame)
+                with session.event_condition:
+                    session.latest_frame = frame
                 if frame.audio_bytes:
                     self._append_counts[frame.source_kind] = self._append_counts.get(frame.source_kind, 0) + ((len(frame.audio_bytes) + 6399) // 6400)
                     self._send_audio_chunks(
@@ -161,20 +206,24 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                         frame.audio_bytes,
                         event_id_prefix=f"{frame.segment_id}-{frame.revision}",
                     )
+                    audio_appended_at_ms = int(time.time() * 1000)
+                    with session.event_condition:
+                        session.latest_audio_appended_at_ms = audio_appended_at_ms
                     session.updated_at_monotonic = time.monotonic()
                 if frame.is_final:
                     session.connection.send(json.dumps({
                         "event_id": f"rt-commit-{frame.segment_id}-{frame.revision}",
                         "type": "input_audio_buffer.commit",
                     }))
+                    commit_sent_at_ms = int(time.time() * 1000)
                     self._commit_counts[frame.source_kind] = self._commit_counts.get(frame.source_kind, 0) + 1
                 if frame.is_final or not self.settings.realtime_asr_nonblocking_partials_enabled:
-                    transcript_text, first_text_at_ms, completed_at_ms = self._wait_for_transcript(
+                    transcript_text, first_text_at_ms, partial_received_at_ms, completed_at_ms = self._wait_for_transcript(
                         session,
                         finalize=frame.is_final,
                     )
                 else:
-                    transcript_text, first_text_at_ms, completed_at_ms = self._latest_available_transcript(
+                    transcript_text, first_text_at_ms, partial_received_at_ms, completed_at_ms = self._latest_available_transcript(
                         session
                     )
                 if frame.is_final:
@@ -187,7 +236,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                         session.current_segment_id = None
                 self._connection_state_by_source[session.source_kind] = "receiving"
                 self._last_error_by_source.pop(session.source_kind, None)
-                return transcript_text, first_text_at_ms, completed_at_ms
+                return transcript_text, first_text_at_ms, partial_received_at_ms, completed_at_ms, audio_appended_at_ms, commit_sent_at_ms
         except TimeoutError as exc:
             self._record_error(frame.source_kind, "realtime_asr_timeout")
             self._close_source_session(self._source_session_key(frame))
@@ -215,11 +264,16 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             return
         with session.event_condition:
             session.current_segment_id = frame.segment_id
+            session.source_generation = frame.source_generation or session.source_generation
+            self._utterance_counts[frame.source_kind] = self._utterance_counts.get(frame.source_kind, 0) + 1
             session.transcript_text = ""
             session.first_text_at_ms = None
+            session.latest_text_at_ms = None
             session.completed_at_ms = None
             session.receiver_error = None
             session.accepting_transcript_events = True
+            session.first_partial_observed_for_segment = False
+            session.latest_audio_appended_at_ms = None
             session.delivered_revision = session.event_revision
 
     def _get_or_create_source_session(self, frame: AudioFrame) -> _SourceRealtimeSession:
@@ -231,18 +285,24 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                 reusable = (
                     self.settings.realtime_asr_persistent_sessions_enabled
                     and existing.sample_rate_hz == frame.sample_rate_hz
-                    and existing.source_generation == (frame.source_generation or 1)
                 )
                 if reusable:
+                    existing.source_generation = frame.source_generation or existing.source_generation
                     existing.updated_at_monotonic = time.monotonic()
                     return existing
                 self._source_sessions.pop(key, None)
+                self._record_closed_lifetime(existing)
                 try:
                     existing.connection.close()
                 except Exception:
                     pass
             connection, mode = self._open_connection(frame)
             self._connection_recreations[frame.source_kind] = self._connection_recreations.get(frame.source_kind, 0) + 1
+            self._connection_create_counts[frame.source_kind] = self._connection_create_counts.get(frame.source_kind, 0) + 1
+            if key in self._connected_source_keys:
+                self._connection_reconnect_counts[frame.source_kind] = self._connection_reconnect_counts.get(frame.source_kind, 0) + 1
+            else:
+                self._connected_source_keys.add(key)
             session = _SourceRealtimeSession(
                 connection=connection,
                 sample_rate_hz=frame.sample_rate_hz,
@@ -343,7 +403,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         session: _SourceRealtimeSession,
         *,
         finalize: bool,
-    ) -> tuple[str, int | None, int | None]:
+    ) -> tuple[str, int | None, int | None, int | None]:
         wait_seconds = (
             self.settings.realtime_asr_finalize_timeout_seconds
             if finalize
@@ -365,18 +425,19 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             has_new_revision = session.event_revision > session.delivered_revision
             transcript_text = session.transcript_text if finalize or has_new_revision else ""
             first_text_at_ms = session.first_text_at_ms
+            partial_received_at_ms = session.latest_text_at_ms if has_new_revision else None
             completed_at_ms = session.completed_at_ms
             if has_new_revision:
                 session.delivered_revision = session.event_revision
         if finalize and completed_at_ms is None:
             self._completed_missing[session.source_kind] = self._completed_missing.get(session.source_kind, 0) + 1
             raise RetryableAsrError("realtime_asr_transcript_missing")
-        return transcript_text, first_text_at_ms, completed_at_ms
+        return transcript_text, first_text_at_ms, partial_received_at_ms, completed_at_ms
 
     @staticmethod
     def _latest_available_transcript(
         session: _SourceRealtimeSession,
-    ) -> tuple[str, int | None, int | None]:
+    ) -> tuple[str, int | None, int | None, int | None]:
         """Return an already-received partial without delaying audio publication.
 
         The provider receiver owns transcript arrival. Audio append calls must not
@@ -390,7 +451,12 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             transcript_text = session.transcript_text if has_new_revision else ""
             if has_new_revision:
                 session.delivered_revision = session.event_revision
-            return transcript_text, session.first_text_at_ms, session.completed_at_ms
+            return (
+                transcript_text,
+                session.first_text_at_ms,
+                session.latest_text_at_ms if has_new_revision else None,
+                session.completed_at_ms,
+            )
 
     def _receive_events(self, session: _SourceRealtimeSession) -> None:
         while True:
@@ -423,6 +489,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             if event_type == "session.updated":
                 continue
             if event_type in {"conversation.item.input_audio_transcription.text", "conversation.item.input_audio_transcription.completed"}:
+                partial_notification: tuple[AudioFrame, TranscriptResult] | None = None
                 with session.event_condition:
                     if not session.accepting_transcript_events:
                         continue
@@ -443,7 +510,37 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                         session.transcript_text = next_text
                         if session.first_text_at_ms is None:
                             session.first_text_at_ms = int(time.time() * 1000)
+                        session.latest_text_at_ms = int(time.time() * 1000)
                         session.event_revision += 1
+                        if (
+                            event_type == "conversation.item.input_audio_transcription.text"
+                            and self._partial_listener is not None
+                            and session.latest_frame is not None
+                        ):
+                            if not session.first_partial_observed_for_segment:
+                                session.first_partial_observed_for_segment = True
+                                self._frames_before_first_partial[session.source_kind] = session.latest_frame.revision
+                            # Mark this provider revision delivered before invoking
+                            # the listener so the next audio append cannot publish
+                            # the same partial a second time.
+                            session.delivered_revision = session.event_revision
+                            partial_frame = replace(session.latest_frame, is_final=False)
+                            partial_notification = (
+                                partial_frame,
+                                TranscriptResult(
+                                    text=next_text.strip(),
+                                    confidence=0.82,
+                                    overlap=False,
+                                    usage=AsrUsageReport(
+                                        total_tokens=max(1, len(next_text.strip()) // 2),
+                                        provider_name=self.settings.realtime_asr_provider,
+                                        model_name=self.settings.realtime_asr_model,
+                                    ),
+                                    first_text_at_ms=session.first_text_at_ms,
+                                    partial_received_at_ms=session.latest_text_at_ms,
+                                    audio_appended_at_ms=session.latest_audio_appended_at_ms,
+                                ),
+                            )
                     elif event_type == "conversation.item.input_audio_transcription.text":
                         source_kind = session.source_kind
                         self._blank_partial_suppressed[source_kind] = self._blank_partial_suppressed.get(source_kind, 0) + 1
@@ -451,12 +548,21 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                         session.completed_at_ms = int(time.time() * 1000)
                         session.event_revision += 1
                     session.event_condition.notify_all()
+                if partial_notification is not None and self._partial_listener is not None:
+                    try:
+                        self._partial_listener(*partial_notification)
+                    except Exception as exc:  # The receive pump must remain alive.
+                        self.logger.exception(
+                            "realtime_asr.partial_listener_failed",
+                            extra={"sourceKind": session.source_kind, "errorCode": exc.__class__.__name__},
+                        )
 
     def _close_source_session(self, source_session_key: str) -> None:
         with self._source_sessions_lock:
             session = self._source_sessions.pop(source_session_key, None)
         if session is None:
             return
+        self._record_closed_lifetime(session)
         self._connection_state_by_source[session.source_kind] = "closed"
         with session.event_condition:
             session.closed = True
@@ -465,6 +571,24 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             session.connection.close()
         except Exception:
             pass
+
+    def _record_closed_lifetime(self, session: _SourceRealtimeSession) -> None:
+        lifetime_ms = max(0, int((time.monotonic() - session.created_at_monotonic) * 1000))
+        closed_counts = getattr(self, "_connection_closed_counts", None)
+        if closed_counts is None:
+            closed_counts = self._connection_closed_counts = {}
+        lifetime_totals = getattr(self, "_connection_lifetime_total_ms", None)
+        if lifetime_totals is None:
+            lifetime_totals = self._connection_lifetime_total_ms = {}
+        lifetime_maximums = getattr(self, "_connection_lifetime_max_ms", None)
+        if lifetime_maximums is None:
+            lifetime_maximums = self._connection_lifetime_max_ms = {}
+        closed_counts[session.source_kind] = closed_counts.get(session.source_kind, 0) + 1
+        lifetime_totals[session.source_kind] = lifetime_totals.get(session.source_kind, 0) + lifetime_ms
+        lifetime_maximums[session.source_kind] = max(
+            lifetime_maximums.get(session.source_kind, 0),
+            lifetime_ms,
+        )
 
     def _sweep_stale_sessions_locked(self) -> None:
         now = time.monotonic()
@@ -477,6 +601,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             session = self._source_sessions.pop(source_session_key, None)
             if session is None:
                 continue
+            self._record_closed_lifetime(session)
             self._idle_session_closures[session.source_kind] = self._idle_session_closures.get(session.source_kind, 0) + 1
             self._connection_state_by_source[session.source_kind] = "idle"
             with session.event_condition:

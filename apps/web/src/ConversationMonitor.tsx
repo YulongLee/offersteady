@@ -86,6 +86,19 @@ export function ConversationMonitor({ state, onConfirmQuestion, onDismissQuestio
     runtime.latestFrontendRenderMs = frontendRenderMs;
     runtime.latestSegmentId = latest.id;
     runtime.renderedAtMs = Date.now();
+    const performance = latest.performance;
+    if (performance?.traceId) {
+      window.dispatchEvent(new CustomEvent("offersteady:realtime-transcript-rendered", {
+        detail: {
+          sessionId: latest.sessionId,
+          traceId: performance.traceId,
+          eventId: performance.eventId,
+          browserEventReceiveAtMs: performance.browserEventReceiveAtMs,
+          browserStateUpdateAtMs: performance.browserStateUpdateAtMs,
+          browserRenderAtMs: runtime.renderedAtMs,
+        },
+      }));
+    }
   }, [transcripts]);
   const pendingSegmentIds = new Set(state.speaker.pendingQuestion?.sourceSegmentIds ?? []);
   return <section className={`conversation-monitor ${transcripts.length === 0 ? "is-empty" : "has-transcripts"}`} aria-labelledby="conversation-title">

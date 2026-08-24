@@ -132,6 +132,33 @@ class RealtimeStageTimingResponse(BaseModel):
     backend_push_ms: int | None = Field(default=None, alias="backendPushMs")
     capture_to_publish_ms: int | None = Field(default=None, alias="captureToPublishMs")
     frontend_render_ms: int | None = Field(default=None, alias="frontendRenderMs")
+    session_id: str | None = Field(default=None, alias="sessionId")
+    channel: str | None = None
+    sequence: int | None = None
+    utterance_id: str | None = Field(default=None, alias="utteranceId")
+    event_id: str | None = Field(default=None, alias="eventId")
+    speech_start_at_ms: int | None = Field(default=None, alias="speechStartAtMs")
+    system_vad_trigger_at_ms: int | None = Field(default=None, alias="systemVadTriggerAtMs")
+    system_speech_start_at_ms: int | None = Field(default=None, alias="systemSpeechStartAtMs")
+    system_first_effective_partial_at_ms: int | None = Field(default=None, alias="systemFirstEffectivePartialAtMs")
+    frames_before_first_partial: int | None = Field(default=None, alias="framesBeforeFirstPartial")
+    desktop_audio_capture_at_ms: int | None = Field(default=None, alias="desktopAudioCaptureAtMs")
+    desktop_ws_send_at_ms: int | None = Field(default=None, alias="desktopWsSendAtMs")
+    backend_ws_receive_at_ms: int | None = Field(default=None, alias="backendWsReceiveAtMs")
+    queue_enter_at_ms: int | None = Field(default=None, alias="queueEnterAtMs")
+    queue_leave_at_ms: int | None = Field(default=None, alias="queueLeaveAtMs")
+    qwen_audio_append_at_ms: int | None = Field(default=None, alias="qwenAudioAppendAtMs")
+    qwen_partial_received_at_ms: int | None = Field(default=None, alias="qwenPartialReceivedAtMs")
+    qwen_final_received_at_ms: int | None = Field(default=None, alias="qwenFinalReceivedAtMs")
+    redis_event_xadd_at_ms: int | None = Field(default=None, alias="redisEventXaddAtMs")
+    redis_event_xread_at_ms: int | None = Field(default=None, alias="redisEventXreadAtMs")
+    redis_read_mode: str | None = Field(default=None, alias="redisReadMode")
+    sse_event_send_at_ms: int | None = Field(default=None, alias="sseEventSendAtMs")
+    browser_event_receive_at_ms: int | None = Field(default=None, alias="browserEventReceiveAtMs")
+    browser_state_update_at_ms: int | None = Field(default=None, alias="browserStateUpdateAtMs")
+    browser_render_at_ms: int | None = Field(default=None, alias="browserRenderAtMs")
+    speech_end_detected_at_ms: int | None = Field(default=None, alias="speechEndDetectedAtMs")
+    manual_commit_sent_at_ms: int | None = Field(default=None, alias="manualCommitSentAtMs")
 
 
 class RealtimeRuntimeCountersResponse(BaseModel):
@@ -146,6 +173,7 @@ class RealtimeRuntimeCountersResponse(BaseModel):
     filler_results_suppressed: int = Field(alias="fillerResultsSuppressed")
     chunks_produced: int = Field(alias="chunksProduced")
     chunks_uploaded: int = Field(alias="chunksUploaded")
+    frames_consumed: int = Field(default=0, alias="framesConsumed")
     serialized_audio_bytes: int = Field(alias="serializedAudioBytes")
     provider_append_count: int = Field(default=0, alias="providerAppendCount")
     provider_commit_count: int = Field(default=0, alias="providerCommitCount")
@@ -154,6 +182,11 @@ class RealtimeRuntimeCountersResponse(BaseModel):
     vad_to_manual_fallbacks: int = Field(default=0, alias="vadToManualFallbacks")
     idle_provider_session_closures: int = Field(default=0, alias="idleProviderSessionClosures")
     active_provider_sessions: int = Field(default=0, alias="activeProviderSessions")
+    asr_connection_create_count: int = Field(default=0, alias="asrConnectionCreateCount")
+    asr_connection_reconnect_count: int = Field(default=0, alias="asrConnectionReconnectCount")
+    asr_connection_lifetime_ms: int = Field(default=0, alias="asrConnectionLifetimeMs")
+    utterance_count: int = Field(default=0, alias="utteranceCount")
+    utterances_per_connection: float = Field(default=0, alias="utterancesPerConnection")
     terminal_admissions: int = Field(default=0, alias="terminalAdmissions")
     terminal_duplicates: int = Field(default=0, alias="terminalDuplicates")
     terminal_admission_failures: int = Field(default=0, alias="terminalAdmissionFailures")
@@ -257,6 +290,8 @@ class RealtimeFrameRequest(BaseModel):
     revision: int
     captured_at_ms: int = Field(alias="capturedAtMs")
     started_at_ms: int = Field(alias="startedAtMs")
+    vad_triggered_at_ms: int | None = Field(default=None, alias="vadTriggeredAtMs")
+    speech_confirmed_at_ms: int | None = Field(default=None, alias="speechConfirmedAtMs")
     ended_at_ms: int = Field(alias="endedAtMs")
     duration_ms: int = Field(alias="durationMs")
     codec: str
@@ -339,6 +374,10 @@ class RuntimePerformanceAcknowledgementRequest(BaseModel):
     stage: Literal["transcript-render", "screenshot-first-render", "answer-first-render"]
     duration_ms: int = Field(ge=0, le=120_000, alias="durationMs")
     task_id: str | None = Field(default=None, min_length=1, max_length=128, alias="taskId", pattern=r"^[A-Za-z0-9:._-]+$")
+    event_id: str | None = Field(default=None, min_length=1, max_length=128, alias="eventId", pattern=r"^[A-Za-z0-9:._-]+$")
+    browser_event_receive_at_ms: int | None = Field(default=None, ge=0, alias="browserEventReceiveAtMs")
+    browser_state_update_at_ms: int | None = Field(default=None, ge=0, alias="browserStateUpdateAtMs")
+    browser_render_at_ms: int | None = Field(default=None, ge=0, alias="browserRenderAtMs")
 
 
 class RealtimeDeliveryMetricRequest(BaseModel):

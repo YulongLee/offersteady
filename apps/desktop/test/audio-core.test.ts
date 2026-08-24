@@ -150,7 +150,13 @@ describe("speech segmenter", () => {
     const digitalAudio = new Uint8Array([1, 2, 3, 4]);
 
     expect(system.push(digitalAudio, 0, 0.001)).toEqual([]);
-    expect(system.push(digitalAudio, 100, 0.001)).toHaveLength(1);
+    const systemPartial = system.push(digitalAudio, 100, 0.001);
+    expect(systemPartial).toHaveLength(1);
+    expect(systemPartial[0]).toMatchObject({
+      vadTriggeredAtMs: 0,
+      speechConfirmedAtMs: 100,
+      startedAtMs: 0,
+    });
     expect(microphone.push(digitalAudio, 0, 0.001)).toEqual([]);
     expect(microphone.push(digitalAudio, 100, 0.001)).toEqual([]);
   });

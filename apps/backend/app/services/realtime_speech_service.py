@@ -7,7 +7,7 @@ import queue
 import random
 import re
 import threading
-from collections import Counter
+from collections import Counter, deque
 from dataclasses import replace
 from difflib import SequenceMatcher
 from time import sleep, time
@@ -138,8 +138,8 @@ class RealtimeSpeechService:
         )
         self._asr_slots = threading.BoundedSemaphore(max(4, settings.realtime_asr_worker_count * 2))
         self._cold_slots = threading.BoundedSemaphore(max(8, settings.realtime_cold_path_queue_max))
-        self._latest_timings_by_session_source: dict[tuple[str, RealtimeSourceKind], dict[str, int | None]] = {}
-        self._counters_by_session_source: dict[tuple[str, RealtimeSourceKind], dict[str, int]] = {}
+        self._latest_timings_by_session_source: dict[tuple[str, RealtimeSourceKind], dict[str, object]] = {}
+        self._counters_by_session_source: dict[tuple[str, RealtimeSourceKind], dict[str, int | float]] = {}
         self._active_requests_by_session_source: dict[tuple[str, RealtimeSourceKind], int] = {}
         self._frame_worker_lock = threading.Lock()
         self._frame_workers: dict[tuple[str, RealtimeSourceKind], threading.Thread] = {}
@@ -156,6 +156,152 @@ class RealtimeSpeechService:
         self._capture_control_cache: dict[str, str] = {}
         self._publisher_status_cache: dict[str, str] = {}
         self._stable_question_state: dict[tuple[str, str], dict[str, object]] = {}
+        self._trace_lock = threading.Lock()
+        self._trace_records: dict[str, dict[str, object]] = {}
+        self._trace_order: deque[str] = deque(maxlen=4096)
+        self._queue_wait_samples: dict[tuple[str, RealtimeSourceKind], deque[int]] = {}
+        self._provider_partial_publish_lock = threading.Lock()
+        partial_listener_setter = getattr(self.asr_gateway, "set_partial_listener", None)
+        if callable(partial_listener_setter):
+            partial_listener_setter(self._publish_provider_partial)
+
+    def _publish_provider_partial(self, frame: AudioFrame, result: TranscriptResult) -> None:
+        """Publish Qwen partials directly from its receive pump.
+
+        This deliberately bypasses the audio append worker: provider receive,
+        Redis XADD and SSE consumption form their own monotonic event path.
+        Stable-question detection remains a downstream observer and never gates
+        the subtitle event.
+        """
+        if frame.session_id in self._retired_session_ids or not result.text.strip():
+            return
+        publisher = self.repository.get_publisher(frame.publisher_id)
+        if publisher is None or publisher.status in {"closed", "failed"}:
+            return
+        if self.capture_control_state(session_id=frame.session_id) == "paused":
+            return
+        partial_received_at_ms = result.partial_received_at_ms or _now_ms()
+        with self._provider_partial_publish_lock:
+            suppression_reason = self._suppression_reason(result.text, frame=frame)
+            if suppression_reason is None:
+                suppression_reason = self._duplicate_nearby_suppression_reason(
+                    text=result.text,
+                    publisher=publisher,
+                    frame=frame,
+                )
+            if suppression_reason is not None:
+                return
+            current = self.repository.get_transcript(frame.session_id, frame.segment_id)
+            if current is not None and current.is_final:
+                return
+            published_at_ms = _now_ms()
+            first_partial = current is None
+            first_partial_at_ms = (
+                partial_received_at_ms
+                if first_partial
+                else int((current.performance or {}).get("systemFirstEffectivePartialAtMs") or partial_received_at_ms)
+            )
+            timing = {
+                "traceId": frame.trace_id,
+                "sessionId": frame.session_id,
+                "channel": frame.source_kind,
+                "sequence": frame.sequence,
+                "revision": frame.revision,
+                "utteranceId": frame.segment_id,
+                "captureToSendMs": (
+                    max(0, frame.sent_at_ms - frame.captured_at_ms) if frame.sent_at_ms is not None else None
+                ),
+                "sendToIngestMs": (
+                    max(0, frame.backend_received_at_ms - frame.sent_at_ms)
+                    if frame.backend_received_at_ms is not None and frame.sent_at_ms is not None else None
+                ),
+                "captureToIngestMs": (
+                    max(0, frame.backend_received_at_ms - frame.captured_at_ms)
+                    if frame.backend_received_at_ms is not None else None
+                ),
+                "queueWaitMs": 0,
+                "asrTtftMs": (
+                    max(0, partial_received_at_ms - result.audio_appended_at_ms)
+                    if result.audio_appended_at_ms is not None else None
+                ),
+                "finalTranscriptMs": None,
+                "stopToTerminalMs": None,
+                "backendPushMs": max(0, published_at_ms - partial_received_at_ms),
+                "captureToPublishMs": max(0, published_at_ms - frame.captured_at_ms),
+                "frontendRenderMs": None,
+                "speechStartAtMs": frame.vad_triggered_at_ms or frame.started_at_ms,
+                "systemVadTriggerAtMs": frame.vad_triggered_at_ms if frame.source_kind == "system" else None,
+                "systemSpeechStartAtMs": frame.speech_confirmed_at_ms if frame.source_kind == "system" else None,
+                "systemFirstEffectivePartialAtMs": first_partial_at_ms if frame.source_kind == "system" else None,
+                "framesBeforeFirstPartial": (
+                    frame.revision if first_partial else (current.performance or {}).get("framesBeforeFirstPartial")
+                ),
+                "desktopAudioCaptureAtMs": frame.captured_at_ms,
+                "desktopWsSendAtMs": frame.sent_at_ms,
+                "backendWsReceiveAtMs": frame.backend_received_at_ms,
+                "queueEnterAtMs": frame.backend_received_at_ms,
+                "queueLeaveAtMs": frame.backend_received_at_ms,
+                "qwenAudioAppendAtMs": result.audio_appended_at_ms,
+                "qwenPartialReceivedAtMs": partial_received_at_ms,
+                "qwenFinalReceivedAtMs": None,
+                "providerResultReceivedAtMs": partial_received_at_ms,
+                "redisEventXaddAtMs": None,
+                "redisEventXreadAtMs": None,
+                "sseEventSendAtMs": None,
+                "browserEventReceiveAtMs": None,
+                "browserStateUpdateAtMs": None,
+                "browserRenderAtMs": None,
+                "speechEndDetectedAtMs": None,
+                "manualCommitSentAtMs": None,
+            }
+            transcript = self.repository.save_transcript(TranscriptSegmentRecord(
+                segment_id=frame.segment_id,
+                session_id=frame.session_id,
+                owner_user_id=publisher.owner_user_id,
+                source_id=frame.source_id,
+                source_kind=frame.source_kind,
+                role="candidate" if frame.source_kind == "microphone" else "interviewer",
+                revision=max(frame.revision, current.revision + 1 if current is not None else frame.revision),
+                text=result.text.strip(),
+                transcript_confidence=result.confidence,
+                started_at_ms=frame.started_at_ms,
+                ended_at_ms=frame.ended_at_ms,
+                is_final=False,
+                overlap=result.overlap,
+                created_at_ms=current.created_at_ms if current is not None else published_at_ms,
+                published_at_ms=published_at_ms,
+                performance=timing,
+                usage=result.usage,
+            ))
+            event = self._save_event(
+                session_id=frame.session_id,
+                owner_user_id=publisher.owner_user_id,
+                kind="transcript-updated",
+                payload={
+                    "segmentId": transcript.segment_id,
+                    "sourceId": transcript.source_id,
+                    "sourceKind": transcript.source_kind,
+                    "revision": transcript.revision,
+                    "role": transcript.role,
+                    "text": transcript.text,
+                    "transcriptConfidence": transcript.transcript_confidence,
+                    "startedAtMs": transcript.started_at_ms,
+                    "endedAtMs": transcript.ended_at_ms,
+                    "isFinal": False,
+                    "overlap": transcript.overlap,
+                    "terminalState": None,
+                    "finalizationReason": None,
+                    "publishedAtMs": published_at_ms,
+                    "performance": timing,
+                },
+            )
+            event_performance = event.payload.get("performance")
+            if isinstance(event_performance, dict):
+                timing = dict(event_performance)
+            self._observe_trace(frame.trace_id, **timing)
+            self._set_latest_timing(session_id=frame.session_id, source_kind=frame.source_kind, timing=timing)
+            # Stable/question-prefetch is deliberately after the subtitle XADD.
+            self._observe_stable_interviewer_partial(transcript)
 
     def _submit_cold(self, operation, /, *args, **kwargs) -> None:
         """Run optional persistence/metrics outside the realtime publication path."""
@@ -265,7 +411,7 @@ class RealtimeSpeechService:
     def _session_source_key(session_id: str, source_kind: RealtimeSourceKind) -> tuple[str, RealtimeSourceKind]:
         return (session_id, source_kind)
 
-    def _counter_bucket(self, *, session_id: str, source_kind: RealtimeSourceKind) -> dict[str, int]:
+    def _counter_bucket(self, *, session_id: str, source_kind: RealtimeSourceKind) -> dict[str, int | float]:
         key = self._session_source_key(session_id, source_kind)
         return self._counters_by_session_source.setdefault(key, {
             "queueDepth": 0,
@@ -278,6 +424,7 @@ class RealtimeSpeechService:
             "fillerResultsSuppressed": 0,
             "chunksProduced": 0,
             "chunksUploaded": 0,
+            "framesConsumed": 0,
             "serializedAudioBytes": 0,
             "terminalAdmissions": 0,
             "terminalDuplicates": 0,
@@ -287,10 +434,10 @@ class RealtimeSpeechService:
             "sourceReconnects": 0,
         })
 
-    def _set_latest_timing(self, *, session_id: str, source_kind: RealtimeSourceKind, timing: dict[str, int | None]) -> None:
+    def _set_latest_timing(self, *, session_id: str, source_kind: RealtimeSourceKind, timing: dict[str, object]) -> None:
         self._latest_timings_by_session_source[self._session_source_key(session_id, source_kind)] = timing
 
-    def _latest_timing(self, *, session_id: str, source_kind: RealtimeSourceKind) -> dict[str, int | None] | None:
+    def _latest_timing(self, *, session_id: str, source_kind: RealtimeSourceKind) -> dict[str, object] | None:
         return self._latest_timings_by_session_source.get(self._session_source_key(session_id, source_kind))
 
     def _active_request_enter(self, *, session_id: str, source_kind: RealtimeSourceKind) -> int:
@@ -309,12 +456,16 @@ class RealtimeSpeechService:
             self._active_requests_by_session_source[key] = remaining
         self._counter_bucket(session_id=session_id, source_kind=source_kind)["queueDepth"] = max(0, remaining - 1)
 
-    def _gateway_diagnostics(self, *, source_kind: RealtimeSourceKind) -> dict[str, int]:
+    def _gateway_diagnostics(self, *, source_kind: RealtimeSourceKind) -> dict[str, int | float]:
         diagnostics = getattr(self.asr_gateway, "diagnostics", None)
         if callable(diagnostics):
             payload = diagnostics(source_kind)
             if isinstance(payload, dict):
-                return {str(key): int(value) for key, value in payload.items() if isinstance(value, int)}
+                return {
+                    str(key): value
+                    for key, value in payload.items()
+                    if isinstance(value, (int, float)) and not isinstance(value, bool)
+                }
         return {}
 
     def _gateway_runtime_status(self, *, source_kind: RealtimeSourceKind) -> dict[str, object]:
@@ -335,14 +486,30 @@ class RealtimeSpeechService:
         except OSError:
             file_descriptors = -1
         usage = resource.getrusage(resource.RUSAGE_SELF)
-        queues = {
-            f"{session_id}:{source_kind}": work_queue.qsize()
-            for (session_id, source_kind), work_queue in self._frame_queues.items()
-        }
+        repository_diagnostics = getattr(self.repository, "operational_diagnostics", None)
+        queue_channels: dict[str, dict[str, int]] = {}
+        for (session_id, source_kind), work_queue in self._frame_queues.items():
+            counter = self._counter_bucket(session_id=session_id, source_kind=source_kind)
+            oldest_age_ms = 0
+            with work_queue.mutex:
+                if work_queue.queue:
+                    queued_at = work_queue.queue[0].get("queue_enter_at_ms")
+                    if isinstance(queued_at, int):
+                        oldest_age_ms = max(0, _now_ms() - queued_at)
+            waits = list(self._queue_wait_samples.get((session_id, source_kind), ()))
+            queue_channels[f"{session_id}:{source_kind}"] = {
+                "depth": work_queue.qsize(),
+                "oldestFrameAgeMs": oldest_age_ms,
+                "latestQueueWaitMs": waits[-1] if waits else 0,
+                "framesIn": int(counter.get("chunksProduced", 0)),
+                "framesOut": int(counter.get("framesConsumed", 0)),
+            }
+        queues = {key: value["depth"] for key, value in queue_channels.items()}
         return {
             "activeQueueWorkers": sum(1 for worker in self._frame_workers.values() if worker.is_alive()),
             "queueDepthByChannel": queues,
             "queuedFrames": sum(queues.values()),
+            "queueByChannel": queue_channels,
             "fileDescriptors": file_descriptors,
             "maxResidentSetKb": int(usage.ru_maxrss),
             "asr": {
@@ -354,7 +521,113 @@ class RealtimeSpeechService:
                 "counts": dict(self._delivery_metric_counts),
                 "latestDurationMs": dict(self._delivery_metric_latest_ms),
             },
+            "eventStore": repository_diagnostics() if callable(repository_diagnostics) else {},
+            "traceSummary": self.performance_summary(),
         }
+
+    @staticmethod
+    def _percentile(values: list[int], fraction: float) -> int | None:
+        if not values:
+            return None
+        ordered = sorted(values)
+        index = min(len(ordered) - 1, max(0, int((len(ordered) - 1) * fraction + 0.999999)))
+        return ordered[index]
+
+    def _observe_trace(self, trace_id: str | None, **fields: object) -> None:
+        if not trace_id:
+            return
+        safe_fields = {key: value for key, value in fields.items() if value is None or isinstance(value, (str, int, bool))}
+        with self._trace_lock:
+            if trace_id not in self._trace_records:
+                if len(self._trace_order) == self._trace_order.maxlen:
+                    expired = self._trace_order.popleft()
+                    self._trace_records.pop(expired, None)
+                self._trace_order.append(trace_id)
+                self._trace_records[trace_id] = {"traceId": trace_id}
+            self._trace_records[trace_id].update(safe_fields)
+
+    def observe_sse_delivery(self, events: list[RealtimeEvent], *, sent_at_ms: int) -> list[RealtimeEvent]:
+        delivered: list[RealtimeEvent] = []
+        for event in events:
+            performance = event.payload.get("performance")
+            if not isinstance(performance, dict):
+                delivered.append(event)
+                continue
+            trace_id = performance.get("traceId")
+            enriched_performance = {**performance, "sseEventSendAtMs": sent_at_ms, "eventId": event.event_id}
+            enriched = replace(event, payload={**event.payload, "performance": enriched_performance})
+            delivered.append(enriched)
+            self._observe_trace(
+                str(trace_id) if trace_id else None,
+                redisEventXreadAtMs=performance.get("redisEventXreadAtMs"),
+                redisReadMode=performance.get("redisReadMode"),
+                sseEventSendAtMs=sent_at_ms,
+                eventId=event.event_id,
+            )
+        return delivered
+
+    def performance_summary(self, *, session_id: str | None = None) -> dict[str, object]:
+        with self._trace_lock:
+            records = [dict(item) for item in self._trace_records.values() if session_id is None or item.get("sessionId") == session_id]
+        pairs = {
+            "speechStartToFirstFrameSendMs": ("speechStartAtMs", "desktopWsSendAtMs"),
+            "firstFrameToQwenAppendMs": ("desktopWsSendAtMs", "qwenAudioAppendAtMs"),
+            "networkMs": ("desktopWsSendAtMs", "backendWsReceiveAtMs"),
+            "preprocessMs": ("backendWsReceiveAtMs", "queueEnterAtMs"),
+            "queueWaitMs": ("queueEnterAtMs", "queueLeaveAtMs"),
+            "asrInputLagMs": ("queueLeaveAtMs", "qwenAudioAppendAtMs"),
+            "qwenPartialMs": ("qwenAudioAppendAtMs", "qwenPartialReceivedAtMs"),
+            "qwenPartialToRedisXaddMs": ("qwenPartialReceivedAtMs", "redisEventXaddAtMs"),
+            "redisXaddToXreadMs": ("redisEventXaddAtMs", "redisEventXreadAtMs"),
+            "redisXreadToSseSendMs": ("redisEventXreadAtMs", "sseEventSendAtMs"),
+            "sseDeliveryMs": ("sseEventSendAtMs", "browserEventReceiveAtMs"),
+            "browserStateUpdateMs": ("browserEventReceiveAtMs", "browserStateUpdateAtMs"),
+            "browserRenderMs": ("browserEventReceiveAtMs", "browserRenderAtMs"),
+            "browserStateToReactRenderMs": ("browserStateUpdateAtMs", "browserRenderAtMs"),
+            "endToEndPartialMs": ("desktopAudioCaptureAtMs", "browserRenderAtMs"),
+            "speechStartToBrowserFirstPartialMs": ("speechStartAtMs", "browserRenderAtMs"),
+            "speechEndToCommitMs": ("speechEndDetectedAtMs", "manualCommitSentAtMs"),
+            "commitToFinalMs": ("manualCommitSentAtMs", "qwenFinalReceivedAtMs"),
+            "speechEndToFinalMs": ("speechEndDetectedAtMs", "qwenFinalReceivedAtMs"),
+        }
+        distributions: dict[str, object] = {}
+        utterance_groups: dict[tuple[object, object, object], list[dict[str, object]]] = {}
+        for item in records:
+            key = (item.get("sessionId"), item.get("channel"), item.get("utteranceId"))
+            if key[2] is not None:
+                utterance_groups.setdefault(key, []).append(item)
+        for name, (start_key, end_key) in pairs.items():
+            if name in {
+                "speechStartToFirstFrameSendMs",
+                "firstFrameToQwenAppendMs",
+                "qwenPartialMs",
+                "speechStartToBrowserFirstPartialMs",
+            }:
+                samples = []
+                for group in utterance_groups.values():
+                    starts = [int(item[start_key]) for item in group if isinstance(item.get(start_key), int)]
+                    ends = [int(item[end_key]) for item in group if isinstance(item.get(end_key), int)]
+                    if starts and ends and min(ends) >= min(starts):
+                        samples.append(min(ends) - min(starts))
+            else:
+                samples = [int(item[end_key]) - int(item[start_key]) for item in records if isinstance(item.get(start_key), int) and isinstance(item.get(end_key), int) and int(item[end_key]) >= int(item[start_key])]
+            distributions[name] = {
+                "count": len(samples),
+                "p50": self._percentile(samples, 0.50),
+                "p95": self._percentile(samples, 0.95),
+                "p99": self._percentile(samples, 0.99),
+                "max": max(samples) if samples else None,
+            }
+        return {"traceCount": len(records), "distributions": distributions}
+
+    def performance_traces(self, *, session_id: str, limit: int = 100) -> list[dict[str, object]]:
+        with self._trace_lock:
+            trace_ids = list(self._trace_order)[-max(1, min(500, limit)):]
+            return [
+                dict(self._trace_records[trace_id])
+                for trace_id in trace_ids
+                if self._trace_records.get(trace_id, {}).get("sessionId") == session_id
+            ]
 
     def record_delivery_metric(
         self,
@@ -1106,6 +1379,8 @@ class RealtimeSpeechService:
         revision: int,
         captured_at_ms: int,
         started_at_ms: int,
+        vad_triggered_at_ms: int | None = None,
+        speech_confirmed_at_ms: int | None = None,
         ended_at_ms: int,
         duration_ms: int,
         codec: str,
@@ -1130,6 +1405,8 @@ class RealtimeSpeechService:
             revision=revision,
             captured_at_ms=captured_at_ms,
             started_at_ms=started_at_ms,
+            vad_triggered_at_ms=vad_triggered_at_ms,
+            speech_confirmed_at_ms=speech_confirmed_at_ms,
             ended_at_ms=ended_at_ms,
             duration_ms=duration_ms,
             codec=codec,
@@ -1161,6 +1438,8 @@ class RealtimeSpeechService:
         revision: int,
         captured_at_ms: int,
         started_at_ms: int,
+        vad_triggered_at_ms: int | None = None,
+        speech_confirmed_at_ms: int | None = None,
         ended_at_ms: int,
         duration_ms: int,
         codec: str,
@@ -1187,6 +1466,8 @@ class RealtimeSpeechService:
             revision=revision,
             captured_at_ms=captured_at_ms,
             started_at_ms=started_at_ms,
+            vad_triggered_at_ms=vad_triggered_at_ms,
+            speech_confirmed_at_ms=speech_confirmed_at_ms,
             ended_at_ms=ended_at_ms,
             duration_ms=duration_ms,
             codec=codec,
@@ -1222,6 +1503,7 @@ class RealtimeSpeechService:
                 counter_bucket["queueDepth"] = max(counter_bucket.get("queueDepth", 0), work_queue.qsize() + 1)
         frame = prepared.get("frame")
         assert isinstance(frame, AudioFrame)
+        prepared["queue_enter_at_ms"] = _now_ms()
         self._track_source_turn(prepared)
         try:
             work_queue.put_nowait(prepared)
@@ -1474,6 +1756,8 @@ class RealtimeSpeechService:
         revision: int,
         captured_at_ms: int,
         started_at_ms: int,
+        vad_triggered_at_ms: int | None = None,
+        speech_confirmed_at_ms: int | None = None,
         ended_at_ms: int,
         duration_ms: int,
         codec: str,
@@ -1563,6 +1847,9 @@ class RealtimeSpeechService:
             terminal_id=terminal_id,
             trace_id=trace_id,
             sent_at_ms=sent_at_ms,
+            vad_triggered_at_ms=vad_triggered_at_ms,
+            speech_confirmed_at_ms=speech_confirmed_at_ms,
+            backend_received_at_ms=ingest_received_at_ms,
             audio_bytes=decoded_audio,
         )
         if not frame.audio_bytes:
@@ -1647,6 +1934,7 @@ class RealtimeSpeechService:
         pending_receipt = prepared["pending_receipt"]
         counter_bucket = prepared["counter_bucket"]
         ingest_received_at_ms = int(prepared["ingest_received_at_ms"])
+        queue_enter_at_ms = int(prepared.get("queue_enter_at_ms", ingest_received_at_ms))
         captured_at_ms = int(prepared["captured_at_ms"])
         sent_at_ms = prepared.get("sent_at_ms")
         source_kind = prepared["source_kind"]
@@ -1658,6 +1946,11 @@ class RealtimeSpeechService:
         events: list[dict[str, object]] = []
         queue_depth = self._active_request_enter(session_id=publisher.session_id, source_kind=source_kind)
         worker_dequeued_at_ms = _now_ms()
+        counter_bucket["framesConsumed"] = int(counter_bucket.get("framesConsumed", 0)) + 1
+        wait_samples = self._queue_wait_samples.setdefault(
+            (publisher.session_id, source_kind), deque(maxlen=512)  # type: ignore[arg-type]
+        )
+        wait_samples.append(max(0, worker_dequeued_at_ms - queue_enter_at_ms))
         asr_started_at_ms = worker_dequeued_at_ms
         try:
             transcript, transcript_result = self._transcribe_frame(publisher=publisher, frame=frame)
@@ -1689,17 +1982,49 @@ class RealtimeSpeechService:
         published_at_ms = _now_ms()
         timing = {
             "traceId": frame.trace_id,
+            "sessionId": publisher.session_id,
+            "channel": source_kind,
+            "sequence": frame.sequence,
+            "revision": frame.revision,
+            "utteranceId": frame.segment_id,
             "captureToSendMs": (max(0, int(sent_at_ms) - captured_at_ms) if isinstance(sent_at_ms, int) else None),
             "sendToIngestMs": (max(0, ingest_received_at_ms - int(sent_at_ms)) if isinstance(sent_at_ms, int) else None),
             "captureToIngestMs": max(0, ingest_received_at_ms - captured_at_ms),
-            "queueWaitMs": max(0, worker_dequeued_at_ms - ingest_received_at_ms),
+            "queueWaitMs": max(0, worker_dequeued_at_ms - queue_enter_at_ms),
             "asrTtftMs": (max(0, transcript_result.first_text_at_ms - asr_started_at_ms) if transcript_result.first_text_at_ms is not None else None),
             "finalTranscriptMs": (max(0, transcript_result.completed_at_ms - asr_started_at_ms) if transcript_result.completed_at_ms is not None else None),
             "stopToTerminalMs": (max(0, published_at_ms - frame.ended_at_ms) if frame.is_final else None),
             "backendPushMs": max(0, published_at_ms - (transcript_result.completed_at_ms or asr_started_at_ms)),
             "captureToPublishMs": max(0, published_at_ms - captured_at_ms),
             "frontendRenderMs": None,
+            "speechStartAtMs": frame.started_at_ms,
+            "systemVadTriggerAtMs": frame.vad_triggered_at_ms if source_kind == "system" else None,
+            "systemSpeechStartAtMs": frame.speech_confirmed_at_ms if source_kind == "system" else None,
+            "systemFirstEffectivePartialAtMs": (
+                transcript_result.partial_received_at_ms if source_kind == "system" and transcript is not None and not frame.is_final else None
+            ),
+            "framesBeforeFirstPartial": frame.revision if transcript is not None and not frame.is_final else None,
+            "desktopAudioCaptureAtMs": captured_at_ms,
+            "desktopWsSendAtMs": int(sent_at_ms) if isinstance(sent_at_ms, int) else None,
+            "backendWsReceiveAtMs": ingest_received_at_ms,
+            "queueEnterAtMs": queue_enter_at_ms,
+            "queueLeaveAtMs": worker_dequeued_at_ms,
+            "qwenAudioAppendAtMs": transcript_result.audio_appended_at_ms,
+            "qwenPartialReceivedAtMs": transcript_result.partial_received_at_ms,
+            "qwenFinalReceivedAtMs": transcript_result.completed_at_ms if frame.is_final else None,
+            "providerResultReceivedAtMs": (
+                transcript_result.completed_at_ms if frame.is_final else transcript_result.partial_received_at_ms
+            ),
+            "redisEventXaddAtMs": None,
+            "redisEventXreadAtMs": None,
+            "sseEventSendAtMs": None,
+            "browserEventReceiveAtMs": None,
+            "browserStateUpdateAtMs": None,
+            "browserRenderAtMs": None,
+            "speechEndDetectedAtMs": frame.ended_at_ms if frame.is_final else None,
+            "manualCommitSentAtMs": transcript_result.commit_sent_at_ms,
         }
+        self._observe_trace(frame.trace_id, **timing)
         self._set_latest_timing(session_id=publisher.session_id, source_kind=source_kind, timing=timing)
         self._submit_cold(self._record_speech_usage,
             publisher=publisher,
@@ -1912,6 +2237,11 @@ class RealtimeSpeechService:
             counter_bucket["vadToManualFallbacks"] = diagnostics.get("vad_to_manual_fallbacks", 0)
             counter_bucket["idleProviderSessionClosures"] = diagnostics.get("idle_session_closures", 0)
             counter_bucket["activeProviderSessions"] = diagnostics.get("active_provider_sessions", 0)
+            counter_bucket["asrConnectionCreateCount"] = diagnostics.get("asr_connection_create_count", 0)
+            counter_bucket["asrConnectionReconnectCount"] = diagnostics.get("asr_connection_reconnect_count", 0)
+            counter_bucket["asrConnectionLifetimeMs"] = diagnostics.get("asr_connection_lifetime_ms", 0)
+            counter_bucket["utteranceCount"] = diagnostics.get("utterance_count", 0)
+            counter_bucket["utterancesPerConnection"] = diagnostics.get("utterances_per_connection", 0.0)
             counters_by_source[source_kind] = RealtimeRuntimeCountersResponse(**counter_bucket)
             latest_timing = self._latest_timing(session_id=session_id, source_kind=source_kind)  # type: ignore[arg-type]
             if latest_timing is not None:
@@ -2267,28 +2597,26 @@ class RealtimeSpeechService:
                     "captureToPublishMs": max(0, published_at_ms - frame.captured_at_ms),
                     "frontendRenderMs": None,
                 }
-                stored = self.repository.save_transcript(
-                    TranscriptSegmentRecord(
-                        segment_id=frame.segment_id,
-                        session_id=frame.session_id,
-                        owner_user_id=publisher.owner_user_id,
-                        source_id=frame.source_id,
-                        source_kind=frame.source_kind,
-                        role=role,  # type: ignore[arg-type]
-                        revision=max(frame.revision, current.revision + 1 if current is not None else frame.revision),
-                        text=result.text,
-                        transcript_confidence=result.confidence,
-                        started_at_ms=frame.started_at_ms,
-                        ended_at_ms=frame.ended_at_ms,
-                        is_final=frame.is_final,
-                        overlap=result.overlap,
-                        created_at_ms=created_at_ms,
-                        terminal_state=("final" if frame.is_final else None),
-                        finalization_reason=(frame.finalization_reason if frame.is_final else None),
-                        published_at_ms=published_at_ms,
-                        performance=performance,
-                        usage=result.usage,
-                    )
+                stored = TranscriptSegmentRecord(
+                    segment_id=frame.segment_id,
+                    session_id=frame.session_id,
+                    owner_user_id=publisher.owner_user_id,
+                    source_id=frame.source_id,
+                    source_kind=frame.source_kind,
+                    role=role,  # type: ignore[arg-type]
+                    revision=max(frame.revision, current.revision + 1 if current is not None else frame.revision),
+                    text=result.text,
+                    transcript_confidence=result.confidence,
+                    started_at_ms=frame.started_at_ms,
+                    ended_at_ms=frame.ended_at_ms,
+                    is_final=frame.is_final,
+                    overlap=result.overlap,
+                    created_at_ms=created_at_ms,
+                    terminal_state=("final" if frame.is_final else None),
+                    finalization_reason=(frame.finalization_reason if frame.is_final else None),
+                    published_at_ms=published_at_ms,
+                    performance=performance,
+                    usage=result.usage,
                 )
                 return stored, result
             except RetryableAsrError as exc:
@@ -2383,6 +2711,9 @@ class RealtimeSpeechService:
                 key: value
                 for key, value in self._latest_timings_by_session_source.items()
                 if key[0] != session_id
+            }
+            self._queue_wait_samples = {
+                key: value for key, value in self._queue_wait_samples.items() if key[0] != session_id
             }
         with self._watchdog_lock:
             self._active_source_turns = {
@@ -2708,14 +3039,26 @@ class RealtimeSpeechService:
         return candidate
 
     def _save_event(self, *, session_id: str, owner_user_id: str, kind, payload: dict[str, object]) -> RealtimeEvent:
+        event_id = f"rt-event-{uuid4().hex}"
+        created_at_ms = _now_ms()
+        performance = payload.get("performance")
+        if isinstance(performance, dict):
+            performance = {**performance, "eventId": event_id, "redisEventXaddAtMs": created_at_ms}
+            payload = {**payload, "performance": performance}
+            trace_id = performance.get("traceId")
+            self._observe_trace(
+                str(trace_id) if trace_id else None,
+                eventId=event_id,
+                redisEventXaddAtMs=created_at_ms,
+            )
         return self.repository.save_event(
             RealtimeEvent(
-                event_id=f"rt-event-{uuid4().hex}",
+                event_id=event_id,
                 session_id=session_id,
                 owner_user_id=owner_user_id,
                 kind=kind,
                 payload=payload,
-                created_at_ms=_now_ms(),
+                created_at_ms=created_at_ms,
             )
         )
 
@@ -2773,6 +3116,10 @@ class RealtimeSpeechService:
         stage: str,
         duration_ms: int,
         task_id: str | None = None,
+        event_id: str | None = None,
+        browser_event_receive_at_ms: int | None = None,
+        browser_state_update_at_ms: int | None = None,
+        browser_render_at_ms: int | None = None,
     ) -> RealtimeEvent:
         self.session_service.get_session(user_id=user_id, session_id=session_id)
         if stage == "transcript-render":
@@ -2784,6 +3131,13 @@ class RealtimeSpeechService:
                         source_kind=source_kind,  # type: ignore[arg-type]
                         timing={**timing, "frontendRenderMs": duration_ms},
                     )
+            self._observe_trace(
+                trace_id,
+                eventId=event_id,
+                browserEventReceiveAtMs=browser_event_receive_at_ms,
+                browserStateUpdateAtMs=browser_state_update_at_ms,
+                browserRenderAtMs=browser_render_at_ms,
+            )
         log_event(
             self.logger,
             logging.INFO,

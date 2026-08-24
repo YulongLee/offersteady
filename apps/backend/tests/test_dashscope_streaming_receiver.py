@@ -127,13 +127,22 @@ def test_gateway_delivers_partial_that_arrives_between_audio_frames(monkeypatch)
         ),
         logging.getLogger("test-between-frame-partial"),
     )
+    delivered_partials: list[tuple[AudioFrame, object]] = []
+    delivered = threading.Event()
+    gateway.set_partial_listener(lambda frame, result: (delivered_partials.append((frame, result)), delivered.set()))
 
     first = gateway.transcribe(frame=_frame(revision=1, is_final=False, audio=b"first"), attempt=0)
     assert first.text == ""
-    time.sleep(0.03)
+    assert delivered.wait(timeout=0.2)
     second = gateway.transcribe(frame=_frame(revision=2, is_final=False, audio=b"second"), attempt=0)
 
-    assert second.text == "持续流式识别"
+    assert len(delivered_partials) == 1
+    assert delivered_partials[0][0].revision == 1
+    assert delivered_partials[0][1].text == "持续流式识别"
+    assert delivered_partials[0][1].partial_received_at_ms is not None
+    # The next append must not re-publish the provider revision already emitted
+    # by the receive loop.
+    assert second.text == ""
     gateway._close_source_session("session-stream:microphone")
 
 

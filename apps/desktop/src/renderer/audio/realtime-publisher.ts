@@ -78,6 +78,8 @@ interface SegmentSnapshot {
   readonly revision: number;
   readonly capturedAtMs: number;
   readonly startedAtMs: number;
+  readonly vadTriggeredAtMs: number;
+  readonly speechConfirmedAtMs: number;
   readonly endedAtMs: number;
   readonly durationMs: number;
   readonly isFinal: boolean;
@@ -110,6 +112,44 @@ const SYSTEM_SILENCE_FINALIZE_MS = 500;
 const MAX_SEGMENT_DURATION_MS = 30_000;
 const MIN_EMIT_SPEECH_MS = 60;
 const PRE_SPEECH_BUFFER_LIMIT = 4;
+
+interface SourceVadProfile {
+  readonly startFloor: number;
+  readonly startCeiling: number;
+  readonly continuationFloor: number;
+  readonly continuationCeiling: number;
+  readonly startNoiseMultiplier: number;
+  readonly continuationNoiseMultiplier: number;
+  readonly attackMs: number;
+  readonly minimumSpeechMs: number;
+  readonly silenceMs: number;
+}
+
+const MICROPHONE_VAD_PROFILE: SourceVadProfile = {
+  startFloor: 0.0012,
+  startCeiling: 0.012,
+  continuationFloor: 0.0011,
+  continuationCeiling: 0.008,
+  startNoiseMultiplier: 3.2,
+  continuationNoiseMultiplier: 2,
+  attackMs: 20,
+  minimumSpeechMs: 60,
+  silenceMs: MICROPHONE_SILENCE_FINALIZE_MS,
+};
+
+const SYSTEM_VAD_PROFILE: SourceVadProfile = {
+  // Keep the floor low enough for quiet meeting audio, English initials and
+  // short numbers. A short attack window rejects one-frame digital noise.
+  startFloor: 0.001,
+  startCeiling: 0.004,
+  continuationFloor: SYSTEM_SPEECH_CONTINUE_THRESHOLD,
+  continuationCeiling: 0.0025,
+  startNoiseMultiplier: 3.2,
+  continuationNoiseMultiplier: 2,
+  attackMs: 40,
+  minimumSpeechMs: 60,
+  silenceMs: SYSTEM_SILENCE_FINALIZE_MS,
+};
 
 export const commercialSpeechEndpointingDefaults: SpeechEndpointingConfig = {
   mode: "commercial-adaptive",
@@ -367,6 +407,9 @@ export class SpeechSegmenter {
   private readonly unsentChunks: Uint8Array[] = [];
   private readonly preSpeechChunks: Uint8Array[] = [];
   private emitted = false;
+  private attackStartedAtMs = -1;
+  private vadTriggeredAtMs = 0;
+  private speechConfirmedAtMs = 0;
   private noiseFloor: number;
   private sourceGeneration = 0;
   private readonly config: SpeechEndpointingConfig;
@@ -394,16 +437,15 @@ export class SpeechSegmenter {
         ? { start: SYSTEM_SPEECH_START_THRESHOLD, continuation: SYSTEM_SPEECH_CONTINUE_THRESHOLD }
         : { start: MICROPHONE_SPEECH_START_THRESHOLD, continuation: MICROPHONE_SPEECH_CONTINUE_THRESHOLD };
     }
-    if (this.sourceKind === "system") {
-      return {
-        start: Math.min(0.004, Math.max(SYSTEM_SPEECH_START_THRESHOLD, this.noiseFloor * 3.2)),
-        continuation: Math.min(0.0025, Math.max(SYSTEM_SPEECH_CONTINUE_THRESHOLD, this.noiseFloor * 2)),
-      };
-    }
+    const profile = this.vadProfile();
     return {
-      start: Math.min(0.012, Math.max(0.0012, this.noiseFloor * 3.2)),
-      continuation: Math.min(0.008, Math.max(0.0011, this.noiseFloor * 2)),
+      start: Math.min(profile.startCeiling, Math.max(profile.startFloor, this.noiseFloor * profile.startNoiseMultiplier)),
+      continuation: Math.min(profile.continuationCeiling, Math.max(profile.continuationFloor, this.noiseFloor * profile.continuationNoiseMultiplier)),
     };
+  }
+
+  private vadProfile(): SourceVadProfile {
+    return this.sourceKind === "system" ? SYSTEM_VAD_PROFILE : MICROPHONE_VAD_PROFILE;
   }
 
   private observeNoise(rms: number): void {
@@ -416,23 +458,38 @@ export class SpeechSegmenter {
   }
 
   push(payload: Uint8Array, nowMs: number, rms: number): SegmentSnapshot[] {
-    if (this.lifecycle === "idle") this.observeNoise(rms);
     const { start: startThreshold, continuation: continueThreshold } = this.thresholds();
     if (this.lifecycle === "idle") {
       if (payload.byteLength > 0) {
         this.preSpeechChunks.push(payload);
         while (this.preSpeechChunks.length > PRE_SPEECH_BUFFER_LIMIT) this.preSpeechChunks.shift();
       }
-      if (rms < startThreshold) return [];
+      if (rms < startThreshold) {
+        this.observeNoise(rms);
+        this.attackStartedAtMs = -1;
+        return [];
+      }
+      const attackMs = this.config.mode === "legacy-threshold" ? 0 : this.vadProfile().attackMs;
+      if (this.attackStartedAtMs < 0) {
+        this.attackStartedAtMs = nowMs;
+        this.vadTriggeredAtMs = nowMs;
+      }
+      if (nowMs - this.attackStartedAtMs < attackMs) return [];
       this.segmentId = `${this.sourceKind}-${nowMs}-${Math.random().toString(36).slice(2, 8)}`;
       this.sourceGeneration += 1;
       this.lifecycle = "speaking";
-      this.startedAtMs = nowMs;
+      this.startedAtMs = this.attackStartedAtMs;
+      this.speechConfirmedAtMs = nowMs;
       this.lastSpeechAtMs = nowMs;
       this.lastInterimAtMs = nowMs;
       this.emitted = false;
       if (this.preSpeechChunks.length > 0) this.unsentChunks.push(...this.preSpeechChunks);
       this.preSpeechChunks.length = 0;
+      if (nowMs - this.startedAtMs >= this.vadProfile().minimumSpeechMs) {
+        this.lastInterimAtMs = nowMs;
+        this.emitted = true;
+        return [this.snapshot(nowMs, false)];
+      }
       return [];
     }
 
@@ -458,7 +515,9 @@ export class SpeechSegmenter {
 
     this.lifecycle = "tail";
     this.observeNoise(rms);
-    const silenceFinalizeMs = this.sourceKind === "system" ? this.config.systemTailMs : this.config.microphoneTailMs;
+    const silenceFinalizeMs = this.config.mode === "legacy-threshold"
+      ? (this.sourceKind === "system" ? this.config.systemTailMs : this.config.microphoneTailMs)
+      : this.vadProfile().silenceMs;
     if (nowMs - this.lastSpeechAtMs < silenceFinalizeMs) return [];
     if (!this.emitted && this.lastSpeechAtMs - this.startedAtMs < this.config.minimumSpeechMs) {
       this.reset();
@@ -491,6 +550,8 @@ export class SpeechSegmenter {
       revision: this.revision,
       capturedAtMs: nowMs,
       startedAtMs: this.startedAtMs,
+      vadTriggeredAtMs: this.vadTriggeredAtMs || this.startedAtMs,
+      speechConfirmedAtMs: this.speechConfirmedAtMs || this.startedAtMs,
       endedAtMs: nowMs,
       durationMs: Math.max(20, nowMs - this.startedAtMs),
       isFinal,
@@ -512,6 +573,9 @@ export class SpeechSegmenter {
     this.unsentChunks.length = 0;
     this.preSpeechChunks.length = 0;
     this.emitted = false;
+    this.attackStartedAtMs = -1;
+    this.vadTriggeredAtMs = 0;
+    this.speechConfirmedAtMs = 0;
   }
 }
 
@@ -688,6 +752,8 @@ export class DesktopRealtimePublisher {
             revision: snapshot.revision,
             capturedAtMs: frame.capturedAtMs,
             startedAtMs: snapshot.startedAtMs,
+            vadTriggeredAtMs: snapshot.vadTriggeredAtMs,
+            speechConfirmedAtMs: snapshot.speechConfirmedAtMs,
             endedAtMs: snapshot.endedAtMs,
             durationMs: frame.durationMs,
             codec: "pcm-s16le",
@@ -777,6 +843,8 @@ export class DesktopRealtimePublisher {
             revision: snapshot.revision,
             capturedAtMs: frame.capturedAtMs,
             startedAtMs: snapshot.startedAtMs,
+            vadTriggeredAtMs: snapshot.vadTriggeredAtMs,
+            speechConfirmedAtMs: snapshot.speechConfirmedAtMs,
             endedAtMs: snapshot.endedAtMs,
             durationMs: frame.durationMs,
             codec: "pcm-s16le",

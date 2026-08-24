@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import threading
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from typing import Callable, TypeVar
 
 from redis import Redis
@@ -57,6 +57,20 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         self._event_retention = max(100, settings.realtime_event_retention)
         self._runtime_ttl_seconds = max(300, settings.realtime_runtime_ttl_seconds)
         self._settings = settings
+        self._event_diagnostic_lock = threading.Lock()
+        self._event_diagnostics = {
+            "xaddCount": 0,
+            "xaddLatestMs": 0,
+            "xaddMaxMs": 0,
+            "xreadCount": 0,
+            "xreadLatestMs": 0,
+            "xreadMaxMs": 0,
+            "eventLatestLagMs": 0,
+            "streamLength": 0,
+            "pendingEvents": 0,
+            "pendingApplicable": False,
+            "consumerMode": "xread-no-group",
+        }
         self._redis.ping()
         self._reload()
 
@@ -74,6 +88,24 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
             "accountDevices": [asdict(item) for item in self.account_desktop_devices.values()],
             "bindings": [asdict(item) for item in self.session_bindings.values()],
             "heartbeats": [asdict(item) for item in self.web_session_heartbeats.values()],
+        }
+
+    def _ensure_event_diagnostics(self) -> None:
+        if hasattr(self, "_event_diagnostic_lock"):
+            return
+        self._event_diagnostic_lock = threading.Lock()
+        self._event_diagnostics = {
+            "xaddCount": 0,
+            "xaddLatestMs": 0,
+            "xaddMaxMs": 0,
+            "xreadCount": 0,
+            "xreadLatestMs": 0,
+            "xreadMaxMs": 0,
+            "eventLatestLagMs": 0,
+            "streamLength": 0,
+            "pendingEvents": 0,
+            "pendingApplicable": False,
+            "consumerMode": "xread-no-group",
         }
 
     def _reload(self) -> None:
@@ -332,12 +364,19 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         stream_key = f"offersteady:realtime:events:{stored.session_id}"
         cursor_index_key = self._event_cursor_index_key(stored.session_id)
         cursor = self.session_activity_versions.get(stored.session_id, 0)
+        xadd_started = time.perf_counter()
         stream_id = self._redis.xadd(
             stream_key,
             {"cursor": str(cursor), "event": json.dumps(asdict(stored), ensure_ascii=True)},
             maxlen=self._event_retention,
             approximate=True,
         )
+        xadd_ms = max(0, int((time.perf_counter() - xadd_started) * 1000))
+        self._ensure_event_diagnostics()
+        with self._event_diagnostic_lock:
+            self._event_diagnostics["xaddCount"] += 1
+            self._event_diagnostics["xaddLatestMs"] = xadd_ms
+            self._event_diagnostics["xaddMaxMs"] = max(self._event_diagnostics["xaddMaxMs"], xadd_ms)
         pipeline = self._redis.pipeline()
         pipeline.zadd(cursor_index_key, {stream_id: cursor})
         pipeline.hset(
@@ -369,6 +408,58 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
                 continue
             decoded.append((int(fields.get("cursor", "0")), RealtimeEvent(**json.loads(raw))))
         return decoded
+
+    @staticmethod
+    def _mark_events_read(
+        events: list[RealtimeEvent], *, read_at_ms: int, mode: str
+    ) -> list[RealtimeEvent]:
+        enriched: list[RealtimeEvent] = []
+        for event in events:
+            performance = event.payload.get("performance")
+            if not isinstance(performance, dict):
+                enriched.append(event)
+                continue
+            enriched.append(replace(
+                event,
+                payload={
+                    **event.payload,
+                    "performance": {
+                        **performance,
+                        "redisEventXreadAtMs": read_at_ms,
+                        "redisReadMode": mode,
+                    },
+                },
+            ))
+        return enriched
+
+    def _record_stream_read(
+        self,
+        *,
+        stream_key: str,
+        events: list[RealtimeEvent],
+        read_ms: int,
+        elapsed_ms: int,
+        mode: str,
+    ) -> None:
+        latest_lag_ms = max(
+            (max(0, read_ms - event.created_at_ms) for event in events),
+            default=0,
+        )
+        xlen = getattr(self._redis, "xlen", None)
+        stream_length = int(xlen(stream_key)) if callable(xlen) else -1
+        self._ensure_event_diagnostics()
+        with self._event_diagnostic_lock:
+            if mode == "xread":
+                self._event_diagnostics["xreadCount"] += 1
+                self._event_diagnostics["xreadLatestMs"] = elapsed_ms
+                self._event_diagnostics["xreadMaxMs"] = max(self._event_diagnostics["xreadMaxMs"], elapsed_ms)
+            self._event_diagnostics["eventLatestLagMs"] = latest_lag_ms
+            self._event_diagnostics["streamLength"] = stream_length
+            # XREAD is deliberately used without a consumer group. XPENDING is
+            # therefore not applicable and must not be reported as hidden work.
+            self._event_diagnostics["pendingEvents"] = 0
+            self._event_diagnostics["pendingApplicable"] = False
+            self._event_diagnostics["consumerMode"] = "xread-no-group"
 
     def _index_event_rows(self, *, session_id: str, rows) -> None:
         mapping = {
@@ -471,8 +562,18 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
                 min=f"({start_id}" if start_id else "-",
                 count=self._event_retention,
             )
+        read_at_ms = int(time.time() * 1000)
         retained = self._decode_event_rows(rows)
-        return current_cursor, [item for item_cursor, item in retained if item_cursor > cursor], True
+        events = [item for item_cursor, item in retained if item_cursor > cursor]
+        if events:
+            self._record_stream_read(
+                stream_key=stream_key,
+                events=events,
+                read_ms=read_at_ms,
+                elapsed_ms=0,
+                mode="xrange",
+            )
+        return current_cursor, self._mark_events_read(events, read_at_ms=read_at_ms, mode="xrange"), True
 
     def wait_for_events_after(
         self, *, session_id: str, cursor: int, timeout_ms: int
@@ -484,18 +585,34 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         start_id = self._stream_id_at_or_before_cursor(session_id=session_id, cursor=cursor)
         if start_id is None:
             start_id = self._legacy_stream_id_at_or_before_cursor(session_id=session_id, cursor=cursor) or "0-0"
+        xread_started = time.perf_counter()
         streams = self._redis.xread(
             {stream_key: start_id},
             count=self._event_retention,
             block=max(1, timeout_ms),
         )
+        xread_ms = max(0, int((time.perf_counter() - xread_started) * 1000))
         rows = streams[0][1] if streams else []
+        read_at_ms = int(time.time() * 1000)
         retained = self._decode_event_rows(rows)
+        events = [item for item_cursor, item in retained if item_cursor > cursor]
+        self._record_stream_read(
+            stream_key=stream_key,
+            events=events,
+            read_ms=read_at_ms,
+            elapsed_ms=xread_ms,
+            mode="xread",
+        )
         current_cursor = max(
             self.get_event_stream_version(session_id=session_id),
             max((item_cursor for item_cursor, _event in retained), default=cursor),
         )
-        return current_cursor, [item for item_cursor, item in retained if item_cursor > cursor], True
+        return current_cursor, self._mark_events_read(events, read_at_ms=read_at_ms, mode="xread"), True
+
+    def operational_diagnostics(self) -> dict[str, object]:
+        self._ensure_event_diagnostics()
+        with self._event_diagnostic_lock:
+            return dict(self._event_diagnostics)
 
     def get_session_activity_version(self, *, session_id):
         activity_version = int(self._redis.hget(self._activity_key, session_id) or 0)

@@ -211,6 +211,19 @@ interface BackendRealtimeTranscriptListResponse {
       readonly backendPushMs?: number;
       readonly captureToPublishMs?: number;
       readonly frontendRenderMs?: number;
+      readonly eventId?: string;
+      readonly speechStartAtMs?: number;
+      readonly desktopWsSendAtMs?: number;
+      readonly backendWsReceiveAtMs?: number;
+      readonly qwenAudioAppendAtMs?: number;
+      readonly qwenPartialReceivedAtMs?: number;
+      readonly redisEventXaddAtMs?: number;
+      readonly redisEventXreadAtMs?: number;
+      readonly redisReadMode?: string;
+      readonly sseEventSendAtMs?: number;
+      readonly browserEventReceiveAtMs?: number;
+      readonly browserStateUpdateAtMs?: number;
+      readonly browserRenderAtMs?: number;
     };
   }[];
 }
@@ -284,6 +297,13 @@ interface BackendRealtimeRuntimeResponse {
       readonly backendPushMs?: number;
       readonly captureToPublishMs?: number;
       readonly frontendRenderMs?: number;
+      readonly eventId?: string;
+      readonly speechStartAtMs?: number;
+      readonly redisEventXreadAtMs?: number;
+      readonly sseEventSendAtMs?: number;
+      readonly browserEventReceiveAtMs?: number;
+      readonly browserStateUpdateAtMs?: number;
+      readonly browserRenderAtMs?: number;
     }>;
     readonly countersBySource?: Record<string, {
       readonly queueDepth: number;
@@ -876,11 +896,18 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     stage: "transcript-render" | "screenshot-first-render" | "answer-first-render",
     startedAtMs: number,
     taskId?: string,
+    delivery?: {
+      readonly eventId?: string;
+      readonly browserEventReceiveAtMs?: number;
+      readonly browserStateUpdateAtMs?: number;
+      readonly browserRenderAtMs?: number;
+    },
   ) {
     const key = `${stage}:${traceId}`;
     if (!traceId || this.acknowledgedPerformanceTraces.has(key)) return;
     this.acknowledgedPerformanceTraces.add(key);
     const send = () => {
+      const browserRenderAtMs = delivery?.browserRenderAtMs ?? Date.now();
       void this.client.request(`/api/v1/realtime-speech/sessions/${interviewId}/performance-ack`, {
         method: "POST",
         headers: authHeaders(),
@@ -888,26 +915,18 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
           userId: requireUserId(), traceId, stage,
           durationMs: Math.max(0, Math.min(120_000, Date.now() - startedAtMs)),
           ...(taskId ? { taskId } : {}),
+          ...(delivery?.eventId ? { eventId: delivery.eventId } : {}),
+          ...(delivery?.browserEventReceiveAtMs === undefined ? {} : { browserEventReceiveAtMs: delivery.browserEventReceiveAtMs }),
+          ...(delivery?.browserStateUpdateAtMs === undefined ? {} : { browserStateUpdateAtMs: delivery.browserStateUpdateAtMs }),
+          browserRenderAtMs,
         }),
       }).catch(() => {
         this.acknowledgedPerformanceTraces.delete(key);
       });
     };
-    if (typeof requestAnimationFrame === "function") requestAnimationFrame(send);
+    if (delivery?.browserRenderAtMs !== undefined) send();
+    else if (typeof requestAnimationFrame === "function") requestAnimationFrame(send);
     else window.setTimeout(send, 0);
-  }
-
-  private acknowledgeRenderedTranscripts(interviewId: string, transcripts: BackendRealtimeTranscriptListResponse) {
-    for (const transcript of transcripts.transcripts) {
-      const traceId = transcript.performance?.traceId;
-      if (!traceId) continue;
-      this.acknowledgeRuntimePerformance(
-        interviewId,
-        traceId,
-        "transcript-render",
-        transcript.publishedAtMs ?? Date.now(),
-      );
-    }
   }
 
   private publishCaptureEvents(events: BackendRealtimeEventListResponse) {
@@ -951,6 +970,27 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     const rawFetch = fetchImpl ?? ((input, init) => window.fetch(input, init));
     this.fetchImpl = createAuthRefreshingFetch(rawFetch);
     this.client = createJsonClient({ baseUrl, fetchImpl: this.fetchImpl });
+    if (typeof window !== "undefined") {
+      window.addEventListener("offersteady:realtime-transcript-rendered", ((event: CustomEvent) => {
+        const detail = event.detail as {
+          readonly sessionId?: string;
+          readonly traceId?: string;
+          readonly eventId?: string;
+          readonly browserEventReceiveAtMs?: number;
+          readonly browserStateUpdateAtMs?: number;
+          readonly browserRenderAtMs?: number;
+        } | undefined;
+        if (!detail?.sessionId || !detail.traceId || detail.browserRenderAtMs === undefined) return;
+        this.acknowledgeRuntimePerformance(
+          detail.sessionId,
+          detail.traceId,
+          "transcript-render",
+          detail.browserStateUpdateAtMs ?? detail.browserRenderAtMs,
+          undefined,
+          detail,
+        );
+      }) as EventListener);
+    }
   }
 
   async probe(signal?: AbortSignal): Promise<FoundationIndexResponse> {
@@ -1140,7 +1180,6 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     );
     if (typeof snapshot.cursor === "number") window.sessionStorage?.setItem(`offersteady:realtime-cursor:${interviewId}`, String(snapshot.cursor));
     this.publishCaptureEvents(snapshot.events);
-    this.acknowledgeRenderedTranscripts(interviewId, snapshot.transcripts);
     this.recordRealtimeDeliveryMetric(interviewId, "fallback-snapshot", { durationMs: Date.now() - startedAt, reason: "recovered" });
     return mapRealtimeState(interviewId, snapshot.transcripts, snapshot.candidates, snapshot.events, snapshot.runtime);
   }
@@ -1245,13 +1284,23 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     let pendingDeliveryEvents: BackendRealtimeEventListResponse["events"] = [];
     let terminalStatus: number | null = null;
     let flushHandle: number | null = null;
+    const markStateUpdate = (payload: MaterializedRealtimeSessionStreamEvent, stateUpdatedAtMs: number) => ({
+      ...payload,
+      transcripts: {
+        ...payload.transcripts,
+        transcripts: payload.transcripts.transcripts.map(transcript => transcript.performance
+          ? { ...transcript, performance: { ...transcript.performance, browserStateUpdateAtMs: stateUpdatedAtMs } }
+          : transcript),
+      },
+    });
     const scheduleFlush = () => {
       if (flushHandle !== null) return;
       const flush = () => {
         flushHandle = null;
-        const payload = pendingSnapshot;
+        const pendingPayload = pendingSnapshot;
         pendingSnapshot = null;
-        if (!payload || (payload.type !== "snapshot" && payload.type !== "update")) return;
+        if (!pendingPayload || (pendingPayload.type !== "snapshot" && pendingPayload.type !== "update")) return;
+        const payload = markStateUpdate(pendingPayload, Date.now());
         if (typeof payload.cursor === "number") window.sessionStorage?.setItem(cursorKey, String(payload.cursor));
         const deliveryEvents = pendingDeliveryEvents;
         pendingDeliveryEvents = [];
@@ -1260,7 +1309,6 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
           mapRealtimeState(interviewId, payload.transcripts, payload.candidates, payload.events, payload.runtime),
           { type: payload.type, cursor: payload.cursor ?? 0 },
         );
-        this.acknowledgeRenderedTranscripts(interviewId, payload.transcripts);
       };
       flushHandle = typeof requestAnimationFrame === "function"
         ? requestAnimationFrame(flush)
@@ -1274,7 +1322,26 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         return;
       }
       if (realtimeEvent.type !== "snapshot" && realtimeEvent.type !== "update") return;
-      const payload = realtimeEvent as BackendRealtimeSessionStreamEvent;
+      const receivedAtMs = Date.now();
+      const rawPayload = realtimeEvent as BackendRealtimeSessionStreamEvent;
+      const payload = {
+        ...rawPayload,
+        events: {
+          ...rawPayload.events,
+          events: rawPayload.events.events.map(item => {
+            if (item.kind !== "transcript-updated") return item;
+            const performance = item.payload.performance;
+            if (!performance || typeof performance !== "object") return item;
+            return {
+              ...item,
+              payload: {
+                ...item.payload,
+                performance: { ...performance, browserEventReceiveAtMs: receivedAtMs, eventId: item.eventId },
+              },
+            };
+          }),
+        },
+      } as BackendRealtimeSessionStreamEvent;
       if (payload.type === "snapshot" && !firstSnapshotRecorded) {
         firstSnapshotRecorded = true;
         this.recordRealtimeDeliveryMetric(interviewId, "first-snapshot", { durationMs: Date.now() - connectStartedAt, reason: "opened" });
@@ -1293,8 +1360,9 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     }
     parser.push(decoder.decode());
     parser.flush();
-    const finalSnapshot = pendingSnapshot as MaterializedRealtimeSessionStreamEvent | null;
-    if (finalSnapshot) {
+    const pendingFinalSnapshot = pendingSnapshot as MaterializedRealtimeSessionStreamEvent | null;
+    if (pendingFinalSnapshot) {
+      const finalSnapshot = markStateUpdate(pendingFinalSnapshot, Date.now());
       if (typeof finalSnapshot.cursor === "number") window.sessionStorage?.setItem(cursorKey, String(finalSnapshot.cursor));
       this.publishCaptureEvents({ sessionId: finalSnapshot.events.sessionId, events: pendingDeliveryEvents });
       pendingDeliveryEvents = [];
@@ -1302,7 +1370,6 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         mapRealtimeState(interviewId, finalSnapshot.transcripts, finalSnapshot.candidates, finalSnapshot.events, finalSnapshot.runtime),
         { type: finalSnapshot.type, cursor: finalSnapshot.cursor ?? 0 },
       );
-      this.acknowledgeRenderedTranscripts(interviewId, finalSnapshot.transcripts);
       pendingSnapshot = null;
     }
     if (flushHandle !== null) {

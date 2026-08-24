@@ -133,10 +133,49 @@ async def acknowledge_runtime_performance(
         stage=request.stage,
         duration_ms=request.duration_ms,
         task_id=request.task_id,
+        event_id=request.event_id,
+        browser_event_receive_at_ms=request.browser_event_receive_at_ms,
+        browser_state_update_at_ms=request.browser_state_update_at_ms,
+        browser_render_at_ms=request.browser_render_at_ms,
     )
     return success_response(
         request=request_context,
         data={"accepted": True, "eventId": event.event_id},
+        timestamp=utc_now_iso(),
+    )
+
+
+@router.get("/sessions/{session_id}/performance-summary", response_model=ApiEnvelope[dict[str, object]])
+async def realtime_performance_summary(
+    session_id: str,
+    request: Request,
+    user_id: str | None = Query(default=None, alias="userId"),
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: RealtimeSpeechService = Depends(realtime_speech_service),
+) -> ApiEnvelope[dict[str, object]]:
+    resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
+    service.session_service.get_session(user_id=resolved_user_id, session_id=session_id)
+    return success_response(
+        request=request,
+        data=service.performance_summary(session_id=session_id),
+        timestamp=utc_now_iso(),
+    )
+
+
+@router.get("/sessions/{session_id}/performance-traces", response_model=ApiEnvelope[list[dict[str, object]]])
+async def realtime_performance_traces(
+    session_id: str,
+    request: Request,
+    user_id: str | None = Query(default=None, alias="userId"),
+    limit: int = Query(default=100, ge=1, le=500),
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: RealtimeSpeechService = Depends(realtime_speech_service),
+) -> ApiEnvelope[list[dict[str, object]]]:
+    resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
+    service.session_service.get_session(user_id=resolved_user_id, session_id=session_id)
+    return success_response(
+        request=request,
+        data=service.performance_traces(session_id=session_id, limit=limit),
         timestamp=utc_now_iso(),
     )
 
@@ -531,6 +570,8 @@ async def stream_session_runtime(
             else:
                 # Normal updates are event deltas. Full state is reserved for
                 # initial entry and expired-cursor recovery.
+                sse_sent_at_ms = int(time() * 1000)
+                incremental_events = service.observe_sse_delivery(incremental_events, sent_at_ms=sse_sent_at_ms)
                 payload = {
                     "type": payload_type,
                     "events": {
@@ -543,7 +584,6 @@ async def stream_session_runtime(
             yield _sse_frame(payload_type, payload, cursor=current_cursor)
             last_cursor = current_cursor
             initial = False
-            await asyncio.sleep(0.05)
 
     return StreamingResponse(
         event_stream(),
@@ -671,6 +711,8 @@ async def ingest_frame(
         revision=request.revision,
         captured_at_ms=request.captured_at_ms,
         started_at_ms=request.started_at_ms,
+        vad_triggered_at_ms=request.vad_triggered_at_ms,
+        speech_confirmed_at_ms=request.speech_confirmed_at_ms,
         ended_at_ms=request.ended_at_ms,
         duration_ms=request.duration_ms,
         codec=request.codec,
@@ -708,6 +750,8 @@ async def realtime_ws(websocket: WebSocket) -> None:
                     revision=payload.revision,
                     captured_at_ms=payload.captured_at_ms,
                     started_at_ms=payload.started_at_ms,
+                    vad_triggered_at_ms=payload.vad_triggered_at_ms,
+                    speech_confirmed_at_ms=payload.speech_confirmed_at_ms,
                     ended_at_ms=payload.ended_at_ms,
                     duration_ms=payload.duration_ms,
                     codec=payload.codec,
@@ -877,6 +921,8 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                     revision=payload.revision,
                     captured_at_ms=payload.captured_at_ms,
                     started_at_ms=payload.started_at_ms,
+                    vad_triggered_at_ms=payload.vad_triggered_at_ms,
+                    speech_confirmed_at_ms=payload.speech_confirmed_at_ms,
                     ended_at_ms=payload.ended_at_ms,
                     duration_ms=payload.duration_ms,
                     codec=payload.codec,

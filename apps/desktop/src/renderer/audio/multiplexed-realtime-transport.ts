@@ -173,7 +173,9 @@ export class MultiplexedRealtimeTransport {
     for (const item of this.queue) {
       const key = `${item.sourceKind}:${item.sequence}`;
       if (this.sent.has(key)) continue;
-      this.socket.send(this.binaryEnvelope(item.payload));
+      // This timestamp is the actual WebSocket write boundary. The enqueue
+      // timestamp is not a transport send and would hide local queue delay.
+      this.socket.send(this.binaryEnvelope({ ...item.payload, sentAtMs: Date.now() }));
       this.sent.add(key);
       if (item.terminalId) {
         const resendCount = this.terminalResends.get(item.terminalId) ?? 0;

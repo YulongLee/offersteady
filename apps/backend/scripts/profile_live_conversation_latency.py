@@ -122,7 +122,10 @@ def run_synthetic_internal_probe() -> dict[str, object]:
                 "runtimeStage": runtime["stage"],
                 "dominantBottleneck": runtime.get("dominantBottleneck"),
                 "anomalyReasons": runtime.get("anomalyReasons"),
-                "text": latest["text"],
+                "traceSummary": _unwrap(client.get(
+                    f"/api/v1/realtime-speech/sessions/{session_id}/performance-summary",
+                    params={"userId": "latency-synthetic-user"},
+                )),
             }
         time.sleep(0.02)
     raise RuntimeError("synthetic probe timed out")
@@ -239,6 +242,11 @@ def run_remote_paced_probe(*, turn_detection_mode: str, text: str) -> dict[str, 
     runtime = _unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/runtime", params={"userId": f"latency-remote-{turn_detection_mode}"}))
     transcripts = _unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/transcripts", params={"userId": f"latency-remote-{turn_detection_mode}"}))
     latest_transcript = transcripts["transcripts"][-1] if transcripts["transcripts"] else None
+    trace_summary = _unwrap(client.get(
+        f"/api/v1/realtime-speech/sessions/{session_id}/performance-summary",
+        params={"userId": f"latency-remote-{turn_detection_mode}"},
+    ))
+    operational = _unwrap(client.get("/api/v1/realtime-speech/metrics"))
     return {
         "mode": f"remote-{turn_detection_mode}",
         "audioDurationMs": int(len(pcm) / 2 / 16000 * 1000),
@@ -250,7 +258,17 @@ def run_remote_paced_probe(*, turn_detection_mode: str, text: str) -> dict[str, 
         "dominantBottleneck": runtime.get("dominantBottleneck"),
         "anomalyReasons": runtime.get("anomalyReasons"),
         "transcriptCount": len(transcripts["transcripts"]),
-        "latestTranscript": latest_transcript,
+        "latestTranscript": ({
+            "segmentId": latest_transcript["segmentId"],
+            "sourceKind": latest_transcript["sourceKind"],
+            "revision": latest_transcript["revision"],
+            "isFinal": latest_transcript["isFinal"],
+            "terminalState": latest_transcript.get("terminalState"),
+        } if latest_transcript else None),
+        "traceSummary": trace_summary,
+        "queueByChannel": operational.get("queueByChannel", {}),
+        "asrDiagnostics": operational.get("asr", {}),
+        "eventStoreDiagnostics": operational.get("eventStore", {}),
         "historyTail": history[-8:],
     }
 

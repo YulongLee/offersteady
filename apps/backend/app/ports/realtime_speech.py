@@ -52,6 +52,9 @@ class AudioFrame:
     terminal_id: str | None = None
     trace_id: str | None = None
     sent_at_ms: int | None = None
+    vad_triggered_at_ms: int | None = None
+    speech_confirmed_at_ms: int | None = None
+    backend_received_at_ms: int | None = None
 
 
 @dataclass(frozen=True)
@@ -96,7 +99,7 @@ class TranscriptSegmentRecord:
     terminal_state: Literal["final", "incomplete"] | None = None
     finalization_reason: str | None = None
     published_at_ms: int | None = None
-    performance: dict[str, int | None] | None = None
+    performance: dict[str, object] | None = None
     usage: AsrUsageReport | None = None
 
 
@@ -180,7 +183,10 @@ class TranscriptResult:
     overlap: bool = False
     usage: AsrUsageReport | None = None
     first_text_at_ms: int | None = None
+    partial_received_at_ms: int | None = None
     completed_at_ms: int | None = None
+    audio_appended_at_ms: int | None = None
+    commit_sent_at_ms: int | None = None
     suppressed_reason: str | None = None
 
 

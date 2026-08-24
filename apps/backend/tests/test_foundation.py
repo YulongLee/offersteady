@@ -13,7 +13,7 @@ from app.main import create_app
 from app.modules.realtime_speech import should_validate_realtime_session
 from app.deps import realtime_speech_service
 from app.ports.authentication import SmsChallengeRecord
-from app.ports.realtime_speech import AudioFrame, RealtimeEvent
+from app.ports.realtime_speech import AudioFrame, RealtimeEvent, TranscriptResult
 from app.ports.chat import ChatAnswerChunk, PromptBuildResult, PromptConfig
 from app.ports.retrieval import RetrievalContext
 from app.services.chat_service import NonRetryableChatError, QwenCompatibleGateway, RetryableChatError
@@ -117,6 +117,67 @@ def test_runtime_performance_ack_accepts_only_allowlisted_metadata() -> None:
         "content": "不允许上传转写或截图内容",
     })
     assert rejected.status_code == 422
+
+
+def test_realtime_trace_summary_correlates_browser_delivery_without_content() -> None:
+    user_id = "trace-summary-user"
+    session = unwrap(client.post("/api/v1/sessions", json={"userId": user_id, "title": "Trace 基线测试"}))
+    session_id = session["sessionId"]
+    service = realtime_speech_service()
+    service._observe_trace(
+        "trace-summary-1",
+        sessionId=session_id,
+        channel="system",
+        sequence=7,
+        revision=1,
+        utteranceId="segment-safe-1",
+        speechStartAtMs=980,
+        desktopAudioCaptureAtMs=1_000,
+        desktopWsSendAtMs=1_010,
+        backendWsReceiveAtMs=1_030,
+        queueEnterAtMs=1_035,
+        queueLeaveAtMs=1_055,
+        qwenAudioAppendAtMs=1_065,
+        qwenPartialReceivedAtMs=1_200,
+        redisEventXaddAtMs=1_210,
+        redisEventXreadAtMs=1_212,
+        sseEventSendAtMs=1_215,
+    )
+    accepted = client.post(f"/api/v1/realtime-speech/sessions/{session_id}/performance-ack", json={
+        "userId": user_id,
+        "traceId": "trace-summary-1",
+        "stage": "transcript-render",
+        "durationMs": 25,
+        "eventId": "rt-event-safe-1",
+        "browserEventReceiveAtMs": 1_230,
+        "browserStateUpdateAtMs": 1_234,
+        "browserRenderAtMs": 1_240,
+    })
+    assert accepted.status_code == 200
+    summary = unwrap(client.get(
+        f"/api/v1/realtime-speech/sessions/{session_id}/performance-summary",
+        params={"userId": user_id},
+    ))
+    assert summary["traceCount"] == 1
+    assert summary["distributions"]["networkMs"] == {
+        "count": 1, "p50": 20, "p95": 20, "p99": 20, "max": 20,
+    }
+    assert summary["distributions"]["sseDeliveryMs"]["p95"] == 15
+    assert summary["distributions"]["browserRenderMs"]["p95"] == 10
+    assert summary["distributions"]["browserStateUpdateMs"]["p95"] == 4
+    assert summary["distributions"]["browserStateToReactRenderMs"]["p95"] == 6
+    assert summary["distributions"]["redisXaddToXreadMs"]["p95"] == 2
+    assert summary["distributions"]["speechStartToBrowserFirstPartialMs"]["p95"] == 260
+    assert summary["distributions"]["endToEndPartialMs"]["p95"] == 240
+    assert "text" not in str(summary).lower()
+    traces = unwrap(client.get(
+        f"/api/v1/realtime-speech/sessions/{session_id}/performance-traces",
+        params={"userId": user_id},
+    ))
+    assert len(traces) == 1
+    assert traces[0]["traceId"] == "trace-summary-1"
+    assert traces[0]["eventId"] == "rt-event-safe-1"
+    assert "text" not in str(traces).lower()
 
 
 def test_realtime_delivery_metrics_accept_only_content_free_fields() -> None:
@@ -2164,6 +2225,62 @@ def test_realtime_speech_websocket_detects_question_without_generating_answer() 
     assert not any(item["kind"] == "answer-stream" for item in events["events"])
 
 
+def test_provider_partial_is_published_without_waiting_for_another_audio_frame() -> None:
+    user_id = "receiver-partial-user"
+    session = unwrap(client.post("/api/v1/sessions", json={"userId": user_id, "title": "接收线程 Partial 测试"}))
+    session_id = session["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": user_id}))
+    publisher = unwrap(client.post("/api/v1/realtime-speech/publishers", json={
+        "userId": user_id,
+        "sessionId": session_id,
+        "sourceKind": "system",
+        "clientName": "desktop-receiver-partial",
+    }))
+    now_ms = int(time() * 1000)
+    frame = AudioFrame(
+        publisher_id=publisher["publisherId"],
+        session_id=session_id,
+        device_id="receiver-partial-device",
+        source_id="system-loopback",
+        source_kind="system",
+        segment_id="receiver-partial-segment",
+        revision=3,
+        sequence=2,
+        captured_at_ms=now_ms - 80,
+        started_at_ms=now_ms - 180,
+        ended_at_ms=now_ms,
+        duration_ms=180,
+        codec="pcm-s16le",
+        sample_rate_hz=16_000,
+        channels=1,
+        is_final=False,
+        audio_bytes=b"synthetic-pcm",
+        trace_id="trace-receiver-partial",
+        sent_at_ms=now_ms - 60,
+        vad_triggered_at_ms=now_ms - 180,
+        speech_confirmed_at_ms=now_ms - 140,
+        backend_received_at_ms=now_ms - 50,
+    )
+    realtime_speech_service()._publish_provider_partial(frame, TranscriptResult(
+        text="请介绍你的项目经历",
+        confidence=0.82,
+        partial_received_at_ms=now_ms - 5,
+        audio_appended_at_ms=now_ms - 45,
+    ))
+
+    events = unwrap(client.get(
+        f"/api/v1/realtime-speech/sessions/{session_id}/events",
+        params={"userId": user_id},
+    ))["events"]
+    partial = next(item for item in events if item["kind"] == "transcript-updated")
+    assert partial["payload"]["text"] == "请介绍你的项目经历"
+    assert partial["payload"]["performance"]["qwenPartialReceivedAtMs"] == now_ms - 5
+    assert partial["payload"]["performance"]["redisEventXaddAtMs"] >= now_ms - 5
+    assert partial["payload"]["performance"]["framesBeforeFirstPartial"] == 3
+    assert partial["payload"]["performance"]["systemVadTriggerAtMs"] == now_ms - 180
+    assert partial["payload"]["performance"]["systemSpeechStartAtMs"] == now_ms - 140
+
+
 def test_realtime_question_confirmation_does_not_start_answer() -> None:
     service = realtime_speech_service()
     assert not hasattr(service, "_start_automatic_answer")
@@ -2464,6 +2581,7 @@ def test_dashscope_gateway_reuses_source_session_and_waits_for_session_created(m
         channels=1,
         is_final=True,
         audio_bytes=b"hello-two",
+        source_generation=2,
     )
 
     first = gateway.transcribe(frame=frame_one, attempt=0)
@@ -2473,6 +2591,10 @@ def test_dashscope_gateway_reuses_source_session_and_waits_for_session_created(m
     assert second.text == "第二段 final"
     assert len(fake_connections) == 1
     assert gateway.diagnostics("microphone")["connection_recreations"] == 1
+    assert gateway.diagnostics("microphone")["asr_connection_create_count"] == 1
+    assert gateway.diagnostics("microphone")["asr_connection_reconnect_count"] == 0
+    assert gateway.diagnostics("microphone")["utterance_count"] == 2
+    assert gateway.diagnostics("microphone")["utterances_per_connection"] == 2.0
     assert gateway.runtime_status("microphone")["mode"] == "manual"
     sent_payloads = "".join(fake_connections[0].sent)
     assert "session.update" in sent_payloads
@@ -2745,7 +2867,7 @@ def test_new_device_binding_becomes_the_users_only_active_realtime_interview() -
     assert stale_stream.status_code == 410
 
 
-def test_realtime_runtime_tracks_frame_receipts_and_asr_status() -> None:
+def test_realtime_runtime_tracks_frame_receipts_and_asr_status(monkeypatch) -> None:
     session = unwrap(client.post("/api/v1/sessions", json={
         "userId": "runtime-status-user",
         "title": "伴随助手运行状态测试",
@@ -2777,6 +2899,16 @@ def test_realtime_runtime_tracks_frame_receipts_and_asr_status() -> None:
         "sourceKind": "microphone",
         "clientName": "desktop-runtime-mic",
     }))
+    speech_service = realtime_speech_service()
+    original_save_transcript = speech_service.repository.save_transcript
+    transcript_write_count = 0
+
+    def counted_save_transcript(segment):
+        nonlocal transcript_write_count
+        transcript_write_count += 1
+        return original_save_transcript(segment)
+
+    monkeypatch.setattr(speech_service.repository, "save_transcript", counted_save_transcript)
     payload = base64.b64encode("我正在测试麦克风".encode("utf-8")).decode("utf-8")
     with client.websocket_connect(f"/api/v1/realtime-speech/ws?token={publisher['token']}") as websocket:
         websocket.send_json({
@@ -2801,6 +2933,7 @@ def test_realtime_runtime_tracks_frame_receipts_and_asr_status() -> None:
         })
         event = websocket.receive_json()
     assert event["kind"] == "transcript-updated"
+    assert transcript_write_count == 1
     runtime = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/runtime", params={"userId": "runtime-status-user"}))
     assert runtime["stage"] in {"publishing", "transcribing", "web-visible"}
     assert runtime["frameReceipts"][0]["sourceKind"] == "microphone"

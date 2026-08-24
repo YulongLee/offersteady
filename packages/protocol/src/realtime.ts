@@ -22,6 +22,10 @@ export interface RealtimeAudioEnvelopeV2 {
   readonly revision: number;
   readonly capturedAtMs: number;
   readonly startedAtMs: number;
+  /** First source-specific VAD threshold crossing retained for latency traces. */
+  readonly vadTriggeredAtMs?: number;
+  /** Source-specific attack/minimum-speech confirmation time. */
+  readonly speechConfirmedAtMs?: number;
   readonly endedAtMs: number;
   readonly durationMs: number;
   readonly codec: "pcm-s16le";

@@ -128,13 +128,19 @@ class SyntheticRedis:
         return [self.hashes.get(key, {}).get(str(field)) for field in fields]
 
 
-def _event(cursor: int, *, session_id: str = "tail-session", kind: str = "screenshot-capture-updated"):
+def _event(
+    cursor: int,
+    *,
+    session_id: str = "tail-session",
+    kind: str = "screenshot-capture-updated",
+    performance: dict[str, object] | None = None,
+):
     event = RealtimeEvent(
         event_id=f"event-{cursor}",
         session_id=session_id,
         owner_user_id="synthetic-user",
         kind=kind,
-        payload={"status": "synthetic"},
+        payload={"status": "synthetic", **({"performance": performance} if performance else {})},
         created_at_ms=cursor,
     )
     return f"{cursor}-0", {"cursor": str(cursor), "event": json.dumps(asdict(event))}
@@ -192,7 +198,7 @@ def test_wait_decodes_xread_increment_without_post_wait_scan() -> None:
     repository._index_event_rows(session_id="tail-session", rows=rows)
 
     def publish() -> None:
-        redis.streams[stream_key].append(_event(2))
+        redis.streams[stream_key].append(_event(2, performance={"traceId": "safe-trace"}))
         redis.activity["tail-session"] = 2
 
     redis.on_xread = publish
@@ -203,6 +209,8 @@ def test_wait_decodes_xread_increment_without_post_wait_scan() -> None:
     assert cursor == 2
     assert resumable is True
     assert [event.event_id for event in events] == ["event-2"]
+    assert events[0].payload["performance"]["redisReadMode"] == "xread"
+    assert isinstance(events[0].payload["performance"]["redisEventXreadAtMs"], int)
     assert redis.full_xrange_calls == 0
     assert redis.xread_calls == 1
 
