@@ -1,5 +1,90 @@
 # 电脑伴随程序分发与兼容性
 
+## macOS Developer ID 正式发布
+
+正式的官网 macOS 包使用 Electron Builder、固定 Bundle ID `com.offersteady.companion` 和以下签名身份：
+
+```text
+Developer ID Application: Yulong li (8Y5FAR3TF3)
+```
+
+正式 Release 不允许回退到 ad-hoc、Apple Development 或本地开发证书。开发调试继续使用下文的 `package:mac:arm64` / `package:mac:x64`，两条流程互不替代。
+
+### 1. 创建公证凭证
+
+推荐在 App Store Connect 中进入“用户和访问（Users and Access）→ 集成（Integrations）→ App Store Connect API → 团队密钥（Team Keys）”，创建具有 App Manager 权限的团队 API Key。保存以下三项：
+
+- Key ID：10 位 Key ID。
+- Issuer ID：UUID 格式的发行者 ID。
+- `AuthKey_<KeyID>.p8`：只能下载一次，存放在仓库以外的受控目录。
+
+运行时通过环境变量提供，不要写入 `.env`、YAML、脚本或 Git：
+
+```bash
+export APPLE_API_KEY=/绝对路径/AuthKey_YOURKEYID.p8
+export APPLE_API_KEY_ID=YOURKEYID
+export APPLE_API_ISSUER=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+```
+
+也可以先将凭证安全存入 macOS Keychain：
+
+```bash
+xcrun notarytool store-credentials "OfferSteady-Notary" \
+  --key /绝对路径/AuthKey_YOURKEYID.p8 \
+  --key-id YOURKEYID \
+  --issuer xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+export APPLE_KEYCHAIN_PROFILE=OfferSteady-Notary
+```
+
+Keychain profile 只保存于当前 Mac 登录钥匙串，不进入仓库。发布脚本也兼容 `APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD` 和 `APPLE_TEAM_ID`，但自动化优先使用团队 API Key。
+
+### 2. 正式构建
+
+Apple Silicon：
+
+```bash
+npm run package:mac:release:arm64 -w @offersteady/desktop
+```
+
+Intel：
+
+```bash
+npm run package:mac:release:x64 -w @offersteady/desktop
+```
+
+命令会依次执行：Swift runtime 编译、Electron 构建、Developer ID 嵌套签名、Hardened Runtime、App 公证与 staple、DMG 生成、Developer ID 签署最终 DMG、DMG 独立公证与 staple，以及 App/DMG 的 codesign、Gatekeeper、stapler 终检。App 和 DMG 两次公证都必须返回 `Accepted`；任何阶段失败都不会把产物报告为正式发行包。
+
+正式 DMG 路径：
+
+```text
+apps/desktop/release/macos-production/OfferSteady-Companion-<version>-macOS-<arch>.dmg
+```
+
+每个架构独立清理和生成自己的 App/DMG，构建 Intel x64 时不得删除或覆盖已经验收的 arm64 DMG，反之亦然。发布前还应核对 App 主程序和 `OfferSteadyCaptureRuntime` 的实际 Mach-O 架构与目标一致。
+
+### 3. 没有公证凭证时的签名预检
+
+开发者账号刚开通、API Key 尚未创建时，可先生成 Developer ID 签名的解包 App：
+
+```bash
+npm run package:mac:release:prepare:arm64 -w @offersteady/desktop
+```
+
+该命令验证 Developer ID、完整嵌套签名、Hardened Runtime和时间戳，但会明确把 Gatekeeper 与 stapler 标为 `PENDING`。它不会生成官网正式 DMG，不得上传分发。
+
+首次使用新导入的 Developer ID 私钥时，macOS 可能提示 `codesign` 访问钥匙串密钥。应在确认进程为 `/usr/bin/codesign` 且证书为上述 Developer ID 后选择“始终允许”，否则签名进程会等待钥匙串授权。不要通过脚本写入登录密码来绕过该确认。
+
+最终 Release 验证等价于：
+
+```bash
+codesign --verify --deep --strict --verbose=2 "/path/to/面试稳伴随程序.app"
+spctl --assess --type execute --verbose "/path/to/面试稳伴随程序.app"
+xcrun stapler validate "/path/to/面试稳伴随程序.app"
+spctl --assess --type open --context context:primary-signature --verbose "/path/to/OfferSteady-Companion.dmg"
+xcrun stapler validate "/path/to/OfferSteady-Companion.dmg"
+```
+
 计划分发三个独立安装包：macOS Apple Silicon arm64、macOS Intel x64、Windows 10/11 x64。Windows ARM64、Linux 和移动原生伴随程序不在当前范围。
 
 发布清单分别记录运营发布状态 `distributionStatus` 与技术签名状态 `signingStatus`。运营负责人确认当前安装包可作为正式产品分发后，将其标为 `published`；网页可以提供下载，但不得把尚未完成的 Developer ID 签名、公证或 Windows 代码签名描述为“已验证”。校验值缺失、内部使用、失败或被撤回的包不能显示下载按钮。
