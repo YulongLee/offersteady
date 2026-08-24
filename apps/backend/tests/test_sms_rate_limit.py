@@ -48,3 +48,28 @@ def test_provider_rate_limit_is_a_retryable_user_error() -> None:
     stored = next(iter(repository.sms_challenges_by_id.values()))
     assert stored.status == "failed"
     assert stored.last_error_code == "isv.BUSINESS_LIMIT_CONTROL"
+
+
+def test_provider_rejections_do_not_consume_user_interval_or_daily_quota() -> None:
+    repository = InMemoryAuthenticationRepository()
+    service = AuthenticationService(
+        settings=Settings(
+            _env_file=None,
+            auth_sms_send_interval_seconds=60,
+            auth_sms_daily_limit=1,
+        ),
+        logger=logging.getLogger("test.sms-provider-rejection-quota"),
+        repository=repository,
+        password_hasher=None,  # type: ignore[arg-type]
+        token_codec=None,  # type: ignore[arg-type]
+        wechat_provider=None,  # type: ignore[arg-type]
+        sms_provider=RateLimitedSmsProvider(),
+    )
+
+    for _attempt in range(2):
+        with pytest.raises(DomainRequestError) as captured:
+            service.send_sms_code(phone_number="19729630316", client_label="admin-login")
+        assert captured.value.error_code == "sms_provider_rate_limited"
+
+    assert len(repository.sms_challenges_by_id) == 2
+    assert {record.status for record in repository.sms_challenges_by_id.values()} == {"failed"}

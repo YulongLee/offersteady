@@ -266,7 +266,17 @@ class AuthenticationService:
         phone_e164 = self._normalize_phone(phone_number)
         phone_hash = self._phone_hash(phone_e164)
         now_ms = _now_ms()
-        recent = self.repository.list_sms_challenges_for_phone(phone_hash=phone_hash, since_ms=now_ms - 24 * 60 * 60 * 1000)
+        recent = [
+            challenge
+            for challenge in self.repository.list_sms_challenges_for_phone(
+                phone_hash=phone_hash,
+                since_ms=now_ms - 24 * 60 * 60 * 1000,
+            )
+            # A provider rejection means no SMS was delivered. Charging that
+            # failed attempt against the user's resend interval or daily quota
+            # can lock an administrator out after a transient channel outage.
+            if challenge.status != "failed"
+        ]
         if recent and now_ms - recent[0].created_at_ms < self.settings.auth_sms_send_interval_seconds * 1000:
             raise DomainRequestError("authentication", "sms-send", "验证码发送太频繁，请稍后再试。", 429, "sms_rate_limited")
         if len(recent) >= self.settings.auth_sms_daily_limit:
