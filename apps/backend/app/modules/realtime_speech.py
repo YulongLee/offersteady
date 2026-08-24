@@ -26,8 +26,10 @@ from app.schemas.realtime_speech import (
     RealtimePublisherResponse,
     RealtimeQuestionCandidateListResponse,
     RealtimeSessionRuntimeResponse,
+    RealtimeSessionSnapshotResponse,
     RealtimeTranscriptListResponse,
     RuntimePerformanceAcknowledgementRequest,
+    RealtimeDeliveryMetricRequest,
     RealtimeFrameIngestRequest,
     RealtimeFrameRequest,
     RegisterDesktopDeviceRequest,
@@ -133,6 +135,27 @@ async def acknowledge_runtime_performance(
         data={"accepted": True, "eventId": event.event_id},
         timestamp=utc_now_iso(),
     )
+
+
+@router.post("/sessions/{session_id}/delivery-metrics", response_model=ApiEnvelope[dict[str, bool]])
+async def record_delivery_metric(
+    session_id: str,
+    request_context: Request,
+    request: RealtimeDeliveryMetricRequest,
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: RealtimeSpeechService = Depends(realtime_speech_service),
+) -> ApiEnvelope[dict[str, bool]]:
+    resolved_user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
+    await asyncio.to_thread(
+        service.record_delivery_metric,
+        user_id=resolved_user_id,
+        session_id=session_id,
+        kind=request.kind,
+        duration_ms=request.duration_ms,
+        attempt=request.attempt,
+        reason=request.reason,
+    )
+    return success_response(request=request_context, data={"accepted": True}, timestamp=utc_now_iso())
 
 
 @router.post("/publishers", response_model=ApiEnvelope[RealtimePublisherResponse])
@@ -359,6 +382,41 @@ async def get_runtime(
     resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
     runtime = service.get_runtime(user_id=resolved_user_id, session_id=session_id)
     return success_response(request=request, data=runtime, timestamp=utc_now_iso())
+
+
+@router.get("/sessions/{session_id}/snapshot", response_model=ApiEnvelope[RealtimeSessionSnapshotResponse])
+async def get_session_snapshot(
+    session_id: str,
+    request: Request,
+    user_id: str | None = Query(default=None, alias="userId"),
+    page_instance_id: str | None = Query(default=None, alias="pageInstanceId"),
+    lease_generation: int | None = Query(default=None, ge=1, alias="leaseGeneration"),
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: RealtimeSpeechService = Depends(realtime_speech_service),
+) -> ApiEnvelope[RealtimeSessionSnapshotResponse]:
+    resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
+    if page_instance_id is not None or lease_generation is not None:
+        if page_instance_id is None or lease_generation is None:
+            raise DomainRequestError(
+                "realtime-speech",
+                "snapshot-lease",
+                "页面会话参数不完整，请刷新后重试。",
+                422,
+                "incomplete_page_lease",
+            )
+        await asyncio.to_thread(
+            service.require_active_realtime_session,
+            user_id=resolved_user_id,
+            session_id=session_id,
+            page_instance_id=page_instance_id,
+            lease_generation=lease_generation,
+        )
+    snapshot = await asyncio.to_thread(
+        service.get_session_snapshot,
+        user_id=resolved_user_id,
+        session_id=session_id,
+    )
+    return success_response(request=request, data=snapshot, timestamp=utc_now_iso())
 
 
 @router.post("/sessions/{session_id}/capture-control", response_model=ApiEnvelope[dict[str, object]])

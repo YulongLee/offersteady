@@ -46,15 +46,23 @@ def capacity_level(value: float | int | None, warning: float | int | None, criti
 
 class RequestWindow:
     def __init__(self) -> None:
-        self._events: deque[tuple[int, float, int]] = deque(maxlen=20_000)
+        self._events: deque[tuple[int, float, int, str]] = deque(maxlen=20_000)
         self._lock = Lock()
+
+    @staticmethod
+    def request_class(path: str) -> str:
+        if path.startswith("/api/v1/realtime-speech/sessions/") and path.endswith("/snapshot"):
+            return "recovery_snapshot"
+        if path.startswith("/api/v1/realtime-speech/sessions/") and path.endswith("/stream"):
+            return "sse_handshake"
+        return "control_api"
 
     def record(self, *, path: str, elapsed_ms: float, status_code: int) -> None:
         if path in {"/healthz", "/api/v1/admin/capacity", "/api/v1/admin/server-health"}:
             return
         current = _now_ms()
         with self._lock:
-            self._events.append((current, elapsed_ms, status_code))
+            self._events.append((current, elapsed_ms, status_code, self.request_class(path)))
             self._prune(current)
 
     def summary(self, current: int | None = None) -> dict[str, float]:
@@ -65,11 +73,20 @@ class RequestWindow:
         durations = [item[1] for item in events]
         errors = sum(1 for item in events if item[2] >= 500)
         span_minutes = max(1.0, min(5.0, (now - events[0][0]) / 60_000)) if events else 1.0
-        return {
+        result = {
             "apiP95Ms": round(percentile(durations, 0.95) or 0.0, 2),
             "apiErrorRate": round(errors * 100 / len(events), 2) if events else 0.0,
             "requestsPerMinute": round(len(events) / span_minutes, 2),
         }
+        for request_class, prefix in (
+            ("control_api", "controlApi"),
+            ("recovery_snapshot", "recoverySnapshot"),
+            ("sse_handshake", "sseHandshake"),
+        ):
+            classified = [item[1] for item in events if item[3] == request_class]
+            result[f"{prefix}P95Ms"] = round(percentile(classified, 0.95) or 0.0, 2)
+            result[f"{prefix}RequestCount"] = len(classified)
+        return result
 
     def _prune(self, current: int) -> None:
         while self._events and self._events[0][0] < current - REQUEST_WINDOW_MS:
@@ -176,6 +193,20 @@ class AdminCapacityMonitor:
             "supporting": {
                 "activeUsers": current.get("activeUsers"),
                 "requestsPerMinute": current.get("requestsPerMinute"),
+                "requestClasses": {
+                    "controlApi": {
+                        "p95Ms": current.get("controlApiP95Ms"),
+                        "requestCount": current.get("controlApiRequestCount"),
+                    },
+                    "recoverySnapshot": {
+                        "p95Ms": current.get("recoverySnapshotP95Ms"),
+                        "requestCount": current.get("recoverySnapshotRequestCount"),
+                    },
+                    "sseHandshake": {
+                        "p95Ms": current.get("sseHandshakeP95Ms"),
+                        "requestCount": current.get("sseHandshakeRequestCount"),
+                    },
+                },
                 "databaseConnectionLimit": database_limit,
             },
         }

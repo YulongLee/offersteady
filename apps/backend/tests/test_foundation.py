@@ -27,6 +27,69 @@ def test_realtime_stream_throttles_database_backed_session_validation() -> None:
     assert should_validate_realtime_session(last_validated_at=10.0, now=12.0) is True
 
 
+def test_realtime_session_snapshot_is_authorized_complete_and_lease_aware() -> None:
+    user_id = "snapshot-owner-user"
+    session = unwrap(client.post("/api/v1/sessions", json={"userId": user_id, "title": "恢复快照测试"}))
+    session_id = session["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": user_id}))
+    lease = unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/web-heartbeat", json={
+        "userId": user_id,
+        "bindingId": None,
+        "page": "live",
+        "pageInstanceId": "snapshot-page-1",
+    }))
+
+    response = client.get(f"/api/v1/realtime-speech/sessions/{session_id}/snapshot", params={
+        "userId": user_id,
+        "pageInstanceId": lease["pageInstanceId"],
+        "leaseGeneration": lease["leaseGeneration"],
+    })
+    assert response.status_code == 200
+    snapshot = unwrap(response)
+    assert snapshot["sessionId"] == session_id
+    assert snapshot["ownerUserId"] == user_id
+    assert snapshot["runtime"]["sessionId"] == session_id
+    assert snapshot["transcripts"] == {"sessionId": session_id, "transcripts": []}
+    assert snapshot["candidates"] == {"sessionId": session_id, "candidates": []}
+    assert snapshot["events"]["sessionId"] == session_id
+    assert isinstance(snapshot["cursor"], int)
+
+    wrong_owner = client.get(
+        f"/api/v1/realtime-speech/sessions/{session_id}/snapshot",
+        params={"userId": "snapshot-other-user"},
+    )
+    assert wrong_owner.status_code == 403
+
+    replacement = unwrap(client.post("/api/v1/sessions", json={"userId": user_id, "title": "替代页面测试"}))
+    replacement_id = replacement["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{replacement_id}/start", json={"userId": user_id}))
+    replacement_lease = unwrap(client.post(f"/api/v1/realtime-speech/sessions/{replacement_id}/web-heartbeat", json={
+        "userId": user_id,
+        "bindingId": None,
+        "page": "live",
+        "pageInstanceId": "snapshot-page-2",
+    }))
+    stale_lease = client.get(f"/api/v1/realtime-speech/sessions/{session_id}/snapshot", params={
+        "userId": user_id,
+        "pageInstanceId": "snapshot-page-1",
+        "leaseGeneration": replacement_lease["leaseGeneration"],
+    })
+    assert stale_lease.status_code == 409
+
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/end", json={"userId": user_id}))
+    terminal = unwrap(client.get(
+        f"/api/v1/realtime-speech/sessions/{session_id}/snapshot",
+        params={"userId": user_id},
+    ))
+    assert terminal["runtime"]["sessionStatus"] == "ended"
+
+    legacy = unwrap(client.get(
+        f"/api/v1/realtime-speech/sessions/{session_id}/transcripts",
+        params={"userId": user_id},
+    ))
+    assert legacy == terminal["transcripts"]
+
+
 def test_runtime_performance_ack_accepts_only_allowlisted_metadata() -> None:
     session = unwrap(client.post("/api/v1/sessions", json={
         "userId": "performance-ack-user", "title": "性能确认测试",
@@ -53,6 +116,31 @@ def test_runtime_performance_ack_accepts_only_allowlisted_metadata() -> None:
         "userId": "performance-ack-user", "traceId": "trace-safe-2",
         "stage": "transcript-render", "durationMs": 10,
         "content": "不允许上传转写或截图内容",
+    })
+    assert rejected.status_code == 422
+
+
+def test_realtime_delivery_metrics_accept_only_content_free_fields() -> None:
+    user_id = "delivery-metric-user"
+    session = unwrap(client.post("/api/v1/sessions", json={"userId": user_id, "title": "交付指标测试"}))
+    session_id = session["sessionId"]
+    accepted = client.post(f"/api/v1/realtime-speech/sessions/{session_id}/delivery-metrics", json={
+        "userId": user_id,
+        "kind": "first-snapshot",
+        "durationMs": 86,
+        "attempt": 1,
+        "reason": "opened",
+    })
+    assert accepted.status_code == 200
+    metrics = unwrap(client.get("/api/v1/realtime-speech/metrics"))
+    assert metrics["delivery"]["counts"]["first-snapshot"] >= 1
+    assert metrics["delivery"]["latestDurationMs"]["first-snapshot"] == 86
+
+    rejected = client.post(f"/api/v1/realtime-speech/sessions/{session_id}/delivery-metrics", json={
+        "userId": user_id,
+        "kind": "first-snapshot",
+        "durationMs": 10,
+        "answer": "不允许进入遥测的用户内容",
     })
     assert rejected.status_code == 422
 

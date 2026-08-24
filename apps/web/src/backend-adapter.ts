@@ -334,6 +334,17 @@ interface BackendRealtimeSessionStreamEvent {
   readonly runtime: BackendRealtimeRuntimeResponse | null;
 }
 
+interface BackendRealtimeSessionSnapshotResponse {
+  readonly sessionId: string;
+  readonly ownerUserId: string;
+  readonly cursor: number;
+  readonly resumable: boolean;
+  readonly transcripts: BackendRealtimeTranscriptListResponse;
+  readonly candidates: BackendRealtimeQuestionCandidateListResponse;
+  readonly events: BackendRealtimeEventListResponse;
+  readonly runtime: BackendRealtimeRuntimeResponse;
+}
+
 interface BackendCancelAnswerResponse {
   readonly outcome: CancelAnswerResult["outcome"];
   readonly task: BackendLiveAnswerTaskResponse;
@@ -746,6 +757,24 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   private readonly captureEventWaiters = new Map<string, Set<(payload: Record<string, unknown>) => void>>();
   private readonly acknowledgedPerformanceTraces = new Set<string>();
 
+  private recordRealtimeDeliveryMetric(
+    interviewId: string,
+    kind: "connect" | "first-snapshot" | "connected-duration" | "reconnect" | "fallback-snapshot",
+    options: { readonly durationMs?: number; readonly attempt?: number; readonly reason?: "opened" | "eof" | "network" | "aborted" | "recovered" | "unknown" } = {},
+  ) {
+    void this.client.request(`/api/v1/realtime-speech/sessions/${interviewId}/delivery-metrics`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        userId: requireUserId(),
+        kind,
+        ...(options.durationMs === undefined ? {} : { durationMs: Math.max(0, Math.min(3_600_000, Math.round(options.durationMs))) }),
+        ...(options.attempt === undefined ? {} : { attempt: options.attempt }),
+        ...(options.reason ? { reason: options.reason } : {}),
+      }),
+    }).catch(() => undefined);
+  }
+
   private acknowledgeRuntimePerformance(
     interviewId: string,
     traceId: string,
@@ -1006,14 +1035,19 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     }, signal);
   }
 
-  async loadRealtimeSession(interviewId: string, signal?: AbortSignal) {
-    const [transcripts, candidates, events, runtime] = await Promise.all([
-      this.client.request<BackendRealtimeTranscriptListResponse>(`/api/v1/realtime-speech/sessions/${interviewId}/transcripts?userId=${encodeURIComponent(requireUserId())}`, { headers: authHeaders() }, signal),
-      this.client.request<BackendRealtimeQuestionCandidateListResponse>(`/api/v1/realtime-speech/sessions/${interviewId}/question-candidates?userId=${encodeURIComponent(requireUserId())}`, { headers: authHeaders() }, signal),
-      this.client.request<BackendRealtimeEventListResponse>(`/api/v1/realtime-speech/sessions/${interviewId}/events?userId=${encodeURIComponent(requireUserId())}`, { headers: authHeaders() }, signal).catch(() => ({ sessionId: interviewId, events: [] })),
-      this.client.request<BackendRealtimeRuntimeResponse>(`/api/v1/realtime-speech/sessions/${interviewId}/runtime?userId=${encodeURIComponent(requireUserId())}`, { headers: authHeaders() }, signal).catch(() => null),
-    ]);
-    return mapRealtimeState(interviewId, transcripts, candidates, events, runtime);
+  async loadRealtimeSession(interviewId: string, signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }) {
+    const startedAt = Date.now();
+    const leaseQuery = lease ? `&pageInstanceId=${encodeURIComponent(lease.pageInstanceId)}&leaseGeneration=${lease.leaseGeneration}` : "";
+    const snapshot = await this.client.request<BackendRealtimeSessionSnapshotResponse>(
+      `/api/v1/realtime-speech/sessions/${interviewId}/snapshot?userId=${encodeURIComponent(requireUserId())}${leaseQuery}`,
+      { headers: authHeaders() },
+      signal,
+    );
+    if (typeof snapshot.cursor === "number") window.sessionStorage?.setItem(`offersteady:realtime-cursor:${interviewId}`, String(snapshot.cursor));
+    this.publishCaptureEvents(snapshot.events);
+    this.acknowledgeRenderedTranscripts(interviewId, snapshot.transcripts);
+    this.recordRealtimeDeliveryMetric(interviewId, "fallback-snapshot", { durationMs: Date.now() - startedAt, reason: "recovered" });
+    return mapRealtimeState(interviewId, snapshot.transcripts, snapshot.candidates, snapshot.events, snapshot.runtime);
   }
 
   async loadInterviewWorkspace(interviewId: string, signal?: AbortSignal): Promise<InterviewWorkspaceSnapshot> {
@@ -1084,6 +1118,8 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   }
 
   async subscribeRealtimeSession(interviewId: string, onUpdate: Parameters<InterviewAppAdapter["subscribeRealtimeSession"]>[1], signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }) {
+    const connectStartedAt = Date.now();
+    let firstSnapshotRecorded = false;
     const cursorKey = `offersteady:realtime-cursor:${interviewId}`;
     const storedCursor = typeof window.sessionStorage?.getItem === "function" ? Number(window.sessionStorage.getItem(cursorKey) ?? "0") : 0;
     const cursor = Number.isFinite(storedCursor) && storedCursor > 0 ? storedCursor : 0;
@@ -1105,6 +1141,8 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       throw error;
     }
     if (!response.body) throw new AppError("network", "当前浏览器不支持实时对话订阅读取");
+    const connectedAt = Date.now();
+    this.recordRealtimeDeliveryMetric(interviewId, "connect", { durationMs: connectedAt - connectStartedAt, reason: "opened" });
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let pendingSnapshot: BackendRealtimeSessionStreamEvent | null = null;
@@ -1119,7 +1157,10 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         if (!payload || (payload.type !== "snapshot" && payload.type !== "update")) return;
         if (typeof payload.cursor === "number") window.sessionStorage?.setItem(cursorKey, String(payload.cursor));
         this.publishCaptureEvents(payload.events);
-        onUpdate(mapRealtimeState(interviewId, payload.transcripts, payload.candidates, payload.events, payload.runtime));
+        onUpdate(
+          mapRealtimeState(interviewId, payload.transcripts, payload.candidates, payload.events, payload.runtime),
+          { type: payload.type, cursor: payload.cursor ?? 0 },
+        );
         this.acknowledgeRenderedTranscripts(interviewId, payload.transcripts);
       };
       flushHandle = typeof requestAnimationFrame === "function"
@@ -1135,6 +1176,10 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       }
       if (realtimeEvent.type !== "snapshot" && realtimeEvent.type !== "update") return;
       const payload = realtimeEvent as BackendRealtimeSessionStreamEvent;
+      if (payload.type === "snapshot" && !firstSnapshotRecorded) {
+        firstSnapshotRecorded = true;
+        this.recordRealtimeDeliveryMetric(interviewId, "first-snapshot", { durationMs: Date.now() - connectStartedAt, reason: "opened" });
+      }
       pendingSnapshot = pendingSnapshot
         ? {
             ...payload,
@@ -1160,7 +1205,10 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     if (finalSnapshot) {
       if (typeof finalSnapshot.cursor === "number") window.sessionStorage?.setItem(cursorKey, String(finalSnapshot.cursor));
       this.publishCaptureEvents(finalSnapshot.events);
-      onUpdate(mapRealtimeState(interviewId, finalSnapshot.transcripts, finalSnapshot.candidates, finalSnapshot.events, finalSnapshot.runtime));
+      onUpdate(
+        mapRealtimeState(interviewId, finalSnapshot.transcripts, finalSnapshot.candidates, finalSnapshot.events, finalSnapshot.runtime),
+        { type: finalSnapshot.type, cursor: finalSnapshot.cursor ?? 0 },
+      );
       this.acknowledgeRenderedTranscripts(interviewId, finalSnapshot.transcripts);
       pendingSnapshot = null;
     }
@@ -1175,6 +1223,10 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       error.status = terminalStatus;
       throw error;
     }
+    this.recordRealtimeDeliveryMetric(interviewId, "connected-duration", {
+      durationMs: Date.now() - connectedAt,
+      reason: signal?.aborted ? "aborted" : "eof",
+    });
   }
 
   async deleteInterview(id: string, signal?: AbortSignal) {

@@ -22,6 +22,7 @@ import { WorkspaceDivider } from "./WorkspaceDivider";
 import { authClient } from "./auth-client";
 import { materialUploadAdapter, saveMaterialDownload } from "./material-upload-adapter";
 import { isInvalidRealtimeSessionStatus, realtimeRetryDelayMs } from "./realtime-recovery";
+import { createLiveSessionLeaderCoordinator } from "./live-session-leader";
 import { applyAppearancePreferences, persistAppearancePreferences, readAppearancePreferences, type AppearancePreferences } from "./appearance-preferences";
 import { isFreshShortcutScreenshotAcceptance, SHORTCUT_SCREENSHOT_RECOVERY_POLL_INTERVAL_MS } from "./screenshot-shortcut-feedback";
 import "./styles.css";
@@ -846,7 +847,6 @@ function LivePage() {
   useEffect(() => {
     let stopped = false;
     let heartbeatTimer: number | null = null;
-    let realtimePollTimer: number | null = null;
     let heartbeatBindingId: string | null = null;
     let leaseGeneration: number | null = null;
     let lastBindingRefreshAt = 0;
@@ -856,8 +856,13 @@ function LivePage() {
     let realtimeSubscribeInFlight = false;
     let realtimeStreamHealthy = false;
     let realtimeLoadInFlight = false;
+    let streamController: AbortController | null = null;
     const realtimeController = new AbortController();
-    const channel = typeof BroadcastChannel === "function" ? new BroadcastChannel(`offersteady:live-page:${state.account.id}`) : null;
+    const coordinator = createLiveSessionLeaderCoordinator(
+      `offersteady:live-session:${state.account.id}:${id}`,
+      pageInstanceId.current,
+    );
+    let isRealtimeLeader = coordinator === null;
     const realtimeErrorStatus = (error: unknown) => {
       if (typeof error === "object" && error !== null && "status" in error && typeof error.status === "number") return error.status;
       const match = error instanceof Error ? error.message.match(/[（(](\d{3})[）)]/) : null;
@@ -870,18 +875,13 @@ function LivePage() {
       setPageLeaseStatus("replaced");
       setNotice("");
       realtimeController.abort();
+      streamController?.abort();
       manualAnswerController.current?.abort();
       screenshotController.current?.abort();
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);
-      if (realtimePollTimer !== null) window.clearInterval(realtimePollTimer);
     };
-    channel?.addEventListener("message", event => {
-      const claim = event.data as { type?: string; sessionId?: string; pageInstanceId?: string };
-      if (claim.type === "claim" && claim.sessionId !== id && claim.pageInstanceId && claim.pageInstanceId !== pageInstanceId.current) pauseReplacedPage();
-    });
-    channel?.postMessage({ type: "claim", sessionId: id, pageInstanceId: pageInstanceId.current });
-    const applyRealtimeState = (realtime: RealtimeSessionUpdate) => {
+    const applyRealtimeState = (realtime: RealtimeSessionUpdate, relay = true) => {
       if (stopped) return;
       const shortcut = realtime.shortcutScreenshotUpdate;
       const notificationId = shortcut?.notificationId;
@@ -934,8 +934,10 @@ function LivePage() {
           ...(realtime.captureState ? { captureState: realtime.captureState } : {}),
         };
       });
+      if (relay) coordinator?.publishState(realtime);
     };
     const sendHeartbeat = async () => {
+      if (!isRealtimeLeader) return false;
       try {
         const now = Date.now();
         if (!heartbeatBindingId || now - lastBindingRefreshAt >= 30_000) {
@@ -962,10 +964,14 @@ function LivePage() {
       }
     };
     const loadRealtime = async () => {
-      if (realtimeLoadInFlight || stopped || document.visibilityState !== "visible") return false;
+      if (!isRealtimeLeader || realtimeLoadInFlight || stopped || document.visibilityState !== "visible" || leaseGeneration === null) return false;
       realtimeLoadInFlight = true;
       try {
-        const realtime = await runAdapterOperation(signal => interviewAppAdapter.loadRealtimeSession(id, signal));
+        const realtime = await runAdapterOperation(signal => interviewAppAdapter.loadRealtimeSession(
+          id,
+          signal,
+          { pageInstanceId: pageInstanceId.current, leaseGeneration: leaseGeneration! },
+        ));
         applyRealtimeState(realtime);
         return true;
       } catch {
@@ -988,17 +994,27 @@ function LivePage() {
       }, delay);
     };
     const subscribeRealtime = async () => {
-      if (realtimeSubscribeInFlight || stopped || realtimeController.signal.aborted || leaseGeneration === null) return;
+      if (!isRealtimeLeader || realtimeSubscribeInFlight || stopped || realtimeController.signal.aborted || leaseGeneration === null) return;
       const activeLeaseGeneration = leaseGeneration;
+      const activeStreamController = new AbortController();
+      streamController = activeStreamController;
+      const abortStream = () => activeStreamController.abort();
+      realtimeController.signal.addEventListener("abort", abortStream, { once: true });
       realtimeSubscribeInFlight = true;
       try {
-        await runAdapterOperation(signal => interviewAppAdapter.subscribeRealtimeSession(id, realtime => {
-          realtimeStreamHealthy = true;
-          realtimeHealthyRef.current = true;
-          invalidSessionSuspended = false;
-          reconnectAttempt = 0;
+        await runAdapterOperation(signal => interviewAppAdapter.subscribeRealtimeSession(id, (realtime, delivery) => {
+          if (delivery?.type === "snapshot") {
+            realtimeStreamHealthy = true;
+            realtimeHealthyRef.current = true;
+            invalidSessionSuspended = false;
+            reconnectAttempt = 0;
+            if (reconnectTimer !== null) {
+              window.clearTimeout(reconnectTimer);
+              reconnectTimer = null;
+            }
+          }
           applyRealtimeState(realtime);
-        }, signal, { pageInstanceId: pageInstanceId.current, leaseGeneration: activeLeaseGeneration }), realtimeController.signal);
+        }, signal, { pageInstanceId: pageInstanceId.current, leaseGeneration: activeLeaseGeneration }), activeStreamController.signal);
         realtimeStreamHealthy = false;
         realtimeHealthyRef.current = false;
         if (!stopped && !realtimeController.signal.aborted) scheduleReconnect();
@@ -1020,20 +1036,37 @@ function LivePage() {
         scheduleReconnect(status);
       } finally {
         realtimeSubscribeInFlight = false;
+        realtimeController.signal.removeEventListener("abort", abortStream);
+        if (streamController === activeStreamController) streamController = null;
       }
     };
-    heartbeatTimer = window.setInterval(() => void sendHeartbeat(), 15_000);
-    realtimePollTimer = window.setInterval(() => {
-      if (realtimeStreamHealthy || invalidSessionSuspended) return;
-      void loadRealtime().then(loaded => {
-        if (loaded && !realtimeSubscribeInFlight && reconnectTimer === null) {
-          reconnectAttempt = 0;
-          void subscribeRealtime();
+    coordinator?.start({
+      onLeadershipChange: leader => {
+        isRealtimeLeader = leader;
+        if (!leader) {
+          realtimeStreamHealthy = false;
+          realtimeHealthyRef.current = false;
+          streamController?.abort();
+          streamController = null;
+          if (reconnectTimer !== null) {
+            window.clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+          }
+          return;
         }
-      });
-    }, 1_000);
+        void sendHeartbeat().then(claimed => {
+          if (claimed) void subscribeRealtime();
+        });
+      },
+      onState: realtime => {
+        realtimeStreamHealthy = true;
+        realtimeHealthyRef.current = true;
+        applyRealtimeState(realtime, false);
+      },
+    });
+    heartbeatTimer = window.setInterval(() => void sendHeartbeat(), 15_000);
     const resumeRealtime = () => {
-      if (stopped || document.visibilityState !== "visible") return;
+      if (stopped || !isRealtimeLeader || document.visibilityState !== "visible") return;
       void sendHeartbeat();
       if (invalidSessionSuspended) return;
       if (!realtimeStreamHealthy && !realtimeSubscribeInFlight) {
@@ -1048,19 +1081,20 @@ function LivePage() {
     document.addEventListener("visibilitychange", resumeRealtime);
     window.addEventListener("focus", resumeRealtime);
     window.addEventListener("online", resumeRealtime);
-    void sendHeartbeat().then(claimed => {
-      if (!claimed || stopped) return;
-      void loadRealtime();
-      void subscribeRealtime();
-    });
+    if (isRealtimeLeader) {
+      void sendHeartbeat().then(claimed => {
+        if (!claimed || stopped) return;
+        void subscribeRealtime();
+      });
+    }
     return () => {
       stopped = true;
       realtimeHealthyRef.current = false;
       realtimeController.abort();
+      streamController?.abort();
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);
-      if (realtimePollTimer !== null) window.clearInterval(realtimePollTimer);
-      channel?.close();
+      coordinator?.stop();
       document.removeEventListener("visibilitychange", resumeRealtime);
       window.removeEventListener("focus", resumeRealtime);
       window.removeEventListener("online", resumeRealtime);

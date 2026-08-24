@@ -16,7 +16,8 @@ describe("realtime recovery policy", () => {
   });
 
   it("keeps bounded exponential recovery for transient network failures", () => {
-    expect(realtimeRetryDelayMs(null, 0)).toBe(1_000);
+    expect(realtimeRetryDelayMs(null, 0)).toBe(0);
+    expect(realtimeRetryDelayMs(500, 1)).toBe(2_000);
     expect(realtimeRetryDelayMs(500, 2)).toBe(4_000);
     expect(realtimeRetryDelayMs(500, 20)).toBe(15_000);
   });

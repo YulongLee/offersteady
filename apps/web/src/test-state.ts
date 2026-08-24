@@ -287,7 +287,7 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
     return { pageInstanceId: _command.pageInstanceId ?? null, leaseGeneration: _command.page === "live" ? 1 : 0, leaseExpiresAtMs: Date.now() + 30_000 };
   }
 
-  async loadRealtimeSession(_interviewId: string, signal?: AbortSignal) {
+  async loadRealtimeSession(_interviewId: string, signal?: AbortSignal, _lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }) {
     await delay(signal);
     return { speaker: structuredClone(syntheticState.speaker) };
   }
@@ -311,7 +311,7 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
 
   async subscribeRealtimeSession(_interviewId: string, onUpdate: Parameters<InterviewAppAdapter["subscribeRealtimeSession"]>[1], signal?: AbortSignal, _lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }) {
     await delay(signal);
-    onUpdate({ speaker: structuredClone(syntheticState.speaker) });
+    onUpdate({ speaker: structuredClone(syntheticState.speaker) }, { type: "snapshot", cursor: 0 });
   }
 
   async deleteInterview(_id: string, signal?: AbortSignal) {

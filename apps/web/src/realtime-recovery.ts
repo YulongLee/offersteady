@@ -2,7 +2,8 @@ export const INVALID_REALTIME_SESSION_RETRY_MS = 60_000;
 
 export const realtimeRetryDelayMs = (status: number | null, attempt: number) => {
   if (isInvalidRealtimeSessionStatus(status)) return INVALID_REALTIME_SESSION_RETRY_MS;
-  return Math.min(15_000, 1_000 * 2 ** Math.min(attempt, 4));
+  if (attempt <= 0) return 0;
+  return [2_000, 4_000, 8_000, 15_000][Math.min(attempt - 1, 3)]!;
 };
 
 export const isInvalidRealtimeSessionStatus = (status: number | null) =>

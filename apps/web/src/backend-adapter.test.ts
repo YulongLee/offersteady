@@ -24,6 +24,41 @@ describe("backend preview adapter", () => {
     });
   });
 
+  it("hydrates realtime state with one aggregated snapshot request and carries the page lease", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const snapshot = {
+      sessionId: "session-1",
+      ownerUserId: "user-1",
+      cursor: 17,
+      resumable: true,
+      transcripts: { sessionId: "session-1", transcripts: [] },
+      candidates: { sessionId: "session-1", candidates: [] },
+      events: { sessionId: "session-1", events: [] },
+      runtime: {
+        sessionId: "session-1", sessionStatus: "live", stage: "live", backendReachable: true,
+        deviceRegistered: true, machineCodeBound: true, sessionLive: true, transcriptCount: 0,
+        questionCandidateCount: 0, sourceHealth: [],
+      },
+    };
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => new Response(JSON.stringify(envelope(
+      String(input).includes("/delivery-metrics") ? { accepted: true } : snapshot,
+    )), { status: 200, headers: { "Content-Type": "application/json" } }));
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+
+    await adapter.loadRealtimeSession("session-1", undefined, { pageInstanceId: "page-1", leaseGeneration: 4 });
+
+    const snapshotCalls = fetchImpl.mock.calls.filter(call => String(call[0]).includes("/snapshot"));
+    expect(snapshotCalls).toHaveLength(1);
+    expect(snapshotCalls[0]?.[0]).toBe("http://localhost:8000/api/v1/realtime-speech/sessions/session-1/snapshot?userId=user-1&pageInstanceId=page-1&leaseGeneration=4");
+    expect(window.sessionStorage.getItem("offersteady:realtime-cursor:session-1")).toBe("17");
+    expect(fetchImpl.mock.calls.some(call => String(call[0]).includes("/transcripts?"))).toBe(false);
+    expect(fetchImpl.mock.calls.some(call => String(call[0]).includes("/question-candidates?"))).toBe(false);
+    expect(fetchImpl.mock.calls.some(call => String(call[0]).includes("/events?"))).toBe(false);
+    expect(fetchImpl.mock.calls.some(call => String(call[0]).includes("/runtime?"))).toBe(false);
+  });
+
   it("loads app state from the backend web state API", async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify(envelope(syntheticState)), {
       status: 200,

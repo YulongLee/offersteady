@@ -45,6 +45,7 @@ from app.schemas.realtime_speech import (
     RealtimeRuntimeCountersResponse,
     RealtimeRuntimePerformanceResponse,
     RealtimeSessionRuntimeResponse,
+    RealtimeSessionSnapshotResponse,
     RealtimeStageTimingResponse,
     RealtimeSourceHealthResponse,
     RealtimeTranscriptListResponse,
@@ -126,6 +127,8 @@ class RealtimeSpeechService:
         self._frame_workers: dict[tuple[str, RealtimeSourceKind], threading.Thread] = {}
         self._frame_queues: dict[tuple[str, RealtimeSourceKind], "queue.Queue[dict[str, object]]"] = {}
         self._retired_session_ids: set[str] = set()
+        self._delivery_metric_counts: Counter[str] = Counter()
+        self._delivery_metric_latest_ms: dict[str, int] = {}
 
     def _record_speech_usage(
         self,
@@ -241,7 +244,37 @@ class RealtimeSpeechService:
                 for source_kind in ("microphone", "system")
             },
             "rawAudioPersisted": False,
+            "delivery": {
+                "counts": dict(self._delivery_metric_counts),
+                "latestDurationMs": dict(self._delivery_metric_latest_ms),
+            },
         }
+
+    def record_delivery_metric(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        kind: str,
+        duration_ms: int | None,
+        attempt: int | None,
+        reason: str | None,
+    ) -> None:
+        self.session_service.get_session(user_id=user_id, session_id=session_id)
+        self._delivery_metric_counts[kind] += 1
+        if duration_ms is not None:
+            self._delivery_metric_latest_ms[kind] = duration_ms
+        log_event(
+            self.logger,
+            logging.INFO,
+            settings=self.settings,
+            event="realtime_delivery.metric",
+            session_id=session_id,
+            kind=kind,
+            duration_ms=duration_ms,
+            attempt=attempt,
+            reason=reason,
+        )
 
     def register_desktop_device(self, *, device_id: str, manual_code: str, display_name: str, capabilities: dict[str, object]) -> DesktopDeviceRecord:
         code = manual_code.strip()
@@ -1675,6 +1708,28 @@ class RealtimeSpeechService:
         return RealtimeEventListResponse(
             sessionId=session_id,
             events=[self.event_response(item) for item in events],
+        )
+
+    def get_session_snapshot(self, *, user_id: str, session_id: str) -> RealtimeSessionSnapshotResponse:
+        """Return one authoritative recovery payload without changing legacy list endpoints."""
+        runtime = self.get_runtime(user_id=user_id, session_id=session_id)
+        transcripts = self.list_transcripts(user_id=user_id, session_id=session_id)
+        candidates = self.list_candidates(user_id=user_id, session_id=session_id)
+        events = self.list_events(user_id=user_id, session_id=session_id)
+        cursor, _incremental, resumable = self.list_session_events_after(
+            user_id=user_id,
+            session_id=session_id,
+            cursor=0,
+        )
+        return RealtimeSessionSnapshotResponse(
+            sessionId=session_id,
+            ownerUserId=user_id,
+            cursor=cursor,
+            resumable=resumable,
+            transcripts=transcripts,
+            candidates=candidates,
+            events=events,
+            runtime=runtime,
         )
 
     @staticmethod

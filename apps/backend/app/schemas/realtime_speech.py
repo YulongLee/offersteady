@@ -196,6 +196,18 @@ class RealtimeEventListResponse(BaseModel):
     events: list[RealtimeEventResponse]
 
 
+class RealtimeSessionSnapshotResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    session_id: str = Field(alias="sessionId")
+    owner_user_id: str = Field(alias="ownerUserId")
+    cursor: int
+    resumable: bool = True
+    transcripts: RealtimeTranscriptListResponse
+    candidates: RealtimeQuestionCandidateListResponse
+    events: RealtimeEventListResponse
+    runtime: RealtimeSessionRuntimeResponse
+
+
 class RealtimeCandidateCommandRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
     user_id: str = Field(min_length=1, alias="userId")
@@ -306,3 +318,12 @@ class RuntimePerformanceAcknowledgementRequest(BaseModel):
     stage: Literal["transcript-render", "screenshot-first-render", "answer-first-render"]
     duration_ms: int = Field(ge=0, le=120_000, alias="durationMs")
     task_id: str | None = Field(default=None, min_length=1, max_length=128, alias="taskId", pattern=r"^[A-Za-z0-9:._-]+$")
+
+
+class RealtimeDeliveryMetricRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True, extra="forbid")
+    user_id: str = Field(min_length=1, max_length=128, alias="userId")
+    kind: Literal["connect", "first-snapshot", "connected-duration", "reconnect", "fallback-snapshot"]
+    duration_ms: int | None = Field(default=None, ge=0, le=3_600_000, alias="durationMs")
+    attempt: int | None = Field(default=None, ge=0, le=100)
+    reason: Literal["opened", "eof", "network", "aborted", "recovered", "unknown"] | None = None
