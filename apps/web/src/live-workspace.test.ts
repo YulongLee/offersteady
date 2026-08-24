@@ -70,6 +70,17 @@ describe("live workspace answer pagination", () => {
     expect(reconciled.transcripts).toEqual([newer]);
   });
 
+  it("keeps an incomplete recovery terminal when a later partial is replayed", () => {
+    const original = syntheticState.speaker.transcripts[0]!;
+    const incomplete = { ...original, revision: 4, isFinal: true, terminalState: "incomplete" as const, text: "可见但未完整的文本" };
+    const replayedPartial = { ...original, revision: 5, isFinal: false, text: "迟到局部结果" };
+    const reconciled = reconcileRealtimeSpeaker(
+      { ...syntheticState.speaker, transcripts: [incomplete] },
+      { ...syntheticState.speaker, transcripts: [replayedPartial] },
+    );
+    expect(reconciled.transcripts).toEqual([incomplete]);
+  });
+
   it("drops realtime content from another interview session instead of merging it", () => {
     const current = syntheticState.speaker;
     const incoming = {

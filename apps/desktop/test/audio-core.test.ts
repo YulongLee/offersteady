@@ -56,6 +56,47 @@ describe("signal diagnostics", () => {
 });
 
 describe("speech segmenter", () => {
+  it("exposes an explicit commercial turn lifecycle and a terminal reason", () => {
+    const segmenter = new SpeechSegmenter("microphone");
+    const speech = new Uint8Array([1, 2, 3]);
+
+    expect(segmenter.currentState).toBe("idle");
+    segmenter.push(speech, 0, 0.01);
+    segmenter.push(speech, 100, 0.01);
+    expect(segmenter.currentState).toBe("speaking");
+    segmenter.push(new Uint8Array([0]), 200, 0.0001);
+    expect(segmenter.currentState).toBe("tail");
+    const terminal = segmenter.push(new Uint8Array([0]), 800, 0.0001)[0];
+
+    expect(terminal).toMatchObject({ isFinal: true, turnState: "committing", finalizationReason: "silence", sourceGeneration: 1 });
+    expect(terminal?.terminalId).toContain(terminal?.segmentId);
+    expect(segmenter.currentState).toBe("idle");
+  });
+
+  it("adapts to steady meeting noise and closes system speech before the hard deadline", () => {
+    const segmenter = new SpeechSegmenter("system");
+    const chunk = new Uint8Array([1, 2]);
+    for (let index = 0; index < 30; index += 1) segmenter.push(chunk, index * 20, 0.0006);
+    segmenter.push(chunk, 700, 0.003);
+    segmenter.push(chunk, 800, 0.003);
+    let terminal: ReturnType<SpeechSegmenter["push"]>[number] | undefined;
+    for (let nowMs = 900; nowMs <= 2_000; nowMs += 100) {
+      terminal = segmenter.push(chunk, nowMs, 0.0006).find(item => item.isFinal) ?? terminal;
+    }
+    expect(terminal?.finalizationReason).toBe("silence");
+    expect(terminal?.endedAtMs).toBeLessThan(3_000);
+  });
+
+  it("flushes an active turn once with an idempotency key and capture-stop reason", () => {
+    const segmenter = new SpeechSegmenter("microphone");
+    segmenter.push(new Uint8Array([1]), 0, 0.01);
+    segmenter.push(new Uint8Array([2]), 100, 0.01);
+    const terminal = segmenter.flush(150)[0];
+    expect(terminal).toMatchObject({ isFinal: true, finalizationReason: "capture-stop" });
+    expect(terminal?.terminalId).toBeTruthy();
+    expect(segmenter.flush(160)).toEqual([]);
+  });
+
   it("keeps a single segment across brief pauses and finalizes only after a longer silence", () => {
     const segmenter = new SpeechSegmenter("microphone");
     const speech = new Uint8Array([1, 2, 3]);
@@ -151,14 +192,15 @@ describe("speech segmenter", () => {
     expect(segmenter.push(speech, 0, 0.01)).toEqual([]);
     const firstPartial = segmenter.push(speech, 100, 0.01);
     expect(firstPartial).toHaveLength(1);
-    const boundedFinal = segmenter.push(speech, 30_000, 0.01);
+    const boundedFinal = segmenter.push(speech, 12_000, 0.01);
 
     expect(boundedFinal).toHaveLength(1);
     expect(boundedFinal[0]?.isFinal).toBe(true);
     expect(boundedFinal[0]?.segmentId).toBe(firstPartial[0]?.segmentId);
-    expect(boundedFinal[0]?.durationMs).toBe(30_000);
-    expect(segmenter.push(speech, 30_020, 0.01)).toEqual([]);
-    const nextPartial = segmenter.push(speech, 30_120, 0.01);
+    expect(boundedFinal[0]?.durationMs).toBe(12_000);
+    expect(boundedFinal[0]?.finalizationReason).toBe("max-duration");
+    expect(segmenter.push(speech, 12_020, 0.01)).toEqual([]);
+    const nextPartial = segmenter.push(speech, 12_120, 0.01);
     expect(nextPartial[0]?.segmentId).not.toBe(firstPartial[0]?.segmentId);
   });
 });

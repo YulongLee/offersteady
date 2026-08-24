@@ -1,4 +1,4 @@
-import type { AudioSourceHealth, AudioSourceKind } from "@offersteady/protocol";
+import type { AudioSourceHealth, AudioSourceKind, RealtimeFinalizationReason, RealtimeTurnState } from "@offersteady/protocol";
 
 import { BoundedAudioFrameBuffer, createAudioFrame, SourceFrameSequencer } from "./audio-frame-buffer";
 import { MicrophoneAudioAdapter, SystemAudioAdapter, describeMediaError, type OpenAudioSource } from "./audio-source-adapter";
@@ -39,6 +39,7 @@ interface RealtimePublisherOptions extends RealtimePublisherCallbacks {
   readonly binding: DesktopBinding;
   readonly microphoneId: string;
   readonly systemAudioId: string;
+  readonly endpointingMode?: EndpointingMode;
   readonly fetchImpl?: typeof fetch;
 }
 
@@ -80,7 +81,23 @@ interface SegmentSnapshot {
   readonly endedAtMs: number;
   readonly durationMs: number;
   readonly isFinal: boolean;
+  readonly turnState: RealtimeTurnState;
+  readonly finalizationReason?: RealtimeFinalizationReason;
+  readonly sourceGeneration: number;
+  readonly terminalId?: string;
   readonly payload: Uint8Array;
+}
+
+export type EndpointingMode = "legacy-threshold" | "commercial-adaptive";
+export type SpeechTurnLifecycle = "idle" | RealtimeTurnState | "final" | "incomplete";
+
+export interface SpeechEndpointingConfig {
+  readonly mode: EndpointingMode;
+  readonly interimIntervalMs: number;
+  readonly minimumSpeechMs: number;
+  readonly maximumTurnMs: number;
+  readonly microphoneTailMs: number;
+  readonly systemTailMs: number;
 }
 
 const MICROPHONE_SPEECH_START_THRESHOLD = 0.003;
@@ -93,6 +110,15 @@ const SYSTEM_SILENCE_FINALIZE_MS = 500;
 const MAX_SEGMENT_DURATION_MS = 30_000;
 const MIN_EMIT_SPEECH_MS = 60;
 const PRE_SPEECH_BUFFER_LIMIT = 4;
+
+export const commercialSpeechEndpointingDefaults: SpeechEndpointingConfig = {
+  mode: "commercial-adaptive",
+  interimIntervalMs: INTERIM_INTERVAL_MS,
+  minimumSpeechMs: MIN_EMIT_SPEECH_MS,
+  maximumTurnMs: 12_000,
+  microphoneTailMs: MICROPHONE_SILENCE_FINALIZE_MS,
+  systemTailMs: SYSTEM_SILENCE_FINALIZE_MS,
+};
 const MAX_PENDING_AUDIO_BYTES = 256_000;
 const MAX_PENDING_UPLOAD_FRAMES = 64;
 const HTTP_PUBLISH_THROTTLE_MS = 12;
@@ -332,6 +358,7 @@ const downsampleToPcm16 = (input: Float32Array, inputSampleRate: number, targetS
 };
 
 export class SpeechSegmenter {
+  private lifecycle: SpeechTurnLifecycle = "idle";
   private segmentId: string | null = null;
   private startedAtMs = 0;
   private lastSpeechAtMs = 0;
@@ -341,44 +368,65 @@ export class SpeechSegmenter {
   private readonly preSpeechChunks: Uint8Array[] = [];
   private emitted = false;
   private noiseFloor: number;
+  private sourceGeneration = 0;
+  private readonly config: SpeechEndpointingConfig;
 
-  constructor(private readonly sourceKind: AudioSourceKind) {
+  constructor(private readonly sourceKind: AudioSourceKind, config: Partial<SpeechEndpointingConfig> = {}) {
     this.noiseFloor = sourceKind === "system" ? 0.0001 : 0.00035;
+    this.config = { ...commercialSpeechEndpointingDefaults, ...config };
   }
 
   get currentNoiseFloor(): number {
     return this.noiseFloor;
   }
 
+  get currentState(): SpeechTurnLifecycle {
+    return this.lifecycle;
+  }
+
+  get currentGeneration(): number {
+    return this.sourceGeneration;
+  }
+
   private thresholds(): { readonly start: number; readonly continuation: number } {
+    if (this.config.mode === "legacy-threshold") {
+      return this.sourceKind === "system"
+        ? { start: SYSTEM_SPEECH_START_THRESHOLD, continuation: SYSTEM_SPEECH_CONTINUE_THRESHOLD }
+        : { start: MICROPHONE_SPEECH_START_THRESHOLD, continuation: MICROPHONE_SPEECH_CONTINUE_THRESHOLD };
+    }
     if (this.sourceKind === "system") {
       return {
-        start: Math.min(SYSTEM_SPEECH_START_THRESHOLD, Math.max(0.00035, this.noiseFloor * 3.2)),
-        continuation: Math.min(SYSTEM_SPEECH_CONTINUE_THRESHOLD, Math.max(0.00025, this.noiseFloor * 2)),
+        start: Math.min(0.004, Math.max(SYSTEM_SPEECH_START_THRESHOLD, this.noiseFloor * 3.2)),
+        continuation: Math.min(0.0025, Math.max(SYSTEM_SPEECH_CONTINUE_THRESHOLD, this.noiseFloor * 2)),
       };
     }
     return {
-      start: Math.min(MICROPHONE_SPEECH_START_THRESHOLD, Math.max(0.0012, this.noiseFloor * 3.2)),
-      continuation: Math.min(MICROPHONE_SPEECH_CONTINUE_THRESHOLD, Math.max(0.0011, this.noiseFloor * 2)),
+      start: Math.min(0.012, Math.max(0.0012, this.noiseFloor * 3.2)),
+      continuation: Math.min(0.008, Math.max(0.0011, this.noiseFloor * 2)),
     };
   }
 
   private observeNoise(rms: number): void {
-    const fixedStart = this.sourceKind === "system" ? SYSTEM_SPEECH_START_THRESHOLD : MICROPHONE_SPEECH_START_THRESHOLD;
-    if (!Number.isFinite(rms) || rms < 0 || rms >= fixedStart) return;
-    this.noiseFloor = this.noiseFloor * 0.92 + rms * 0.08;
+    const ceiling = this.sourceKind === "system" ? 0.0025 : 0.008;
+    if (!Number.isFinite(rms) || rms < 0 || rms >= ceiling) return;
+    const next = this.noiseFloor * 0.94 + rms * 0.06;
+    const minimum = this.sourceKind === "system" ? 0.00005 : 0.0001;
+    const maximum = this.sourceKind === "system" ? 0.0015 : 0.004;
+    this.noiseFloor = Math.max(minimum, Math.min(maximum, next));
   }
 
   push(payload: Uint8Array, nowMs: number, rms: number): SegmentSnapshot[] {
-    if (!this.segmentId) this.observeNoise(rms);
+    if (this.lifecycle === "idle") this.observeNoise(rms);
     const { start: startThreshold, continuation: continueThreshold } = this.thresholds();
-    if (!this.segmentId) {
+    if (this.lifecycle === "idle") {
       if (payload.byteLength > 0) {
         this.preSpeechChunks.push(payload);
         while (this.preSpeechChunks.length > PRE_SPEECH_BUFFER_LIMIT) this.preSpeechChunks.shift();
       }
       if (rms < startThreshold) return [];
       this.segmentId = `${this.sourceKind}-${nowMs}-${Math.random().toString(36).slice(2, 8)}`;
+      this.sourceGeneration += 1;
+      this.lifecycle = "speaking";
       this.startedAtMs = nowMs;
       this.lastSpeechAtMs = nowMs;
       this.lastInterimAtMs = nowMs;
@@ -388,16 +436,19 @@ export class SpeechSegmenter {
       return [];
     }
 
-    const speaking = rms >= continueThreshold;
+    const resumeThreshold = this.lifecycle === "tail" ? startThreshold : continueThreshold;
+    const speaking = rms >= resumeThreshold;
     if (payload.byteLength > 0) this.unsentChunks.push(payload);
-    if (nowMs - this.startedAtMs >= MAX_SEGMENT_DURATION_MS) {
-      const boundedFinalSnapshot = this.snapshot(nowMs, true);
+    const maximumTurnMs = this.config.mode === "legacy-threshold" ? MAX_SEGMENT_DURATION_MS : this.config.maximumTurnMs;
+    if (nowMs - this.startedAtMs >= maximumTurnMs) {
+      const boundedFinalSnapshot = this.finalize(nowMs, "max-duration");
       this.reset();
       return [boundedFinalSnapshot];
     }
     if (speaking) {
+      this.lifecycle = "speaking";
       this.lastSpeechAtMs = nowMs;
-      if ((!this.emitted && nowMs - this.startedAtMs >= MIN_EMIT_SPEECH_MS) || nowMs - this.lastInterimAtMs >= INTERIM_INTERVAL_MS) {
+      if ((!this.emitted && nowMs - this.startedAtMs >= this.config.minimumSpeechMs) || nowMs - this.lastInterimAtMs >= this.config.interimIntervalMs) {
         this.lastInterimAtMs = nowMs;
         this.emitted = true;
         return [this.snapshot(nowMs, false)];
@@ -405,27 +456,32 @@ export class SpeechSegmenter {
       return [];
     }
 
-    const silenceFinalizeMs = this.sourceKind === "system"
-      ? SYSTEM_SILENCE_FINALIZE_MS
-      : MICROPHONE_SILENCE_FINALIZE_MS;
+    this.lifecycle = "tail";
+    this.observeNoise(rms);
+    const silenceFinalizeMs = this.sourceKind === "system" ? this.config.systemTailMs : this.config.microphoneTailMs;
     if (nowMs - this.lastSpeechAtMs < silenceFinalizeMs) return [];
-    if (!this.emitted && this.lastSpeechAtMs - this.startedAtMs < MIN_EMIT_SPEECH_MS) {
+    if (!this.emitted && this.lastSpeechAtMs - this.startedAtMs < this.config.minimumSpeechMs) {
       this.reset();
       return [];
     }
-    const finalSnapshot = this.snapshot(nowMs, true);
+    const finalSnapshot = this.finalize(nowMs, "silence");
     this.reset();
     return [finalSnapshot];
   }
 
-  flush(nowMs: number): SegmentSnapshot[] {
+  flush(nowMs: number, reason: RealtimeFinalizationReason = "capture-stop"): SegmentSnapshot[] {
     if (!this.segmentId) return [];
-    const finalSnapshot = this.snapshot(nowMs, true);
+    const finalSnapshot = this.finalize(nowMs, reason);
     this.reset();
     return [finalSnapshot];
   }
 
-  private snapshot(nowMs: number, isFinal: boolean): SegmentSnapshot {
+  private finalize(nowMs: number, reason: RealtimeFinalizationReason): SegmentSnapshot {
+    this.lifecycle = "committing";
+    return this.snapshot(nowMs, true, reason);
+  }
+
+  private snapshot(nowMs: number, isFinal: boolean, finalizationReason?: RealtimeFinalizationReason): SegmentSnapshot {
     this.revision += 1;
     const payload = concatBytes(this.unsentChunks);
     this.unsentChunks.length = 0;
@@ -438,12 +494,17 @@ export class SpeechSegmenter {
       endedAtMs: nowMs,
       durationMs: Math.max(20, nowMs - this.startedAtMs),
       isFinal,
+      turnState: isFinal ? "committing" : this.lifecycle === "tail" ? "tail" : "speaking",
+      ...(finalizationReason ? { finalizationReason } : {}),
+      sourceGeneration: this.sourceGeneration,
+      ...(isFinal ? { terminalId: `${this.segmentId ?? this.sourceKind}:${this.sourceGeneration}:${this.revision}` } : {}),
       payload,
     };
   }
 
   private reset() {
     this.segmentId = null;
+    this.lifecycle = "idle";
     this.startedAtMs = 0;
     this.lastSpeechAtMs = 0;
     this.lastInterimAtMs = 0;
@@ -575,7 +636,7 @@ export class DesktopRealtimePublisher {
       const context = new AudioContext();
       await context.resume().catch(() => undefined);
       const node = context.createMediaStreamSource(openedMedia.stream);
-      const segmenter = new SpeechSegmenter(input.sourceKind);
+      const segmenter = new SpeechSegmenter(input.sourceKind, { mode: this.options.endpointingMode ?? "commercial-adaptive" });
       const openedAtMs = Date.now();
       let lastProcessAtMs = openedAtMs;
       let closing = false;
@@ -598,6 +659,9 @@ export class DesktopRealtimePublisher {
           stage: rms >= (input.sourceKind === "system" ? SYSTEM_SPEECH_CONTINUE_THRESHOLD : MICROPHONE_SPEECH_CONTINUE_THRESHOLD) ? "signal-detected" : "track-live",
           level: Number(rms.toFixed(3)),
           noiseFloor: Number(segmenter.currentNoiseFloor.toFixed(5)),
+          endpointingMode: this.options.endpointingMode ?? "commercial-adaptive",
+          turnState: segmenter.currentState,
+          sourceGeneration: segmenter.currentGeneration,
           ...(rms >= (input.sourceKind === "system" ? SYSTEM_SPEECH_CONTINUE_THRESHOLD : MICROPHONE_SPEECH_CONTINUE_THRESHOLD) ? { lastSignalAtMs: nowMs } : {}),
           active: true,
         });
@@ -630,6 +694,10 @@ export class DesktopRealtimePublisher {
             sampleRateHz: 16_000,
             channels: 1,
             isFinal: snapshot.isFinal,
+            turnState: snapshot.turnState,
+            finalizationReason: snapshot.finalizationReason,
+            sourceGeneration: snapshot.sourceGeneration,
+            terminalId: snapshot.terminalId,
             traceId: `${input.sourceKind}:${snapshot.segmentId}:${snapshot.revision}:${frame.sequence}`,
             audioBase64: bytesToBase64(snapshot.payload),
           };
@@ -715,6 +783,10 @@ export class DesktopRealtimePublisher {
             sampleRateHz: 16_000,
             channels: 1,
             isFinal: true,
+            turnState: snapshot.turnState,
+            finalizationReason: snapshot.finalizationReason,
+            sourceGeneration: snapshot.sourceGeneration,
+            terminalId: snapshot.terminalId,
             traceId: `${input.sourceKind}:${snapshot.segmentId}:${snapshot.revision}:${frame.sequence}`,
             audioBase64: bytesToBase64(snapshot.payload),
           }, frame, openedMedia.descriptor.id || input.sourceId);
@@ -906,10 +978,10 @@ export class DesktopRealtimePublisher {
     const sourceKind = payload?.sourceKind;
     if (sourceKind === "microphone" || sourceKind === "system") {
       const existing = this.latestHealth.get(sourceKind);
-      if (existing && event.kind === "frame-accepted" && typeof payload.sequence === "number") {
+      if (existing && (event.kind === "frame-accepted" || event.kind === "terminal-accepted") && typeof payload.sequence === "number") {
         this.sendBuffers.get(sourceKind)?.acknowledge(String(payload.sourceId ?? existing.sourceId), payload.sequence);
       }
-      if (existing && (event.kind === "delivery-diagnostics" || event.kind === "sequence-gap" || event.kind === "frame-accepted")) {
+      if (existing && (event.kind === "delivery-diagnostics" || event.kind === "sequence-gap" || event.kind === "frame-accepted" || event.kind === "terminal-accepted")) {
         this.updateHealth({
           ...existing,
           ...(typeof payload.pendingFrames === "number" ? { pendingFrameCount: payload.pendingFrames } : {}),
@@ -917,6 +989,10 @@ export class DesktopRealtimePublisher {
           ...(typeof payload.droppedFrames === "number" ? { droppedFrameCount: payload.droppedFrames } : {}),
           ...(typeof payload.reconnectCount === "number" ? { reconnectCount: payload.reconnectCount } : {}),
           ...(typeof payload.lastAckAtMs === "number" ? { lastAckAtMs: payload.lastAckAtMs } : event.kind === "frame-accepted" ? { lastAckAtMs: Date.now() } : {}),
+          ...(typeof payload.terminalPendingSinceMs === "number" ? { terminalPendingSinceMs: payload.terminalPendingSinceMs } : {}),
+          ...(typeof payload.terminalAgeMs === "number" ? { terminalAgeMs: payload.terminalAgeMs } : {}),
+          ...(typeof payload.terminalResendCount === "number" ? { terminalResendCount: payload.terminalResendCount } : {}),
+          ...(typeof payload.terminalAckAtMs === "number" ? { terminalAckAtMs: payload.terminalAckAtMs } : event.kind === "terminal-accepted" ? { terminalAckAtMs: Date.now() } : {}),
           ...(typeof payload.reason === "string" ? { lastReconnectReason: payload.reason } : {}),
         });
       }
@@ -956,20 +1032,31 @@ export class DesktopRealtimePublisher {
       this._notifyFailure(sourceKind, `${sourceLabel(sourceKind)}未连接，已暂停语音上报，请先重连桌面端与网页。`);
       return;
     }
-    queueState.items.push({
+    const queued = {
       sourceKind,
       sourceId,
       payload,
       frame,
-    });
-    if (queueState.items.length > MAX_PENDING_UPLOAD_FRAMES) {
-      const dropped = queueState.items.shift();
+    };
+    if (queueState.items.length >= MAX_PENDING_UPLOAD_FRAMES) {
+      const firstInterim = queueState.items.findIndex(item => item.payload.isFinal !== true);
+      if (firstInterim < 0 && payload.isFinal !== true) {
+        this.sendBuffers.get(sourceKind)?.acknowledge(frame.sourceId, frame.sequence);
+        this._notifyFailure(sourceKind, `${sourceLabel(sourceKind)}发送队列正在保障结束帧，已跳过过期中间帧`);
+        return;
+      }
+      const dropped = firstInterim >= 0 ? queueState.items.splice(firstInterim, 1)[0] : undefined;
       if (dropped) {
         const droppedFrame = dropped.frame;
         this.sendBuffers.get(sourceKind)?.acknowledge(droppedFrame.sourceId, droppedFrame.sequence);
       }
-      this._notifyFailure(sourceKind, `${sourceLabel(sourceKind)}发送队列已满，已丢弃旧帧`);
+      if (!dropped) {
+        this._notifyFailure(sourceKind, `${sourceLabel(sourceKind)}结束帧队列已满，请检查网络连接`);
+        return;
+      }
+      this._notifyFailure(sourceKind, `${sourceLabel(sourceKind)}发送队列已满，已跳过过期中间帧并保留结束帧`);
     }
+    queueState.items.push(queued);
     if (!queueState.uploading) {
       void this._drainUploadQueue(sourceKind);
     }
@@ -1033,12 +1120,15 @@ export class DesktopRealtimePublisher {
           this.sendBuffers.get(sourceKind)?.acknowledge(current.sourceId, current.frame.sequence);
           queueState.consecutiveFailures = 0;
           this.lastFailureNotice.delete(sourceKind);
+          const isTerminal = current.payload.isFinal === true;
           this.options.onServerEvent?.({
-            kind: "frame-accepted",
+            kind: isTerminal ? "terminal-accepted" : "frame-accepted",
             payload: {
               sourceKind,
               sourceId: current.sourceId,
               sequence: current.frame.sequence,
+              ...(isTerminal && typeof current.payload.terminalId === "string" ? { terminalId: current.payload.terminalId } : {}),
+              ...(isTerminal ? { terminalAckAtMs: Date.now() } : {}),
               transport: "http-frame-ingest",
             },
           });

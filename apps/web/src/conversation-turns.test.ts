@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SpeakerTranscriptSegment } from "@offersteady/protocol";
-import { latestInterviewerTurnText, projectConversationTurns, reconcileTranscriptRevisions } from "./conversation-turns";
+import { latestInterviewerTurnText, partitionTranscriptLifecycle, projectConversationTurns, reconcileTranscriptRevisions } from "./conversation-turns";
 
 const segment = (overrides: Partial<SpeakerTranscriptSegment> = {}): SpeakerTranscriptSegment => ({
   id: "segment-1",
@@ -34,6 +34,33 @@ describe("continuous conversation turns", () => {
     expect(turns).toHaveLength(1);
     expect(turns[0]?.text).toBe("我叫李玉龙。 今年二十一岁。");
     expect(turns[0]?.sourceSegmentIds).toEqual(["candidate-1", "candidate-2"]);
+  });
+
+  it("keeps a confirmed turn separate from a newer active draft", () => {
+    const turns = projectConversationTurns([
+      segment({ id: "confirmed", text: "已经确认的问题。", isFinal: true }),
+      segment({ id: "draft", text: "正在继续说", startedAtMs: 2_300, endedAtMs: 2_800, isFinal: false }),
+    ]);
+    expect(turns.map(turn => turn.sourceSegmentIds)).toEqual([["confirmed"], ["draft"]]);
+    expect(turns[0]?.isFinal).toBe(true);
+    expect(turns[1]?.isFinal).toBe(false);
+  });
+
+  it("never regresses a terminal segment to a newer partial replay", () => {
+    const terminal = segment({ revision: 3, isFinal: true, terminalState: "final", text: "最终文本" });
+    const latePartial = segment({ revision: 4, isFinal: false, text: "迟到的局部文本" });
+    expect(reconcileTranscriptRevisions([terminal, latePartial])).toEqual([terminal]);
+  });
+
+  it("keeps confirmed history while exposing at most one draft per source", () => {
+    const lifecycle = partitionTranscriptLifecycle([
+      segment({ id: "confirmed", isFinal: true }),
+      segment({ id: "old-mic-draft", endedAtMs: 2_400 }),
+      segment({ id: "new-mic-draft", startedAtMs: 2_500, endedAtMs: 3_000 }),
+      segment({ id: "system-draft", sourceKind: "system", sourceId: "system", role: "interviewer", endedAtMs: 2_700 }),
+    ]);
+    expect(lifecycle.confirmed.map(item => item.id)).toEqual(["confirmed"]);
+    expect(lifecycle.activeDrafts.map(item => item.id).sort()).toEqual(["new-mic-draft", "system-draft"]);
   });
 
   it("does not join role changes, overlaps, or long gaps", () => {

@@ -196,6 +196,8 @@ interface BackendRealtimeTranscriptListResponse {
     readonly startedAtMs: number;
     readonly endedAtMs: number;
     readonly isFinal: boolean;
+    readonly terminalState?: "final" | "incomplete";
+    readonly finalizationReason?: "silence" | "max-duration" | "capture-stop" | "source-recovery" | "backend-watchdog" | "provider-completed" | "provider-timeout";
     readonly overlap: boolean;
     readonly publishedAtMs?: number;
     readonly performance?: {
@@ -595,6 +597,8 @@ const mapRealtimeState = (
           startedAtMs: segment.startedAtMs,
           endedAtMs: segment.endedAtMs,
           isFinal: segment.isFinal,
+          ...(segment.terminalState ? { terminalState: segment.terminalState } : {}),
+          ...(segment.finalizationReason ? { finalizationReason: segment.finalizationReason } : {}),
           overlap: segment.overlap,
           ...(segment.publishedAtMs !== undefined ? { publishedAtMs: segment.publishedAtMs } : {}),
           ...(segment.performance ? { performance: segment.performance } : {}),

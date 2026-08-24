@@ -2,14 +2,14 @@ import { existsSync, lstatSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
-const EXPECTED_BUNDLE_ID = "com.offersteady.companion";
-const EXPECTED_IDENTITY = "Developer ID Application: Yulong li (8Y5FAR3TF3)";
-const EXPECTED_TEAM_ID = "8Y5FAR3TF3";
-
 const valueAfter = flag => {
   const index = process.argv.indexOf(flag);
   return index >= 0 ? process.argv[index + 1] : undefined;
 };
+const EXPECTED_BUNDLE_ID = valueAfter("--bundle-id") || "com.offersteady.companion";
+const EXPECTED_IDENTITY = "Developer ID Application: Yulong li (8Y5FAR3TF3)";
+const EXPECTED_TEAM_ID = "8Y5FAR3TF3";
+
 const appPath = valueAfter("--app") ? resolve(valueAfter("--app")) : null;
 const dmgPath = valueAfter("--dmg") ? resolve(valueAfter("--dmg")) : null;
 const allowUnnotarized = process.argv.includes("--allow-unnotarized");

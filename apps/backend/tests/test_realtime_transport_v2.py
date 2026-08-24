@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import queue
 from dataclasses import replace
 from uuid import uuid4
 
@@ -9,6 +10,7 @@ from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from app.main import create_app
+from app.deps import realtime_speech_service
 from app.ports.realtime_speech import AudioFrame
 from app.services.realtime_speech_service import RealtimeSpeechService
 
@@ -89,6 +91,128 @@ def test_multiplexed_transport_acknowledges_independent_channels_and_gaps():
         assert gap["payload"] == {"sourceKind": "microphone", "expected": 1, "received": 2}
 
 
+def test_terminal_is_acknowledged_idempotently_and_stale_generation_is_rejected():
+    _user_id, _session_id, device_id, publisher = create_live_binding()
+    terminal = {
+        **frame(device_id=device_id, source_kind="system", sequence=0),
+        "segmentId": "commercial-terminal-segment",
+        "revision": 3,
+        "isFinal": True,
+        "turnState": "committing",
+        "finalizationReason": "silence",
+        "sourceGeneration": 2,
+        "terminalId": "commercial-terminal-2-3",
+    }
+    with client.websocket_connect(f"/api/v1/realtime-speech/ingest-ws?token={publisher['token']}&protocol=2.0") as websocket:
+        websocket.receive_json()
+        websocket.send_json(terminal)
+        accepted = websocket.receive_json()
+        assert accepted["kind"] == "terminal-accepted"
+        assert accepted["payload"]["terminalId"] == "commercial-terminal-2-3"
+
+        websocket.send_json(terminal)
+        duplicate = websocket.receive_json()
+        assert duplicate["kind"] == "terminal-accepted"
+        assert duplicate["payload"]["duplicate"] is True
+
+        stale = {
+            **frame(device_id=device_id, source_kind="system", sequence=1),
+            "segmentId": "stale-generation-segment",
+            "sourceGeneration": 1,
+        }
+        websocket.send_json(stale)
+        rejected = websocket.receive_json()
+        assert rejected["kind"] == "degraded"
+        assert rejected["payload"]["reason"] == "stale-source-generation"
+
+
+def test_watchdog_publishes_one_incomplete_terminal_without_question_side_effects():
+    user_id, session_id, device_id, publisher = create_live_binding()
+    service = realtime_speech_service()
+    original_enabled = service.settings.realtime_source_watchdog_enabled
+    service.settings.realtime_source_watchdog_enabled = True
+    try:
+        partial = {
+            **frame(device_id=device_id, source_kind="system", sequence=0),
+            "segmentId": "abandoned-commercial-turn",
+            "sourceGeneration": 1,
+        }
+        with client.websocket_connect(f"/api/v1/realtime-speech/ingest-ws?token={publisher['token']}&protocol=2.0") as websocket:
+            websocket.receive_json()
+            websocket.send_json(partial)
+            assert websocket.receive_json()["kind"] == "frame-accepted"
+        queue_key = (session_id, "system")
+        queued = service._frame_queues.get(queue_key)
+        if queued is not None:
+            queued.join()
+        with service._watchdog_lock:
+            active = service._active_source_turns.pop(queue_key)
+        service._finalize_abandoned_source_turn(key=queue_key, active=active, now_ms=20_000)
+
+        transcript = service.repository.get_transcript(session_id, "abandoned-commercial-turn")
+        assert transcript is not None
+        assert transcript.is_final is True
+        assert transcript.terminal_state == "incomplete"
+        assert transcript.finalization_reason == "backend-watchdog"
+        assert service.repository.list_candidates_for_session(session_id=session_id) == []
+        terminal_events = [
+            event for event in service.repository.list_events_for_session(session_id=session_id)
+            if event.kind == "transcript-updated"
+            and event.payload.get("segmentId") == "abandoned-commercial-turn"
+            and event.payload.get("terminalState") == "incomplete"
+        ]
+        assert len(terminal_events) == 1
+    finally:
+        service.settings.realtime_source_watchdog_enabled = original_enabled
+
+
+def test_stale_watchdog_snapshot_does_not_close_a_fresh_source_turn():
+    _user_id, session_id, device_id, publisher_payload = create_live_binding()
+    service = realtime_speech_service()
+    publisher = service.repository.get_publisher(publisher_payload["publisherId"])
+    assert publisher is not None
+    source_key = (session_id, "system")
+    expired_frame = AudioFrame(
+        publisher_id=publisher.publisher_id,
+        session_id=session_id,
+        device_id=device_id,
+        source_id="native-system",
+        source_kind="system",
+        segment_id="segment-expired",
+        revision=1,
+        sequence=0,
+        captured_at_ms=1_000,
+        started_at_ms=1_000,
+        ended_at_ms=1_020,
+        duration_ms=20,
+        codec="pcm-s16le",
+        sample_rate_hz=16_000,
+        channels=1,
+        is_final=False,
+        audio_bytes=b"synthetic-system",
+    )
+    fresh_frame = replace(
+        expired_frame,
+        segment_id="segment-fresh",
+        revision=1,
+        sequence=expired_frame.sequence + 1,
+    )
+    expired = {"publisher": publisher, "frame": expired_frame, "lastFrameAtMs": 1_000}
+    with service._watchdog_lock:
+        service._active_source_turns[source_key] = {
+            "publisher": publisher,
+            "frame": fresh_frame,
+            "lastFrameAtMs": 2_000,
+        }
+
+    closed_sources: list[tuple[str, str]] = []
+    service._close_asr_source = lambda *, session_id, source_kind: closed_sources.append((session_id, source_kind))  # type: ignore[method-assign]
+    service._finalize_abandoned_source_turn(key=source_key, active=expired, now_ms=10_000)
+
+    assert closed_sources == []
+    assert service.repository.get_transcript(session_id, expired_frame.segment_id) is None
+
+
 def test_multiplexed_transport_rejects_stale_token_without_asgi_exception():
     with client.websocket_connect("/api/v1/realtime-speech/ingest-ws?token=rt-stale&protocol=2.0") as websocket:
         rejected = websocket.receive_json()
@@ -163,3 +287,46 @@ def test_realtime_worker_coalesces_backlogged_incremental_pcm_and_preserves_fina
     assert merged.is_final is True
     assert merged.started_at_ms == 100
     assert merged.ended_at_ms == 520
+
+
+def test_saturated_queue_replaces_only_a_partial_and_preserves_all_terminals():
+    template = AudioFrame(
+        publisher_id="publisher-queue",
+        session_id="session-queue",
+        device_id="device-queue",
+        source_id="system-queue",
+        source_kind="system",
+        segment_id="segment-queue",
+        revision=1,
+        sequence=0,
+        captured_at_ms=100,
+        started_at_ms=100,
+        ended_at_ms=200,
+        duration_ms=100,
+        codec="pcm-s16le",
+        sample_rate_hz=16000,
+        channels=1,
+        is_final=False,
+        audio_bytes=b"partial",
+    )
+    already_terminal = replace(template, segment_id="prior-terminal", is_final=True, terminal_id="prior")
+    pending_partial = replace(template, segment_id="new-terminal", revision=2, audio_bytes=b"pending")
+    new_terminal = replace(
+        template,
+        segment_id="new-terminal",
+        revision=3,
+        sequence=2,
+        is_final=True,
+        terminal_id="new",
+        audio_bytes=b"tail",
+    )
+    work_queue: queue.Queue[dict[str, object]] = queue.Queue(maxsize=2)
+    work_queue.put_nowait({"frame": already_terminal})
+    work_queue.put_nowait({"frame": pending_partial})
+
+    assert RealtimeSpeechService._replace_queued_partial_with_terminal(work_queue, {"frame": new_terminal}) is True
+    jobs = [work_queue.get_nowait(), work_queue.get_nowait()]
+    frames = [job["frame"] for job in jobs]
+    assert isinstance(frames[0], AudioFrame) and frames[0].terminal_id == "prior"
+    assert isinstance(frames[1], AudioFrame) and frames[1].terminal_id == "new"
+    assert frames[1].audio_bytes == b"pendingtail"

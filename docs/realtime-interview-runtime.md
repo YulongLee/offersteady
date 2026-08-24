@@ -27,6 +27,8 @@ The renderer treats `ended`, `muted`, a suspended/closed AudioContext, a stalled
 - Web presence is diagnostic only. Refreshing the page does not revoke the desktop media lease.
 - The web consumer stores the latest activity cursor in session storage, hydrates once, and then consumes ordered incremental events. A cursor outside the retained Redis range forces a fresh snapshot.
 - Transcript confirmation never creates an answer task. Only a user click on quick answer, manual answer, or screenshot answer may start answer generation.
+- New companions use a source-scoped `idle -> speaking -> tail -> committing -> final|incomplete` lifecycle. Terminal states are monotonic, and terminal frames are acknowledged independently of coalescible partial frames.
+- The backend source watchdog resolves abandoned partial turns as `incomplete` unless the provider supplied authoritative completion. Recovery closes only the affected source generation.
 - The dedicated answer SSE remains responsible for token-by-token first response. Its lifecycle is also published into the session stream so reconnects and cross-device views converge on the same terminal state.
 - Screenshot request stages (`requested`, `claimed`, `uploaded`, `vision-running`, terminal) use the same session event stream. Events contain identifiers and safe metadata only; screenshots and audio are never embedded.
 
@@ -53,6 +55,9 @@ The renderer treats `ended`, `muted`, a suspended/closed AudioContext, a stalled
 - `OFFERSTEADY_REDIS_REALTIME_REQUIRED=true` in production.
 - `OFFERSTEADY_REALTIME_TRANSCRIPT_PERSISTENCE_ENABLED=false` by default; enable only after explicit user consent.
 - `OFFERSTEADY_REALTIME_TRANSCRIPT_RETENTION_DAYS=30` when approved persistence is enabled.
+- `OFFERSTEADY_REALTIME_SOURCE_WATCHDOG_ENABLED=true|false` independently controls bounded backend recovery.
+- `OFFERSTEADY_REALTIME_TERMINAL_ACK_ENABLED=true|false` independently controls terminal acknowledgements.
+- `OFFERSTEADY_REALTIME_ENDPOINTING_MODE=commercial-adaptive|legacy-threshold` selects the desktop endpoint controller.
 
 Redis runtime snapshots and event streams expire after two hours by default. Approved final transcripts may be copied to PostgreSQL with an expiry timestamp; interim text is never archived.
 
@@ -75,3 +80,5 @@ The commercial path is not release-ready until the repository tests and a consen
 - Recovery within five seconds after a five-second interruption.
 - A 30-minute dual-channel soak with bounded sockets, file descriptors, memory, queues and ASR sessions.
 - Device switching, permission denial, backend restart and web refresh recovery.
+
+The isolated Beta procedure, troubleshooting, compatibility and rollback contract are documented in [commercial-realtime-finalization-beta.md](commercial-realtime-finalization-beta.md).

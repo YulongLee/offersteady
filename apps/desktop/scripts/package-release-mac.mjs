@@ -9,8 +9,12 @@ const EXPECTED_TEAM_ID = "8Y5FAR3TF3";
 const scriptDir = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const desktopDir = resolve(scriptDir, "..");
 const repoRoot = resolve(desktopDir, "../..");
-const outputDir = join(desktopDir, "release/macos-production");
 const arch = process.argv[2] || process.arch;
+const isBeta = process.env.OFFERSTEADY_RELEASE_CHANNEL === "beta";
+const outputDir = join(desktopDir, isBeta ? "release/macos-beta" : "release/macos-production");
+const builderConfig = isBeta ? "electron-builder.beta.mac.yml" : "electron-builder.release.mac.yml";
+const expectedBundleId = isBeta ? "com.offersteady.companion.beta" : "com.offersteady.companion";
+const productName = isBeta ? "面试稳伴随程序 Beta" : "面试稳伴随程序";
 const prepareOnly = process.argv.includes("--prepare-only");
 
 if (process.platform !== "darwin") throw new Error("macOS release packaging must run on macOS.");
@@ -90,10 +94,10 @@ const notarizeAndStapleDmg = dmgPath => {
 };
 
 if (!prepareOnly && !completeNotaryCredentials()) {
-  throw new Error(
-    "Production notarization credentials are missing. Configure APPLE_API_KEY + APPLE_API_KEY_ID + APPLE_API_ISSUER, " +
-    "or APPLE_KEYCHAIN_PROFILE, before creating the official DMG.",
-  );
+  if (isBeta) {
+    throw new Error("Beta notarization credentials are missing. Configure APPLE_KEYCHAIN_PROFILE or complete API credentials.");
+  }
+  throw new Error("Production notarization credentials are missing. Configure APPLE_API_KEY + APPLE_API_KEY_ID + APPLE_API_ISSUER, or APPLE_KEYCHAIN_PROFILE, before creating the official DMG.");
 }
 
 if (existsSync(outputDir)) {
@@ -109,22 +113,28 @@ run("npm", ["run", "build"]);
 
 const electronBuilderCli = join(repoRoot, "node_modules/electron-builder/out/cli/cli.js");
 const localElectronDist = join(repoRoot, "node_modules/electron/dist");
-const localElectronExecutable = join(localElectronDist, "Electron.app/Contents/MacOS/Electron");
-const localElectronType = existsSync(localElectronExecutable)
-  ? spawnSync("file", ["-b", localElectronExecutable], { encoding: "utf8" }).stdout
-  : "";
-const localElectronMatchesTarget = arch === "arm64"
-  ? localElectronType.includes("arm64")
-  : localElectronType.includes("x86_64");
+const configuredElectronDist = process.env.OFFERSTEADY_ELECTRON_DIST
+  ? resolve(process.env.OFFERSTEADY_ELECTRON_DIST)
+  : null;
+const electronDistForTarget = [configuredElectronDist, localElectronDist].find(candidate => {
+  if (!candidate) return false;
+  const executable = join(candidate, "Electron.app/Contents/MacOS/Electron");
+  if (!existsSync(executable)) return false;
+  const type = spawnSync("file", ["-b", executable], { encoding: "utf8" }).stdout;
+  return arch === "arm64" ? type.includes("arm64") : type.includes("x86_64");
+});
+if (configuredElectronDist && electronDistForTarget !== configuredElectronDist) {
+  throw new Error(`OFFERSTEADY_ELECTRON_DIST does not contain a ${arch} Electron.app: ${configuredElectronDist}`);
+}
 const builderArgs = [
   electronBuilderCli,
   "--mac",
   prepareOnly ? "dir" : "dmg",
   `--${arch}`,
   "--config",
-  "electron-builder.release.mac.yml",
+  builderConfig,
 ];
-if (localElectronMatchesTarget) builderArgs.push(`--config.electronDist=${localElectronDist}`);
+if (electronDistForTarget) builderArgs.push(`--config.electronDist=${electronDistForTarget}`);
 if (prepareOnly) builderArgs.push("--config.mac.notarize=false");
 run(process.execPath, builderArgs, {
   env: {
@@ -148,16 +158,18 @@ const findByExtension = (root, extension) => {
 };
 
 const isTargetArchitecture = path => {
-  const executable = join(path, "Contents/MacOS/面试稳伴随程序");
+  const executable = join(path, `Contents/MacOS/${productName}`);
   if (!existsSync(executable)) return false;
   const type = spawnSync("file", ["-b", executable], { encoding: "utf8" }).stdout;
   return arch === "arm64" ? type.includes("arm64") : type.includes("x86_64");
 };
 const apps = findByExtension(outputDir, ".app")
-  .filter(path => path.endsWith("面试稳伴随程序.app"))
+  .filter(path => path.endsWith(`${productName}.app`))
   .filter(isTargetArchitecture);
 if (apps.length !== 1) throw new Error(`Expected exactly one packaged app, found ${apps.length}.`);
-const dmgs = prepareOnly ? [] : findByExtension(outputDir, ".dmg").filter(path => path.endsWith(`-macOS-${arch}.dmg`));
+const dmgs = prepareOnly ? [] : findByExtension(outputDir, ".dmg").filter(path =>
+  path.endsWith(`-macOS-${arch}.dmg`) && (!isBeta || path.includes("-Beta-"))
+);
 if (!prepareOnly && dmgs.length !== 1) throw new Error(`Expected exactly one official DMG, found ${dmgs.length}.`);
 
 if (!prepareOnly) {
@@ -168,12 +180,20 @@ if (!prepareOnly) {
 run(process.execPath, [
   join(desktopDir, "scripts/verify-release-mac.mjs"),
   "--app", apps[0],
+  "--bundle-id", expectedBundleId,
   ...(prepareOnly ? ["--allow-unnotarized"] : ["--dmg", dmgs[0]]),
 ]);
 
-if (!prepareOnly) {
+if (!prepareOnly && !isBeta) {
   run(process.execPath, [
     join(desktopDir, "scripts/generate-production-mac-metadata.mjs"),
+    arch,
+    dmgs[0],
+  ]);
+}
+if (!prepareOnly && isBeta) {
+  run(process.execPath, [
+    join(desktopDir, "scripts/generate-beta-mac-metadata.mjs"),
     arch,
     dmgs[0],
   ]);

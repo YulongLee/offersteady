@@ -131,6 +131,11 @@ class Settings(BaseSettings):
     realtime_ingress_queue_max_frames: int = 64
     realtime_ingress_max_frames_per_second: int = 120
     realtime_ingress_coalesce_max_frames: int = 4
+    realtime_terminal_admission_timeout_seconds: float = 0.25
+    realtime_terminal_ack_enabled: bool = True
+    realtime_source_watchdog_enabled: bool = False
+    realtime_source_watchdog_seconds: float = 4.0
+    realtime_source_watchdog_poll_seconds: float = 0.5
     realtime_event_retention: int = 1000
     realtime_event_block_ms: int = 1000
     realtime_event_wait_workers: int = 32

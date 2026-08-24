@@ -5,6 +5,8 @@ interface QueuedEnvelope {
   readonly sourceId: string;
   readonly sequence: number;
   readonly payload: Record<string, unknown>;
+  readonly isTerminal: boolean;
+  readonly terminalId?: string;
 }
 
 interface TransportOptions {
@@ -34,6 +36,7 @@ export class MultiplexedRealtimeTransport {
   private readonly maximumFrames = 256;
   private readonly droppedFramesBySource = new Map<RealtimeAudioChannel, number>();
   private reconnectCount = 0;
+  private readonly terminalResends = new Map<string, number>();
 
   constructor(private readonly options: TransportOptions) {}
 
@@ -47,23 +50,37 @@ export class MultiplexedRealtimeTransport {
     const sourceId = payload.sourceId;
     const sequence = payload.sequence;
     if ((sourceKind !== "microphone" && sourceKind !== "system") || typeof sourceId !== "string" || typeof sequence !== "number") return;
-    this.queue.push({ sourceKind, sourceId, sequence, payload: { ...payload, sentAtMs: Date.now() } });
-    if (this.queue.length > this.maximumFrames) {
-      const firstInterim = this.queue.findIndex(item => item.payload.isFinal !== true);
-      const [dropped] = this.queue.splice(firstInterim >= 0 ? firstInterim : 0, 1);
-      const droppedSource = dropped?.sourceKind ?? sourceKind;
-      const droppedFrames = (this.droppedFramesBySource.get(droppedSource) ?? 0) + 1;
-      this.droppedFramesBySource.set(droppedSource, droppedFrames);
-      this.options.onEvent({ kind: "sequence-gap", payload: {
-        sourceKind: droppedSource,
-        sourceId: dropped?.sourceId ?? sourceId,
-        sequence: dropped?.sequence,
-        reason: "desktop-buffer-overflow",
-        droppedFrames,
-        pendingFrames: this.queue.length,
-        oldestPendingFrameAgeMs: this.oldestPendingFrameAgeMs(),
-      } });
+    const isTerminal = payload.isFinal === true;
+    const terminalId = typeof payload.terminalId === "string" ? payload.terminalId : undefined;
+    if (terminalId && this.queue.some(item => item.terminalId === terminalId)) return;
+    const item: QueuedEnvelope = {
+      sourceKind,
+      sourceId,
+      sequence,
+      payload: { ...payload, sentAtMs: Date.now() },
+      isTerminal,
+      ...(terminalId ? { terminalId } : {}),
+    };
+    if (this.queue.length >= this.maximumFrames) {
+      const firstInterim = this.queue.findIndex(queued => !queued.isTerminal);
+      if (firstInterim < 0 && !isTerminal) {
+        this.recordDrop(item, "desktop-buffer-terminal-reserved");
+        return;
+      }
+      if (firstInterim < 0) {
+        this.options.onEvent({ kind: "degraded", payload: {
+          reason: "terminal-buffer-full",
+          sourceKind,
+          sourceId,
+          terminalId,
+          pendingFrames: this.queue.length,
+        } });
+        return;
+      }
+      const [dropped] = this.queue.splice(firstInterim, 1);
+      if (dropped) this.recordDrop(dropped, "desktop-buffer-overflow");
     }
+    this.queue.push(item);
     this.publishDiagnostics(sourceKind);
     this.flush();
   }
@@ -80,6 +97,7 @@ export class MultiplexedRealtimeTransport {
     this.socket = null;
     this.queue = [];
     this.sent.clear();
+    this.terminalResends.clear();
   }
 
   private connect(): Promise<void> {
@@ -99,7 +117,7 @@ export class MultiplexedRealtimeTransport {
       socket.onmessage = (message) => {
         try {
           const event = JSON.parse(String(message.data)) as { kind?: string; payload?: Record<string, unknown> };
-          if (event.kind === "frame-accepted") this.acknowledge(event.payload);
+          if (event.kind === "frame-accepted" || event.kind === "terminal-accepted") this.acknowledge(event.payload);
           if (event.kind === "sequence-gap") this.handleGap(event.payload);
           this.options.onEvent(event);
         } catch {
@@ -157,6 +175,10 @@ export class MultiplexedRealtimeTransport {
       if (this.sent.has(key)) continue;
       this.socket.send(JSON.stringify(item.payload));
       this.sent.add(key);
+      if (item.terminalId) {
+        const resendCount = this.terminalResends.get(item.terminalId) ?? 0;
+        this.terminalResends.set(item.terminalId, resendCount + 1);
+      }
     }
   }
 
@@ -164,12 +186,28 @@ export class MultiplexedRealtimeTransport {
     const sourceKind = payload?.sourceKind;
     const sequence = payload?.sequence;
     if ((sourceKind !== "microphone" && sourceKind !== "system") || typeof sequence !== "number") return;
-    this.queue = this.queue.filter(item => item.sourceKind !== sourceKind || item.sequence > sequence);
+    const terminalId = typeof payload?.terminalId === "string" ? payload.terminalId : undefined;
+    this.queue = this.queue.filter(item => terminalId ? item.terminalId !== terminalId : item.sourceKind !== sourceKind || item.sequence > sequence);
     for (const key of this.sent) {
       const [channel, rawSequence] = key.split(":");
       if (channel === sourceKind && Number(rawSequence) <= sequence) this.sent.delete(key);
     }
-    this.publishDiagnostics(sourceKind, Date.now());
+    if (terminalId) this.terminalResends.delete(terminalId);
+    this.publishDiagnostics(sourceKind, Date.now(), terminalId ? Date.now() : undefined);
+  }
+
+  private recordDrop(item: QueuedEnvelope, reason: string): void {
+    const droppedFrames = (this.droppedFramesBySource.get(item.sourceKind) ?? 0) + 1;
+    this.droppedFramesBySource.set(item.sourceKind, droppedFrames);
+    this.options.onEvent({ kind: "sequence-gap", payload: {
+      sourceKind: item.sourceKind,
+      sourceId: item.sourceId,
+      sequence: item.sequence,
+      reason,
+      droppedFrames,
+      pendingFrames: this.queue.length,
+      oldestPendingFrameAgeMs: this.oldestPendingFrameAgeMs(),
+    } });
   }
 
   private handleGap(payload?: Record<string, unknown>): void {
@@ -189,19 +227,26 @@ export class MultiplexedRealtimeTransport {
     return Math.max(0, Date.now() - Math.min(...capturedAtMs));
   }
 
-  private publishDiagnostics(sourceKind?: RealtimeAudioChannel, lastAckAtMs?: number): void {
+  private publishDiagnostics(sourceKind?: RealtimeAudioChannel, lastAckAtMs?: number, terminalAckAtMs?: number): void {
     const channels: readonly RealtimeAudioChannel[] = sourceKind ? [sourceKind] : ["microphone", "system"];
     for (const channel of channels) {
       const channelQueue = this.queue.filter(item => item.sourceKind === channel);
       const capturedAtMs = channelQueue
         .map(item => Number(item.payload.capturedAtMs))
         .filter(value => Number.isFinite(value) && value > 0);
+      const pendingTerminal = channelQueue.find(item => item.isTerminal);
       this.options.onEvent({ kind: "delivery-diagnostics", payload: {
         sourceKind: channel,
         pendingFrames: channelQueue.length,
         oldestPendingFrameAgeMs: capturedAtMs.length > 0 ? Math.max(0, Date.now() - Math.min(...capturedAtMs)) : 0,
         droppedFrames: this.droppedFramesBySource.get(channel) ?? 0,
         reconnectCount: this.reconnectCount,
+        ...(pendingTerminal ? {
+          terminalPendingSinceMs: Number(pendingTerminal.payload.sentAtMs) || Number(pendingTerminal.payload.capturedAtMs) || Date.now(),
+          terminalAgeMs: Math.max(0, Date.now() - (Number(pendingTerminal.payload.sentAtMs) || Number(pendingTerminal.payload.capturedAtMs) || Date.now())),
+          terminalResendCount: pendingTerminal.terminalId ? Math.max(0, (this.terminalResends.get(pendingTerminal.terminalId) ?? 1) - 1) : 0,
+        } : {}),
+        ...(terminalAckAtMs ? { terminalAckAtMs } : {}),
         ...(lastAckAtMs ? { lastAckAtMs } : {}),
       } });
     }

@@ -1,5 +1,6 @@
-import type { AnswerTaskSnapshot } from "@offersteady/protocol";
+import { canApplyTranscriptRevision, type AnswerTaskSnapshot } from "@offersteady/protocol";
 import type { InterviewQuestion, InterviewWorkspaceSnapshot, LiveWorkspaceViewState, SpeakerPresentationState, WebAppState } from "./domain";
+import { flattenTranscriptLifecycle } from "./conversation-turns";
 
 export interface AnswerPage {
   readonly answer: InterviewQuestion;
@@ -182,18 +183,12 @@ export const reconcileRealtimeSpeaker = (
   for (const segment of scopedIncoming.transcripts) {
     if (!hasVisibleTranscriptText(segment.text)) continue;
     const existing = latestById.get(segment.id);
-    if (
-      !existing
-      || segment.revision > existing.revision
-      || (segment.revision === existing.revision && segment.isFinal && !existing.isFinal)
-    ) {
+    if (canApplyTranscriptRevision(existing, segment)) {
       latestById.set(segment.id, segment);
     }
   }
   return {
     ...scopedIncoming,
-    transcripts: [...latestById.values()].sort((left, right) => (
-      left.startedAtMs - right.startedAtMs || left.revision - right.revision
-    )),
+    transcripts: flattenTranscriptLifecycle([...latestById.values()]),
   };
 };

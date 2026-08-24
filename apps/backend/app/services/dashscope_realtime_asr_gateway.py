@@ -23,6 +23,7 @@ class _SourceRealtimeSession:
     updated_at_monotonic: float
     source_session_key: str
     source_kind: str
+    source_generation: int = 1
     current_segment_id: str | None = None
     transcript_text: str = ""
     mode: str = "manual"
@@ -99,6 +100,10 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             completed_at_ms=completed_at_ms,
         )
 
+    def finalize(self, *, frame: AudioFrame, attempt: int) -> TranscriptResult:
+        """Provider boundary for an authoritative application-side turn commit."""
+        return self.transcribe(frame=frame, attempt=attempt)
+
     def diagnostics(self, source_kind: str) -> dict[str, int]:
         with self._source_sessions_lock:
             active_provider_sessions = sum(
@@ -136,6 +141,13 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         for source_session_key in source_session_keys:
             self._close_source_session(source_session_key)
         return len(source_session_keys)
+
+    def close_source(self, *, session_id: str, source_kind: str) -> int:
+        source_session_key = f"{session_id}:{source_kind}"
+        with self._source_sessions_lock:
+            exists = source_session_key in self._source_sessions
+        self._close_source_session(source_session_key)
+        return 1 if exists else 0
 
     def _roundtrip(self, frame: AudioFrame) -> tuple[str, int | None, int | None]:
         session = self._get_or_create_source_session(frame)
@@ -219,6 +231,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                 reusable = (
                     self.settings.realtime_asr_persistent_sessions_enabled
                     and existing.sample_rate_hz == frame.sample_rate_hz
+                    and existing.source_generation == (frame.source_generation or 1)
                 )
                 if reusable:
                     existing.updated_at_monotonic = time.monotonic()
@@ -237,6 +250,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                 updated_at_monotonic=time.monotonic(),
                 source_session_key=key,
                 source_kind=frame.source_kind,
+                source_generation=frame.source_generation or 1,
                 mode=mode,
             )
             self._source_sessions[key] = session

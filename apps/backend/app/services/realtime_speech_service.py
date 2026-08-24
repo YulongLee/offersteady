@@ -4,12 +4,13 @@ import base64
 import concurrent.futures
 import logging
 import queue
+import random
 import re
 import threading
 from collections import Counter
 from dataclasses import replace
 from difflib import SequenceMatcher
-from time import time
+from time import sleep, time
 from typing import Any
 from uuid import uuid4
 
@@ -101,6 +102,12 @@ class SyntheticRealtimeAsrGateway(RealtimeAsrGatewayPort):
     def close_session(self, *, session_id: str) -> int:
         return 0
 
+    def finalize(self, *, frame: AudioFrame, attempt: int) -> TranscriptResult:
+        return self.transcribe(frame=frame, attempt=attempt)
+
+    def close_source(self, *, session_id: str, source_kind: RealtimeSourceKind) -> int:
+        return 0
+
 
 class RealtimeSpeechService:
     def __init__(
@@ -129,6 +136,12 @@ class RealtimeSpeechService:
         self._retired_session_ids: set[str] = set()
         self._delivery_metric_counts: Counter[str] = Counter()
         self._delivery_metric_latest_ms: dict[str, int] = {}
+        self._terminal_lock = threading.Lock()
+        self._accepted_terminal_ids: dict[tuple[str, RealtimeSourceKind], dict[str, int]] = {}
+        self._latest_source_generations: dict[tuple[str, RealtimeSourceKind], int] = {}
+        self._watchdog_lock = threading.Lock()
+        self._active_source_turns: dict[tuple[str, RealtimeSourceKind], dict[str, object]] = {}
+        self._watchdog_thread: threading.Thread | None = None
 
     def _record_speech_usage(
         self,
@@ -179,6 +192,12 @@ class RealtimeSpeechService:
             "chunksProduced": 0,
             "chunksUploaded": 0,
             "serializedAudioBytes": 0,
+            "terminalAdmissions": 0,
+            "terminalDuplicates": 0,
+            "terminalAdmissionFailures": 0,
+            "terminalResends": 0,
+            "incompleteRecoveries": 0,
+            "sourceReconnects": 0,
         })
 
     def _set_latest_timing(self, *, session_id: str, source_kind: RealtimeSourceKind, timing: dict[str, int | None]) -> None:
@@ -1001,6 +1020,10 @@ class RealtimeSpeechService:
         trace_id: str | None,
         sent_at_ms: int | None,
         audio_base64: str,
+        turn_state: str | None = None,
+        finalization_reason: str | None = None,
+        source_generation: int | None = None,
+        terminal_id: str | None = None,
     ) -> list[dict[str, object]]:
         prepared = self._prepare_audio_frame(
             token=token,
@@ -1018,6 +1041,10 @@ class RealtimeSpeechService:
             sample_rate_hz=sample_rate_hz,
             channels=channels,
             is_final=is_final,
+            turn_state=turn_state,
+            finalization_reason=finalization_reason,
+            source_generation=source_generation,
+            terminal_id=terminal_id,
             trace_id=trace_id,
             sent_at_ms=sent_at_ms,
             audio_base64=audio_base64,
@@ -1048,6 +1075,10 @@ class RealtimeSpeechService:
         trace_id: str | None,
         sent_at_ms: int | None,
         audio_base64: str,
+        turn_state: str | None = None,
+        finalization_reason: str | None = None,
+        source_generation: int | None = None,
+        terminal_id: str | None = None,
     ) -> list[dict[str, object]]:
         prepared = self._prepare_audio_frame(
             token=token,
@@ -1065,6 +1096,10 @@ class RealtimeSpeechService:
             sample_rate_hz=sample_rate_hz,
             channels=channels,
             is_final=is_final,
+            turn_state=turn_state,
+            finalization_reason=finalization_reason,
+            source_generation=source_generation,
+            terminal_id=terminal_id,
             trace_id=trace_id,
             sent_at_ms=sent_at_ms,
             audio_base64=audio_base64,
@@ -1088,16 +1123,182 @@ class RealtimeSpeechService:
             counter_bucket = prepared.get("counter_bucket")
             if isinstance(counter_bucket, dict):
                 counter_bucket["queueDepth"] = max(counter_bucket.get("queueDepth", 0), work_queue.qsize() + 1)
+        frame = prepared.get("frame")
+        assert isinstance(frame, AudioFrame)
+        self._track_source_turn(prepared)
         try:
             work_queue.put_nowait(prepared)
         except queue.Full:
             counter_bucket = prepared.get("counter_bucket")
             if isinstance(counter_bucket, dict):
                 counter_bucket["droppedPartialUpdates"] = int(counter_bucket.get("droppedPartialUpdates", 0)) + 1
-            frame = prepared.get("frame")
-            if isinstance(frame, AudioFrame) and frame.is_final:
-                work_queue.put(prepared, timeout=0.25)
+            if not frame.is_final:
+                return [{"kind": "degraded", "payload": {
+                    "reason": "partial-coalesced-under-pressure",
+                    "sourceKind": frame.source_kind,
+                    "sequence": frame.sequence,
+                }}]
+            displaced = self._replace_queued_partial_with_terminal(work_queue, prepared)
+            if displaced:
+                if frame.terminal_id:
+                    self._mark_terminal_accepted(frame)
+                if isinstance(counter_bucket, dict):
+                    counter_bucket["terminalAdmissions"] = int(counter_bucket.get("terminalAdmissions", 0)) + 1
+                return [self._terminal_ack(frame)] if frame.terminal_id else []
+            try:
+                work_queue.put(prepared, timeout=max(0.01, self.settings.realtime_terminal_admission_timeout_seconds))
+            except queue.Full:
+                if isinstance(counter_bucket, dict):
+                    counter_bucket["terminalAdmissionFailures"] = int(counter_bucket.get("terminalAdmissionFailures", 0)) + 1
+                return [{"kind": "degraded", "payload": {
+                    "reason": "terminal-admission-timeout",
+                    "sourceKind": frame.source_kind,
+                    "segmentId": frame.segment_id,
+                    "revision": frame.revision,
+                    "terminalId": frame.terminal_id,
+                    "displacedPartial": displaced is not None,
+                }}]
+        if frame.is_final and frame.terminal_id:
+            self._mark_terminal_accepted(frame)
+            if isinstance(counter_bucket, dict):
+                counter_bucket["terminalAdmissions"] = int(counter_bucket.get("terminalAdmissions", 0)) + 1
+            return [self._terminal_ack(frame)]
         return []
+
+    def _track_source_turn(self, prepared: dict[str, object]) -> None:
+        if not self.settings.realtime_source_watchdog_enabled:
+            return
+        frame = prepared.get("frame")
+        publisher = prepared.get("publisher")
+        if not isinstance(frame, AudioFrame) or not isinstance(publisher, RealtimePublisherRecord):
+            return
+        key = self._session_source_key(frame.session_id, frame.source_kind)
+        with self._watchdog_lock:
+            if frame.is_final:
+                self._active_source_turns.pop(key, None)
+            else:
+                self._active_source_turns[key] = {
+                    "publisher": publisher,
+                    "frame": frame,
+                    "lastFrameAtMs": _now_ms(),
+                }
+            if self._watchdog_thread is None or not self._watchdog_thread.is_alive():
+                self._watchdog_thread = threading.Thread(
+                    target=self._source_watchdog_loop,
+                    name="realtime-source-watchdog",
+                    daemon=True,
+                )
+                self._watchdog_thread.start()
+
+    def _source_watchdog_loop(self) -> None:
+        poll_seconds = max(0.1, self.settings.realtime_source_watchdog_poll_seconds)
+        deadline_ms = max(1_000, int(self.settings.realtime_source_watchdog_seconds * 1_000))
+        while self.settings.realtime_source_watchdog_enabled:
+            sleep(poll_seconds)
+            now_ms = _now_ms()
+            expired: list[tuple[tuple[str, RealtimeSourceKind], dict[str, object]]] = []
+            with self._watchdog_lock:
+                for key, active in list(self._active_source_turns.items()):
+                    if now_ms - int(active.get("lastFrameAtMs", now_ms)) < deadline_ms:
+                        continue
+                    expired.append((key, self._active_source_turns.pop(key)))
+            for key, active in expired:
+                self._finalize_abandoned_source_turn(key=key, active=active, now_ms=now_ms)
+            with self._watchdog_lock:
+                if not self._active_source_turns:
+                    self._watchdog_thread = None
+                    return
+
+    def _finalize_abandoned_source_turn(
+        self,
+        *,
+        key: tuple[str, RealtimeSourceKind],
+        active: dict[str, object],
+        now_ms: int,
+    ) -> None:
+        publisher = active.get("publisher")
+        frame = active.get("frame")
+        if not isinstance(publisher, RealtimePublisherRecord) or not isinstance(frame, AudioFrame):
+            return
+        # The watchdog removes an expired snapshot before performing provider
+        # recovery. A fresh frame can arrive in that small gap and establish a
+        # newer active turn for the same source. Never let the stale watchdog
+        # snapshot close that fresh source connection.
+        with self._watchdog_lock:
+            replacement_active = self._active_source_turns.get(key)
+            replacement_frame = replacement_active.get("frame") if replacement_active is not None else None
+            replacement_at_ms = int(replacement_active.get("lastFrameAtMs", 0)) if replacement_active is not None else 0
+        if isinstance(replacement_frame, AudioFrame) and (
+            replacement_at_ms > int(active.get("lastFrameAtMs", 0))
+            or replacement_frame.segment_id != frame.segment_id
+            or replacement_frame.revision > frame.revision
+        ):
+            return
+        self._close_asr_source(session_id=frame.session_id, source_kind=frame.source_kind)
+        current = self.repository.get_transcript(frame.session_id, frame.segment_id)
+        terminal_revision = max(frame.revision + 1, current.revision + 1 if current is not None else 1)
+        if current is not None and not current.is_final:
+            current = self.repository.save_transcript(replace(
+                current,
+                revision=terminal_revision,
+                ended_at_ms=max(current.ended_at_ms, frame.ended_at_ms),
+                is_final=True,
+                terminal_state="incomplete",
+                finalization_reason="backend-watchdog",
+                published_at_ms=now_ms,
+                usage=None,
+            ))
+        self.repository.save_publisher(replace(publisher, status="receiving-audio"))
+        self._counter_bucket(session_id=key[0], source_kind=key[1])["incompleteRecoveries"] += 1
+        self._save_event(
+            session_id=publisher.session_id,
+            owner_user_id=publisher.owner_user_id,
+            kind="transcript-updated",
+            payload={
+                "segmentId": frame.segment_id,
+                "revision": terminal_revision,
+                "role": current.role if current is not None else ("candidate" if frame.source_kind == "microphone" else "interviewer"),
+                "text": current.text if current is not None else "",
+                "isFinal": True,
+                "terminalState": "incomplete",
+                "finalizationReason": "backend-watchdog",
+                "publishedAtMs": now_ms,
+            },
+        )
+
+    @staticmethod
+    def _replace_queued_partial_with_terminal(
+        work_queue: "queue.Queue[dict[str, object]]",
+        terminal_job: dict[str, object],
+    ) -> bool:
+        """Atomically reserve a saturated queue slot without ever evicting a terminal."""
+        terminal_frame = terminal_job.get("frame")
+        if not isinstance(terminal_frame, AudioFrame) or not terminal_frame.is_final:
+            return False
+        # queue.Queue has no public replace operation. Its mutex is the same lock
+        # used by put/get, so replacing one queued partial keeps task accounting
+        # unchanged and cannot race another producer or the worker.
+        with work_queue.mutex:
+            for index, candidate in enumerate(work_queue.queue):
+                candidate_frame = candidate.get("frame")
+                if not isinstance(candidate_frame, AudioFrame) or candidate_frame.is_final:
+                    continue
+                replacement = terminal_job
+                if candidate_frame.segment_id == terminal_frame.segment_id:
+                    replacement = dict(terminal_job)
+                    replacement["frame"] = replace(
+                        terminal_frame,
+                        started_at_ms=min(candidate_frame.started_at_ms, terminal_frame.started_at_ms),
+                        duration_ms=max(
+                            20,
+                            terminal_frame.ended_at_ms - min(candidate_frame.started_at_ms, terminal_frame.started_at_ms),
+                        ),
+                        audio_bytes=candidate_frame.audio_bytes + terminal_frame.audio_bytes,
+                    )
+                work_queue.queue[index] = replacement
+                work_queue.not_empty.notify()
+                return True
+        return False
 
     def _frame_worker_loop(self, key: tuple[str, RealtimeSourceKind], work_queue: "queue.Queue[dict[str, object]]") -> None:
         while True:
@@ -1182,6 +1383,10 @@ class RealtimeSpeechService:
         sample_rate_hz: int,
         channels: int,
         is_final: bool,
+        turn_state: str | None,
+        finalization_reason: str | None,
+        source_generation: int | None,
+        terminal_id: str | None,
         trace_id: str | None,
         sent_at_ms: int | None,
         audio_base64: str,
@@ -1201,6 +1406,37 @@ class RealtimeSpeechService:
             )
             self._log(logging.WARNING, "realtime_speech.degraded", session_id=degraded.session_id, publisher_id=degraded.publisher_id, state="degraded", error_code="mixed_input")
             return {"early_events": [self._event_payload(event)]}
+        source_key = self._session_source_key(publisher.session_id, source_kind)
+        if source_generation is not None:
+            with self._terminal_lock:
+                latest_generation = self._latest_source_generations.get(source_key, 0)
+                if source_generation < latest_generation:
+                    return {"early_events": [{"kind": "degraded", "payload": {
+                        "reason": "stale-source-generation",
+                        "sourceKind": source_kind,
+                        "sourceGeneration": source_generation,
+                        "latestSourceGeneration": latest_generation,
+                    }}]}
+                self._latest_source_generations[source_key] = max(latest_generation, source_generation)
+        if is_final and terminal_id:
+            with self._terminal_lock:
+                accepted = self._accepted_terminal_ids.get(source_key, {})
+                accepted_at_ms = accepted.get(terminal_id)
+            if accepted_at_ms is not None:
+                duplicate_bucket = self._counter_bucket(session_id=publisher.session_id, source_kind=source_kind)
+                duplicate_bucket["terminalDuplicates"] += 1
+                duplicate_bucket["terminalResends"] += 1
+                return {"early_events": [{"kind": "terminal-accepted", "payload": {
+                    "sourceKind": source_kind,
+                    "sourceId": source_id,
+                    "sequence": sequence,
+                    "segmentId": segment_id,
+                    "revision": revision,
+                    "terminalId": terminal_id,
+                    "sourceGeneration": source_generation,
+                    "acceptedAtMs": accepted_at_ms,
+                    "duplicate": True,
+                }}]}
         audio_bytes = base64.b64decode(audio_base64.encode("utf-8"))
         frame = AudioFrame(
             publisher_id=publisher.publisher_id,
@@ -1219,6 +1455,10 @@ class RealtimeSpeechService:
             sample_rate_hz=sample_rate_hz,
             channels=channels,
             is_final=is_final,
+            turn_state=turn_state,
+            finalization_reason=finalization_reason,
+            source_generation=source_generation,
+            terminal_id=terminal_id,
             trace_id=trace_id,
             sent_at_ms=sent_at_ms,
             audio_bytes=audio_bytes,
@@ -1265,6 +1505,30 @@ class RealtimeSpeechService:
             "sent_at_ms": sent_at_ms,
             "source_kind": source_kind,
         }
+
+    @staticmethod
+    def _terminal_ack(frame: AudioFrame) -> dict[str, object]:
+        return {"kind": "terminal-accepted", "payload": {
+            "sourceKind": frame.source_kind,
+            "sourceId": frame.source_id,
+            "sequence": frame.sequence,
+            "segmentId": frame.segment_id,
+            "revision": frame.revision,
+            "terminalId": frame.terminal_id,
+            "sourceGeneration": frame.source_generation,
+            "acceptedAtMs": _now_ms(),
+        }}
+
+    def _mark_terminal_accepted(self, frame: AudioFrame) -> None:
+        if not frame.terminal_id:
+            return
+        key = self._session_source_key(frame.session_id, frame.source_kind)
+        with self._terminal_lock:
+            accepted = self._accepted_terminal_ids.setdefault(key, {})
+            accepted[frame.terminal_id] = _now_ms()
+            if len(accepted) > 256:
+                for terminal_id, _accepted_at_ms in sorted(accepted.items(), key=lambda item: item[1])[:-128]:
+                    accepted.pop(terminal_id, None)
 
     def _process_prepared_audio_frame(self, prepared: dict[str, object]) -> list[dict[str, object]]:
         early_events = prepared.get("early_events")
@@ -1326,6 +1590,7 @@ class RealtimeSpeechService:
             "queueWaitMs": max(0, worker_dequeued_at_ms - ingest_received_at_ms),
             "asrTtftMs": (max(0, transcript_result.first_text_at_ms - asr_started_at_ms) if transcript_result.first_text_at_ms is not None else None),
             "finalTranscriptMs": (max(0, transcript_result.completed_at_ms - asr_started_at_ms) if transcript_result.completed_at_ms is not None else None),
+            "stopToTerminalMs": (max(0, published_at_ms - frame.ended_at_ms) if frame.is_final else None),
             "backendPushMs": max(0, published_at_ms - (transcript_result.completed_at_ms or asr_started_at_ms)),
             "captureToPublishMs": max(0, published_at_ms - captured_at_ms),
             "frontendRenderMs": None,
@@ -1397,6 +1662,8 @@ class RealtimeSpeechService:
                 "role": transcript.role,
                 "text": transcript.text,
                 "isFinal": transcript.is_final,
+                "terminalState": transcript.terminal_state,
+                "finalizationReason": transcript.finalization_reason,
                 "publishedAtMs": transcript.published_at_ms,
                 "performance": transcript.performance,
             },
@@ -1413,7 +1680,7 @@ class RealtimeSpeechService:
                 model_name=transcript.usage.model_name,
                 related_task_id=transcript.segment_id,
             )
-        if transcript.is_final:
+        if transcript.is_final and transcript.terminal_state != "incomplete":
             self.session_service.append_context(
                 user_id=publisher.owner_user_id,
                 session_id=publisher.session_id,
@@ -1779,6 +2046,22 @@ class RealtimeSpeechService:
                 "lastFrameAtMs": item.get("lastFrameAtMs"),
                 "backendFrameCount": item.get("backendFrameCount"),
                 "lastBackendFrameAtMs": item.get("lastBackendFrameAtMs"),
+                "pendingFrameCount": item.get("pendingFrameCount"),
+                "oldestPendingFrameAgeMs": item.get("oldestPendingFrameAgeMs"),
+                "droppedFrameCount": item.get("droppedFrameCount"),
+                "reconnectCount": item.get("reconnectCount"),
+                "lastAckAtMs": item.get("lastAckAtMs"),
+                "lastReconnectReason": item.get("lastReconnectReason"),
+                "noiseFloor": item.get("noiseFloor"),
+                "captureProcessor": item.get("captureProcessor"),
+                "endpointingMode": item.get("endpointingMode"),
+                "turnState": item.get("turnState"),
+                "finalizationReason": item.get("finalizationReason"),
+                "sourceGeneration": item.get("sourceGeneration"),
+                "terminalPendingSinceMs": item.get("terminalPendingSinceMs"),
+                "terminalAgeMs": item.get("terminalAgeMs"),
+                "terminalResendCount": item.get("terminalResendCount"),
+                "terminalAckAtMs": item.get("terminalAckAtMs"),
                 "errorCode": item.get("errorCode"),
             }
             for item in source_health
@@ -1810,12 +2093,17 @@ class RealtimeSpeechService:
         for attempt in range(self.settings.realtime_asr_retry_max_attempts + 1):
             try:
                 self.repository.save_publisher(replace(publisher, status="transcribing"))
-                future = self._asr_executor.submit(self.asr_gateway.transcribe, frame=frame, attempt=attempt)
+                provider_operation = (
+                    getattr(self.asr_gateway, "finalize", self.asr_gateway.transcribe)
+                    if frame.is_final
+                    else self.asr_gateway.transcribe
+                )
+                future = self._asr_executor.submit(provider_operation, frame=frame, attempt=attempt)
                 try:
                     result = future.result(timeout=asr_timeout_seconds)
                 except concurrent.futures.TimeoutError as exc:
                     future.cancel()
-                    self.asr_gateway.close_session(session_id=frame.session_id)
+                    self._close_asr_source(session_id=frame.session_id, source_kind=frame.source_kind)
                     self._log(logging.WARNING, "realtime_speech.transcribe_timeout", session_id=publisher.session_id, publisher_id=publisher.publisher_id, state="transcribe-timeout", error_code="realtime_asr_frame_timeout")
                     raise RetryableAsrError("realtime_asr_frame_timeout") from exc
                 suppression_reason = self._suppression_reason(result.text, frame=frame)
@@ -1845,6 +2133,7 @@ class RealtimeSpeechService:
                     "queueWaitMs": None,
                     "asrTtftMs": None,
                     "finalTranscriptMs": None,
+                    "stopToTerminalMs": None,
                     "backendPushMs": None,
                     "captureToPublishMs": max(0, published_at_ms - frame.captured_at_ms),
                     "frontendRenderMs": None,
@@ -1865,6 +2154,8 @@ class RealtimeSpeechService:
                         is_final=frame.is_final,
                         overlap=result.overlap,
                         created_at_ms=created_at_ms,
+                        terminal_state=("final" if frame.is_final else None),
+                        finalization_reason=(frame.finalization_reason if frame.is_final else None),
                         published_at_ms=published_at_ms,
                         performance=performance,
                         usage=result.usage,
@@ -1877,6 +2168,8 @@ class RealtimeSpeechService:
                 last_error = exc
                 if str(exc) == "realtime_asr_frame_timeout":
                     break
+                if attempt < self.settings.realtime_asr_retry_max_attempts:
+                    sleep(min(0.35, (0.04 * (2 ** attempt)) + random.uniform(0.0, 0.025)))
                 continue
             except NonRetryableAsrError as exc:
                 self._log(logging.WARNING, "realtime_speech.transcribe_non_retryable", session_id=publisher.session_id, publisher_id=publisher.publisher_id, state="transcribe-failed", error_code=str(exc))
@@ -1895,6 +2188,17 @@ class RealtimeSpeechService:
         )
         error_code = str(last_error) if last_error and str(last_error).strip() else "asr-failed"
         raise DomainRequestError("realtime-speech", "transcribe", "实时语音转写失败。", 502, error_code=error_code)
+
+    def _close_asr_source(self, *, session_id: str, source_kind: RealtimeSourceKind) -> int:
+        close_source = getattr(self.asr_gateway, "close_source", None)
+        if callable(close_source):
+            closed = int(close_source(session_id=session_id, source_kind=source_kind))
+        else:
+            # Compatibility for third-party/test adapters predating source-scoped recovery.
+            closed = int(self.asr_gateway.close_session(session_id=session_id))
+        bucket = self._counter_bucket(session_id=session_id, source_kind=source_kind)
+        bucket["sourceReconnects"] = int(bucket.get("sourceReconnects", 0)) + max(1, closed)
+        return closed
 
     def _finalize_suppressed_partial(
         self,
@@ -1951,6 +2255,10 @@ class RealtimeSpeechService:
                 key: value
                 for key, value in self._latest_timings_by_session_source.items()
                 if key[0] != session_id
+            }
+        with self._watchdog_lock:
+            self._active_source_turns = {
+                key: value for key, value in self._active_source_turns.items() if key[0] != session_id
             }
 
     def _asr_timeout_seconds(self, frame: AudioFrame) -> float:
@@ -2431,6 +2739,8 @@ class RealtimeSpeechService:
             startedAtMs=record.started_at_ms,
             endedAtMs=record.ended_at_ms,
             isFinal=record.is_final,
+            terminalState=record.terminal_state,
+            finalizationReason=record.finalization_reason,
             overlap=record.overlap,
             createdAtMs=record.created_at_ms,
             publishedAtMs=record.published_at_ms,

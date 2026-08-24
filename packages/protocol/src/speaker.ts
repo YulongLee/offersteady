@@ -5,6 +5,8 @@ export type LegacySpeakerSourceKind = SpeakerSourceKind | "mixed";
 export type QuestionCandidateState = "auto-confirmed" | "needs-confirmation" | "rejected";
 export type QuestionTriggerReason = "high-confidence-question" | "source-degraded" | "low-transcript-confidence" | "overlap" | "incomplete" | "non-question" | "candidate-speech" | "duplicate";
 export type AudioSourceDegradationReason = "mixed-input" | "source-missing" | "source-disconnected" | "incompatible-client";
+export type TranscriptTerminalState = "final" | "incomplete";
+export type ExplicitAnswerInvocationSource = "quick-answer" | "screenshot-answer" | "manual-input";
 
 export interface SpeakerTranscriptSegment {
   readonly id: string;
@@ -19,6 +21,10 @@ export interface SpeakerTranscriptSegment {
   readonly startedAtMs: number;
   readonly endedAtMs: number;
   readonly isFinal: boolean;
+  /** `isFinal` remains for compatibility; terminalState distinguishes recovered incomplete turns. */
+  readonly terminalState?: TranscriptTerminalState;
+  readonly finalizationReason?: import("./realtime.js").RealtimeFinalizationReason;
+  readonly sourceGeneration?: number;
   readonly overlap: boolean;
   readonly publishedAtMs?: number;
   readonly performance?: {
@@ -30,6 +36,34 @@ export interface SpeakerTranscriptSegment {
     readonly frontendRenderMs?: number;
   };
 }
+
+export const transcriptTerminalState = (
+  segment: Pick<SpeakerTranscriptSegment, "isFinal" | "terminalState">,
+): TranscriptTerminalState | null => segment.terminalState ?? (segment.isFinal ? "final" : null);
+
+const terminalRank = (state: TranscriptTerminalState | null): number => {
+  if (state === "final") return 2;
+  if (state === "incomplete") return 1;
+  return 0;
+};
+
+/**
+ * Segment revisions are monotonic and terminal precedence is irreversible.
+ * A provider final may improve an incomplete recovery at the same/newer revision,
+ * while no partial can make a terminal segment active again.
+ */
+export const canApplyTranscriptRevision = (
+  current: Pick<SpeakerTranscriptSegment, "id" | "revision" | "isFinal" | "terminalState"> | undefined,
+  incoming: Pick<SpeakerTranscriptSegment, "id" | "revision" | "isFinal" | "terminalState">,
+): boolean => {
+  if (!current || current.id !== incoming.id) return true;
+  const currentTerminal = transcriptTerminalState(current);
+  const incomingTerminal = transcriptTerminalState(incoming);
+  if (terminalRank(incomingTerminal) < terminalRank(currentTerminal)) return false;
+  if (incoming.revision < current.revision) return false;
+  if (incoming.revision > current.revision) return true;
+  return terminalRank(incomingTerminal) > terminalRank(currentTerminal);
+};
 
 export interface LegacySpeakerTranscriptSegment extends Omit<SpeakerTranscriptSegment, "sourceKind" | "role"> {
   readonly sourceKind: LegacySpeakerSourceKind;

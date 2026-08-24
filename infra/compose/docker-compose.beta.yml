@@ -1,0 +1,107 @@
+name: offersteady-beta
+
+services:
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - beta-redis-data:/data
+    ports:
+      - "127.0.0.1:${BETA_REDIS_PORT:-16379}:6379"
+    mem_limit: 160m
+    cpus: 0.20
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${BETA_POSTGRES_DB:-offersteady_beta}
+      POSTGRES_USER: ${BETA_POSTGRES_USER:-offersteady_beta}
+      POSTGRES_PASSWORD: ${BETA_POSTGRES_PASSWORD:?set BETA_POSTGRES_PASSWORD in .env.beta}
+    volumes:
+      - beta-postgres-data:/var/lib/postgresql/data
+      - ../postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:${BETA_POSTGRES_PORT:-15432}:5432"
+    mem_limit: 384m
+    cpus: 0.35
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${BETA_POSTGRES_USER:-offersteady_beta} -d ${BETA_POSTGRES_DB:-offersteady_beta}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: infra/docker/backend.Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}
+        PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-mirrors.aliyun.com}
+    env_file:
+      - ../../${BETA_APP_ENV_FILE:-.env.beta}
+    environment:
+      OFFERSTEADY_ENV: staging
+      OFFERSTEADY_APP_MODE: commercial-realtime-beta
+      OFFERSTEADY_APP_VERSION: ${BETA_RELEASE_VERSION:-commercial-realtime-beta}
+      OFFERSTEADY_DATABASE_URL: postgresql://${BETA_POSTGRES_USER:-offersteady_beta}:${BETA_POSTGRES_PASSWORD}@postgres:5432/${BETA_POSTGRES_DB:-offersteady_beta}
+      OFFERSTEADY_DATABASE_APPLICATION_NAME: offersteady-beta-backend
+      OFFERSTEADY_REDIS_URL: redis://redis:6379/0
+      OFFERSTEADY_REDIS_REALTIME_REQUIRED: "true"
+      OFFERSTEADY_REALTIME_TRANSPORT_MODE: websocket-v2
+      OFFERSTEADY_REALTIME_LEGACY_HTTP_ENABLED: "false"
+      OFFERSTEADY_REALTIME_TERMINAL_ACK_ENABLED: "true"
+      OFFERSTEADY_REALTIME_SOURCE_WATCHDOG_ENABLED: "true"
+      OFFERSTEADY_REALTIME_SOURCE_WATCHDOG_SECONDS: "4.0"
+      OFFERSTEADY_REALTIME_SOURCE_WATCHDOG_POLL_SECONDS: "0.5"
+      OFFERSTEADY_REALTIME_TRANSCRIPT_PERSISTENCE_ENABLED: "false"
+      OFFERSTEADY_SCREENSHOT_VISION_DELIVERY_MODE: inline
+      OFFERSTEADY_OSS_ENVIRONMENT_LABEL: beta
+      OFFERSTEADY_OSS_KEY_PREFIX: beta/materials
+      OFFERSTEADY_SCREENSHOT_OSS_KEY_PREFIX: beta/screenshots
+      OFFERSTEADY_AUTH_SMS_PROVIDER_MODE: fake
+      OFFERSTEADY_ADMIN_ENABLED: "false"
+      OFFERSTEADY_CHECKOUT_PROVIDER: ""
+      OFFERSTEADY_CORS_ALLOWED_ORIGINS: '["https://beta.mianshiwen.cn"]'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${BETA_BACKEND_PORT:-18000}:8000"
+    mem_limit: 768m
+    cpus: 0.75
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        VITE_APP_ENV: production
+        VITE_API_BASE_URL: /
+        VITE_PUBLIC_APP_VERSION: ${BETA_RELEASE_VERSION:-commercial-realtime-beta}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${BETA_WEB_PORT:-18080}:80"
+    mem_limit: 96m
+    cpus: 0.15
+    restart: unless-stopped
+
+volumes:
+  beta-postgres-data:
+    name: offersteady-beta-postgres-data
+  beta-redis-data:
+    name: offersteady-beta-redis-data

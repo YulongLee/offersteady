@@ -46,3 +46,22 @@ PYTHONPATH=apps/backend python apps/backend/scripts/benchmark_realtime_asr_pipel
   - `backendPushMs`
   - `frontendRenderMs`
 - 后续进入 2.x / 3.x 任务后，这个基线会作为“同步转写旧链路”的对照样本。
+
+## 2026-08-24 商业化终止候选（本地 synthetic）
+
+运行：
+
+```bash
+PYTHONPATH=apps/backend OFFERSTEADY_BENCHMARK_LABEL=commercial-finalization-candidate \
+  python apps/backend/scripts/benchmark_realtime_asr_pipeline.py
+```
+
+- transport acknowledgement avg: 0.77 ms
+- transport acknowledgement p95: 1.34 ms
+- queue depth: 0
+- terminal loss: 0 in this synthetic run
+- stop-to-terminal: 0 ms（synthetic adapter 同步返回）
+- aggregate snapshot request reduction: 75%
+- concurrency 10 aggregate snapshot p95/p99: 15.72 ms / 15.72 ms，0 errors
+
+这个结果只证明本地协议、队列和终态归并没有引入明显控制面开销。它不包含公网、DashScope、设备驱动和浏览器渲染延迟，因此不能单独作为正式商业发布依据。完整门禁和隔离 Beta 步骤见 [commercial-realtime-finalization-beta.md](commercial-realtime-finalization-beta.md)。

@@ -97,6 +97,25 @@ describe("realtime transport v2", () => {
     transport.stop();
   });
 
+  it("keeps a terminal until its explicit acknowledgement and does not enqueue it twice", async () => {
+    vi.stubGlobal("window", { location: { href: "https://mianshiwen.cc/interviews/session" }, setTimeout, clearTimeout });
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const transport = new MultiplexedRealtimeTransport({
+      apiBaseUrl: "https://mianshiwen.cc/api/v1",
+      token: "terminal-token",
+      onEvent: () => undefined,
+      onState: () => undefined,
+    });
+    await transport.start();
+    const terminal = { sourceKind: "system", sourceId: "loopback", sequence: 9, isFinal: true, terminalId: "terminal-9", capturedAtMs: Date.now() };
+    transport.enqueue(terminal);
+    transport.enqueue(terminal);
+    expect(transport.pendingPayloads()).toHaveLength(1);
+    FakeWebSocket.instances[0]!.serverEvent({ kind: "terminal-accepted", payload: { ...terminal, acceptedAtMs: Date.now() } });
+    expect(transport.pendingPayloads()).toHaveLength(0);
+    transport.stop();
+  });
+
   it("keeps final boundaries when the recovery queue overflows", async () => {
     vi.stubGlobal("window", { location: { href: "https://mianshiwen.cc/interviews/session" }, setTimeout, clearTimeout });
     vi.stubGlobal("WebSocket", FakeWebSocket);

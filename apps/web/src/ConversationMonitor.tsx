@@ -31,10 +31,10 @@ export const nextProgressiveTranscriptText = (current: string, target: string, s
 export const STALE_TRANSCRIPT_MS = 8_000;
 export type TranscriptPresentationState = "final" | "transcribing" | "stale";
 export const transcriptPresentationState = (
-  segment: { readonly isFinal: boolean; readonly publishedAtMs?: number; readonly endedAtMs: number },
+  segment: { readonly isFinal: boolean; readonly terminalState?: "final" | "incomplete"; readonly publishedAtMs?: number; readonly endedAtMs: number },
   nowMs = Date.now(),
 ): TranscriptPresentationState => {
-  if (segment.isFinal) return "final";
+  if (segment.isFinal) return segment.terminalState === "incomplete" ? "stale" : "final";
   const lastRevisionAtMs = segment.publishedAtMs ?? segment.endedAtMs;
   if (lastRevisionAtMs >= 1_000_000_000_000 && nowMs - lastRevisionAtMs >= STALE_TRANSCRIPT_MS) return "stale";
   return "transcribing";

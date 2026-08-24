@@ -123,8 +123,9 @@ const stateLabels: Record<CaptureState, string> = {
   error: "连接异常",
 };
 
-const defaultWebWorkspaceUrl = () => "https://mianshiwen.cn/app";
-const defaultApiBaseUrl = () => "https://mianshiwen.cn/api/v1";
+const isBetaRelease = () => process.env.OFFERSTEADY_RELEASE_CHANNEL === "beta" || /\bbeta\b/i.test(app.getName());
+const defaultWebWorkspaceUrl = () => isBetaRelease() ? "https://beta.mianshiwen.cn/app" : "https://mianshiwen.cn/app";
+const defaultApiBaseUrl = () => isBetaRelease() ? "https://beta.mianshiwen.cn/api/v1" : "https://mianshiwen.cn/api/v1";
 
 const desktopConfig = () => ({
   appVersion: app.getVersion(),
@@ -133,8 +134,14 @@ const desktopConfig = () => ({
   platformVersion: process.getSystemVersion(),
   protocolVersion: "2.0",
   captureRuntime: "electron-single-owner",
+  releaseChannel: isBetaRelease() ? "beta" : "production",
   webWorkspaceUrl: process.env.OFFERSTEADY_DESKTOP_WEB_URL || defaultWebWorkspaceUrl(),
   apiBaseUrl: process.env.OFFERSTEADY_API_BASE_URL || defaultApiBaseUrl(),
+  realtimeEndpointing: {
+    mode: process.env.OFFERSTEADY_REALTIME_ENDPOINTING_MODE === "legacy-threshold"
+      ? "legacy-threshold"
+      : "commercial-adaptive",
+  },
 });
 
 const nativeRuntimePath = () => {

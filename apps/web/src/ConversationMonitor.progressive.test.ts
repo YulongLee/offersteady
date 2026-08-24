@@ -25,5 +25,6 @@ describe("progressive realtime transcript", () => {
     expect(transcriptPresentationState({ isFinal: false, publishedAtMs, endedAtMs: publishedAtMs }, publishedAtMs + STALE_TRANSCRIPT_MS - 1)).toBe("transcribing");
     expect(transcriptPresentationState({ isFinal: false, publishedAtMs, endedAtMs: publishedAtMs }, publishedAtMs + STALE_TRANSCRIPT_MS)).toBe("stale");
     expect(transcriptPresentationState({ isFinal: true, publishedAtMs, endedAtMs: publishedAtMs }, publishedAtMs + STALE_TRANSCRIPT_MS)).toBe("final");
+    expect(transcriptPresentationState({ isFinal: true, terminalState: "incomplete", publishedAtMs, endedAtMs: publishedAtMs }, publishedAtMs + 1)).toBe("stale");
   });
 });

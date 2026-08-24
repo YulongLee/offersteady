@@ -131,6 +131,14 @@ export interface AudioSourceHealth {
   readonly lastReconnectReason?: string;
   readonly noiseFloor?: number;
   readonly captureProcessor?: "audio-worklet" | "script-processor" | "native";
+  readonly endpointingMode?: "legacy-threshold" | "commercial-adaptive";
+  readonly turnState?: "idle" | "speaking" | "tail" | "committing" | "final" | "incomplete";
+  readonly finalizationReason?: string;
+  readonly sourceGeneration?: number;
+  readonly terminalPendingSinceMs?: number;
+  readonly terminalAgeMs?: number;
+  readonly terminalResendCount?: number;
+  readonly terminalAckAtMs?: number;
   readonly errorCode?: CompanionErrorCode | "silent-source";
 }
 
@@ -152,6 +160,7 @@ export interface RealtimeStageTiming {
   readonly queueWaitMs?: number;
   readonly asrTtftMs?: number;
   readonly finalTranscriptMs?: number;
+  readonly stopToTerminalMs?: number;
   readonly backendPushMs?: number;
   readonly captureToPublishMs?: number;
   readonly frontendRenderMs?: number;
@@ -176,6 +185,12 @@ export interface RealtimeRuntimeCounters {
   readonly vadToManualFallbacks?: number;
   readonly idleProviderSessionClosures?: number;
   readonly activeProviderSessions?: number;
+  readonly terminalAdmissions?: number;
+  readonly terminalDuplicates?: number;
+  readonly terminalAdmissionFailures?: number;
+  readonly terminalResends?: number;
+  readonly incompleteRecoveries?: number;
+  readonly sourceReconnects?: number;
 }
 
 export interface RealtimeRuntimePerformance {

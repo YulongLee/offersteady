@@ -1,4 +1,4 @@
-import type { SpeakerTranscriptSegment } from "@offersteady/protocol";
+import { canApplyTranscriptRevision, type SpeakerTranscriptSegment } from "@offersteady/protocol";
 
 export const CONVERSATION_TURN_JOIN_GAP_MS = 700;
 export const CONVERSATION_TURN_MAX_DURATION_MS = 45_000;
@@ -31,16 +31,44 @@ export const reconcileTranscriptRevisions = (segments: readonly SpeakerTranscrip
   for (const segment of segments) {
     if (!compactTranscriptText(segment.text)) continue;
     const current = latestById.get(segment.id);
-    if (!current || segment.revision > current.revision || (segment.revision === current.revision && segment.isFinal && !current.isFinal)) {
+    if (canApplyTranscriptRevision(current, segment)) {
       latestById.set(segment.id, segment);
     }
   }
   return [...latestById.values()].sort((left, right) => left.startedAtMs - right.startedAtMs || left.revision - right.revision);
 };
 
+export interface TranscriptLifecycleView {
+  readonly confirmed: readonly SpeakerTranscriptSegment[];
+  readonly activeDrafts: readonly SpeakerTranscriptSegment[];
+}
+
+export const partitionTranscriptLifecycle = (segments: readonly SpeakerTranscriptSegment[]): TranscriptLifecycleView => {
+  const confirmed: SpeakerTranscriptSegment[] = [];
+  const draftBySource = new Map<string, SpeakerTranscriptSegment>();
+  for (const segment of reconcileTranscriptRevisions(segments)) {
+    if (segment.isFinal) {
+      confirmed.push(segment);
+      continue;
+    }
+    const sourceKey = `${segment.sourceKind}:${segment.sourceId}`;
+    const current = draftBySource.get(sourceKey);
+    if (!current || segment.endedAtMs > current.endedAtMs || (segment.endedAtMs === current.endedAtMs && segment.revision > current.revision)) {
+      draftBySource.set(sourceKey, segment);
+    }
+  }
+  return { confirmed, activeDrafts: [...draftBySource.values()] };
+};
+
+export const flattenTranscriptLifecycle = (segments: readonly SpeakerTranscriptSegment[]) => {
+  const lifecycle = partitionTranscriptLifecycle(segments);
+  return [...lifecycle.confirmed, ...lifecycle.activeDrafts]
+    .sort((left, right) => left.startedAtMs - right.startedAtMs || left.revision - right.revision);
+};
+
 export const projectConversationTurns = (segments: readonly SpeakerTranscriptSegment[]): readonly ConversationTurn[] => {
   const turns: ConversationTurn[] = [];
-  for (const segment of reconcileTranscriptRevisions(segments)) {
+  for (const segment of flattenTranscriptLifecycle(segments)) {
     const previous = turns.at(-1);
     const gapMs = previous ? segment.startedAtMs - previous.endedAtMs : Number.POSITIVE_INFINITY;
     const sourceSegmentIds = previous?.sourceSegmentIds ?? [];
@@ -48,6 +76,7 @@ export const projectConversationTurns = (segments: readonly SpeakerTranscriptSeg
       && previous!.sessionId === segment.sessionId
       && previous!.role === segment.role
       && previous!.sourceKind === segment.sourceKind
+      && previous!.isFinal === segment.isFinal
       && !previous!.overlap
       && !segment.overlap
       && gapMs >= -250
@@ -65,6 +94,8 @@ export const projectConversationTurns = (segments: readonly SpeakerTranscriptSeg
       transcriptConfidence: Math.min(previous.transcriptConfidence, segment.transcriptConfidence),
       endedAtMs: Math.max(previous.endedAtMs, segment.endedAtMs),
       isFinal: segment.isFinal,
+      ...(segment.terminalState ? { terminalState: segment.terminalState } : {}),
+      ...(segment.finalizationReason ? { finalizationReason: segment.finalizationReason } : {}),
       ...(segment.publishedAtMs !== undefined ? { publishedAtMs: segment.publishedAtMs } : {}),
       sourceSegmentIds: [...sourceSegmentIds, segment.id],
     };

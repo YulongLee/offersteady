@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canTransitionAnswerTask, routeLegacyTranscript, supportsAnswerCancellation, supportsDualChannelRoleRouting, supportsSpeakerAwareTranscripts, type QuestionConfirmedEvent, type SpeakerTranscriptSegment } from "../src/index.js";
+import { canApplyTranscriptRevision, canTransitionAnswerTask, routeLegacyTranscript, supportsAnswerCancellation, supportsDualChannelRoleRouting, supportsSpeakerAwareTranscripts, transcriptTerminalState, type ExplicitAnswerInvocationSource, type QuestionConfirmedEvent, type RealtimeAudioEnvelopeV2, type SpeakerTranscriptSegment } from "../src/index.js";
 
 describe("speaker-aware protocol events", () => {
   it("round-trips a revisioned transcript segment", () => {
@@ -44,5 +44,42 @@ describe("speaker-aware protocol events", () => {
     expect(canTransitionAnswerTask("generating", "cancelled")).toBe(true);
     expect(canTransitionAnswerTask("cancelled", "completed")).toBe(false);
     expect(canTransitionAnswerTask("completed", "cancelled")).toBe(false);
+  });
+
+  it("keeps transcript terminal state monotonic across delayed partials", () => {
+    const final = { id: "seg-1", revision: 4, isFinal: true } as const;
+    expect(transcriptTerminalState(final)).toBe("final");
+    expect(canApplyTranscriptRevision(final, { id: "seg-1", revision: 5, isFinal: false })).toBe(false);
+    expect(canApplyTranscriptRevision(final, { id: "seg-1", revision: 3, isFinal: true })).toBe(false);
+  });
+
+  it("allows authoritative final to improve an incomplete recovery", () => {
+    const incomplete = { id: "seg-1", revision: 4, isFinal: false, terminalState: "incomplete" as const };
+    expect(canApplyTranscriptRevision(incomplete, { id: "seg-1", revision: 4, isFinal: true, terminalState: "final" })).toBe(true);
+    expect(canApplyTranscriptRevision(incomplete, { id: "seg-1", revision: 5, isFinal: false })).toBe(false);
+  });
+
+  it("keeps old realtime envelopes valid while accepting optional terminal metadata", () => {
+    const legacyCompatible: RealtimeAudioEnvelopeV2 = {
+      type: "audio-frame", deviceId: "device", sourceId: "system", sourceKind: "system", sequence: 1,
+      segmentId: "seg", revision: 1, capturedAtMs: 1, startedAtMs: 1, endedAtMs: 2, durationMs: 1,
+      codec: "pcm-s16le", sampleRateHz: 16000, channels: 1, isFinal: true, traceId: "trace", sentAtMs: 2,
+      audioBase64: "",
+    };
+    const commercial: RealtimeAudioEnvelopeV2 = {
+      ...legacyCompatible,
+      turnState: "committing",
+      finalizationReason: "silence",
+      sourceGeneration: 2,
+      terminalId: "terminal:seg:1",
+    };
+    expect(legacyCompatible.terminalId).toBeUndefined();
+    expect(commercial.terminalId).toBe("terminal:seg:1");
+  });
+
+  it("limits answer invocation sources to explicit user actions", () => {
+    const sources: readonly ExplicitAnswerInvocationSource[] = ["quick-answer", "screenshot-answer", "manual-input"];
+    expect(sources).not.toContain("transcript-final");
+    expect(sources).not.toContain("transcript-recovery");
   });
 });

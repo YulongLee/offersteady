@@ -707,6 +707,10 @@ async def ingest_frame(
         sample_rate_hz=request.sample_rate_hz,
         channels=request.channels,
         is_final=request.is_final,
+        turn_state=request.turn_state,
+        finalization_reason=request.finalization_reason,
+        source_generation=request.source_generation,
+        terminal_id=request.terminal_id,
         trace_id=request.trace_id,
         sent_at_ms=request.sent_at_ms,
         audio_base64=request.audio_base64,
@@ -740,6 +744,10 @@ async def realtime_ws(websocket: WebSocket) -> None:
                     sample_rate_hz=payload.sample_rate_hz,
                     channels=payload.channels,
                     is_final=payload.is_final,
+                    turn_state=payload.turn_state,
+                    finalization_reason=payload.finalization_reason,
+                    source_generation=payload.source_generation,
+                    terminal_id=payload.terminal_id,
                     trace_id=payload.trace_id,
                     sent_at_ms=payload.sent_at_ms,
                     audio_base64=payload.audio_base64,
@@ -833,12 +841,24 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                     continue
                 expected = expected_sequence[payload.source_kind]
                 if payload.sequence < expected:
-                    await websocket.send_json({"kind": "frame-accepted", "payload": {"sourceKind": payload.source_kind, "sourceId": payload.source_id, "sequence": expected - 1, "duplicate": True}})
+                    await websocket.send_json({
+                        "kind": "terminal-accepted" if payload.is_final and payload.terminal_id else "frame-accepted",
+                        "payload": {
+                            "sourceKind": payload.source_kind,
+                            "sourceId": payload.source_id,
+                            "sequence": expected - 1,
+                            "segmentId": payload.segment_id,
+                            "revision": payload.revision,
+                            **({"terminalId": payload.terminal_id} if payload.terminal_id else {}),
+                            "duplicate": True,
+                            "acceptedAtMs": int(time() * 1000),
+                        },
+                    })
                     continue
                 if payload.sequence > expected:
                     await websocket.send_json({"kind": "sequence-gap", "payload": {"sourceKind": payload.source_kind, "expected": expected, "received": payload.sequence}})
                     continue
-                service.enqueue_audio_frame(
+                admission_events = service.enqueue_audio_frame(
                     token=token,
                     device_id=payload.device_id,
                     source_id=payload.source_id,
@@ -854,10 +874,20 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                     sample_rate_hz=payload.sample_rate_hz,
                     channels=payload.channels,
                     is_final=payload.is_final,
+                    turn_state=payload.turn_state,
+                    finalization_reason=payload.finalization_reason,
+                    source_generation=payload.source_generation,
+                    terminal_id=payload.terminal_id,
                     trace_id=payload.trace_id,
                     sent_at_ms=payload.sent_at_ms,
                     audio_base64=payload.audio_base64,
                 )
+                terminal_event = next((event for event in admission_events if event.get("kind") in {"terminal-accepted", "degraded"}), None)
+                if terminal_event is not None and (payload.is_final or terminal_event.get("kind") == "degraded"):
+                    if terminal_event.get("kind") == "terminal-accepted":
+                        expected_sequence[payload.source_kind] = expected + 1
+                    await websocket.send_json(terminal_event)
+                    continue
                 expected_sequence[payload.source_kind] = expected + 1
                 await websocket.send_json({
                     "kind": "frame-accepted",

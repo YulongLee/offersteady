@@ -9,6 +9,9 @@ export interface DesktopRuntimeConfig {
   readonly captureRuntime: "electron-single-owner";
   readonly webWorkspaceUrl: string;
   readonly apiBaseUrl: string;
+  readonly realtimeEndpointing: {
+    readonly mode: "legacy-threshold" | "commercial-adaptive";
+  };
 }
 
 export interface DesktopPairingIdentity {

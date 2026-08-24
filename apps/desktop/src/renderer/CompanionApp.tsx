@@ -881,6 +881,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       },
       microphoneId: effectiveMicrophoneId,
       systemAudioId: selectedSystemAudioId || "system-loopback",
+      endpointingMode: config.realtimeEndpointing.mode,
       fetchImpl: (input, init) => desktopBackendFetch(config, String(input), init),
       onHealth: (health) => {
         if (cancelled) return;

@@ -46,6 +46,10 @@ class AudioFrame:
     channels: int
     is_final: bool
     audio_bytes: bytes
+    turn_state: str | None = None
+    finalization_reason: str | None = None
+    source_generation: int | None = None
+    terminal_id: str | None = None
     trace_id: str | None = None
     sent_at_ms: int | None = None
 
@@ -89,6 +93,8 @@ class TranscriptSegmentRecord:
     is_final: bool
     overlap: bool
     created_at_ms: int
+    terminal_state: Literal["final", "incomplete"] | None = None
+    finalization_reason: str | None = None
     published_at_ms: int | None = None
     performance: dict[str, int | None] | None = None
     usage: AsrUsageReport | None = None
@@ -180,6 +186,10 @@ class TranscriptResult:
 
 class RealtimeAsrGatewayPort(Protocol):
     def transcribe(self, *, frame: AudioFrame, attempt: int) -> TranscriptResult: ...
+
+    def finalize(self, *, frame: AudioFrame, attempt: int) -> TranscriptResult: ...
+
+    def close_source(self, *, session_id: str, source_kind: RealtimeSourceKind) -> int: ...
 
     def close_session(self, *, session_id: str) -> int: ...
 
