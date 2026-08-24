@@ -46,12 +46,12 @@
 - [x] 6.2 Add Beta deployment, health, teardown, and production-non-regression scripts that never run production Compose mutation commands
 - [x] 6.3 Add a Caddy Beta virtual-host template and verify DNS resolution; keep the Beta stack stopped after the user selected the resource-constrained direct-canary path
 - [x] 6.4 Build, sign, notarize, and verify production macOS arm64/x64 companions; retain the current Windows release until an Authenticode identity is available
-- [ ] 6.5 Run complete local smoke/load checks and record the tested commit, package digests, production rollback baseline, resource caps, and known limitations
+- [x] 6.5 Run complete local smoke/load checks and record the tested commit, package digests, production rollback baseline, resource caps, and known limitations
 
 ## 7. User Acceptance And Production Promotion
 
 - [x] 7.1 Keep production on its existing commit/images/manifest while local release verification runs; parallel Beta remains stopped by explicit user decision
-- [ ] 7.2 Address local verification findings and repeat focused plus full commercial verification without changing production
+- [x] 7.2 Address local verification findings and repeat focused plus full commercial verification without changing production
 - [x] 7.3 Obtain explicit user approval for the resource-constrained direct-canary strategy and its known Windows signing limitation
 - [ ] 7.4 Promote backward-compatible backend then Web artifacts, verify production, and only then publish the tested production macOS companion manifest
 - [ ] 7.5 Enable bounded feature canaries, expand only after production SLOs pass, commit/push scoped files, and record previous/current artifacts plus rollback switches

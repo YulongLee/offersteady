@@ -93,6 +93,8 @@ Beta 禁用真实支付、副作用型短信与生产桌面发布清单。禁止
 
 本轮本地完整测试结果：Backend `292 passed / 14 skipped`；Admin `34`、API `90`、Desktop `80`、Web `282`、Protocol `31` 全部通过；类型检查、正式 Web/Desktop 构建和 OpenSpec strict 校验通过。合成控制面确认 P95 `0.64 ms`、队列深度 `0`、终态丢失 `0`；10 并发聚合恢复 P95 `12.37 ms`，请求数相对旧四接口恢复降低 `75%`。
 
+已测试运行时代码提交：`8bf6a57`（`feat: harden realtime transcript finalization`）。发布脚本在 Intel 构建期间发现 GitHub 重复下载无进展，已增加显式本地 Electron 分发目录校验，并通过针对性回归测试后完成 x64 正式构建。
+
 ### 2026-08-24 正式 macOS 0.1.17 产物
 
 | 架构 | SHA-256 | 签名与验证 |
