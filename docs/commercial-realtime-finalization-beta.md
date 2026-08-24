@@ -102,6 +102,16 @@ Beta 禁用真实支付、副作用型短信与生产桌面发布清单。禁止
 | macOS arm64 | `6cbe9fd5a5bc3c7b35155a0cbbd8d7973b4f5d83fdf72d9b40e9c02e13c5b4e2` | Developer ID、App/DMG Notarization Accepted、stapler、Gatekeeper、16 个 Mach-O 组件验证通过 |
 | macOS x64 | `a21ab0c0ed946acc90c2e4b6a26f8dd9af2b4938fce196c9e5c0180341a40cda` | Developer ID、App/DMG Notarization Accepted、stapler、Gatekeeper、16 个 Mach-O 组件验证通过 |
 
+### 2026-08-24 生产兼容推广结果
+
+- 按后端、Web、正式 macOS 下载清单的顺序完成推广；运行时代码提交为 `8bf6a57`，生产发布提交为 `593978d`。
+- 生产 Backend 镜像为 `sha256:341de4143ce0d1a23a9f9656068a2938b3f...`，Web 镜像为 `sha256:d589015d4d9f781c0e83424d2d3247502e6...`；发布前 Backend/Web 镜像继续保留回滚标签。
+- 首页、登录、应用入口、构建清单、`/healthz` 和 `/api/v1/web/state` 均返回 `200`。公网 10 次样本中，健康检查平均 `100.69 ms`、样本 P95 `105.46 ms`；Web 状态平均 `424.11 ms`、样本 P95 `450.39 ms`。
+- 稳定期三次资源采样：Backend CPU `0.66%`–`3.65%`、内存约 `91 MiB`；PostgreSQL CPU 大部分时间接近 `0%`、样本峰值 `11.71%`；Redis CPU 约 `1.9%`。切换稳定后 5 分钟未发现新增 Backend/Web 错误、异常、死锁或 `5xx`。
+- 生产运行时保持 `terminal_ack=true`、`watchdog=false`、`transcript_persistence=false`。旧桌面协议仍兼容；Windows 正式下载继续为 `0.1.16`。
+- macOS arm64/x64 `0.1.17` 与 Windows x64 `0.1.16` 下载入口均返回 OSS 签名重定向，并通过 `206 / 1024 bytes` 分段下载校验。
+- 真实声卡、会议平台和 DashScope 的可见首字、stop-to-terminal、30 分钟双声道与卡住率仍由用户上线验收补齐，因此任务 `5.3` 与后续扩大灰度保持未完成。
+
 ### 2026-08-24 Beta 助手产物
 
 | 架构 | 版本 | 本地 DMG | SHA-256 | 验证 |

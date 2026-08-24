@@ -53,5 +53,5 @@
 - [x] 7.1 Keep production on its existing commit/images/manifest while local release verification runs; parallel Beta remains stopped by explicit user decision
 - [x] 7.2 Address local verification findings and repeat focused plus full commercial verification without changing production
 - [x] 7.3 Obtain explicit user approval for the resource-constrained direct-canary strategy and its known Windows signing limitation
-- [ ] 7.4 Promote backward-compatible backend then Web artifacts, verify production, and only then publish the tested production macOS companion manifest
+- [x] 7.4 Promote backward-compatible backend then Web artifacts, verify production, and only then publish the tested production macOS companion manifest
 - [ ] 7.5 Enable bounded feature canaries, expand only after production SLOs pass, commit/push scoped files, and record previous/current artifacts plus rollback switches
