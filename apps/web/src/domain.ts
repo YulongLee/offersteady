@@ -274,7 +274,7 @@ export interface InterviewAppAdapter {
   loadInterviewReview(interviewId: string, signal?: AbortSignal): Promise<InterviewReview>;
   loadDesktopShortcutScreenshotUpdates(interviewId: string, signal?: AbortSignal): Promise<readonly DesktopShortcutScreenshotUpdate[]>;
   cancelDesktopShortcutScreenshot(requestId: string, signal?: AbortSignal): Promise<void>;
-  subscribeRealtimeSession(interviewId: string, onUpdate: (state: RealtimeSessionUpdate) => void, signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number; readonly onTransportConnected?: () => void }): Promise<void>;
+  subscribeRealtimeSession(interviewId: string, onUpdate: (state: RealtimeSessionUpdate) => void, signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }): Promise<void>;
   deleteInterview(id: string, signal?: AbortSignal): Promise<void>;
   deleteScreenshot(id: string, signal?: AbortSignal): Promise<void>;
   submitManualAnswer(command: SubmitManualAnswerCommand, signal?: AbortSignal, onStreamUpdate?: (update: ManualAnswerStreamUpdate) => void): Promise<SubmitManualAnswerResult>;

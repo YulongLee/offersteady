@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   INVALID_REALTIME_SESSION_RETRY_MS,
   isInvalidRealtimeSessionStatus,
-  realtimeFallbackDelayMs,
   realtimeRetryDelayMs,
 } from "./realtime-recovery";
 
@@ -20,12 +19,5 @@ describe("realtime recovery policy", () => {
     expect(realtimeRetryDelayMs(null, 0)).toBe(1_000);
     expect(realtimeRetryDelayMs(500, 2)).toBe(4_000);
     expect(realtimeRetryDelayMs(500, 20)).toBe(15_000);
-  });
-
-  it("uses a slower bounded fallback snapshot cadence", () => {
-    expect(realtimeFallbackDelayMs(0)).toBe(5_000);
-    expect(realtimeFallbackDelayMs(1)).toBe(10_000);
-    expect(realtimeFallbackDelayMs(2)).toBe(15_000);
-    expect(realtimeFallbackDelayMs(20)).toBe(15_000);
   });
 });

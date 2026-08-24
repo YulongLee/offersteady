@@ -21,7 +21,7 @@ import { ABSOLUTE_MAX_SPLIT_RATIO, ABSOLUTE_MIN_SPLIT_RATIO, clampSplitRatio, in
 import { WorkspaceDivider } from "./WorkspaceDivider";
 import { authClient } from "./auth-client";
 import { materialUploadAdapter, saveMaterialDownload } from "./material-upload-adapter";
-import { isInvalidRealtimeSessionStatus, realtimeFallbackDelayMs, realtimeRetryDelayMs } from "./realtime-recovery";
+import { isInvalidRealtimeSessionStatus, realtimeRetryDelayMs } from "./realtime-recovery";
 import { applyAppearancePreferences, persistAppearancePreferences, readAppearancePreferences, type AppearancePreferences } from "./appearance-preferences";
 import { isFreshShortcutScreenshotAcceptance, SHORTCUT_SCREENSHOT_RECOVERY_POLL_INTERVAL_MS } from "./screenshot-shortcut-feedback";
 import "./styles.css";
@@ -846,8 +846,7 @@ function LivePage() {
   useEffect(() => {
     let stopped = false;
     let heartbeatTimer: number | null = null;
-    let realtimeFallbackTimer: number | null = null;
-    let realtimeFallbackAttempt = 0;
+    let realtimePollTimer: number | null = null;
     let heartbeatBindingId: string | null = null;
     let leaseGeneration: number | null = null;
     let lastBindingRefreshAt = 0;
@@ -875,7 +874,7 @@ function LivePage() {
       screenshotController.current?.abort();
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);
-      if (realtimeFallbackTimer !== null) window.clearTimeout(realtimeFallbackTimer);
+      if (realtimePollTimer !== null) window.clearInterval(realtimePollTimer);
     };
     channel?.addEventListener("message", event => {
       const claim = event.data as { type?: string; sessionId?: string; pageInstanceId?: string };
@@ -976,34 +975,6 @@ function LivePage() {
         realtimeLoadInFlight = false;
       }
     };
-    const clearRealtimeFallback = () => {
-      if (realtimeFallbackTimer !== null) window.clearTimeout(realtimeFallbackTimer);
-      realtimeFallbackTimer = null;
-    };
-    const markRealtimeTransportConnected = () => {
-      realtimeStreamHealthy = true;
-      realtimeHealthyRef.current = true;
-      invalidSessionSuspended = false;
-      reconnectAttempt = 0;
-      realtimeFallbackAttempt = 0;
-      clearRealtimeFallback();
-    };
-    const scheduleRealtimeFallback = () => {
-      if (stopped || realtimeController.signal.aborted || realtimeStreamHealthy || invalidSessionSuspended || realtimeFallbackTimer !== null) return;
-      const delay = realtimeFallbackDelayMs(realtimeFallbackAttempt);
-      realtimeFallbackTimer = window.setTimeout(() => {
-        realtimeFallbackTimer = null;
-        if (stopped || realtimeController.signal.aborted || realtimeStreamHealthy || invalidSessionSuspended) return;
-        if (realtimeSubscribeInFlight || document.visibilityState !== "visible") {
-          scheduleRealtimeFallback();
-          return;
-        }
-        void loadRealtime().finally(() => {
-          realtimeFallbackAttempt += 1;
-          scheduleRealtimeFallback();
-        });
-      }, delay);
-    };
     const scheduleReconnect = (status: number | null = null) => {
       if (stopped || realtimeController.signal.aborted) return;
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
@@ -1022,19 +993,15 @@ function LivePage() {
       realtimeSubscribeInFlight = true;
       try {
         await runAdapterOperation(signal => interviewAppAdapter.subscribeRealtimeSession(id, realtime => {
-          markRealtimeTransportConnected();
+          realtimeStreamHealthy = true;
+          realtimeHealthyRef.current = true;
+          invalidSessionSuspended = false;
+          reconnectAttempt = 0;
           applyRealtimeState(realtime);
-        }, signal, {
-          pageInstanceId: pageInstanceId.current,
-          leaseGeneration: activeLeaseGeneration,
-          onTransportConnected: markRealtimeTransportConnected,
-        }), realtimeController.signal);
+        }, signal, { pageInstanceId: pageInstanceId.current, leaseGeneration: activeLeaseGeneration }), realtimeController.signal);
         realtimeStreamHealthy = false;
         realtimeHealthyRef.current = false;
-        if (!stopped && !realtimeController.signal.aborted) {
-          scheduleRealtimeFallback();
-          scheduleReconnect();
-        }
+        if (!stopped && !realtimeController.signal.aborted) scheduleReconnect();
       } catch (error) {
         if (stopped || realtimeController.signal.aborted) return;
         realtimeStreamHealthy = false;
@@ -1049,13 +1016,22 @@ function LivePage() {
           }
           return;
         }
-        scheduleRealtimeFallback();
+        await loadRealtime();
         scheduleReconnect(status);
       } finally {
         realtimeSubscribeInFlight = false;
       }
     };
     heartbeatTimer = window.setInterval(() => void sendHeartbeat(), 15_000);
+    realtimePollTimer = window.setInterval(() => {
+      if (realtimeStreamHealthy || invalidSessionSuspended) return;
+      void loadRealtime().then(loaded => {
+        if (loaded && !realtimeSubscribeInFlight && reconnectTimer === null) {
+          reconnectAttempt = 0;
+          void subscribeRealtime();
+        }
+      });
+    }, 1_000);
     const resumeRealtime = () => {
       if (stopped || document.visibilityState !== "visible") return;
       void sendHeartbeat();
@@ -1083,7 +1059,7 @@ function LivePage() {
       realtimeController.abort();
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);
-      clearRealtimeFallback();
+      if (realtimePollTimer !== null) window.clearInterval(realtimePollTimer);
       channel?.close();
       document.removeEventListener("visibilitychange", resumeRealtime);
       window.removeEventListener("focus", resumeRealtime);

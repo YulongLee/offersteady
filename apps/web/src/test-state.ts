@@ -309,9 +309,8 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
     await delay(signal);
   }
 
-  async subscribeRealtimeSession(_interviewId: string, onUpdate: Parameters<InterviewAppAdapter["subscribeRealtimeSession"]>[1], signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number; readonly onTransportConnected?: () => void }) {
+  async subscribeRealtimeSession(_interviewId: string, onUpdate: Parameters<InterviewAppAdapter["subscribeRealtimeSession"]>[1], signal?: AbortSignal, _lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }) {
     await delay(signal);
-    lease?.onTransportConnected?.();
     onUpdate({ speaker: structuredClone(syntheticState.speaker) });
   }
 

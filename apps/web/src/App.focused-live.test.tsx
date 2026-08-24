@@ -628,27 +628,6 @@ describe("focused live interview workspace", () => {
     expect(screenshotButton).not.toHaveTextContent(/处理中|已回答/);
   });
 
-  it("does not start fallback snapshots while the realtime transport is connected", async () => {
-    vi.spyOn(interviewAppAdapter, "sendDesktopSessionHeartbeat").mockImplementation(async command => ({
-      pageInstanceId: command.pageInstanceId ?? null,
-      leaseGeneration: 1,
-      leaseExpiresAtMs: Date.now() + 30_000,
-    }));
-    const loadRealtime = vi.spyOn(interviewAppAdapter, "loadRealtimeSession").mockResolvedValue({
-      speaker: structuredClone(syntheticState.speaker),
-    });
-    vi.spyOn(interviewAppAdapter, "subscribeRealtimeSession").mockImplementation(async (_id, _onUpdate, signal, lease) => {
-      lease?.onTransportConnected?.();
-      await new Promise<void>((_resolve, reject) => signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true }));
-    });
-
-    openLive();
-    await waitFor(() => expect(loadRealtime).toHaveBeenCalledTimes(1));
-    await new Promise(resolve => window.setTimeout(resolve, 1_200));
-
-    expect(loadRealtime).toHaveBeenCalledTimes(1);
-  });
-
   it("keeps the mobile screenshot button label stable while capture is active", async () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     vi.spyOn(interviewAppAdapter, "submitScreenshotAnswer").mockImplementation(async (_command, signal, onStage) => {
