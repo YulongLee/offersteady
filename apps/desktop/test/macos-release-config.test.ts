@@ -53,6 +53,7 @@ describe("macOS Developer ID release configuration", () => {
     expect(releaseScript).toContain('entry.name.includes(`-macOS-${arch}.`)');
     expect(releaseScript).toContain(".filter(isTargetArchitecture)");
     expect(releaseScript).toContain('path.endsWith(`-macOS-${arch}.dmg`)');
+    expect(releaseScript).toContain("generate-production-mac-metadata.mjs");
     expect(releaseScript).not.toContain("rmSync(outputDir");
     expect(releaseScript).not.toContain('CSC_IDENTITY_AUTO_DISCOVERY: "false"');
     expect(verifier).toContain('"--verify", "--deep", "--strict", "--verbose=2"');
@@ -61,6 +62,16 @@ describe("macOS Developer ID release configuration", () => {
     expect(verifier).toContain("assertDeveloperIdSignature(dmgPath)");
     expect(verifier).toContain('"xcrun", ["stapler", "validate"');
     expect(verifier).toContain('"stapler", "validate", dmgPath');
+  });
+
+  it("generates verified publication metadata only from production DMGs", () => {
+    const generator = readDesktop("scripts/generate-production-mac-metadata.mjs");
+
+    expect(generator).toContain('signingStatus: "verified"');
+    expect(generator).toContain("notarized: true");
+    expect(generator).toContain('installerType: "dmg"');
+    expect(generator).toContain('developmentOnly: false');
+    expect(generator).toContain('artifact.endsWith(".dmg")');
   });
 
   it("ignores Apple signing and notarization secret files", () => {

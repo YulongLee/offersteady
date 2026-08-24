@@ -61,6 +61,17 @@ npm run package:mac:release:x64 -w @offersteady/desktop
 apps/desktop/release/macos-production/OfferSteady-Companion-<version>-macOS-<arch>.dmg
 ```
 
+两种架构均通过终检后，使用同一次发布命令上传并原子生成官网清单：
+
+```bash
+python3 scripts/publish-desktop-release.py \
+  --channel production \
+  --metadata apps/desktop/release/macos-production/OfferSteady-Companion-<version>-macOS-arm64.json \
+  --metadata apps/desktop/release/macos-production/OfferSteady-Companion-<version>-macOS-x64.json
+```
+
+macOS production 发布会在上传前再次验证 DMG 的签名、Gatekeeper 和 stapler 状态。ZIP、`local-development`、未公证或校验值不一致的包会直接失败，不会更新官网发布清单。两个架构全部上传成功后才写入包含二者的本地 Backend 清单，再随正常部署上线；Windows 条目不受影响。
+
 每个架构独立清理和生成自己的 App/DMG，构建 Intel x64 时不得删除或覆盖已经验收的 arm64 DMG，反之亦然。发布前还应核对 App 主程序和 `OfferSteadyCaptureRuntime` 的实际 Mach-O 架构与目标一致。
 
 ### 3. 没有公证凭证时的签名预检

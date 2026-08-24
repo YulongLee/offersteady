@@ -171,6 +171,14 @@ run(process.execPath, [
   ...(prepareOnly ? ["--allow-unnotarized"] : ["--dmg", dmgs[0]]),
 ]);
 
+if (!prepareOnly) {
+  run(process.execPath, [
+    join(desktopDir, "scripts/generate-production-mac-metadata.mjs"),
+    arch,
+    dmgs[0],
+  ]);
+}
+
 console.log(`Signing identity: ${EXPECTED_IDENTITY}`);
 console.log(`Team identifier: ${EXPECTED_TEAM_ID}`);
 console.log(`Application: ${apps[0]}`);
