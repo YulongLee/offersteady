@@ -11,6 +11,10 @@ When configured as `aliyun-dysmsapi`, the backend SHALL call Aliyun `Dysmsapi Se
 - **WHEN** Aliyun rejects the sign, template, credential, permission, or frequency limit
 - **THEN** the backend SHALL record redacted diagnostics and return a stable provider error without persisting the plaintext code
 
+#### Scenario: Provider frequency limit is reached
+- **WHEN** Aliyun returns a message-frequency limit response
+- **THEN** the backend SHALL return a retryable 429 response with a frequency-limit message instead of reporting the whole SMS service as unavailable
+
 ### Requirement: Server-generated codes MUST be stored only as a digest
 The backend MUST generate codes using a cryptographically secure random source and MUST persist only an HMAC-SHA256 digest derived with a server-only pepper.
 

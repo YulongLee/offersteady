@@ -15,3 +15,4 @@
 - [x] 3.2 Update environment documentation and examples for both Aliyun SMS modes.
 - [x] 3.3 Run backend tests and strict OpenSpec validation.
 - [ ] 3.4 Deploy the new backend and database migration, then run one authorized production SMS send/verify smoke test. (Deployment and real send passed; final user-entered production verification remains.)
+- [x] 3.5 Align the resend cooldown with Aliyun's minute-level verification-code limit and return a stable 429 response for provider throttling.

@@ -181,7 +181,7 @@ class Settings(BaseSettings):
     auth_sms_aliyun_template_code: str | None = None
     auth_sms_code_pepper: str | None = None
     auth_sms_ttl_seconds: int = 300
-    auth_sms_send_interval_seconds: int = 30
+    auth_sms_send_interval_seconds: int = 60
     auth_sms_daily_limit: int = 20
     auth_sms_verify_attempt_limit: int = 5
     auth_sms_fake_code: str = "123456"

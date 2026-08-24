@@ -299,6 +299,14 @@ class AuthenticationService:
         ))
         self._log(logging.INFO if status == "sent" else logging.WARNING, "authentication.sms_code_sent", user_id=None, auth_session_id=stored.challenge_id, outcome=result.outcome, login_id=phone_e164)
         if result.outcome != "sent":
+            if result.outcome == "rate_limited":
+                raise DomainRequestError(
+                    "authentication",
+                    "sms-send",
+                    "验证码获取过于频繁，已触发短信渠道限制，请稍后再试。",
+                    429,
+                    "sms_provider_rate_limited",
+                )
             raise DomainRequestError("authentication", "sms-send", "短信服务暂时不可用，请稍后重试。", 503, result.error_code or "sms_provider_unavailable")
         return stored
 
