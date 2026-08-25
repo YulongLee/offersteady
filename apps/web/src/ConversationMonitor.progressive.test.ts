@@ -16,6 +16,18 @@ describe("progressive realtime transcript", () => {
     expect(nextProgressiveTranscriptText("项目负责", "项目复盘")).toBe("项目复盘");
   });
 
+  it("keeps the last longer visible partial during a temporary provider retraction", () => {
+    expect(nextProgressiveTranscriptText("请介绍一下你最近负责的项目", "请介绍项目")).toBe("请介绍一下你最近负责的项目");
+  });
+
+  it("ignores punctuation when deciding whether a partial retracted", () => {
+    expect(nextProgressiveTranscriptText("请介绍项目。", "请介绍项目")).toBe("请介绍项目");
+  });
+
+  it("lets an authoritative final replace a longer visible partial", () => {
+    expect(nextProgressiveTranscriptText("请介绍一下你最近负责的项目", "请介绍项目", true)).toBe("请介绍项目");
+  });
+
   it("stops claiming an abandoned partial is actively transcribing", () => {
     const publishedAtMs = 1_800_000_000_000;
     expect(transcriptPresentationState({ isFinal: false, publishedAtMs, endedAtMs: publishedAtMs }, publishedAtMs + STALE_TRANSCRIPT_MS - 1)).toBe("transcribing");

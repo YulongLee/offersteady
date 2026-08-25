@@ -166,6 +166,8 @@ Alternative considered: 只继续调一个全局 RMS 阈值。缺点是不同设
 
 每个 provider utterance 独立保存第一次 PCM append 时间，后续 append 不得覆盖该时间。供应商 TTFT 必须以第一次 append 到第一次有效 partial 计算，同时保留最近 append 时间用于发送路径诊断。网页收到新的 partial revision 后直接展示最新文本，不再增加逐字追赶动画；回答流式动画不受影响。
 
+供应商 partial 允许修正识别假设，但网页展示不得因同一 utterance 的临时短 revision 大幅回缩。增长或等长修订继续在当前帧立即展示；较短 partial 只更新原始实时状态，展示层暂时保留最近的较长可见文本，直到后续 partial 恢复到相同长度或 final 到达。Final 始终是权威文本并立即替换展示内容。该稳定策略只作用于字幕呈现，不修改供应商原始 revision、最终转录或回答模型输入。
+
 Qwen Realtime 优先使用百炼 Workspace 专属地域域名。Workspace ID 未配置时继续使用显式 `WS_URL` 或公共域名作为可回滚兼容路径，不得把 Workspace ID 或 API Key写入客户端。
 
 ## Risks / Trade-offs
@@ -177,6 +179,7 @@ Qwen Realtime 优先使用百炼 Workspace 专属地域域名。Workspace ID 未
 - [Risk] 更多性能指标可能增加日志量 → Mitigation: 只保留摘要计数、采样指标和聚合窗口，不记录高频原始媒体内容。
 - [Risk] “保持 API 不变”限制了大规模接口重构 → Mitigation: 在现有 API 之下增加兼容的内部队列、事件模型和诊断字段，对外保持主要入口不变。
 - [Risk] 对无效 session 降低 SSE 重试频率后，短暂创建延迟可能延后恢复 → Mitigation: 页面前台恢复、网络恢复和低频状态探测成功时立即重建订阅。
+- [Risk] 暂时保留较长 partial 可能让错误尾词多停留一小段时间 → Mitigation: 仅在未定稿文本回缩时稳定显示，等长/增长修订仍即时更新，Final 无条件立即覆盖。
 
 ## Migration Plan
 

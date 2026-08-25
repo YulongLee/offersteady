@@ -7,13 +7,17 @@
 - **WHEN** 视口达到桌面断点并加载实时面试页
 - **THEN** 实时对话和回答以左右两栏出现，回答历史翻页和紧凑问题操作位于右侧回答栏
 
-#### Scenario: Partial transcript updates the current utterance
-- **WHEN** 当前面试 session 收到某一句话的 Partial Transcript 更新
+#### Scenario: Partial transcript grows or corrects without retracting visible content
+- **WHEN** 当前面试 session 收到某一句话的增长或等长 Partial Transcript 修订
 - **THEN** 左侧实时对话栏立即原地显示该 revision 的完整最新文本，而不是追加重复对话或通过逐字追赶动画延后可见内容
+
+#### Scenario: Provider temporarily retracts a partial transcript
+- **WHEN** 同一未定稿 utterance 的较新 revision 比当前可见文本更短
+- **THEN** 左侧实时对话栏保留最近的较长可见文本，直到后续 partial 恢复到相同长度或 Final Transcript 到达，不得让已经显示的整段内容突然消失
 
 #### Scenario: Final transcript replaces the partial transcript
 - **WHEN** 某一句话对应的 Final Transcript 到达
-- **THEN** 系统将该句的 partial 状态替换为 final 状态，并保留同一条对话记录的角色和顺序
+- **THEN** 系统立即使用权威 Final Transcript 替换该句的可见 partial 和状态，即使 Final 文本更短，并保留同一条对话记录的角色和顺序
 
 #### Scenario: Empty or phantom transcript is suppressed
 - **WHEN** 实时链路返回空白文本、静音误触发结果或已失效的旧 partial

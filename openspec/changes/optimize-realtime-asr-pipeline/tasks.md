@@ -52,3 +52,4 @@
 - [x] 5.8 Preserve the first Qwen audio append timestamp per utterance and calculate provider TTFT from that immutable anchor.
 - [x] 5.9 Render each accepted realtime partial revision immediately without a synthetic progressive reveal delay.
 - [x] 5.10 Prefer the configured Aliyun Bailian Workspace endpoint, document its safe fallback, and verify endpoint selection without exposing credentials.
+- [x] 5.11 Stabilize visible realtime partials against temporary provider retractions while keeping growth immediate and Final authoritative.
