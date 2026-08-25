@@ -11,6 +11,7 @@ import {
   type RealtimeSourceReliabilitySnapshot,
 } from "./realtime-reliability";
 import { RealtimeTransportDiagnostics } from "./realtime-transport-diagnostics";
+import { FreshTransportAckGate, ReplacementPublisherBudget } from "./publisher-recovery-policy";
 
 interface DesktopBinding {
   readonly sessionId: string;
@@ -193,6 +194,8 @@ const SYSTEM_RECOVERY_CHECK_MS = 2_000;
 const SYSTEM_CALLBACK_STALL_MS = 4_000;
 const SYSTEM_RECOVERY_STARTUP_GRACE_MS = 6_000;
 const SYSTEM_SILENCE_RECOVERY_DELAYS_MS = [30_000, 120_000, 300_000] as const;
+const REPLACEMENT_PUBLISHER_ACK_TIMEOUT_MS = 4_000;
+const MAX_REPLACEMENT_PUBLISHER_ATTEMPTS = 3;
 
 export type SystemAudioRecoveryReason =
   | "track-ended"
@@ -668,6 +671,11 @@ export class DesktopRealtimePublisher {
   private watchdogTimer: number | null = null;
   private transportWatchdogRecoveryInFlight = false;
   private transportSequenceResetInProgress = false;
+  private readonly transportRecoveryAck = new FreshTransportAckGate<MultiplexedRealtimeTransport>({
+    setTimeout: (handler, timeoutMs) => window.setTimeout(handler, timeoutMs),
+    clearTimeout: timer => window.clearTimeout(timer),
+  });
+  private readonly replacementPublisherBudget = new ReplacementPublisherBudget(MAX_REPLACEMENT_PUBLISHER_ATTEMPTS);
 
   constructor(private readonly options: RealtimePublisherOptions) {
     this.fetchImpl = options.fetchImpl ?? ((input, init) => window.fetch(input, init));
@@ -738,6 +746,7 @@ export class DesktopRealtimePublisher {
     this.transportDiagnostics.stop();
     this.transport?.stop();
     this.transport = null;
+    this.transportRecoveryAck.cancel("publisher-stopped");
     this.transportRecovery = null;
     if (this.watchdogTimer !== null) {
       window.clearInterval(this.watchdogTimer);
@@ -1139,16 +1148,21 @@ export class DesktopRealtimePublisher {
     return payload.data;
   }
 
-  private async openTransport(pending: readonly Record<string, unknown>[] = []): Promise<void> {
+  private async openTransport(pending: readonly Record<string, unknown>[] = []): Promise<MultiplexedRealtimeTransport> {
     const transportPublisher = await this.createPublisher("mixed");
     let transport: MultiplexedRealtimeTransport;
     transport = new MultiplexedRealtimeTransport({
       apiBaseUrl: this.options.apiBaseUrl,
       token: transportPublisher.token,
-      onEvent: event => this.handleTransportEvent(event),
-      onState: state => this.options.onCaptureState(state === "failed" ? "reconnecting" : state === "connected" ? "capturing" : "reconnecting"),
+      onEvent: event => {
+        if (this.transport === transport) this.handleTransportEvent(event, transport);
+      },
+      onState: state => {
+        if (this.transport === transport) this.options.onCaptureState(state === "failed" ? "reconnecting" : state === "connected" ? "capturing" : "reconnecting");
+      },
       onTerminal: input => {
         if (this.transport !== transport || this.stopped) return;
+        this.transportRecoveryAck.fail(transport, input.reason);
         void this.recoverTransport(input);
       },
       diagnostics: this.transportDiagnostics,
@@ -1156,6 +1170,7 @@ export class DesktopRealtimePublisher {
     this.transport = transport;
     await transport.start();
     for (const payload of pending) transport.enqueue(payload);
+    return transport;
   }
 
   private recoverTransport(input: { readonly code: number; readonly reason: string; readonly pending: readonly Record<string, unknown>[]; readonly resetSequence?: boolean }): Promise<void> {
@@ -1184,17 +1199,22 @@ export class DesktopRealtimePublisher {
         queueState.consecutiveFailures = 0;
       });
       let lastError: unknown = null;
-      for (let attempt = 1; attempt <= 3 && !this.stopped; attempt += 1) {
+      let attempt = 0;
+      while (!this.stopped && this.replacementPublisherBudget.claimAttempt()) {
+        attempt += 1;
         try {
           if (attempt > 1) await new Promise<void>(resolve => window.setTimeout(resolve, 250 * attempt));
-          await this.openTransport();
+          const replacementTransport = await this.openTransport();
           for (const sourceInput of sourceInputs) {
             this.reliability.start(sourceInput.sourceKind);
             this.reliability.markRecovering(sourceInput.sourceKind, "transport-sequence-reset");
             const recovered = await this.startSource(sourceInput);
             if (recovered) this.runtimes.push(recovered);
           }
+          const acknowledged = this.transportRecoveryAck.wait(replacementTransport, REPLACEMENT_PUBLISHER_ACK_TIMEOUT_MS);
+          void acknowledged.catch(() => undefined);
           this.transportSequenceResetInProgress = false;
+          await acknowledged;
           this.options.onServerEvent?.({ kind: "connection-state", payload: {
             state: "transport-reset",
             recoveryReason: input.reason,
@@ -1204,8 +1224,20 @@ export class DesktopRealtimePublisher {
           return;
         } catch (error) {
           lastError = error;
-          this.transport?.stop();
-          this.transport = null;
+          const failedAttempt = this.transport;
+          if (failedAttempt) this.transportRecoveryAck.fail(failedAttempt, "replacement-publisher-attempt-failed");
+          failedAttempt?.stop();
+          if (this.transport === failedAttempt) this.transport = null;
+          await Promise.all(this.runtimes.map(runtime => runtime.stop()));
+          this.runtimes = [];
+          this.sequencer.reset();
+          this.sendBuffers.forEach(buffer => buffer.clear());
+          this.uploadQueues.forEach(queueState => {
+            queueState.items.length = 0;
+            queueState.uploading = false;
+            queueState.terminalFailure = false;
+            queueState.consecutiveFailures = 0;
+          });
         }
       }
       if (!this.stopped) {
@@ -1226,7 +1258,7 @@ export class DesktopRealtimePublisher {
     return this.transportRecovery;
   }
 
-  private handleTransportEvent(event: { readonly kind?: string; readonly payload?: Record<string, unknown> }): void {
+  private handleTransportEvent(event: { readonly kind?: string; readonly payload?: Record<string, unknown> }, transport: MultiplexedRealtimeTransport): void {
     const payload = event.payload ?? {};
     const sourceKind = payload?.sourceKind;
     if (sourceKind === "microphone" || sourceKind === "system") {
@@ -1237,6 +1269,8 @@ export class DesktopRealtimePublisher {
       if (typeof payload.pendingFrames === "number") this.reliability.updatePendingFrames(sourceKind, payload.pendingFrames);
       if (event.kind === "frame-accepted" || event.kind === "terminal-accepted") {
         this.reliability.recordFrameAck(sourceKind, typeof payload.lastAckAtMs === "number" ? payload.lastAckAtMs : Date.now(), typeof payload.pendingFrames === "number" ? payload.pendingFrames : 0);
+        this.transportRecoveryAck.acknowledge(transport);
+        this.replacementPublisherBudget.recordAcknowledgement(transport.pendingPayloads().length > 0);
       }
       if (typeof payload.qwenAppendAtMs === "number") this.reliability.recordQwenAppend(sourceKind, payload.qwenAppendAtMs);
       if (existing && (event.kind === "frame-accepted" || event.kind === "terminal-accepted") && typeof payload.sequence === "number") {

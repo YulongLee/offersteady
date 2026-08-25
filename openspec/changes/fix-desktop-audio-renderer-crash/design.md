@@ -42,6 +42,7 @@ The companion is Electron 42 (Chromium 148) and captures microphone plus system 
 15. **Fail closed on amplification.** The desktop stops the affected transport before repeated writes exceed the bounded resend budget. Backend ingress independently closes a connection that exceeds a bounded sequence-gap response budget, protecting commercial capacity even when an old or defective client connects.
 16. **Preserve protocol compatibility.** Existing protocol `2.0` events remain valid. Added close reasons and optional recovery metadata are diagnostic; older clients continue to receive existing ACK, gap and degraded events.
 17. **Isolate browser performance telemetry from realtime ingress.** The Web adapter serializes performance acknowledgement requests and retains at most sixteen pending measurements, dropping stale diagnostic work under pressure. The Backend executes the synchronous acknowledgement handler outside the event loop so already-open older pages cannot starve WebSocket frame acknowledgements.
+18. **Gate replacement-publisher recovery on authoritative forward progress.** A replacement attempt remains the single active recovery until its current WebSocket receives a fresh `frame-accepted` or `terminal-accepted`. Events from superseded transports cannot complete the gate. Each failed attempt stops its transport and every capture runtime it created before another attempt starts. Attempts and ACK wait time are bounded; exhaustion exits WebSocket recovery instead of creating publishers indefinitely. Version 1.1.2 ships this correction without changing protocol `2.0`.
 
 ## Risks / Trade-offs
 
@@ -67,6 +68,7 @@ The companion is Electron 42 (Chromium 148) and captures microphone plus system 
 7. Before any new public release, pass three real 60-minute capture soaks (system-only, microphone-only, dual-channel). A 120-minute run follows only after all three pass.
 8. Release the transport correction as a patch version only after deterministic storm tests, complete desktop/backend suites, production builds and a controlled real ACK test pass.
 9. Deploy the backward-compatible Backend guard before publishing desktop 1.1.1, then verify public health, release metadata, signed downloads and a controlled live ACK before broader use.
+10. Publish desktop 1.1.2 only after the publisher-recovery regressions, desktop tests, type checks, production build, signed artifact verification and public manifest checks pass.
 
 ## Open Questions
 

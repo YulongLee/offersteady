@@ -158,3 +158,28 @@ The corrected companion SHALL use version 1.1.1 and SHALL retain bundle identifi
 - **THEN** the Backend SHALL be deployed before the new desktop download manifest is made public
 - **AND** macOS arm64 and x64 artifacts SHALL pass Developer ID, notarization, Gatekeeper and stapler verification
 - **AND** the public release manifest SHALL expose version 1.1.1 with matching SHA-256 values
+
+### Requirement: Replacement publisher recovery proves progress and remains bounded
+The companion SHALL keep at most one replacement-publisher recovery active, SHALL consider it successful only after the current replacement transport receives an authoritative audio acknowledgement, and SHALL clean up every failed attempt before creating another publisher.
+
+#### Scenario: One channel stops receiving acknowledgements
+- **WHEN** a live channel has pending frames whose acknowledgements stall
+- **THEN** the companion SHALL enter one shared transport recovery
+- **AND** watchdog ticks or terminal callbacks during that recovery SHALL join the same recovery instead of creating another publisher
+
+#### Scenario: Replacement transport receives a fresh acknowledgement
+- **WHEN** the current replacement transport receives `frame-accepted` or `terminal-accepted`
+- **THEN** the recovery gate SHALL complete and normal delivery MAY resume
+- **AND** an acknowledgement from a superseded transport SHALL NOT complete the gate
+
+#### Scenario: Replacement transport does not make forward progress
+- **WHEN** a replacement transport receives no authoritative acknowledgement within the bounded deadline
+- **THEN** its WebSocket and capture runtimes SHALL be stopped before a bounded retry begins
+- **AND** exhausting the retry budget SHALL stop fresh-publisher creation rather than entering an unbounded loop
+
+### Requirement: Publisher recovery hotfix is released as version 1.1.2
+The replacement-publisher recovery correction SHALL use desktop version 1.1.2 while retaining bundle identifier `com.offersteady.companion` and realtime protocol version `2.0`.
+
+#### Scenario: Production hotfix is published
+- **WHEN** desktop 1.1.2 passes regression, build, signing and publication gates
+- **THEN** the production download manifest SHALL expose version 1.1.2 with matching artifact checksums

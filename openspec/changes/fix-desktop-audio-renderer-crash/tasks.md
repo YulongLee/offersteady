@@ -64,3 +64,11 @@
 - [x] 8.3 Reproduce a browser performance-ack burst and verify that request concurrency is bounded
 - [x] 8.4 Serialize and bound Web performance acknowledgements, and offload Backend acknowledgement processing from the realtime event loop
 - [x] 8.5 Run Web/Backend regression and build verification, deploy the hotfix and verify sustained ACK progress from the active real interview
+
+## 9. Replacement Publisher Recovery Hotfix 1.1.2
+
+- [x] 9.1 Record the production publisher replacement loop and define ACK-gated, bounded recovery behavior
+- [x] 9.2 Implement current-transport ACK gating, single-flight recovery and per-attempt resource cleanup
+- [x] 9.3 Add deterministic regression coverage for ACK success, stale events, timeout cleanup and publisher-attempt bounds
+- [x] 9.4 Bump the companion patch version to 1.1.2 and run desktop tests, type checks, production build and strict OpenSpec validation
+- [ ] 9.5 Build, sign, publish and verify the 1.1.2 desktop artifacts and production download manifest

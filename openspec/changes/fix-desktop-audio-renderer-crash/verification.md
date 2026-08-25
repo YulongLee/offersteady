@@ -105,3 +105,12 @@
 - SHA-256: `7056e36c6dd89747894c6775d6b1abe524ea7800d13fb05de7ac554c9e58a361`
 
 The verified artifacts are ready for controlled distribution but were not uploaded to the website or deployed by this change.
+### Patch release 1.1.2 pre-publication verification (2026-08-26)
+
+- Production evidence showed repeated fresh `mixed` publishers replacing one another after audio ACK progress stalled; capture callbacks and local frame production continued while Backend receipts stopped advancing.
+- Replacement recovery now remains single-flight until the current transport receives `frame-accepted` or `terminal-accepted`, ignores stale transport events, cleans up every failed attempt and bounds consecutive fresh-publisher creation.
+- Desktop verification passed: 24 test files / 104 tests, renderer and main-process TypeScript checks, and production renderer/main build.
+- `openspec validate fix-desktop-audio-renderer-crash --strict` passed.
+- macOS arm64 and x64 App/DMG signing, notarization, Gatekeeper and stapler verification passed; Windows x64 NSIS structure verification passed.
+- Verified SHA-256 values: arm64 `1236a979dcf7e498a1675ddbb37b616f0f1b8216db978f340c0c305f0c5b089b`, x64 `01d9d2511e9b0fa318481b8346cc6f735363837bf4785cbbd25b147b5f854759`, Windows x64 `62b24df6784fb9d58527b1c0245ea4d4239169bd83ad728c08f1f3f38780e462`.
+- All three artifacts were uploaded to versioned production OSS paths; the generated Backend manifest now targets 1.1.2 pending production deployment verification.
