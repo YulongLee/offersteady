@@ -19,4 +19,6 @@ Release 1.1.1 is the commercial realtime audio transport hotfix for the 1.1 desk
 | macOS Intel | `OfferSteady-Companion-1.1.1-macOS-x64.dmg` | `1fa03520db74dec5a18dd1ad5b7653c549effef0a9130bf6788df28a23b2a86b` | Developer ID, App/DMG notarization, stapler and Gatekeeper passed |
 | Windows x64 | `OfferSteady-Companion-Setup-1.1.1-Windows-x64.exe` | `eab6185876447347b3ea184ec4f19a61b16be43e240482aba8aabc8535a899f6` | NSIS structure passed; Authenticode remains unavailable |
 
-The Backend is deployed before the new desktop manifest is published. Public health, checksums and a controlled live frame ACK are verified after rollout.
+The Backend and production manifest were deployed on 2026-08-26. Public health, all three download routes and checksums passed verification, and a controlled synthetic frame received authoritative ACK sequence `0` through the public realtime WebSocket.
+
+Real system-only, microphone-only, dual-channel and extended soak tests remain release follow-up gates; the controlled synthetic probe does not replace them.

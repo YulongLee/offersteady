@@ -61,6 +61,16 @@
 - Backend storm protection source commit `a9e99a4` was deployed first; production Backend, PostgreSQL and Redis passed health checks before the new desktop manifest was promoted.
 - Verified artifacts were uploaded to `desktop-releases/<platform>/<architecture>/1.1.1/`; the checked-in production manifest is updated atomically in the follow-up publication commit.
 
+### Patch release 1.1.1 production rollout (2026-08-26)
+
+- Source commits `a9e99a4` and `fe53ba5` were pushed to `main`; production deploy metadata and the checked-out repository both resolve to `fe53ba5bc16fe62f20c38c1c953ebe3b3658349c`.
+- Production Backend, PostgreSQL and Redis are healthy. The active Backend configuration enforces an eight-event sequence-gap budget without progress.
+- The public desktop manifest reports version `1.1.1` for macOS arm64, macOS x64 and Windows x64 with the verified release checksums above.
+- A public byte-range request for every download returned HTTP 206 with the expected object size: 126,798,359 bytes for macOS arm64, 130,341,085 bytes for macOS x64 and 102,142,838 bytes for Windows x64.
+- A one-time synthetic production session connected through the public realtime WebSocket, received protocol `2.0` connection state, sent one 640-byte synthetic PCM frame and received authoritative `frame-accepted` ACK sequence `0`. The publisher and synthetic session were then closed and deleted.
+- The notarized macOS arm64 1.1.1 app was installed locally after confirming capture diagnostics had been idle for more than one hour. Its version, strict code signature, Gatekeeper assessment and stapler ticket passed before launch; the prior 1.1.0 app remains as a recoverable backup.
+- This controlled rollout verifies reachability and one-frame acknowledgement only. The real system-only, microphone-only, dual-channel and 120-minute soak gates remain pending and are not inferred from the synthetic probe.
+
 ## macOS arm64
 
 - Version: 0.1.20

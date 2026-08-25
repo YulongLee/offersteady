@@ -54,5 +54,5 @@
 - [x] 7.1 Bump the shared companion patch version from 1.1.0 to 1.1.1 without changing the bundle identifier or protocol version
 - [x] 7.2 Build and verify production companion artifacts for macOS arm64, macOS x64 and Windows x64
 - [x] 7.3 Commit and push the verified release source, then deploy the compatible Backend protection to production
-- [ ] 7.4 Publish the 1.1.1 desktop artifacts and atomically update the production download manifest
-- [ ] 7.5 Verify public health, build metadata, download metadata/checksums and one controlled live frame ACK after rollout
+- [x] 7.4 Publish the 1.1.1 desktop artifacts and atomically update the production download manifest
+- [x] 7.5 Verify public health, build metadata, download metadata/checksums and one controlled live frame ACK after rollout
