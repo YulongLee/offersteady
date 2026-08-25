@@ -116,6 +116,33 @@ def test_multiplexed_transport_accepts_negotiated_binary_audio_without_base64():
     assert transcript is not None
 
 
+def test_binary_audio_diagnostics_cannot_collide_with_authoritative_trace_fields():
+    _user_id, _session_id, device_id, publisher = create_live_binding()
+    payload = frame(device_id=device_id, source_kind="system", sequence=0)
+    payload["diagnostics"] = {
+        "desktopWsSendAtMs": 9_999_999,
+        "backendWsReceiveAtMs": 9_999_999,
+        "desktopPublisherFlushAtMs": 1_005,
+    }
+    audio = base64.b64decode(payload.pop("audioBase64"))
+    header = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    envelope = len(header).to_bytes(4, byteorder="big") + header + audio
+
+    with client.websocket_connect(
+        f"/api/v1/realtime-speech/ingest-ws?token={publisher['token']}&protocol=2.0&media=binary-v1"
+    ) as websocket:
+        websocket.receive_json()
+        websocket.send_bytes(envelope)
+        accepted = websocket.receive_json()
+        assert accepted["kind"] == "frame-accepted"
+        assert accepted["payload"]["sequence"] == 0
+
+    trace = realtime_speech_service()._trace_snapshot("trace-system-0")
+    assert trace["desktopWsSendAtMs"] == 1_010
+    assert trace["backendWsReceiveAtMs"] != 9_999_999
+    assert trace["desktopPublisherFlushAtMs"] == 1_005
+
+
 def test_authenticated_audio_hot_path_does_not_reload_session_from_database():
     _user_id, _session_id, device_id, publisher_payload = create_live_binding()
     service = realtime_speech_service()

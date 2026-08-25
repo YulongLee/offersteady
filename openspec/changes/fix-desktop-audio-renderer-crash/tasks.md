@@ -56,3 +56,9 @@
 - [x] 7.3 Commit and push the verified release source, then deploy the compatible Backend protection to production
 - [x] 7.4 Publish the 1.1.1 desktop artifacts and atomically update the production download manifest
 - [x] 7.5 Verify public health, build metadata, download metadata/checksums and one controlled live frame ACK after rollout
+
+## 8. Production Trace Collision Hotfix
+
+- [x] 8.1 Reproduce real-client diagnostic keys colliding with authoritative Backend trace fields
+- [x] 8.2 Merge trace diagnostics without duplicate keyword arguments and preserve authoritative frame timings
+- [ ] 8.3 Run Backend regression/full verification, deploy the hotfix and verify ACK progress from the active real interview

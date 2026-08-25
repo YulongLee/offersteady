@@ -2251,22 +2251,22 @@ class RealtimeSpeechService:
             diagnostics=dict(diagnostics or {}),
             audio_bytes=decoded_audio,
         )
-        self._observe_trace(
-            trace_id,
-            sessionId=publisher.session_id,
-            channel=source_kind,
-            sequence=sequence,
-            revision=revision,
-            utteranceId=segment_id,
-            desktopAudioCaptureAtMs=captured_at_ms,
-            desktopWsSendAtMs=sent_at_ms,
-            backendWsReceiveAtMs=ingest_received_at_ms,
-            **{
-                key: value
-                for key, value in frame.diagnostics.items()
-                if value is None or isinstance(value, (str, int, float, bool))
-            },
-        )
+        trace_fields = {
+            key: value
+            for key, value in frame.diagnostics.items()
+            if value is None or isinstance(value, (str, int, float, bool))
+        }
+        trace_fields.update({
+            "sessionId": publisher.session_id,
+            "channel": source_kind,
+            "sequence": sequence,
+            "revision": revision,
+            "utteranceId": segment_id,
+            "desktopAudioCaptureAtMs": captured_at_ms,
+            "desktopWsSendAtMs": sent_at_ms,
+            "backendWsReceiveAtMs": ingest_received_at_ms,
+        })
+        self._observe_trace(trace_id, **trace_fields)
         if not frame.audio_bytes:
             degraded = self._save_event(
                 session_id=publisher.session_id,
