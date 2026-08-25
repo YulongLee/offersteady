@@ -9,7 +9,7 @@
 
 #### Scenario: Partial transcript updates the current utterance
 - **WHEN** 当前面试 session 收到某一句话的 Partial Transcript 更新
-- **THEN** 左侧实时对话栏原地更新该句对应的当前内容，而不是追加一条重复对话
+- **THEN** 左侧实时对话栏立即原地显示该 revision 的完整最新文本，而不是追加重复对话或通过逐字追赶动画延后可见内容
 
 #### Scenario: Final transcript replaces the partial transcript
 - **WHEN** 某一句话对应的 Final Transcript 到达

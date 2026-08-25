@@ -3,17 +3,13 @@ import { describe, expect, it } from "vitest";
 import { nextProgressiveTranscriptText, STALE_TRANSCRIPT_MS, transcriptPresentationState } from "./ConversationMonitor";
 
 describe("progressive realtime transcript", () => {
-  it("reveals appended partial text without replacing the whole sentence", () => {
-    expect(nextProgressiveTranscriptText("你好", "你好，请介绍项目")).toBe("你好，请");
+  it("shows the complete latest partial revision immediately", () => {
+    expect(nextProgressiveTranscriptText("你好", "你好，请介绍项目")).toBe("你好，请介绍项目");
   });
 
-  it("catches up a 100-character partial transcript within 250ms", () => {
+  it("does not add a synthetic reveal delay to long partials", () => {
     const target = "面".repeat(100);
-    let visible = "";
-    for (let elapsed = 32; elapsed <= 224; elapsed += 32) {
-      visible = nextProgressiveTranscriptText(visible, target);
-    }
-    expect(visible).toBe(target);
+    expect(nextProgressiveTranscriptText("", target)).toBe(target);
   });
 
   it("recovers from an ASR correction at the first changed character", () => {

@@ -42,6 +42,7 @@ class _SourceRealtimeSession:
     receiver_thread: threading.Thread | None = None
     latest_frame: AudioFrame | None = None
     latest_audio_appended_at_ms: int | None = None
+    first_audio_appended_at_ms: int | None = None
     first_partial_observed_for_segment: bool = False
     latest_asr_lock_wait_start_at_ms: int | None = None
     latest_asr_lock_acquired_at_ms: int | None = None
@@ -141,6 +142,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                 partial_received_at_ms,
                 completed_at_ms,
                 audio_appended_at_ms,
+                first_audio_appended_at_ms,
                 commit_sent_at_ms,
                 asr_lock_wait_start_at_ms,
                 asr_lock_acquired_at_ms,
@@ -166,6 +168,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             partial_received_at_ms=partial_received_at_ms,
             completed_at_ms=completed_at_ms,
             audio_appended_at_ms=audio_appended_at_ms,
+            first_audio_appended_at_ms=first_audio_appended_at_ms,
             commit_sent_at_ms=commit_sent_at_ms,
             asr_lock_wait_start_at_ms=asr_lock_wait_start_at_ms,
             asr_lock_acquired_at_ms=asr_lock_acquired_at_ms,
@@ -256,6 +259,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         int | None,
         int | None,
         int | None,
+        int | None,
         str,
     ]:
         session = self._get_or_create_source_session(frame)
@@ -284,6 +288,8 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                     audio_appended_at_ms = int(time.time() * 1000)
                     with session.event_condition:
                         session.latest_audio_appended_at_ms = audio_appended_at_ms
+                        if session.first_audio_appended_at_ms is None:
+                            session.first_audio_appended_at_ms = audio_appended_at_ms
                         session.latest_qwen_ws_send_start_at_ms = qwen_ws_send_start_at_ms
                         session.latest_qwen_ws_send_complete_at_ms = qwen_ws_send_complete_at_ms
                     session.updated_at_monotonic = time.monotonic()
@@ -319,6 +325,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                     partial_received_at_ms,
                     completed_at_ms,
                     audio_appended_at_ms,
+                    session.first_audio_appended_at_ms,
                     commit_sent_at_ms,
                     asr_lock_wait_start_at_ms,
                     asr_lock_acquired_at_ms,
@@ -364,6 +371,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             session.accepting_transcript_events = True
             session.first_partial_observed_for_segment = False
             session.latest_audio_appended_at_ms = None
+            session.first_audio_appended_at_ms = None
             session.latest_asr_lock_wait_start_at_ms = None
             session.latest_asr_lock_acquired_at_ms = None
             session.latest_qwen_send_enqueue_at_ms = None
@@ -635,6 +643,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                                     first_text_at_ms=session.first_text_at_ms,
                                     partial_received_at_ms=session.latest_text_at_ms,
                                     audio_appended_at_ms=session.latest_audio_appended_at_ms,
+                                    first_audio_appended_at_ms=session.first_audio_appended_at_ms,
                                     asr_lock_wait_start_at_ms=session.latest_asr_lock_wait_start_at_ms,
                                     asr_lock_acquired_at_ms=session.latest_asr_lock_acquired_at_ms,
                                     qwen_send_enqueue_at_ms=session.latest_qwen_send_enqueue_at_ms,

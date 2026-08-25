@@ -35,6 +35,7 @@ export interface SpeakerTranscriptSegment {
     readonly desktopWsSendAtMs?: number;
     readonly backendWsReceiveAtMs?: number;
     readonly qwenAudioAppendAtMs?: number;
+    readonly qwenFirstAudioAppendAtMs?: number;
     readonly qwenPartialReceivedAtMs?: number;
     readonly transcriptEventCreatedAtMs?: number;
     readonly redisEventXaddStartAtMs?: number;

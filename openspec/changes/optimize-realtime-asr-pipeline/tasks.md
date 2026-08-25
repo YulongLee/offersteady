@@ -49,3 +49,6 @@
 - [x] Persist transcript activity revisions independently from operational events so SSE consumers wake immediately.
 - [x] Reduce unhealthy-stream fallback synchronization to one second and stop it after the stream becomes healthy.
 - [x] Reject stale publisher tokens with a terminal WebSocket policy close so backend restarts do not cause retry storms or ASGI exception loops.
+- [x] 5.8 Preserve the first Qwen audio append timestamp per utterance and calculate provider TTFT from that immutable anchor.
+- [x] 5.9 Render each accepted realtime partial revision immediately without a synthetic progressive reveal delay.
+- [x] 5.10 Prefer the configured Aliyun Bailian Workspace endpoint, document its safe fallback, and verify endpoint selection without exposing credentials.

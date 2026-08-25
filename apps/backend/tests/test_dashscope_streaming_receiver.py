@@ -65,6 +65,27 @@ class _LatePartialAfterCompletedFakeWebSocket(_StreamingFakeWebSocket):
             })
 
 
+class _PartialAfterTwoAppendsFakeWebSocket(_StreamingFakeWebSocket):
+    def __init__(self) -> None:
+        super().__init__()
+        self.append_count = 0
+
+    def send(self, payload: str) -> None:
+        message = json.loads(payload)
+        self.sent.append(message)
+        if message["type"] != "input_audio_buffer.append":
+            return
+        self.append_count += 1
+        if self.append_count == 2:
+            threading.Timer(
+                0.01,
+                lambda: self.events.put({
+                    "type": "conversation.item.input_audio_transcription.text",
+                    "text": "第二帧后返回首字",
+                }),
+            ).start()
+
+
 def _frame(*, revision: int, is_final: bool, audio: bytes) -> AudioFrame:
     return AudioFrame(
         publisher_id="publisher-stream",
@@ -143,6 +164,39 @@ def test_gateway_delivers_partial_that_arrives_between_audio_frames(monkeypatch)
     # The next append must not re-publish the provider revision already emitted
     # by the receive loop.
     assert second.text == ""
+    gateway._close_source_session("session-stream:microphone")
+
+
+def test_gateway_preserves_first_append_timestamp_until_first_partial(monkeypatch) -> None:
+    socket = _PartialAfterTwoAppendsFakeWebSocket()
+    monkeypatch.setattr(
+        "app.services.dashscope_realtime_asr_gateway.connect",
+        lambda *args, **kwargs: socket,
+    )
+    gateway = DashScopeRealtimeAsrGateway(
+        Settings(
+            realtime_asr_api_key="test-key",
+            realtime_asr_nonblocking_partials_enabled=True,
+        ),
+        logging.getLogger("test-first-append-anchor"),
+    )
+    delivered_partials: list[object] = []
+    delivered = threading.Event()
+    gateway.set_partial_listener(lambda _frame, result: (delivered_partials.append(result), delivered.set()))
+
+    first = gateway.transcribe(frame=_frame(revision=1, is_final=False, audio=b"first"), attempt=0)
+    time.sleep(0.01)
+    second = gateway.transcribe(frame=_frame(revision=2, is_final=False, audio=b"second"), attempt=0)
+
+    assert first.first_audio_appended_at_ms == first.audio_appended_at_ms
+    assert second.first_audio_appended_at_ms == first.audio_appended_at_ms
+    assert second.audio_appended_at_ms is not None
+    assert first.audio_appended_at_ms is not None
+    assert second.audio_appended_at_ms > first.audio_appended_at_ms
+    assert delivered.wait(timeout=0.2)
+    partial = delivered_partials[0]
+    assert partial.first_audio_appended_at_ms == first.audio_appended_at_ms
+    assert partial.audio_appended_at_ms == second.audio_appended_at_ms
     gateway._close_source_session("session-stream:microphone")
 
 

@@ -148,6 +148,7 @@ class RealtimeStageTimingResponse(BaseModel):
     queue_enter_at_ms: int | None = Field(default=None, alias="queueEnterAtMs")
     queue_leave_at_ms: int | None = Field(default=None, alias="queueLeaveAtMs")
     qwen_audio_append_at_ms: int | None = Field(default=None, alias="qwenAudioAppendAtMs")
+    qwen_first_audio_append_at_ms: int | None = Field(default=None, alias="qwenFirstAudioAppendAtMs")
     qwen_partial_received_at_ms: int | None = Field(default=None, alias="qwenPartialReceivedAtMs")
     qwen_final_received_at_ms: int | None = Field(default=None, alias="qwenFinalReceivedAtMs")
     redis_event_xadd_at_ms: int | None = Field(default=None, alias="redisEventXaddAtMs")

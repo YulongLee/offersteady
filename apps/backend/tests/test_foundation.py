@@ -153,6 +153,7 @@ def test_realtime_trace_summary_correlates_browser_delivery_without_content() ->
         backendWsReceiveAtMs=1_030,
         queueEnterAtMs=1_035,
         queueLeaveAtMs=1_055,
+        qwenFirstAudioAppendAtMs=1_060,
         qwenAudioAppendAtMs=1_065,
         qwenPartialReceivedAtMs=1_200,
         transcriptEventCreatedAtMs=1_205,
@@ -199,6 +200,8 @@ def test_realtime_trace_summary_correlates_browser_delivery_without_content() ->
     assert summary["distributions"]["speechStartToBrowserFirstPartialMs"]["p95"] == 260
     assert summary["distributions"]["desktopEnqueueToFlushMs"]["p95"] == 11
     assert summary["distributions"]["backendAsrLockWaitMs"]["p95"] == 2
+    assert summary["distributions"]["qwenPartialMs"]["p95"] == 140
+    assert summary["distributions"]["qwenLatestAppendToPartialMs"]["p95"] == 135
     assert summary["revisionDiagnostics"]["stageCounts"] == {
         "qwen": 1,
         "event": 1,

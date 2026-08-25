@@ -187,6 +187,7 @@ class TranscriptResult:
     partial_received_at_ms: int | None = None
     completed_at_ms: int | None = None
     audio_appended_at_ms: int | None = None
+    first_audio_appended_at_ms: int | None = None
     commit_sent_at_ms: int | None = None
     suppressed_reason: str | None = None
     asr_lock_wait_start_at_ms: int | None = None

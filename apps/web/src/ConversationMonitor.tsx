@@ -19,16 +19,9 @@ export const formatTranscriptTimestamp = (milliseconds: number) => {
   return `[${String(Math.floor(milliseconds / 60_000)).padStart(2, "0")}:${String(Math.floor(milliseconds / 1_000) % 60).padStart(2, "0")}]`;
 };
 export const nextProgressiveTranscriptText = (current: string, target: string, step?: number) => {
-  if (current === target) return current;
-  const catchUpStep = Math.max(1, step ?? Math.max(2, Math.ceil(target.length / 6)));
-  if (target.startsWith(current)) return target.slice(0, current.length + catchUpStep);
-  let commonPrefixLength = 0;
-  while (
-    commonPrefixLength < current.length
-    && commonPrefixLength < target.length
-    && current[commonPrefixLength] === target[commonPrefixLength]
-  ) commonPrefixLength += 1;
-  return target.slice(0, Math.min(target.length, commonPrefixLength + catchUpStep));
+  void current;
+  void step;
+  return target;
 };
 
 export const STALE_TRANSCRIPT_MS = 8_000;
@@ -45,23 +38,10 @@ export const transcriptPresentationState = (
 
 function ProgressiveTranscriptText({ segment, active }: { readonly segment: SpeakerTranscriptSegment; readonly active: boolean }) {
   const text = segment.text;
-  const [visibleText, setVisibleText] = useState(text);
-  const targetText = useRef(text);
+  const visibleText = text;
   const lastPaintedEventId = useRef<string | null>(null);
   const performance = segment.performance;
   const renderStartedAtMs = useMemo(() => Date.now(), [performance?.eventId, visibleText]);
-  targetText.current = text;
-
-  useEffect(() => {
-    if (!active) {
-      setVisibleText(text);
-      return;
-    }
-    const timer = window.setInterval(() => {
-      setVisibleText(current => nextProgressiveTranscriptText(current, targetText.current));
-    }, 32);
-    return () => window.clearInterval(timer);
-  }, [active, text]);
 
   useLayoutEffect(() => {
     if (!subtitleRevisionDiagnosticsEnabled() || visibleText !== text) return;

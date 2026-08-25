@@ -11,6 +11,10 @@
 - **WHEN** 麦克风和系统音频的延迟表现不同
 - **THEN** 指标按 source 分开展示，而不是只给出整场面试的单一平均值
 
+#### Scenario: Several audio appends precede the first provider partial
+- **WHEN** 同一 utterance 在 Qwen 返回首个有效 partial 前已经追加多个 PCM chunk
+- **THEN** provider TTFT 以该 utterance 的第一次 PCM append 为起点，后续 append 不得重置或缩短该指标
+
 ### Requirement: Realtime diagnostics SHALL classify blocking and backpressure conditions
 系统 MUST 能识别并报告实时链路中的阻塞、排队、背压和连接抖动问题，包括同步等待、Chunk 堆积、队列覆盖、连接重建和前端消费滞后。诊断输出 MUST 使用阶段化错误码或状态，而不是仅显示通用“识别慢”。
 

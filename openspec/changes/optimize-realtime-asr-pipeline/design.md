@@ -162,6 +162,12 @@ Alternative considered: 只继续调一个全局 RMS 阈值。缺点是不同设
 
 实时字幕、待确认问题、当前回答任务和新建面试时的回答列表属于单场面试运行态，不得跨 session 合并。创建新草稿时前端清空上一场临时运行态；实时字幕 reconciliation 只允许合并相同 `sessionId` 的 partial/final，目标 session 变化时先过滤旧 session 内容。该清理只作用于前端当前工作区，不删除后端历史面试记录。
 
+### Decision 12: Measure provider TTFT from the first utterance append and render partials immediately
+
+每个 provider utterance 独立保存第一次 PCM append 时间，后续 append 不得覆盖该时间。供应商 TTFT 必须以第一次 append 到第一次有效 partial 计算，同时保留最近 append 时间用于发送路径诊断。网页收到新的 partial revision 后直接展示最新文本，不再增加逐字追赶动画；回答流式动画不受影响。
+
+Qwen Realtime 优先使用百炼 Workspace 专属地域域名。Workspace ID 未配置时继续使用显式 `WS_URL` 或公共域名作为可回滚兼容路径，不得把 Workspace ID 或 API Key写入客户端。
+
 ## Risks / Trade-offs
 
 - [Risk] 引入 source worker、持久连接和有界队列后，系统状态机会更复杂 → Mitigation: 按 source/session 明确状态图，并增加可重复的单元测试与集成测试。

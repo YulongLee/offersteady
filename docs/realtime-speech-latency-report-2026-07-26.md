@@ -193,6 +193,8 @@ pairing-status 是设备可访问接口，但 runtime、device-status 和 publis
 
 线上容器未显式设置 `OFFERSTEADY_REALTIME_ASR_TURN_DETECTION_MODE`。从本次结果看，Manual final 约 0.55 秒，VAD final 约 8.04 秒。生产环境需要显式固定低延迟策略，避免不同构建或默认值变化导致性能漂移。
 
+专属域名迁移采用配置优先且可回滚的方式：配置 `OFFERSTEADY_REALTIME_ASR_WORKSPACE_ID` 与匹配地域后，后端优先连接 `wss://{WorkspaceId}.{region}.maas.aliyuncs.com/api-ws/v1/realtime`；移除 Workspace ID 即回退到显式 `OFFERSTEADY_REALTIME_ASR_WS_URL` 或公共 DashScope 域名。API Key 和 Workspace ID 均只存在于后端环境。
+
 ### P1：无效请求需要熔断和限流
 
 后端应对同一设备、同一失效 session 的高频 `401/404/410` 做短期熔断。客户端必须停止重试，服务端限流只能作为第二道保护。

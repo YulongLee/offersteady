@@ -227,6 +227,7 @@ interface BackendRealtimeTranscriptListResponse {
       readonly desktopWsSendAtMs?: number;
       readonly backendWsReceiveAtMs?: number;
       readonly qwenAudioAppendAtMs?: number;
+      readonly qwenFirstAudioAppendAtMs?: number;
       readonly qwenPartialReceivedAtMs?: number;
       readonly redisEventXaddAtMs?: number;
       readonly redisEventXaddStartAtMs?: number;
