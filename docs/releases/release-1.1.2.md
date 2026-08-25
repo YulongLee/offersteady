@@ -19,3 +19,5 @@ Release 1.1.2 is the bounded replacement-publisher recovery hotfix for the 1.1 d
 | Windows x64 | `OfferSteady-Companion-Setup-1.1.2-Windows-x64.exe` | `62b24df6784fb9d58527b1c0245ea4d4239169bd83ad728c08f1f3f38780e462` | NSIS structure passed; Authenticode remains unavailable |
 
 All three artifacts were uploaded to their versioned production OSS paths. The checked-in Backend manifest is deployed and public routes are verified in the production rollout step.
+
+The production Backend and download manifest were deployed on 2026-08-26. Public health passed, all three download routes redirected to their short-lived OSS objects, and range probes returned HTTP 206. The Apple Silicon build was installed locally as version 1.1.2 and passed strict signature, Gatekeeper and stapler checks before launch.

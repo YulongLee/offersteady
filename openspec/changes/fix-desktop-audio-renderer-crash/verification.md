@@ -113,4 +113,7 @@ The verified artifacts are ready for controlled distribution but were not upload
 - `openspec validate fix-desktop-audio-renderer-crash --strict` passed.
 - macOS arm64 and x64 App/DMG signing, notarization, Gatekeeper and stapler verification passed; Windows x64 NSIS structure verification passed.
 - Verified SHA-256 values: arm64 `1236a979dcf7e498a1675ddbb37b616f0f1b8216db978f340c0c305f0c5b089b`, x64 `01d9d2511e9b0fa318481b8346cc6f735363837bf4785cbbd25b147b5f854759`, Windows x64 `62b24df6784fb9d58527b1c0245ea4d4239169bd83ad728c08f1f3f38780e462`.
-- All three artifacts were uploaded to versioned production OSS paths; the generated Backend manifest now targets 1.1.2 pending production deployment verification.
+- All three artifacts were uploaded to versioned production OSS paths and the generated Backend manifest targets 1.1.2.
+- Production Backend commit `93dbf54` is healthy and the public release manifest exposes 1.1.2 for macOS arm64, macOS x64 and Windows x64 with the verified checksums above.
+- Each public download route returned HTTP 307 to a short-lived OSS URL, and a one-byte range GET returned HTTP 206 for all three artifacts.
+- The notarized macOS arm64 1.1.2 app was installed locally and passed version, strict code-sign, Gatekeeper and stapler checks. Version 1.1.1 remains as a recoverable application backup.
