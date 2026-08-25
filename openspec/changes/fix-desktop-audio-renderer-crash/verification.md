@@ -71,6 +71,17 @@
 - The notarized macOS arm64 1.1.1 app was installed locally after confirming capture diagnostics had been idle for more than one hour. Its version, strict code signature, Gatekeeper assessment and stapler ticket passed before launch; the prior 1.1.0 app remains as a recoverable backup.
 - This controlled rollout verifies reachability and one-frame acknowledgement only. The real system-only, microphone-only, dual-channel and 120-minute soak gates remain pending and are not inferred from the synthetic probe.
 
+### Production real-client hotfix verification (2026-08-26)
+
+- The first 1.1.1 real interview reproduced a Backend `TypeError`: client diagnostics supplied `desktopWsSendAtMs` while `_prepare_audio_frame` also passed the same keyword explicitly. The WebSocket closed with 1011 before ACK, while the prior synthetic probe passed because it did not include real-client diagnostics.
+- Regression coverage now sends negotiated binary audio with colliding diagnostic keys. Trace fields are merged once and authoritative Backend/session/frame timings override client diagnostics; the focused transport suite passed 11 tests and the full Backend suite passed 306 tests with 14 environment-dependent skips.
+- After the trace fix, the real interview initially reached 516/516 SYSTEM ACKs, then exposed a second production issue: hundreds of concurrent browser `performance-ack` requests delayed the event loop beyond the three-second client ACK watchdog and caused publisher recreation.
+- Web performance acknowledgements now use one in-flight request and at most sixteen pending measurements; excess diagnostic work is dropped. Backend acknowledgement processing runs outside the realtime event loop. A 64-event burst regression verified one maximum concurrent request and seventeen total processed requests (one active plus sixteen retained).
+- Web verification passed 42 files / 287 tests and the documented production build. Backend verification passed 306 tests with 14 skips. Strict OpenSpec validation and `git diff --check` passed.
+- Production commit and deploy marker both resolve to `3933bcf3fe6b8a952b4f3d147c83dc1d4c5d9112`; Backend and Web health checks passed.
+- In the refreshed real interview, SYSTEM reached 1,264 acknowledged frames and MIC reached 128 acknowledged frames over more than three minutes of process uptime. Both channels had zero reconnects, resends and sequence gaps; send amplification remained 1.0 while audio was produced. Backend logs showed zero realtime WebSocket failures and exactly one publisher connection during the observed window.
+- This live window verifies real dual-channel capture and sustained ACK recovery beyond both reproduced failure points. It does not replace the pending 60-minute system-only, microphone-only, dual-channel or 120-minute soak gates.
+
 ## macOS arm64
 
 - Version: 0.1.20
