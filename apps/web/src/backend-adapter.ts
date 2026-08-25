@@ -28,6 +28,8 @@ interface BackendSessionResponse {
   };
 }
 
+const MAX_PENDING_PERFORMANCE_ACKS = 16;
+
 interface BackendActiveSessionConflictResponse {
   readonly currentSessionId: string;
   readonly activeSession: BackendSessionResponse | null;
@@ -893,6 +895,32 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   private readonly captureEventWaiters = new Map<string, Set<(payload: Record<string, unknown>) => void>>();
   private readonly acknowledgedPerformanceTraces = new Set<string>();
   private readonly acknowledgedPerformanceTraceOrder: string[] = [];
+  private readonly pendingPerformanceAcks: Array<{ readonly key: string; readonly send: () => Promise<unknown> }> = [];
+  private performanceAckInFlight = false;
+
+  private drainPerformanceAcks() {
+    if (this.performanceAckInFlight) return;
+    const next = this.pendingPerformanceAcks.shift();
+    if (!next) return;
+    this.performanceAckInFlight = true;
+    void next.send()
+      .catch(() => {
+        this.acknowledgedPerformanceTraces.delete(next.key);
+      })
+      .finally(() => {
+        this.performanceAckInFlight = false;
+        this.drainPerformanceAcks();
+      });
+  }
+
+  private enqueuePerformanceAck(key: string, send: () => Promise<unknown>) {
+    while (this.pendingPerformanceAcks.length >= MAX_PENDING_PERFORMANCE_ACKS) {
+      const dropped = this.pendingPerformanceAcks.shift();
+      if (dropped) this.acknowledgedPerformanceTraces.delete(dropped.key);
+    }
+    this.pendingPerformanceAcks.push({ key, send });
+    this.drainPerformanceAcks();
+  }
 
   private recordRealtimeDeliveryMetric(
     interviewId: string,
@@ -945,7 +973,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     }
     const send = () => {
       const browserRenderAtMs = delivery?.browserRenderAtMs;
-      void this.client.request(`/api/v1/realtime-speech/sessions/${interviewId}/performance-ack`, {
+      this.enqueuePerformanceAck(key, () => this.client.request(`/api/v1/realtime-speech/sessions/${interviewId}/performance-ack`, {
         method: "POST",
         headers: authHeaders(),
         body: JSON.stringify({
@@ -967,9 +995,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
           ...(delivery?.renderedTextLength === undefined ? {} : { renderedTextLength: delivery.renderedTextLength }),
           ...(delivery?.visibilityState ? { visibilityState: delivery.visibilityState } : {}),
         }),
-      }).catch(() => {
-        this.acknowledgedPerformanceTraces.delete(key);
-      });
+      }));
     };
     if (stage === "transcript-delivery" || delivery?.browserRenderAtMs !== undefined) send();
     else if (typeof requestAnimationFrame === "function") requestAnimationFrame(send);

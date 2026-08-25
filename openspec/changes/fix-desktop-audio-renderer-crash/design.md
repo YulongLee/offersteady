@@ -41,6 +41,7 @@ The companion is Electron 42 (Chromium 148) and captures microphone plus system 
 14. **Reconcile server resume offsets before sending.** The client consumes `resumeOffsets` from the initial connection event, removes acknowledged frames and refuses to replay pending frames whose sequence space cannot match the publisher identity.
 15. **Fail closed on amplification.** The desktop stops the affected transport before repeated writes exceed the bounded resend budget. Backend ingress independently closes a connection that exceeds a bounded sequence-gap response budget, protecting commercial capacity even when an old or defective client connects.
 16. **Preserve protocol compatibility.** Existing protocol `2.0` events remain valid. Added close reasons and optional recovery metadata are diagnostic; older clients continue to receive existing ACK, gap and degraded events.
+17. **Isolate browser performance telemetry from realtime ingress.** The Web adapter serializes performance acknowledgement requests and retains at most sixteen pending measurements, dropping stale diagnostic work under pressure. The Backend executes the synchronous acknowledgement handler outside the event loop so already-open older pages cannot starve WebSocket frame acknowledgements.
 
 ## Risks / Trade-offs
 
@@ -53,6 +54,7 @@ The companion is Electron 42 (Chromium 148) and captures microphone plus system 
 - [Renderer recovery cannot safely reuse a dead renderer's in-memory objects] → Recreate all media, worklet and transport objects from authoritative binding/source metadata; do not reuse tokens or old WebContents.
 - [Dropping an unrecoverable pending interval loses a small amount of audio] → Prefer an explicit bounded gap and immediate return to live capture over an infinite resend storm that loses the entire remaining interview.
 - [A small in-flight window can reduce peak throughput] → Size the window above normal frame cadence and advance it immediately on ACK; verify p95 delivery while keeping writes bounded.
+- [Dropping excess performance measurements reduces diagnostic completeness] → Performance acknowledgements are non-critical telemetry; preserving realtime audio and transcript delivery takes priority, while a bounded recent sample remains available.
 
 ## Migration Plan
 

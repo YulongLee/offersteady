@@ -18,6 +18,7 @@ The macOS companion renderer repeatedly crashes during live interviews and leave
 - Add backward-compatible Backend ingress protection so malformed or storming publishers cannot consume unbounded network and event-loop capacity.
 - Require user-visible capture health to follow recent frame acknowledgements rather than a desired live-session state.
 - Release the commercial transport correction as desktop patch version 1.1.1 and deploy the compatible Backend protection before publishing the new downloads.
+- Keep non-critical browser performance acknowledgements bounded so telemetry cannot starve realtime audio acknowledgements.
 
 ## Capabilities
 
@@ -30,7 +31,7 @@ None.
 
 ## Impact
 
-- Affects the Electron companion audio worklet, realtime publisher, main-window lifecycle, Backend realtime ingress safeguards, desktop/backend tests, package version 1.1.1, production deployment, and release artifacts.
+- Affects the Electron companion audio worklet, realtime publisher, main-window lifecycle, bounded Web performance telemetry, Backend realtime ingress safeguards, desktop/web/backend tests, package version 1.1.1, production deployment, and release artifacts.
 - Preserves realtime protocol version `2.0` and existing frame/event shapes; it changes retry, recovery, admission protection, and health behavior without changing ASR, billing, RAG, screenshot persistence, or transcript semantics.
 - Transport amplification diagnostics remain local to the companion process and do not add audio, counters, or identifiers to the backend protocol.
 - Audio remains transient and is not newly persisted; batching changes only in-memory capture transport inside the desktop process.

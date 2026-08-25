@@ -118,7 +118,7 @@ async def realtime_metrics(request: Request, service: RealtimeSpeechService = De
 
 
 @router.post("/sessions/{session_id}/performance-ack", response_model=ApiEnvelope[dict[str, object]])
-async def acknowledge_runtime_performance(
+def acknowledge_runtime_performance(
     session_id: str,
     request_context: Request,
     request: RuntimePerformanceAcknowledgementRequest,

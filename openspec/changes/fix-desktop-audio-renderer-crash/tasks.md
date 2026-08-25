@@ -61,4 +61,6 @@
 
 - [x] 8.1 Reproduce real-client diagnostic keys colliding with authoritative Backend trace fields
 - [x] 8.2 Merge trace diagnostics without duplicate keyword arguments and preserve authoritative frame timings
-- [ ] 8.3 Run Backend regression/full verification, deploy the hotfix and verify ACK progress from the active real interview
+- [x] 8.3 Reproduce a browser performance-ack burst and verify that request concurrency is bounded
+- [x] 8.4 Serialize and bound Web performance acknowledgements, and offload Backend acknowledgement processing from the realtime event loop
+- [ ] 8.5 Run Web/Backend regression and build verification, deploy the hotfix and verify sustained ACK progress from the active real interview

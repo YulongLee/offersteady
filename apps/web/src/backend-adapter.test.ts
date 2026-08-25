@@ -70,6 +70,35 @@ describe("backend preview adapter", () => {
     expect(state.interviews[0]?.id).toBe(syntheticState.interviews[0]?.id);
   });
 
+  it("serializes performance acknowledgements and bounds a burst", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    let activeRequests = 0;
+    let maximumActiveRequests = 0;
+    const fetchImpl = vi.fn(async () => {
+      activeRequests += 1;
+      maximumActiveRequests = Math.max(maximumActiveRequests, activeRequests);
+      await new Promise(resolve => window.setTimeout(resolve, 1));
+      activeRequests -= 1;
+      return new Response(JSON.stringify(envelope({ accepted: true })), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+    const acknowledge = (adapter as unknown as {
+      acknowledgeRuntimePerformance: (interviewId: string, traceId: string, stage: "transcript-delivery", startedAtMs: number) => void;
+    }).acknowledgeRuntimePerformance.bind(adapter);
+
+    for (let index = 0; index < 64; index += 1) {
+      acknowledge("session-1", `trace-${index}`, "transcript-delivery", Date.now());
+    }
+
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(17));
+    expect(maximumActiveRequests).toBe(1);
+  });
+
   it("restores one authoritative interview workspace across devices", async () => {
     window.localStorage.setItem("offersteady.auth.access_token", "access-token");
     window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");

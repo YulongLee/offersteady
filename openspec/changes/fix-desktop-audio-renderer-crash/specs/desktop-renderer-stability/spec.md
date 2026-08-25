@@ -141,6 +141,15 @@ The companion SHALL not report normal capture while produced frames remain unack
 - **THEN** the companion SHALL show degraded, lost or recovering state instead of `capturing`
 - **AND** bounded transport recovery SHALL begin
 
+### Requirement: Diagnostic telemetry cannot starve realtime audio
+Browser performance acknowledgements SHALL use bounded concurrency and bounded pending storage, and Backend processing of those acknowledgements SHALL not block the realtime WebSocket event loop.
+
+#### Scenario: Transcript updates produce a telemetry burst
+- **WHEN** many transcript delivery or render measurements are produced faster than the Backend can accept them
+- **THEN** the Web client SHALL keep at most one performance acknowledgement request in flight and a bounded pending queue
+- **AND** excess diagnostic measurements MAY be dropped without affecting audio, transcript or answer delivery
+- **AND** realtime frame acknowledgements SHALL remain independently serviceable
+
 ### Requirement: Commercial transport fix is released as a verified patch
 The corrected companion SHALL use version 1.1.1 and SHALL retain bundle identifier `com.offersteady.companion` and realtime protocol version `2.0`.
 
