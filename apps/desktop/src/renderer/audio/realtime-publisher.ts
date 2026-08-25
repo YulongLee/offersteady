@@ -667,6 +667,7 @@ export class DesktopRealtimePublisher {
   private readonly sourceInputs = new Map<AudioSourceKind, SourceStartInput>();
   private watchdogTimer: number | null = null;
   private transportWatchdogRecoveryInFlight = false;
+  private transportSequenceResetInProgress = false;
 
   constructor(private readonly options: RealtimePublisherOptions) {
     this.fetchImpl = options.fetchImpl ?? ((input, init) => window.fetch(input, init));
@@ -1067,7 +1068,7 @@ export class DesktopRealtimePublisher {
   }
 
   private async recoverSource(input: SourceStartInput, reason: SystemAudioRecoveryReason) {
-    if (this.stopped || this.sourceRecoveryInFlight.has(input.sourceKind)) return;
+    if (this.stopped || this.transportSequenceResetInProgress || this.sourceRecoveryInFlight.has(input.sourceKind)) return;
     this.sourceRecoveryInFlight.add(input.sourceKind);
     this.reliability.markRecovering(input.sourceKind, reason);
     this.emitReliability();
@@ -1157,29 +1158,48 @@ export class DesktopRealtimePublisher {
     for (const payload of pending) transport.enqueue(payload);
   }
 
-  private recoverTransport(input: { readonly code: number; readonly reason: string; readonly pending: readonly Record<string, unknown>[] }): Promise<void> {
+  private recoverTransport(input: { readonly code: number; readonly reason: string; readonly pending: readonly Record<string, unknown>[]; readonly resetSequence?: boolean }): Promise<void> {
     if (this.transportRecovery) return this.transportRecovery;
     const failedTransport = this.transport;
     this.transportRecovery = (async () => {
+      const sourceInputs = [...this.sourceInputs.values()];
+      this.transportSequenceResetInProgress = true;
       this.options.onCaptureState("reconnecting");
       this.options.onServerEvent?.({ kind: "degraded", payload: {
         reason: input.reason,
-        message: "实时发布凭据已失效，正在自动连接当前面试并恢复未确认音频。",
+        message: "实时音频顺序已失配，正在自动重建发布链路并从新序列继续。",
         closeCode: input.code,
         pendingFrames: input.pending.length,
       } });
       failedTransport?.stop();
       if (this.transport === failedTransport) this.transport = null;
+      await Promise.all(this.runtimes.map(runtime => runtime.stop()));
+      this.runtimes = [];
+      this.sequencer.reset();
+      this.sendBuffers.forEach(buffer => buffer.clear());
+      this.uploadQueues.forEach(queueState => {
+        queueState.items.length = 0;
+        queueState.uploading = false;
+        queueState.terminalFailure = false;
+        queueState.consecutiveFailures = 0;
+      });
       let lastError: unknown = null;
       for (let attempt = 1; attempt <= 3 && !this.stopped; attempt += 1) {
         try {
           if (attempt > 1) await new Promise<void>(resolve => window.setTimeout(resolve, 250 * attempt));
-          await this.openTransport(input.pending);
+          await this.openTransport();
+          for (const sourceInput of sourceInputs) {
+            this.reliability.start(sourceInput.sourceKind);
+            this.reliability.markRecovering(sourceInput.sourceKind, "transport-sequence-reset");
+            const recovered = await this.startSource(sourceInput);
+            if (recovered) this.runtimes.push(recovered);
+          }
+          this.transportSequenceResetInProgress = false;
           this.options.onServerEvent?.({ kind: "connection-state", payload: {
-            state: "credential-refreshed",
+            state: "transport-reset",
             recoveryReason: input.reason,
             attempt,
-            restoredFrames: input.pending.length,
+            discardedStaleFrames: input.pending.length,
           } });
           return;
         } catch (error) {
@@ -1189,11 +1209,18 @@ export class DesktopRealtimePublisher {
         }
       }
       if (!this.stopped) {
+        for (const sourceInput of sourceInputs) {
+          this.reliability.start(sourceInput.sourceKind);
+          const recovered = await this.startSource(sourceInput);
+          if (recovered) this.runtimes.push(recovered);
+        }
+        this.transportSequenceResetInProgress = false;
         const diagnostic = publisherFailureDiagnostic("microphone", lastError);
-        this.options.onFailure(`实时发布通道自动恢复失败：${diagnostic.displayMessage}`);
-        this.options.onCaptureState("error");
+        this.options.onFailure(`实时长连接自动恢复失败，已切换兼容传输：${diagnostic.displayMessage}`);
+        this.options.onCaptureState(this.runtimes.length > 0 ? "capturing" : "error");
       }
     })().finally(() => {
+      this.transportSequenceResetInProgress = false;
       this.transportRecovery = null;
     });
     return this.transportRecovery;
@@ -1242,6 +1269,7 @@ export class DesktopRealtimePublisher {
     frame: ReturnType<typeof createAudioFrame>,
     sourceId: string,
   ) {
+    if (this.transportSequenceResetInProgress) return;
     const ringBufferWriteAtMs = Date.now();
     const diagnostics = typeof payload.diagnostics === "object" && payload.diagnostics !== null
       ? payload.diagnostics as Record<string, unknown>

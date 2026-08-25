@@ -133,6 +133,7 @@ class Settings(BaseSettings):
     realtime_cold_path_worker_count: int = 2
     realtime_cold_path_queue_max: int = 256
     realtime_ingress_max_frames_per_second: int = 120
+    realtime_ingress_sequence_gap_max_events: int = 8
     realtime_ingress_coalesce_max_frames: int = 4
     realtime_terminal_admission_timeout_seconds: float = 0.25
     realtime_terminal_ack_enabled: bool = True

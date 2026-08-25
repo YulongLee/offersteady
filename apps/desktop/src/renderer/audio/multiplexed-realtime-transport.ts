@@ -15,9 +15,19 @@ interface TransportOptions {
   readonly token: string;
   readonly onEvent: (event: { readonly kind?: string; readonly payload?: Record<string, unknown> }) => void;
   readonly onState: (state: "connected" | "reconnecting" | "failed") => void;
-  readonly onTerminal?: (input: { readonly code: number; readonly reason: string; readonly pending: readonly Record<string, unknown>[] }) => void;
+  readonly onTerminal?: (input: { readonly code: number; readonly reason: string; readonly pending: readonly Record<string, unknown>[]; readonly resetSequence?: boolean }) => void;
   readonly diagnostics?: RealtimeTransportDiagnostics;
 }
+
+interface GapRecoveryState {
+  readonly expected: number;
+  attempts: number;
+  lastAttemptAtMs: number;
+}
+
+const MAX_IN_FLIGHT_FRAMES_PER_CHANNEL = 8;
+const MAX_GAP_RESENDS_PER_SEQUENCE = 3;
+const GAP_RESEND_COOLDOWN_MS = 500;
 
 const socketUrl = (apiBaseUrl: string, token: string) => {
   const base = new URL(apiBaseUrl, window.location.href);
@@ -40,6 +50,9 @@ export class MultiplexedRealtimeTransport {
   private reconnectCount = 0;
   private readonly terminalResends = new Map<string, number>();
   private readonly lastSentAtBySource = new Map<RealtimeAudioChannel, number>();
+  private readonly gapRecoveryBySource = new Map<RealtimeAudioChannel, GapRecoveryState>();
+  private readyForFrames = false;
+  private recoveryRequested = false;
 
   constructor(private readonly options: TransportOptions) {}
 
@@ -111,6 +124,9 @@ export class MultiplexedRealtimeTransport {
     this.sent.clear();
     this.terminalResends.clear();
     this.lastSentAtBySource.clear();
+    this.gapRecoveryBySource.clear();
+    this.readyForFrames = false;
+    this.recoveryRequested = false;
     this.publishQueueDepths();
   }
 
@@ -125,12 +141,12 @@ export class MultiplexedRealtimeTransport {
         this.reconnectAttempt = 0;
         this.options.onState("connected");
         this.publishDiagnostics();
-        this.flush();
         resolve();
       };
       socket.onmessage = (message) => {
         try {
           const event = JSON.parse(String(message.data)) as { kind?: string; payload?: Record<string, unknown> };
+          if (event.kind === "connection-state") this.applyResumeOffsets(event.payload);
           if (event.kind === "frame-accepted" || event.kind === "terminal-accepted") this.acknowledge(event.payload);
           if (event.kind === "sequence-gap") this.handleGap(event.payload);
           this.options.onEvent(event);
@@ -146,8 +162,9 @@ export class MultiplexedRealtimeTransport {
         window.clearTimeout(timeout);
         this.socket = null;
         this.connecting = null;
+        this.readyForFrames = false;
         this.sent.clear();
-        if (this.stopped || event.code === 1000) return;
+        if (this.stopped || this.recoveryRequested || event.code === 1000) return;
         if (event.code === 1002 || event.code === 1008) {
           this.options.onState("failed");
           this.options.onTerminal?.({
@@ -184,38 +201,17 @@ export class MultiplexedRealtimeTransport {
   }
 
   private flush(reason: "normal" | "sequence-gap" = "normal"): void {
-    if (this.socket?.readyState !== WebSocket.OPEN) return;
-    for (const item of this.queue) {
-      const key = `${item.sourceKind}:${item.sequence}`;
-      if (this.sent.has(key)) continue;
-      // This timestamp is the actual WebSocket write boundary. The enqueue
-      // timestamp is not a transport send and would hide local queue delay.
-      const desktopPublisherFlushAtMs = Date.now();
-      const diagnostics = typeof item.payload.diagnostics === "object" && item.payload.diagnostics !== null
-        ? item.payload.diagnostics as Record<string, unknown>
-        : {};
-      const envelope = this.binaryEnvelope({
-        ...item.payload,
-        sentAtMs: desktopPublisherFlushAtMs,
-        diagnostics: {
-          ...diagnostics,
-          desktopPublisherFlushAtMs,
-          desktopWsSendAtMs: desktopPublisherFlushAtMs,
-        },
-      });
-      this.socket.send(envelope);
-      this.options.diagnostics?.recordWebSocketSend({
-        channel: item.sourceKind,
-        sequence: item.sequence,
-        audioPayloadBytes: this.audioPayloadByteLength(item.payload),
-        totalBytes: envelope.byteLength,
-        sequenceGapRecovery: reason === "sequence-gap",
-      });
-      this.lastSentAtBySource.set(item.sourceKind, desktopPublisherFlushAtMs);
-      this.sent.add(key);
-      if (item.terminalId) {
-        const resendCount = this.terminalResends.get(item.terminalId) ?? 0;
-        this.terminalResends.set(item.terminalId, resendCount + 1);
+    if (!this.readyForFrames || this.socket?.readyState !== WebSocket.OPEN) return;
+    for (const channel of ["microphone", "system"] as const) {
+      const inFlight = [...this.sent].reduce((count, key) => count + (key.startsWith(`${channel}:`) ? 1 : 0), 0);
+      let available = Math.max(0, MAX_IN_FLIGHT_FRAMES_PER_CHANNEL - inFlight);
+      if (available === 0) continue;
+      for (const item of this.queue) {
+        if (item.sourceKind !== channel || available === 0) continue;
+        const key = `${item.sourceKind}:${item.sequence}`;
+        if (this.sent.has(key)) continue;
+        this.sendItem(item, reason);
+        available -= 1;
       }
     }
     this.publishQueueDepths();
@@ -246,8 +242,10 @@ export class MultiplexedRealtimeTransport {
       if (channel === sourceKind && Number(rawSequence) <= sequence) this.sent.delete(key);
     }
     if (terminalId) this.terminalResends.delete(terminalId);
+    this.gapRecoveryBySource.delete(sourceKind);
     this.publishQueueDepths();
     this.publishDiagnostics(sourceKind, Date.now(), terminalId ? Date.now() : undefined);
+    this.flush();
   }
 
   private recordDrop(item: QueuedEnvelope, reason: string): void {
@@ -272,7 +270,87 @@ export class MultiplexedRealtimeTransport {
     this.queue = this.queue.filter(item => item.sourceKind !== sourceKind || item.sequence >= expected);
     for (const key of this.sent) if (key.startsWith(`${sourceKind}:`)) this.sent.delete(key);
     this.publishQueueDepths();
-    this.flush("sequence-gap");
+    const expectedItem = this.queue.find(item => item.sourceKind === sourceKind && item.sequence === expected);
+    if (!expectedItem) {
+      this.requestFreshSequence("sequence-gap-frame-unavailable", sourceKind, expected);
+      return;
+    }
+    const nowMs = Date.now();
+    const previous = this.gapRecoveryBySource.get(sourceKind);
+    if (previous?.expected === expected && nowMs - previous.lastAttemptAtMs < GAP_RESEND_COOLDOWN_MS) return;
+    const attempts = previous?.expected === expected ? previous.attempts + 1 : 1;
+    if (attempts > MAX_GAP_RESENDS_PER_SEQUENCE) {
+      this.requestFreshSequence("sequence-gap-retry-budget-exhausted", sourceKind, expected);
+      return;
+    }
+    this.gapRecoveryBySource.set(sourceKind, { expected, attempts, lastAttemptAtMs: nowMs });
+    this.sent.delete(`${sourceKind}:${expected}`);
+    this.sendItem(expectedItem, "sequence-gap");
+    this.publishQueueDepths();
+  }
+
+  private applyResumeOffsets(payload?: Record<string, unknown>): void {
+    const resumeOffsets = payload?.resumeOffsets;
+    if (typeof resumeOffsets !== "object" || resumeOffsets === null) return;
+    for (const channel of ["microphone", "system"] as const) {
+      const offset = (resumeOffsets as Record<string, unknown>)[channel];
+      if (typeof offset !== "number" || !Number.isInteger(offset)) continue;
+      this.queue = this.queue.filter(item => item.sourceKind !== channel || item.sequence > offset);
+      for (const key of this.sent) {
+        const [sourceKind, rawSequence] = key.split(":");
+        if (sourceKind === channel && Number(rawSequence) <= offset) this.sent.delete(key);
+      }
+      const firstPending = this.queue.find(item => item.sourceKind === channel);
+      if (firstPending && firstPending.sequence > offset + 1) {
+        this.requestFreshSequence("resume-offset-frame-unavailable", channel, offset + 1);
+        return;
+      }
+    }
+    this.readyForFrames = true;
+    this.publishQueueDepths();
+    this.flush();
+  }
+
+  private sendItem(item: QueuedEnvelope, reason: "normal" | "sequence-gap"): void {
+    if (!this.readyForFrames || this.socket?.readyState !== WebSocket.OPEN) return;
+    const desktopPublisherFlushAtMs = Date.now();
+    const diagnostics = typeof item.payload.diagnostics === "object" && item.payload.diagnostics !== null
+      ? item.payload.diagnostics as Record<string, unknown>
+      : {};
+    const envelope = this.binaryEnvelope({
+      ...item.payload,
+      sentAtMs: desktopPublisherFlushAtMs,
+      diagnostics: {
+        ...diagnostics,
+        desktopPublisherFlushAtMs,
+        desktopWsSendAtMs: desktopPublisherFlushAtMs,
+      },
+    });
+    this.socket.send(envelope);
+    this.options.diagnostics?.recordWebSocketSend({
+      channel: item.sourceKind,
+      sequence: item.sequence,
+      audioPayloadBytes: this.audioPayloadByteLength(item.payload),
+      totalBytes: envelope.byteLength,
+      sequenceGapRecovery: reason === "sequence-gap",
+    });
+    this.lastSentAtBySource.set(item.sourceKind, desktopPublisherFlushAtMs);
+    this.sent.add(`${item.sourceKind}:${item.sequence}`);
+    if (item.terminalId) {
+      const resendCount = this.terminalResends.get(item.terminalId) ?? 0;
+      this.terminalResends.set(item.terminalId, resendCount + 1);
+    }
+  }
+
+  private requestFreshSequence(reason: string, sourceKind: RealtimeAudioChannel, expected: number): void {
+    if (this.recoveryRequested || this.stopped) return;
+    this.recoveryRequested = true;
+    this.readyForFrames = false;
+    const pending = this.pendingPayloads();
+    this.options.onState("failed");
+    this.options.onEvent({ kind: "degraded", payload: { reason, sourceKind, expected, pendingFrames: pending.length } });
+    this.options.onTerminal?.({ code: 1013, reason, pending, resetSequence: true });
+    this.socket?.close(1013, reason);
   }
 
   private audioPayloadByteLength(payload: Record<string, unknown>): number {

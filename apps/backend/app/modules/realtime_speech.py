@@ -848,6 +848,7 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
             if receipt.publisher_id == publisher.publisher_id and receipt.source_kind in expected_sequence:
                 expected_sequence[receipt.source_kind] = max(expected_sequence[receipt.source_kind], receipt.sequence + 1)
         frame_arrivals: deque[float] = deque()
+        sequence_gap_events: dict[str, int] = {"microphone": 0, "system": 0}
         await websocket.send_json({
             "kind": "connection-state",
             "payload": {
@@ -909,6 +910,7 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                     continue
                 expected = expected_sequence[payload.source_kind]
                 if payload.sequence < expected:
+                    sequence_gap_events[payload.source_kind] = 0
                     await websocket.send_json({
                         "kind": "terminal-accepted" if payload.is_final and payload.terminal_id else "frame-accepted",
                         "payload": {
@@ -924,8 +926,26 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                     })
                     continue
                 if payload.sequence > expected:
+                    sequence_gap_events[payload.source_kind] += 1
+                    if sequence_gap_events[payload.source_kind] >= service.settings.realtime_ingress_sequence_gap_max_events:
+                        await websocket.send_json({
+                            "kind": "degraded",
+                            "payload": {
+                                "reason": "sequence-gap-budget-exhausted",
+                                "sourceKind": payload.source_kind,
+                                "expected": expected,
+                                "received": payload.sequence,
+                                "gapEvents": sequence_gap_events[payload.source_kind],
+                                "retryable": True,
+                            },
+                        })
+                        service.disconnect_publisher(token=token)
+                        publisher_connected = False
+                        await websocket.close(code=1013, reason="sequence-gap-budget-exhausted")
+                        return
                     await websocket.send_json({"kind": "sequence-gap", "payload": {"sourceKind": payload.source_kind, "expected": expected, "received": payload.sequence}})
                     continue
+                sequence_gap_events[payload.source_kind] = 0
                 channel_routing_done_at_ms = int(time() * 1000)
                 diagnostics = {
                     **payload.diagnostics,

@@ -13,10 +13,13 @@ The companion is Electron 42 (Chromium 148) and captures microphone plus system 
 - Prove that renderer memory, ArrayBuffer use, CPU, worklet traffic, timers, listeners, media tracks, audio nodes and React updates remain bounded during sustained capture.
 - Recover the current live interview capture and publisher after renderer recreation and verify recovery with fresh frame production and acknowledgement.
 - Prevent a desired `capturing` flag from masking a dead audio pipeline.
+- Keep actual WebSocket writes within a bounded ratio of unique audio frames during gaps, reconnects, rate limits and credential refreshes.
+- Recover live delivery without replaying an unordered queue into a new publisher identity.
 
 **Non-Goals:**
 
-- No changes to ASR, RAG, LLM, billing, backend/SSE protocols, or screenshot behavior.
+- No changes to ASR, RAG, LLM, billing, transcript/SSE behavior, or screenshot behavior.
+- No realtime protocol version bump or incompatible message shape.
 - No persistence of captured audio.
 - No Electron major-version migration in this hotfix.
 
@@ -32,6 +35,12 @@ The companion is Electron 42 (Chromium 148) and captures microphone plus system 
 8. **Persist only recovery-safe metadata in the main process.** A renderer heartbeat provides the active session-safe identifiers, selected sources and bounded counters/timestamps. `render-process-gone` logs reason, exit code and the last resource snapshot, destroys the dead `webContents`, recreates the window, and supplies a one-shot recovery context. The new renderer re-reads the authoritative binding and starts a fresh publisher; tokens, PCM and transcript content are never checkpointed.
 9. **Measure trends at bounded cadence.** Worklet callback/postMessage rates and audio byte counts are accumulated as counters and reported once per minute. Renderer memory/CPU and React render counts are sampled at the same bounded cadence so diagnostics cannot recreate the resource problem they measure.
 10. **Diagnose transport amplification beside the send path.** A session-scoped local counter records capture, publisher input, unique sequence, actual WebSocket write, audio/header bytes, ACK, gap, resend, reconnect, queue depth, listener count and bounded duplicate-sequence samples separately for microphone and system audio. It emits one local summary every ten seconds and MUST NOT decide whether a frame is queued, sent, retried, acknowledged, or dropped.
+11. **Bound unacknowledged writes per channel.** Normal flushing sends only a small ordered window per logical channel. An ACK advances the window; enqueueing more audio does not bypass it.
+12. **Recover one expected sequence at a time.** A `sequence-gap` blocks later writes for that channel and resends only the exact expected frame. Repeated identical gap events are deduplicated and rate limited rather than clearing every sent marker and replaying the whole queue.
+13. **Reset when continuity is impossible.** If the expected sequence is no longer present locally, or a bounded resend/circuit-breaker limit is exceeded, the publisher discards stale pending PCM, creates a fresh publisher identity, resets per-channel sequencing and resumes from new live audio. The UI reports recovery; it never claims the discarded interval was delivered.
+14. **Reconcile server resume offsets before sending.** The client consumes `resumeOffsets` from the initial connection event, removes acknowledged frames and refuses to replay pending frames whose sequence space cannot match the publisher identity.
+15. **Fail closed on amplification.** The desktop stops the affected transport before repeated writes exceed the bounded resend budget. Backend ingress independently closes a connection that exceeds a bounded sequence-gap response budget, protecting commercial capacity even when an old or defective client connects.
+16. **Preserve protocol compatibility.** Existing protocol `2.0` events remain valid. Added close reasons and optional recovery metadata are diagnostic; older clients continue to receive existing ACK, gap and degraded events.
 
 ## Risks / Trade-offs
 
@@ -42,6 +51,8 @@ The companion is Electron 42 (Chromium 148) and captures microphone plus system 
 - [A two-second watchdog can misread legitimate silence as a dead source] → Use raw AudioWorklet callback progress as capture liveness; only require send/ACK progress when speech produced a pending frame.
 - [Per-sequence diagnostics could grow for a long interview] → Keep cumulative scalar totals while bounding detailed sequence tracking and duplicate samples; never retain PCM content.
 - [Renderer recovery cannot safely reuse a dead renderer's in-memory objects] → Recreate all media, worklet and transport objects from authoritative binding/source metadata; do not reuse tokens or old WebContents.
+- [Dropping an unrecoverable pending interval loses a small amount of audio] → Prefer an explicit bounded gap and immediate return to live capture over an infinite resend storm that loses the entire remaining interview.
+- [A small in-flight window can reduce peak throughput] → Size the window above normal frame cadence and advance it immediately on ACK; verify p95 delivery while keeping writes bounded.
 
 ## Migration Plan
 
@@ -52,6 +63,8 @@ The companion is Electron 42 (Chromium 148) and captures microphone plus system 
 5. Do not alter the currently published release manifest until the new artifacts pass all verification.
 6. Roll back by continuing to serve the prior DMGs; no server or data migration is involved.
 7. Before any new public release, pass three real 60-minute capture soaks (system-only, microphone-only, dual-channel). A 120-minute run follows only after all three pass.
+8. Release the transport correction as a patch version only after deterministic storm tests, complete desktop/backend suites, production builds and a controlled real ACK test pass.
+9. Deploy the backward-compatible Backend guard before publishing desktop 1.1.1, then verify public health, release metadata, signed downloads and a controlled live ACK before broader use.
 
 ## Open Questions
 

@@ -3,13 +3,13 @@ import { describe, expect, it } from "vitest";
 import { RealtimeReliabilityController } from "../src/renderer/audio/realtime-reliability";
 
 describe("desktop realtime reliability watchdog", () => {
-  it("treats continuous silent worklet callbacks as healthy", () => {
+  it("does not claim delivery health from silent worklet callbacks alone", () => {
     const controller = new RealtimeReliabilityController({ startupGraceMs: 100, degradedCaptureMs: 1_000, lostCaptureMs: 2_000 });
     controller.start("system", 0);
     for (let nowMs = 100; nowMs <= 10_000; nowMs += 100) controller.recordAudioCapture("system", nowMs);
     expect(controller.evaluate(10_500)).toEqual([{
       sourceKind: "system",
-      state: "HEALTHY",
+      state: "STARTING",
       action: "none",
       reason: null,
     }]);
@@ -34,12 +34,14 @@ describe("desktop realtime reliability watchdog", () => {
     expect(controller.evaluate(10_500)[0]).toMatchObject({ state: "HEALTHY", action: "none" });
   });
 
-  it("moves through recovering and returns healthy after capture callbacks resume", () => {
+  it("moves through recovering and returns healthy only after a fresh ACK", () => {
     const controller = new RealtimeReliabilityController();
     controller.start("system", 1_000);
     controller.markRecovering("system", "capture-callback-stalled");
     expect(controller.snapshot()[0]).toMatchObject({ state: "RECOVERING", recoveryCount: 1 });
     controller.recordAudioCapture("system", 2_000);
+    expect(controller.snapshot()[0]).toMatchObject({ state: "RECOVERING" });
+    controller.recordFrameAck("system", 2_100);
     expect(controller.snapshot()[0]).toMatchObject({ state: "HEALTHY" });
   });
 });

@@ -87,8 +87,10 @@ export class RealtimeReliabilityController {
   recordAudioCapture(sourceKind: AudioSourceKind, atMs = Date.now()): void {
     const source = this.ensure(sourceKind, atMs);
     source.lastAudioCaptureAt = atMs;
-    source.state = "HEALTHY";
-    source.lastFailureReason = null;
+    if (source.lastFrameAckAt !== null && source.state !== "RECOVERING") {
+      source.state = "HEALTHY";
+      source.lastFailureReason = null;
+    }
   }
 
   recordFrameProduced(sourceKind: AudioSourceKind, atMs = Date.now()): void {
@@ -164,7 +166,7 @@ export class RealtimeReliabilityController {
         source.lastFailureReason = "capture-callback-delayed";
         return { sourceKind: source.sourceKind, state: source.state, action: "none", reason: source.lastFailureReason };
       }
-      source.state = insideStartupGrace ? "STARTING" : "HEALTHY";
+      source.state = source.lastFrameAckAt === null || insideStartupGrace ? "STARTING" : "HEALTHY";
       source.lastFailureReason = null;
       return { sourceKind: source.sourceKind, state: source.state, action: "none", reason: null };
     });

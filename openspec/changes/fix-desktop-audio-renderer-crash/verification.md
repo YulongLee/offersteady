@@ -40,6 +40,25 @@
 - Verification: 23 desktop test files / 97 tests passed; desktop TypeScript typecheck passed; production build passed; `git diff --check` passed; strict OpenSpec validation passed.
 - Deployment/publishing: none. The currently running notarized 0.1.20 app does not contain these new counters, so the prior 4.95 GB sample cannot be retroactively attributed to audio payload until a controlled diagnostic build is run.
 
+### Commercial transport storm remediation (2026-08-26)
+
+- Live failure evidence: installed production companion 1.1.0 captured 27,112 system callbacks and 1,634 unique system frames, but made 1,253,984 WebSocket writes with zero ACKs in the observed session. Duplicate writes reached 1,252,350, reconnects reached 33, and the interval amplification ratio reached 511. This proves capture was active while delivery was trapped in a resend storm.
+- Root cause: every `sequence-gap` response cleared the whole channel's sent set and replayed every queued frame. The client also ignored Backend `resumeOffsets`, flushed before receiving the authoritative cursor, and passed stale pending sequences into a newly-created publisher.
+- Client remediation: each channel now permits at most eight unacknowledged writes; only the exact expected sequence is retried; repeated gap responses are suppressed for 500 ms; each sequence has a three-resend budget; missing recovery frames or an exhausted budget open the circuit and recreate both enabled capture sources with a fresh sequencer.
+- Server remediation: eight consecutive sequence-gap events without progress return a retryable `sequence-gap-budget-exhausted` degraded event and close the connection with code 1013. Protocol version remains `2.0`.
+- Health semantics: capture callbacks alone no longer move a source to `HEALTHY`; a fresh authoritative frame or terminal ACK is required after startup or recovery.
+- Focused verification: 15 desktop transport/reliability tests passed; the Backend storm circuit-breaker regression passed.
+- Full verification: 23 desktop test files / 101 tests passed; Backend 305 tests passed and 14 environment-dependent tests skipped; all-workspace TypeScript typecheck passed; all workspace production builds passed with the documented production Web environment; `git diff --check` passed; strict OpenSpec validation passed.
+- Privacy: tests use synthetic metadata and synthetic bytes only. No interview audio or transcript content was persisted by this work.
+- Deployment/publishing: none. The fix is implemented and locally verified, but production rollout and the real 60/60/60/120-minute soak gates remain separate release actions.
+
+### Patch release 1.1.1 packaging (2026-08-26)
+
+- macOS arm64 DMG: SHA-256 `40e8c71c500af493780941832c45153f037edc52258be4c14e0c8fd5399cf2a0`; App and DMG notarization Accepted; Developer ID, 16 Mach-O components, Gatekeeper and stapler passed.
+- macOS x64 DMG: SHA-256 `1fa03520db74dec5a18dd1ad5b7653c549effef0a9130bf6788df28a23b2a86b`; App and DMG notarization Accepted; Developer ID, 16 Mach-O components, Gatekeeper and stapler passed.
+- Windows x64 NSIS installer: SHA-256 `eab6185876447347b3ea184ec4f19a61b16be43e240482aba8aabc8535a899f6`; installer/executable structure passed; Authenticode remains unavailable and metadata remains non-verified.
+- Bundle identifier remains `com.offersteady.companion`; realtime protocol remains `2.0`.
+
 ## macOS arm64
 
 - Version: 0.1.20

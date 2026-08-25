@@ -2578,6 +2578,58 @@ def test_realtime_ingest_websocket_acknowledges_immediately_and_persists_transcr
         raise AssertionError("ingest websocket worker did not persist transcript in time")
 
 
+def test_realtime_ingest_websocket_closes_a_sequence_gap_storm() -> None:
+    session = unwrap(client.post("/api/v1/sessions", json={
+        "userId": "realtime-gap-storm-user",
+        "title": "实时序列缺口熔断测试",
+    }))
+    session_id = session["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": "realtime-gap-storm-user"}))
+    publisher = unwrap(client.post("/api/v1/realtime-speech/publishers", json={
+        "userId": "realtime-gap-storm-user",
+        "sessionId": session_id,
+        "sourceKind": "mixed",
+        "clientName": "synthetic-gap-storm-client",
+    }))
+    frame = {
+        "type": "audio-frame",
+        "deviceId": "synthetic-device",
+        "sourceId": "synthetic-mic",
+        "sequence": 1,
+        "sourceKind": "microphone",
+        "segmentId": "synthetic-segment",
+        "revision": 1,
+        "capturedAtMs": 1000,
+        "startedAtMs": 1000,
+        "endedAtMs": 1020,
+        "durationMs": 20,
+        "codec": "pcm-s16le",
+        "sampleRateHz": 16000,
+        "channels": 1,
+        "isFinal": False,
+        "audioBase64": base64.b64encode(b"synthetic-audio").decode("utf-8"),
+    }
+
+    with client.websocket_connect(f"/api/v1/realtime-speech/ingest-ws?token={publisher['token']}") as websocket:
+        assert websocket.receive_json()["kind"] == "connection-state"
+        for _ in range(7):
+            websocket.send_json(frame)
+            gap = websocket.receive_json()
+            assert gap["kind"] == "sequence-gap"
+            assert gap["payload"]["expected"] == 0
+        websocket.send_json(frame)
+        degraded = websocket.receive_json()
+        assert degraded["kind"] == "degraded"
+        assert degraded["payload"] == {
+            "reason": "sequence-gap-budget-exhausted",
+            "sourceKind": "microphone",
+            "expected": 0,
+            "received": 1,
+            "gapEvents": 8,
+            "retryable": True,
+        }
+
+
 def test_dashscope_gateway_prefers_workspace_specific_endpoint() -> None:
     settings = Settings(
         realtime_asr_workspace_id="ws-rhhabbnvh2rsbkj2",

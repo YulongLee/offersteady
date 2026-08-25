@@ -39,3 +39,20 @@
 - [x] 5.2 Emit local ten-second SYSTEM/MIC summaries and bounded duplicate-sequence samples without changing transport behavior
 - [x] 5.3 Add deterministic regression coverage for normal 1x sends, duplicate sends, gap recovery, reconnect and amplification thresholds
 - [x] 5.4 Run desktop tests, typecheck, build and strict OpenSpec validation; do not deploy or publish
+
+## 6. Commercial Transport Storm Remediation
+
+- [x] 6.1 Implement a bounded per-channel in-flight window and advance it only from authoritative ACKs
+- [x] 6.2 Reconcile connection resume offsets, resend only the requested sequence, and reset the publisher when the expected frame is unavailable
+- [x] 6.3 Add duplicate-gap suppression, resend budgets, an amplification circuit breaker, and Backend storm protection without changing protocol version 2.0
+- [x] 6.4 Ensure ACK-stalled or reset transports stop reporting healthy capture and restart both enabled sources with fresh sequencing after renderer or publisher recovery
+- [x] 6.5 Add deterministic desktop/backend regressions for queued gaps, missing expected frames, repeated gaps, resume offsets, ACK stalls and storm bounds
+- [x] 6.6 Run focused and full tests, type checks, production builds and strict OpenSpec validation; record verification without deploying or publishing
+
+## 7. Patch Release 1.1.1
+
+- [x] 7.1 Bump the shared companion patch version from 1.1.0 to 1.1.1 without changing the bundle identifier or protocol version
+- [x] 7.2 Build and verify production companion artifacts for macOS arm64, macOS x64 and Windows x64
+- [ ] 7.3 Commit and push the verified release source, then deploy the compatible Backend protection to production
+- [ ] 7.4 Publish the 1.1.1 desktop artifacts and atomically update the production download manifest
+- [ ] 7.5 Verify public health, build metadata, download metadata/checksums and one controlled live frame ACK after rollout

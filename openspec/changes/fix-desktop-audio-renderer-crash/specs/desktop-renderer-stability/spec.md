@@ -97,3 +97,55 @@ The companion SHALL expose local, bounded, per-channel counters at the AudioWork
 - **WHEN** the same channel and sequence crosses the actual WebSocket write boundary repeatedly
 - **THEN** the companion SHALL count every write after the first as a resend and duplicate-sequence send
 - **AND** it SHALL retain a bounded sample containing the maximum send count for diagnosis
+
+### Requirement: Realtime transport recovery remains ordered and bounded
+The desktop companion SHALL keep unacknowledged realtime audio writes bounded per logical channel and SHALL recover sequence gaps without replaying an entire pending queue.
+
+#### Scenario: Server requests a recoverable missing sequence
+- **WHEN** the Backend reports `sequence-gap` with an expected sequence that remains in the local buffer
+- **THEN** the desktop SHALL pause later writes for that channel and resend only the expected frame
+- **AND** it SHALL resume the bounded ordered window only after an authoritative acknowledgement advances the cursor
+
+#### Scenario: Server repeats the same gap response
+- **WHEN** identical gap responses arrive while the requested frame is already awaiting acknowledgement
+- **THEN** the desktop SHALL suppress immediate duplicate resends
+- **AND** actual WebSocket writes SHALL remain within the configured retry budget
+
+#### Scenario: Expected sequence is no longer recoverable
+- **WHEN** the Backend requests a sequence that is absent from the bounded local buffer
+- **THEN** the desktop SHALL stop the stale transport, discard the explicitly unrecoverable pending interval, create a fresh publisher and reset sequencing before accepting new live audio
+- **AND** the user-facing state SHALL remain recovering until a fresh frame is acknowledged
+
+#### Scenario: Publisher connection supplies resume offsets
+- **WHEN** a WebSocket connection reports per-channel `resumeOffsets`
+- **THEN** the desktop SHALL prune already accepted frames and align its next ordered send with the server cursor before flushing pending audio
+
+### Requirement: Transport amplification fails closed
+The desktop and Backend SHALL bound the resource impact of repeated gaps, reconnects or acknowledgements that do not advance.
+
+#### Scenario: Client amplification exceeds the commercial safety budget
+- **WHEN** repeated sends or identical gap recovery attempts exceed the configured bound
+- **THEN** the desktop SHALL close the affected transport and start bounded fresh-publisher recovery
+- **AND** it SHALL not continue a resend storm in the background
+
+#### Scenario: Defective publisher floods sequence gaps
+- **WHEN** one Backend connection exceeds the bounded sequence-gap response budget without forward progress
+- **THEN** the Backend SHALL close that connection with a retryable policy reason
+- **AND** other interview sessions SHALL remain isolated from its resource usage
+
+### Requirement: Commercial capture health requires delivery evidence
+The companion SHALL not report normal capture while produced frames remain unacknowledged or while a publisher reset is in progress.
+
+#### Scenario: Capture continues but ACK progress stops
+- **WHEN** AudioWorklet callbacks continue but a sent frame receives no acknowledgement within the delivery deadline
+- **THEN** the companion SHALL show degraded, lost or recovering state instead of `capturing`
+- **AND** bounded transport recovery SHALL begin
+
+### Requirement: Commercial transport fix is released as a verified patch
+The corrected companion SHALL use version 1.1.1 and SHALL retain bundle identifier `com.offersteady.companion` and realtime protocol version `2.0`.
+
+#### Scenario: Production patch is published
+- **WHEN** Backend protection and companion 1.1.1 pass their release gates
+- **THEN** the Backend SHALL be deployed before the new desktop download manifest is made public
+- **AND** macOS arm64 and x64 artifacts SHALL pass Developer ID, notarization, Gatekeeper and stapler verification
+- **AND** the public release manifest SHALL expose version 1.1.1 with matching SHA-256 values

@@ -8,6 +8,11 @@ export class SourceFrameSequencer {
     this.nextBySource.set(sourceId, sequence + 1);
     return sequence;
   }
+
+  reset(sourceId?: string): void {
+    if (sourceId) this.nextBySource.delete(sourceId);
+    else this.nextBySource.clear();
+  }
 }
 
 export interface CreateFrameInput {

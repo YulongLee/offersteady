@@ -14,6 +14,10 @@ The macOS companion renderer repeatedly crashes during live interviews and leave
 - Replace boolean-only local capture reporting with evidence-backed STARTING/HEALTHY/DEGRADED/LOST/RECOVERING health and a one-second watchdog.
 - Gate completion on real 60-minute system-only, microphone-only, and dual-channel soak tests.
 - Add read-only, per-channel realtime transport amplification counters so abnormal outbound volume can be attributed without changing send, retry, ACK, queue, or reconnect behavior.
+- Eliminate sequence-gap resend storms with a bounded in-flight window, ordered single-frame recovery, resume-offset reconciliation, unrecoverable-gap reset, and an amplification circuit breaker.
+- Add backward-compatible Backend ingress protection so malformed or storming publishers cannot consume unbounded network and event-loop capacity.
+- Require user-visible capture health to follow recent frame acknowledgements rather than a desired live-session state.
+- Release the commercial transport correction as desktop patch version 1.1.1 and deploy the compatible Backend protection before publishing the new downloads.
 
 ## Capabilities
 
@@ -26,7 +30,7 @@ None.
 
 ## Impact
 
-- Affects the Electron companion audio worklet, realtime publisher, main-window lifecycle, desktop tests, package version, and macOS release artifacts.
-- Does not change web, backend, ASR, billing, screenshot persistence, or realtime transport protocols.
+- Affects the Electron companion audio worklet, realtime publisher, main-window lifecycle, Backend realtime ingress safeguards, desktop/backend tests, package version 1.1.1, production deployment, and release artifacts.
+- Preserves realtime protocol version `2.0` and existing frame/event shapes; it changes retry, recovery, admission protection, and health behavior without changing ASR, billing, RAG, screenshot persistence, or transcript semantics.
 - Transport amplification diagnostics remain local to the companion process and do not add audio, counters, or identifiers to the backend protocol.
 - Audio remains transient and is not newly persisted; batching changes only in-memory capture transport inside the desktop process.
