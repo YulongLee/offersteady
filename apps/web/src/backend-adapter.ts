@@ -29,6 +29,7 @@ interface BackendSessionResponse {
 }
 
 const MAX_PENDING_PERFORMANCE_ACKS = 16;
+const TRANSCRIPT_ACK_INTERVAL_MS = 1_000;
 
 interface BackendActiveSessionConflictResponse {
   readonly currentSessionId: string;
@@ -896,6 +897,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   private readonly acknowledgedPerformanceTraces = new Set<string>();
   private readonly acknowledgedPerformanceTraceOrder: string[] = [];
   private readonly pendingPerformanceAcks: Array<{ readonly key: string; readonly send: () => Promise<unknown> }> = [];
+  private readonly lastTranscriptAckAtBySegment = new Map<string, number>();
   private performanceAckInFlight = false;
 
   private drainPerformanceAcks() {
@@ -960,9 +962,22 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       readonly browserRenderAtMs?: number;
       readonly renderedRevision?: number;
       readonly renderedTextLength?: number;
+      readonly segmentId?: string;
+      readonly isFinal?: boolean;
       readonly visibilityState?: DocumentVisibilityState;
     },
   ) {
+    const observedAtMs = Date.now();
+    if (stage === "transcript-delivery" && delivery?.eventId && !subtitleRevisionDiagnosticsEnabled()) return;
+    if (stage === "transcript-render" && delivery?.segmentId && !subtitleRevisionDiagnosticsEnabled()) {
+      const lastAcknowledgedAtMs = this.lastTranscriptAckAtBySegment.get(delivery.segmentId);
+      if (!delivery.isFinal && lastAcknowledgedAtMs !== undefined && observedAtMs - lastAcknowledgedAtMs < TRANSCRIPT_ACK_INTERVAL_MS) return;
+      this.lastTranscriptAckAtBySegment.set(delivery.segmentId, observedAtMs);
+      if (this.lastTranscriptAckAtBySegment.size > 256) {
+        const oldest = this.lastTranscriptAckAtBySegment.keys().next().value;
+        if (oldest) this.lastTranscriptAckAtBySegment.delete(oldest);
+      }
+    }
     const key = `${stage}:${delivery?.eventId ?? traceId}`;
     if (!traceId || this.acknowledgedPerformanceTraces.has(key)) return;
     this.acknowledgedPerformanceTraces.add(key);
@@ -971,6 +986,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       const expired = this.acknowledgedPerformanceTraceOrder.shift();
       if (expired) this.acknowledgedPerformanceTraces.delete(expired);
     }
+    const durationMs = Math.max(0, Math.min(120_000, observedAtMs - startedAtMs));
     const send = () => {
       const browserRenderAtMs = delivery?.browserRenderAtMs;
       this.enqueuePerformanceAck(key, () => this.client.request(`/api/v1/realtime-speech/sessions/${interviewId}/performance-ack`, {
@@ -978,7 +994,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         headers: authHeaders(),
         body: JSON.stringify({
           userId: requireUserId(), traceId, stage,
-          durationMs: Math.max(0, Math.min(120_000, Date.now() - startedAtMs)),
+          durationMs,
           ...(taskId ? { taskId } : {}),
           ...(delivery?.eventId ? { eventId: delivery.eventId } : {}),
           ...(delivery?.browserEventReceiveAtMs === undefined ? {} : { browserEventReceiveAtMs: delivery.browserEventReceiveAtMs }),
@@ -1061,6 +1077,8 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
           readonly browserRenderAtMs?: number;
           readonly renderedRevision?: number;
           readonly renderedTextLength?: number;
+          readonly segmentId?: string;
+          readonly isFinal?: boolean;
           readonly visibilityState?: DocumentVisibilityState;
         } | undefined;
         if (!detail?.sessionId || !detail.traceId || detail.browserRenderAtMs === undefined) return;
@@ -1368,6 +1386,27 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     let terminalStatus: number | null = null;
     let flushHandle: number | null = null;
     let latestChunkReceivedAtMs = 0;
+    const coalescePendingDeliveryEvents = (events: BackendRealtimeEventListResponse["events"]) => {
+      const latestTranscriptIndexBySegment = new Map<string, number>();
+      const latestTranscriptRankBySegment = new Map<string, readonly [boolean, number, number]>();
+      events.forEach((item, index) => {
+        if (item.kind !== "transcript-updated") return;
+        const segmentId = typeof item.payload.segmentId === "string" ? item.payload.segmentId : "";
+        if (!segmentId) return;
+        const rank = [item.payload.isFinal === true, typeof item.payload.revision === "number" ? item.payload.revision : 0, index] as const;
+        const current = latestTranscriptRankBySegment.get(segmentId);
+        if (!current || Number(rank[0]) > Number(current[0])
+          || (rank[0] === current[0] && (rank[1] > current[1] || (rank[1] === current[1] && rank[2] > current[2])))) {
+          latestTranscriptRankBySegment.set(segmentId, rank);
+          latestTranscriptIndexBySegment.set(segmentId, index);
+        }
+      });
+      return events.filter((item, index) => {
+        if (item.kind !== "transcript-updated") return true;
+        const segmentId = typeof item.payload.segmentId === "string" ? item.payload.segmentId : "";
+        return !segmentId || latestTranscriptIndexBySegment.get(segmentId) === index;
+      });
+    };
     const markStateUpdate = (
       payload: MaterializedRealtimeSessionStreamEvent,
       stateUpdateStartedAtMs: number,
@@ -1454,9 +1493,10 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         acknowledgeTranscriptDelivery(payload.events.sessionId, deliveryEvents, stateUpdateStartedAtMs, stateUpdatedAtMs);
         this.publishCaptureEvents({ sessionId: payload.events.sessionId, events: deliveryEvents });
       };
-      flushHandle = typeof requestAnimationFrame === "function"
-        ? requestAnimationFrame(flush)
-        : window.setTimeout(flush, 16);
+      // State delivery must not wait for the next paint. A zero-delay task lets
+      // the parser coalesce a burst while keeping transcript state ahead of UI
+      // rendering and unrelated main-thread animation work.
+      flushHandle = window.setTimeout(flush, 0);
     };
     const parser = createSseParser((event) => {
       const realtimeEvent = event as unknown as { type?: string };
@@ -1509,8 +1549,10 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       }
       streamSnapshot = materializeRealtimeDelta(interviewId, streamSnapshot, payload);
       pendingSnapshot = streamSnapshot;
-      pendingDeliveryEvents = [...pendingDeliveryEvents, ...payload.events.events].filter(
-        (item, index, items) => items.findIndex(candidate => candidate.eventId === item.eventId) === index,
+      pendingDeliveryEvents = coalescePendingDeliveryEvents(
+        [...pendingDeliveryEvents, ...payload.events.events].filter(
+          (item, index, items) => items.findIndex(candidate => candidate.eventId === item.eventId) === index,
+        ),
       );
       scheduleFlush();
     });
@@ -1560,8 +1602,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       pendingSnapshot = null;
     }
     if (flushHandle !== null) {
-      if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(flushHandle);
-      else window.clearTimeout(flushHandle);
+      window.clearTimeout(flushHandle);
       flushHandle = null;
     }
     if (terminalStatus !== null) {

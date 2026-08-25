@@ -6,7 +6,7 @@ import threading
 import time
 from dataclasses import asdict
 
-from app.modules.realtime_speech import session_stream_refresh_plan
+from app.modules.realtime_speech import coalesce_transcript_revisions, session_stream_refresh_plan
 from app.ports.realtime_speech import RealtimeEvent
 from app.services.realtime_event_wait import RealtimeEventWaitExecutor
 from app.services.redis_realtime_speech_repository import RedisRealtimeSpeechRepository
@@ -295,6 +295,32 @@ def test_session_stream_refreshes_only_event_specific_snapshots() -> None:
     assert screenshot == {"runtime": False, "transcripts": False, "candidates": False, "events": False}
     assert transcript == {"runtime": True, "transcripts": True, "candidates": False, "events": False}
     assert snapshot == {"runtime": True, "transcripts": True, "candidates": True, "events": True}
+
+
+def test_sse_batch_keeps_only_latest_revision_per_transcript_segment() -> None:
+    def event(event_id: str, kind: str, *, segment_id: str | None = None, revision: int = 1, is_final: bool = False) -> RealtimeEvent:
+        payload: dict[str, object] = {"revision": revision, "isFinal": is_final}
+        if segment_id is not None:
+            payload["segmentId"] = segment_id
+        return RealtimeEvent(
+            event_id=event_id,
+            session_id="tail-session",
+            owner_user_id="synthetic-user",
+            kind=kind,
+            payload=payload,
+            created_at_ms=revision,
+        )
+
+    coalesced = coalesce_transcript_revisions([
+        event("partial-a-1", "transcript-updated", segment_id="segment-a", revision=1),
+        event("answer-started", "answer-task-updated"),
+        event("partial-b-1", "transcript-updated", segment_id="segment-b", revision=1),
+        event("partial-a-2", "transcript-updated", segment_id="segment-a", revision=2),
+        event("final-b-2", "transcript-updated", segment_id="segment-b", revision=2, is_final=True),
+        event("late-partial-b-3", "transcript-updated", segment_id="segment-b", revision=3),
+    ])
+
+    assert [item.event_id for item in coalesced] == ["answer-started", "partial-a-2", "final-b-2"]
 
 
 def test_blocking_wait_executor_does_not_starve_default_executor() -> None:

@@ -146,6 +146,8 @@ export function ConversationMonitor({ state, onConfirmQuestion, onDismissQuestio
           sessionId: latest.sessionId,
           traceId: performance.traceId,
           eventId: performance.eventId,
+          segmentId: latest.id,
+          isFinal: latest.isFinal,
           browserEventReceiveAtMs: performance.browserEventReceiveAtMs,
           browserStateUpdateAtMs: performance.browserStateUpdateAtMs,
           browserRenderAtMs: runtime.renderedAtMs,

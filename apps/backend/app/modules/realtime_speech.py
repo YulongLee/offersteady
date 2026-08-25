@@ -14,6 +14,7 @@ from app.core.logging import utc_now_iso
 from app.core.responses import success_response
 from app.deps import optional_authenticated_context, realtime_speech_service, resolve_owned_user_id
 from app.ports.authentication import AuthenticatedRequestContext
+from app.ports.realtime_speech import RealtimeEvent
 from app.schemas.foundation import ApiEnvelope, ModuleDescriptor
 from app.schemas.realtime_speech import (
     BindDesktopDeviceRequest,
@@ -69,6 +70,35 @@ def session_stream_refresh_plan(*, payload_type: str, event_kinds: set[str]) -> 
         "candidates": snapshot or bool(event_kinds & {"question-candidate", "question-confirmed"}),
         "events": snapshot,
     }
+
+
+def coalesce_transcript_revisions(events: list[RealtimeEvent]) -> list[RealtimeEvent]:
+    """Keep only the newest visible revision for each transcript in one SSE batch.
+
+    Redis remains the authoritative ordered log and the cursor still advances
+    across every event.  The browser only needs the newest monotonic state for a
+    segment, so replaying superseded partials creates avoidable network and main
+    thread backpressure without changing the visible result.
+    """
+    latest_index_by_segment: dict[str, int] = {}
+    latest_rank_by_segment: dict[str, tuple[bool, int, int]] = {}
+    for index, event in enumerate(events):
+        if event.kind != "transcript-updated":
+            continue
+        segment_id = event.payload.get("segmentId")
+        if isinstance(segment_id, str) and segment_id:
+            revision = event.payload.get("revision")
+            rank = (event.payload.get("isFinal") is True, revision if isinstance(revision, int) else 0, index)
+            if rank > latest_rank_by_segment.get(segment_id, (False, -1, -1)):
+                latest_rank_by_segment[segment_id] = rank
+                latest_index_by_segment[segment_id] = index
+    return [
+        event
+        for index, event in enumerate(events)
+        if event.kind != "transcript-updated"
+        or not isinstance(event.payload.get("segmentId"), str)
+        or latest_index_by_segment.get(str(event.payload.get("segmentId"))) == index
+    ]
 
 
 def _sse_frame(event: str, payload: dict[str, object], *, cursor: int | None = None) -> str:
@@ -580,6 +610,7 @@ async def stream_session_runtime(
             else:
                 # Normal updates are event deltas. Full state is reserved for
                 # initial entry and expired-cursor recovery.
+                incremental_events = coalesce_transcript_revisions(incremental_events)
                 sse_sent_at_ms = int(time() * 1000)
                 incremental_events = service.observe_sse_delivery(incremental_events, sent_at_ms=sse_sent_at_ms)
                 payload = {

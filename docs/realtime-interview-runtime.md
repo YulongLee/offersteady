@@ -26,6 +26,7 @@ The renderer treats `ended`, `muted`, a suspended/closed AudioContext, a stalled
 - A reconnect reuses the publisher token and resumes from backend receipts for that publisher.
 - Web presence is diagnostic only. Refreshing the page does not revoke the desktop media lease.
 - The web consumer stores the latest activity cursor in session storage, hydrates once, and then consumes ordered incremental events. A cursor outside the retained Redis range forces a fresh snapshot.
+- When several partial revisions for the same transcript are already waiting in one SSE read, the backend advances the authoritative cursor across all of them but sends only the newest visible revision for that segment. The web consumer applies the same latest-only rule across a browser task and commits transcript state without waiting for the next animation frame. Final revisions and non-transcript lifecycle events are never discarded.
 - Transcript confirmation never creates an answer task. Only a user click on quick answer, manual answer, or screenshot answer may start answer generation.
 - New companions use a source-scoped `idle -> speaking -> tail -> committing -> final|incomplete` lifecycle. Terminal states are monotonic, and terminal frames are acknowledged independently of coalescible partial frames.
 - The backend source watchdog resolves abandoned partial turns as `incomplete` unless the provider supplied authoritative completion. Recovery closes only the affected source generation.
@@ -68,6 +69,8 @@ For screenshot delivery, current desktop packages subscribe to the authenticated
 ## Privacy-safe diagnostics
 
 Allowed diagnostics include trace IDs, session-safe IDs, channel, sequence, queue depth, durations, dropped-frame counts, reconnect counts and provider error codes. Logs and reports must not contain PCM payloads, access tokens or transcript text.
+
+Per-revision browser delivery acknowledgements are enabled only with `?subtitleDiagnostics=1`. Normal commercial sessions acknowledge the first visible revision, at most one intermediate revision per segment per second, and the final revision. This keeps observability available without allowing diagnostic POST traffic to contend with the session SSE connection.
 
 Recommended event-flow metrics are session-stream reconnect count, resume success rate, event cursor lag, screenshot request-to-claim latency, screenshot terminal latency, fallback poll count, and duplicate event suppression count. A rise in fallback polls or cursor resets indicates push-path degradation even when the user-visible workflow still succeeds.
 

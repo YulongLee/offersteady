@@ -99,6 +99,42 @@ describe("backend preview adapter", () => {
     expect(maximumActiveRequests).toBe(1);
   });
 
+  it("samples normal transcript telemetry while always retaining the final revision", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const fetchImpl = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify(envelope({ accepted: true })), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+    const acknowledge = (adapter as unknown as {
+      acknowledgeRuntimePerformance: (
+        interviewId: string,
+        traceId: string,
+        stage: "transcript-delivery" | "transcript-render",
+        startedAtMs: number,
+        taskId: undefined,
+        delivery: { eventId: string; segmentId: string; isFinal: boolean; browserRenderAtMs: number },
+      ) => void;
+    }).acknowledgeRuntimePerformance.bind(adapter);
+    const now = Date.now();
+
+    acknowledge("session-1", "trace-1", "transcript-render", now, undefined, {
+      eventId: "event-1", segmentId: "segment-1", isFinal: false, browserRenderAtMs: now,
+    });
+    acknowledge("session-1", "trace-2", "transcript-render", now, undefined, {
+      eventId: "event-2", segmentId: "segment-1", isFinal: false, browserRenderAtMs: now,
+    });
+    acknowledge("session-1", "trace-3", "transcript-render", now, undefined, {
+      eventId: "event-3", segmentId: "segment-1", isFinal: true, browserRenderAtMs: now,
+    });
+
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(2));
+    const bodies = fetchImpl.mock.calls.map(call => JSON.parse(String((call[1] as RequestInit).body)) as { traceId: string });
+    expect(bodies.map(body => body.traceId)).toEqual(["trace-1", "trace-3"]);
+  });
+
   it("restores one authoritative interview workspace across devices", async () => {
     window.localStorage.setItem("offersteady.auth.access_token", "access-token");
     window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
@@ -463,6 +499,48 @@ describe("backend preview adapter", () => {
 
     expect(updates.at(-1)?.speaker.transcripts).toEqual([
       expect.objectContaining({ text: "请介绍项目", isFinal: true, revision: 2 }),
+    ]);
+  });
+
+  it("coalesces a synchronous partial burst before updating the visible transcript store", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const push = (data: unknown) => controller.enqueue(new TextEncoder().encode(`event: update\ndata: ${JSON.stringify(data)}\n\n`));
+        controller.enqueue(new TextEncoder().encode(`event: snapshot\ndata: ${JSON.stringify({
+          type: "snapshot", cursor: 0,
+          transcripts: { sessionId: "session-1", transcripts: [] },
+          candidates: { sessionId: "session-1", candidates: [] },
+          events: { sessionId: "session-1", events: [] }, runtime: null,
+        })}\n\n`));
+        for (let revision = 1; revision <= 50; revision += 1) {
+          push({
+            type: "update", cursor: revision,
+            events: { sessionId: "session-1", events: [{
+              eventId: `partial-${revision}`, kind: "transcript-updated", createdAtMs: revision,
+              payload: {
+                segmentId: "segment-burst", sourceId: "system", sourceKind: "system", role: "interviewer",
+                revision, text: `第 ${revision} 版`, isFinal: false, transcriptConfidence: 0.9,
+                startedAtMs: 1, endedAtMs: revision, overlap: false,
+              },
+            }] },
+          });
+        }
+        controller.close();
+      },
+    });
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", vi.fn(async () => new Response(stream, {
+      status: 200, headers: { "Content-Type": "text/event-stream" },
+    })) as typeof fetch);
+    const updates: Array<{ speaker: { transcripts: readonly { text: string; revision: number }[] } }> = [];
+
+    await adapter.subscribeRealtimeSession("session-1", update => updates.push(update as typeof updates[number]));
+
+    expect(updates).toHaveLength(1);
+    expect(updates[0]?.speaker.transcripts).toEqual([
+      expect.objectContaining({ text: "第 50 版", revision: 50 }),
     ]);
   });
 
