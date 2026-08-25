@@ -364,6 +364,7 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         stream_key = f"offersteady:realtime:events:{stored.session_id}"
         cursor_index_key = self._event_cursor_index_key(stored.session_id)
         cursor = self.session_activity_versions.get(stored.session_id, 0)
+        xadd_started_at_ms = int(time.time() * 1000)
         xadd_started = time.perf_counter()
         stream_id = self._redis.xadd(
             stream_key,
@@ -371,6 +372,7 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
             maxlen=self._event_retention,
             approximate=True,
         )
+        xadd_completed_at_ms = int(time.time() * 1000)
         xadd_ms = max(0, int((time.perf_counter() - xadd_started) * 1000))
         self._ensure_event_diagnostics()
         with self._event_diagnostic_lock:
@@ -389,7 +391,22 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         pipeline.expire(self._latest_event_key(stored.session_id), self._runtime_ttl_seconds)
         pipeline.expire(stream_key, self._runtime_ttl_seconds)
         pipeline.execute()
-        return stored
+        performance = stored.payload.get("performance")
+        if not isinstance(performance, dict):
+            return stored
+        return replace(
+            stored,
+            payload={
+                **stored.payload,
+                "performance": {
+                    **performance,
+                    "redisEventXaddStartAtMs": xadd_started_at_ms,
+                    "redisEventXaddCompleteAtMs": xadd_completed_at_ms,
+                    "redisEventXaddAtMs": xadd_completed_at_ms,
+                    "redisEventXaddDurationMs": xadd_ms,
+                },
+            },
+        )
 
     @staticmethod
     def _event_cursor_index_key(session_id: str) -> str:

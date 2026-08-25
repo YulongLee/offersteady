@@ -36,6 +36,22 @@ describe("continuous conversation turns", () => {
     expect(turns[0]?.sourceSegmentIds).toEqual(["candidate-1", "candidate-2"]);
   });
 
+  it("retains the newest revision trace metadata when adjacent fragments are projected", () => {
+    const turns = projectConversationTurns([
+      segment({ id: "candidate-1", isFinal: true, performance: { traceId: "trace-1", eventId: "event-1" } }),
+      segment({
+        id: "candidate-2",
+        text: "第二段",
+        startedAtMs: 2_500,
+        endedAtMs: 3_000,
+        isFinal: true,
+        performance: { traceId: "trace-2", eventId: "event-2", segmentId: "candidate-2" },
+      }),
+    ]);
+    expect(turns).toHaveLength(1);
+    expect(turns[0]?.performance).toMatchObject({ traceId: "trace-2", eventId: "event-2", segmentId: "candidate-2" });
+  });
+
   it("keeps a confirmed turn separate from a newer active draft", () => {
     const turns = projectConversationTurns([
       segment({ id: "confirmed", text: "已经确认的问题。", isFinal: true }),

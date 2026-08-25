@@ -304,6 +304,7 @@ class RealtimeFrameRequest(BaseModel):
     terminal_id: str | None = Field(default=None, min_length=1, max_length=256, alias="terminalId")
     trace_id: str | None = Field(default=None, alias="traceId")
     sent_at_ms: int | None = Field(default=None, alias="sentAtMs")
+    diagnostics: dict[str, object] = Field(default_factory=dict)
     audio_base64: str = Field(alias="audioBase64")
 
 
@@ -371,13 +372,23 @@ class RuntimePerformanceAcknowledgementRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True, extra="forbid")
     user_id: str = Field(min_length=1, max_length=128, alias="userId")
     trace_id: str = Field(min_length=1, max_length=128, alias="traceId", pattern=r"^[A-Za-z0-9:._-]+$")
-    stage: Literal["transcript-render", "screenshot-first-render", "answer-first-render"]
+    stage: Literal["transcript-delivery", "transcript-render", "screenshot-first-render", "answer-first-render"]
     duration_ms: int = Field(ge=0, le=120_000, alias="durationMs")
     task_id: str | None = Field(default=None, min_length=1, max_length=128, alias="taskId", pattern=r"^[A-Za-z0-9:._-]+$")
     event_id: str | None = Field(default=None, min_length=1, max_length=128, alias="eventId", pattern=r"^[A-Za-z0-9:._-]+$")
     browser_event_receive_at_ms: int | None = Field(default=None, ge=0, alias="browserEventReceiveAtMs")
     browser_state_update_at_ms: int | None = Field(default=None, ge=0, alias="browserStateUpdateAtMs")
     browser_render_at_ms: int | None = Field(default=None, ge=0, alias="browserRenderAtMs")
+    visibility_state: Literal["visible", "hidden", "prerender"] | None = Field(default=None, alias="visibilityState")
+    browser_stream_chunk_received_at_ms: int | None = Field(default=None, ge=0, alias="browserStreamChunkReceivedAtMs")
+    browser_event_parsed_at_ms: int | None = Field(default=None, ge=0, alias="browserEventParsedAtMs")
+    transcript_store_update_start_at_ms: int | None = Field(default=None, ge=0, alias="transcriptStoreUpdateStartAtMs")
+    transcript_store_update_complete_at_ms: int | None = Field(default=None, ge=0, alias="transcriptStoreUpdateCompleteAtMs")
+    react_render_start_at_ms: int | None = Field(default=None, ge=0, alias="reactRenderStartAtMs")
+    react_commit_at_ms: int | None = Field(default=None, ge=0, alias="reactCommitAtMs")
+    browser_paint_at_ms: int | None = Field(default=None, ge=0, alias="browserPaintAtMs")
+    rendered_revision: int | None = Field(default=None, ge=0, alias="renderedRevision")
+    rendered_text_length: int | None = Field(default=None, ge=0, le=1_000_000, alias="renderedTextLength")
 
 
 class RealtimeDeliveryMetricRequest(BaseModel):

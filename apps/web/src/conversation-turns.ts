@@ -97,6 +97,7 @@ export const projectConversationTurns = (segments: readonly SpeakerTranscriptSeg
       ...(segment.terminalState ? { terminalState: segment.terminalState } : {}),
       ...(segment.finalizationReason ? { finalizationReason: segment.finalizationReason } : {}),
       ...(segment.publishedAtMs !== undefined ? { publishedAtMs: segment.publishedAtMs } : {}),
+      ...(segment.performance ? { performance: segment.performance } : {}),
       sourceSegmentIds: [...sourceSegmentIds, segment.id],
     };
   }

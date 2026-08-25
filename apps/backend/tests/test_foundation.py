@@ -131,6 +131,22 @@ def test_realtime_trace_summary_correlates_browser_delivery_without_content() ->
         sequence=7,
         revision=1,
         utteranceId="segment-safe-1",
+        desktopVadConfirmAtMs=985,
+        desktopAudioWorkletOutputAtMs=990,
+        desktopRendererReceiveAtMs=992,
+        desktopPcmConversionAtMs=994,
+        desktopRingBufferWriteAtMs=996,
+        desktopPublisherEnqueueAtMs=997,
+        desktopPublisherFlushAtMs=1_008,
+        backendWebsocketFrameReceivedAtMs=1_030,
+        backendFrameValidationDoneAtMs=1_031,
+        backendChannelRoutingDoneAtMs=1_033,
+        asrSessionLockWaitStartAtMs=1_056,
+        asrSessionLockAcquiredAtMs=1_058,
+        qwenSendEnqueueAtMs=1_060,
+        qwenWsSendStartAtMs=1_061,
+        qwenWsSendCompleteAtMs=1_064,
+        audioRms=0.125,
         speechStartAtMs=980,
         desktopAudioCaptureAtMs=1_000,
         desktopWsSendAtMs=1_010,
@@ -139,8 +155,11 @@ def test_realtime_trace_summary_correlates_browser_delivery_without_content() ->
         queueLeaveAtMs=1_055,
         qwenAudioAppendAtMs=1_065,
         qwenPartialReceivedAtMs=1_200,
+        transcriptEventCreatedAtMs=1_205,
+        redisEventXaddCompleteAtMs=1_210,
         redisEventXaddAtMs=1_210,
         redisEventXreadAtMs=1_212,
+        sseGeneratorYieldAtMs=1_215,
         sseEventSendAtMs=1_215,
     )
     accepted = client.post(f"/api/v1/realtime-speech/sessions/{session_id}/performance-ack", json={
@@ -149,9 +168,19 @@ def test_realtime_trace_summary_correlates_browser_delivery_without_content() ->
         "stage": "transcript-render",
         "durationMs": 25,
         "eventId": "rt-event-safe-1",
+        "browserStreamChunkReceivedAtMs": 1_228,
+        "browserEventParsedAtMs": 1_230,
         "browserEventReceiveAtMs": 1_230,
+        "transcriptStoreUpdateStartAtMs": 1_232,
+        "transcriptStoreUpdateCompleteAtMs": 1_234,
         "browserStateUpdateAtMs": 1_234,
+        "reactRenderStartAtMs": 1_236,
+        "reactCommitAtMs": 1_238,
+        "browserPaintAtMs": 1_240,
         "browserRenderAtMs": 1_240,
+        "renderedRevision": 1,
+        "renderedTextLength": 12,
+        "visibilityState": "visible",
     })
     assert accepted.status_code == 200
     summary = unwrap(client.get(
@@ -168,16 +197,79 @@ def test_realtime_trace_summary_correlates_browser_delivery_without_content() ->
     assert summary["distributions"]["browserStateToReactRenderMs"]["p95"] == 6
     assert summary["distributions"]["redisXaddToXreadMs"]["p95"] == 2
     assert summary["distributions"]["speechStartToBrowserFirstPartialMs"]["p95"] == 260
+    assert summary["distributions"]["desktopEnqueueToFlushMs"]["p95"] == 11
+    assert summary["distributions"]["backendAsrLockWaitMs"]["p95"] == 2
+    assert summary["revisionDiagnostics"]["stageCounts"] == {
+        "qwen": 1,
+        "event": 1,
+        "redisXadd": 1,
+        "redisXread": 1,
+        "sse": 1,
+        "browser": 1,
+        "store": 1,
+        "reactCommit": 1,
+        "paint": 1,
+    }
+    traces = unwrap(client.get(
+        f"/api/v1/realtime-speech/sessions/{session_id}/performance-traces",
+        params={"userId": user_id, "limit": 4096},
+    ))
+    assert traces[0]["audioRms"] == 0.125
+    assert traces[0]["visibilityState"] == "visible"
     assert summary["distributions"]["endToEndPartialMs"]["p95"] == 240
     assert "text" not in str(summary).lower()
+    assert len(traces) == 1
+    assert traces[0]["traceId"] == "trace-summary-1"
+    assert traces[0]["eventId"] == "rt-event-safe-1"
+    assert "text" not in traces[0]
+    assert "partialText" not in traces[0]
+    assert traces[0]["renderedTextLength"] == 12
+
+
+def test_transcript_delivery_ack_records_browser_receive_without_fake_render() -> None:
+    user_id = "trace-delivery-user"
+    session = unwrap(client.post("/api/v1/sessions", json={"userId": user_id, "title": "字幕投递测试"}))
+    session_id = session["sessionId"]
+    service = realtime_speech_service()
+    service._observe_trace("trace-delivery-1", sessionId=session_id, sseEventSendAtMs=2_000)
+
+    accepted = client.post(f"/api/v1/realtime-speech/sessions/{session_id}/performance-ack", json={
+        "userId": user_id,
+        "traceId": "trace-delivery-1",
+        "stage": "transcript-delivery",
+        "durationMs": 25,
+        "eventId": "rt-event-delivery-1",
+        "browserStreamChunkReceivedAtMs": 2_023,
+        "browserEventParsedAtMs": 2_025,
+        "browserEventReceiveAtMs": 2_025,
+        "transcriptStoreUpdateStartAtMs": 2_028,
+        "transcriptStoreUpdateCompleteAtMs": 2_030,
+        "browserStateUpdateAtMs": 2_030,
+        "visibilityState": "visible",
+    })
+    assert accepted.status_code == 200
+    rendered = client.post(f"/api/v1/realtime-speech/sessions/{session_id}/performance-ack", json={
+        "userId": user_id,
+        "traceId": "trace-delivery-1",
+        "stage": "transcript-render",
+        "durationMs": 15,
+        "eventId": "rt-event-delivery-1",
+        "reactRenderStartAtMs": 2_035,
+        "reactCommitAtMs": 2_037,
+        "browserPaintAtMs": 2_040,
+        "browserRenderAtMs": 2_040,
+        "visibilityState": "visible",
+    })
+    assert rendered.status_code == 200
     traces = unwrap(client.get(
         f"/api/v1/realtime-speech/sessions/{session_id}/performance-traces",
         params={"userId": user_id},
     ))
-    assert len(traces) == 1
-    assert traces[0]["traceId"] == "trace-summary-1"
-    assert traces[0]["eventId"] == "rt-event-safe-1"
-    assert "text" not in str(traces).lower()
+    assert traces[0]["browserEventReceiveAtMs"] == 2_025
+    assert traces[0]["browserStateUpdateAtMs"] == 2_030
+    assert traces[0]["transcriptStoreUpdateStartAtMs"] == 2_028
+    assert traces[0]["transcriptStoreUpdateCompleteAtMs"] == 2_030
+    assert traces[0]["browserRenderAtMs"] == 2_040
 
 
 def test_realtime_delivery_metrics_accept_only_content_free_fields() -> None:

@@ -9,6 +9,8 @@ import { DEFAULT_SCREENSHOT_SHORTCUT, SCREENSHOT_SHORTCUT_OPTIONS, ScreenshotSho
 import { desktopPollDelayMs } from "./polling-policy";
 import { ScreenshotCaptureLock } from "./screenshot-capture-lock";
 import { DesktopCaptureEventParser } from "./capture-event-stream";
+import { decideRendererRecovery } from "./renderer-recovery-policy";
+import { RealtimeTransportDiagnosticsLog } from "./realtime-transport-diagnostics-log";
 
 // Local ad-hoc builds cannot reliably retain Apple's separate Audio Capture
 // grant across rebuilds. Reuse the Screen & System Audio Recording grant,
@@ -24,6 +26,7 @@ let isQuitting = false;
 let credentialVault: DeviceCredentialVault | null = null;
 let pairingIdentityStore: DevicePairingIdentityStore | null = null;
 let screenshotShortcutStore: ScreenshotShortcutStore | null = null;
+let realtimeTransportDiagnosticsLog: RealtimeTransportDiagnosticsLog | null = null;
 let activeScreenshotShortcut = "";
 let screenshotShortcutRegistration = {
   ok: false,
@@ -59,6 +62,50 @@ let remoteScreenshotPollInFlight = false;
 let remoteScreenshotPollFailureCount = 0;
 let remoteScreenshotStreamController: AbortController | null = null;
 let displayMediaFailureBackoffUntil = 0;
+let rendererRecoveryAttempts: readonly number[] = [];
+let rendererRecoveryResetTimer: NodeJS.Timeout | null = null;
+interface RendererReliabilityHeartbeat {
+  readonly sentAtMs: number;
+  readonly sessionId: string | null;
+  readonly sessionStatus: string | null;
+  readonly desiredCapture: boolean;
+  readonly captureStartedAtMs: number | null;
+  readonly renderCount: number;
+  readonly reactRenderRate: number;
+  readonly jsHeapUsed: number | null;
+  readonly jsHeapTotal: number | null;
+  readonly jsHeapLimit: number | null;
+  readonly jsExternal: number | null;
+  readonly arrayBuffers: number | null;
+  readonly audioWorkletCallbackRate: number;
+  readonly workletPostMessageRate: number;
+  readonly audioBytesPerSecond: number;
+  readonly publisher: Record<string, unknown> | null;
+}
+
+interface RendererReliabilitySample extends RendererReliabilityHeartbeat {
+  readonly milestoneMinutes: number;
+  readonly rendererPid: number;
+  readonly rendererRss: number | null;
+  readonly rendererPrivateMemory: number | null;
+  readonly rendererCpu: number | null;
+}
+
+interface RendererRecoveryContext {
+  readonly crashAtMs: number;
+  readonly reason: string;
+  readonly exitCode: number;
+  readonly sessionId: string | null;
+  readonly desiredCapture: boolean;
+  readonly recoveryAttempt: number;
+}
+
+let latestRendererHeartbeat: RendererReliabilityHeartbeat | null = null;
+let latestRendererProcessMetrics: ReturnType<typeof currentRendererProcessMetrics> | null = null;
+let rendererReliabilitySessionId: string | null = null;
+let rendererReliabilitySamples: RendererReliabilitySample[] = [];
+let rendererRecoveryContext: RendererRecoveryContext | null = null;
+const RENDERER_RELIABILITY_MILESTONES_MINUTES = [0, 5, 10, 20, 30, 60, 120] as const;
 const activeDesktopRequestControllers = new Set<AbortController>();
 const desktopApiRequestsInFlight = new Map<string, Promise<DesktopApiRequestResult>>();
 const SCREENSHOT_VISION_MAX_LONG_EDGE = 1600;
@@ -100,6 +147,38 @@ const abortPendingDesktopRequests = () => {
   for (const controller of activeDesktopRequestControllers) controller.abort(new Error("desktop_app_quitting"));
   activeDesktopRequestControllers.clear();
   desktopApiRequestsInFlight.clear();
+};
+
+const currentRendererProcessMetrics = (window: BrowserWindow) => {
+  const rendererPid = window.webContents.getOSProcessId();
+  const metric = app.getAppMetrics().find((entry) => entry.pid === rendererPid);
+  return {
+    rendererPid,
+    rendererRss: metric?.memory?.workingSetSize ?? null,
+    rendererPrivateMemory: metric?.memory?.privateBytes ?? null,
+    rendererCpu: metric?.cpu?.percentCPUUsage ?? null,
+  };
+};
+
+const recordRendererReliabilityMilestone = (window: BrowserWindow, heartbeat: RendererReliabilityHeartbeat) => {
+  if (!heartbeat.sessionId || !heartbeat.desiredCapture || heartbeat.captureStartedAtMs === null) return;
+  if (rendererReliabilitySessionId !== heartbeat.sessionId) {
+    rendererReliabilitySessionId = heartbeat.sessionId;
+    rendererReliabilitySamples = [];
+  }
+  const elapsedMinutes = Math.max(0, (heartbeat.sentAtMs - heartbeat.captureStartedAtMs) / 60_000);
+  const milestone = RENDERER_RELIABILITY_MILESTONES_MINUTES.find((candidate) => (
+    elapsedMinutes >= candidate
+    && !rendererReliabilitySamples.some((sample) => sample.milestoneMinutes === candidate)
+  ));
+  if (milestone === undefined) return;
+  const sample: RendererReliabilitySample = {
+    ...heartbeat,
+    ...currentRendererProcessMetrics(window),
+    milestoneMinutes: milestone,
+  };
+  rendererReliabilitySamples = [...rendererReliabilitySamples, sample].slice(-RENDERER_RELIABILITY_MILESTONES_MINUTES.length);
+  console.info("[desktop-reliability] resource milestone", sample);
 };
 
 const emitNativeAudioEvent = (event: Record<string, unknown>) => {
@@ -951,7 +1030,7 @@ const startRemoteScreenshotRequestLoop = () => {
 };
 
 const createWindow = () => {
-  mainWindow = new BrowserWindow({
+  const window = new BrowserWindow({
     width: 780,
     height: 540,
     minWidth: 700,
@@ -966,15 +1045,66 @@ const createWindow = () => {
       sandbox: true,
     },
   });
+  mainWindow = window;
 
-  mainWindow.removeMenu();
-  void mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
-  mainWindow.once("ready-to-show", () => mainWindow?.show());
-  mainWindow.on("close", (event) => {
+  window.removeMenu();
+  void window.loadFile(path.join(__dirname, "../renderer/index.html"));
+  window.once("ready-to-show", () => {
+    if (rendererRecoveryResetTimer) clearTimeout(rendererRecoveryResetTimer);
+    rendererRecoveryResetTimer = setTimeout(() => {
+      rendererRecoveryAttempts = [];
+      rendererRecoveryResetTimer = null;
+    }, 60_000);
+    if (!window.isDestroyed()) window.show();
+  });
+  window.webContents.on("did-finish-load", () => {
+    if (rendererRecoveryContext && !window.isDestroyed()) {
+      window.webContents.send("desktop:renderer-recovery-requested", rendererRecoveryContext);
+    }
+  });
+  window.on("close", (event) => {
     if (!isQuitting) {
       event.preventDefault();
-      mainWindow?.hide();
+      window.hide();
     }
+  });
+  window.on("closed", () => {
+    if (mainWindow === window) mainWindow = null;
+  });
+  window.webContents.on("render-process-gone", (_event, details) => {
+    if (isQuitting || details.reason === "clean-exit") return;
+    if (rendererRecoveryResetTimer) {
+      clearTimeout(rendererRecoveryResetTimer);
+      rendererRecoveryResetTimer = null;
+    }
+    const decision = decideRendererRecovery(rendererRecoveryAttempts, Date.now());
+    rendererRecoveryAttempts = decision.attempts;
+    console.error("[desktop-renderer] renderer process exited", {
+      reason: details.reason,
+      exitCode: details.exitCode,
+      recoveryAllowed: decision.allowed,
+      recoveryAttemptCount: decision.attempts.length,
+      sessionId: latestRendererHeartbeat?.sessionId ?? null,
+      memory: latestRendererProcessMetrics,
+      reliability: latestRendererHeartbeat,
+    });
+    rendererRecoveryContext = {
+      crashAtMs: Date.now(),
+      reason: details.reason,
+      exitCode: details.exitCode,
+      sessionId: latestRendererHeartbeat?.sessionId ?? null,
+      desiredCapture: latestRendererHeartbeat?.desiredCapture === true,
+      recoveryAttempt: decision.attempts.length,
+    };
+    if (mainWindow === window) mainWindow = null;
+    if (!window.isDestroyed()) window.destroy();
+    if (!decision.allowed) {
+      console.error("[desktop-renderer] recovery limit reached; automatic recreation stopped");
+      return;
+    }
+    setTimeout(() => {
+      if (!isQuitting && !mainWindow) createWindow();
+    }, 250);
   });
 };
 
@@ -983,6 +1113,7 @@ app.whenReady().then(() => {
   credentialVault = new DeviceCredentialVault(app.getPath("userData"), safeStorage);
   pairingIdentityStore = new DevicePairingIdentityStore(app.getPath("userData"));
   screenshotShortcutStore = new ScreenshotShortcutStore(app.getPath("userData"));
+  realtimeTransportDiagnosticsLog = new RealtimeTransportDiagnosticsLog(app.getPath("userData"));
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
     callback(allowedRuntimePermissions.has(permission));
   });
@@ -998,28 +1129,28 @@ app.whenReady().then(() => {
       }
       return;
     }
-    void desktopCapturer.getSources({
-        types: ["screen"],
-        thumbnailSize: { width: 0, height: 0 },
-      })
-      .then((sources) => {
-      const selectedScreen = (preferredScreenSourceId
-        ? sources.find((source) => source.id === preferredScreenSourceId)
-        : null) ?? sources[0];
-      if (!selectedScreen) {
-        try {
-          callback({});
-        } catch (error) {
-          console.warn("[desktop-capture] display media callback rejected an empty source", error);
+    void (async () => {
+      try {
+        const sources = await desktopCapturer.getSources({
+          types: ["screen"],
+          thumbnailSize: { width: 0, height: 0 },
+        });
+        const selectedScreen = (preferredScreenSourceId
+          ? sources.find((source) => source.id === preferredScreenSourceId)
+          : null) ?? sources[0];
+        if (!selectedScreen) {
+          try {
+            callback({});
+          } catch (error) {
+            console.warn("[desktop-capture] display media callback rejected an empty source", error);
+          }
+          return;
         }
-        return;
-      }
-      callback({
-        ...(request.videoRequested ? { video: selectedScreen } : {}),
-        ...(request.audioRequested ? { audio: "loopback" } : {}),
-      });
-      })
-      .catch((error) => {
+        callback({
+          ...(request.videoRequested ? { video: selectedScreen } : {}),
+          ...(request.audioRequested ? { audio: "loopback" } : {}),
+        });
+      } catch (error) {
         displayMediaFailureBackoffUntil = Date.now() + 5_000;
         console.warn("[desktop-capture] display media source unavailable", error);
         try {
@@ -1027,7 +1158,8 @@ app.whenReady().then(() => {
         } catch (callbackError) {
           console.warn("[desktop-capture] display media callback rejected an unavailable source", callbackError);
         }
-      });
+      }
+    })();
   }, { useSystemPicker: false });
   tray = new Tray(trayImage());
   updateTray();
@@ -1038,7 +1170,10 @@ app.whenReady().then(() => {
     .then(accelerator => registerScreenshotShortcut(accelerator))
     .then(result => shortcutNotice(result.message));
 
-  app.on("activate", () => mainWindow?.show());
+  app.on("activate", () => {
+    if (!mainWindow) createWindow();
+    else mainWindow.show();
+  });
 });
 
 ipcMain.on("capture:set-state", (_event, state: CaptureState) => {
@@ -1046,6 +1181,37 @@ ipcMain.on("capture:set-state", (_event, state: CaptureState) => {
   captureState = state;
   updateTray();
   if (state !== previousState) startRemoteScreenshotRequestLoop();
+});
+
+ipcMain.on("desktop:renderer-reliability-heartbeat", (event, heartbeat: RendererReliabilityHeartbeat) => {
+  latestRendererHeartbeat = heartbeat;
+  const ownerWindow = BrowserWindow.fromWebContents(event.sender);
+  if (ownerWindow && !ownerWindow.isDestroyed()) {
+    latestRendererProcessMetrics = currentRendererProcessMetrics(ownerWindow);
+    recordRendererReliabilityMilestone(ownerWindow, heartbeat);
+  }
+});
+
+ipcMain.on("desktop:realtime-transport-diagnostics", (_event, snapshot: Record<string, unknown>) => {
+  console.info("[realtime-audio-transport-diagnostics]", snapshot);
+  realtimeTransportDiagnosticsLog?.append(snapshot);
+});
+
+ipcMain.handle("desktop:get-realtime-transport-diagnostics-path", async () => realtimeTransportDiagnosticsLog?.path ?? null);
+
+ipcMain.handle("desktop:get-renderer-recovery-context", async () => rendererRecoveryContext);
+ipcMain.handle("desktop:get-renderer-reliability-diagnostics", async () => ({
+  latest: latestRendererHeartbeat,
+  samples: rendererReliabilitySamples,
+  recovery: rendererRecoveryContext,
+}));
+ipcMain.on("desktop:renderer-recovery-complete", (_event, input: { readonly sessionId: string; readonly ackAtMs: number }) => {
+  if (!rendererRecoveryContext || rendererRecoveryContext.sessionId !== input.sessionId || input.ackAtMs < rendererRecoveryContext.crashAtMs) return;
+  console.info("[desktop-renderer] realtime recovery confirmed by fresh frame acknowledgement", {
+    sessionId: input.sessionId,
+    recoveryMs: input.ackAtMs - rendererRecoveryContext.crashAtMs,
+  });
+  rendererRecoveryContext = null;
 });
 
 ipcMain.on("app:close", () => {
@@ -1184,6 +1350,11 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   isQuitting = true;
+  rendererRecoveryContext = null;
+  if (rendererRecoveryResetTimer) {
+    clearTimeout(rendererRecoveryResetTimer);
+    rendererRecoveryResetTimer = null;
+  }
   captureState = "not-connected";
   screenshotCaptureLock.release();
   if (registrationInterval) {

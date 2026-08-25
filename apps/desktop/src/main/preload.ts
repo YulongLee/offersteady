@@ -3,6 +3,17 @@ import type { CaptureState } from "@offersteady/protocol" with { "resolution-mod
 
 contextBridge.exposeInMainWorld("offersteady", {
   publishCaptureState: (state: CaptureState) => ipcRenderer.send("capture:set-state", state),
+  publishRendererReliabilityHeartbeat: (heartbeat: Record<string, unknown>) => ipcRenderer.send("desktop:renderer-reliability-heartbeat", heartbeat),
+  publishRealtimeTransportDiagnostics: (snapshot: Record<string, unknown>) => ipcRenderer.send("desktop:realtime-transport-diagnostics", snapshot),
+  getRendererRecoveryContext: () => ipcRenderer.invoke("desktop:get-renderer-recovery-context"),
+  getRendererReliabilityDiagnostics: () => ipcRenderer.invoke("desktop:get-renderer-reliability-diagnostics"),
+  getRealtimeTransportDiagnosticsPath: () => ipcRenderer.invoke("desktop:get-realtime-transport-diagnostics-path"),
+  completeRendererRecovery: (input: { sessionId: string; ackAtMs: number }) => ipcRenderer.send("desktop:renderer-recovery-complete", input),
+  onRendererRecoveryRequested: (listener: (context: Record<string, unknown>) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, context: Record<string, unknown>) => listener(context);
+    ipcRenderer.on("desktop:renderer-recovery-requested", handler);
+    return () => ipcRenderer.removeListener("desktop:renderer-recovery-requested", handler);
+  },
   saveDeviceCredential: (credential: string) => ipcRenderer.invoke("credential:save", credential),
   clearDeviceCredential: () => ipcRenderer.invoke("credential:clear"),
   getDesktopConfig: () => ipcRenderer.invoke("desktop:get-config"),

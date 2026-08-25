@@ -3,7 +3,7 @@ import type { AudioPermission, AudioSourceDescriptor, AudioSourceHealth, Capture
 import type { DesktopNativeRuntimeHealth, DesktopPairingIdentity, DesktopRuntimeConfig, DesktopScreenSource, DesktopScreenshotShortcutSettings } from "./global";
 import { MicrophoneAudioAdapter, SystemAudioAdapter, describeMediaError } from "./audio/audio-source-adapter";
 import { LocalSourceMonitor } from "./audio/local-source-monitor";
-import { DesktopRealtimePublisher, publisherFailureIsTerminal } from "./audio/realtime-publisher";
+import { DesktopRealtimePublisher, publisherFailureIsTerminal, type DesktopRealtimeReliabilitySnapshot } from "./audio/realtime-publisher";
 import appIconUrl from "./assets/app-icon.png";
 import { BINDING_LIVE_POLL_MS, desktopPollDelayMs } from "../main/polling-policy";
 
@@ -29,6 +29,9 @@ const systemAudioOptions: readonly AudioSourceDescriptor[] = [
 
 const DEFAULT_MICROPHONE_ID = "default";
 export const BINDING_STATUS_POLL_MS = BINDING_LIVE_POLL_MS;
+const diagnosticAudioChannels = import.meta.env.VITE_REALTIME_DIAGNOSTIC_AUDIO_CHANNELS === "system"
+  ? (["system"] as const)
+  : undefined;
 
 interface ApiEnvelope<T> {
   readonly data: T;
@@ -363,6 +366,9 @@ const mergeBackendReceipts = (
 };
 
 export function CompanionApp() {
+  const rendererStartedAtMsRef = useRef(Date.now());
+  const renderCountRef = useRef(0);
+  renderCountRef.current += 1;
   const [state, setState] = useState<CaptureState>("permission-required");
   const [config, setConfig] = useState<DesktopRuntimeConfig | null>(null);
   const [pairingIdentity, setPairingIdentity] = useState<DesktopPairingIdentity | null>(null);
@@ -397,6 +403,13 @@ export function CompanionApp() {
   const [liveSourceHealthState, setLiveSourceHealthState] = useState<readonly AudioSourceHealth[]>([]);
   const [monitorSourceHealthState, setMonitorSourceHealthState] = useState<readonly AudioSourceHealth[]>([]);
   const [publisherRetryNonce, setPublisherRetryNonce] = useState(0);
+  const reliabilityRef = useRef<DesktopRealtimeReliabilitySnapshot | null>(null);
+  const reliabilityRateRef = useRef<{
+    readonly atMs: number;
+    readonly callbackCount: number;
+    readonly postMessageCount: number;
+    readonly audioBytes: number;
+  } | null>(null);
   const previewRef = useRef<HTMLVideoElement>(null);
   const previewStream = useRef<MediaStream | null>(null);
   const previewRequestIdRef = useRef(0);
@@ -410,6 +423,20 @@ export function CompanionApp() {
   const lastLiveSessionIdRef = useRef<string | null>(null);
   const lastPublisherKickSessionIdRef = useRef<string | null>(null);
   const [webOpenNotice, setWebOpenNotice] = useState("");
+
+  useEffect(() => {
+    const requestRecovery = (context: Record<string, unknown>) => {
+      if (context.desiredCapture !== true) return;
+      setDesktopNotice("助手已从异常退出中恢复，正在重新连接当前面试收音。");
+      setPublisherRetryNonce((value) => value + 1);
+    };
+    const unsubscribe = window.offersteady?.onRendererRecoveryRequested?.(requestRecovery);
+    void window.offersteady?.getRendererRecoveryContext?.().then((context) => {
+      if (context) requestRecovery(context);
+    });
+    return () => unsubscribe?.();
+  }, []);
+
   const applyConnectionCopy = (notice: string, info?: string) => {
     setConnectionNotice(current => current === notice ? current : notice);
     if (info !== undefined) {
@@ -423,6 +450,68 @@ export function CompanionApp() {
     () => captureEnabled && hasPublisherTakenOver(liveSourceHealthState),
     [captureEnabled, liveSourceHealthState],
   );
+
+  useEffect(() => {
+    let previousRenderCount = renderCountRef.current;
+    let previousAtMs = Date.now();
+    const timer = window.setInterval(() => {
+      const nowMs = Date.now();
+      const elapsedSeconds = Math.max(0.001, (nowMs - previousAtMs) / 1_000);
+      const reactRenderRate = (renderCountRef.current - previousRenderCount) / elapsedSeconds;
+      previousRenderCount = renderCountRef.current;
+      previousAtMs = nowMs;
+      const memory = (performance as Performance & { memory?: {
+        usedJSHeapSize?: number;
+        totalJSHeapSize?: number;
+        jsHeapSizeLimit?: number;
+      } }).memory;
+      const publisher = publisherRef.current?.reliabilitySnapshot() ?? reliabilityRef.current;
+      const resources = publisher?.resources;
+      const previousResources = reliabilityRateRef.current;
+      const resourceElapsedSeconds = previousResources ? Math.max(0.001, (nowMs - previousResources.atMs) / 1_000) : 1;
+      const audioWorkletCallbackRate = resources && previousResources
+        ? Math.max(0, resources.audioWorkletCallbackCount - previousResources.callbackCount) / resourceElapsedSeconds
+        : 0;
+      const workletPostMessageRate = resources && previousResources
+        ? Math.max(0, resources.workletPostMessageCount - previousResources.postMessageCount) / resourceElapsedSeconds
+        : 0;
+      const audioBytesPerSecond = resources && previousResources
+        ? Math.max(0, resources.audioBytes - previousResources.audioBytes) / resourceElapsedSeconds
+        : 0;
+      if (resources) {
+        reliabilityRateRef.current = {
+          atMs: nowMs,
+          callbackCount: resources.audioWorkletCallbackCount,
+          postMessageCount: resources.workletPostMessageCount,
+          audioBytes: resources.audioBytes,
+        };
+      }
+      const captureStartedAtMs = publisher?.sources
+        .map((source) => source.startedAtMs)
+        .filter((value) => value > 0)
+        .sort((a, b) => a - b)[0] ?? null;
+      window.offersteady?.publishRendererReliabilityHeartbeat?.({
+        sentAtMs: nowMs,
+        rendererStartedAtMs: rendererStartedAtMsRef.current,
+        sessionId: activeBinding?.sessionId ?? publisher?.sessionId ?? null,
+        sessionStatus: bindingSessionStatus,
+        desiredCapture: captureEnabled,
+        captureStartedAtMs,
+        renderCount: renderCountRef.current,
+        reactRenderRate,
+        jsHeapUsed: memory?.usedJSHeapSize ?? null,
+        jsHeapTotal: memory?.totalJSHeapSize ?? null,
+        jsHeapLimit: memory?.jsHeapSizeLimit ?? null,
+        jsExternal: null,
+        arrayBuffers: resources?.ownedArrayBufferBytes ?? null,
+        audioWorkletCallbackRate,
+        workletPostMessageRate,
+        audioBytesPerSecond,
+        publisher: publisher ?? null,
+      });
+    }, 1_000);
+    return () => window.clearInterval(timer);
+  }, [activeBinding?.sessionId, bindingSessionStatus, captureEnabled]);
 
   useEffect(() => {
     void window.offersteady?.getScreenshotShortcut?.()
@@ -882,6 +971,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       microphoneId: effectiveMicrophoneId,
       systemAudioId: selectedSystemAudioId || "system-loopback",
       endpointingMode: config.realtimeEndpointing.mode,
+      ...(diagnosticAudioChannels ? { diagnosticAudioChannels } : {}),
       fetchImpl: (input, init) => desktopBackendFetch(config, String(input), init),
       onHealth: (health) => {
         if (cancelled) return;
@@ -899,6 +989,27 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
         setState(captureState);
         window.offersteady?.publishCaptureState(captureState);
       },
+      onReliability: (snapshot) => {
+        if (cancelled) return;
+        reliabilityRef.current = snapshot;
+        const states = snapshot.sources.map((source) => source.state);
+        if (states.includes("LOST")) {
+          setState("error");
+          setCaptureDiagnostic("实时收音链路已中断，助手正在自动恢复。");
+          window.offersteady?.publishCaptureState("error");
+        } else if (states.includes("RECOVERING") || states.includes("STARTING")) {
+          setState("reconnecting");
+          window.offersteady?.publishCaptureState("reconnecting");
+        } else if (states.includes("DEGRADED")) {
+          setState("error");
+          setCaptureDiagnostic("实时收音链路不稳定，助手正在检查并恢复。");
+          window.offersteady?.publishCaptureState("error");
+        } else if (states.length > 0 && states.every((sourceState) => sourceState === "HEALTHY")) {
+          setState("capturing");
+          setCaptureDiagnostic(null);
+          window.offersteady?.publishCaptureState("capturing");
+        }
+      },
       onFailure: (message) => {
         if (cancelled) return;
         const nextMessage = message.includes("输出音频") || message.includes("系统音频")
@@ -912,6 +1023,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
         if (event.kind === "frame-accepted") {
           setCaptureDiagnostic(null);
           setConnectionInfo("已连接网页端，音频帧正在持续送入后端实时语音链路");
+          window.offersteady?.completeRendererRecovery?.({ sessionId: activeBinding.sessionId, ackAtMs: Date.now() });
           return;
         }
         if (event.kind === "transcript-updated") {

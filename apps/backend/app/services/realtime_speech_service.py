@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import concurrent.futures
 import logging
+import math
 import queue
 import random
 import re
@@ -400,6 +401,11 @@ class RealtimeSpeechService:
         if self.capture_control_state(session_id=frame.session_id) == "paused":
             return
         partial_received_at_ms = result.partial_received_at_ms or _now_ms()
+        partial_trace_id = (
+            f"{frame.trace_id}:p{result.provider_revision}"
+            if frame.trace_id and result.provider_revision is not None
+            else frame.trace_id
+        )
         with self._provider_partial_publish_lock:
             suppression_reason = self._suppression_reason(result.text, frame=frame)
             if suppression_reason is None:
@@ -421,7 +427,13 @@ class RealtimeSpeechService:
                 else int((current.performance or {}).get("systemFirstEffectivePartialAtMs") or partial_received_at_ms)
             )
             timing = {
-                "traceId": frame.trace_id,
+                **{
+                    key: value
+                    for key, value in frame.diagnostics.items()
+                    if value is None or isinstance(value, (str, int, float, bool))
+                },
+                "traceId": partial_trace_id,
+                "sourceFrameTraceId": frame.trace_id,
                 "sessionId": frame.session_id,
                 "channel": frame.source_kind,
                 "sequence": frame.sequence,
@@ -472,6 +484,14 @@ class RealtimeSpeechService:
                 "browserRenderAtMs": None,
                 "speechEndDetectedAtMs": None,
                 "manualCommitSentAtMs": None,
+                "asrSessionLockWaitStartAtMs": result.asr_lock_wait_start_at_ms,
+                "asrSessionLockAcquiredAtMs": result.asr_lock_acquired_at_ms,
+                "qwenSendEnqueueAtMs": result.qwen_send_enqueue_at_ms,
+                "qwenWsSendStartAtMs": result.qwen_ws_send_start_at_ms,
+                "qwenWsSendCompleteAtMs": result.qwen_ws_send_complete_at_ms,
+                "providerRevision": result.provider_revision,
+                "partialTextLength": len(result.text.strip()),
+                "connectionId": result.connection_id,
             }
             transcript = self.repository.save_transcript(TranscriptSegmentRecord(
                 segment_id=frame.segment_id,
@@ -492,6 +512,15 @@ class RealtimeSpeechService:
                 performance=timing,
                 usage=result.usage,
             ))
+            timing = {
+                **timing,
+                "revision": transcript.revision,
+                "providerRevision": result.provider_revision,
+                "segmentId": transcript.segment_id,
+                "utteranceId": transcript.segment_id,
+                "textLength": len(transcript.text),
+                "transcriptEventCreatedAtMs": _now_ms(),
+            }
             event = self._save_event(
                 session_id=frame.session_id,
                 owner_user_id=publisher.owner_user_id,
@@ -517,7 +546,7 @@ class RealtimeSpeechService:
             event_performance = event.payload.get("performance")
             if isinstance(event_performance, dict):
                 timing = dict(event_performance)
-            self._observe_trace(frame.trace_id, **timing)
+            self._observe_trace(partial_trace_id, **timing)
             self._set_latest_timing(session_id=frame.session_id, source_kind=frame.source_kind, timing=timing)
             # Stable/question-prefetch is deliberately after the subtitle XADD.
             self._observe_stable_interviewer_partial(transcript)
@@ -755,7 +784,13 @@ class RealtimeSpeechService:
     def _observe_trace(self, trace_id: str | None, **fields: object) -> None:
         if not trace_id:
             return
-        safe_fields = {key: value for key, value in fields.items() if value is None or isinstance(value, (str, int, bool))}
+        safe_fields = {
+            key: value
+            for key, value in fields.items()
+            if value is None
+            or isinstance(value, (str, int, bool))
+            or (isinstance(value, float) and math.isfinite(value))
+        }
         with self._trace_lock:
             if trace_id not in self._trace_records:
                 if len(self._trace_order) == self._trace_order.maxlen:
@@ -765,6 +800,12 @@ class RealtimeSpeechService:
                 self._trace_records[trace_id] = {"traceId": trace_id}
             self._trace_records[trace_id].update(safe_fields)
 
+    def _trace_snapshot(self, trace_id: str | None) -> dict[str, object]:
+        if not trace_id:
+            return {}
+        with self._trace_lock:
+            return dict(self._trace_records.get(trace_id, {}))
+
     def observe_sse_delivery(self, events: list[RealtimeEvent], *, sent_at_ms: int) -> list[RealtimeEvent]:
         delivered: list[RealtimeEvent] = []
         for event in events:
@@ -773,14 +814,28 @@ class RealtimeSpeechService:
                 delivered.append(event)
                 continue
             trace_id = performance.get("traceId")
-            enriched_performance = {**performance, "sseEventSendAtMs": sent_at_ms, "eventId": event.event_id}
+            trace = self._trace_snapshot(str(trace_id) if trace_id else None)
+            enriched_performance = {
+                **performance,
+                **{
+                    key: value
+                    for key, value in trace.items()
+                    if key != "traceId" and (value is None or isinstance(value, (str, int, float, bool)))
+                },
+                "sseGeneratorYieldAtMs": sent_at_ms,
+                "sseEventSendAtMs": sent_at_ms,
+                "httpResponseChunkWrittenAvailable": False,
+                "eventId": event.event_id,
+            }
             enriched = replace(event, payload={**event.payload, "performance": enriched_performance})
             delivered.append(enriched)
             self._observe_trace(
                 str(trace_id) if trace_id else None,
                 redisEventXreadAtMs=performance.get("redisEventXreadAtMs"),
                 redisReadMode=performance.get("redisReadMode"),
+                sseGeneratorYieldAtMs=sent_at_ms,
                 sseEventSendAtMs=sent_at_ms,
+                httpResponseChunkWrittenAvailable=False,
                 eventId=event.event_id,
             )
         return delivered
@@ -789,6 +844,22 @@ class RealtimeSpeechService:
         with self._trace_lock:
             records = [dict(item) for item in self._trace_records.values() if session_id is None or item.get("sessionId") == session_id]
         pairs = {
+            "desktopVadToWorkletMs": ("desktopVadConfirmAtMs", "desktopAudioWorkletOutputAtMs"),
+            "desktopWorkletToRendererMs": ("desktopAudioWorkletOutputAtMs", "desktopRendererReceiveAtMs"),
+            "desktopRendererToPcmMs": ("desktopRendererReceiveAtMs", "desktopPcmConversionAtMs"),
+            "desktopPcmToRingBufferMs": ("desktopPcmConversionAtMs", "desktopRingBufferWriteAtMs"),
+            "desktopRingBufferToEnqueueMs": ("desktopRingBufferWriteAtMs", "desktopPublisherEnqueueAtMs"),
+            "desktopEnqueueToFlushMs": ("desktopPublisherEnqueueAtMs", "desktopPublisherFlushAtMs"),
+            "desktopFlushToWsSendMs": ("desktopPublisherFlushAtMs", "desktopWsSendAtMs"),
+            "backendWsToValidationMs": ("backendWebsocketFrameReceivedAtMs", "backendFrameValidationDoneAtMs"),
+            "backendValidationToRoutingMs": ("backendFrameValidationDoneAtMs", "backendChannelRoutingDoneAtMs"),
+            "backendRoutingToQueueMs": ("backendChannelRoutingDoneAtMs", "queueEnterAtMs"),
+            "backendQueueMs": ("queueEnterAtMs", "queueLeaveAtMs"),
+            "backendWorkerToLockWaitMs": ("queueLeaveAtMs", "asrSessionLockWaitStartAtMs"),
+            "backendAsrLockWaitMs": ("asrSessionLockWaitStartAtMs", "asrSessionLockAcquiredAtMs"),
+            "backendLockToQwenEnqueueMs": ("asrSessionLockAcquiredAtMs", "qwenSendEnqueueAtMs"),
+            "backendQwenEnqueueToWsSendMs": ("qwenSendEnqueueAtMs", "qwenWsSendStartAtMs"),
+            "backendQwenWsSendMs": ("qwenWsSendStartAtMs", "qwenWsSendCompleteAtMs"),
             "speechStartToFirstFrameSendMs": ("speechStartAtMs", "desktopWsSendAtMs"),
             "firstFrameToQwenAppendMs": ("desktopWsSendAtMs", "qwenAudioAppendAtMs"),
             "networkMs": ("desktopWsSendAtMs", "backendWsReceiveAtMs"),
@@ -796,6 +867,18 @@ class RealtimeSpeechService:
             "queueWaitMs": ("queueEnterAtMs", "queueLeaveAtMs"),
             "asrInputLagMs": ("queueLeaveAtMs", "qwenAudioAppendAtMs"),
             "qwenPartialMs": ("qwenAudioAppendAtMs", "qwenPartialReceivedAtMs"),
+            "revisionQwenToEventMs": ("qwenPartialReceivedAtMs", "transcriptEventCreatedAtMs"),
+            "revisionEventToRedisXaddStartMs": ("transcriptEventCreatedAtMs", "redisEventXaddStartAtMs"),
+            "revisionRedisXaddMs": ("redisEventXaddStartAtMs", "redisEventXaddCompleteAtMs"),
+            "revisionRedisToSseMs": ("redisEventXaddCompleteAtMs", "sseGeneratorYieldAtMs"),
+            "revisionSseToBrowserChunkMs": ("sseGeneratorYieldAtMs", "browserStreamChunkReceivedAtMs"),
+            "revisionBrowserChunkToParseMs": ("browserStreamChunkReceivedAtMs", "browserEventParsedAtMs"),
+            "revisionBrowserParseToStoreStartMs": ("browserEventParsedAtMs", "transcriptStoreUpdateStartAtMs"),
+            "revisionStoreUpdateMs": ("transcriptStoreUpdateStartAtMs", "transcriptStoreUpdateCompleteAtMs"),
+            "revisionStoreToReactRenderMs": ("transcriptStoreUpdateCompleteAtMs", "reactRenderStartAtMs"),
+            "revisionReactRenderToCommitMs": ("reactRenderStartAtMs", "reactCommitAtMs"),
+            "revisionReactCommitToPaintMs": ("reactCommitAtMs", "browserPaintAtMs"),
+            "revisionQwenToPaintMs": ("qwenPartialReceivedAtMs", "browserPaintAtMs"),
             "qwenPartialToRedisXaddMs": ("qwenPartialReceivedAtMs", "redisEventXaddAtMs"),
             "redisXaddToXreadMs": ("redisEventXaddAtMs", "redisEventXreadAtMs"),
             "redisXreadToSseSendMs": ("redisEventXreadAtMs", "sseEventSendAtMs"),
@@ -837,11 +920,85 @@ class RealtimeSpeechService:
                 "p99": self._percentile(samples, 0.99),
                 "max": max(samples) if samples else None,
             }
-        return {"traceCount": len(records), "distributions": distributions}
+        revision_stages = {
+            "qwen": "qwenPartialReceivedAtMs",
+            "event": "transcriptEventCreatedAtMs",
+            "redisXadd": "redisEventXaddCompleteAtMs",
+            "redisXread": "redisEventXreadAtMs",
+            "sse": "sseGeneratorYieldAtMs",
+            "browser": "browserEventParsedAtMs",
+            "store": "transcriptStoreUpdateCompleteAtMs",
+            "reactCommit": "reactCommitAtMs",
+            "paint": "browserPaintAtMs",
+        }
+        visible_records = [item for item in records if item.get("visibilityState") == "visible"]
+        stage_counts = {
+            stage: sum(1 for item in records if isinstance(item.get(field), int))
+            for stage, field in revision_stages.items()
+        }
+        visible_stage_counts = {
+            stage: sum(1 for item in visible_records if isinstance(item.get(field), int))
+            for stage, field in revision_stages.items()
+        }
+        revision_gaps: dict[str, object] = {}
+        browser_stages = {"browser", "store", "reactCommit", "paint"}
+        for stage, field in revision_stages.items():
+            gaps: list[int] = []
+            anomalies: list[dict[str, object]] = []
+            for (group_session, group_channel, group_utterance), group in utterance_groups.items():
+                ordered = sorted(
+                    (
+                        item for item in group
+                        if isinstance(item.get(field), int)
+                        and (stage not in browser_stages or item.get("visibilityState") == "visible")
+                    ),
+                    key=lambda item: (int(item.get("providerRevision") or item.get("revision") or 0), int(item[field])),
+                )
+                for previous, current in zip(ordered, ordered[1:]):
+                    gap = int(current[field]) - int(previous[field])
+                    if gap < 0:
+                        continue
+                    gaps.append(gap)
+                    if gap > 500:
+                        anomalies.append({
+                            "sessionId": group_session,
+                            "channel": group_channel,
+                            "utteranceId": group_utterance,
+                            "fromRevision": previous.get("providerRevision") or previous.get("revision"),
+                            "toRevision": current.get("providerRevision") or current.get("revision"),
+                            "gapMs": gap,
+                            "threshold": 3000 if gap > 3000 else 1000 if gap > 1000 else 500,
+                        })
+            revision_gaps[stage] = {
+                "count": len(gaps),
+                "p50": self._percentile(gaps, 0.50),
+                "p95": self._percentile(gaps, 0.95),
+                "p99": self._percentile(gaps, 0.99),
+                "max": max(gaps) if gaps else None,
+                "over500Ms": sum(1 for gap in gaps if gap > 500),
+                "over1000Ms": sum(1 for gap in gaps if gap > 1000),
+                "over3000Ms": sum(1 for gap in gaps if gap > 3000),
+                "anomalies": anomalies[:200],
+            }
+        qwen_count = stage_counts["qwen"]
+        loss_rates = {
+            stage: (round(max(0, qwen_count - count) / qwen_count, 6) if qwen_count else None)
+            for stage, count in stage_counts.items()
+        }
+        return {
+            "traceCount": len(records),
+            "distributions": distributions,
+            "revisionDiagnostics": {
+                "stageCounts": stage_counts,
+                "visibleStageCounts": visible_stage_counts,
+                "lossRatesFromQwen": loss_rates,
+                "revisionGaps": revision_gaps,
+            },
+        }
 
     def performance_traces(self, *, session_id: str, limit: int = 100) -> list[dict[str, object]]:
         with self._trace_lock:
-            trace_ids = list(self._trace_order)[-max(1, min(500, limit)):]
+            trace_ids = list(self._trace_order)[-max(1, min(4096, limit)):]
             return [
                 dict(self._trace_records[trace_id])
                 for trace_id in trace_ids
@@ -1625,6 +1782,7 @@ class RealtimeSpeechService:
         trace_id: str | None,
         sent_at_ms: int | None,
         audio_base64: str,
+        diagnostics: dict[str, object] | None = None,
         turn_state: str | None = None,
         finalization_reason: str | None = None,
         source_generation: int | None = None,
@@ -1654,6 +1812,7 @@ class RealtimeSpeechService:
             terminal_id=terminal_id,
             trace_id=trace_id,
             sent_at_ms=sent_at_ms,
+            diagnostics=diagnostics,
             audio_base64=audio_base64,
         )
         publisher = prepared.get("publisher")
@@ -1683,6 +1842,7 @@ class RealtimeSpeechService:
         is_final: bool,
         trace_id: str | None,
         sent_at_ms: int | None,
+        diagnostics: dict[str, object] | None = None,
         audio_base64: str = "",
         audio_bytes: bytes | None = None,
         turn_state: str | None = None,
@@ -1715,6 +1875,7 @@ class RealtimeSpeechService:
             terminal_id=terminal_id,
             trace_id=trace_id,
             sent_at_ms=sent_at_ms,
+            diagnostics=diagnostics,
             audio_base64=audio_base64,
             audio_bytes=audio_bytes,
             authenticated_publisher=authenticated_publisher,
@@ -1739,6 +1900,7 @@ class RealtimeSpeechService:
         frame = prepared.get("frame")
         assert isinstance(frame, AudioFrame)
         prepared["queue_enter_at_ms"] = _now_ms()
+        self._observe_trace(frame.trace_id, queueEnterAtMs=prepared["queue_enter_at_ms"])
         self._track_source_turn(prepared)
         try:
             work_queue.put_nowait(prepared)
@@ -2005,6 +2167,7 @@ class RealtimeSpeechService:
         terminal_id: str | None,
         trace_id: str | None,
         sent_at_ms: int | None,
+        diagnostics: dict[str, object] | None = None,
         audio_base64: str = "",
         audio_bytes: bytes | None = None,
         authenticated_publisher: RealtimePublisherRecord | None = None,
@@ -2085,7 +2248,24 @@ class RealtimeSpeechService:
             vad_triggered_at_ms=vad_triggered_at_ms,
             speech_confirmed_at_ms=speech_confirmed_at_ms,
             backend_received_at_ms=ingest_received_at_ms,
+            diagnostics=dict(diagnostics or {}),
             audio_bytes=decoded_audio,
+        )
+        self._observe_trace(
+            trace_id,
+            sessionId=publisher.session_id,
+            channel=source_kind,
+            sequence=sequence,
+            revision=revision,
+            utteranceId=segment_id,
+            desktopAudioCaptureAtMs=captured_at_ms,
+            desktopWsSendAtMs=sent_at_ms,
+            backendWsReceiveAtMs=ingest_received_at_ms,
+            **{
+                key: value
+                for key, value in frame.diagnostics.items()
+                if value is None or isinstance(value, (str, int, float, bool))
+            },
         )
         if not frame.audio_bytes:
             degraded = self._save_event(
@@ -2181,6 +2361,7 @@ class RealtimeSpeechService:
         events: list[dict[str, object]] = []
         queue_depth = self._active_request_enter(session_id=publisher.session_id, source_kind=source_kind)
         worker_dequeued_at_ms = _now_ms()
+        self._observe_trace(frame.trace_id, queueLeaveAtMs=worker_dequeued_at_ms)
         counter_bucket["framesConsumed"] = int(counter_bucket.get("framesConsumed", 0)) + 1
         wait_samples = self._queue_wait_samples.setdefault(
             (publisher.session_id, source_kind), deque(maxlen=512)  # type: ignore[arg-type]
@@ -2216,6 +2397,11 @@ class RealtimeSpeechService:
             self._counter_bucket(session_id=publisher.session_id, source_kind=source_kind)["queueDepth"] = max(0, queue_depth - 1)
         published_at_ms = _now_ms()
         timing = {
+            **{
+                key: value
+                for key, value in frame.diagnostics.items()
+                if value is None or isinstance(value, (str, int, float, bool))
+            },
             "traceId": frame.trace_id,
             "sessionId": publisher.session_id,
             "channel": source_kind,
@@ -2258,6 +2444,13 @@ class RealtimeSpeechService:
             "browserRenderAtMs": None,
             "speechEndDetectedAtMs": frame.ended_at_ms if frame.is_final else None,
             "manualCommitSentAtMs": transcript_result.commit_sent_at_ms,
+            "asrSessionLockWaitStartAtMs": transcript_result.asr_lock_wait_start_at_ms,
+            "asrSessionLockAcquiredAtMs": transcript_result.asr_lock_acquired_at_ms,
+            "qwenSendEnqueueAtMs": transcript_result.qwen_send_enqueue_at_ms,
+            "qwenWsSendStartAtMs": transcript_result.qwen_ws_send_start_at_ms,
+            "qwenWsSendCompleteAtMs": transcript_result.qwen_ws_send_complete_at_ms,
+            "coalescedFrameCount": int(prepared.get("coalesced_frame_count", 1)),
+            "connectionId": transcript_result.connection_id,
         }
         self._observe_trace(frame.trace_id, **timing)
         self._set_latest_timing(session_id=publisher.session_id, source_kind=source_kind, timing=timing)
@@ -3288,7 +3481,7 @@ class RealtimeSpeechService:
                 eventId=event_id,
                 redisEventXaddAtMs=created_at_ms,
             )
-        return self.repository.save_event(
+        stored = self.repository.save_event(
             RealtimeEvent(
                 event_id=event_id,
                 session_id=session_id,
@@ -3298,6 +3491,14 @@ class RealtimeSpeechService:
                 created_at_ms=created_at_ms,
             )
         )
+        stored_performance = stored.payload.get("performance")
+        if isinstance(stored_performance, dict):
+            stored_trace_id = stored_performance.get("traceId")
+            self._observe_trace(
+                str(stored_trace_id) if stored_trace_id else None,
+                **stored_performance,
+            )
+        return stored
 
     def publish_session_event(
         self,
@@ -3357,9 +3558,19 @@ class RealtimeSpeechService:
         browser_event_receive_at_ms: int | None = None,
         browser_state_update_at_ms: int | None = None,
         browser_render_at_ms: int | None = None,
+        visibility_state: str | None = None,
+        browser_stream_chunk_received_at_ms: int | None = None,
+        browser_event_parsed_at_ms: int | None = None,
+        transcript_store_update_start_at_ms: int | None = None,
+        transcript_store_update_complete_at_ms: int | None = None,
+        react_render_start_at_ms: int | None = None,
+        react_commit_at_ms: int | None = None,
+        browser_paint_at_ms: int | None = None,
+        rendered_revision: int | None = None,
+        rendered_text_length: int | None = None,
     ) -> RealtimeEvent:
         self.session_service.get_session(user_id=user_id, session_id=session_id)
-        if stage == "transcript-render":
+        if stage in {"transcript-delivery", "transcript-render"}:
             for source_kind in ("microphone", "system"):
                 timing = self._latest_timing(session_id=session_id, source_kind=source_kind)  # type: ignore[arg-type]
                 if timing is not None and timing.get("traceId") == trace_id:
@@ -3368,13 +3579,25 @@ class RealtimeSpeechService:
                         source_kind=source_kind,  # type: ignore[arg-type]
                         timing={**timing, "frontendRenderMs": duration_ms},
                     )
-            self._observe_trace(
-                trace_id,
-                eventId=event_id,
-                browserEventReceiveAtMs=browser_event_receive_at_ms,
-                browserStateUpdateAtMs=browser_state_update_at_ms,
-                browserRenderAtMs=browser_render_at_ms,
-            )
+            browser_fields = {
+                "eventId": event_id,
+                "browserEventReceiveAtMs": browser_event_receive_at_ms,
+                "browserStateUpdateAtMs": browser_state_update_at_ms,
+                "browserRenderAtMs": browser_render_at_ms,
+                "visibilityState": visibility_state,
+                "browserStreamChunkReceivedAtMs": browser_stream_chunk_received_at_ms,
+                "browserEventParsedAtMs": browser_event_parsed_at_ms,
+                "transcriptStoreUpdateStartAtMs": transcript_store_update_start_at_ms,
+                "transcriptStoreUpdateCompleteAtMs": transcript_store_update_complete_at_ms,
+                "reactRenderStartAtMs": react_render_start_at_ms,
+                "reactCommitAtMs": react_commit_at_ms,
+                "browserPaintAtMs": browser_paint_at_ms,
+                "renderedRevision": rendered_revision,
+                "renderedTextLength": rendered_text_length,
+            }
+            self._observe_trace(trace_id, **{
+                key: value for key, value in browser_fields.items() if value is not None
+            })
         log_event(
             self.logger,
             logging.INFO,

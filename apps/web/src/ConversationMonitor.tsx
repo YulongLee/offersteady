@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { SpeakerTranscriptSegment } from "@offersteady/protocol";
 import type { WebAppState } from "./domain";
 import { projectConversationTurns } from "./conversation-turns";
+import { SubtitleDiagnosticsOverlay } from "./SubtitleDiagnosticsOverlay";
+import { recordSubtitleRevisionStage, subtitleRevisionDiagnosticsEnabled } from "./realtime-subtitle-diagnostics";
 
 interface Props {
   readonly state: WebAppState;
@@ -40,9 +43,13 @@ export const transcriptPresentationState = (
   return "transcribing";
 };
 
-function ProgressiveTranscriptText({ text, active }: { readonly text: string; readonly active: boolean }) {
+function ProgressiveTranscriptText({ segment, active }: { readonly segment: SpeakerTranscriptSegment; readonly active: boolean }) {
+  const text = segment.text;
   const [visibleText, setVisibleText] = useState(text);
   const targetText = useRef(text);
+  const lastPaintedEventId = useRef<string | null>(null);
+  const performance = segment.performance;
+  const renderStartedAtMs = useMemo(() => Date.now(), [performance?.eventId, visibleText]);
   targetText.current = text;
 
   useEffect(() => {
@@ -55,6 +62,52 @@ function ProgressiveTranscriptText({ text, active }: { readonly text: string; re
     }, 32);
     return () => window.clearInterval(timer);
   }, [active, text]);
+
+  useLayoutEffect(() => {
+    if (!subtitleRevisionDiagnosticsEnabled() || visibleText !== text) return;
+    const eventId = performance?.eventId;
+    const traceId = performance?.traceId;
+    if (!eventId || !traceId || lastPaintedEventId.current === eventId) return;
+    const identity = {
+      sessionId: segment.sessionId,
+      channel: performance.channel ?? segment.sourceKind,
+      utteranceId: performance.utteranceId ?? performance.segmentId ?? segment.id,
+      segmentId: performance.segmentId ?? segment.id,
+      revision: segment.revision,
+      eventId,
+      traceId,
+      textLength: text.length,
+    };
+    recordSubtitleRevisionStage(identity, "react-render", renderStartedAtMs, { renderedTextLength: visibleText.length });
+    const reactCommitAtMs = Date.now();
+    recordSubtitleRevisionStage(identity, "react-commit", reactCommitAtMs, { renderedTextLength: visibleText.length });
+    const handle = window.requestAnimationFrame(() => {
+      const browserPaintAtMs = Date.now();
+      lastPaintedEventId.current = eventId;
+      recordSubtitleRevisionStage(identity, "paint", browserPaintAtMs, { renderedTextLength: visibleText.length });
+      window.dispatchEvent(new CustomEvent("offersteady:realtime-transcript-rendered", {
+        detail: {
+          sessionId: segment.sessionId,
+          traceId,
+          eventId,
+          browserStreamChunkReceivedAtMs: performance.browserStreamChunkReceivedAtMs,
+          browserEventParsedAtMs: performance.browserEventParsedAtMs,
+          transcriptStoreUpdateStartAtMs: performance.transcriptStoreUpdateStartAtMs,
+          transcriptStoreUpdateCompleteAtMs: performance.transcriptStoreUpdateCompleteAtMs,
+          browserEventReceiveAtMs: performance.browserEventReceiveAtMs,
+          browserStateUpdateAtMs: performance.browserStateUpdateAtMs,
+          reactRenderStartAtMs: renderStartedAtMs,
+          reactCommitAtMs,
+          browserPaintAtMs,
+          browserRenderAtMs: browserPaintAtMs,
+          renderedRevision: segment.revision,
+          renderedTextLength: visibleText.length,
+          visibilityState: document.visibilityState,
+        },
+      }));
+    });
+    return () => window.cancelAnimationFrame(handle);
+  }, [performance, renderStartedAtMs, segment.id, segment.revision, segment.sessionId, text, visibleText]);
 
   return <p className={active ? "is-streaming" : "is-final"}>{visibleText}{active ? <span className="transcript-caret" aria-hidden="true" /> : null}</p>;
 }
@@ -87,7 +140,7 @@ export function ConversationMonitor({ state, onConfirmQuestion, onDismissQuestio
     runtime.latestSegmentId = latest.id;
     runtime.renderedAtMs = Date.now();
     const performance = latest.performance;
-    if (performance?.traceId) {
+    if (performance?.traceId && !subtitleRevisionDiagnosticsEnabled()) {
       window.dispatchEvent(new CustomEvent("offersteady:realtime-transcript-rendered", {
         detail: {
           sessionId: latest.sessionId,
@@ -96,12 +149,14 @@ export function ConversationMonitor({ state, onConfirmQuestion, onDismissQuestio
           browserEventReceiveAtMs: performance.browserEventReceiveAtMs,
           browserStateUpdateAtMs: performance.browserStateUpdateAtMs,
           browserRenderAtMs: runtime.renderedAtMs,
+          visibilityState: document.visibilityState,
         },
       }));
     }
   }, [transcripts]);
   const pendingSegmentIds = new Set(state.speaker.pendingQuestion?.sourceSegmentIds ?? []);
   return <section className={`conversation-monitor ${transcripts.length === 0 ? "is-empty" : "has-transcripts"}`} aria-labelledby="conversation-title">
+    <SubtitleDiagnosticsOverlay />
     <header><div><span className="kicker">LIVE CONVERSATION</span><h2 id="conversation-title">实时对话</h2></div><span className="conversation-mode"><i className={state.speaker.mode === "dual-channel" ? "online-dot" : "recording-dot"} />{state.speaker.mode === "dual-channel" ? "双通道 · 两角色" : "仅手动提问"}</span></header>
     {state.speaker.degradation ? <div className="source-degradation" role="status"><strong>音频来源无法区分</strong><span>面试官问题识别已暂停，请检查桌面程序或使用右侧手动提问。</span></div> : null}
     {!state.speaker.degradation && state.speaker.runtimeNotice ? <div className="source-degradation" role="status"><strong>当前 session 尚未收到实时对话</strong><span>{state.speaker.runtimeNotice.message}</span></div> : null}
@@ -111,7 +166,7 @@ export function ConversationMonitor({ state, onConfirmQuestion, onDismissQuestio
         const role = segment.role;
         const hasPendingQuestion = segment.sourceSegmentIds.some(id => pendingSegmentIds.has(id));
         const presentation = transcriptPresentationState(segment, nowMs);
-        return <article key={segment.id} className={`conversation-turn ${role}`}><time>{formatTranscriptTimestamp(segment.startedAtMs)}</time><div><div className="conversation-turn-meta"><strong>{role === "candidate" ? "我" : "面试官"}</strong><small>{presentation === "final" ? "已确认" : presentation === "stale" ? "识别未完成" : "转写中"}{segment.overlap ? " · 声音重叠" : ""}</small></div><ProgressiveTranscriptText text={segment.text} active={presentation === "transcribing"} />{hasPendingQuestion && state.speaker.pendingQuestion ? <div className="inline-question-confirm"><span>问题内容不清晰</span><strong>{state.speaker.pendingQuestion.text}</strong><small>确认文本后可点击“快答”生成回答；确认本身不会开始回答或扣费。</small><div><button onClick={onDismissQuestion}>忽略</button><button className="confirm" onClick={onConfirmQuestion}>确认问题</button></div></div> : null}</div></article>;
+        return <article key={segment.id} className={`conversation-turn ${role}`}><time>{formatTranscriptTimestamp(segment.startedAtMs)}</time><div><div className="conversation-turn-meta"><strong>{role === "candidate" ? "我" : "面试官"}</strong><small>{presentation === "final" ? "已确认" : presentation === "stale" ? "识别未完成" : "转写中"}{segment.overlap ? " · 声音重叠" : ""}</small></div><ProgressiveTranscriptText segment={segment} active={presentation === "transcribing"} />{hasPendingQuestion && state.speaker.pendingQuestion ? <div className="inline-question-confirm"><span>问题内容不清晰</span><strong>{state.speaker.pendingQuestion.text}</strong><small>确认文本后可点击“快答”生成回答；确认本身不会开始回答或扣费。</small><div><button onClick={onDismissQuestion}>忽略</button><button className="confirm" onClick={onConfirmQuestion}>确认问题</button></div></div> : null}</div></article>;
       })}
     </div>
   </section>;

@@ -67,6 +67,14 @@ export class BoundedAudioFrameBuffer {
     return [...this.frames];
   }
 
+  pendingByteLength(): number {
+    return this.byteLength;
+  }
+
+  depth(): number {
+    return this.frames.length;
+  }
+
   clear(): void {
     this.frames = [];
     this.byteLength = 0;

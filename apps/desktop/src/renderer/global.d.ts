@@ -54,6 +54,20 @@ declare global {
   interface Window {
     offersteady: {
       publishCaptureState: (state: CaptureState) => void;
+      publishRendererReliabilityHeartbeat?: (heartbeat: Record<string, unknown>) => void;
+      publishRealtimeTransportDiagnostics?: (snapshot: Record<string, unknown>) => void;
+      getRendererRecoveryContext?: () => Promise<{
+        readonly crashAtMs: number;
+        readonly reason: string;
+        readonly exitCode: number;
+        readonly sessionId: string | null;
+        readonly desiredCapture: boolean;
+        readonly recoveryAttempt: number;
+      } | null>;
+      getRendererReliabilityDiagnostics?: () => Promise<Record<string, unknown>>;
+      getRealtimeTransportDiagnosticsPath?: () => Promise<string | null>;
+      completeRendererRecovery?: (input: { readonly sessionId: string; readonly ackAtMs: number }) => void;
+      onRendererRecoveryRequested?: (listener: (context: Record<string, unknown>) => void) => () => void;
       saveDeviceCredential: (credential: string) => Promise<void>;
       clearDeviceCredential: () => Promise<void>;
       getDesktopConfig: () => Promise<DesktopRuntimeConfig>;

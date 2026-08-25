@@ -55,6 +55,7 @@ class AudioFrame:
     vad_triggered_at_ms: int | None = None
     speech_confirmed_at_ms: int | None = None
     backend_received_at_ms: int | None = None
+    diagnostics: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -188,6 +189,13 @@ class TranscriptResult:
     audio_appended_at_ms: int | None = None
     commit_sent_at_ms: int | None = None
     suppressed_reason: str | None = None
+    asr_lock_wait_start_at_ms: int | None = None
+    asr_lock_acquired_at_ms: int | None = None
+    qwen_send_enqueue_at_ms: int | None = None
+    qwen_ws_send_start_at_ms: int | None = None
+    qwen_ws_send_complete_at_ms: int | None = None
+    provider_revision: int | None = None
+    connection_id: str | None = None
 
 
 class RealtimeAsrGatewayPort(Protocol):

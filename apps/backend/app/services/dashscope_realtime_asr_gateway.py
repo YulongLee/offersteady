@@ -24,6 +24,7 @@ class _SourceRealtimeSession:
     updated_at_monotonic: float
     source_session_key: str
     source_kind: str
+    connection_id: str = "unknown"
     source_generation: int = 1
     current_segment_id: str | None = None
     transcript_text: str = ""
@@ -42,6 +43,11 @@ class _SourceRealtimeSession:
     latest_frame: AudioFrame | None = None
     latest_audio_appended_at_ms: int | None = None
     first_partial_observed_for_segment: bool = False
+    latest_asr_lock_wait_start_at_ms: int | None = None
+    latest_asr_lock_acquired_at_ms: int | None = None
+    latest_qwen_send_enqueue_at_ms: int | None = None
+    latest_qwen_ws_send_start_at_ms: int | None = None
+    latest_qwen_ws_send_complete_at_ms: int | None = None
 
 
 class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
@@ -129,7 +135,20 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         if frame.codec != normalized_codec:
             normalized_frame = replace(frame, codec=normalized_codec)
         try:
-            text, first_text_at_ms, partial_received_at_ms, completed_at_ms, audio_appended_at_ms, commit_sent_at_ms = self._roundtrip(normalized_frame)
+            (
+                text,
+                first_text_at_ms,
+                partial_received_at_ms,
+                completed_at_ms,
+                audio_appended_at_ms,
+                commit_sent_at_ms,
+                asr_lock_wait_start_at_ms,
+                asr_lock_acquired_at_ms,
+                qwen_send_enqueue_at_ms,
+                qwen_ws_send_start_at_ms,
+                qwen_ws_send_complete_at_ms,
+                connection_id,
+            ) = self._roundtrip(normalized_frame)
         finally:
             if not self.settings.realtime_asr_persistent_sessions_enabled:
                 self._close_source_session(self._source_session_key(normalized_frame))
@@ -148,6 +167,12 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             completed_at_ms=completed_at_ms,
             audio_appended_at_ms=audio_appended_at_ms,
             commit_sent_at_ms=commit_sent_at_ms,
+            asr_lock_wait_start_at_ms=asr_lock_wait_start_at_ms,
+            asr_lock_acquired_at_ms=asr_lock_acquired_at_ms,
+            qwen_send_enqueue_at_ms=qwen_send_enqueue_at_ms,
+            qwen_ws_send_start_at_ms=qwen_ws_send_start_at_ms,
+            qwen_ws_send_complete_at_ms=qwen_ws_send_complete_at_ms,
+            connection_id=connection_id,
         )
 
     def finalize(self, *, frame: AudioFrame, attempt: int) -> TranscriptResult:
@@ -219,18 +244,39 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         self._close_source_session(source_session_key)
         return 1 if exists else 0
 
-    def _roundtrip(self, frame: AudioFrame) -> tuple[str, int | None, int | None, int | None, int | None, int | None]:
+    def _roundtrip(self, frame: AudioFrame) -> tuple[
+        str,
+        int | None,
+        int | None,
+        int | None,
+        int | None,
+        int | None,
+        int | None,
+        int | None,
+        int | None,
+        int | None,
+        int | None,
+        str,
+    ]:
         session = self._get_or_create_source_session(frame)
         audio_appended_at_ms: int | None = None
         commit_sent_at_ms: int | None = None
+        asr_lock_wait_start_at_ms = int(time.time() * 1000)
         try:
             with session.lock:
+                asr_lock_acquired_at_ms = int(time.time() * 1000)
                 self._prepare_segment_state(session, frame)
                 with session.event_condition:
                     session.latest_frame = frame
+                    session.latest_asr_lock_wait_start_at_ms = asr_lock_wait_start_at_ms
+                    session.latest_asr_lock_acquired_at_ms = asr_lock_acquired_at_ms
                 if frame.audio_bytes:
                     self._append_counts[frame.source_kind] = self._append_counts.get(frame.source_kind, 0) + ((len(frame.audio_bytes) + 6399) // 6400)
-                    self._send_audio_chunks(
+                    qwen_send_enqueue_at_ms = int(time.time() * 1000)
+                    with session.event_condition:
+                        session.latest_qwen_send_enqueue_at_ms = qwen_send_enqueue_at_ms
+                        session.latest_qwen_ws_send_start_at_ms = qwen_send_enqueue_at_ms
+                    qwen_ws_send_start_at_ms, qwen_ws_send_complete_at_ms = self._send_audio_chunks(
                         session.connection,
                         frame.audio_bytes,
                         event_id_prefix=f"{frame.segment_id}-{frame.revision}",
@@ -238,6 +284,8 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                     audio_appended_at_ms = int(time.time() * 1000)
                     with session.event_condition:
                         session.latest_audio_appended_at_ms = audio_appended_at_ms
+                        session.latest_qwen_ws_send_start_at_ms = qwen_ws_send_start_at_ms
+                        session.latest_qwen_ws_send_complete_at_ms = qwen_ws_send_complete_at_ms
                     session.updated_at_monotonic = time.monotonic()
                 if frame.is_final:
                     session.connection.send(json.dumps({
@@ -265,7 +313,20 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                         session.current_segment_id = None
                 self._connection_state_by_source[session.source_kind] = "receiving"
                 self._last_error_by_source.pop(session.source_kind, None)
-                return transcript_text, first_text_at_ms, partial_received_at_ms, completed_at_ms, audio_appended_at_ms, commit_sent_at_ms
+                return (
+                    transcript_text,
+                    first_text_at_ms,
+                    partial_received_at_ms,
+                    completed_at_ms,
+                    audio_appended_at_ms,
+                    commit_sent_at_ms,
+                    asr_lock_wait_start_at_ms,
+                    asr_lock_acquired_at_ms,
+                    session.latest_qwen_send_enqueue_at_ms,
+                    session.latest_qwen_ws_send_start_at_ms,
+                    session.latest_qwen_ws_send_complete_at_ms,
+                    session.connection_id,
+                )
         except TimeoutError as exc:
             self._record_error(frame.source_kind, "realtime_asr_timeout")
             self._close_source_session(self._source_session_key(frame))
@@ -303,6 +364,11 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             session.accepting_transcript_events = True
             session.first_partial_observed_for_segment = False
             session.latest_audio_appended_at_ms = None
+            session.latest_asr_lock_wait_start_at_ms = None
+            session.latest_asr_lock_acquired_at_ms = None
+            session.latest_qwen_send_enqueue_at_ms = None
+            session.latest_qwen_ws_send_start_at_ms = None
+            session.latest_qwen_ws_send_complete_at_ms = None
             session.delivered_revision = session.event_revision
 
     def _get_or_create_source_session(self, frame: AudioFrame) -> _SourceRealtimeSession:
@@ -339,6 +405,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                 updated_at_monotonic=time.monotonic(),
                 source_session_key=key,
                 source_kind=frame.source_kind,
+                connection_id=f"{frame.source_kind}-{self._connection_create_counts[frame.source_kind]}",
                 source_generation=frame.source_generation or 1,
                 mode=mode,
             )
@@ -568,6 +635,13 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                                     first_text_at_ms=session.first_text_at_ms,
                                     partial_received_at_ms=session.latest_text_at_ms,
                                     audio_appended_at_ms=session.latest_audio_appended_at_ms,
+                                    asr_lock_wait_start_at_ms=session.latest_asr_lock_wait_start_at_ms,
+                                    asr_lock_acquired_at_ms=session.latest_asr_lock_acquired_at_ms,
+                                    qwen_send_enqueue_at_ms=session.latest_qwen_send_enqueue_at_ms,
+                                    qwen_ws_send_start_at_ms=session.latest_qwen_ws_send_start_at_ms,
+                                    qwen_ws_send_complete_at_ms=session.latest_qwen_ws_send_complete_at_ms,
+                                    provider_revision=session.event_revision,
+                                    connection_id=session.connection_id,
                                 ),
                             )
                     elif event_type == "conversation.item.input_audio_transcription.text":
@@ -664,9 +738,10 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         self._last_error_by_source[source_kind] = code
 
     @staticmethod
-    def _send_audio_chunks(websocket, audio_bytes: bytes, *, event_id_prefix: str = "audio") -> None:
+    def _send_audio_chunks(websocket, audio_bytes: bytes, *, event_id_prefix: str = "audio") -> tuple[int, int]:
+        started_at_ms = int(time.time() * 1000)
         if not audio_bytes:
-            return
+            return started_at_ms, started_at_ms
         # 6,400 bytes is 200 ms of 16 kHz mono PCM16. It keeps partial
         # transcripts responsive without multiplying synchronous WS writes.
         for index in range(0, len(audio_bytes), 6400):
@@ -676,6 +751,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                 "type": "input_audio_buffer.append",
                 "audio": base64.b64encode(chunk).decode("ascii"),
             }))
+        return started_at_ms, int(time.time() * 1000)
 
     @staticmethod
     def _error_message(payload: dict[str, object]) -> str:

@@ -4,6 +4,13 @@ import { BoundedAudioFrameBuffer, createAudioFrame, SourceFrameSequencer } from 
 import { MicrophoneAudioAdapter, SystemAudioAdapter, describeMediaError, type OpenAudioSource } from "./audio-source-adapter";
 import { calculateRms } from "./signal-diagnostics";
 import { MultiplexedRealtimeTransport } from "./multiplexed-realtime-transport";
+import { HealthUpdateScheduler } from "./health-update-scheduler";
+import { CaptureResourceCounters, type CaptureResourceCounterSnapshot } from "./capture-resource-counters";
+import {
+  RealtimeReliabilityController,
+  type RealtimeSourceReliabilitySnapshot,
+} from "./realtime-reliability";
+import { RealtimeTransportDiagnostics } from "./realtime-transport-diagnostics";
 
 interface DesktopBinding {
   readonly sessionId: string;
@@ -32,6 +39,7 @@ interface RealtimePublisherCallbacks {
   readonly onCaptureState: (state: "capturing" | "permission-required" | "reconnecting" | "error") => void;
   readonly onFailure: (message: string) => void;
   readonly onServerEvent?: (event: { readonly kind?: string; readonly payload?: Record<string, unknown> }) => void;
+  readonly onReliability?: (snapshot: DesktopRealtimeReliabilitySnapshot) => void;
 }
 
 interface RealtimePublisherOptions extends RealtimePublisherCallbacks {
@@ -41,6 +49,7 @@ interface RealtimePublisherOptions extends RealtimePublisherCallbacks {
   readonly systemAudioId: string;
   readonly endpointingMode?: EndpointingMode;
   readonly fetchImpl?: typeof fetch;
+  readonly diagnosticAudioChannels?: readonly AudioSourceKind[];
 }
 
 export const sessionCapturePermissionPolicy = {
@@ -88,6 +97,21 @@ interface SegmentSnapshot {
   readonly sourceGeneration: number;
   readonly terminalId?: string;
   readonly payload: Uint8Array;
+}
+
+interface CaptureBatchTiming {
+  readonly audioWorkletOutputAtMs: number;
+  readonly rendererReceiveAtMs: number;
+  readonly workletCallbackCount: number;
+  readonly workletPostMessageCount: number;
+  readonly float32ArrayAllocations: number;
+}
+
+export interface DesktopRealtimeReliabilitySnapshot {
+  readonly capturedAtMs: number;
+  readonly sessionId: string;
+  readonly sources: readonly RealtimeSourceReliabilitySnapshot[];
+  readonly resources: CaptureResourceCounterSnapshot;
 }
 
 export type EndpointingMode = "legacy-threshold" | "commercial-adaptive";
@@ -175,7 +199,8 @@ export type SystemAudioRecoveryReason =
   | "track-muted"
   | "audio-context-not-running"
   | "audio-callback-stalled"
-  | "system-signal-stalled";
+  | "system-signal-stalled"
+  | "watchdog-capture-lost";
 
 interface SystemAudioRecoverySnapshot {
   readonly nowMs: number;
@@ -302,7 +327,7 @@ interface AudioCaptureProcessor {
 
 const createAudioCaptureProcessor = async (
   context: AudioContext,
-  onSamples: (samples: Float32Array) => void,
+  onSamples: (samples: Float32Array, timing: CaptureBatchTiming) => void,
 ): Promise<AudioCaptureProcessor> => {
   if (context.audioWorklet && typeof AudioWorkletNode !== "undefined") {
     try {
@@ -312,9 +337,34 @@ const createAudioCaptureProcessor = async (
         numberOfOutputs: 1,
         outputChannelCount: [1],
       });
+      let previousCallbackCount = 0;
+      let previousPostMessageCount = 0;
+      let previousAllocationCount = 1;
       processor.port.onmessage = event => {
-        const samples = event.data;
-        if (samples instanceof Float32Array) onSamples(samples);
+        const rendererReceiveAtMs = Date.now();
+        const payload = event.data as {
+          readonly samples?: unknown;
+          readonly audioWorkletOutputAtMs?: unknown;
+          readonly callbackCount?: unknown;
+          readonly postMessageCount?: unknown;
+          readonly allocationCount?: unknown;
+        };
+        const samples = payload?.samples;
+        const callbackCount = typeof payload.callbackCount === "number" ? payload.callbackCount : previousCallbackCount + 1;
+        const postMessageCount = typeof payload.postMessageCount === "number" ? payload.postMessageCount : previousPostMessageCount + 1;
+        const allocationCount = typeof payload.allocationCount === "number" ? payload.allocationCount : previousAllocationCount + 1;
+        if (samples instanceof Float32Array) onSamples(samples, {
+          audioWorkletOutputAtMs: typeof payload.audioWorkletOutputAtMs === "number"
+            ? payload.audioWorkletOutputAtMs
+            : rendererReceiveAtMs,
+          rendererReceiveAtMs,
+          workletCallbackCount: Math.max(0, callbackCount - previousCallbackCount),
+          workletPostMessageCount: Math.max(0, postMessageCount - previousPostMessageCount),
+          float32ArrayAllocations: Math.max(0, allocationCount - previousAllocationCount),
+        });
+        previousCallbackCount = callbackCount;
+        previousPostMessageCount = postMessageCount;
+        previousAllocationCount = allocationCount;
       };
       const sink = connectProcessor(context, processor);
       return {
@@ -329,7 +379,16 @@ const createAudioCaptureProcessor = async (
     }
   }
   const processor = context.createScriptProcessor(1024, 1, 1);
-  processor.onaudioprocess = event => onSamples(event.inputBuffer.getChannelData(0));
+  processor.onaudioprocess = event => {
+    const receivedAtMs = Date.now();
+    onSamples(event.inputBuffer.getChannelData(0), {
+      audioWorkletOutputAtMs: receivedAtMs,
+      rendererReceiveAtMs: receivedAtMs,
+      workletCallbackCount: 1,
+      workletPostMessageCount: 1,
+      float32ArrayAllocations: 0,
+    });
+  };
   const sink = connectProcessor(context, processor);
   return {
     processor,
@@ -429,6 +488,10 @@ export class SpeechSegmenter {
 
   get currentGeneration(): number {
     return this.sourceGeneration;
+  }
+
+  get currentThresholds(): { readonly start: number; readonly continuation: number } {
+    return this.thresholds();
   }
 
   private thresholds(): { readonly start: number; readonly continuation: number } {
@@ -597,9 +660,21 @@ export class DesktopRealtimePublisher {
   private stopped = false;
   private transport: MultiplexedRealtimeTransport | null = null;
   private transportRecovery: Promise<void> | null = null;
+  private readonly healthUpdates: HealthUpdateScheduler<readonly AudioSourceHealth[]>;
+  private readonly reliability = new RealtimeReliabilityController();
+  private readonly resourceCounters = new CaptureResourceCounters();
+  private readonly transportDiagnostics: RealtimeTransportDiagnostics;
+  private readonly sourceInputs = new Map<AudioSourceKind, SourceStartInput>();
+  private watchdogTimer: number | null = null;
+  private transportWatchdogRecoveryInFlight = false;
 
   constructor(private readonly options: RealtimePublisherOptions) {
     this.fetchImpl = options.fetchImpl ?? ((input, init) => window.fetch(input, init));
+    this.transportDiagnostics = new RealtimeTransportDiagnostics(options.binding.sessionId, (snapshot) => {
+      console.info("[realtime-audio-transport-diagnostics]", snapshot);
+      window.offersteady.publishRealtimeTransportDiagnostics?.(snapshot as unknown as Record<string, unknown>);
+    });
+    this.healthUpdates = new HealthUpdateScheduler((health) => this.options.onHealth(health), 100);
     this.sendBuffers.set("microphone", new BoundedAudioFrameBuffer(MAX_PENDING_AUDIO_BYTES));
     this.sendBuffers.set("system", new BoundedAudioFrameBuffer(MAX_PENDING_AUDIO_BYTES));
     this.uploadQueues.set("microphone", { items: [], uploading: false, terminalFailure: false, consecutiveFailures: 0 });
@@ -608,6 +683,7 @@ export class DesktopRealtimePublisher {
 
   async start() {
     this.stopped = false;
+    this.transportDiagnostics.start();
     this.options.onCaptureState("reconnecting");
     try {
       await this.openTransport();
@@ -627,19 +703,22 @@ export class DesktopRealtimePublisher {
     // Electron is the single media owner for the unsigned beta. Start the
     // microphone first so a pending display-media permission cannot block the
     // candidate channel, then open the system loopback on the same app identity.
-    const microphoneRuntime = await this.startSource({
+    const enabledChannels = new Set<AudioSourceKind>(this.options.diagnosticAudioChannels ?? ["microphone", "system"]);
+    for (const sourceKind of enabledChannels) this.reliability.start(sourceKind);
+    const microphoneRuntime = enabledChannels.has("microphone") ? await this.startSource({
       sourceKind: "microphone",
       sourceId: this.options.microphoneId,
       open: () => this.microphoneAdapter.open(this.options.microphoneId),
-    });
-    const systemRuntime = await this.startSource({
+    }) : null;
+    const systemRuntime = enabledChannels.has("system") ? await this.startSource({
       sourceKind: "system",
       sourceId: this.options.systemAudioId || "system-loopback",
       open: () => this.systemAudioAdapter.open(),
-    });
+    }) : null;
     const runtimes = [microphoneRuntime, systemRuntime];
     this.runtimes.push(...runtimes.filter((runtime): runtime is WebAudioSourceRuntime => runtime !== null));
     if (this.runtimes.length > 0) {
+      this.startWatchdog();
       this.options.onServerEvent?.({
         kind: "connection-state",
         payload: { captureOwner: desktopCaptureArchitecture, transport: this.transport ? "websocket-v2" : "http-frame-ingest" },
@@ -654,9 +733,16 @@ export class DesktopRealtimePublisher {
 
   async stop() {
     this.stopped = true;
+    this.transportDiagnostics.publish();
+    this.transportDiagnostics.stop();
     this.transport?.stop();
     this.transport = null;
     this.transportRecovery = null;
+    if (this.watchdogTimer !== null) {
+      window.clearInterval(this.watchdogTimer);
+      this.resourceCounters.removeTimer();
+    }
+    this.watchdogTimer = null;
     await Promise.all(this.runtimes.map(runtime => runtime.stop()));
     this.runtimes = [];
     this.latestHealth.clear();
@@ -672,12 +758,22 @@ export class DesktopRealtimePublisher {
     this.lastSystemRecoveryAtMs = null;
     this.systemRecoveryAttempt = 0;
     this.sendBuffers.forEach((buffer) => buffer.clear());
+    this.sourceInputs.clear();
+    this.healthUpdates.dispose();
     this.options.onHealth([]);
   }
 
   private async startSource(input: SourceStartInput): Promise<WebAudioSourceRuntime | null> {
     let media: OpenAudioSource | null = null;
+    let pendingContext: AudioContext | null = null;
+    let pendingNode: MediaStreamAudioSourceNode | null = null;
+    let pendingCaptureProcessor: AudioCaptureProcessor | null = null;
+    let trackedAudioContext = false;
+    let trackedAudioNodes = 0;
+    let trackedMediaTracks = 0;
+    let trackedCaptureListener = false;
     try {
+      this.sourceInputs.set(input.sourceKind, input);
       this.updateHealth({
         sourceId: input.sourceId,
         sourceKind: input.sourceKind,
@@ -698,18 +794,35 @@ export class DesktopRealtimePublisher {
         active: true,
       });
       const context = new AudioContext();
+      pendingContext = context;
+      this.resourceCounters.addAudioContext();
+      trackedAudioContext = true;
       await context.resume().catch(() => undefined);
       const node = context.createMediaStreamSource(openedMedia.stream);
+      pendingNode = node;
+      this.resourceCounters.addAudioNodes(4);
+      trackedAudioNodes = 4;
+      this.resourceCounters.addMediaTracks(openedMedia.stream.getTracks().length);
+      trackedMediaTracks = openedMedia.stream.getTracks().length;
       const segmenter = new SpeechSegmenter(input.sourceKind, { mode: this.options.endpointingMode ?? "commercial-adaptive" });
       const openedAtMs = Date.now();
       let lastProcessAtMs = openedAtMs;
       let closing = false;
 
-      const processSamples = (channel: Float32Array) => {
+      const processSamples = (channel: Float32Array, captureTiming: CaptureBatchTiming) => {
         if (this.stopped) return;
+        this.transportDiagnostics.recordCaptureFrame(input.sourceKind);
+        this.transportDiagnostics.recordPublisherInputFrame(input.sourceKind);
         const rms = calculateRms(channel);
         const nowMs = Date.now();
         lastProcessAtMs = nowMs;
+        this.reliability.recordAudioCapture(input.sourceKind, nowMs);
+        this.resourceCounters.recordWorkletBatch(input.sourceKind, {
+          callbackCount: captureTiming.workletCallbackCount,
+          postMessageCount: captureTiming.workletPostMessageCount,
+          audioBytes: channel.byteLength,
+          float32ArrayAllocations: captureTiming.float32ArrayAllocations,
+        });
         if (input.sourceKind === "system" && rms >= SYSTEM_SPEECH_CONTINUE_THRESHOLD) {
           this.lastSystemSignalAtMs = nowMs;
           this.lastSystemRecoveryAtMs = null;
@@ -730,6 +843,7 @@ export class DesktopRealtimePublisher {
           active: true,
         });
         const pcm16 = downsampleToPcm16(channel, context.sampleRate);
+        const pcmConversionCompleteAtMs = Date.now();
         const frames = segmenter.push(pcm16, nowMs, rms);
         for (const snapshot of frames) {
           if (snapshot.payload.byteLength === 0) continue;
@@ -765,10 +879,24 @@ export class DesktopRealtimePublisher {
             sourceGeneration: snapshot.sourceGeneration,
             terminalId: snapshot.terminalId,
             traceId: `${input.sourceKind}:${snapshot.segmentId}:${snapshot.revision}:${frame.sequence}`,
+            diagnostics: {
+              desktopVadConfirmAtMs: snapshot.speechConfirmedAtMs,
+              desktopAudioWorkletOutputAtMs: captureTiming.audioWorkletOutputAtMs,
+              desktopRendererReceiveAtMs: captureTiming.rendererReceiveAtMs,
+              desktopPcmConversionAtMs: pcmConversionCompleteAtMs,
+              audioRms: Number(rms.toFixed(6)),
+              audioPeak: Number(Math.max(...channel.map(sample => Math.abs(sample))).toFixed(6)),
+              noiseFloor: Number(segmenter.currentNoiseFloor.toFixed(6)),
+              vadThreshold: Number(segmenter.currentThresholds.start.toFixed(6)),
+              vadState: segmenter.currentState,
+              payloadDurationMs: Math.round(snapshot.payload.byteLength / 32),
+              frameSeq: frame.sequence,
+            },
             audioBase64: bytesToBase64(snapshot.payload),
           };
           const frameCount = (this.frameCounts.get(input.sourceKind) ?? 0) + 1;
           this.frameCounts.set(input.sourceKind, frameCount);
+          this.reliability.recordFrameProduced(input.sourceKind, nowMs);
           this.updateHealth({
             sourceId: openedMedia.descriptor.id || input.sourceId,
             sourceKind: input.sourceKind,
@@ -785,6 +913,9 @@ export class DesktopRealtimePublisher {
         }
       };
       const captureProcessor = await createAudioCaptureProcessor(context, processSamples);
+      pendingCaptureProcessor = captureProcessor;
+      this.transportDiagnostics.recordAudioListenerAttached(input.sourceKind);
+      trackedCaptureListener = true;
       const { processor, sink } = captureProcessor;
       node.connect(processor);
       this.updateHealth({
@@ -817,10 +948,34 @@ export class DesktopRealtimePublisher {
           if (reason) void this.recoverSource(input, reason);
         }, SYSTEM_RECOVERY_CHECK_MS)
         : null;
+      if (recoveryTimer !== null) this.resourceCounters.addTimer();
+
+      const handleTrackEnded = () => {
+        if (closing || this.stopped) return;
+        this.updateHealth({
+          sourceId: openedMedia.descriptor.id || input.sourceId,
+          sourceKind: input.sourceKind,
+          label: openedMedia.descriptor.label,
+          state: "unavailable",
+          stage: "failed",
+          level: 0,
+          active: false,
+          errorCode: "source-unavailable",
+        });
+        void this.recoverSource(input, "track-ended");
+      };
+      const tracks = openedMedia.stream.getTracks();
+      tracks.forEach((track) => track.addEventListener("ended", handleTrackEnded));
+      this.resourceCounters.addListeners(tracks.length + 1);
 
       const stop = async () => {
         closing = true;
-        if (recoveryTimer !== null) window.clearInterval(recoveryTimer);
+        if (recoveryTimer !== null) {
+          window.clearInterval(recoveryTimer);
+          this.resourceCounters.removeTimer();
+        }
+        tracks.forEach((track) => track.removeEventListener("ended", handleTrackEnded));
+        this.resourceCounters.removeListeners(tracks.length + 1);
         const tailFrames = segmenter.flush(Date.now());
         for (const snapshot of tailFrames) {
           if (snapshot.payload.byteLength === 0) continue;
@@ -860,29 +1015,18 @@ export class DesktopRealtimePublisher {
           }, frame, openedMedia.descriptor.id || input.sourceId);
         }
         captureProcessor.detach();
+        this.transportDiagnostics.recordAudioListenerDetached(input.sourceKind);
+        trackedCaptureListener = false;
         processor.disconnect();
         sink.disconnect();
         node.disconnect();
         openedMedia.close();
         await context.close().catch(() => undefined);
+        this.resourceCounters.removeMediaTracks(tracks.length);
+        this.resourceCounters.removeAudioNodes(4);
+        this.resourceCounters.removeAudioContext();
+        this.reliability.remove(input.sourceKind);
       };
-
-      openedMedia.stream.getTracks().forEach((track) => {
-        track.addEventListener("ended", () => {
-          if (closing || this.stopped) return;
-          this.updateHealth({
-            sourceId: openedMedia.descriptor.id || input.sourceId,
-            sourceKind: input.sourceKind,
-            label: openedMedia.descriptor.label,
-            state: "unavailable",
-            stage: "failed",
-            level: 0,
-            active: false,
-            errorCode: "source-unavailable",
-          });
-          if (input.sourceKind === "system") void this.recoverSource(input, "track-ended");
-        });
-      });
 
       return {
         sourceId: openedMedia.descriptor.id || input.sourceId,
@@ -896,7 +1040,16 @@ export class DesktopRealtimePublisher {
         stop,
       };
     } catch (error) {
+      pendingCaptureProcessor?.detach();
+      if (trackedCaptureListener) this.transportDiagnostics.recordAudioListenerDetached(input.sourceKind);
+      pendingCaptureProcessor?.processor.disconnect();
+      pendingCaptureProcessor?.sink.disconnect();
+      pendingNode?.disconnect();
       media?.close();
+      if (pendingContext) await pendingContext.close().catch(() => undefined);
+      if (trackedMediaTracks > 0) this.resourceCounters.removeMediaTracks(trackedMediaTracks);
+      if (trackedAudioNodes > 0) this.resourceCounters.removeAudioNodes(trackedAudioNodes);
+      if (trackedAudioContext) this.resourceCounters.removeAudioContext();
       const diagnostic = publisherFailureDiagnostic(input.sourceKind, error);
       this.updateHealth({
         sourceId: input.sourceId,
@@ -916,6 +1069,8 @@ export class DesktopRealtimePublisher {
   private async recoverSource(input: SourceStartInput, reason: SystemAudioRecoveryReason) {
     if (this.stopped || this.sourceRecoveryInFlight.has(input.sourceKind)) return;
     this.sourceRecoveryInFlight.add(input.sourceKind);
+    this.reliability.markRecovering(input.sourceKind, reason);
+    this.emitReliability();
     if (input.sourceKind === "system") {
       this.lastSystemRecoveryAtMs = Date.now();
       this.systemRecoveryAttempt += 1;
@@ -948,6 +1103,8 @@ export class DesktopRealtimePublisher {
         this.runtimes = this.runtimes.filter(runtime => runtime !== current);
       }
       if (this.stopped) return;
+      this.reliability.start(input.sourceKind);
+      this.reliability.markRecovering(input.sourceKind, reason);
       const recovered = await this.startSource(input);
       if (recovered) {
         this.runtimes.push(recovered);
@@ -993,6 +1150,7 @@ export class DesktopRealtimePublisher {
         if (this.transport !== transport || this.stopped) return;
         void this.recoverTransport(input);
       },
+      diagnostics: this.transportDiagnostics,
     });
     this.transport = transport;
     await transport.start();
@@ -1046,8 +1204,17 @@ export class DesktopRealtimePublisher {
     const sourceKind = payload?.sourceKind;
     if (sourceKind === "microphone" || sourceKind === "system") {
       const existing = this.latestHealth.get(sourceKind);
+      if (typeof payload.lastFrameSentAtMs === "number") {
+        this.reliability.recordFrameSent(sourceKind, payload.lastFrameSentAtMs, typeof payload.pendingFrames === "number" ? payload.pendingFrames : undefined);
+      }
+      if (typeof payload.pendingFrames === "number") this.reliability.updatePendingFrames(sourceKind, payload.pendingFrames);
+      if (event.kind === "frame-accepted" || event.kind === "terminal-accepted") {
+        this.reliability.recordFrameAck(sourceKind, typeof payload.lastAckAtMs === "number" ? payload.lastAckAtMs : Date.now(), typeof payload.pendingFrames === "number" ? payload.pendingFrames : 0);
+      }
+      if (typeof payload.qwenAppendAtMs === "number") this.reliability.recordQwenAppend(sourceKind, payload.qwenAppendAtMs);
       if (existing && (event.kind === "frame-accepted" || event.kind === "terminal-accepted") && typeof payload.sequence === "number") {
         this.sendBuffers.get(sourceKind)?.acknowledge(String(payload.sourceId ?? existing.sourceId), payload.sequence);
+        this.transportDiagnostics.setRingBufferDepth(sourceKind, this.sendBuffers.get(sourceKind)?.depth() ?? 0);
       }
       if (existing && (event.kind === "delivery-diagnostics" || event.kind === "sequence-gap" || event.kind === "frame-accepted" || event.kind === "terminal-accepted")) {
         this.updateHealth({
@@ -1066,6 +1233,7 @@ export class DesktopRealtimePublisher {
       }
     }
     this.options.onServerEvent?.(event);
+    this.emitReliability();
   }
 
   private sendFrameHttp(
@@ -1074,12 +1242,28 @@ export class DesktopRealtimePublisher {
     frame: ReturnType<typeof createAudioFrame>,
     sourceId: string,
   ) {
+    const ringBufferWriteAtMs = Date.now();
+    const diagnostics = typeof payload.diagnostics === "object" && payload.diagnostics !== null
+      ? payload.diagnostics as Record<string, unknown>
+      : {};
+    const queuedPayload = {
+      ...payload,
+      diagnostics: {
+        ...diagnostics,
+        desktopRingBufferWriteAtMs: ringBufferWriteAtMs,
+        desktopPublisherEnqueueAtMs: Date.now(),
+      },
+    };
     if (this.transport) {
       this.sendBuffers.get(sourceKind)?.push(frame);
-      this.transport.enqueue(payload);
+      this.transportDiagnostics.setRingBufferDepth(sourceKind, this.sendBuffers.get(sourceKind)?.depth() ?? 0);
+      this.transport.enqueue(queuedPayload);
+      this.reliability.recordFrameSent(sourceKind, Date.now());
+      this.refreshOwnedBufferBytes();
       return;
     }
     const droppedFrames = this.sendBuffers.get(sourceKind)?.push(frame) ?? [];
+    this.transportDiagnostics.setRingBufferDepth(sourceKind, this.sendBuffers.get(sourceKind)?.depth() ?? 0);
     if (droppedFrames.length > 0) {
       this.updateHealth({
         sourceId,
@@ -1103,7 +1287,7 @@ export class DesktopRealtimePublisher {
     const queued = {
       sourceKind,
       sourceId,
-      payload,
+      payload: queuedPayload,
       frame,
     };
     if (queueState.items.length >= MAX_PENDING_UPLOAD_FRAMES) {
@@ -1125,6 +1309,8 @@ export class DesktopRealtimePublisher {
       this._notifyFailure(sourceKind, `${sourceLabel(sourceKind)}发送队列已满，已跳过过期中间帧并保留结束帧`);
     }
     queueState.items.push(queued);
+    this.reliability.recordFrameSent(sourceKind, Date.now(), queueState.items.length);
+    this.refreshOwnedBufferBytes();
     if (!queueState.uploading) {
       void this._drainUploadQueue(sourceKind);
     }
@@ -1186,7 +1372,9 @@ export class DesktopRealtimePublisher {
             throw new Error(`publisher_http_frame_failed_${response.status}: ${message}`);
           }
           this.sendBuffers.get(sourceKind)?.acknowledge(current.sourceId, current.frame.sequence);
+          this.transportDiagnostics.setRingBufferDepth(sourceKind, this.sendBuffers.get(sourceKind)?.depth() ?? 0);
           queueState.consecutiveFailures = 0;
+          this.reliability.recordFrameAck(sourceKind, Date.now(), queueState.items.length);
           this.lastFailureNotice.delete(sourceKind);
           const isTerminal = current.payload.isFinal === true;
           this.options.onServerEvent?.({
@@ -1246,7 +1434,49 @@ export class DesktopRealtimePublisher {
       }
     } finally {
       queueState.uploading = false;
+      this.refreshOwnedBufferBytes();
     }
+  }
+
+  reliabilitySnapshot(): DesktopRealtimeReliabilitySnapshot {
+    this.refreshOwnedBufferBytes();
+    return {
+      capturedAtMs: Date.now(),
+      sessionId: this.options.binding.sessionId,
+      sources: this.reliability.snapshot(),
+      resources: this.resourceCounters.snapshot(),
+    };
+  }
+
+  private emitReliability(): void {
+    this.options.onReliability?.(this.reliabilitySnapshot());
+  }
+
+  private refreshOwnedBufferBytes(): void {
+    const bufferedPcmBytes = [...this.sendBuffers.values()].reduce((sum, buffer) => sum + buffer.pendingByteLength(), 0);
+    const queuedHttpBytes = [...this.uploadQueues.values()].reduce((sum, queue) => sum + queue.items.reduce((queueSum, item) => queueSum + item.frame.payload.byteLength, 0), 0);
+    this.resourceCounters.setOwnedArrayBufferBytes(bufferedPcmBytes + queuedHttpBytes);
+  }
+
+  private startWatchdog(): void {
+    if (this.watchdogTimer !== null) window.clearInterval(this.watchdogTimer);
+    this.resourceCounters.addTimer();
+    this.watchdogTimer = window.setInterval(() => {
+      if (this.stopped) return;
+      const decisions = this.reliability.evaluate();
+      this.emitReliability();
+      for (const decision of decisions) {
+        if (decision.action === "recover-source") {
+          const input = this.sourceInputs.get(decision.sourceKind);
+          if (input) void this.recoverSource(input, "watchdog-capture-lost");
+        } else if (decision.action === "recover-transport" && !this.transportWatchdogRecoveryInFlight) {
+          this.transportWatchdogRecoveryInFlight = true;
+          const pending = this.transport?.pendingPayloads() ?? [];
+          void this.recoverTransport({ code: 0, reason: "watchdog-frame-ack-stalled", pending })
+            .finally(() => { this.transportWatchdogRecoveryInFlight = false; });
+        }
+      }
+    }, 1_000);
   }
 
   private _notifyFailure(sourceKind: AudioSourceKind, message: string) {
@@ -1277,6 +1507,6 @@ export class DesktopRealtimePublisher {
     const ordered = [...this.latestHealth.values()]
       .sort((left, right) => left.sourceKind.localeCompare(right.sourceKind))
       .map(({ active, ...health }) => health);
-    this.options.onHealth(ordered);
+    this.healthUpdates.push(ordered);
   }
 }

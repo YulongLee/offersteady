@@ -1,0 +1,45 @@
+import { describe, expect, it } from "vitest";
+
+import { RealtimeReliabilityController } from "../src/renderer/audio/realtime-reliability";
+
+describe("desktop realtime reliability watchdog", () => {
+  it("treats continuous silent worklet callbacks as healthy", () => {
+    const controller = new RealtimeReliabilityController({ startupGraceMs: 100, degradedCaptureMs: 1_000, lostCaptureMs: 2_000 });
+    controller.start("system", 0);
+    for (let nowMs = 100; nowMs <= 10_000; nowMs += 100) controller.recordAudioCapture("system", nowMs);
+    expect(controller.evaluate(10_500)).toEqual([{
+      sourceKind: "system",
+      state: "HEALTHY",
+      action: "none",
+      reason: null,
+    }]);
+  });
+
+  it("marks a source lost after capture callbacks stop for two seconds", () => {
+    const controller = new RealtimeReliabilityController({ startupGraceMs: 100, degradedCaptureMs: 1_000, lostCaptureMs: 2_000 });
+    controller.start("system", 0);
+    controller.recordAudioCapture("system", 500);
+    expect(controller.evaluate(2_501)[0]).toMatchObject({ state: "LOST", action: "recover-source", reason: "capture-callback-stalled" });
+  });
+
+  it("only applies the ACK watchdog while frames are pending", () => {
+    const controller = new RealtimeReliabilityController({ lostAckMs: 3_000 });
+    controller.start("microphone", 0);
+    controller.recordAudioCapture("microphone", 3_900);
+    controller.recordFrameSent("microphone", 500, 1);
+    controller.recordFrameSent("microphone", 3_900, 2);
+    expect(controller.evaluate(4_000)[0]).toMatchObject({ state: "LOST", action: "recover-transport", reason: "frame-ack-stalled" });
+    controller.recordFrameAck("microphone", 4_100, 0);
+    controller.recordAudioCapture("microphone", 10_000);
+    expect(controller.evaluate(10_500)[0]).toMatchObject({ state: "HEALTHY", action: "none" });
+  });
+
+  it("moves through recovering and returns healthy after capture callbacks resume", () => {
+    const controller = new RealtimeReliabilityController();
+    controller.start("system", 1_000);
+    controller.markRecovering("system", "capture-callback-stalled");
+    expect(controller.snapshot()[0]).toMatchObject({ state: "RECOVERING", recoveryCount: 1 });
+    controller.recordAudioCapture("system", 2_000);
+    expect(controller.snapshot()[0]).toMatchObject({ state: "HEALTHY" });
+  });
+});

@@ -6,6 +6,13 @@ import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, D
 import { createJsonClient, withBaseUrl } from "./api-client";
 import { authClient } from "./auth-client";
 import { createSseParser, type LiveAnswerStreamEvent, type ManualAnswerStreamUpdate } from "./live-answer-stream";
+import {
+  recordSubtitleBackendStages,
+  recordSubtitleRevisionStage,
+  subtitleRevisionDiagnosticsEnabled,
+  subtitleRevisionIdentity,
+  updateRemoteSubtitleStageCounts,
+} from "./realtime-subtitle-diagnostics";
 
 interface BackendSessionResponse {
   readonly sessionId: string;
@@ -202,6 +209,7 @@ interface BackendRealtimeTranscriptListResponse {
     readonly publishedAtMs?: number;
     readonly performance?: {
       readonly traceId?: string;
+      readonly channel?: string;
       readonly captureToSendMs?: number;
       readonly sendToIngestMs?: number;
       readonly captureToIngestMs?: number;
@@ -218,12 +226,25 @@ interface BackendRealtimeTranscriptListResponse {
       readonly qwenAudioAppendAtMs?: number;
       readonly qwenPartialReceivedAtMs?: number;
       readonly redisEventXaddAtMs?: number;
+      readonly redisEventXaddStartAtMs?: number;
+      readonly redisEventXaddCompleteAtMs?: number;
       readonly redisEventXreadAtMs?: number;
       readonly redisReadMode?: string;
+      readonly sseGeneratorYieldAtMs?: number;
       readonly sseEventSendAtMs?: number;
+      readonly browserStreamChunkReceivedAtMs?: number;
+      readonly browserEventParsedAtMs?: number;
       readonly browserEventReceiveAtMs?: number;
+      readonly transcriptStoreUpdateStartAtMs?: number;
+      readonly transcriptStoreUpdateCompleteAtMs?: number;
       readonly browserStateUpdateAtMs?: number;
+      readonly reactRenderStartAtMs?: number;
+      readonly reactCommitAtMs?: number;
+      readonly browserPaintAtMs?: number;
       readonly browserRenderAtMs?: number;
+      readonly utteranceId?: string;
+      readonly segmentId?: string;
+      readonly textLength?: number;
     };
   }[];
 }
@@ -871,6 +892,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   private foundation: FoundationIndexResponse | null = null;
   private readonly captureEventWaiters = new Map<string, Set<(payload: Record<string, unknown>) => void>>();
   private readonly acknowledgedPerformanceTraces = new Set<string>();
+  private readonly acknowledgedPerformanceTraceOrder: string[] = [];
 
   private recordRealtimeDeliveryMetric(
     interviewId: string,
@@ -893,21 +915,36 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   private acknowledgeRuntimePerformance(
     interviewId: string,
     traceId: string,
-    stage: "transcript-render" | "screenshot-first-render" | "answer-first-render",
+    stage: "transcript-delivery" | "transcript-render" | "screenshot-first-render" | "answer-first-render",
     startedAtMs: number,
     taskId?: string,
     delivery?: {
       readonly eventId?: string;
       readonly browserEventReceiveAtMs?: number;
+      readonly browserStreamChunkReceivedAtMs?: number;
+      readonly browserEventParsedAtMs?: number;
+      readonly transcriptStoreUpdateStartAtMs?: number;
+      readonly transcriptStoreUpdateCompleteAtMs?: number;
       readonly browserStateUpdateAtMs?: number;
+      readonly reactRenderStartAtMs?: number;
+      readonly reactCommitAtMs?: number;
+      readonly browserPaintAtMs?: number;
       readonly browserRenderAtMs?: number;
+      readonly renderedRevision?: number;
+      readonly renderedTextLength?: number;
+      readonly visibilityState?: DocumentVisibilityState;
     },
   ) {
-    const key = `${stage}:${traceId}`;
+    const key = `${stage}:${delivery?.eventId ?? traceId}`;
     if (!traceId || this.acknowledgedPerformanceTraces.has(key)) return;
     this.acknowledgedPerformanceTraces.add(key);
+    this.acknowledgedPerformanceTraceOrder.push(key);
+    while (this.acknowledgedPerformanceTraceOrder.length > 4_096) {
+      const expired = this.acknowledgedPerformanceTraceOrder.shift();
+      if (expired) this.acknowledgedPerformanceTraces.delete(expired);
+    }
     const send = () => {
-      const browserRenderAtMs = delivery?.browserRenderAtMs ?? Date.now();
+      const browserRenderAtMs = delivery?.browserRenderAtMs;
       void this.client.request(`/api/v1/realtime-speech/sessions/${interviewId}/performance-ack`, {
         method: "POST",
         headers: authHeaders(),
@@ -917,14 +954,24 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
           ...(taskId ? { taskId } : {}),
           ...(delivery?.eventId ? { eventId: delivery.eventId } : {}),
           ...(delivery?.browserEventReceiveAtMs === undefined ? {} : { browserEventReceiveAtMs: delivery.browserEventReceiveAtMs }),
+          ...(delivery?.browserStreamChunkReceivedAtMs === undefined ? {} : { browserStreamChunkReceivedAtMs: delivery.browserStreamChunkReceivedAtMs }),
+          ...(delivery?.browserEventParsedAtMs === undefined ? {} : { browserEventParsedAtMs: delivery.browserEventParsedAtMs }),
+          ...(delivery?.transcriptStoreUpdateStartAtMs === undefined ? {} : { transcriptStoreUpdateStartAtMs: delivery.transcriptStoreUpdateStartAtMs }),
+          ...(delivery?.transcriptStoreUpdateCompleteAtMs === undefined ? {} : { transcriptStoreUpdateCompleteAtMs: delivery.transcriptStoreUpdateCompleteAtMs }),
           ...(delivery?.browserStateUpdateAtMs === undefined ? {} : { browserStateUpdateAtMs: delivery.browserStateUpdateAtMs }),
-          browserRenderAtMs,
+          ...(delivery?.reactRenderStartAtMs === undefined ? {} : { reactRenderStartAtMs: delivery.reactRenderStartAtMs }),
+          ...(delivery?.reactCommitAtMs === undefined ? {} : { reactCommitAtMs: delivery.reactCommitAtMs }),
+          ...(delivery?.browserPaintAtMs === undefined ? {} : { browserPaintAtMs: delivery.browserPaintAtMs }),
+          ...(browserRenderAtMs === undefined ? {} : { browserRenderAtMs }),
+          ...(delivery?.renderedRevision === undefined ? {} : { renderedRevision: delivery.renderedRevision }),
+          ...(delivery?.renderedTextLength === undefined ? {} : { renderedTextLength: delivery.renderedTextLength }),
+          ...(delivery?.visibilityState ? { visibilityState: delivery.visibilityState } : {}),
         }),
       }).catch(() => {
         this.acknowledgedPerformanceTraces.delete(key);
       });
     };
-    if (delivery?.browserRenderAtMs !== undefined) send();
+    if (stage === "transcript-delivery" || delivery?.browserRenderAtMs !== undefined) send();
     else if (typeof requestAnimationFrame === "function") requestAnimationFrame(send);
     else window.setTimeout(send, 0);
   }
@@ -977,8 +1024,18 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
           readonly traceId?: string;
           readonly eventId?: string;
           readonly browserEventReceiveAtMs?: number;
+          readonly browserStreamChunkReceivedAtMs?: number;
+          readonly browserEventParsedAtMs?: number;
+          readonly transcriptStoreUpdateStartAtMs?: number;
+          readonly transcriptStoreUpdateCompleteAtMs?: number;
           readonly browserStateUpdateAtMs?: number;
+          readonly reactRenderStartAtMs?: number;
+          readonly reactCommitAtMs?: number;
+          readonly browserPaintAtMs?: number;
           readonly browserRenderAtMs?: number;
+          readonly renderedRevision?: number;
+          readonly renderedTextLength?: number;
+          readonly visibilityState?: DocumentVisibilityState;
         } | undefined;
         if (!detail?.sessionId || !detail.traceId || detail.browserRenderAtMs === undefined) return;
         this.acknowledgeRuntimePerformance(
@@ -1284,15 +1341,64 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     let pendingDeliveryEvents: BackendRealtimeEventListResponse["events"] = [];
     let terminalStatus: number | null = null;
     let flushHandle: number | null = null;
-    const markStateUpdate = (payload: MaterializedRealtimeSessionStreamEvent, stateUpdatedAtMs: number) => ({
+    let latestChunkReceivedAtMs = 0;
+    const markStateUpdate = (
+      payload: MaterializedRealtimeSessionStreamEvent,
+      stateUpdateStartedAtMs: number,
+      stateUpdatedAtMs: number,
+    ) => ({
       ...payload,
       transcripts: {
         ...payload.transcripts,
         transcripts: payload.transcripts.transcripts.map(transcript => transcript.performance
-          ? { ...transcript, performance: { ...transcript.performance, browserStateUpdateAtMs: stateUpdatedAtMs } }
+          ? { ...transcript, performance: {
+              ...transcript.performance,
+              transcriptStoreUpdateStartAtMs: transcript.performance.transcriptStoreUpdateStartAtMs ?? stateUpdateStartedAtMs,
+              transcriptStoreUpdateCompleteAtMs: transcript.performance.transcriptStoreUpdateCompleteAtMs ?? stateUpdatedAtMs,
+              browserStateUpdateAtMs: stateUpdatedAtMs,
+            } }
           : transcript),
       },
     });
+    const acknowledgeTranscriptDelivery = (
+      sessionId: string,
+      events: BackendRealtimeEventListResponse["events"],
+      stateUpdateStartedAtMs: number,
+      stateUpdatedAtMs: number,
+    ) => {
+      for (const item of events) {
+        if (item.kind !== "transcript-updated") continue;
+        const rawPerformance = item.payload.performance;
+        if (!rawPerformance || typeof rawPerformance !== "object") continue;
+        const performance = rawPerformance as Record<string, unknown>;
+        const traceId = typeof performance.traceId === "string" ? performance.traceId : "";
+        const eventId = typeof performance.eventId === "string" ? performance.eventId : item.eventId;
+        const browserEventReceiveAtMs = typeof performance.browserEventReceiveAtMs === "number"
+          ? performance.browserEventReceiveAtMs
+          : undefined;
+        const sseEventSendAtMs = typeof performance.sseEventSendAtMs === "number"
+          ? performance.sseEventSendAtMs
+          : Date.now();
+        const visibilityState: DocumentVisibilityState = performance.visibilityState === "hidden" ? "hidden" : "visible";
+        this.acknowledgeRuntimePerformance(
+          sessionId,
+          traceId,
+          "transcript-delivery",
+          sseEventSendAtMs,
+          undefined,
+          {
+            eventId,
+            ...(browserEventReceiveAtMs === undefined ? {} : { browserEventReceiveAtMs }),
+            ...(typeof performance.browserStreamChunkReceivedAtMs === "number" ? { browserStreamChunkReceivedAtMs: performance.browserStreamChunkReceivedAtMs } : {}),
+            ...(typeof performance.browserEventParsedAtMs === "number" ? { browserEventParsedAtMs: performance.browserEventParsedAtMs } : {}),
+            transcriptStoreUpdateStartAtMs: stateUpdateStartedAtMs,
+            transcriptStoreUpdateCompleteAtMs: stateUpdatedAtMs,
+            browserStateUpdateAtMs: stateUpdatedAtMs,
+            visibilityState,
+          },
+        );
+      }
+    };
     const scheduleFlush = () => {
       if (flushHandle !== null) return;
       const flush = () => {
@@ -1300,15 +1406,27 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         const pendingPayload = pendingSnapshot;
         pendingSnapshot = null;
         if (!pendingPayload || (pendingPayload.type !== "snapshot" && pendingPayload.type !== "update")) return;
-        const payload = markStateUpdate(pendingPayload, Date.now());
+        const stateUpdateStartedAtMs = Date.now();
+        for (const item of pendingDeliveryEvents) {
+          if (item.kind !== "transcript-updated") continue;
+          const identity = subtitleRevisionIdentity(pendingPayload.events.sessionId, item.eventId, item.payload);
+          if (identity) recordSubtitleRevisionStage(identity, "store-start", stateUpdateStartedAtMs, { visibilityState: document.visibilityState });
+        }
+        const mappedState = mapRealtimeState(interviewId, pendingPayload.transcripts, pendingPayload.candidates, pendingPayload.events, pendingPayload.runtime);
+        onUpdate(mappedState, { type: pendingPayload.type, cursor: pendingPayload.cursor ?? 0 });
+        const stateUpdatedAtMs = Date.now();
+        const payload = markStateUpdate(pendingPayload, stateUpdateStartedAtMs, stateUpdatedAtMs);
         if (typeof payload.cursor === "number") window.sessionStorage?.setItem(cursorKey, String(payload.cursor));
         const deliveryEvents = pendingDeliveryEvents;
         pendingDeliveryEvents = [];
+        for (const item of deliveryEvents) {
+          if (item.kind !== "transcript-updated") continue;
+          const identity = subtitleRevisionIdentity(payload.events.sessionId, item.eventId, item.payload);
+          if (!identity) continue;
+          recordSubtitleRevisionStage(identity, "store-complete", stateUpdatedAtMs, { visibilityState: document.visibilityState });
+        }
+        acknowledgeTranscriptDelivery(payload.events.sessionId, deliveryEvents, stateUpdateStartedAtMs, stateUpdatedAtMs);
         this.publishCaptureEvents({ sessionId: payload.events.sessionId, events: deliveryEvents });
-        onUpdate(
-          mapRealtimeState(interviewId, payload.transcripts, payload.candidates, payload.events, payload.runtime),
-          { type: payload.type, cursor: payload.cursor ?? 0 },
-        );
       };
       flushHandle = typeof requestAnimationFrame === "function"
         ? requestAnimationFrame(flush)
@@ -1322,7 +1440,8 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         return;
       }
       if (realtimeEvent.type !== "snapshot" && realtimeEvent.type !== "update") return;
-      const receivedAtMs = Date.now();
+      const parsedAtMs = Date.now();
+      const receivedAtMs = latestChunkReceivedAtMs || parsedAtMs;
       const rawPayload = realtimeEvent as BackendRealtimeSessionStreamEvent;
       const payload = {
         ...rawPayload,
@@ -1336,7 +1455,14 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
               ...item,
               payload: {
                 ...item.payload,
-                performance: { ...performance, browserEventReceiveAtMs: receivedAtMs, eventId: item.eventId },
+                performance: {
+                  ...performance,
+                  browserStreamChunkReceivedAtMs: receivedAtMs,
+                  browserEventParsedAtMs: parsedAtMs,
+                  browserEventReceiveAtMs: receivedAtMs,
+                  eventId: item.eventId,
+                  visibilityState: document.visibilityState,
+                },
               },
             };
           }),
@@ -1346,6 +1472,15 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         firstSnapshotRecorded = true;
         this.recordRealtimeDeliveryMetric(interviewId, "first-snapshot", { durationMs: Date.now() - connectStartedAt, reason: "opened" });
       }
+      for (const item of payload.events.events) {
+        if (item.kind !== "transcript-updated") continue;
+        const identity = subtitleRevisionIdentity(payload.events.sessionId, item.eventId, item.payload);
+        if (!identity) continue;
+        const performance = item.payload.performance as Record<string, unknown>;
+        recordSubtitleBackendStages(identity, performance);
+        recordSubtitleRevisionStage(identity, "browser-chunk", receivedAtMs, { visibilityState: document.visibilityState });
+        recordSubtitleRevisionStage(identity, "browser-parse", parsedAtMs, { visibilityState: document.visibilityState });
+      }
       streamSnapshot = materializeRealtimeDelta(interviewId, streamSnapshot, payload);
       pendingSnapshot = streamSnapshot;
       pendingDeliveryEvents = [...pendingDeliveryEvents, ...payload.events.events].filter(
@@ -1353,23 +1488,49 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       );
       scheduleFlush();
     });
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      parser.push(decoder.decode(value, { stream: true }));
+    const diagnosticsPoll = subtitleRevisionDiagnosticsEnabled()
+      ? window.setInterval(() => {
+          void this.client.request<{ revisionDiagnostics?: { stageCounts?: Record<string, number> } }>(
+            `/api/v1/realtime-speech/sessions/${interviewId}/performance-summary?userId=${encodeURIComponent(requireUserId())}`,
+            { headers: authHeaders() },
+          ).then(summary => updateRemoteSubtitleStageCounts(summary.revisionDiagnostics?.stageCounts)).catch(() => undefined);
+        }, 2_000)
+      : null;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        latestChunkReceivedAtMs = Date.now();
+        parser.push(decoder.decode(value, { stream: true }));
+      }
+    } finally {
+      if (diagnosticsPoll !== null) window.clearInterval(diagnosticsPoll);
     }
     parser.push(decoder.decode());
     parser.flush();
     const pendingFinalSnapshot = pendingSnapshot as MaterializedRealtimeSessionStreamEvent | null;
     if (pendingFinalSnapshot) {
-      const finalSnapshot = markStateUpdate(pendingFinalSnapshot, Date.now());
+      const stateUpdateStartedAtMs = Date.now();
+      for (const item of pendingDeliveryEvents) {
+        if (item.kind !== "transcript-updated") continue;
+        const identity = subtitleRevisionIdentity(pendingFinalSnapshot.events.sessionId, item.eventId, item.payload);
+        if (identity) recordSubtitleRevisionStage(identity, "store-start", stateUpdateStartedAtMs, { visibilityState: document.visibilityState });
+      }
+      onUpdate(
+        mapRealtimeState(interviewId, pendingFinalSnapshot.transcripts, pendingFinalSnapshot.candidates, pendingFinalSnapshot.events, pendingFinalSnapshot.runtime),
+        { type: pendingFinalSnapshot.type, cursor: pendingFinalSnapshot.cursor ?? 0 },
+      );
+      const stateUpdatedAtMs = Date.now();
+      const finalSnapshot = markStateUpdate(pendingFinalSnapshot, stateUpdateStartedAtMs, stateUpdatedAtMs);
       if (typeof finalSnapshot.cursor === "number") window.sessionStorage?.setItem(cursorKey, String(finalSnapshot.cursor));
       this.publishCaptureEvents({ sessionId: finalSnapshot.events.sessionId, events: pendingDeliveryEvents });
+      for (const item of pendingDeliveryEvents) {
+        if (item.kind !== "transcript-updated") continue;
+        const identity = subtitleRevisionIdentity(finalSnapshot.events.sessionId, item.eventId, item.payload);
+        if (identity) recordSubtitleRevisionStage(identity, "store-complete", stateUpdatedAtMs, { visibilityState: document.visibilityState });
+      }
+      acknowledgeTranscriptDelivery(finalSnapshot.events.sessionId, pendingDeliveryEvents, stateUpdateStartedAtMs, stateUpdatedAtMs);
       pendingDeliveryEvents = [];
-      onUpdate(
-        mapRealtimeState(interviewId, finalSnapshot.transcripts, finalSnapshot.candidates, finalSnapshot.events, finalSnapshot.runtime),
-        { type: finalSnapshot.type, cursor: finalSnapshot.cursor ?? 0 },
-      );
       pendingSnapshot = null;
     }
     if (flushHandle !== null) {

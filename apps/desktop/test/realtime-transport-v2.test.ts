@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { BoundedAudioFrameBuffer, SourceFrameSequencer, createAudioFrame } from "../src/renderer/audio/audio-frame-buffer";
 import { MultiplexedRealtimeTransport } from "../src/renderer/audio/multiplexed-realtime-transport";
+import { RealtimeTransportDiagnostics } from "../src/renderer/audio/realtime-transport-diagnostics";
 
 
 class FakeWebSocket {
@@ -65,6 +66,51 @@ describe("realtime transport v2", () => {
     expect(FakeWebSocket.instances[0]!.sent.map(item => decodeEnvelope(item).sourceKind)).toEqual(["microphone", "system"]);
     FakeWebSocket.instances[0]!.serverEvent({ kind: "sequence-gap", payload: { sourceKind: "microphone", expected: 0, received: 2 } });
     expect(events).toContainEqual({ kind: "sequence-gap", payload: { sourceKind: "microphone", expected: 0, received: 2 } });
+    transport.stop();
+  });
+
+  it("observes a sequence-gap resend at the actual websocket boundary", async () => {
+    vi.stubGlobal("window", {
+      location: { href: "https://mianshiwen.cc/interviews/session" },
+      setTimeout,
+      clearTimeout,
+      setInterval,
+      clearInterval,
+    });
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const diagnostics = new RealtimeTransportDiagnostics("trace-session", () => undefined, 10_000, 0);
+    const transport = new MultiplexedRealtimeTransport({
+      apiBaseUrl: "https://mianshiwen.cc/api/v1",
+      token: "trace-token",
+      diagnostics,
+      onEvent: () => undefined,
+      onState: () => undefined,
+    });
+    await transport.start();
+    transport.enqueue({
+      sourceKind: "system",
+      sourceId: "loopback",
+      sequence: 12,
+      codec: "pcm-s16le",
+      sampleRateHz: 16_000,
+      channels: 1,
+      audioBase64: btoa("abcd"),
+    });
+    FakeWebSocket.instances[0]!.serverEvent({ kind: "sequence-gap", payload: { sourceKind: "system", expected: 12, received: 13 } });
+    FakeWebSocket.instances[0]!.serverEvent({ kind: "frame-accepted", payload: { sourceKind: "system", sourceId: "loopback", sequence: 12 } });
+
+    expect(FakeWebSocket.instances[0]!.sent).toHaveLength(2);
+    expect(diagnostics.publish(10_000).SYSTEM).toMatchObject({
+      unique_frames: 1,
+      websocket_send_calls: 2,
+      ack_count: 1,
+      resend_frames: 1,
+      sequence_gap_count: 1,
+      sequence_gap_recovery_frames: 1,
+      retransmit_queue_depth: 0,
+      send_amplification_ratio: 2,
+      byte_amplification_ratio: 2,
+    });
     transport.stop();
   });
 

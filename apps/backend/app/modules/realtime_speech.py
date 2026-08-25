@@ -137,6 +137,16 @@ async def acknowledge_runtime_performance(
         browser_event_receive_at_ms=request.browser_event_receive_at_ms,
         browser_state_update_at_ms=request.browser_state_update_at_ms,
         browser_render_at_ms=request.browser_render_at_ms,
+        visibility_state=request.visibility_state,
+        browser_stream_chunk_received_at_ms=request.browser_stream_chunk_received_at_ms,
+        browser_event_parsed_at_ms=request.browser_event_parsed_at_ms,
+        transcript_store_update_start_at_ms=request.transcript_store_update_start_at_ms,
+        transcript_store_update_complete_at_ms=request.transcript_store_update_complete_at_ms,
+        react_render_start_at_ms=request.react_render_start_at_ms,
+        react_commit_at_ms=request.react_commit_at_ms,
+        browser_paint_at_ms=request.browser_paint_at_ms,
+        rendered_revision=request.rendered_revision,
+        rendered_text_length=request.rendered_text_length,
     )
     return success_response(
         request=request_context,
@@ -167,7 +177,7 @@ async def realtime_performance_traces(
     session_id: str,
     request: Request,
     user_id: str | None = Query(default=None, alias="userId"),
-    limit: int = Query(default=100, ge=1, le=500),
+    limit: int = Query(default=100, ge=1, le=4096),
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[list[dict[str, object]]]:
@@ -725,6 +735,7 @@ async def ingest_frame(
         terminal_id=request.terminal_id,
         trace_id=request.trace_id,
         sent_at_ms=request.sent_at_ms,
+        diagnostics=request.diagnostics,
         audio_base64=request.audio_base64,
     )
     return success_response(request=request_context, data=events, timestamp=utc_now_iso())
@@ -764,6 +775,7 @@ async def realtime_ws(websocket: WebSocket) -> None:
                     terminal_id=payload.terminal_id,
                     trace_id=payload.trace_id,
                     sent_at_ms=payload.sent_at_ms,
+                    diagnostics=payload.diagnostics,
                     audio_base64=payload.audio_base64,
                 )
             except DomainRequestError as exc:
@@ -853,6 +865,7 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
             audio_bytes: bytes | None = None
             if requested_media == "binary-v1":
                 message = await websocket.receive()
+                websocket_frame_received_at_ms = int(time() * 1000)
                 raw = message.get("bytes")
                 if not isinstance(raw, bytes) or len(raw) < 4:
                     await websocket.close(code=1002, reason="binary-frame-required")
@@ -876,11 +889,13 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                 payload = RealtimeFrameRequest.model_validate({**header, "audioBase64": ""})
             else:
                 message = await websocket.receive()
+                websocket_frame_received_at_ms = int(time() * 1000)
                 raw_text = message.get("text")
                 if not isinstance(raw_text, str):
                     await websocket.close(code=1002, reason="json-frame-required")
                     return
                 payload = RealtimeFrameRequest.model_validate(json.loads(raw_text))
+            frame_validation_done_at_ms = int(time() * 1000)
             try:
                 now = time()
                 while frame_arrivals and now - frame_arrivals[0] >= 1:
@@ -911,6 +926,13 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                 if payload.sequence > expected:
                     await websocket.send_json({"kind": "sequence-gap", "payload": {"sourceKind": payload.source_kind, "expected": expected, "received": payload.sequence}})
                     continue
+                channel_routing_done_at_ms = int(time() * 1000)
+                diagnostics = {
+                    **payload.diagnostics,
+                    "backendWebsocketFrameReceivedAtMs": websocket_frame_received_at_ms,
+                    "backendFrameValidationDoneAtMs": frame_validation_done_at_ms,
+                    "backendChannelRoutingDoneAtMs": channel_routing_done_at_ms,
+                }
                 admission_events = service.enqueue_audio_frame(
                     token=token,
                     device_id=payload.device_id,
@@ -935,6 +957,7 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                     terminal_id=payload.terminal_id,
                     trace_id=payload.trace_id,
                     sent_at_ms=payload.sent_at_ms,
+                    diagnostics=diagnostics,
                     audio_base64=payload.audio_base64,
                     audio_bytes=audio_bytes,
                     authenticated_publisher=publisher,
