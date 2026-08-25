@@ -58,6 +58,8 @@
 - macOS x64 DMG: SHA-256 `1fa03520db74dec5a18dd1ad5b7653c549effef0a9130bf6788df28a23b2a86b`; App and DMG notarization Accepted; Developer ID, 16 Mach-O components, Gatekeeper and stapler passed.
 - Windows x64 NSIS installer: SHA-256 `eab6185876447347b3ea184ec4f19a61b16be43e240482aba8aabc8535a899f6`; installer/executable structure passed; Authenticode remains unavailable and metadata remains non-verified.
 - Bundle identifier remains `com.offersteady.companion`; realtime protocol remains `2.0`.
+- Backend storm protection source commit `a9e99a4` was deployed first; production Backend, PostgreSQL and Redis passed health checks before the new desktop manifest was promoted.
+- Verified artifacts were uploaded to `desktop-releases/<platform>/<architecture>/1.1.1/`; the checked-in production manifest is updated atomically in the follow-up publication commit.
 
 ## macOS arm64
 
