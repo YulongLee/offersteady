@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from threading import RLock
 
 from app.ports.interview_session import (
     ConversationContextEntry,
     InterviewSessionRecord,
     InterviewSessionRepository,
+    InterviewLanguage,
     SessionUsageRecord,
 )
 
@@ -15,6 +17,7 @@ class InMemoryInterviewSessionRepository(InterviewSessionRepository):
         self.sessions: dict[str, InterviewSessionRecord] = {}
         self.context_entries: dict[str, list[ConversationContextEntry]] = {}
         self.usage_records: dict[str, list[SessionUsageRecord]] = {}
+        self._session_lock = RLock()
 
     def save_session(self, session: InterviewSessionRecord) -> InterviewSessionRecord:
         stored = replace(session)
@@ -38,6 +41,40 @@ class InMemoryInterviewSessionRepository(InterviewSessionRepository):
         touched = replace(session, updated_at_ms=activity_at_ms, last_activity_at_ms=activity_at_ms)
         self.sessions[session_id] = touched
         return replace(touched)
+
+    def update_language_if_preparing(
+        self, *, user_id: str, session_id: str, interview_language: InterviewLanguage, updated_at_ms: int
+    ) -> InterviewSessionRecord | None:
+        with self._session_lock:
+            session = self.sessions.get(session_id)
+            if session is None or session.owner_user_id != user_id or session.status != "preparing":
+                return None
+            updated = replace(
+                session,
+                interview_language=interview_language,
+                updated_at_ms=updated_at_ms,
+                last_activity_at_ms=updated_at_ms,
+            )
+            self.sessions[session_id] = updated
+            return replace(updated)
+
+    def start_if_not_ended(
+        self, *, user_id: str, session_id: str, started_at_ms: int
+    ) -> InterviewSessionRecord | None:
+        with self._session_lock:
+            session = self.sessions.get(session_id)
+            if session is None or session.owner_user_id != user_id or session.status == "ended":
+                return None
+            updated = replace(
+                session,
+                status="live",
+                continue_target="live",
+                started_at_ms=session.started_at_ms or started_at_ms,
+                updated_at_ms=started_at_ms,
+                last_activity_at_ms=started_at_ms,
+            )
+            self.sessions[session_id] = updated
+            return replace(updated)
 
     def list_idle_live_sessions(self, *, before_ms: int, limit: int, user_id: str | None = None) -> list[InterviewSessionRecord]:
         items = [

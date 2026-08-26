@@ -43,9 +43,10 @@ class RecordingStorage:
 
 
 class SessionStub:
-    def __init__(self) -> None:
+    def __init__(self, interview_language: str = "zh-CN") -> None:
         self.session = SimpleNamespace(
             status="live",
+            interview_language=interview_language,
             material_binding=SimpleNamespace(revision=3),
         )
         self.contexts: list[dict[str, object]] = []
@@ -106,7 +107,7 @@ class UnsupportedStreamingVisionGateway(StreamingVisionGateway):
         yield ""  # pragma: no cover
 
 
-def build_service(*, delivery_mode: str, fail_vision: bool = False):
+def build_service(*, delivery_mode: str, fail_vision: bool = False, interview_language: str = "zh-CN"):
     settings = Settings(_env_file=None, screenshot_vision_delivery_mode=delivery_mode)
     storage = RecordingStorage()
     repository = InMemoryScreenshotAnswerRepository()
@@ -115,7 +116,7 @@ def build_service(*, delivery_mode: str, fail_vision: bool = False):
     service = ScreenshotAnswerService(
         settings=settings,
         logger=logging.getLogger("test.screenshot-inline"),
-        session_service=SessionStub(),  # type: ignore[arg-type]
+        session_service=SessionStub(interview_language),  # type: ignore[arg-type]
         retrieval_service=SimpleNamespace(),  # type: ignore[arg-type]
         object_storage=storage,  # type: ignore[arg-type]
         repository=repository,
@@ -127,6 +128,26 @@ def build_service(*, delivery_mode: str, fail_vision: bool = False):
         llm_gateway=SimpleNamespace(),  # type: ignore[arg-type]
     )
     return service, storage, repository, upload_port, vision
+
+
+class EnglishVisionGateway(CapturingVisionGateway):
+    def analyze(
+        self, *, session_id: str, instruction: str, images: list[PreparedScreenshotImage],
+        attempt: int, interview_language: str = "zh-CN",
+    ) -> VisionSummary:
+        _ = session_id, attempt
+        self.images = images
+        assert interview_language == "en-US"
+        assert instruction == "Answer the screenshot question."
+        return VisionSummary(
+            title="Synthetic screenshot question",
+            summary_text="Synthetic screenshot evidence",
+            derived_question="Explain the algorithm shown in the screenshot.",
+            final_answer="Use the visible constraints and explain the trade-offs.",
+            image_count=len(images),
+            provider_name="synthetic",
+            model_name="synthetic-vision",
+        )
 
 
 def upload_synthetic_image(service: ScreenshotAnswerService, telemetry: dict[str, object]):
@@ -165,6 +186,28 @@ def test_inline_mode_skips_oss_and_releases_transient_bytes_after_success() -> N
     with pytest.raises(DomainRequestError):
         upload_port.load_image_bytes(image=upload)
     assert "base64" not in str(task.telemetry)
+
+
+def test_english_screenshot_answer_stays_in_english_and_records_language_route() -> None:
+    service, _storage, _repository, _upload_port, _vision = build_service(
+        delivery_mode="inline", interview_language="en-US"
+    )
+    service.vision_gateway = EnglishVisionGateway()
+    upload = upload_synthetic_image(service, {})
+
+    task, _ = service.answer_screenshots(
+        user_id="user-inline",
+        session_id="session-inline",
+        image_ids=[upload.image_id],
+        instruction="Answer the screenshot question.",
+        stream=False,
+    )
+
+    assert task.prompt_template_id == "screenshot-vision-direct-en"
+    assert task.answer_text.startswith("Quick Answer")
+    assert "Detailed Answer" in task.answer_text
+    assert task.material_provenance["interviewLanguage"] == "en-US"
+    assert "简要回答" not in task.answer_text
 
 
 def test_inline_mode_releases_transient_bytes_when_vision_fails() -> None:

@@ -9,6 +9,7 @@ from app.ports.document_repository import DocumentRepository
 from app.ports.interview_session import (
     ConversationContextEntry,
     IntegrationReference,
+    InterviewLanguage,
     InterviewSessionRecord,
     InterviewSessionRepository,
     SessionBoundDocument,
@@ -40,7 +41,14 @@ class SessionService:
         self.material_availability = material_availability
         self._recent_activity_touches: dict[str, int] = {}
 
-    def create_session(self, *, user_id: str, title: str, restart_of_session_id: str | None = None) -> InterviewSessionRecord:
+    def create_session(
+        self,
+        *,
+        user_id: str,
+        title: str,
+        interview_language: InterviewLanguage = "zh-CN",
+        restart_of_session_id: str | None = None,
+    ) -> InterviewSessionRecord:
         now_ms = _now_ms()
         session_id = f"session-{uuid4().hex}"
         config_snapshot = self._default_config_snapshot(captured_at_ms=now_ms)
@@ -58,6 +66,7 @@ class SessionService:
             session_id=session_id,
             owner_user_id=user_id,
             title=title.strip(),
+            interview_language=interview_language,
             status="preparing",
             continue_target="preparing",
             material_binding=material_binding,
@@ -76,6 +85,37 @@ class SessionService:
             last_activity_at_ms=now_ms,
         )
         return self.repository.save_session(session)
+
+    def update_interview_language(
+        self, *, user_id: str, session_id: str, interview_language: InterviewLanguage
+    ) -> InterviewSessionRecord:
+        session = self.get_session(user_id=user_id, session_id=session_id)
+        if session.status != "preparing":
+            raise DomainRequestError(
+                "session",
+                "update-language",
+                "面试开始后不能修改面试语言。",
+                409,
+                error_code="interview_language_locked",
+            )
+        updated = self.repository.update_language_if_preparing(
+            user_id=user_id,
+            session_id=session_id,
+            interview_language=interview_language,
+            updated_at_ms=_now_ms(),
+        )
+        if updated is not None:
+            return updated
+        latest = self.get_session(user_id=user_id, session_id=session_id)
+        if latest.status != "preparing":
+            raise DomainRequestError(
+                "session",
+                "update-language",
+                "面试开始后不能修改面试语言。",
+                409,
+                error_code="interview_language_locked",
+            )
+        raise DomainRequestError("session", "update-language", "面试语言保存失败，请重试。", 409)
 
     def list_sessions(self, *, user_id: str, status: str | None = None) -> list[InterviewSessionRecord]:
         sessions = self.repository.list_sessions_for_user(user_id=user_id, status=status)  # type: ignore[arg-type]
@@ -212,14 +252,14 @@ class SessionService:
             )
         now_ms = _now_ms()
         try:
-            return self._save_session(
-                session,
-                status="live",
-                continue_target="live",
-                started_at_ms=session.started_at_ms or now_ms,
-                updated_at_ms=now_ms,
-                last_activity_at_ms=now_ms,
+            started = self.repository.start_if_not_ended(
+                user_id=user_id,
+                session_id=session.session_id,
+                started_at_ms=now_ms,
             )
+            if started is None:
+                raise DomainRequestError("session", "start", "已结束的会话不能直接开始，请重新开始一场新的面试。", 400)
+            return started
         except Exception as exc:
             if "uq_interview_sessions_one_live_per_user" not in str(exc) and "duplicate key" not in str(exc).lower():
                 raise
@@ -244,7 +284,12 @@ class SessionService:
 
     def restart_session(self, *, user_id: str, session_id: str) -> InterviewSessionRecord:
         session = self.get_session(user_id=user_id, session_id=session_id)
-        restarted = self.create_session(user_id=user_id, title=f"{session.title} · 重新开始", restart_of_session_id=session.session_id)
+        restarted = self.create_session(
+            user_id=user_id,
+            title=f"{session.title} · 重新开始",
+            interview_language=session.interview_language,
+            restart_of_session_id=session.session_id,
+        )
         if session.material_binding.confirmed_at_ms is not None:
             restarted = self.confirm_materials(
                 user_id=user_id,
@@ -490,6 +535,7 @@ class SessionService:
             session_id=updates.get("session_id", session.session_id),
             owner_user_id=updates.get("owner_user_id", session.owner_user_id),
             title=updates.get("title", session.title),
+            interview_language=updates.get("interview_language", session.interview_language),
             status=updates.get("status", session.status),
             continue_target=updates.get("continue_target", self._derive_continue_target(updates.get("status", session.status))),
             material_binding=updates.get("material_binding", session.material_binding),

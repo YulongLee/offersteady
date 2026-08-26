@@ -12,6 +12,7 @@ from urllib.parse import urlencode
 from websockets.sync.client import connect
 
 from app.core.config import Settings
+from app.ports.interview_session import InterviewLanguage
 from app.ports.realtime_speech import AsrUsageReport, AudioFrame, RealtimeAsrGatewayPort, TranscriptResult
 from app.services.realtime_speech_service import NonRetryableAsrError, RetryableAsrError
 
@@ -24,6 +25,7 @@ class _SourceRealtimeSession:
     updated_at_monotonic: float
     source_session_key: str
     source_kind: str
+    interview_language: InterviewLanguage = "zh-CN"
     connection_id: str = "unknown"
     source_generation: int = 1
     current_segment_id: str | None = None
@@ -89,6 +91,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         session_id: str,
         source_kind: str,
         sample_rate_hz: int = 16_000,
+        interview_language: InterviewLanguage = "zh-CN",
     ) -> None:
         """Create the role provider session without sending synthetic audio."""
         now_ms = int(time.time() * 1000)
@@ -110,6 +113,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             channels=1,
             is_final=False,
             audio_bytes=b"",
+            interview_language=interview_language,
         ))
 
     @staticmethod
@@ -388,6 +392,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                 reusable = (
                     self.settings.realtime_asr_persistent_sessions_enabled
                     and existing.sample_rate_hz == frame.sample_rate_hz
+                    and existing.interview_language == frame.interview_language
                 )
                 if reusable:
                     existing.source_generation = frame.source_generation or existing.source_generation
@@ -413,6 +418,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                 updated_at_monotonic=time.monotonic(),
                 source_session_key=key,
                 source_kind=frame.source_kind,
+                interview_language=frame.interview_language,
                 connection_id=f"{frame.source_kind}-{self._connection_create_counts[frame.source_kind]}",
                 source_generation=frame.source_generation or 1,
                 mode=mode,
@@ -468,6 +474,16 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             self._record_error(frame.source_kind, "realtime_asr_session_created_missing")
             raise RetryableAsrError("realtime_asr_session_created_missing")
         session_payload, mode = self._session_update_payload(frame)
+        self.logger.info(
+            "realtime_asr.language_route",
+            extra={
+                "interview_language": frame.interview_language,
+                "source_kind": frame.source_kind,
+                "stage": "session-update",
+                "prompt_template_id": None,
+                "prompt_version": None,
+            },
+        )
         try:
             websocket.send(json.dumps({
                 "event_id": f"rt-session-{frame.segment_id}-{frame.revision}",
@@ -489,7 +505,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             "input_audio_format": "pcm",
             "sample_rate": frame.sample_rate_hz,
             "input_audio_transcription": {
-                "language": "zh",
+                "language": "en" if frame.interview_language == "en-US" else "zh",
             },
         }
         if mode == "vad":

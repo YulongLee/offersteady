@@ -702,6 +702,29 @@ describe("backend preview adapter", () => {
     expect(result).toMatchObject({ id: "session-1", title: "后端启动测试", status: "active", readiness: 100 });
   });
 
+  it("persists the authoritative interview language through the session API", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(envelope({
+      sessionId: "session-1",
+      title: "English interview",
+      interviewLanguage: "en-US",
+      status: "preparing",
+      updatedAtMs: 123,
+      materialBinding: { confirmedAtMs: null },
+    })), { status: 200, headers: { "Content-Type": "application/json" } }));
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+
+    const result = await adapter.updateInterviewLanguage("session-1", "en-US");
+
+    expect(fetchImpl).toHaveBeenCalledWith("http://localhost:8000/api/v1/sessions/session-1/language", expect.objectContaining({
+      method: "PATCH",
+      body: JSON.stringify({ userId: "user-1", interviewLanguage: "en-US" }),
+    }));
+    expect(result.interviewLanguage).toBe("en-US");
+  });
+
   it("cancels a desktop shortcut screenshot through the remote capture API", async () => {
     window.localStorage.setItem("offersteady.auth.access_token", "access-token");
     window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");

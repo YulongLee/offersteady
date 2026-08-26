@@ -1,5 +1,5 @@
 import type { AnswerTaskSnapshot, BillingProduct, CancelAnswerCommand, CancelAnswerResult, CompanionDeviceStatus, ContextLibrarySource, DesktopReleaseEntry, KnowledgeCollection, KnowledgeDocumentVersion, OfficialCheckoutOrder, PointsRedemptionRequest, PointsRedemptionResult, RedemptionSuccessData, SpeakerTranscriptSegment } from "@offersteady/protocol";
-import type { InterviewAppAdapter, InterviewSummary, WebAppState } from "./domain";
+import type { InterviewAppAdapter, InterviewLanguage, InterviewSummary, WebAppState } from "./domain";
 
 const device: CompanionDeviceStatus = {
   deviceId: "synthetic-mac-device",
@@ -68,8 +68,8 @@ const transcripts: SpeakerTranscriptSegment[] = [
 
 export const syntheticState: WebAppState = {
   interviews: [
-    { id: "demo", title: "高级前端工程师面试", role: "高级前端工程师", company: "示例科技", status: "ready", updatedAt: "今天 18:10", readiness: 80 },
-    { id: "review", title: "产品工程师模拟面试", role: "产品工程师", status: "ended", updatedAt: "昨天 21:30", readiness: 100 },
+    { id: "demo", title: "高级前端工程师面试", interviewLanguage: "zh-CN", role: "高级前端工程师", company: "示例科技", status: "ready", updatedAt: "今天 18:10", readiness: 80 },
+    { id: "review", title: "产品工程师模拟面试", interviewLanguage: "zh-CN", role: "产品工程师", status: "ended", updatedAt: "昨天 21:30", readiness: 100 },
   ],
   preparation: {
     resources: [
@@ -208,6 +208,7 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
     const draft: InterviewSummary = {
       id: "draft",
       title: input.title.trim(),
+      interviewLanguage: "zh-CN",
       role: input.role.trim(),
       ...(input.company?.trim() ? { company: input.company.trim() } : {}),
       status: "preparing",
@@ -220,6 +221,12 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
   async confirmInterviewMaterials(selection: Parameters<InterviewAppAdapter["confirmInterviewMaterials"]>[0], signal?: AbortSignal) {
     await delay(signal);
     return structuredClone(selection);
+  }
+
+  async updateInterviewLanguage(id: string, interviewLanguage: InterviewLanguage, signal?: AbortSignal) {
+    await delay(signal);
+    const interview = syntheticState.interviews.find(item => item.id === id) ?? syntheticState.interviews[0]!;
+    return { ...interview, id, interviewLanguage };
   }
 
   async getActiveInterviewConflict(id: string, signal?: AbortSignal) {

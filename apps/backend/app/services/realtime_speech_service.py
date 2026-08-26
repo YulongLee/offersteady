@@ -53,7 +53,7 @@ from app.schemas.realtime_speech import (
     RealtimeTranscriptListResponse,
     TranscriptSegmentResponse,
 )
-from app.ports.interview_session import InterviewSessionRecord
+from app.ports.interview_session import InterviewLanguage, InterviewSessionRecord
 from app.services.session_service import SessionService
 from app.services.billing_service import BillingService, UsageReservationRecord
 
@@ -107,6 +107,7 @@ class SyntheticRealtimeAsrGateway(RealtimeAsrGatewayPort):
         session_id: str,
         source_kind: RealtimeSourceKind,
         sample_rate_hz: int = 16_000,
+        interview_language: InterviewLanguage = "zh-CN",
     ) -> None:
         return None
 
@@ -167,6 +168,7 @@ class RealtimeSpeechService:
         self._active_source_turns: dict[tuple[str, RealtimeSourceKind], dict[str, object]] = {}
         self._watchdog_thread: threading.Thread | None = None
         self._capture_control_cache: dict[str, str] = {}
+        self._session_language_cache: dict[str, InterviewLanguage] = {}
         self._publisher_status_cache: dict[str, str] = {}
         self._stable_question_state: dict[tuple[str, str], dict[str, object]] = {}
         self._trace_lock = threading.Lock()
@@ -205,8 +207,9 @@ class RealtimeSpeechService:
         if reservation is not None and reservation.status == "reserved":
             self.billing_service.settle_usage(usage_id=reservation.usage_id)  # type: ignore[union-attr]
         self._capture_control_cache[session_id] = "capturing"
+        self._session_language_cache[session_id] = session.interview_language
         self._ensure_realtime_metering(user_id=user_id, session_id=session_id)
-        self._prewarm_asr_session(session_id=session_id)
+        self._prewarm_asr_session(session_id=session_id, interview_language=session.interview_language)
         return session
 
     def _realtime_minute_usage_id(self, *, session_id: str, minute_index: int) -> str:
@@ -313,18 +316,22 @@ class RealtimeSpeechService:
         if stop_event is not None:
             stop_event.set()
 
-    def _prewarm_asr_session(self, *, session_id: str) -> None:
+    def _prewarm_asr_session(
+        self, *, session_id: str, interview_language: InterviewLanguage | None = None
+    ) -> None:
         if not self.settings.realtime_asr_prewarm_enabled:
             return
         warm_session = getattr(self.asr_gateway, "warm_session", None)
         if not callable(warm_session):
             return
+        resolved_language = interview_language or self._session_language_cache.get(session_id, "zh-CN")
         for source_kind in ("microphone", "system"):
             future = self._asr_executor.submit(
                 warm_session,
                 session_id=session_id,
                 source_kind=source_kind,
                 sample_rate_hz=16_000,
+                interview_language=resolved_language,
             )
             future.add_done_callback(
                 lambda completed, kind=source_kind: self._observe_asr_prewarm(
@@ -1572,7 +1579,8 @@ class RealtimeSpeechService:
             self.asr_gateway.close_session(session_id=session_id)
         else:
             self._ensure_realtime_metering(user_id=user_id, session_id=session_id)
-            self._prewarm_asr_session(session_id=session_id)
+            self._session_language_cache[session_id] = session.interview_language
+            self._prewarm_asr_session(session_id=session_id, interview_language=session.interview_language)
         self.session_service.touch_activity(user_id=user_id, session_id=session_id, force=True)
         return {"sessionId": session_id, "captureState": capture_state}
 
@@ -1692,6 +1700,7 @@ class RealtimeSpeechService:
         if self.capture_control_state(session_id=session_id) == "paused":
             raise DomainRequestError("realtime-speech", "create-publisher", "当前面试已暂停收音，请先在网页端恢复收音。", 409, "capture_paused")
         self._ensure_realtime_metering(user_id=user_id, session_id=session_id)
+        self._session_language_cache[session_id] = session.interview_language
         now_ms = _now_ms()
         safe_client_name = client_name.strip()
         for previous in self.repository.list_publishers_for_session(session_id=session_id):
@@ -2179,6 +2188,8 @@ class RealtimeSpeechService:
             session = self.session_service.get_session(user_id=publisher.owner_user_id, session_id=publisher.session_id)
             if session.status != "live":
                 return {"early_events": []}
+            self._session_language_cache[publisher.session_id] = session.interview_language
+        interview_language = self._session_language_cache.get(publisher.session_id, "zh-CN")
         if self.capture_control_state(session_id=publisher.session_id) == "paused":
             return {"early_events": []}
         ingest_received_at_ms = _now_ms()
@@ -2252,6 +2263,7 @@ class RealtimeSpeechService:
             backend_received_at_ms=ingest_received_at_ms,
             diagnostics=dict(diagnostics or {}),
             audio_bytes=decoded_audio,
+            interview_language=interview_language,
         )
         trace_fields = {
             key: value
@@ -3337,7 +3349,21 @@ class RealtimeSpeechService:
         if transcript.source_kind != "system":
             return None
         text, source_segment_ids, confidence = self._assemble_interviewer_question_turn(transcript=transcript)
-        if not self._looks_like_question(text):
+        language_cache = getattr(self, "_session_language_cache", None)
+        if language_cache is None:
+            language_cache = self._session_language_cache = {}
+        interview_language = language_cache.get(transcript.session_id)
+        if interview_language is None:
+            session_service = getattr(self, "session_service", None)
+            interview_language = (
+                session_service.get_session(
+                    user_id=transcript.owner_user_id, session_id=transcript.session_id
+                ).interview_language
+                if session_service is not None
+                else "zh-CN"
+            )
+            language_cache[transcript.session_id] = interview_language
+        if not self._looks_like_question(text, interview_language=interview_language):
             return None
         source_segment_id_set = set(source_segment_ids)
         existing_turn_candidate = next((
@@ -3445,8 +3471,17 @@ class RealtimeSpeechService:
         return " ".join(texts).strip(), source_segment_ids or [transcript.segment_id], min(item.transcript_confidence for item in selected)
 
     @staticmethod
-    def _looks_like_question(text: str) -> bool:
+    def _looks_like_question(text: str, *, interview_language: InterviewLanguage = "zh-CN") -> bool:
         lowered = text.strip().lower()
+        if not lowered:
+            return False
+        if interview_language == "en-US":
+            if lowered in {"hello", "hi", "good morning", "good afternoon", "good evening", "thank you", "thanks"}:
+                return False
+            return lowered.endswith("?") or bool(re.match(
+                r"^(?:please\s+)?(?:tell\s+me|describe|explain|discuss|compare|design|implement|walk\s+me\s+through|give\s+me\s+an?\s+example|what|how|why|when|where|which|who|could\s+you|would\s+you|can\s+you|do\s+you|did\s+you|have\s+you|are\s+you|is\s+there|was\s+there|will\s+you)\b",
+                lowered,
+            ))
         return lowered.endswith(("?", "？")) or bool(re.match(
             r"^(?:请|麻烦|能否|可以|可不可以)?(?:你|您)?(?:介绍|说明|讲|谈|分析|设计|实现|比较|解释)",
             lowered,

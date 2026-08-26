@@ -33,6 +33,11 @@ describe("OfferSteady web application", () => {
       status: "active",
       updatedAt: "刚刚",
     }));
+    vi.spyOn(interviewAppAdapter, "updateInterviewLanguage").mockImplementation(async (id, interviewLanguage) => ({
+      ...(syntheticState.interviews.find(item => item.id === id) ?? syntheticState.interviews[0]!),
+      id,
+      interviewLanguage,
+    }));
     vi.spyOn(interviewAppAdapter, "getActiveInterviewConflict").mockImplementation(async id => ({ currentInterviewId: id, activeInterview: null }));
     vi.spyOn(interviewAppAdapter, "supersedeActiveInterview").mockResolvedValue([]);
     vi.spyOn(interviewAppAdapter, "controlInterviewCapture").mockImplementation(async (_id, action) => action === "pause" ? "paused" : "capturing");
@@ -319,6 +324,41 @@ describe("OfferSteady web application", () => {
     expect((await screen.findAllByText("请介绍一个你负责过的、最有挑战的前端项目。")).length).toBeGreaterThan(0);
     expect(screen.getByText("等待开始面试")).toBeInTheDocument();
     expect(screen.getByText("这台设备 · 已连接，未采集")).toBeInTheDocument();
+  });
+
+  it("defaults preparation to Chinese and persists an English interview selection without changing readiness", async () => {
+    await login();
+    window.history.pushState({}, "", "/app/interviews/demo/prepare");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+
+    const chinese = await screen.findByRole("radio", { name: /中文面试/ });
+    const english = screen.getByRole("radio", { name: /English Interview/ });
+    expect(chinese).toBeChecked();
+    expect(english).not.toBeChecked();
+    expect(screen.getByText("1/2")).toBeInTheDocument();
+
+    fireEvent.click(english);
+    await waitFor(() => expect(interviewAppAdapter.updateInterviewLanguage).toHaveBeenCalledWith(
+      "demo", "en-US", expect.any(AbortSignal),
+    ));
+    await waitFor(() => expect(english).toBeChecked());
+    expect(screen.getByText("1/2")).toBeInTheDocument();
+  });
+
+  it("restores the server language and keeps it selected when saving a change fails", async () => {
+    const state = clonedState();
+    state.interviews = state.interviews.map(item => item.id === "demo" ? { ...item, interviewLanguage: "en-US" } : item);
+    vi.mocked(interviewAppAdapter.updateInterviewLanguage).mockRejectedValueOnce(new Error("面试语言保存失败，请重试。"));
+    openAtWithState("/app/interviews/demo/prepare", state, true);
+
+    const english = await screen.findByRole("radio", { name: /English Interview/ });
+    const chinese = screen.getByRole("radio", { name: /中文面试/ });
+    expect(english).toBeChecked();
+    fireEvent.click(chinese);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("面试语言保存失败，请重试。");
+    expect(english).toBeChecked();
+    expect(chinese).not.toBeChecked();
   });
 
   it("keeps the user on preparation when backend session start fails", async () => {

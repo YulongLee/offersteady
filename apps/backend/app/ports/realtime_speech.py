@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
+from app.ports.interview_session import InterviewLanguage
+
 
 RealtimeConnectionState = Literal["connected", "receiving-audio", "transcribing", "degraded", "reconnecting", "answer-streaming", "failed", "closed"]
 RealtimeEventKind = Literal["connection-state", "transcript-updated", "question-stable", "question-candidate", "question-confirmed", "answer-stream", "answer-completed", "answer-task-updated", "screenshot-capture-updated", "performance-ack", "degraded", "device-status", "capture-control", "screenshot-shortcut-accepted"]
@@ -56,6 +58,7 @@ class AudioFrame:
     speech_confirmed_at_ms: int | None = None
     backend_received_at_ms: int | None = None
     diagnostics: dict[str, object] = field(default_factory=dict)
+    interview_language: InterviewLanguage = "zh-CN"
 
 
 @dataclass(frozen=True)
@@ -206,6 +209,7 @@ class RealtimeAsrGatewayPort(Protocol):
         session_id: str,
         source_kind: RealtimeSourceKind,
         sample_rate_hz: int = 16_000,
+        interview_language: InterviewLanguage = "zh-CN",
     ) -> None: ...
 
     def transcribe(self, *, frame: AudioFrame, attempt: int) -> TranscriptResult: ...

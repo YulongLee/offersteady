@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import base64
 import io
+import inspect
 import json
 import logging
 import re
@@ -52,6 +53,7 @@ from app.services.chat_service import NonRetryableChatError, RetryableChatError
 from app.services.material_object_keys import MaterialObjectKeyFactory
 from app.services.session_service import SessionService
 from app.services.billing_service import BillingService
+from app.ports.interview_session import InterviewLanguage
 
 
 def _now_ms() -> int:
@@ -62,10 +64,16 @@ def _elapsed_ms(start: float) -> float:
     return round((perf_counter() - start) * 1000, 2)
 
 
-def _screenshot_only_instruction(instruction: str) -> str:
+def _vision_language_kwargs(operation, interview_language: InterviewLanguage) -> dict[str, object]:
+    parameters = inspect.signature(operation).parameters
+    accepts_kwargs = any(item.kind == inspect.Parameter.VAR_KEYWORD for item in parameters.values())
+    return {"interview_language": interview_language} if accepts_kwargs or "interview_language" in parameters else {}
+
+
+def _screenshot_only_instruction(instruction: str, interview_language: InterviewLanguage = "zh-CN") -> str:
     """Keep transport metadata out of the visual model's evidence."""
     cleaned = re.sub(r"\s*\[来源:[^\]]+\]\s*", " ", instruction).strip()
-    return cleaned or "请只依据当前截图识别并回答其中的题目。"
+    return cleaned or ("Answer the question using only the current screenshot." if interview_language == "en-US" else "请只依据当前截图识别并回答其中的题目。")
 
 
 class RetryableVisionError(Exception):
@@ -80,13 +88,15 @@ class FileScreenshotPromptTemplateAdapter(ScreenshotPromptTemplatePort):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    def load_system_prompt(self) -> tuple[str, PromptConfig]:
+    def load_system_prompt(self, interview_language: InterviewLanguage = "zh-CN") -> tuple[str, PromptConfig]:
         prompt_path = Path(self.settings.screenshot_prompt_template_path)
         if not prompt_path.is_absolute():
             prompt_path = Path(__file__).resolve().parents[4] / self.settings.screenshot_prompt_template_path
+        if interview_language == "en-US":
+            prompt_path = prompt_path.with_name(f"{prompt_path.stem}.en{prompt_path.suffix}")
         text = prompt_path.read_text(encoding="utf-8").strip()
         return text, PromptConfig(
-            template_id="screenshot-answer-system",
+            template_id="screenshot-answer-en-system" if interview_language == "en-US" else "screenshot-answer-system",
             version=self.settings.screenshot_prompt_version,
             max_history_entries=self.settings.screenshot_max_history_entries,
             include_retrieval_context=False,
@@ -111,10 +121,11 @@ class ScreenshotPromptBuilder(ScreenshotPromptBuilderPort):
             version="v1",
             max_history_entries=4,
         )
-        screenshot_instruction = _screenshot_only_instruction(instruction)
+        english = "-en-" in typed_prompt_config.template_id
+        screenshot_instruction = _screenshot_only_instruction(instruction, "en-US" if english else "zh-CN")
         sections = [
             "<authoritative_screenshot_request>",
-            f"截图摘要：{vision_summary.title}",
+            (f"Screenshot summary: {vision_summary.title}" if english else f"截图摘要：{vision_summary.title}"),
             "</authoritative_screenshot_request>",
             f"<untrusted_screenshot_evidence>\n{vision_summary.summary_text}\n</untrusted_screenshot_evidence>",
         ]
@@ -300,6 +311,7 @@ class SyntheticVisionGateway(VisionGatewayPort):
         instruction: str,
         images: list[PreparedScreenshotImage],
         attempt: int,
+        interview_language: InterviewLanguage = "zh-CN",
     ) -> VisionSummary:
         lowered = instruction.lower()
         if "__permanent_fail__" in lowered:
@@ -307,6 +319,25 @@ class SyntheticVisionGateway(VisionGatewayPort):
         if "__retry_once__" in lowered and attempt == 0:
             raise RetryableVisionError("forced_retryable_vision_failure")
         ordered_names = [image.filename for image in images]
+        if interview_language == "en-US":
+            focus = instruction.strip() or "Answer the question shown in the screenshot."
+            usage = VisionUsageReport(
+                visual_tokens=max(1, sum(max(1, image.byte_length // 32) for image in images)),
+                total_tokens=max(1, sum(max(1, image.byte_length // 32) for image in images)),
+                provider_name=self.settings.screenshot_vision_provider,
+                model_name=self.settings.screenshot_vision_model,
+            )
+            return VisionSummary(
+                title="Screenshot question",
+                summary_text="The answer was generated only from the current synthetic screenshot.",
+                derived_question=focus,
+                image_count=len(images),
+                ordered_image_names=ordered_names,
+                final_answer="Quick Answer\nUse the visible constraints to state the core solution.\n\n---\n\nDetailed Answer\nExplain the approach, edge cases, and trade-offs without inventing missing screenshot details.",
+                usage=usage,
+                provider_name=self.settings.screenshot_vision_provider,
+                model_name=self.settings.screenshot_vision_model,
+            )
         focus = instruction.strip() or "请基于截图给出更稳妥的回答思路"
         summary_text = (
             f"共识别到 {len(images)} 张截图，顺序为：{'、'.join(ordered_names)}。\n"
@@ -348,10 +379,12 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    def _load_system_prompt(self) -> str:
+    def _load_system_prompt(self, interview_language: InterviewLanguage = "zh-CN") -> str:
         prompt_path = Path(self.settings.screenshot_prompt_template_path)
         if not prompt_path.is_absolute():
             prompt_path = Path(__file__).resolve().parents[4] / self.settings.screenshot_prompt_template_path
+        if interview_language == "en-US":
+            prompt_path = prompt_path.with_name(f"{prompt_path.stem}.en{prompt_path.suffix}")
         return prompt_path.read_text(encoding="utf-8").strip()
 
     def analyze(
@@ -361,12 +394,13 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
         instruction: str,
         images: list[PreparedScreenshotImage],
         attempt: int,
+        interview_language: InterviewLanguage = "zh-CN",
     ) -> VisionSummary:
         _ = session_id, attempt
         if not self.settings.screenshot_vision_base_url or not self.settings.screenshot_vision_api_key:
             raise NonRetryableVisionError("当前多模识别模型未配置完成，请检查服务端 .env 配置。")
         url = f"{self.settings.screenshot_vision_base_url.rstrip('/')}/chat/completions"
-        payload = self._request_payload(instruction=instruction, images=images, stream=False)
+        payload = self._request_payload(instruction=instruction, images=images, stream=False, interview_language=interview_language)
         try:
             with httpx.Client(timeout=max(self.settings.integration_http_timeout_seconds, 60.0)) as client:
                 response = client.post(url, headers={"Authorization": f"Bearer {self.settings.screenshot_vision_api_key}"}, json=payload)
@@ -389,12 +423,13 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
         instruction: str,
         images: list[PreparedScreenshotImage],
         attempt: int,
+        interview_language: InterviewLanguage = "zh-CN",
     ):
         _ = session_id, attempt
         if not self.settings.screenshot_vision_base_url or not self.settings.screenshot_vision_api_key:
             raise NonRetryableVisionError("当前多模识别模型未配置完成，请检查服务端 .env 配置。")
         url = f"{self.settings.screenshot_vision_base_url.rstrip('/')}/chat/completions"
-        payload = self._request_payload(instruction=instruction, images=images, stream=True)
+        payload = self._request_payload(instruction=instruction, images=images, stream=True, interview_language=interview_language)
         try:
             with httpx.Client(timeout=max(self.settings.integration_http_timeout_seconds, 60.0)) as client:
                 with client.stream("POST", url, headers={"Authorization": f"Bearer {self.settings.screenshot_vision_api_key}"}, json=payload) as response:
@@ -406,16 +441,20 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
         except httpx.HTTPError as exc:
             raise RetryableVisionError("截图识别服务暂时不可用，请稍后重试。") from exc
 
-    def _request_payload(self, *, instruction: str, images: list[PreparedScreenshotImage], stream: bool) -> dict[str, object]:
-        screenshot_instruction = _screenshot_only_instruction(instruction)
+    def _request_payload(
+        self, *, instruction: str, images: list[PreparedScreenshotImage], stream: bool, interview_language: InterviewLanguage = "zh-CN"
+    ) -> dict[str, object]:
+        screenshot_instruction = _screenshot_only_instruction(instruction, interview_language)
+        request_text = (
+            "Identify and answer the question in the screenshot directly. Output only the final Markdown answer, without JSON, OCR notes, or an extra preface. Follow the system policy exactly and provide complete runnable code for coding questions."
+            if interview_language == "en-US"
+            else "请直接识别并回答截图中的题目。只输出最终 Markdown 答案，不要输出 JSON、字段名、识别过程、OCR 摘要或额外前言。答案必须严格执行系统策略；代码题必须给出完整可运行代码，不要只描述解题框架。"
+        )
         content: list[dict[str, object]] = [
             {
                 "type": "text",
                 "text": (
-                    "请直接识别并回答截图中的题目。只输出最终 Markdown 答案，不要输出 JSON、字段名、"
-                    "识别过程、OCR 摘要或额外前言。答案必须严格执行系统策略；代码题必须给出完整可运行代码，"
-                    "不要只描述解题框架。"
-                    f"\n<user_instruction>{screenshot_instruction}</user_instruction>"
+                    f"{request_text}\n<user_instruction>{screenshot_instruction}</user_instruction>"
                 ),
             }
         ]
@@ -431,7 +470,7 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
             "stream": stream,
             "temperature": 0.1,
             "messages": [
-                {"role": "system", "content": self._load_system_prompt()},
+                {"role": "system", "content": self._load_system_prompt(interview_language)},
                 {"role": "user", "content": content},
             ],
         }
@@ -821,7 +860,8 @@ class ScreenshotAnswerService:
         on_task_update: Callable[[ScreenshotAnswerTaskRecord], None] | None = None,
     ) -> tuple[ScreenshotAnswerTaskRecord, RetrievalResponse]:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
-        screenshot_instruction = _screenshot_only_instruction(instruction)
+        interview_language = getattr(session, "interview_language", "zh-CN")
+        screenshot_instruction = _screenshot_only_instruction(instruction, interview_language)
         if session.status != "live":
             raise DomainRequestError("screenshot-answer", "create-task", "只有进行中的面试会话才能发起截图回答。", 400)
         self.session_service.touch_activity(user_id=user_id, session_id=session_id, force=True)
@@ -902,10 +942,10 @@ class ScreenshotAnswerService:
                     current = self.repository.save_task(replace(
                         current,
                         status="streaming",
-                        prompt_template_id="screenshot-vision-direct",
+                        prompt_template_id="screenshot-vision-direct-en" if interview_language == "en-US" else "screenshot-vision-direct",
                         prompt_version=self.settings.screenshot_prompt_version,
                         material_context_status="not-used",
-                        material_provenance={"selectionRevision": session.material_binding.revision, "usedSources": [], "noPersonalMaterialUsed": True},
+                        material_provenance={"selectionRevision": session.material_binding.revision, "usedSources": [], "noPersonalMaterialUsed": True, "interviewLanguage": interview_language},
                         updated_at_ms=_now_ms(),
                     ))
                     answer_parts: list[str] = []
@@ -917,6 +957,7 @@ class ScreenshotAnswerService:
                             instruction=screenshot_instruction,
                             images=prepared,
                             attempt=attempt,
+                            **_vision_language_kwargs(stream_analyze, interview_language),
                         ):
                             answer_parts.append(text_part)
                             if telemetry is not None and telemetry.get("first_text_ms") is None:
@@ -938,32 +979,37 @@ class ScreenshotAnswerService:
                             raise
                         using_streaming_gateway = False
                         vision = self.vision_gateway.analyze(
-                            session_id=session_id, instruction=screenshot_instruction, images=prepared, attempt=attempt
+                            session_id=session_id, instruction=screenshot_instruction, images=prepared, attempt=attempt,
+                            **_vision_language_kwargs(self.vision_gateway.analyze, interview_language),
                         )
                     else:
                         streamed_text = "".join(answer_parts).strip()
                         if not streamed_text:
                             using_streaming_gateway = False
                             vision = self.vision_gateway.analyze(
-                                session_id=session_id, instruction=screenshot_instruction, images=prepared, attempt=attempt
+                                session_id=session_id, instruction=screenshot_instruction, images=prepared, attempt=attempt,
+                                **_vision_language_kwargs(self.vision_gateway.analyze, interview_language),
                             )
                         else:
                             vision = summarize_stream(text=streamed_text, images=prepared)
                 else:
-                    vision = self.vision_gateway.analyze(session_id=session_id, instruction=screenshot_instruction, images=prepared, attempt=attempt)
+                    vision = self.vision_gateway.analyze(
+                        session_id=session_id, instruction=screenshot_instruction, images=prepared, attempt=attempt,
+                        **_vision_language_kwargs(self.vision_gateway.analyze, interview_language),
+                    )
                 if telemetry is not None:
                     telemetry["vision_model_ms"] = _elapsed_ms(vision_started)
                 current = self.repository.save_task(
                     replace(
                         current,
                         status="streaming",
-                        prompt_template_id="screenshot-vision-direct",
+                        prompt_template_id="screenshot-vision-direct-en" if interview_language == "en-US" else "screenshot-vision-direct",
                         prompt_version=self.settings.screenshot_prompt_version,
                         retrieval_excerpt_count=0,
                         material_context_status="not-used",
                         fixed_source_count=0,
                         retrieved_source_count=0,
-                        material_provenance={"selectionRevision": session.material_binding.revision, "usedSources": [], "noPersonalMaterialUsed": True},
+                        material_provenance={"selectionRevision": session.material_binding.revision, "usedSources": [], "noPersonalMaterialUsed": True, "interviewLanguage": interview_language},
                         unavailable_material_sources=[],
                         vision_provider_name=vision.provider_name,
                         vision_model_name=vision.model_name,
@@ -972,7 +1018,12 @@ class ScreenshotAnswerService:
                     )
                 )
                 persist_started = perf_counter()
-                completed = self._complete_vision_direct_task(task=current, vision=vision, retry_count=attempt)
+                completed = self._complete_vision_direct_task(
+                    task=current,
+                    vision=vision,
+                    retry_count=attempt,
+                    interview_language=interview_language,
+                )
                 if using_streaming_gateway and on_task_update is not None:
                     on_task_update(completed)
                 self.session_service.append_context(
@@ -1347,10 +1398,13 @@ class ScreenshotAnswerService:
         task: ScreenshotAnswerTaskRecord,
         vision: VisionSummary,
         retry_count: int,
+        interview_language: InterviewLanguage = "zh-CN",
     ) -> ScreenshotAnswerTaskRecord:
         answer_text = (vision.final_answer or vision.summary_text or vision.derived_question).strip()
-        if "简要回答" not in answer_text or "---" not in answer_text or "详细回答" not in answer_text:
-            answer_text = f"简要回答\n{vision.derived_question.strip() or vision.title}\n\n---\n\n详细回答\n{answer_text}"
+        quick_heading = "Quick Answer" if interview_language == "en-US" else "简要回答"
+        detail_heading = "Detailed Answer" if interview_language == "en-US" else "详细回答"
+        if quick_heading not in answer_text or "---" not in answer_text or detail_heading not in answer_text:
+            answer_text = f"{quick_heading}\n{vision.derived_question.strip() or vision.title}\n\n---\n\n{detail_heading}\n{answer_text}"
         completed = replace(
             task,
             answer_text=answer_text,
@@ -1359,13 +1413,17 @@ class ScreenshotAnswerService:
             model_name=vision.model_name,
             vision_provider_name=vision.provider_name,
             vision_model_name=vision.model_name,
-            prompt_template_id="screenshot-vision-direct",
+            prompt_template_id="screenshot-vision-direct-en" if interview_language == "en-US" else "screenshot-vision-direct",
             prompt_version=self.settings.screenshot_prompt_version,
             retrieval_excerpt_count=0,
             material_context_status="not-used",
             fixed_source_count=0,
             retrieved_source_count=0,
-            material_provenance={"usedSources": [], "noPersonalMaterialUsed": True},
+            material_provenance={
+                "usedSources": [],
+                "noPersonalMaterialUsed": True,
+                "interviewLanguage": interview_language,
+            },
             retry_count=retry_count,
             chunks=[ChatAnswerChunk(sequence=0, text=answer_text, is_final=True)],
             vision_summary_title=vision.title,
@@ -1556,6 +1614,7 @@ class ScreenshotAnswerService:
         retry_count: int,
         error_code: str | None = None,
     ) -> None:
+        provenance = task.material_provenance if task else {}
         log_event(
             self.logger,
             level,
@@ -1570,6 +1629,9 @@ class ScreenshotAnswerService:
             vision_provider_name=task.vision_provider_name if task else None,
             vision_model_name=task.vision_model_name if task else None,
             prompt_version=task.prompt_version if task else None,
+            prompt_template_id=task.prompt_template_id if task else None,
+            interview_language=provenance.get("interviewLanguage"),
+            stage=event.removeprefix("screenshot_answer."),
             image_count=image_count,
             retry_count=retry_count,
             status=task.status if task else None,

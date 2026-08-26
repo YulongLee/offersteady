@@ -1,6 +1,12 @@
 from types import SimpleNamespace
+import logging
+import threading
+import time
 
+from app.core.config import Settings
+from app.ports.realtime_speech import AudioFrame
 from app.services.dashscope_realtime_asr_gateway import DashScopeRealtimeAsrGateway, _SourceRealtimeSession
+from app.services.realtime_speech_service import RealtimeSpeechService
 
 
 class FakeConnection:
@@ -9,6 +15,29 @@ class FakeConnection:
 
     def close(self) -> None:
         self.closed = True
+
+
+def language_frame(interview_language: str) -> AudioFrame:
+    return AudioFrame(
+        publisher_id="publisher-language",
+        session_id="session-language",
+        device_id="device-language",
+        source_id="system-language",
+        source_kind="system",
+        segment_id="segment-language",
+        revision=1,
+        sequence=1,
+        captured_at_ms=int(time.time() * 1000),
+        started_at_ms=1,
+        ended_at_ms=2,
+        duration_ms=1,
+        codec="pcm-s16le",
+        sample_rate_hz=16_000,
+        channels=1,
+        is_final=False,
+        audio_bytes=b"synthetic",
+        interview_language=interview_language,  # type: ignore[arg-type]
+    )
 
 
 def test_stale_provider_session_is_closed_and_reported(monkeypatch) -> None:
@@ -122,7 +151,7 @@ def test_warm_session_opens_provider_without_sending_audio(monkeypatch) -> None:
     captured = []
     monkeypatch.setattr(gateway, "_get_or_create_source_session", lambda frame: captured.append(frame))
 
-    gateway.warm_session(session_id="session-warm", source_kind="system")
+    gateway.warm_session(session_id="session-warm", source_kind="system", interview_language="en-US")
 
     assert len(captured) == 1
     frame = captured[0]
@@ -130,3 +159,41 @@ def test_warm_session_opens_provider_without_sending_audio(monkeypatch) -> None:
     assert frame.source_kind == "system"
     assert frame.audio_bytes == b""
     assert frame.revision == 0
+    assert frame.interview_language == "en-US"
+
+
+def test_provider_payload_maps_closed_domain_languages() -> None:
+    gateway = DashScopeRealtimeAsrGateway(Settings(realtime_asr_api_key="synthetic"), logging.getLogger("language-payload"))
+
+    chinese, _ = gateway._session_update_payload(language_frame("zh-CN"))
+    english, _ = gateway._session_update_payload(language_frame("en-US"))
+
+    assert chinese["input_audio_transcription"] == {"language": "zh"}
+    assert english["input_audio_transcription"] == {"language": "en"}
+
+
+def test_provider_connection_is_not_reused_across_languages(monkeypatch) -> None:
+    gateway = DashScopeRealtimeAsrGateway(Settings(realtime_asr_api_key="synthetic"), logging.getLogger("language-isolation"))
+    first_connection = FakeConnection()
+    second_connection = FakeConnection()
+    connections = iter([first_connection, second_connection])
+    monkeypatch.setattr(gateway, "_open_connection", lambda _frame: (next(connections), "manual"))
+    monkeypatch.setattr(gateway, "_receive_events", lambda _session: None)
+
+    english = gateway._get_or_create_source_session(language_frame("en-US"))
+    chinese = gateway._get_or_create_source_session(language_frame("zh-CN"))
+
+    assert english is not chinese
+    assert first_connection.closed is True
+    assert chinese.interview_language == "zh-CN"
+
+
+def test_question_detection_uses_english_interrogatives_without_triggering_greetings() -> None:
+    assert RealtimeSpeechService._looks_like_question(
+        "Tell me about a difficult production incident you handled.", interview_language="en-US"
+    )
+    assert RealtimeSpeechService._looks_like_question(
+        "Walk me through your rollback strategy", interview_language="en-US"
+    )
+    assert not RealtimeSpeechService._looks_like_question("Good morning", interview_language="en-US")
+    assert not RealtimeSpeechService._looks_like_question("I worked on the deployment pipeline", interview_language="en-US")

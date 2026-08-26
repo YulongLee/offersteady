@@ -2,7 +2,7 @@ import type { CaptureState, FoundationIndexResponse } from "@offersteady/protoco
 
 import type { AnswerProvenance, AnswerSourceReference, AnswerTaskSnapshot, CancelAnswerResult, OfficialCheckoutOrder, PointsRedemptionResult } from "@offersteady/protocol";
 import { AppError } from "./domain";
-import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, DesktopDeviceBinding, DesktopShortcutScreenshotUpdate, IdleInterviewStatus, InterviewAppAdapter, InterviewQuestion, InterviewReview, InterviewSummary, InterviewWorkspaceSnapshot, ReferralActivationResult, ReferralStatus, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
+import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, DesktopDeviceBinding, DesktopShortcutScreenshotUpdate, IdleInterviewStatus, InterviewAppAdapter, InterviewLanguage, InterviewQuestion, InterviewReview, InterviewSummary, InterviewWorkspaceSnapshot, ReferralActivationResult, ReferralStatus, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
 import { createJsonClient, withBaseUrl } from "./api-client";
 import { authClient } from "./auth-client";
 import { createSseParser, type LiveAnswerStreamEvent, type ManualAnswerStreamUpdate } from "./live-answer-stream";
@@ -17,6 +17,7 @@ import {
 interface BackendSessionResponse {
   readonly sessionId: string;
   readonly title: string;
+  readonly interviewLanguage?: InterviewLanguage;
   readonly status: "preparing" | "live" | "ended";
   readonly updatedAtMs: number;
   readonly materialBinding: {
@@ -529,6 +530,7 @@ const requireUserId = () => {
 const toInterviewSummary = (session: BackendSessionResponse, fallback?: { title?: string; role?: string; company?: string }): InterviewSummary => ({
   id: session.sessionId,
   title: session.title || fallback?.title || "新的面试",
+  interviewLanguage: session.interviewLanguage ?? "zh-CN",
   role: fallback?.role || session.title || "目标岗位",
   ...(fallback?.company?.trim() ? { company: fallback.company.trim() } : {}),
   status: session.status === "live" ? "active" : session.status,
@@ -1133,6 +1135,15 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       body: JSON.stringify({ userId: requireUserId(), title: persistedTitle }),
     }, signal);
     return toInterviewSummary(created, { ...input, title: persistedTitle });
+  }
+
+  async updateInterviewLanguage(id: string, interviewLanguage: InterviewLanguage, signal?: AbortSignal) {
+    const updated = await this.client.request<BackendSessionResponse>(`/api/v1/sessions/${id}/language`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ userId: requireUserId(), interviewLanguage }),
+    }, signal);
+    return toInterviewSummary(updated);
   }
 
   async confirmInterviewMaterials(selection: Parameters<InterviewAppAdapter["confirmInterviewMaterials"]>[0], signal?: AbortSignal) {

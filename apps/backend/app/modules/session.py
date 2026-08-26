@@ -23,6 +23,7 @@ from app.schemas.session import (
     SessionUsageResponse,
     SupersedeActiveSessionRequest,
     SupersedeActiveSessionResponse,
+    UpdateInterviewLanguageRequest,
 )
 from app.services.realtime_speech_service import RealtimeSpeechService
 from app.services.session_service import SessionService
@@ -43,6 +44,7 @@ def _to_session_response(session) -> InterviewSessionResponse:
         sessionId=session.session_id,
         ownerUserId=session.owner_user_id,
         title=session.title,
+        interviewLanguage=session.interview_language,
         status=session.status,
         continueTarget=session.continue_target,
         materialBinding={
@@ -114,7 +116,11 @@ async def create_session(
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: SessionService = Depends(session_service),
 ) -> ApiEnvelope[InterviewSessionResponse]:
-    session = service.create_session(user_id=resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context), title=request.title)
+    session = service.create_session(
+        user_id=resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context),
+        title=request.title,
+        interview_language=request.interview_language,
+    )
     return success_response(request=request_context, data=_to_session_response(session), timestamp=utc_now_iso())
 
 
@@ -274,6 +280,22 @@ async def confirm_materials(
         resume_document_id=request.resume_document_id,
         job_description_document_id=request.job_description_document_id,
         knowledge_document_ids=request.knowledge_document_ids,
+    )
+    return success_response(request=request_context, data=_to_session_response(session), timestamp=utc_now_iso())
+
+
+@router.patch("/{session_id}/language", response_model=ApiEnvelope[InterviewSessionResponse])
+async def update_interview_language(
+    session_id: str,
+    request_context: Request,
+    request: UpdateInterviewLanguageRequest,
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: SessionService = Depends(session_service),
+) -> ApiEnvelope[InterviewSessionResponse]:
+    session = service.update_interview_language(
+        user_id=resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context),
+        session_id=session_id,
+        interview_language=request.interview_language,
     )
     return success_response(request=request_context, data=_to_session_response(session), timestamp=utc_now_iso())
 

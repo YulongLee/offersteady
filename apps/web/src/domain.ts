@@ -3,6 +3,7 @@ import type { ManualAnswerStreamUpdate } from "./live-answer-stream";
 
 export type ResourceStatus = "missing" | "processing" | "ready" | "error" | "deleted";
 export type SessionStatus = "preparing" | "ready" | "active" | "paused" | "ended" | "error";
+export type InterviewLanguage = "zh-CN" | "en-US";
 export type QuestionStatus = "listening" | "transcribing" | "confirmed" | "generating" | "streaming" | "uncertain" | "failed" | "offline" | "cancelled";
 export type ReviewStatus = "waiting" | "generating" | "complete" | "failed";
 
@@ -18,6 +19,7 @@ export interface PreparedResource {
 export interface InterviewSummary {
   readonly id: string;
   readonly title: string;
+  readonly interviewLanguage?: InterviewLanguage;
   readonly role: string;
   readonly company?: string;
   readonly status: SessionStatus;
@@ -260,6 +262,7 @@ export interface InterviewAppAdapter {
   resolveReferral(code: string, signal?: AbortSignal): Promise<{ valid: boolean; enabled: boolean; rewardPoints?: number; inviterRewardPoints?: number; inviteeRewardPoints?: number; activationWindowDays?: number }>;
   activateReferral(code: string, signal?: AbortSignal): Promise<ReferralActivationResult>;
   createDraft(input: { title: string; role: string; company?: string }, signal?: AbortSignal): Promise<InterviewSummary>;
+  updateInterviewLanguage(id: string, interviewLanguage: InterviewLanguage, signal?: AbortSignal): Promise<InterviewSummary>;
   confirmInterviewMaterials(selection: SessionContextSelection, signal?: AbortSignal): Promise<SessionContextSelection>;
   getActiveInterviewConflict(id: string, signal?: AbortSignal): Promise<ActiveInterviewConflict>;
   supersedeActiveInterview(command: { interviewId: string; expectedPreviousInterviewId: string }, signal?: AbortSignal): Promise<readonly string[]>;

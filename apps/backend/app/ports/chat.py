@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from collections.abc import Iterator
 from typing import Literal, Protocol
 
+from app.ports.interview_session import InterviewLanguage
+
 
 AnswerTaskStatus = Literal["queued", "streaming", "completed", "failed", "cancelled"]
 ChatFinishReason = Literal["completed", "failed", "cancelled", "retry-exhausted"]
@@ -130,9 +132,9 @@ class PromptBuilderPort(Protocol):
 
 
 class PromptTemplatePort(Protocol):
-    def load_system_prompt(self) -> tuple[str, PromptConfig]: ...
+    def load_system_prompt(self, interview_language: InterviewLanguage = "zh-CN") -> tuple[str, PromptConfig]: ...
 
-    def load_stage_prompt(self, stage: str) -> tuple[str, PromptConfig]: ...
+    def load_stage_prompt(self, stage: str, interview_language: InterviewLanguage = "zh-CN") -> tuple[str, PromptConfig]: ...
 
 
 class LLMGatewayPort(Protocol):

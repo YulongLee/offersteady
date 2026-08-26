@@ -503,7 +503,11 @@ function PreparationPage() {
   const [activeConflict, setActiveConflict] = useState<Awaited<ReturnType<typeof interviewAppAdapter.getActiveInterviewConflict>>["activeInterview"] | undefined>(undefined);
   const [conflictError, setConflictError] = useState("");
   const [resolvingConflict, setResolvingConflict] = useState(false);
-  const interviewTitle = state.interviews.find(item => item.id === id)?.title ?? "本场面试";
+  const [savingLanguage, setSavingLanguage] = useState(false);
+  const [languageError, setLanguageError] = useState("");
+  const interview = state.interviews.find(item => item.id === id);
+  const interviewTitle = interview?.title ?? "本场面试";
+  const interviewLanguage = interview?.interviewLanguage ?? "zh-CN";
   const selection = state.contextSelections[id] ?? state.contextSelections.demo!;
   const managedSources = managedLibrarySources(state.librarySources, state.account.id);
   const validity = selectionValidity(managedSources, selection);
@@ -534,6 +538,22 @@ function PreparationPage() {
       setMaterialConfirmError(error instanceof Error ? error.message : "确认本场资料失败，请稍后重试。");
     } finally {
       setConfirmingMaterials(false);
+    }
+  };
+  const saveInterviewLanguage = async (nextLanguage: "zh-CN" | "en-US") => {
+    if (savingLanguage || nextLanguage === interviewLanguage) return;
+    setSavingLanguage(true);
+    setLanguageError("");
+    try {
+      const updated = await runAdapterOperation(signal => interviewAppAdapter.updateInterviewLanguage(id, nextLanguage, signal));
+      setState(current => ({
+        ...current,
+        interviews: current.interviews.map(item => item.id === id ? { ...item, ...updated } : item),
+      }));
+    } catch (error) {
+      setLanguageError(error instanceof Error ? error.message : "面试语言保存失败，请重试。");
+    } finally {
+      setSavingLanguage(false);
     }
   };
   const downloadMaterial = async (source: ContextLibrarySource) => {
@@ -644,7 +664,7 @@ function PreparationPage() {
     }
   };
   return <main className="app-page"><Link className="back-link" to={routes.app}>← 返回面试首页</Link><PageHeader eyebrow="PREPARATION" title={interviewTitle} detail="资料与“面试资料”页面保持一致，为本场按需选择。" action={<div className="completion"><strong>{complete}/2</strong><span>可进入</span></div>} />
-    <div className="prepare-grid"><section className="panel"><ContextPicker sources={managedSources} selection={selection} onSave={saveSelection} onDownload={downloadMaterial} />{confirmingMaterials ? <div className="context-warning" role="status">正在提交后端校验并保存本场资料…</div> : null}{materialConfirmError ? <div className="context-warning" role="alert">{materialConfirmError}</div> : null}</section>
+    <div className="prepare-grid"><section className="panel"><fieldset className="interview-language-picker" disabled={savingLanguage}><legend>面试语言</legend><p>用于本场实时识别、问题判断和 AI 回答；开始面试后将锁定。</p><div><label className={interviewLanguage === "zh-CN" ? "selected" : ""}><input type="radio" name="interview-language" value="zh-CN" checked={interviewLanguage === "zh-CN"} onChange={() => void saveInterviewLanguage("zh-CN")} /><span><strong>中文面试</strong><small>沿用当前中文识别与回答链路</small></span></label><label className={interviewLanguage === "en-US" ? "selected" : ""}><input type="radio" name="interview-language" value="en-US" checked={interviewLanguage === "en-US"} onChange={() => void saveInterviewLanguage("en-US")} /><span><strong>English Interview</strong><small>English transcription and AI answers</small></span></label></div>{savingLanguage ? <small role="status">正在保存面试语言…</small> : null}{languageError ? <div className="inline-error" role="alert">{languageError}</div> : null}</fieldset><ContextPicker sources={managedSources} selection={selection} onSave={saveSelection} onDownload={downloadMaterial} />{confirmingMaterials ? <div className="context-warning" role="status">正在提交后端校验并保存本场资料…</div> : null}{materialConfirmError ? <div className="context-warning" role="alert">{materialConfirmError}</div> : null}</section>
       <aside className="panel check-panel"><div className="panel-heading"><h2>开始前检查</h2><span>{canStart ? "可进入" : !selectionReady ? "待确认资料" : "待绑定机器"}</span></div><ul className="check-list"><li className={selectionReady ? "done" : ""}><i>{selectionReady ? "✓" : "1"}</i><div><strong>本场资料</strong><span>{validity === "unconfirmed" ? "请选择资料或确认不使用资料" : validity === "attention-required" ? "所选资料已失效，请处理" : level === "none" ? "已确认不使用个人资料" : level === "personalized" ? "简历与 JD 已选择" : "已确认使用部分资料"}</span></div></li><li className={machineReady ? "done" : ""}><i>{machineReady ? "✓" : "2"}</i><div><strong>收音机器</strong><span>{inputDiagnostic}</span></div></li></ul>
         <div className="machine-code-panel">
           <strong className="connection-choice-title">连接桌面助手</strong>
@@ -692,7 +712,9 @@ function LivePage() {
   const realtimeHealthyRef = useRef(false);
   const livePageMountedAtMs = useRef(Date.now());
   const pageInstanceId = useRef(globalThis.crypto?.randomUUID?.() ?? `page-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  const interviewTitle = state.interviews.find(item => item.id === id)?.title ?? "本场面试";
+  const liveInterview = state.interviews.find(item => item.id === id);
+  const interviewTitle = liveInterview?.title ?? "本场面试";
+  const interviewLanguageLabel = (liveInterview?.interviewLanguage ?? "zh-CN") === "en-US" ? "English Interview" : "中文面试";
   const active = state.questions[0] ?? emptyLiveQuestion;
   const screenshot = actionState.screenshotTask;
   const setScreenshot = (next: ScreenshotTask | null) => setActionState(current => ({
@@ -1556,7 +1578,7 @@ function LivePage() {
   return <main className={`live-page focused-live-page${desktopLayout ? " desktop-live-page" : " mobile-live-page"}`}>
     <header className="live-top">
       <Link to={routes.app} aria-label="返回面试首页"><Logo /></Link>
-      <div className="live-session-heading"><strong>{interviewTitle}</strong><span><i className={state.captureState === "capturing" ? "recording-dot" : "online-dot"} /> {desktopLayout ? `这台设备 · ${captureStatus}` : captureStatus}</span></div>
+      <div className="live-session-heading"><strong>{interviewTitle}</strong><span><i className={state.captureState === "capturing" ? "recording-dot" : "online-dot"} /> {desktopLayout ? `这台设备 · ${captureStatus}` : captureStatus}</span><small className="live-language-badge">{interviewLanguageLabel}</small></div>
       {desktopLayout ? <div className="live-top-actions"><Link className="live-balance" to={routes.billing}>积分与会员</Link><span>18:24</span><AccountMenu compact />{captureButton}<button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束面试</button></div> : <div className="mobile-live-top-actions">{captureButton}<details className="mobile-live-more"><summary aria-label="更多面试操作">•••</summary><div><Link to={routes.billing}>积分与会员</Link><Link to={routes.settings}>用户设置</Link><button className="danger" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束面试</button></div></details></div>}
     </header>
     {idleStatus?.state === "warning" ? <div className="global-live-alert" role="status"><strong>本场面试即将因空闲自动结束</strong><span>连续 20 分钟没有音频、回答或截图活动会释放当前设备连接，历史记录仍会保留。</span><button className="button primary" disabled={continuingInterview} onClick={() => void continueIdleInterview()}>{continuingInterview ? "正在继续…" : "继续本场面试"}</button></div> : null}

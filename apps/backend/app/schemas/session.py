@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.material_formats import MaterialKind
-from app.ports.interview_session import ConversationRole, ConversationVisibility, InterviewSessionState, SessionContinueTarget, SessionUsageKind
+from app.ports.interview_session import ConversationRole, ConversationVisibility, InterviewLanguage, InterviewSessionState, SessionContinueTarget, SessionUsageKind
 
 
 class SessionDocumentSnapshotResponse(BaseModel):
@@ -108,6 +108,7 @@ class InterviewSessionResponse(BaseModel):
     session_id: str = Field(alias="sessionId")
     owner_user_id: str = Field(alias="ownerUserId")
     title: str
+    interview_language: InterviewLanguage = Field(alias="interviewLanguage")
     status: InterviewSessionState
     continue_target: SessionContinueTarget = Field(alias="continueTarget")
     material_binding: SessionMaterialBindingResponse = Field(alias="materialBinding")
@@ -126,6 +127,13 @@ class CreateInterviewSessionRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
     user_id: str = Field(min_length=1, alias="userId")
     title: str = Field(min_length=1, max_length=120)
+    interview_language: InterviewLanguage = Field(default="zh-CN", alias="interviewLanguage")
+
+
+class UpdateInterviewLanguageRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    user_id: str = Field(min_length=1, alias="userId")
+    interview_language: InterviewLanguage = Field(alias="interviewLanguage")
 
 
 class ListInterviewSessionsRequest(BaseModel):

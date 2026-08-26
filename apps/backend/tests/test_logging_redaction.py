@@ -55,3 +55,38 @@ def test_log_event_serializes_redacted_payload(caplog) -> None:
     assert record["object_key"] == "[redacted]"
     assert record["system_prompt"] == "[redacted]"
     assert record["source_count"] == 1
+
+
+def test_language_route_telemetry_keeps_dimensions_but_redacts_all_user_content(caplog) -> None:
+    logger = logging.getLogger("offersteady.test.language-route-redaction")
+    logger.handlers = []
+    logger.propagate = True
+    logger.setLevel(logging.INFO)
+
+    with caplog.at_level(logging.INFO, logger=logger.name):
+        log_event(
+            logger,
+            logging.INFO,
+            settings=Settings(app_name="test", environment="test"),
+            event="chat.language_route",
+            interview_language="en-US",
+            stage="detail",
+            prompt_template_id="interview-chat-en-detail",
+            prompt_version="v4",
+            transcript="synthetic private transcript",
+            screenshot="synthetic private pixels",
+            document_text="synthetic private resume",
+            question_hash="0123456789ab",
+            question_length=31,
+        )
+
+    record = json.loads(caplog.records[-1].message)
+    assert record["interview_language"] == "en-US"
+    assert record["stage"] == "detail"
+    assert record["prompt_template_id"] == "interview-chat-en-detail"
+    assert record["prompt_version"] == "v4"
+    assert record["question_hash"] == "0123456789ab"
+    assert record["question_length"] == 31
+    assert record["transcript"] == "[redacted]"
+    assert record["screenshot"] == "[redacted]"
+    assert record["document_text"] == "[redacted]"

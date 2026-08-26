@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 from pathlib import Path
+import pytest
 from app.core.config import Settings
 from app.ports.chat import PromptConfig
 from app.ports.screenshot_answer import VisionSummary
@@ -17,6 +18,35 @@ def test_versioned_live_prompt_components_load() -> None:
     assert "authoritative_answer_anchor" in detail
     assert quick_config.template_id == "interview-chat-quick"
     assert detail_config.template_id == "interview-chat-detail"
+
+
+def test_versioned_english_prompt_components_load_without_runtime_translation() -> None:
+    adapter = FilePromptTemplateAdapter(Settings(_env_file=None, chat_prompt_version="v4"))
+    system, system_config = adapter.load_system_prompt("en-US")
+    quick, quick_config = adapter.load_stage_prompt("quick", "en-US")
+    detail, detail_config = adapter.load_stage_prompt("detail", "en-US")
+    continuation, continuation_config = adapter.load_stage_prompt("continuation", "en-US")
+
+    assert "naturally in English" in system
+    assert "<normalized_question>" in quick
+    assert "authoritative_answer_anchor" in detail
+    assert "authoritative prefix" in continuation
+    assert system_config.template_id == "interview-chat-en-system"
+    assert quick_config.template_id == "interview-chat-en-quick"
+    assert detail_config.template_id == "interview-chat-en-detail"
+    assert continuation_config.template_id == "interview-chat-en-continuation"
+
+
+def test_missing_english_prompt_fails_closed_instead_of_loading_chinese(tmp_path: Path) -> None:
+    chinese = tmp_path / "system.md"
+    chinese.write_text("仅中文模板", encoding="utf-8")
+    adapter = FilePromptTemplateAdapter(Settings(_env_file=None, chat_prompt_template_path=str(chinese)))
+
+    with pytest.raises(FileNotFoundError):
+        adapter.load_system_prompt("en-US")
+
+    with pytest.raises(FileNotFoundError):
+        adapter.load_stage_prompt("quick", "en-US")
 
 def test_live_prompt_delimits_evidence_and_anchor() -> None:
     prompt = InterviewPromptBuilder().build(
@@ -43,6 +73,7 @@ def test_screenshot_prompt_excludes_personal_materials() -> None:
 
 def test_screenshot_instruction_removes_internal_shortcut_metadata() -> None:
     assert _screenshot_only_instruction("只回答截图。[来源:助手快捷键]") == "只回答截图。"
+    assert _screenshot_only_instruction("", "en-US") == "Answer the question using only the current screenshot."
 
 def test_vision_gateway_loads_v2_policy() -> None:
     policy = OpenAICompatibleVisionGateway(Settings(_env_file=None, screenshot_prompt_version="v2"))._load_system_prompt()
@@ -50,6 +81,9 @@ def test_vision_gateway_loads_v2_policy() -> None:
     assert "简历、JD、知识库" in policy
     assert "禁止使用实时对话" in policy
     assert "只输出最终Markdown答案" in policy
+    english_policy = OpenAICompatibleVisionGateway(Settings(_env_file=None, screenshot_prompt_version="v2"))._load_system_prompt("en-US")
+    assert "Answer in English" in english_policy
+    assert "complete runnable code" in english_policy
 
 def test_vision_gateway_extracts_direct_and_legacy_json_answers() -> None:
     direct = "简要回答\n使用哈希表。\n\n---\n\n详细回答\n```python\nprint('ok')\n```"
@@ -60,11 +94,21 @@ def test_vision_gateway_extracts_direct_and_legacy_json_answers() -> None:
     assert OpenAICompatibleVisionGateway._extract_final_answer(fenced_legacy) == direct
 
 def test_eval_fixtures_are_synthetic() -> None:
-    paths = [ROOT / "ai/evals/interview-answer-quality-v4.jsonl", ROOT / "ai/evals/screenshot-answer-quality-v2.jsonl", ROOT / "ai/evals/question-normalization-v1.jsonl"]
+    paths = [ROOT / "ai/evals/interview-answer-quality-v4.jsonl", ROOT / "ai/evals/screenshot-answer-quality-v2.jsonl", ROOT / "ai/evals/question-normalization-v1.jsonl", ROOT / "ai/evals/interview-language-routing-en-v1.jsonl"]
     records = [json.loads(line) for path in paths for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
     assert all(item["synthetic"] is True for item in records)
     ids = {item["id"] for item in records}
     assert {"quick-detail-consistent", "resume-injection", "algorithm-complete", "unreadable-schema", "fragmented-rag-question", "referential-follow-up"} <= ids
+    assert {"en-fragmented-question-normalization", "en-quick-detail-continuity", "en-screenshot-answer", "zh-regression-language-default"} <= ids
+
+
+def test_english_language_eval_baseline_keeps_zero_regression_safety_gates() -> None:
+    baseline = json.loads(
+        (ROOT / "ai/evals/baselines/interview-language-routing-en-v1.json").read_text(encoding="utf-8")
+    )
+    assert baseline["thresholds"]["languageRouteAccuracy"] == 1.0
+    assert baseline["thresholds"]["groundingSafetyPassRate"] == 1.0
+    assert baseline["thresholds"]["chineseBaselineRegressionCount"] == 0
 
 
 def test_quick_question_envelope_parser_preserves_raw_fallback() -> None:

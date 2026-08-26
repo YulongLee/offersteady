@@ -34,6 +34,7 @@ from app.ports.chat import (
     UsageReport,
 )
 from app.ports.retrieval import RetrievalContext, RetrievalFilter, RetrievalPort
+from app.ports.interview_session import InterviewLanguage
 from app.ports.commercial_hardening import AiUsageRecord, CommercialHardeningRepository
 from app.ports.storage import FileStoragePort
 from app.schemas.retrieval import RetrievalResponse, RetrievedChunkResponse
@@ -96,27 +97,30 @@ class FilePromptTemplateAdapter(PromptTemplatePort):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    def load_system_prompt(self) -> tuple[str, PromptConfig]:
+    def load_system_prompt(self, interview_language: InterviewLanguage = "zh-CN") -> tuple[str, PromptConfig]:
         prompt_path = Path(self.settings.chat_prompt_template_path)
         if not prompt_path.is_absolute():
             prompt_path = Path(__file__).resolve().parents[4] / self.settings.chat_prompt_template_path
+        if interview_language == "en-US":
+            prompt_path = prompt_path.with_name(f"{prompt_path.stem}.en{prompt_path.suffix}")
         text = prompt_path.read_text(encoding="utf-8").strip()
         return text, PromptConfig(
-            template_id="interview-chat-system",
+            template_id="interview-chat-en-system" if interview_language == "en-US" else "interview-chat-system",
             version=self.settings.chat_prompt_version,
             max_history_entries=self.settings.chat_max_history_entries,
             include_retrieval_context=True,
         )
 
-    def load_stage_prompt(self, stage: str) -> tuple[str, PromptConfig]:
+    def load_stage_prompt(self, stage: str, interview_language: InterviewLanguage = "zh-CN") -> tuple[str, PromptConfig]:
         if stage not in {"quick", "detail", "continuation"}:
             raise ValueError(f"unsupported_prompt_stage:{stage}")
         prompt_path = Path(self.settings.chat_prompt_template_path)
         if not prompt_path.is_absolute():
             prompt_path = Path(__file__).resolve().parents[4] / self.settings.chat_prompt_template_path
-        text = prompt_path.with_name(f"{stage}.md").read_text(encoding="utf-8").strip()
+        filename = f"{stage}.en.md" if interview_language == "en-US" else f"{stage}.md"
+        text = prompt_path.with_name(filename).read_text(encoding="utf-8").strip()
         return text, PromptConfig(
-            template_id=f"interview-chat-{stage}",
+            template_id=f"interview-chat-en-{stage}" if interview_language == "en-US" else f"interview-chat-{stage}",
             version=self.settings.chat_prompt_version,
             max_history_entries=self.settings.chat_max_history_entries,
             include_retrieval_context=stage == "detail",
@@ -136,11 +140,13 @@ class InterviewPromptBuilder(PromptBuilderPort):
         prompt_config: PromptConfig,
     ) -> PromptBuildResult:
         selected_history = conversation_history[-prompt_config.max_history_entries :]
-        answer_anchors = [item.removeprefix("本轮简要回答锚点：").strip() for item in selected_history if item.startswith("本轮简要回答锚点：")]
-        history_text = "\n".join(item for item in selected_history if not item.startswith("本轮简要回答锚点："))
+        english = "-en-" in prompt_config.template_id
+        anchor_prefix = "Quick answer anchor: " if english else "本轮简要回答锚点："
+        answer_anchors = [item.removeprefix(anchor_prefix).strip() for item in selected_history if item.startswith(anchor_prefix)]
+        history_text = "\n".join(item for item in selected_history if not item.startswith(anchor_prefix))
         sections = [
             "<authoritative_request>",
-            f"会话标题：{session_title}\n当前问题：{question}",
+            (f"Session title: {session_title}\nCurrent question: {question}" if english else f"会话标题：{session_title}\n当前问题：{question}"),
             "</authoritative_request>",
         ]
         if history_text:
@@ -150,7 +156,7 @@ class InterviewPromptBuilder(PromptBuilderPort):
         if prompt_config.include_retrieval_context and retrieval_context_text.strip():
             sections.append(f"<untrusted_knowledge_evidence>\n{retrieval_context_text.strip()}\n</untrusted_knowledge_evidence>")
         elif prompt_config.include_retrieval_context:
-            sections.append("<knowledge_status>本次未命中已确认知识库。</knowledge_status>")
+            sections.append("<knowledge_status>No confirmed knowledge-base evidence matched this request.</knowledge_status>" if english else "<knowledge_status>本次未命中已确认知识库。</knowledge_status>")
         if answer_anchors:
             sections.append(f"<authoritative_answer_anchor>\n{answer_anchors[-1]}\n</authoritative_answer_anchor>")
         user_prompt = "\n\n".join(sections)
@@ -446,11 +452,28 @@ class QwenCompatibleGateway(LLMGatewayPort):
         return chunks or [ChatAnswerChunk(sequence=1, text=answer, is_final=True)]
 
     def _compose_answer(self, *, question: str, prompt: PromptBuildResult) -> str:
-        if prompt.prompt_config.template_id == "interview-chat-quick":
+        english = "-en-" in prompt.prompt_config.template_id
+        if prompt.prompt_config.template_id.endswith("-quick"):
             return (
                 f"{_NORMALIZED_QUESTION_OPEN}{_clean_question_text(question)}"
                 f"{_NORMALIZED_QUESTION_CLOSE}\n"
-                "我会先直接回答核心结论，再用一到两个关键依据说明实现方式和取舍。"
+                + ("I would start with the core conclusion, then support it with one or two concrete reasons and trade-offs." if english else "我会先直接回答核心结论，再用一到两个关键依据说明实现方式和取舍。")
+            )
+        if english and prompt.prompt_config.template_id.endswith("-detail"):
+            return (
+                "I would explain the context, my verified responsibility, the key decision and its trade-offs, "
+                "followed by the result or lesson learned. If personal evidence is unavailable, I would describe "
+                "the approach I would take instead of inventing prior experience, employers, metrics, or outcomes."
+            )
+        if english:
+            evidence_hint = "This answer uses the confirmed evidence available for this interview." if prompt.retrieval_excerpt_count > 0 else "The available personal evidence is limited, so I would keep any experience claims explicit and factual."
+            return (
+                "Quick Answer\n"
+                f"For “{question}”, I would state the conclusion first and support it with the most relevant verified facts. {evidence_hint}\n\n"
+                "---\n\n"
+                "Detailed Answer\n"
+                "I would then explain the context, my verified responsibility, the key decision and its trade-offs, followed by the result or lesson learned. "
+                "If no personal evidence is available, I would describe the approach I would take instead of inventing prior experience or metrics."
             )
         evidence_hint = "已结合本场资料和检索依据。" if prompt.retrieval_excerpt_count > 0 else "当前可用资料有限，建议结合你的真实经历补充。"
         return (
@@ -596,9 +619,9 @@ class ChatService:
         except Exception as exc:  # Observability must never break a user answer.
             self.logger.warning("chat.ai_usage_record_failed", extra={"task_id": task_id, "safe_error_code": exc.__class__.__name__})
 
-    def _load_stage_prompt(self, stage: str) -> tuple[str, PromptConfig]:
+    def _load_stage_prompt(self, stage: str, interview_language: InterviewLanguage = "zh-CN") -> tuple[str, PromptConfig]:
         loader = getattr(self.prompt_template, "load_stage_prompt", None)
-        return loader(stage) if callable(loader) else self.prompt_template.load_system_prompt()
+        return loader(stage, interview_language) if callable(loader) else self.prompt_template.load_system_prompt(interview_language)
 
     def _conversation_history(self, *, user_id: str, session_id: str, question: str) -> list[str]:
         entries = self.session_service.get_context_window(
@@ -650,14 +673,15 @@ class ChatService:
         stage: str,
         original_prompt: PromptBuildResult,
         existing_answer: str,
+        interview_language: InterviewLanguage,
     ) -> PromptBuildResult:
-        system_prompt, config = self._load_stage_prompt("continuation")
+        system_prompt, config = self._load_stage_prompt("continuation", interview_language)
         user_prompt = (
             f"<original_request>\n{original_prompt.user_prompt}\n</original_request>\n\n"
             f"<answer_stage>{stage}</answer_stage>\n"
             f"<authoritative_existing_answer>\n{existing_answer}\n</authoritative_existing_answer>"
         )
-        continuation_config = replace(config, template_id=f"interview-chat-continuation-{stage}")
+        continuation_config = replace(config, template_id=f"{config.template_id}-{stage}")
         return PromptBuildResult(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
@@ -676,6 +700,7 @@ class ChatService:
         finish_reason: str,
         provider_attempt: int,
         task_id: str,
+        interview_language: InterviewLanguage = "zh-CN",
     ) -> tuple[str, int, int]:
         if finish_reason in {"content-filter", "tool-calls", "unknown"}:
             raise NonRetryableChatError(
@@ -697,6 +722,7 @@ class ChatService:
                 stage=stage,
                 original_prompt=prompt,
                 existing_answer=current_text,
+                interview_language=interview_language,
             )
             prompt_characters += len(continuation_prompt.rendered_prompt)
             continuation_parts: list[str] = []
@@ -789,7 +815,7 @@ class ChatService:
         conversation_history = self._conversation_history(user_id=user_id, session_id=session_id, question=question)
         retrieval = self._retrieve_context(user_id=user_id, session=session, question=question)
         material_context_text, material_assembly, material_provenance = self._assemble_material_context(session=session, retrieval=retrieval)
-        system_prompt, prompt_config = self.prompt_template.load_system_prompt()
+        system_prompt, prompt_config = self.prompt_template.load_system_prompt(session.interview_language)
         history_entries = self.session_service.get_context_window(user_id=user_id, session_id=session_id, limit=self.settings.chat_max_history_entries)
         prompt = self.prompt_builder.build(
             question=question,
@@ -933,7 +959,7 @@ class ChatService:
             strategy="filtered-first",
         )
         material_context_text, material_assembly, material_provenance = self._assemble_material_context(session=session, retrieval=quick_retrieval)
-        quick_system_prompt, prompt_config = self._load_stage_prompt("quick")
+        quick_system_prompt, prompt_config = self._load_stage_prompt("quick", session.interview_language)
         material_context_text = material_context_text[:min(2400, int(getattr(self.settings, "rag_context_max_characters", 6000)))]
         conversation_history = self._conversation_history(
             user_id=user_id,
@@ -1027,7 +1053,7 @@ class ChatService:
                                 question=normalized_question,
                             )
                         yield {"type": "question-normalized", "task": current_task}
-                        visible_text = f"简单回答\n{visible_text}"
+                        visible_text = f"{'Quick Answer' if session.interview_language == 'en-US' else '简单回答'}\n{visible_text}"
                     if not visible_text:
                         continue
                     normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=visible_text, is_final=False)
@@ -1061,14 +1087,15 @@ class ChatService:
                             question=normalized_question,
                         )
                     yield {"type": "question-normalized", "task": current_task}
-                    normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=f"简单回答\n{visible_text}", is_final=False)
+                    normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=f"{'Quick Answer' if session.interview_language == 'en-US' else '简单回答'}\n{visible_text}", is_final=False)
                     chunks.append(normalized)
                     answer_parts.append(normalized.text)
                     current_task = self.repository.save_task(
                         replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
                     )
                     yield {"type": "chunk", "task": current_task, "chunk": normalized}
-                quick_answer = "".join(answer_parts).removeprefix("简单回答\n").strip()
+                quick_heading = "Quick Answer" if session.interview_language == "en-US" else "简单回答"
+                quick_answer = "".join(answer_parts).removeprefix(f"{quick_heading}\n").strip()
                 quick_suffix, quick_continuations, quick_prompt_characters = self._complete_answer_stage(
                     stage="quick",
                     question=normalized_question,
@@ -1077,6 +1104,7 @@ class ChatService:
                     finish_reason=quick_finish_reason,
                     provider_attempt=attempt,
                     task_id=current_task.task_id,
+                    interview_language=session.interview_language,
                 )
                 continuation_count += quick_continuations
                 continuation_prompt_characters += quick_prompt_characters
@@ -1098,13 +1126,13 @@ class ChatService:
                     yield {"type": "cancelled", "task": cancelled}
                     return
                 material_context_text, material_assembly, material_provenance = self._assemble_material_context(session=session, retrieval=retrieval)
-                detail_system_prompt, detail_prompt_config = self._load_stage_prompt("detail")
-                quick_answer_anchor = "".join(answer_parts).removeprefix("简单回答\n").strip()
+                detail_system_prompt, detail_prompt_config = self._load_stage_prompt("detail", session.interview_language)
+                quick_answer_anchor = "".join(answer_parts).removeprefix(f"{quick_heading}\n").strip()
                 detail_prompt = self.prompt_builder.build(
                     question=normalized_question,
                     session_title=session.title,
                     system_prompt=detail_system_prompt,
-                    conversation_history=[*conversation_history, f"本轮简要回答锚点：{quick_answer_anchor}"],
+                    conversation_history=[*conversation_history, f"{'Quick answer anchor: ' if session.interview_language == 'en-US' else '本轮简要回答锚点：'}{quick_answer_anchor}"],
                     session_material_context_text=material_context_text[:int(getattr(self.settings, "rag_context_max_characters", 6000))],
                     retrieval_context_text=retrieval.context_text,
                     prompt_config=detail_prompt_config,
@@ -1129,7 +1157,7 @@ class ChatService:
                         updated_at_ms=_now_ms(),
                     )
                 )
-                separator = "\n\n---\n\n详细回答\n"
+                separator = f"\n\n---\n\n{'Detailed Answer' if session.interview_language == 'en-US' else '详细回答'}\n"
                 normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=separator, is_final=False)
                 chunks.append(normalized)
                 answer_parts.append(normalized.text)
@@ -1165,6 +1193,7 @@ class ChatService:
                     finish_reason=detail_finish_reason,
                     provider_attempt=attempt,
                     task_id=current_task.task_id,
+                    interview_language=session.interview_language,
                 )
                 continuation_count += detail_continuations
                 continuation_prompt_characters += detail_prompt_characters
@@ -1231,6 +1260,8 @@ class ChatService:
                     event="chat.prompt_quality_completed", feature="live-answer", action="prompt-quality",
                     session_id=session_id, task_id=completed.task_id,
                     prompt_template_id=completed.prompt_template_id, prompt_version=completed.prompt_version,
+                    interview_language=session.interview_language,
+                    stage="quick+detail",
                     prompt_strategy_mode="adaptive-evidence-first",
                     fixed_source_count=completed.fixed_source_count, retrieved_source_count=completed.retrieved_source_count,
                     question_size_bucket=self._size_bucket(len(question)), answer_size_bucket=self._size_bucket(len(completed.answer_text)),
@@ -1448,6 +1479,7 @@ class ChatService:
             unavailable_sources=unavailable_sources,
         )
         provenance = {
+            "interviewLanguage": getattr(session, "interview_language", "zh-CN"),
             "selectionRevision": session.material_binding.revision,
             "usedSources": [self._material_source_payload(item) for item in used_sources],
             "unavailableSources": [self._material_source_payload(item) for item in unavailable_sources],
@@ -1518,6 +1550,7 @@ class ChatService:
         )
 
     def _log(self, level: int, event: str, *, task: ChatAnswerTaskRecord | None, session_id: str, question: str, retry_count: int, error_code: str | None = None) -> None:
+        provenance = task.material_provenance if task else {}
         log_event(
             self.logger,
             level,
@@ -1530,6 +1563,9 @@ class ChatService:
             provider_name=task.provider_name if task else None,
             model_name=task.model_name if task else None,
             prompt_version=task.prompt_version if task else None,
+            prompt_template_id=task.prompt_template_id if task else None,
+            interview_language=provenance.get("interviewLanguage"),
+            stage=event.removeprefix("chat."),
             stream_mode=task.stream_mode if task else None,
             status=task.status if task else None,
             retry_count=retry_count,

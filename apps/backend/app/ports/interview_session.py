@@ -7,6 +7,7 @@ from app.material_formats import MaterialKind
 
 
 InterviewSessionState = Literal["preparing", "live", "ended"]
+InterviewLanguage = Literal["zh-CN", "en-US"]
 SessionContinueTarget = Literal["preparing", "live", "history"]
 ConversationRole = Literal["system", "interviewer", "candidate", "assistant", "manual-question", "screenshot", "event"]
 ConversationVisibility = Literal["session", "ai", "review", "system-only"]
@@ -98,6 +99,7 @@ class InterviewSessionRecord:
     session_id: str
     owner_user_id: str
     title: str
+    interview_language: InterviewLanguage
     status: InterviewSessionState
     continue_target: SessionContinueTarget
     material_binding: SessionMaterialBinding
@@ -120,6 +122,14 @@ class InterviewSessionRepository(Protocol):
     def list_sessions_for_user(self, *, user_id: str, status: InterviewSessionState | None = None) -> list[InterviewSessionRecord]: ...
 
     def touch_activity(self, *, user_id: str, session_id: str, activity_at_ms: int) -> InterviewSessionRecord | None: ...
+
+    def update_language_if_preparing(
+        self, *, user_id: str, session_id: str, interview_language: InterviewLanguage, updated_at_ms: int
+    ) -> InterviewSessionRecord | None: ...
+
+    def start_if_not_ended(
+        self, *, user_id: str, session_id: str, started_at_ms: int
+    ) -> InterviewSessionRecord | None: ...
 
     def list_idle_live_sessions(self, *, before_ms: int, limit: int, user_id: str | None = None) -> list[InterviewSessionRecord]: ...
 

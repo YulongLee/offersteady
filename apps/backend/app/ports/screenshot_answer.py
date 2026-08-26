@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
+from app.ports.interview_session import InterviewLanguage
+
 from app.ports.chat import ChatAnswerChunk, PromptBuildResult
 
 
@@ -197,11 +199,12 @@ class VisionGatewayPort(Protocol):
         instruction: str,
         images: list[PreparedScreenshotImage],
         attempt: int,
+        interview_language: InterviewLanguage = "zh-CN",
     ) -> VisionSummary: ...
 
 
 class ScreenshotPromptTemplatePort(Protocol):
-    def load_system_prompt(self) -> tuple[str, object]: ...
+    def load_system_prompt(self, interview_language: InterviewLanguage = "zh-CN") -> tuple[str, object]: ...
 
 
 class ScreenshotPromptBuilderPort(Protocol):
