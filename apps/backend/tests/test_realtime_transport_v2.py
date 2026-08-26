@@ -256,6 +256,53 @@ def test_watchdog_publishes_one_incomplete_terminal_without_question_side_effect
         service.settings.realtime_source_watchdog_enabled = original_enabled
 
 
+def test_new_segment_terminalizes_superseded_visible_partial_without_closing_source():
+    _user_id, session_id, device_id, publisher = create_live_binding()
+    service = realtime_speech_service()
+    original_enabled = service.settings.realtime_source_watchdog_enabled
+    service.settings.realtime_source_watchdog_enabled = True
+    try:
+        with client.websocket_connect(f"/api/v1/realtime-speech/ingest-ws?token={publisher['token']}&protocol=2.0") as websocket:
+            websocket.receive_json()
+            first = {
+                **frame(device_id=device_id, source_kind="microphone", sequence=0),
+                "segmentId": "superseded-visible-partial",
+            }
+            websocket.send_json(first)
+            assert websocket.receive_json()["kind"] == "frame-accepted"
+            queued = service._frame_queues.get((session_id, "microphone"))
+            if queued is not None:
+                queued.join()
+            current = service.repository.get_transcript(session_id, "superseded-visible-partial")
+            assert current is not None and current.is_final is False
+
+            second = {
+                **frame(device_id=device_id, source_kind="microphone", sequence=1),
+                "segmentId": "new-visible-partial",
+            }
+            websocket.send_json(second)
+            assert websocket.receive_json()["kind"] == "frame-accepted"
+            queued = service._frame_queues.get((session_id, "microphone"))
+            if queued is not None:
+                queued.join()
+
+        superseded = service.repository.get_transcript(session_id, "superseded-visible-partial")
+        assert superseded is not None
+        assert superseded.is_final is True
+        assert superseded.terminal_state == "incomplete"
+        assert superseded.finalization_reason == "superseded-segment"
+        terminal_events = [
+            event for event in service.repository.list_events_for_session(session_id=session_id)
+            if event.kind == "transcript-updated"
+            and event.payload.get("segmentId") == "superseded-visible-partial"
+            and event.payload.get("terminalState") == "incomplete"
+        ]
+        assert len(terminal_events) == 1
+        assert service.repository.list_candidates_for_session(session_id=session_id) == []
+    finally:
+        service.settings.realtime_source_watchdog_enabled = original_enabled
+
+
 def test_stale_watchdog_snapshot_does_not_close_a_fresh_source_turn():
     _user_id, session_id, device_id, publisher_payload = create_live_binding()
     service = realtime_speech_service()

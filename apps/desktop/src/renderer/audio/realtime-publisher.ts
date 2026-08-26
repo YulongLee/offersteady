@@ -137,11 +137,12 @@ const MICROPHONE_SPEECH_CONTINUE_THRESHOLD = 0.0018;
 const SYSTEM_SPEECH_START_THRESHOLD = 0.0008;
 const SYSTEM_SPEECH_CONTINUE_THRESHOLD = 0.0005;
 const INTERIM_INTERVAL_MS = 100;
-const MICROPHONE_SILENCE_FINALIZE_MS = 700;
+const MICROPHONE_SILENCE_FINALIZE_MS = 500;
 const SYSTEM_SILENCE_FINALIZE_MS = 500;
 const MAX_SEGMENT_DURATION_MS = 30_000;
 const MIN_EMIT_SPEECH_MS = 60;
 const PRE_SPEECH_BUFFER_LIMIT = 4;
+const MICROPHONE_TURN_PEAK_RELEASE_RATIO = 0.15;
 
 interface SourceVadProfile {
   readonly startFloor: number;
@@ -458,6 +459,7 @@ export class SpeechSegmenter {
   private vadTriggeredAtMs = 0;
   private speechConfirmedAtMs = 0;
   private noiseFloor: number;
+  private turnPeakRms = 0;
   private sourceGeneration = 0;
   private readonly config: SpeechEndpointingConfig;
 
@@ -532,6 +534,7 @@ export class SpeechSegmenter {
       this.startedAtMs = this.attackStartedAtMs;
       this.speechConfirmedAtMs = nowMs;
       this.lastSpeechAtMs = nowMs;
+      this.turnPeakRms = rms;
       this.lastInterimAtMs = nowMs;
       this.emitted = false;
       if (this.preSpeechChunks.length > 0) this.unsentChunks.push(...this.preSpeechChunks);
@@ -544,7 +547,13 @@ export class SpeechSegmenter {
       return [];
     }
 
-    const resumeThreshold = this.lifecycle === "tail" ? startThreshold : continueThreshold;
+    this.turnPeakRms = Math.max(this.turnPeakRms, rms);
+    const peakReleaseThreshold = this.sourceKind === "microphone" && this.config.mode === "commercial-adaptive"
+      ? Math.min(this.vadProfile().startCeiling, this.turnPeakRms * MICROPHONE_TURN_PEAK_RELEASE_RATIO)
+      : 0;
+    const resumeThreshold = this.lifecycle === "tail"
+      ? Math.max(startThreshold, peakReleaseThreshold)
+      : Math.max(continueThreshold, peakReleaseThreshold);
     const speaking = rms >= resumeThreshold;
     if (payload.byteLength > 0) this.unsentChunks.push(payload);
     const maximumTurnMs = this.config.mode === "legacy-threshold" ? MAX_SEGMENT_DURATION_MS : this.config.maximumTurnMs;
@@ -627,6 +636,7 @@ export class SpeechSegmenter {
     this.attackStartedAtMs = -1;
     this.vadTriggeredAtMs = 0;
     this.speechConfirmedAtMs = 0;
+    this.turnPeakRms = 0;
   }
 }
 

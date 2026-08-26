@@ -28,7 +28,7 @@ export const nextProgressiveTranscriptText = (current: string, target: string, i
   return target;
 };
 
-export const STALE_TRANSCRIPT_MS = 8_000;
+export const STALE_TRANSCRIPT_MS = 4_000;
 export type TranscriptPresentationState = "final" | "transcribing" | "stale";
 export const transcriptPresentationState = (
   segment: { readonly isFinal: boolean; readonly terminalState?: "final" | "incomplete"; readonly publishedAtMs?: number; readonly endedAtMs: number },

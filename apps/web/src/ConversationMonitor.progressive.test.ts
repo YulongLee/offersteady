@@ -29,6 +29,7 @@ describe("progressive realtime transcript", () => {
   });
 
   it("stops claiming an abandoned partial is actively transcribing", () => {
+    expect(STALE_TRANSCRIPT_MS).toBe(4_000);
     const publishedAtMs = 1_800_000_000_000;
     expect(transcriptPresentationState({ isFinal: false, publishedAtMs, endedAtMs: publishedAtMs }, publishedAtMs + STALE_TRANSCRIPT_MS - 1)).toBe("transcribing");
     expect(transcriptPresentationState({ isFinal: false, publishedAtMs, endedAtMs: publishedAtMs }, publishedAtMs + STALE_TRANSCRIPT_MS)).toBe("stale");

@@ -1973,6 +1973,14 @@ class RealtimeSpeechService:
             return
         key = self._session_source_key(frame.session_id, frame.source_kind)
         with self._watchdog_lock:
+            current = self._active_source_turns.get(key)
+            current_frame = current.get("frame") if current is not None else None
+            if (
+                isinstance(current_frame, AudioFrame)
+                and current_frame.segment_id != frame.segment_id
+                and not current_frame.is_final
+            ):
+                prepared["superseded_source_turn"] = current
             if frame.is_final:
                 self._active_source_turns.pop(key, None)
             else:
@@ -2385,6 +2393,17 @@ class RealtimeSpeechService:
         assert isinstance(counter_bucket, dict)
         assert isinstance(source_kind, str)
         events: list[dict[str, object]] = []
+        superseded = prepared.get("superseded_source_turn")
+        if isinstance(superseded, dict):
+            superseded_publisher = superseded.get("publisher")
+            superseded_frame = superseded.get("frame")
+            if isinstance(superseded_publisher, RealtimePublisherRecord) and isinstance(superseded_frame, AudioFrame):
+                self._terminalize_visible_partial(
+                    publisher=superseded_publisher,
+                    frame=superseded_frame,
+                    terminal_state="incomplete",
+                    finalization_reason="superseded-segment",
+                )
         queue_depth = self._active_request_enter(session_id=publisher.session_id, source_kind=source_kind)
         worker_dequeued_at_ms = _now_ms()
         self._observe_trace(frame.trace_id, queueLeaveAtMs=worker_dequeued_at_ms)
@@ -3136,20 +3155,68 @@ class RealtimeSpeechService:
         result: TranscriptResult,
     ) -> None:
         """Close an already-visible partial without business side effects."""
+        self._terminalize_visible_partial(
+            publisher=publisher,
+            frame=frame,
+            terminal_state="final",
+            finalization_reason=frame.finalization_reason or "provider-completed",
+            text=result.text.strip() or None,
+            confidence=result.confidence,
+            overlap=result.overlap,
+        )
+
+    def _terminalize_visible_partial(
+        self,
+        *,
+        publisher: RealtimePublisherRecord,
+        frame: AudioFrame,
+        terminal_state: str,
+        finalization_reason: str,
+        text: str | None = None,
+        confidence: float | None = None,
+        overlap: bool | None = None,
+    ) -> TranscriptSegmentRecord | None:
+        """Publish one monotonic display terminal without business side effects."""
         current = self.repository.get_transcript(frame.session_id, frame.segment_id)
         if current is None or current.is_final:
-            return
-        self.repository.save_transcript(replace(
+            return current
+        published_at_ms = _now_ms()
+        terminal = self.repository.save_transcript(replace(
             current,
             revision=max(frame.revision, current.revision + 1),
-            text=result.text.strip() or current.text,
-            transcript_confidence=result.confidence,
+            text=text or current.text,
+            transcript_confidence=confidence if confidence is not None else current.transcript_confidence,
             ended_at_ms=max(current.ended_at_ms, frame.ended_at_ms),
             is_final=True,
-            overlap=result.overlap,
-            published_at_ms=_now_ms(),
+            terminal_state=terminal_state,
+            finalization_reason=finalization_reason,
+            overlap=overlap if overlap is not None else current.overlap,
+            published_at_ms=published_at_ms,
             usage=None,
         ))
+        self._save_event(
+            session_id=publisher.session_id,
+            owner_user_id=publisher.owner_user_id,
+            kind="transcript-updated",
+            payload={
+                "segmentId": terminal.segment_id,
+                "sourceId": terminal.source_id,
+                "sourceKind": terminal.source_kind,
+                "revision": terminal.revision,
+                "role": terminal.role,
+                "text": terminal.text,
+                "transcriptConfidence": terminal.transcript_confidence,
+                "startedAtMs": terminal.started_at_ms,
+                "endedAtMs": terminal.ended_at_ms,
+                "isFinal": True,
+                "overlap": terminal.overlap,
+                "terminalState": terminal.terminal_state,
+                "finalizationReason": terminal.finalization_reason,
+                "publishedAtMs": terminal.published_at_ms,
+                "performance": terminal.performance,
+            },
+        )
+        return terminal
 
     def _reset_realtime_session(self, *, session_id: str, retired: bool) -> None:
         if retired:

@@ -8,6 +8,7 @@ export type RealtimeFinalizationReason =
   | "max-duration"
   | "capture-stop"
   | "source-recovery"
+  | "superseded-segment"
   | "backend-watchdog"
   | "provider-completed"
   | "provider-timeout";

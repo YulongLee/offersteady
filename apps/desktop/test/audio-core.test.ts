@@ -111,16 +111,45 @@ describe("speech segmenter", () => {
     expect(segmenter.push(speech, 0, 0.013)).toEqual([]);
     const firstPartial = segmenter.push(speech, 130, 0.010);
     expect(firstPartial).toHaveLength(1);
-    expect(segmenter.push(new Uint8Array([0]), 800, 0.001)).toEqual([]);
-    const secondPartial = segmenter.push(speech, 830, 0.009);
+    expect(segmenter.push(new Uint8Array([0]), 500, 0.001)).toEqual([]);
+    const secondPartial = segmenter.push(speech, 530, 0.009);
     expect(secondPartial).toHaveLength(1);
-    expect(segmenter.push(new Uint8Array([0]), 1_529, 0.001)).toEqual([]);
-    const finalized = segmenter.push(new Uint8Array([0]), 1_530, 0.001);
+    expect(segmenter.push(new Uint8Array([0]), 1_029, 0.001)).toEqual([]);
+    const finalized = segmenter.push(new Uint8Array([0]), 1_030, 0.001);
 
     expect(finalized).toHaveLength(1);
     expect(finalized[0]?.isFinal).toBe(true);
     expect(firstPartial[0]?.segmentId).toBe(secondPartial[0]?.segmentId);
     expect(secondPartial[0]?.segmentId).toBe(finalized[0]?.segmentId);
+  });
+
+  it("releases loud microphone speech when only steady residual noise remains", () => {
+    const segmenter = new SpeechSegmenter("microphone");
+    const chunk = new Uint8Array([1, 2, 3]);
+
+    expect(segmenter.push(chunk, 0, 0.08)).toEqual([]);
+    const partial = segmenter.push(chunk, 100, 0.06);
+    expect(partial).toHaveLength(1);
+    expect(segmenter.push(chunk, 200, 0.004)).toEqual([]);
+    expect(segmenter.currentState).toBe("tail");
+    expect(segmenter.push(chunk, 599, 0.004)).toEqual([]);
+    const terminal = segmenter.push(chunk, 600, 0.004);
+
+    expect(terminal).toHaveLength(1);
+    expect(terminal[0]).toMatchObject({ isFinal: true, finalizationReason: "silence" });
+    expect((terminal[0]?.endedAtMs ?? 0) - 200).toBeLessThanOrEqual(500);
+  });
+
+  it("keeps quiet microphone speech active when it remains strong relative to its turn peak", () => {
+    const segmenter = new SpeechSegmenter("microphone");
+    const chunk = new Uint8Array([1, 2]);
+    for (let index = 0; index < 20; index += 1) segmenter.push(chunk, index * 20, 0.0002);
+
+    expect(segmenter.push(chunk, 420, 0.0014)).toEqual([]);
+    const firstPartial = segmenter.push(chunk, 500, 0.0014);
+    expect(firstPartial).toHaveLength(1);
+    expect(segmenter.push(chunk, 900, 0.0013).some(item => item.isFinal)).toBe(false);
+    expect(segmenter.currentState).toBe("speaking");
   });
 
   it("streams only newly captured PCM in ordered partial revisions", () => {

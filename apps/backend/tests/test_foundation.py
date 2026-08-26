@@ -3708,6 +3708,15 @@ def test_realtime_speech_suppressed_final_closes_existing_partial_without_answer
     assert unwrap(client.get(f"/api/v1/live-answer/sessions/{session_id}/history", params={"userId": user_id})) == []
     candidates = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/question-candidates", params={"userId": user_id}))
     assert candidates["candidates"] == []
+    events = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/events", params={"userId": user_id}))
+    reconciled = [
+        item for item in events["events"]
+        if item["kind"] == "transcript-updated"
+        and item["payload"].get("segmentId") == "seg-greeting-duplicate"
+        and item["payload"].get("isFinal") is True
+    ]
+    assert len(reconciled) == 1
+    assert reconciled[0]["payload"]["terminalState"] == "final"
 
 
 def test_realtime_speech_suppresses_filler_transcript() -> None:
