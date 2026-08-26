@@ -20,5 +20,5 @@
 
 - [x] 4.1 Run focused Backend, Desktop, and Web regression tests
 - [x] 4.2 Run full affected test suites, typechecks, production builds, and strict OpenSpec validation
-- [ ] 4.3 Commit and push the tested revision, deploy compatible Backend/Web changes, and pass production health gates
+- [x] 4.3 Commit and push the tested revision, deploy compatible Backend/Web changes, and pass production health gates
 - [ ] 4.4 Run a live recognizable-speech acceptance test on both channels and compare first-partial/final distributions without transcript content
