@@ -88,8 +88,9 @@ export class MultiplexedRealtimeTransport {
     const sourceId = payload.sourceId;
     const sequence = payload.sequence;
     if ((sourceKind !== "microphone" && sourceKind !== "system") || typeof sourceId !== "string" || typeof sequence !== "number") return;
+    const isTerminal = payload.isFinal === true;
     const authoritativeOffset = this.resumeOffsets?.[sourceKind];
-    if (typeof authoritativeOffset === "number" && sequence <= authoritativeOffset) {
+    if (typeof authoritativeOffset === "number" && sequence <= authoritativeOffset && !isTerminal) {
       this.options.onEvent({ kind: "delivery-diagnostics", payload: {
         sourceKind,
         sourceId,
@@ -100,7 +101,6 @@ export class MultiplexedRealtimeTransport {
       } });
       return;
     }
-    const isTerminal = payload.isFinal === true;
     const terminalId = typeof payload.terminalId === "string" ? payload.terminalId : undefined;
     if (terminalId && this.queue.some(item => item.terminalId === terminalId)) return;
     const item: QueuedEnvelope = {
@@ -386,7 +386,10 @@ export class MultiplexedRealtimeTransport {
       if (typeof offset !== "number" || !Number.isInteger(offset)) continue;
       acceptedOffsets[channel] = offset;
       this.lastAcknowledgedBySource.set(channel, offset);
-      this.queue = this.queue.filter(item => item.sourceKind !== channel || item.sequence > offset);
+      // A resume offset proves only that the backend observed a sequence. It
+      // does not prove that an isFinal frame reached terminal admission. Keep
+      // terminals until an explicit terminal-accepted event names their id.
+      this.queue = this.queue.filter(item => item.sourceKind !== channel || item.sequence > offset || item.isTerminal);
       for (const key of this.sent) {
         const [sourceKind, rawSequence] = key.split(":");
         if (sourceKind === channel && Number(rawSequence) <= offset) {

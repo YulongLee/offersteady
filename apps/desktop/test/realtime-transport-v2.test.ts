@@ -394,6 +394,38 @@ describe("realtime transport v2", () => {
     transport.stop();
   });
 
+  it("retains a terminal across resume offsets until terminal-accepted names its id", async () => {
+    vi.stubGlobal("window", { location: { href: "https://mianshiwen.cc/interviews/session" }, setTimeout, clearTimeout });
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const transport = new MultiplexedRealtimeTransport({
+      apiBaseUrl: "https://mianshiwen.cc/api/v1",
+      token: "terminal-resume-token",
+      onEvent: () => undefined,
+      onState: () => undefined,
+    });
+    await transport.start();
+    transport.enqueue({
+      sourceKind: "system",
+      sourceId: "loopback",
+      sequence: 41,
+      segmentId: "pending-final",
+      revision: 5,
+      isFinal: true,
+      terminalId: "pending-final:1:5",
+    });
+    acceptConnection(FakeWebSocket.instances[0]!, -1, 41);
+    expect(FakeWebSocket.instances[0]!.sent.map(decodeEnvelope)).toEqual([
+      expect.objectContaining({ sequence: 41, isFinal: true, terminalId: "pending-final:1:5" }),
+    ]);
+    expect(transport.pendingPayloads()).toHaveLength(1);
+    FakeWebSocket.instances[0]!.serverEvent({
+      kind: "terminal-accepted",
+      payload: { sourceKind: "system", sourceId: "loopback", sequence: 41, terminalId: "pending-final:1:5" },
+    });
+    expect(transport.pendingPayloads()).toHaveLength(0);
+    transport.stop();
+  });
+
   it("discards retired-generation frames enqueued after authoritative offsets", async () => {
     vi.stubGlobal("window", { location: { href: "https://mianshiwen.cc/interviews/session" }, setTimeout, clearTimeout });
     vi.stubGlobal("WebSocket", FakeWebSocket);

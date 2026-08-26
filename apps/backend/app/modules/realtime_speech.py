@@ -945,22 +945,39 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                     await websocket.send_json({"kind": "channel-rejected", "payload": {"sourceKind": payload.source_kind}})
                     continue
                 expected = expected_sequence[payload.source_kind]
+                recovering_unaccepted_terminal = False
                 if payload.sequence < expected:
-                    sequence_gap_events[payload.source_kind] = 0
-                    await websocket.send_json({
-                        "kind": "terminal-accepted" if payload.is_final and payload.terminal_id else "frame-accepted",
-                        "payload": {
-                            "sourceKind": payload.source_kind,
-                            "sourceId": payload.source_id,
-                            "sequence": expected - 1,
-                            "segmentId": payload.segment_id,
-                            "revision": payload.revision,
-                            **({"terminalId": payload.terminal_id} if payload.terminal_id else {}),
-                            "duplicate": True,
-                            "acceptedAtMs": int(time() * 1000),
-                        },
-                    })
-                    continue
+                    recovering_unaccepted_terminal = bool(
+                        payload.is_final
+                        and payload.terminal_id
+                        and not service.terminal_is_accepted(
+                            session_id=publisher.session_id,
+                            source_kind=payload.source_kind,
+                            segment_id=payload.segment_id,
+                            terminal_id=payload.terminal_id,
+                        )
+                    )
+                    if recovering_unaccepted_terminal:
+                        # A receipt can advance resumeOffsets before a terminal
+                        # reaches the bounded worker queue. Re-admit that terminal
+                        # instead of falsely acknowledging an unfinished turn.
+                        pass
+                    else:
+                        sequence_gap_events[payload.source_kind] = 0
+                        await websocket.send_json({
+                            "kind": "terminal-accepted" if payload.is_final and payload.terminal_id else "frame-accepted",
+                            "payload": {
+                                "sourceKind": payload.source_kind,
+                                "sourceId": payload.source_id,
+                                "sequence": expected - 1,
+                                "segmentId": payload.segment_id,
+                                "revision": payload.revision,
+                                **({"terminalId": payload.terminal_id} if payload.terminal_id else {}),
+                                "duplicate": True,
+                                "acceptedAtMs": int(time() * 1000),
+                            },
+                        })
+                        continue
                 if payload.sequence > expected:
                     sequence_gap_events[payload.source_kind] += 1
                     if sequence_gap_events[payload.source_kind] >= service.settings.realtime_ingress_sequence_gap_max_events:
@@ -1021,10 +1038,10 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                 terminal_event = next((event for event in admission_events if event.get("kind") in {"terminal-accepted", "degraded"}), None)
                 if terminal_event is not None and (payload.is_final or terminal_event.get("kind") == "degraded"):
                     if terminal_event.get("kind") == "terminal-accepted":
-                        expected_sequence[payload.source_kind] = expected + 1
+                        expected_sequence[payload.source_kind] = max(expected, payload.sequence + 1)
                     await websocket.send_json(terminal_event)
                     continue
-                expected_sequence[payload.source_kind] = expected + 1
+                expected_sequence[payload.source_kind] = max(expected, payload.sequence + 1)
                 await websocket.send_json({
                     "kind": "frame-accepted",
                     "payload": {

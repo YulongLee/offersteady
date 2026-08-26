@@ -391,6 +391,35 @@ describe("microphone adapter", () => {
     });
     expect(constraints[0]?.audio).not.toHaveProperty("deviceId");
   });
+
+  it("skips a removed headset and opens the built-in microphone during fallback", async () => {
+    const constraints: MediaStreamConstraints[] = [];
+    const stream = {
+      getAudioTracks: () => [{ id: "macbook", label: "MacBook Microphone", stop: () => undefined, getSettings: () => ({ deviceId: "macbook" }) }],
+      getVideoTracks: () => [],
+      getTracks: () => [{ stop: () => undefined }],
+    } as unknown as MediaStream;
+    const devices = [
+      { kind: "audioinput", deviceId: "removed-airpods", label: "AirPods" },
+      { kind: "audioinput", deviceId: "usb-mic", label: "USB Microphone" },
+      { kind: "audioinput", deviceId: "macbook", label: "MacBook Microphone" },
+    ] as MediaDeviceInfo[];
+    const mediaDevices = {
+      enumerateDevices: async () => devices,
+      getUserMedia: async (nextConstraints: MediaStreamConstraints) => {
+        constraints.push(nextConstraints);
+        return stream;
+      },
+      getDisplayMedia: async () => { throw new Error("unused"); },
+    } as unknown as MediaDevicesLike;
+
+    const opened = await new MicrophoneAudioAdapter(mediaDevices).openFallback("removed-airpods");
+    opened.close();
+
+    expect(opened.descriptor.id).toBe("macbook");
+    expect(constraints).toHaveLength(1);
+    expect(constraints[0]?.audio).toMatchObject({ deviceId: { exact: "macbook" } });
+  });
 });
 
 describe("system audio adapter diagnostics", () => {

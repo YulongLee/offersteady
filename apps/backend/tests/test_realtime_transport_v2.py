@@ -118,6 +118,55 @@ def test_replacement_publisher_resumes_session_channel_offsets():
         assert accepted["payload"]["sequence"] == 1
 
 
+def test_replayed_terminal_below_resume_offset_is_readmitted_until_explicitly_accepted():
+    user_id, session_id, device_id, first = create_live_binding()
+    partial = {
+        **frame(device_id=device_id, source_kind="system", sequence=0),
+        "segmentId": "resume-terminal-segment",
+    }
+    with client.websocket_connect(f"/api/v1/realtime-speech/ingest-ws?token={first['token']}&protocol=2.0") as websocket:
+        websocket.receive_json()
+        websocket.send_json(partial)
+        assert websocket.receive_json()["kind"] == "frame-accepted"
+
+    replacement = unwrap(client.post("/api/v1/realtime-speech/publishers", json={
+        "userId": user_id,
+        "sessionId": session_id,
+        "sourceKind": "mixed",
+        "clientName": "Synthetic terminal recovery",
+        "deviceId": device_id,
+    }))
+    terminal = {
+        **partial,
+        "revision": 2,
+        "isFinal": True,
+        "turnState": "committing",
+        "finalizationReason": "silence",
+        "sourceGeneration": 1,
+        "terminalId": "resume-terminal-segment:1:2",
+    }
+    service = realtime_speech_service()
+    assert not service.terminal_is_accepted(
+        session_id=session_id,
+        source_kind="system",
+        segment_id="resume-terminal-segment",
+        terminal_id="resume-terminal-segment:1:2",
+    )
+    with client.websocket_connect(f"/api/v1/realtime-speech/ingest-ws?token={replacement['token']}&protocol=2.0") as websocket:
+        assert websocket.receive_json()["payload"]["resumeOffsets"]["system"] == 0
+        websocket.send_json(terminal)
+        accepted = websocket.receive_json()
+        assert accepted["kind"] == "terminal-accepted"
+        assert accepted["payload"]["terminalId"] == "resume-terminal-segment:1:2"
+
+    assert service.terminal_is_accepted(
+        session_id=session_id,
+        source_kind="system",
+        segment_id="resume-terminal-segment",
+        terminal_id="resume-terminal-segment:1:2",
+    )
+
+
 def test_multiplexed_transport_accepts_negotiated_binary_audio_without_base64():
     _user_id, session_id, device_id, publisher = create_live_binding()
     payload = frame(device_id=device_id, source_kind="system", sequence=0)

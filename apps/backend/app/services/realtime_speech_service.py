@@ -2414,6 +2414,25 @@ class RealtimeSpeechService:
                 for terminal_id, _accepted_at_ms in sorted(accepted.items(), key=lambda item: item[1])[:-128]:
                     accepted.pop(terminal_id, None)
 
+    def terminal_is_accepted(
+        self,
+        *,
+        session_id: str,
+        source_kind: RealtimeSourceKind,
+        segment_id: str,
+        terminal_id: str,
+    ) -> bool:
+        key = self._session_source_key(session_id, source_kind)
+        with self._terminal_lock:
+            if terminal_id in self._accepted_terminal_ids.get(key, {}):
+                return True
+        transcript = self.repository.get_transcript(session_id, segment_id)
+        return bool(
+            transcript is not None
+            and transcript.is_final
+            and transcript.terminal_state != "incomplete"
+        )
+
     def _process_prepared_audio_frame(self, prepared: dict[str, object]) -> list[dict[str, object]]:
         early_events = prepared.get("early_events")
         if isinstance(early_events, list):

@@ -197,6 +197,8 @@ const SYSTEM_RECOVERY_CHECK_MS = 2_000;
 const SYSTEM_CALLBACK_STALL_MS = 4_000;
 const SYSTEM_RECOVERY_STARTUP_GRACE_MS = 6_000;
 const SYSTEM_SILENCE_RECOVERY_DELAYS_MS = [30_000, 120_000, 300_000] as const;
+const SYSTEM_REOPEN_RETRY_DELAYS_MS = [0, 300, 900, 2_000] as const;
+const MICROPHONE_REOPEN_RETRY_DELAYS_MS = [0, 300, 900, 2_000] as const;
 const MAX_REPLACEMENT_PUBLISHER_ATTEMPTS = 3;
 
 export type SystemAudioRecoveryReason =
@@ -208,6 +210,21 @@ export type SystemAudioRecoveryReason =
   | "watchdog-capture-lost";
 
 type AudioSourceRecoveryReason = SystemAudioRecoveryReason | "device-change";
+
+export interface AudioSourceRecoveryAttempt {
+  readonly delayMs: number;
+  readonly sourceId: string;
+}
+
+export const audioSourceRecoveryAttempts = (
+  sourceKind: AudioSourceKind,
+  sourceId: string,
+  reason: AudioSourceRecoveryReason,
+): readonly AudioSourceRecoveryAttempt[] => {
+  const delays = sourceKind === "system" ? SYSTEM_REOPEN_RETRY_DELAYS_MS : MICROPHONE_REOPEN_RETRY_DELAYS_MS;
+  const recoverySourceId = sourceKind === "microphone" && reason !== "device-change" ? "default" : sourceId;
+  return delays.map(delayMs => ({ delayMs, sourceId: recoverySourceId }));
+};
 
 interface SystemAudioRecoverySnapshot {
   readonly nowMs: number;
@@ -1121,16 +1138,45 @@ export class DesktopRealtimePublisher {
         this.runtimes = this.runtimes.filter(runtime => runtime !== current);
       }
       if (this.stopped) return false;
-      this.reliability.start(input.sourceKind);
-      this.reliability.markRecovering(input.sourceKind, reason);
-      const recovered = await this.startSource(input);
-      if (recovered) {
-        this.runtimes.push(recovered);
-        this.options.onServerEvent?.({
-          kind: "connection-state",
-          payload: { sourceKind: input.sourceKind, state: "reconnected", recoveryReason: reason },
-        });
-        return true;
+      const recoveryAttempts = audioSourceRecoveryAttempts(input.sourceKind, input.sourceId, reason);
+      for (let attempt = 0; attempt < recoveryAttempts.length && !this.stopped; attempt += 1) {
+        const recoveryAttempt = recoveryAttempts[attempt]!;
+        const delayMs = recoveryAttempt.delayMs;
+        if (delayMs > 0) await new Promise<void>(resolve => window.setTimeout(resolve, delayMs));
+        if (this.stopped) return false;
+        const attemptInput: SourceStartInput = input.sourceKind === "microphone"
+          ? {
+            sourceKind: "microphone",
+            sourceId: recoveryAttempt.sourceId,
+            open: () => reason === "device-change"
+              ? this.microphoneAdapter.open(recoveryAttempt.sourceId)
+              : this.microphoneAdapter.openFallback(current?.sourceId),
+          }
+          : input;
+        this.reliability.start(input.sourceKind);
+        this.reliability.markRecovering(input.sourceKind, reason);
+        this.options.onServerEvent?.({ kind: "degraded", payload: {
+          reason: "audio-source-recovery-attempt",
+          sourceKind: input.sourceKind,
+          recoveryReason: reason,
+          attempt: attempt + 1,
+        } });
+        const recovered = await this.startSource(attemptInput);
+        if (this.stopped) {
+          await recovered?.stop();
+          return false;
+        }
+        if (recovered) {
+          this.runtimes.push(recovered);
+          if (input.sourceKind === "microphone") {
+            this.microphoneSwitch.markApplied(recoveryAttempt.sourceId);
+          }
+          this.options.onServerEvent?.({
+            kind: "connection-state",
+            payload: { sourceKind: input.sourceKind, state: "reconnected", recoveryReason: reason, attempt: attempt + 1 },
+          });
+          return true;
+        }
       }
       this.options.onFailure(`${sourceLabel(input.sourceKind)}自动恢复失败，请在助手中重新开始面试。`);
       return false;
@@ -1196,7 +1242,6 @@ export class DesktopRealtimePublisher {
     if (this.transportRecovery) return this.transportRecovery;
     const failedTransport = this.transport;
     this.transportRecovery = (async () => {
-      const sourceInputs = [...this.sourceInputs.values()];
       this.transportSequenceResetInProgress = true;
       this.options.onCaptureState("reconnecting");
       this.options.onServerEvent?.({ kind: "degraded", payload: {
@@ -1207,8 +1252,11 @@ export class DesktopRealtimePublisher {
       } });
       failedTransport?.stop();
       if (this.transport === failedTransport) this.transport = null;
-      await Promise.all(this.runtimes.map(runtime => runtime.stop()));
-      this.runtimes = [];
+      // A transport sequence repair must not tear down healthy media capture.
+      // The audio callbacks remain attached while sendFrame is gated below;
+      // the replacement transport supplies authoritative resume offsets before
+      // publication resumes. Reopening ScreenCaptureKit here can fail during an
+      // otherwise unrelated network/gap event and permanently lose both tracks.
       this.sequencer.reset();
       this.sendBuffers.forEach(buffer => buffer.clear());
       let lastError: unknown = null;
@@ -1217,13 +1265,8 @@ export class DesktopRealtimePublisher {
         attempt += 1;
         try {
           if (attempt > 1) await new Promise<void>(resolve => window.setTimeout(resolve, 250 * attempt));
-          const replacementTransport = await this.openTransport();
+          await this.openTransport();
           this.transportSequenceResetInProgress = false;
-          for (const sourceInput of sourceInputs) {
-            this.reliability.start(sourceInput.sourceKind);
-            const recovered = await this.startSource(sourceInput);
-            if (recovered) this.runtimes.push(recovered);
-          }
           this.options.onServerEvent?.({ kind: "connection-state", payload: {
             state: "transport-reset",
             recoveryReason: input.reason,
@@ -1237,21 +1280,19 @@ export class DesktopRealtimePublisher {
           const failedAttempt = this.transport;
           failedAttempt?.stop();
           if (this.transport === failedAttempt) this.transport = null;
-          await Promise.all(this.runtimes.map(runtime => runtime.stop()));
-          this.runtimes = [];
           this.sequencer.reset();
           this.sendBuffers.forEach(buffer => buffer.clear());
         }
       }
       if (!this.stopped) {
-        for (const sourceInput of sourceInputs) {
-          this.reliability.markTerminalLost(sourceInput.sourceKind, "publisher-recovery-exhausted");
-          const existing = this.latestHealth.get(sourceInput.sourceKind);
+        for (const sourceKind of ["microphone", "system"] as const) {
+          this.reliability.markTerminalLost(sourceKind, "publisher-recovery-exhausted");
+          const existing = this.latestHealth.get(sourceKind);
           this.updateHealth({
             ...(existing ?? {
-              sourceId: sourceInput.sourceId,
-              sourceKind: sourceInput.sourceKind,
-              label: sourceLabel(sourceInput.sourceKind),
+              sourceId: this.sourceInputs.get(sourceKind)?.sourceId ?? `${sourceKind}-unknown`,
+              sourceKind,
+              label: sourceLabel(sourceKind),
             }),
             state: "error",
             stage: "failed",

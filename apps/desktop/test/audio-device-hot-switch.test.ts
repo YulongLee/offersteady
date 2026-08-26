@@ -5,6 +5,7 @@ import {
   reconcileMicrophoneSelection,
   SerializedLatestSourceSwitch,
 } from "../src/renderer/audio/audio-device-hot-switch";
+import { audioSourceRecoveryAttempts } from "../src/renderer/audio/realtime-publisher";
 import { BoundedAudioFrameBuffer, SourceFrameSequencer, createAudioFrame } from "../src/renderer/audio/audio-frame-buffer";
 
 const source = (id: string, label = id) => ({ id, label, kind: "microphone" as const, available: true });
@@ -62,5 +63,24 @@ describe("audio device hot switching", () => {
     buffer.push(builtIn);
     buffer.acknowledge("macbook", 1);
     expect(buffer.depth()).toBe(0);
+  });
+
+  it("falls back to the default microphone with bounded retries when a headset track ends", () => {
+    expect(audioSourceRecoveryAttempts("microphone", "removed-airpods", "track-ended")).toEqual([
+      { delayMs: 0, sourceId: "default" },
+      { delayMs: 300, sourceId: "default" },
+      { delayMs: 900, sourceId: "default" },
+      { delayMs: 2_000, sourceId: "default" },
+    ]);
+  });
+
+  it("keeps the newly selected microphone identity during an explicit device switch", () => {
+    expect(audioSourceRecoveryAttempts("microphone", "usb-microphone", "device-change"))
+      .toEqual([
+        { delayMs: 0, sourceId: "usb-microphone" },
+        { delayMs: 300, sourceId: "usb-microphone" },
+        { delayMs: 900, sourceId: "usb-microphone" },
+        { delayMs: 2_000, sourceId: "usb-microphone" },
+      ]);
   });
 });

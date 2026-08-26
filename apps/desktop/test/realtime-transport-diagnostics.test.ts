@@ -110,4 +110,13 @@ describe("realtime transport diagnostics", () => {
     expect(second.SYSTEM.byte_amplification_ratio).toBe(4);
     expect(second.SYSTEM.amplification_status).toBe("severe");
   });
+
+  it("keeps last sent sequence monotonic when an older frame is resent", () => {
+    vi.stubGlobal("window", { setInterval, clearInterval });
+    const diagnostics = new RealtimeTransportDiagnostics("session-monotonic", () => undefined, 10_000, 0);
+    diagnostics.recordWebSocketSend({ channel: "system", sequence: 20, audioPayloadBytes: 320, totalBytes: 500, sequenceGapRecovery: false });
+    diagnostics.recordWebSocketSend({ channel: "system", sequence: 18, audioPayloadBytes: 320, totalBytes: 500, sequenceGapRecovery: true });
+
+    expect(diagnostics.publish(10_000).SYSTEM.last_sent_seq).toBe(20);
+  });
 });

@@ -238,7 +238,9 @@ export class RealtimeTransportDiagnostics {
     counters.websocketSendCalls += 1;
     counters.websocketAudioPayloadBytes += input.audioPayloadBytes;
     counters.websocketTotalBytes += input.totalBytes;
-    counters.lastSentSeq = input.sequence;
+    counters.lastSentSeq = counters.lastSentSeq === null
+      ? input.sequence
+      : Math.max(counters.lastSentSeq, input.sequence);
     this.intervalSentSequences.get(input.channel)?.set(input.sequence, input.audioPayloadBytes);
     counters.maximumSendCount = Math.max(counters.maximumSendCount, sequenceState.sendCount);
     if (previousSendCount > 0) {

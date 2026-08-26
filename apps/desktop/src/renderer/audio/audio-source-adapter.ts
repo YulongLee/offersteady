@@ -41,6 +41,36 @@ const closeStream = (stream: MediaStream) => {
   stream.getTracks().forEach((track) => track.stop());
 };
 
+const MICROPHONE_ROUTE_ATTEMPT_TIMEOUT_MS = 1_500;
+
+const openMicrophoneStreamWithTimeout = async (
+  open: () => Promise<MediaStream>,
+  timeoutMs = MICROPHONE_ROUTE_ATTEMPT_TIMEOUT_MS,
+): Promise<MediaStream> => {
+  let timedOut = false;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const pending = open().then(stream => {
+    if (timedOut) {
+      closeStream(stream);
+      throw new Error("microphone-route-open-timeout");
+    }
+    return stream;
+  });
+  try {
+    return await Promise.race([
+      pending,
+      new Promise<MediaStream>((_resolve, reject) => {
+        timeoutId = setTimeout(() => {
+          timedOut = true;
+          reject(new Error("microphone-route-open-timeout"));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+};
+
 const preferredMicrophoneConstraints = (sourceId?: string): MediaTrackConstraints => ({
   ...(sourceId ? { deviceId: { exact: sourceId } } : {}),
   channelCount: { ideal: 1 },
@@ -139,6 +169,54 @@ export class MicrophoneAudioAdapter implements AudioSourceAdapter {
         }
       }
     }
+    return this.describeOpenStream(stream, normalizedSourceId);
+  }
+
+  async openFallback(excludedSourceId?: string): Promise<OpenAudioSource> {
+    const devices = await this.mediaDevices.enumerateDevices().catch(() => []);
+    const candidates = devices
+      .filter(device => (
+        device.kind === "audioinput"
+        && Boolean(device.deviceId)
+        && device.deviceId !== "default"
+        && device.deviceId !== excludedSourceId
+      ))
+      .sort((left, right) => {
+        const builtIn = /macbook|built[- ]?in|内建|内置/i;
+        return Number(builtIn.test(right.label)) - Number(builtIn.test(left.label));
+      });
+    let lastError: unknown = new Error("microphone-audio-unavailable");
+    for (const candidate of candidates) {
+      try {
+        const stream = await openMicrophoneStreamWithTimeout(() => this.mediaDevices.getUserMedia({
+          audio: preferredMicrophoneConstraints(candidate.deviceId),
+          video: false,
+        }));
+        if (stream.getAudioTracks().length === 0) {
+          closeStream(stream);
+          continue;
+        }
+        return this.describeOpenStream(stream, candidate.deviceId);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    try {
+      const stream = await openMicrophoneStreamWithTimeout(() => this.mediaDevices.getUserMedia({
+        audio: fallbackMicrophoneConstraints(),
+        video: false,
+      }));
+      if (stream.getAudioTracks().length === 0) {
+        closeStream(stream);
+        throw new Error("microphone-audio-unavailable");
+      }
+      return this.describeOpenStream(stream);
+    } catch (error) {
+      throw lastError instanceof Error ? lastError : error;
+    }
+  }
+
+  private describeOpenStream(stream: MediaStream, normalizedSourceId?: string): OpenAudioSource {
     const audioTrack = stream.getAudioTracks()[0];
     const trackSettings = audioTrack && typeof audioTrack.getSettings === "function" ? audioTrack.getSettings() : undefined;
     const descriptor: AudioSourceDescriptor = {
