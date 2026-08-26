@@ -28,3 +28,5 @@ The controlled production-connected system-audio run completed on the locally in
 | macOS Intel | `OfferSteady-Companion-1.1.3-macOS-x64.dmg` | `eb4e9e4142a5d9c0c7826d6be12b91d2b61465dd2d335cf553a1a6d309ea942b` | Developer ID, App/DMG notarization, stapler and Gatekeeper passed |
 
 Both artifacts were uploaded to versioned production OSS paths. The production manifest updates both macOS architectures atomically and retains the existing Windows 1.1.2 entry.
+
+Backend/Web compatibility changes and the production download manifest were deployed on 2026-08-26. Public health passed, both macOS 1.1.3 download routes returned their production objects, and byte-range probes returned HTTP 206. The server repository and deployment marker matched manifest commit `9f71071` during rollout verification.
