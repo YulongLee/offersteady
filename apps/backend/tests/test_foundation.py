@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import base64
 import logging
+import threading
 from pathlib import Path
-from time import perf_counter, sleep, time
+from time import monotonic, perf_counter, sleep, time
 
 import httpx
 from fastapi.testclient import TestClient
@@ -266,6 +267,33 @@ def test_realtime_trace_summary_correlates_browser_delivery_without_content() ->
     assert "text" not in traces[0]
     assert "partialText" not in traces[0]
     assert traces[0]["renderedTextLength"] == 12
+
+
+def test_first_visible_latency_uses_only_earliest_utterance_revision() -> None:
+    service = realtime_speech_service()
+    session_id = "first-visible-synthetic-session"
+    for revision, partial_at_ms, paint_at_ms in ((1, 1_200, 1_240), (2, 1_500, 1_800)):
+        service._observe_trace(
+            f"first-visible-trace-{revision}",
+            sessionId=session_id,
+            channel="system",
+            utteranceId="synthetic-utterance",
+            revision=revision,
+            speechStartAtMs=980,
+            qwenFirstAudioAppendAtMs=1_060,
+            qwenPartialReceivedAtMs=partial_at_ms,
+            browserRenderAtMs=paint_at_ms,
+            browserPaintAtMs=paint_at_ms,
+            visibilityState="visible",
+        )
+
+    summary = service.performance_summary(session_id=session_id)
+    assert summary["distributions"]["qwenPartialMs"] == {
+        "count": 1, "p50": 140, "p95": 140, "p99": 140, "max": 140,
+    }
+    assert summary["distributions"]["speechStartToBrowserFirstPartialMs"] == {
+        "count": 1, "p50": 260, "p95": 260, "p99": 260, "max": 260,
+    }
 
 
 def test_transcript_delivery_ack_records_browser_receive_without_fake_render() -> None:
@@ -3318,6 +3346,36 @@ def test_realtime_publisher_replacement_preserves_other_logical_channels() -> No
         system["publisherId"],
         mixed["publisherId"],
     }
+
+
+def test_live_start_bounds_provider_prewarm_wait(monkeypatch) -> None:
+    service = realtime_speech_service()
+    user_id = "bounded-prewarm-user"
+    session = unwrap(client.post("/api/v1/sessions", json={
+        "userId": user_id,
+        "title": "Bounded prewarm",
+    }))
+    release = threading.Event()
+    original_wait = service.settings.realtime_asr_prewarm_wait_seconds
+    original_enabled = service.settings.realtime_asr_prewarm_enabled
+    original_warm = service.asr_gateway.warm_session
+    service.settings.realtime_asr_prewarm_enabled = True
+    service.settings.realtime_asr_prewarm_wait_seconds = 0.02
+    monkeypatch.setattr(service.asr_gateway, "warm_session", lambda **_kwargs: release.wait(timeout=1))
+    try:
+        started = monotonic()
+        response = client.post(f"/api/v1/sessions/{session['sessionId']}/start", json={"userId": user_id})
+        elapsed = monotonic() - started
+        assert response.status_code == 200
+        # The provider stub blocks for one second. HTTP/repository overhead is
+        # intentionally excluded from the 20 ms gate, so assert only that the
+        # request did not inherit the provider's unbounded wait.
+        assert elapsed < 0.75
+    finally:
+        release.set()
+        service.settings.realtime_asr_prewarm_wait_seconds = original_wait
+        service.settings.realtime_asr_prewarm_enabled = original_enabled
+        monkeypatch.setattr(service.asr_gateway, "warm_session", original_warm)
 
 
 def test_realtime_runtime_reports_desktop_no_audio_frames_anomaly() -> None:

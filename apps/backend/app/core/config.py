@@ -166,6 +166,7 @@ class Settings(BaseSettings):
     realtime_asr_persistent_sessions_enabled: bool = True
     realtime_asr_nonblocking_partials_enabled: bool = True
     realtime_asr_prewarm_enabled: bool = True
+    realtime_asr_prewarm_wait_seconds: float = 2.5
     realtime_asr_points_per_minute: int = 5
     realtime_asr_provider: str = "qwen-realtime-asr-compatible"
     realtime_asr_model: str = "qwen-realtime"

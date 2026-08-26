@@ -162,6 +162,45 @@ def test_warm_session_opens_provider_without_sending_audio(monkeypatch) -> None:
     assert frame.interview_language == "en-US"
 
 
+def test_channel_prewarms_overlap_and_same_channel_creation_is_single_flight(monkeypatch) -> None:
+    gateway = DashScopeRealtimeAsrGateway(
+        Settings(realtime_asr_api_key="synthetic"),
+        logging.getLogger("concurrent-prewarm"),
+    )
+    opened: list[str] = []
+    opened_lock = threading.Lock()
+
+    def open_connection(frame):  # noqa: ANN001
+        with opened_lock:
+            opened.append(frame.source_kind)
+        time.sleep(0.08)
+        return FakeConnection(), "manual"
+
+    monkeypatch.setattr(gateway, "_open_connection", open_connection)
+    monkeypatch.setattr(gateway, "_receive_events", lambda _session: None)
+
+    started = time.monotonic()
+    microphone = threading.Thread(target=gateway.warm_session, kwargs={"session_id": "parallel", "source_kind": "microphone"})
+    system = threading.Thread(target=gateway.warm_session, kwargs={"session_id": "parallel", "source_kind": "system"})
+    microphone.start()
+    system.start()
+    microphone.join()
+    system.join()
+
+    assert time.monotonic() - started < 0.14
+    assert sorted(opened) == ["microphone", "system"]
+
+    opened.clear()
+    first = threading.Thread(target=gateway.warm_session, kwargs={"session_id": "single-flight", "source_kind": "system"})
+    second = threading.Thread(target=gateway.warm_session, kwargs={"session_id": "single-flight", "source_kind": "system"})
+    first.start()
+    second.start()
+    first.join()
+    second.join()
+
+    assert opened == ["system"]
+
+
 def test_provider_payload_maps_closed_domain_languages() -> None:
     gateway = DashScopeRealtimeAsrGateway(Settings(realtime_asr_api_key="synthetic"), logging.getLogger("language-payload"))
 

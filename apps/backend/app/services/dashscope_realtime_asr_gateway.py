@@ -59,6 +59,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         self.logger = logger
         self._source_sessions: dict[str, _SourceRealtimeSession] = {}
         self._source_sessions_lock = threading.Lock()
+        self._source_creation_locks: dict[str, threading.Lock] = {}
         self._connection_recreations: dict[str, int] = {}
         self._connection_create_counts: dict[str, int] = {}
         self._connection_reconnect_counts: dict[str, int] = {}
@@ -386,44 +387,51 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
     def _get_or_create_source_session(self, frame: AudioFrame) -> _SourceRealtimeSession:
         key = self._source_session_key(frame)
         with self._source_sessions_lock:
-            self._sweep_stale_sessions_locked()
-            existing = self._source_sessions.get(key)
+            creation_lock = self._source_creation_locks.setdefault(key, threading.Lock())
+        # External WebSocket setup can take seconds. Serialize only callers for
+        # this logical channel so microphone and system prewarm in parallel.
+        with creation_lock:
+            with self._source_sessions_lock:
+                self._sweep_stale_sessions_locked()
+                existing = self._source_sessions.get(key)
+                if existing is not None:
+                    reusable = (
+                        self.settings.realtime_asr_persistent_sessions_enabled
+                        and existing.sample_rate_hz == frame.sample_rate_hz
+                        and existing.interview_language == frame.interview_language
+                    )
+                    if reusable:
+                        existing.source_generation = frame.source_generation or existing.source_generation
+                        existing.updated_at_monotonic = time.monotonic()
+                        return existing
+                    self._source_sessions.pop(key, None)
             if existing is not None:
-                reusable = (
-                    self.settings.realtime_asr_persistent_sessions_enabled
-                    and existing.sample_rate_hz == frame.sample_rate_hz
-                    and existing.interview_language == frame.interview_language
-                )
-                if reusable:
-                    existing.source_generation = frame.source_generation or existing.source_generation
-                    existing.updated_at_monotonic = time.monotonic()
-                    return existing
-                self._source_sessions.pop(key, None)
                 self._record_closed_lifetime(existing)
                 try:
                     existing.connection.close()
                 except Exception:
                     pass
             connection, mode = self._open_connection(frame)
-            self._connection_recreations[frame.source_kind] = self._connection_recreations.get(frame.source_kind, 0) + 1
-            self._connection_create_counts[frame.source_kind] = self._connection_create_counts.get(frame.source_kind, 0) + 1
-            if key in self._connected_source_keys:
-                self._connection_reconnect_counts[frame.source_kind] = self._connection_reconnect_counts.get(frame.source_kind, 0) + 1
-            else:
-                self._connected_source_keys.add(key)
-            session = _SourceRealtimeSession(
-                connection=connection,
-                sample_rate_hz=frame.sample_rate_hz,
-                created_at_monotonic=time.monotonic(),
-                updated_at_monotonic=time.monotonic(),
-                source_session_key=key,
-                source_kind=frame.source_kind,
-                interview_language=frame.interview_language,
-                connection_id=f"{frame.source_kind}-{self._connection_create_counts[frame.source_kind]}",
-                source_generation=frame.source_generation or 1,
-                mode=mode,
-            )
-            self._source_sessions[key] = session
+            with self._source_sessions_lock:
+                self._connection_recreations[frame.source_kind] = self._connection_recreations.get(frame.source_kind, 0) + 1
+                self._connection_create_counts[frame.source_kind] = self._connection_create_counts.get(frame.source_kind, 0) + 1
+                if key in self._connected_source_keys:
+                    self._connection_reconnect_counts[frame.source_kind] = self._connection_reconnect_counts.get(frame.source_kind, 0) + 1
+                else:
+                    self._connected_source_keys.add(key)
+                session = _SourceRealtimeSession(
+                    connection=connection,
+                    sample_rate_hz=frame.sample_rate_hz,
+                    created_at_monotonic=time.monotonic(),
+                    updated_at_monotonic=time.monotonic(),
+                    source_session_key=key,
+                    source_kind=frame.source_kind,
+                    interview_language=frame.interview_language,
+                    connection_id=f"{frame.source_kind}-{self._connection_create_counts[frame.source_kind]}",
+                    source_generation=frame.source_generation or 1,
+                    mode=mode,
+                )
+                self._source_sessions[key] = session
             receiver = threading.Thread(
                 target=self._receive_events,
                 args=(session,),

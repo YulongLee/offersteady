@@ -170,6 +170,19 @@ describe("speech segmenter", () => {
     expect(Array.from(secondPartial[0]?.payload ?? [])).toEqual([5, 6]);
   });
 
+  it.each(["microphone", "system"] as const)("emits the first %s payload at the earliest valid speech boundary", sourceKind => {
+    const segmenter = new SpeechSegmenter(sourceKind);
+    const chunks = [1, 2, 3].map(value => new Uint8Array([value]));
+
+    expect(segmenter.push(chunks[0]!, 0, 0.01)).toEqual([]);
+    expect(segmenter.push(chunks[1]!, 43, 0.01)).toEqual([]);
+    const first = segmenter.push(chunks[2]!, 86, 0.01);
+
+    expect(first).toHaveLength(1);
+    expect(first[0]).toMatchObject({ isFinal: false, revision: 1, startedAtMs: 0, endedAtMs: 86 });
+    expect(Array.from(first[0]?.payload ?? [])).toEqual([1, 2, 3]);
+  });
+
   it("drops very short noise bursts instead of emitting broken transcript segments", () => {
     const segmenter = new SpeechSegmenter("system");
     const burst = new Uint8Array([9, 9]);

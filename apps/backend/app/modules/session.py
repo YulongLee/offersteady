@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Request
+from starlette.concurrency import run_in_threadpool
 
 from app.core.logging import utc_now_iso
 from app.core.responses import success_response
@@ -308,7 +309,8 @@ async def start_session(
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[InterviewSessionResponse]:
-    session = service.start_live_session(
+    session = await run_in_threadpool(
+        service.start_live_session,
         user_id=resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context),
         session_id=session_id,
     )

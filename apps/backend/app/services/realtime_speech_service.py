@@ -188,6 +188,11 @@ class RealtimeSpeechService:
         self._trace_order: deque[str] = deque(maxlen=4096)
         self._queue_wait_samples: dict[tuple[str, RealtimeSourceKind], deque[int]] = {}
         self._provider_partial_publish_lock = threading.Lock()
+        self._prewarm_metrics_lock = threading.Lock()
+        self._prewarm_metrics: dict[str, dict[str, int]] = {
+            source_kind: {"scheduled": 0, "ready": 0, "failed": 0, "timedOut": 0, "latestDurationMs": 0, "maxDurationMs": 0}
+            for source_kind in ("microphone", "system")
+        }
         self._meter_lock = threading.Lock()
         self._meter_stops: dict[str, threading.Event] = {}
         self._meter_threads: dict[str, threading.Thread] = {}
@@ -221,7 +226,20 @@ class RealtimeSpeechService:
         self._capture_control_cache[session_id] = "capturing"
         self._session_language_cache[session_id] = session.interview_language
         self._ensure_realtime_metering(user_id=user_id, session_id=session_id)
-        self._prewarm_asr_session(session_id=session_id, interview_language=session.interview_language)
+        prewarm_futures = self._prewarm_asr_session(
+            session_id=session_id,
+            interview_language=session.interview_language,
+        )
+        if prewarm_futures:
+            _, pending = concurrent.futures.wait(
+                [future for _, future in prewarm_futures],
+                timeout=max(0.0, self.settings.realtime_asr_prewarm_wait_seconds),
+            )
+            if pending:
+                with self._prewarm_metrics_lock:
+                    for source_kind, future in prewarm_futures:
+                        if future in pending:
+                            self._prewarm_metrics[source_kind]["timedOut"] += 1
         return session
 
     def _realtime_minute_usage_id(self, *, session_id: str, minute_index: int) -> str:
@@ -330,14 +348,18 @@ class RealtimeSpeechService:
 
     def _prewarm_asr_session(
         self, *, session_id: str, interview_language: InterviewLanguage | None = None
-    ) -> None:
+    ) -> tuple[tuple[str, concurrent.futures.Future[object]], ...]:
         if not self.settings.realtime_asr_prewarm_enabled:
-            return
+            return ()
         warm_session = getattr(self.asr_gateway, "warm_session", None)
         if not callable(warm_session):
-            return
+            return ()
         resolved_language = interview_language or self._session_language_cache.get(session_id, "zh-CN")
+        futures: list[tuple[str, concurrent.futures.Future[object]]] = []
         for source_kind in ("microphone", "system"):
+            scheduled_at_ms = _now_ms()
+            with self._prewarm_metrics_lock:
+                self._prewarm_metrics[source_kind]["scheduled"] += 1
             future = self._asr_executor.submit(
                 warm_session,
                 session_id=session_id,
@@ -346,12 +368,15 @@ class RealtimeSpeechService:
                 interview_language=resolved_language,
             )
             future.add_done_callback(
-                lambda completed, kind=source_kind: self._observe_asr_prewarm(
+                lambda completed, kind=source_kind, started=scheduled_at_ms: self._observe_asr_prewarm(
                     completed,
                     session_id=session_id,
                     source_kind=kind,
+                    scheduled_at_ms=started,
                 )
             )
+            futures.append((source_kind, future))
+        return tuple(futures)
 
     def _observe_asr_prewarm(
         self,
@@ -359,10 +384,17 @@ class RealtimeSpeechService:
         *,
         session_id: str,
         source_kind: str,
+        scheduled_at_ms: int,
     ) -> None:
+        duration_ms = max(0, _now_ms() - scheduled_at_ms)
         try:
             future.result()
         except Exception as exc:
+            with self._prewarm_metrics_lock:
+                metrics = self._prewarm_metrics[source_kind]
+                metrics["failed"] += 1
+                metrics["latestDurationMs"] = duration_ms
+                metrics["maxDurationMs"] = max(metrics["maxDurationMs"], duration_ms)
             self._log(
                 logging.WARNING,
                 "realtime_speech.asr_prewarm_failed",
@@ -372,6 +404,11 @@ class RealtimeSpeechService:
                 error_code=exc.__class__.__name__,
             )
             return
+        with self._prewarm_metrics_lock:
+            metrics = self._prewarm_metrics[source_kind]
+            metrics["ready"] += 1
+            metrics["latestDurationMs"] = duration_ms
+            metrics["maxDurationMs"] = max(metrics["maxDurationMs"], duration_ms)
         self._log(
             logging.INFO,
             "realtime_speech.asr_prewarm_ready",
@@ -754,6 +791,11 @@ class RealtimeSpeechService:
         except OSError:
             file_descriptors = -1
         usage = resource.getrusage(resource.RUSAGE_SELF)
+        with self._prewarm_metrics_lock:
+            prewarm_metrics = {
+                source_kind: dict(metrics)
+                for source_kind, metrics in self._prewarm_metrics.items()
+            }
         repository_diagnostics = getattr(self.repository, "operational_diagnostics", None)
         queue_channels: dict[str, dict[str, int]] = {}
         for (session_id, source_kind), work_queue in self._frame_queues.items():
@@ -784,6 +826,7 @@ class RealtimeSpeechService:
                 source_kind: self._gateway_diagnostics(source_kind=source_kind)  # type: ignore[arg-type]
                 for source_kind in ("microphone", "system")
             },
+            "asrPrewarm": prewarm_metrics,
             "rawAudioPersisted": False,
             "delivery": {
                 "counts": dict(self._delivery_metric_counts),

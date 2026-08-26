@@ -113,6 +113,7 @@
 - `OFFERSTEADY_REALTIME_ASR_PERSISTENT_SESSIONS_ENABLED`：同一面试同一声道跨话语复用 Qwen WebSocket，生产默认开启
 - `OFFERSTEADY_REALTIME_ASR_NONBLOCKING_PARTIALS_ENABLED`：非最终帧发送后不等待供应商 partial
 - `OFFERSTEADY_REALTIME_ASR_PREWARM_ENABLED`：进入正式面试后预热麦克风和系统音频 ASR 会话，默认开启
+- `OFFERSTEADY_REALTIME_ASR_PREWARM_WAIT_SECONDS`：进入正式面试时等待双声道并行 ASR 预热完成的最长秒数，默认 `2.5`；超时后继续进入并使用惰性连接兜底
 - `OFFERSTEADY_REALTIME_ASR_POINTS_PER_MINUTE`：实时面试每个会话分钟的积分价格，默认 `5`；会员有效时不扣积分
 - `OFFERSTEADY_REALTIME_ASR_WORKER_COUNT`：实时 ASR 网络任务工作线程数，默认 `8`；入口仍受每会话有界队列保护
 - `OFFERSTEADY_REALTIME_COLD_PATH_WORKER_COUNT`：最终历史、用量与上下文异步写入线程数，默认 `2`
