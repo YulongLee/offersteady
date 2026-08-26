@@ -13,5 +13,5 @@
 ## 3. Atomic Production Publication
 
 - [x] 3.1 Upload all three 1.1.4 artifacts in one production publication and generate a complete three-target manifest.
-- [ ] 3.2 Commit and deploy the release manifest and release evidence without changing protocol 2.0 or persisting interview content.
-- [ ] 3.3 Verify public health, three 1.1.4 manifest entries, macOS verification flags, Windows signing disclosure and byte-range downloads.
+- [x] 3.2 Commit and deploy the release manifest and release evidence without changing protocol 2.0 or persisting interview content.
+- [x] 3.3 Verify public health, three 1.1.4 manifest entries, macOS verification flags, Windows signing disclosure and byte-range downloads.

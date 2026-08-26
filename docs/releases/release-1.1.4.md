@@ -26,3 +26,5 @@ Release 1.1.4 completes the cross-platform rollout of the realtime publisher rec
 | Windows x64 | `OfferSteady-Companion-Setup-1.1.4-Windows-x64.exe` | `8c7d402c1aaee639a32f86d7fe5850aa812aadb2533fd686fc8dbba0ddd23c18` | Unsigned; explicitly reported as `local-development` |
 
 All three artifacts were uploaded under immutable 1.1.4 OSS object keys in one publication run, and the generated production manifest contains exactly the three aligned targets.
+
+The production manifest was deployed on 2026-08-26 with Backend health passing. The public state API reported all three targets at 1.1.4 with protocol 2.0, both macOS entries verified/notarized, and Windows explicitly `local-development`/not notarized. Byte-range probes for all three public download routes returned HTTP 206.
