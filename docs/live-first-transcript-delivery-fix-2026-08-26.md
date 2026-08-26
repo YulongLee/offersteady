@@ -20,3 +20,12 @@
 ## 回滚
 
 该变更没有数据库迁移，也不改变 Redis 数据结构。生产发布前保留 Backend 和 Web 回滚镜像；若出现 SSE 连接放大、页面状态回退或首快照误超时，可同时或独立恢复旧 Web/Backend。Desktop、PostgreSQL、Redis、Admin 和 Analytics 无需回滚。
+
+## 生产发布结果
+
+- 运行代码提交：`cc497576c1567ae44f3b0670e4ba08948d5eed3b`。
+- 生产 Web 主资源：`assets/main-C4MOdixs.js`；公开构建清单为 `appEnv=production`、`apiBaseUrl=/`、`appVersion=0.1.0`。
+- Backend 与 Web 已按顺序重建并切换；Backend 为 healthy，Web 为 running。
+- 公开 `/healthz` 与 `/api/v1/web/state` 连续 20 轮检查通过，部署后 Backend HTTP 5xx/ERROR/CRITICAL 与 Web error 日志均为 0。
+- 回滚镜像：`offersteady-backend:rollback-cc49757-pre`、`offersteady-web:rollback-cc49757-pre`。
+- 最后一项验收由用户刷新真实面试页后执行，确认首句话不再进入 20–30 秒交付长尾。

@@ -15,5 +15,5 @@
 
 - [x] 3.1 Run focused Web tests, full Web tests, TypeScript typecheck and the production Web build
 - [x] 3.2 Validate this OpenSpec change strictly and document the implementation and rollback behavior
-- [ ] 3.3 Deploy the minimum required production services, pass health/version/error-rate gates and preserve rollback artifacts
+- [x] 3.3 Deploy the minimum required production services, pass health/version/error-rate gates and preserve rollback artifacts
 - [ ] 3.4 Run a privacy-safe production acceptance test for first-transcript delivery and hand the live page back to the user for confirmation
