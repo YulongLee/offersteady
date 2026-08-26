@@ -67,9 +67,12 @@ export class BoundedAudioFrameBuffer {
     return dropped;
   }
 
-  acknowledge(sourceId: string, sequence: number): void {
+  acknowledge(_sourceId: string, sequence: number): void {
     this.frames = this.frames.filter((frame) => {
-      const acknowledged = frame.sourceId === sourceId && frame.sequence <= sequence;
+      // A buffer instance already belongs to one logical channel. Device hot
+      // switching may change sourceId while the channel sequence remains
+      // authoritative, so sourceId must not strand already acknowledged PCM.
+      const acknowledged = frame.sequence <= sequence;
       if (acknowledged) this.byteLength -= frame.payload.byteLength;
       return !acknowledged;
     });

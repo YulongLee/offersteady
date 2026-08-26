@@ -17,6 +17,13 @@ describe("realtime transport diagnostics", () => {
     diagnostics.recordAck("system", 100);
     diagnostics.setRingBufferDepth("system", 0);
     diagnostics.setRetransmitQueueDepth("system", 0);
+    diagnostics.setDeliveryProgress("system", {
+      transportGeneration: 3,
+      inFlightFrames: 1,
+      oldestUnacknowledgedAtMs: 9_500,
+      lastGenerationSentSeq: 100,
+      lastGenerationAckedSeq: 99,
+    });
 
     const snapshot = diagnostics.publish(10_000);
     expect(emitted).toHaveLength(1);
@@ -34,6 +41,11 @@ describe("realtime transport diagnostics", () => {
       amplification_status: "normal",
       maximum_audio_listeners: 1,
       unexpected_audio_format_frames: 0,
+      transport_generation: 3,
+      in_flight_frames: 1,
+      oldest_unacknowledged_age_ms: 500,
+      generation_last_sent_seq: 100,
+      generation_last_acked_seq: 99,
     });
     expect(JSON.stringify(snapshot)).not.toContain("audioBase64");
   });

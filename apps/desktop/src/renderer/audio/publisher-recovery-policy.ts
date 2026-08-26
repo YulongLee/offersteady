@@ -85,3 +85,45 @@ export class ReplacementPublisherBudget {
     return this.attempts;
   }
 }
+
+export type RecoveryChannel = "microphone" | "system";
+
+export class ChannelForwardProgressGate<TTransport extends object> {
+  private transport: TTransport | null = null;
+  private readonly produced = new Set<RecoveryChannel>();
+  private readonly acknowledged = new Set<RecoveryChannel>();
+
+  activate(transport: TTransport): void {
+    this.transport = transport;
+    this.produced.clear();
+    this.acknowledged.clear();
+  }
+
+  markMediaProduced(transport: TTransport, channel: RecoveryChannel): boolean {
+    if (this.transport !== transport) return false;
+    this.produced.add(channel);
+    return true;
+  }
+
+  acknowledge(transport: TTransport, channel: RecoveryChannel): boolean {
+    if (this.transport !== transport) return false;
+    this.acknowledged.add(channel);
+    return true;
+  }
+
+  pendingChannels(transport: TTransport): readonly RecoveryChannel[] {
+    if (this.transport !== transport) return [];
+    return [...this.produced].filter(channel => !this.acknowledged.has(channel));
+  }
+
+  allProducedChannelsAcknowledged(transport: TTransport): boolean {
+    return this.transport === transport && this.pendingChannels(transport).length === 0;
+  }
+
+  clear(transport?: TTransport): void {
+    if (transport && this.transport !== transport) return;
+    this.transport = null;
+    this.produced.clear();
+    this.acknowledged.clear();
+  }
+}

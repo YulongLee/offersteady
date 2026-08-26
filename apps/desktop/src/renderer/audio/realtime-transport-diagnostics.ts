@@ -27,6 +27,11 @@ interface MutableChannelCounters {
   unexpectedAudioFormatFrames: number;
   activeAudioListeners: number;
   maximumAudioListeners: number;
+  transportGeneration: number;
+  inFlightFrames: number;
+  oldestUnacknowledgedAtMs: number | null;
+  lastGenerationSentSeq: number | null;
+  lastGenerationAckedSeq: number | null;
 }
 
 interface SequenceSendState {
@@ -77,6 +82,11 @@ export interface RealtimeTransportChannelSnapshot {
     readonly send_count: number;
     readonly audio_bytes_per_send: number;
   }[];
+  readonly transport_generation: number;
+  readonly in_flight_frames: number;
+  readonly oldest_unacknowledged_age_ms: number;
+  readonly generation_last_sent_seq: number | null;
+  readonly generation_last_acked_seq: number | null;
 }
 
 export interface RealtimeTransportDiagnosticsSnapshot {
@@ -123,6 +133,11 @@ const emptyCounters = (): MutableChannelCounters => ({
   unexpectedAudioFormatFrames: 0,
   activeAudioListeners: 0,
   maximumAudioListeners: 0,
+  transportGeneration: 0,
+  inFlightFrames: 0,
+  oldestUnacknowledgedAtMs: null,
+  lastGenerationSentSeq: null,
+  lastGenerationAckedSeq: null,
 });
 
 const rounded = (value: number, digits = 3) => Number(value.toFixed(digits));
@@ -256,14 +271,29 @@ export class RealtimeTransportDiagnostics {
     this.channel(channel).retransmitQueueDepth = Math.max(0, depth);
   }
 
+  setDeliveryProgress(channel: RealtimeAudioChannel, input: {
+    readonly transportGeneration: number;
+    readonly inFlightFrames: number;
+    readonly oldestUnacknowledgedAtMs: number | null;
+    readonly lastGenerationSentSeq: number | null;
+    readonly lastGenerationAckedSeq: number | null;
+  }): void {
+    const counters = this.channel(channel);
+    counters.transportGeneration = input.transportGeneration;
+    counters.inFlightFrames = Math.max(0, input.inFlightFrames);
+    counters.oldestUnacknowledgedAtMs = input.oldestUnacknowledgedAtMs;
+    counters.lastGenerationSentSeq = input.lastGenerationSentSeq;
+    counters.lastGenerationAckedSeq = input.lastGenerationAckedSeq;
+  }
+
   snapshot(nowMs = Date.now()): RealtimeTransportDiagnosticsSnapshot {
     const intervalSeconds = Math.max(0.001, (nowMs - this.lastSnapshotAtMs) / 1_000);
     return {
       kind: "realtime-audio-transport-diagnostics",
       captured_at_ms: nowMs,
       session_id: this.sessionId,
-      SYSTEM: this.channelSnapshot("system", intervalSeconds),
-      MIC: this.channelSnapshot("microphone", intervalSeconds),
+      SYSTEM: this.channelSnapshot("system", intervalSeconds, nowMs),
+      MIC: this.channelSnapshot("microphone", intervalSeconds, nowMs),
     };
   }
 
@@ -278,7 +308,7 @@ export class RealtimeTransportDiagnostics {
     return snapshot;
   }
 
-  private channelSnapshot(channel: RealtimeAudioChannel, intervalSeconds: number): RealtimeTransportChannelSnapshot {
+  private channelSnapshot(channel: RealtimeAudioChannel, intervalSeconds: number, nowMs: number): RealtimeTransportChannelSnapshot {
     const counters = this.channel(channel);
     const previous = this.previous.get(channel) ?? emptyCounters();
     const delta = (key: CounterKey) => Math.max(0, counters[key] - previous[key]);
@@ -331,6 +361,11 @@ export class RealtimeTransportDiagnostics {
       byte_amplification_ratio: rounded(byteAmplificationRatio),
       amplification_status: amplificationStatus(maximumRatio),
       duplicate_sequence_samples: duplicateSamples,
+      transport_generation: counters.transportGeneration,
+      in_flight_frames: counters.inFlightFrames,
+      oldest_unacknowledged_age_ms: counters.oldestUnacknowledgedAtMs === null ? 0 : Math.max(0, nowMs - counters.oldestUnacknowledgedAtMs),
+      generation_last_sent_seq: counters.lastGenerationSentSeq,
+      generation_last_acked_seq: counters.lastGenerationAckedSeq,
     };
   }
 

@@ -34,6 +34,27 @@ describe("desktop realtime reliability watchdog", () => {
     expect(controller.evaluate(10_500)[0]).toMatchObject({ state: "HEALTHY", action: "none" });
   });
 
+  it("keeps the oldest pending deadline while continuous sends arrive", () => {
+    const controller = new RealtimeReliabilityController({ lostAckMs: 3_000 });
+    controller.start("microphone", 0);
+    controller.recordAudioCapture("microphone", 3_900);
+    controller.recordFrameSent("microphone", 500, 1);
+    for (let nowMs = 1_000; nowMs <= 3_900; nowMs += 100) {
+      controller.recordFrameSent("microphone", nowMs, 8);
+    }
+    expect(controller.snapshot()[0]?.pendingSinceAt).toBe(500);
+    expect(controller.evaluate(4_000)[0]).toMatchObject({ action: "recover-transport", reason: "frame-ack-stalled" });
+  });
+
+  it("does not exempt a recovering channel after it produces unacknowledged media", () => {
+    const controller = new RealtimeReliabilityController({ lostAckMs: 3_000 });
+    controller.start("microphone", 0);
+    controller.markRecovering("microphone", "transport-sequence-reset");
+    controller.recordAudioCapture("microphone", 500);
+    controller.recordFrameSent("microphone", 500, 1);
+    expect(controller.evaluate(3_501)[0]).toMatchObject({ state: "LOST", action: "recover-transport", reason: "frame-ack-stalled" });
+  });
+
   it("moves through recovering and returns healthy only after a fresh ACK", () => {
     const controller = new RealtimeReliabilityController();
     controller.start("system", 1_000);

@@ -155,17 +155,9 @@ export class RealtimeReliabilityController {
         source.state = "LOST";
         return { sourceKind: source.sourceKind, state: source.state, action: "none", reason: source.lastFailureReason };
       }
-      if (source.state === "RECOVERING") {
-        return { sourceKind: source.sourceKind, state: source.state, action: "none", reason: source.lastFailureReason };
-      }
-      const captureReference = source.lastAudioCaptureAt ?? source.startedAtMs;
-      const captureAgeMs = Math.max(0, nowMs - captureReference);
-      const insideStartupGrace = source.lastAudioCaptureAt === null && nowMs - source.startedAtMs < this.startupGraceMs;
-      if (!insideStartupGrace && captureAgeMs > this.lostCaptureMs) {
-        source.state = "LOST";
-        source.lastFailureReason = "capture-callback-stalled";
-        return { sourceKind: source.sourceKind, state: source.state, action: "recover-source", reason: source.lastFailureReason };
-      }
+      // Recovery is not an exemption from delivery supervision. Once fresh
+      // media exists, a recovering channel must still prove ACK progress.
+      // Otherwise one healthy channel can leave its sibling stuck forever.
       if (source.pendingFrames > 0 && source.pendingSinceAt !== null) {
         const ackAgeMs = Math.max(0, nowMs - source.pendingSinceAt);
         if (ackAgeMs > this.lostAckMs) {
@@ -178,6 +170,17 @@ export class RealtimeReliabilityController {
           source.lastFailureReason = "frame-ack-delayed";
           return { sourceKind: source.sourceKind, state: source.state, action: "none", reason: source.lastFailureReason };
         }
+      }
+      if (source.state === "RECOVERING") {
+        return { sourceKind: source.sourceKind, state: source.state, action: "none", reason: source.lastFailureReason };
+      }
+      const captureReference = source.lastAudioCaptureAt ?? source.startedAtMs;
+      const captureAgeMs = Math.max(0, nowMs - captureReference);
+      const insideStartupGrace = source.lastAudioCaptureAt === null && nowMs - source.startedAtMs < this.startupGraceMs;
+      if (!insideStartupGrace && captureAgeMs > this.lostCaptureMs) {
+        source.state = "LOST";
+        source.lastFailureReason = "capture-callback-stalled";
+        return { sourceKind: source.sourceKind, state: source.state, action: "recover-source", reason: source.lastFailureReason };
       }
       if (!insideStartupGrace && captureAgeMs > this.degradedCaptureMs) {
         source.state = "DEGRADED";

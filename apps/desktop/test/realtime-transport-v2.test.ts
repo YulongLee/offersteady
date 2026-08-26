@@ -192,6 +192,35 @@ describe("realtime transport v2", () => {
     transport.stop();
   });
 
+  it("reconnects an unexpected clean close and ignores stale socket events", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("window", { location: { href: "https://mianshiwen.cc/interviews/session" }, setTimeout, clearTimeout });
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const states: string[] = [];
+    const transport = new MultiplexedRealtimeTransport({
+      apiBaseUrl: "https://mianshiwen.cc/api/v1",
+      token: "clean-close-token",
+      onEvent: () => undefined,
+      onState: state => states.push(state),
+    });
+    const started = transport.start();
+    await vi.runAllTicks();
+    await started;
+    const oldSocket = FakeWebSocket.instances[0]!;
+    acceptConnection(oldSocket);
+    const staleClose = oldSocket.onclose;
+    oldSocket.close(1000);
+    await vi.advanceTimersByTimeAsync(5_500);
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    const currentSocket = FakeWebSocket.instances[1]!;
+    acceptConnection(currentSocket);
+    staleClose?.({ code: 1006 });
+    await vi.advanceTimersByTimeAsync(5_500);
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(states).toContain("reconnecting");
+    transport.stop();
+  });
+
   it("keeps a terminal until its explicit acknowledgement and does not enqueue it twice", async () => {
     vi.stubGlobal("window", { location: { href: "https://mianshiwen.cc/interviews/session" }, setTimeout, clearTimeout });
     vi.stubGlobal("WebSocket", FakeWebSocket);
@@ -365,6 +394,51 @@ describe("realtime transport v2", () => {
     transport.stop();
   });
 
+  it("discards retired-generation frames enqueued after authoritative offsets", async () => {
+    vi.stubGlobal("window", { location: { href: "https://mianshiwen.cc/interviews/session" }, setTimeout, clearTimeout });
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const events: Array<{ kind?: string; payload?: Record<string, unknown> }> = [];
+    const transport = new MultiplexedRealtimeTransport({
+      apiBaseUrl: "https://mianshiwen.cc/api/v1",
+      token: "atomic-resume-token",
+      onEvent: event => events.push(event),
+      onState: () => undefined,
+    });
+    await transport.start();
+    acceptConnection(FakeWebSocket.instances[0]!, 14, 52);
+    transport.enqueue({ sourceKind: "microphone", sourceId: "retired-headset", sequence: 7, isFinal: false });
+    transport.enqueue({ sourceKind: "microphone", sourceId: "default-mic", sequence: 15, isFinal: false });
+    expect(FakeWebSocket.instances[0]!.sent.map(decodeEnvelope).map(item => item.sequence)).toEqual([15]);
+    expect(events).toContainEqual(expect.objectContaining({
+      kind: "delivery-diagnostics",
+      payload: expect.objectContaining({ reason: "retired-generation-frame-discarded", sequence: 7, resumeOffset: 14 }),
+    }));
+    transport.stop();
+  });
+
+  it("reports a saturated per-channel window without losing its oldest pending age", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    vi.stubGlobal("window", { location: { href: "https://mianshiwen.cc/interviews/session" }, setTimeout, clearTimeout });
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const transport = new MultiplexedRealtimeTransport({
+      apiBaseUrl: "https://mianshiwen.cc/api/v1",
+      token: "production-deadlock-token",
+      onEvent: () => undefined,
+      onState: () => undefined,
+    });
+    await transport.start();
+    acceptConnection(FakeWebSocket.instances[0]!);
+    for (let sequence = 0; sequence < 32; sequence += 1) {
+      vi.setSystemTime(1_000 + sequence * 100);
+      transport.enqueue({ sourceKind: "microphone", sourceId: "mic", sequence, isFinal: false, capturedAtMs: Date.now() });
+    }
+    const progress = transport.progressSnapshot("microphone");
+    expect(FakeWebSocket.instances[0]!.sent).toHaveLength(8);
+    expect(progress).toMatchObject({ inFlightFrames: 8, queuedFrames: 32, oldestUnacknowledgedAtMs: 1_000, lastSentSequence: 7, lastAcknowledgedSequence: -1 });
+    transport.stop();
+  });
+
   it("opens the circuit after the bounded resend budget is exhausted", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
@@ -408,5 +482,65 @@ describe("realtime transport v2", () => {
     FakeWebSocket.instances[0]!.serverEvent({ kind: "frame-accepted", payload: { sourceKind: "microphone", sequence: 0 } });
     FakeWebSocket.instances[0]!.serverEvent({ kind: "sequence-gap", payload: { sourceKind: "microphone", expected: 0, received: 9 } });
     expect(recoveries).toEqual([expect.objectContaining({ reason: "sequence-gap-frame-unavailable", resetSequence: true })]);
+  });
+
+  it("soaks dual-channel traffic through an ACK stall and clean reconnect without unbounded queues", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    vi.stubGlobal("window", { location: { href: "https://mianshiwen.cc/interviews/session" }, setTimeout, clearTimeout, setInterval, clearInterval });
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const diagnostics = new RealtimeTransportDiagnostics("dual-channel-soak", () => undefined, 10_000, 1_000);
+    const transport = new MultiplexedRealtimeTransport({
+      apiBaseUrl: "https://mianshiwen.cc/api/v1",
+      token: "dual-channel-soak-token",
+      diagnostics,
+      onEvent: () => undefined,
+      onState: () => undefined,
+    });
+    const started = transport.start();
+    await vi.runAllTicks();
+    await started;
+    const firstSocket = FakeWebSocket.instances[0]!;
+    acceptConnection(firstSocket);
+
+    for (let sequence = 0; sequence < 500; sequence += 1) {
+      for (const sourceKind of ["microphone", "system"] as const) {
+        transport.enqueue({ sourceKind, sourceId: sourceKind, sequence, isFinal: false, capturedAtMs: Date.now() });
+        firstSocket.serverEvent({ kind: "frame-accepted", payload: { sourceKind, sourceId: sourceKind, sequence } });
+      }
+    }
+    for (let sequence = 500; sequence < 540; sequence += 1) {
+      transport.enqueue({ sourceKind: "microphone", sourceId: "microphone", sequence, isFinal: false, capturedAtMs: Date.now() });
+      transport.enqueue({ sourceKind: "system", sourceId: "system", sequence, isFinal: false, capturedAtMs: Date.now() });
+      firstSocket.serverEvent({ kind: "frame-accepted", payload: { sourceKind: "system", sourceId: "system", sequence } });
+    }
+    expect(transport.progressSnapshot("microphone")).toMatchObject({ inFlightFrames: 8, queuedFrames: 40, lastAcknowledgedSequence: 499 });
+
+    firstSocket.close(1000);
+    await vi.advanceTimersByTimeAsync(5_500);
+    const replacement = FakeWebSocket.instances[1]!;
+    acceptConnection(replacement, 499, 539);
+    let observedSends = 0;
+    while (transport.progressSnapshot("microphone").queuedFrames > 0) {
+      const newlySent = replacement.sent.slice(observedSends).map(decodeEnvelope).filter(item => item.sourceKind === "microphone");
+      expect(newlySent.length).toBeGreaterThan(0);
+      observedSends = replacement.sent.length;
+      const latest = Math.max(...newlySent.map(item => Number(item.sequence)));
+      replacement.serverEvent({ kind: "frame-accepted", payload: { sourceKind: "microphone", sourceId: "microphone", sequence: latest } });
+    }
+
+    for (let sequence = 540; sequence < 2_000; sequence += 1) {
+      for (const sourceKind of ["microphone", "system"] as const) {
+        transport.enqueue({ sourceKind, sourceId: sourceKind, sequence, isFinal: false, capturedAtMs: Date.now() });
+        replacement.serverEvent({ kind: "frame-accepted", payload: { sourceKind, sourceId: sourceKind, sequence } });
+      }
+    }
+    const snapshot = diagnostics.publish(20_000);
+    expect(transport.pendingPayloads()).toHaveLength(0);
+    expect(snapshot.MIC.maximum_send_count_for_one_seq).toBeLessThanOrEqual(2);
+    expect(snapshot.SYSTEM.maximum_send_count_for_one_seq).toBe(1);
+    expect(snapshot.MIC.retransmit_queue_depth).toBe(0);
+    expect(snapshot.SYSTEM.retransmit_queue_depth).toBe(0);
+    transport.stop();
   });
 });

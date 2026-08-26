@@ -5,6 +5,7 @@ import {
   reconcileMicrophoneSelection,
   SerializedLatestSourceSwitch,
 } from "../src/renderer/audio/audio-device-hot-switch";
+import { BoundedAudioFrameBuffer, SourceFrameSequencer, createAudioFrame } from "../src/renderer/audio/audio-frame-buffer";
 
 const source = (id: string, label = id) => ({ id, label, kind: "microphone" as const, available: true });
 
@@ -50,5 +51,16 @@ describe("audio device hot switching", () => {
     await Promise.all([first, latest]);
     expect(applied).toEqual(["macbook", "usb-mic"]);
     expect(apply).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears acknowledged channel frames even when the microphone device identity changed", () => {
+    const sequencer = new SourceFrameSequencer();
+    const buffer = new BoundedAudioFrameBuffer(64_000);
+    const headset = createAudioFrame(sequencer, { sessionId: "s", deviceId: "d", sourceId: "airpods", sourceKind: "microphone", capturedAtMs: 1, durationMs: 20, payload: new Uint8Array(320) });
+    const builtIn = createAudioFrame(sequencer, { sessionId: "s", deviceId: "d", sourceId: "macbook", sourceKind: "microphone", capturedAtMs: 2, durationMs: 20, payload: new Uint8Array(320) });
+    buffer.push(headset);
+    buffer.push(builtIn);
+    buffer.acknowledge("macbook", 1);
+    expect(buffer.depth()).toBe(0);
   });
 });

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { FreshTransportAckGate, ReplacementPublisherBudget } from "../src/renderer/audio/publisher-recovery-policy";
+import { ChannelForwardProgressGate, FreshTransportAckGate, ReplacementPublisherBudget } from "../src/renderer/audio/publisher-recovery-policy";
 
 describe("replacement publisher recovery policy", () => {
   const timers = {
@@ -68,5 +68,26 @@ describe("replacement publisher recovery policy", () => {
     expect(budget.claimAttempt()).toBe(false);
     budget.recordAcknowledgement(false);
     expect(budget.claimAttempt()).toBe(true);
+  });
+
+  it("requires independent progress only from channels that produced replacement media", () => {
+    const gate = new ChannelForwardProgressGate<object>();
+    const stale = {};
+    const current = {};
+    gate.activate(current);
+    gate.markMediaProduced(current, "microphone");
+    gate.markMediaProduced(current, "system");
+    expect(gate.acknowledge(stale, "microphone")).toBe(false);
+    expect(gate.acknowledge(current, "system")).toBe(true);
+    expect(gate.pendingChannels(current)).toEqual(["microphone"]);
+    expect(gate.allProducedChannelsAcknowledged(current)).toBe(false);
+    gate.acknowledge(current, "microphone");
+    expect(gate.allProducedChannelsAcknowledged(current)).toBe(true);
+
+    const silentMicrophoneTransport = {};
+    gate.activate(silentMicrophoneTransport);
+    gate.markMediaProduced(silentMicrophoneTransport, "system");
+    gate.acknowledge(silentMicrophoneTransport, "system");
+    expect(gate.allProducedChannelsAcknowledged(silentMicrophoneTransport)).toBe(true);
   });
 });

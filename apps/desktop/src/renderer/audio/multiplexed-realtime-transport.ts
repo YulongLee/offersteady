@@ -30,6 +30,14 @@ export interface RealtimeResumeOffsets {
   readonly system: number;
 }
 
+export interface RealtimeChannelTransportProgress {
+  readonly inFlightFrames: number;
+  readonly queuedFrames: number;
+  readonly oldestUnacknowledgedAtMs: number | null;
+  readonly lastSentSequence: number | null;
+  readonly lastAcknowledgedSequence: number | null;
+}
+
 const MAX_IN_FLIGHT_FRAMES_PER_CHANNEL = 8;
 const MAX_GAP_RESENDS_PER_SEQUENCE = 3;
 const GAP_RESEND_COOLDOWN_MS = 500;
@@ -59,6 +67,9 @@ export class MultiplexedRealtimeTransport {
   private readyForFrames = false;
   private recoveryRequested = false;
   private resumeOffsets: RealtimeResumeOffsets | null = null;
+  private socketGeneration = 0;
+  private readonly lastAcknowledgedBySource = new Map<RealtimeAudioChannel, number>();
+  private readonly sentAtByFrame = new Map<string, number>();
   private readonly resumeOffsetWaiters = new Set<{
     readonly resolve: (offsets: RealtimeResumeOffsets) => void;
     readonly reject: (error: Error) => void;
@@ -77,6 +88,18 @@ export class MultiplexedRealtimeTransport {
     const sourceId = payload.sourceId;
     const sequence = payload.sequence;
     if ((sourceKind !== "microphone" && sourceKind !== "system") || typeof sourceId !== "string" || typeof sequence !== "number") return;
+    const authoritativeOffset = this.resumeOffsets?.[sourceKind];
+    if (typeof authoritativeOffset === "number" && sequence <= authoritativeOffset) {
+      this.options.onEvent({ kind: "delivery-diagnostics", payload: {
+        sourceKind,
+        sourceId,
+        reason: "retired-generation-frame-discarded",
+        sequence,
+        resumeOffset: authoritativeOffset,
+        pendingFrames: this.queue.filter(item => item.sourceKind === sourceKind).length,
+      } });
+      return;
+    }
     const isTerminal = payload.isFinal === true;
     const terminalId = typeof payload.terminalId === "string" ? payload.terminalId : undefined;
     if (terminalId && this.queue.some(item => item.terminalId === terminalId)) return;
@@ -125,6 +148,21 @@ export class MultiplexedRealtimeTransport {
     return this.queue.map(item => ({ ...item.payload }));
   }
 
+  progressSnapshot(sourceKind: RealtimeAudioChannel): RealtimeChannelTransportProgress {
+    const channelQueue = this.queue.filter(item => item.sourceKind === sourceKind);
+    const inFlightFrames = [...this.sent].filter(key => key.startsWith(`${sourceKind}:`)).length;
+    const oldestSent = channelQueue
+      .map(item => this.sentAtByFrame.get(`${item.sourceKind}:${item.sequence}`) ?? 0)
+      .filter(value => Number.isFinite(value) && value > 0);
+    return {
+      inFlightFrames,
+      queuedFrames: channelQueue.length,
+      oldestUnacknowledgedAtMs: oldestSent.length > 0 ? Math.min(...oldestSent) : null,
+      lastSentSequence: this.lastSequenceFromKeys(sourceKind),
+      lastAcknowledgedSequence: this.lastAcknowledgedBySource.get(sourceKind) ?? null,
+    };
+  }
+
   waitForResumeOffsets(timeoutMs = 5_000): Promise<RealtimeResumeOffsets> {
     if (this.resumeOffsets) return Promise.resolve(this.resumeOffsets);
     return new Promise<RealtimeResumeOffsets>((resolve, reject) => {
@@ -148,6 +186,7 @@ export class MultiplexedRealtimeTransport {
     this.socket = null;
     this.queue = [];
     this.sent.clear();
+    this.sentAtByFrame.clear();
     this.terminalResends.clear();
     this.lastSentAtBySource.clear();
     this.gapRecoveryBySource.clear();
@@ -165,9 +204,11 @@ export class MultiplexedRealtimeTransport {
     if (this.connecting) return this.connecting;
     this.connecting = new Promise<void>((resolve, reject) => {
       const socket = new WebSocket(socketUrl(this.options.apiBaseUrl, this.options.token));
+      const generation = ++this.socketGeneration;
       this.socket = socket;
       const timeout = window.setTimeout(() => socket.close(4000, "connect-timeout"), 5000);
       socket.onopen = () => {
+        if (this.socket !== socket || generation !== this.socketGeneration) return;
         window.clearTimeout(timeout);
         this.reconnectAttempt = 0;
         this.options.onState("connected");
@@ -175,10 +216,21 @@ export class MultiplexedRealtimeTransport {
         resolve();
       };
       socket.onmessage = (message) => {
+        if (this.socket !== socket || generation !== this.socketGeneration) return;
         try {
           const event = JSON.parse(String(message.data)) as { kind?: string; payload?: Record<string, unknown> };
           if (event.kind === "connection-state") this.applyResumeOffsets(event.payload);
-          if (event.kind === "frame-accepted" || event.kind === "terminal-accepted") this.acknowledge(event.payload);
+          if (event.kind === "frame-accepted" || event.kind === "terminal-accepted") {
+            this.acknowledge(event.payload);
+            const sourceKind = event.payload?.sourceKind;
+            if (sourceKind === "microphone" || sourceKind === "system") {
+              event.payload = {
+                ...event.payload,
+                pendingFrames: this.queue.filter(item => item.sourceKind === sourceKind).length,
+                lastAckAtMs: Date.now(),
+              };
+            }
+          }
           if (event.kind === "sequence-gap") this.handleGap(event.payload);
           this.options.onEvent(event);
         } catch {
@@ -186,16 +238,19 @@ export class MultiplexedRealtimeTransport {
         }
       };
       socket.onerror = () => {
+        if (this.socket !== socket || generation !== this.socketGeneration) return;
         window.clearTimeout(timeout);
         reject(new Error("publisher_websocket_failed"));
       };
       socket.onclose = (event) => {
         window.clearTimeout(timeout);
+        if (this.socket !== socket || generation !== this.socketGeneration) return;
         this.socket = null;
         this.connecting = null;
         this.readyForFrames = false;
         this.sent.clear();
-        if (this.stopped || this.recoveryRequested || event.code === 1000) return;
+        this.sentAtByFrame.clear();
+        if (this.stopped || this.recoveryRequested) return;
         if (event.code === 1002 || event.code === 1008) {
           this.options.onState("failed");
           this.options.onTerminal?.({
@@ -267,10 +322,14 @@ export class MultiplexedRealtimeTransport {
     if ((sourceKind !== "microphone" && sourceKind !== "system") || typeof sequence !== "number") return;
     const terminalId = typeof payload?.terminalId === "string" ? payload.terminalId : undefined;
     this.options.diagnostics?.recordAck(sourceKind, sequence);
+    this.lastAcknowledgedBySource.set(sourceKind, Math.max(sequence, this.lastAcknowledgedBySource.get(sourceKind) ?? -1));
     this.queue = this.queue.filter(item => terminalId ? item.terminalId !== terminalId : item.sourceKind !== sourceKind || item.sequence > sequence);
     for (const key of this.sent) {
       const [channel, rawSequence] = key.split(":");
-      if (channel === sourceKind && Number(rawSequence) <= sequence) this.sent.delete(key);
+      if (channel === sourceKind && Number(rawSequence) <= sequence) {
+        this.sent.delete(key);
+        this.sentAtByFrame.delete(key);
+      }
     }
     if (terminalId) this.terminalResends.delete(terminalId);
     this.gapRecoveryBySource.delete(sourceKind);
@@ -326,10 +385,14 @@ export class MultiplexedRealtimeTransport {
       const offset = (resumeOffsets as Record<string, unknown>)[channel];
       if (typeof offset !== "number" || !Number.isInteger(offset)) continue;
       acceptedOffsets[channel] = offset;
+      this.lastAcknowledgedBySource.set(channel, offset);
       this.queue = this.queue.filter(item => item.sourceKind !== channel || item.sequence > offset);
       for (const key of this.sent) {
         const [sourceKind, rawSequence] = key.split(":");
-        if (sourceKind === channel && Number(rawSequence) <= offset) this.sent.delete(key);
+        if (sourceKind === channel && Number(rawSequence) <= offset) {
+          this.sent.delete(key);
+          this.sentAtByFrame.delete(key);
+        }
       }
       const firstPending = this.queue.find(item => item.sourceKind === channel);
       if (firstPending && firstPending.sequence > offset + 1) {
@@ -372,7 +435,9 @@ export class MultiplexedRealtimeTransport {
       sequenceGapRecovery: reason === "sequence-gap",
     });
     this.lastSentAtBySource.set(item.sourceKind, desktopPublisherFlushAtMs);
-    this.sent.add(`${item.sourceKind}:${item.sequence}`);
+    const frameKey = `${item.sourceKind}:${item.sequence}`;
+    this.sent.add(frameKey);
+    if (!this.sentAtByFrame.has(frameKey)) this.sentAtByFrame.set(frameKey, desktopPublisherFlushAtMs);
     if (item.terminalId) {
       const resendCount = this.terminalResends.get(item.terminalId) ?? 0;
       this.terminalResends.set(item.terminalId, resendCount + 1);
@@ -403,7 +468,23 @@ export class MultiplexedRealtimeTransport {
         channel,
         this.queue.reduce((count, item) => count + (item.sourceKind === channel ? 1 : 0), 0),
       );
+      const progress = this.progressSnapshot(channel);
+      this.options.diagnostics?.setDeliveryProgress(channel, {
+        transportGeneration: this.socketGeneration,
+        inFlightFrames: progress.inFlightFrames,
+        oldestUnacknowledgedAtMs: progress.oldestUnacknowledgedAtMs,
+        lastGenerationSentSeq: progress.lastSentSequence,
+        lastGenerationAckedSeq: progress.lastAcknowledgedSequence,
+      });
     }
+  }
+
+  private lastSequenceFromKeys(sourceKind: RealtimeAudioChannel): number | null {
+    const sequences = [...this.sent]
+      .filter(key => key.startsWith(`${sourceKind}:`))
+      .map(key => Number(key.slice(sourceKind.length + 1)))
+      .filter(Number.isFinite);
+    return sequences.length > 0 ? Math.max(...sequences) : null;
   }
 
   private oldestPendingFrameAgeMs(): number {
