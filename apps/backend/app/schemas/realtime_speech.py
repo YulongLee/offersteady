@@ -398,4 +398,4 @@ class RealtimeDeliveryMetricRequest(BaseModel):
     kind: Literal["connect", "first-snapshot", "connected-duration", "reconnect", "fallback-snapshot"]
     duration_ms: int | None = Field(default=None, ge=0, le=3_600_000, alias="durationMs")
     attempt: int | None = Field(default=None, ge=0, le=100)
-    reason: Literal["opened", "eof", "network", "aborted", "recovered", "unknown"] | None = None
+    reason: Literal["opened", "eof", "network", "aborted", "recovered", "first-snapshot-timeout", "first-snapshot-eof", "unknown"] | None = None

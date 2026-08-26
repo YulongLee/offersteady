@@ -31,6 +31,7 @@ interface BackendSessionResponse {
 
 const MAX_PENDING_PERFORMANCE_ACKS = 16;
 const TRANSCRIPT_ACK_INTERVAL_MS = 1_000;
+export const FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS = 2_000;
 
 interface BackendActiveSessionConflictResponse {
   readonly currentSessionId: string;
@@ -930,7 +931,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   private recordRealtimeDeliveryMetric(
     interviewId: string,
     kind: "connect" | "first-snapshot" | "connected-duration" | "reconnect" | "fallback-snapshot",
-    options: { readonly durationMs?: number; readonly attempt?: number; readonly reason?: "opened" | "eof" | "network" | "aborted" | "recovered" | "unknown" } = {},
+    options: { readonly durationMs?: number; readonly attempt?: number; readonly reason?: "opened" | "eof" | "network" | "aborted" | "recovered" | "first-snapshot-timeout" | "first-snapshot-eof" | "unknown" } = {},
   ) {
     void this.client.request(`/api/v1/realtime-speech/sessions/${interviewId}/delivery-metrics`, {
       method: "POST",
@@ -1398,6 +1399,31 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     let terminalStatus: number | null = null;
     let flushHandle: number | null = null;
     let latestChunkReceivedAtMs = 0;
+    let firstSnapshotTimer: number | null = null;
+    const clearFirstSnapshotDeadline = () => {
+      if (firstSnapshotTimer === null) return;
+      window.clearTimeout(firstSnapshotTimer);
+      firstSnapshotTimer = null;
+    };
+    const firstSnapshotFailure = (reason: "first-snapshot-timeout" | "first-snapshot-eof") => {
+      const error = new AppError("network", reason === "first-snapshot-timeout"
+        ? "实时字幕首个快照等待超时"
+        : "实时字幕连接在首个快照前结束") as AppError & {
+          realtimeFailure: "first-snapshot-timeout" | "first-snapshot-eof";
+        };
+      error.realtimeFailure = reason;
+      this.recordRealtimeDeliveryMetric(interviewId, "reconnect", {
+        durationMs: Date.now() - connectedAt,
+        reason,
+      });
+      return error;
+    };
+    const firstSnapshotDeadline = new Promise<never>((_resolve, reject) => {
+      firstSnapshotTimer = window.setTimeout(
+        () => reject(firstSnapshotFailure("first-snapshot-timeout")),
+        FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS,
+      );
+    });
     const coalescePendingDeliveryEvents = (events: BackendRealtimeEventListResponse["events"]) => {
       const latestTranscriptIndexBySegment = new Map<string, number>();
       const latestTranscriptRankBySegment = new Map<string, readonly [boolean, number, number]>();
@@ -1548,6 +1574,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       } as BackendRealtimeSessionStreamEvent;
       if (payload.type === "snapshot" && !firstSnapshotRecorded) {
         firstSnapshotRecorded = true;
+        clearFirstSnapshotDeadline();
         this.recordRealtimeDeliveryMetric(interviewId, "first-snapshot", { durationMs: Date.now() - connectStartedAt, reason: "opened" });
       }
       for (const item of payload.events.events) {
@@ -1578,16 +1605,25 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       : null;
     try {
       while (true) {
-        const { done, value } = await reader.read();
+        const { done, value } = await Promise.race([reader.read(), firstSnapshotDeadline]);
         if (done) break;
         latestChunkReceivedAtMs = Date.now();
         parser.push(decoder.decode(value, { stream: true }));
       }
     } finally {
+      clearFirstSnapshotDeadline();
       if (diagnosticsPoll !== null) window.clearInterval(diagnosticsPoll);
+      if (!firstSnapshotRecorded) {
+        void reader.cancel().catch(() => undefined);
+        if (flushHandle !== null) {
+          window.clearTimeout(flushHandle);
+          flushHandle = null;
+        }
+      }
     }
     parser.push(decoder.decode());
     parser.flush();
+    if (!firstSnapshotRecorded && terminalStatus === null && !signal?.aborted) throw firstSnapshotFailure("first-snapshot-eof");
     const pendingFinalSnapshot = pendingSnapshot as MaterializedRealtimeSessionStreamEvent | null;
     if (pendingFinalSnapshot) {
       const stateUpdateStartedAtMs = Date.now();

@@ -4,7 +4,7 @@ import { App } from "./App";
 import { interviewAppAdapter } from "./app-adapter";
 import { authClient } from "./auth-client";
 import { syntheticState } from "./test-state";
-import type { RealtimeSessionUpdate, WebAppState } from "./domain";
+import { AppError, type RealtimeSessionUpdate, type WebAppState } from "./domain";
 
 const openLive = (mutate?: (state: WebAppState) => void) => {
   if (!vi.isMockFunction(interviewAppAdapter.submitManualAnswer)) {
@@ -95,6 +95,28 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 beforeEach(() => Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 }));
 
 describe("focused live interview workspace", () => {
+  it("reconnects immediately when an aggregate recovery snapshot succeeds", async () => {
+    vi.spyOn(interviewAppAdapter, "sendDesktopSessionHeartbeat").mockImplementation(async command => ({
+      pageInstanceId: command.pageInstanceId ?? null,
+      leaseGeneration: 1,
+      leaseExpiresAtMs: Date.now() + 30_000,
+    }));
+    vi.spyOn(interviewAppAdapter, "loadRealtimeSession").mockResolvedValue({
+      speaker: structuredClone(syntheticState.speaker),
+    });
+    let attempts = 0;
+    const subscribe = vi.spyOn(interviewAppAdapter, "subscribeRealtimeSession").mockImplementation(async (_id, _onUpdate, signal) => {
+      attempts += 1;
+      if (attempts <= 3) throw new AppError("network", "first snapshot timeout");
+      await new Promise<void>((_resolve, reject) => signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true }));
+    });
+
+    openLive();
+
+    await waitFor(() => expect(subscribe).toHaveBeenCalledTimes(4), { timeout: 1_000 });
+    expect(interviewAppAdapter.loadRealtimeSession).toHaveBeenCalledTimes(3);
+  });
+
   it("offers account switching and logout from the focused interview page", async () => {
     const logout = vi.spyOn(authClient, "logout").mockResolvedValue();
     openLive();

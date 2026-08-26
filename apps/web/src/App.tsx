@@ -1054,7 +1054,8 @@ function LivePage() {
           }
           return;
         }
-        await loadRealtime();
+        const recovered = await loadRealtime();
+        if (recovered) reconnectAttempt = 0;
         scheduleReconnect(status);
       } finally {
         realtimeSubscribeInFlight = false;
@@ -1085,7 +1086,7 @@ function LivePage() {
         realtimeHealthyRef.current = true;
         applyRealtimeState(realtime, false);
       },
-    });
+    }, document.visibilityState === "visible");
     heartbeatTimer = window.setInterval(() => void sendHeartbeat(), 15_000);
     const resumeRealtime = () => {
       if (stopped || !isRealtimeLeader || document.visibilityState !== "visible") return;
@@ -1100,7 +1101,18 @@ function LivePage() {
         void subscribeRealtime();
       }
     };
-    document.addEventListener("visibilitychange", resumeRealtime);
+    const handleVisibilityChange = () => {
+      coordinator?.setEligible(document.visibilityState === "visible");
+      if (document.visibilityState === "visible") resumeRealtime();
+    };
+    const handlePageHide = () => coordinator?.setEligible(false);
+    const handlePageShow = () => {
+      coordinator?.setEligible(document.visibilityState === "visible");
+      if (document.visibilityState === "visible") resumeRealtime();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pageshow", handlePageShow);
     window.addEventListener("focus", resumeRealtime);
     window.addEventListener("online", resumeRealtime);
     if (isRealtimeLeader) {
@@ -1117,7 +1129,9 @@ function LivePage() {
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);
       coordinator?.stop();
-      document.removeEventListener("visibilitychange", resumeRealtime);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pageshow", handlePageShow);
       window.removeEventListener("focus", resumeRealtime);
       window.removeEventListener("online", resumeRealtime);
     };

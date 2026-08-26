@@ -21,6 +21,7 @@ export class LiveSessionLeaderCoordinator {
   private leaderPageId: string | null = null;
   private leaderEpoch = 0;
   private lastLeaderAt = 0;
+  private eligible = true;
   private electionTimer: number | null = null;
   private heartbeatTimer: number | null = null;
   private watchdogTimer: number | null = null;
@@ -32,17 +33,32 @@ export class LiveSessionLeaderCoordinator {
     private readonly now: () => number = Date.now,
   ) {}
 
-  start(callbacks: LiveSessionLeaderCallbacks) {
+  start(callbacks: LiveSessionLeaderCallbacks, eligible = true) {
     this.callbacks = callbacks;
+    this.eligible = eligible;
     this.channel.addEventListener("message", this.onMessage as EventListener);
-    this.post("probe");
-    this.electionTimer = window.setTimeout(() => {
-      this.electionTimer = null;
-      if (this.now() - this.lastLeaderAt >= 120) this.becomeLeader();
-    }, 120);
+    if (this.eligible) this.requestElection();
     this.watchdogTimer = window.setInterval(() => {
-      if (!this.leader && this.now() - this.lastLeaderAt > 5_000) this.becomeLeader();
+      if (this.eligible && !this.leader && this.now() - this.lastLeaderAt > 5_000) this.becomeLeader();
     }, 1_000);
+  }
+
+  setEligible(eligible: boolean) {
+    if (this.eligible === eligible) return;
+    this.eligible = eligible;
+    if (!eligible) {
+      if (this.electionTimer !== null) {
+        window.clearTimeout(this.electionTimer);
+        this.electionTimer = null;
+      }
+      const wasLeader = this.leader;
+      this.setLeader(false);
+      if (wasLeader) this.post("release");
+      if (this.leaderPageId === this.pageId) this.leaderPageId = null;
+      return;
+    }
+    this.lastLeaderAt = 0;
+    this.requestElection();
   }
 
   publishState(state: RealtimeSessionUpdate) {
@@ -68,18 +84,20 @@ export class LiveSessionLeaderCoordinator {
     const message = event.data;
     if (!message || message.pageId === this.pageId) return;
     if (message.type === "probe") {
-      if (this.leader) this.post("leader");
+      if (this.eligible && this.leader) this.post("leader");
       return;
     }
     if (message.type === "release") {
-      if (!this.leader && this.leaderPageId === message.pageId && message.epoch >= this.leaderEpoch) {
+      if (this.eligible && !this.leader && message.epoch >= this.leaderEpoch) {
+        this.leaderPageId = null;
+        this.leaderEpoch = message.epoch;
         this.lastLeaderAt = 0;
         this.becomeLeader();
       }
       return;
     }
     if (message.type === "leader") {
-      if (this.leader && this.pageId < message.pageId) {
+      if (this.eligible && this.leader && this.pageId < message.pageId) {
         this.post("leader");
         return;
       }
@@ -99,6 +117,7 @@ export class LiveSessionLeaderCoordinator {
   };
 
   private becomeLeader() {
+    if (!this.eligible) return;
     this.epoch = Math.max(this.epoch + 1, this.now());
     this.leaderPageId = this.pageId;
     this.leaderEpoch = this.epoch;
@@ -107,6 +126,16 @@ export class LiveSessionLeaderCoordinator {
     this.post("leader");
     if (this.heartbeatTimer !== null) window.clearInterval(this.heartbeatTimer);
     this.heartbeatTimer = window.setInterval(() => this.post("leader"), 2_000);
+  }
+
+  private requestElection() {
+    if (!this.eligible) return;
+    this.post("probe");
+    if (this.electionTimer !== null) window.clearTimeout(this.electionTimer);
+    this.electionTimer = window.setTimeout(() => {
+      this.electionTimer = null;
+      if (this.eligible && this.now() - this.lastLeaderAt >= 120) this.becomeLeader();
+    }, 120);
   }
 
   private setLeader(value: boolean) {

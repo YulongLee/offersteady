@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { BackendPreviewInterviewAdapter } from "./backend-adapter";
+import { BackendPreviewInterviewAdapter, FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS } from "./backend-adapter";
 import { syntheticState } from "./test-state";
 
 const envelope = (data: unknown) => ({
@@ -561,6 +561,34 @@ describe("backend preview adapter", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("cancels a half-open realtime stream when the first snapshot misses its deadline", async () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const cancel = vi.fn();
+    const stream = new ReadableStream<Uint8Array>({ cancel });
+    const fetchImpl = vi.fn(async (input: string | URL | Request, _init?: RequestInit) => String(input).includes("/delivery-metrics")
+      ? new Response(JSON.stringify(envelope({ accepted: true })), { status: 200, headers: { "Content-Type": "application/json" } })
+      : new Response(stream, { status: 200, headers: { "Content-Type": "text/event-stream" } }));
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+
+    const subscription = adapter.subscribeRealtimeSession("session-1", () => undefined);
+    const rejected = expect(subscription).rejects.toMatchObject({
+      code: "network",
+      realtimeFailure: "first-snapshot-timeout",
+      message: "实时字幕首个快照等待超时",
+    });
+    await vi.advanceTimersByTimeAsync(FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS + 1);
+    await rejected;
+
+    expect(cancel).toHaveBeenCalledOnce();
+    const metricCall = fetchImpl.mock.calls.find(call => String(call[0]).includes("/delivery-metrics")
+      && String((call[1] as RequestInit | undefined)?.body).includes("first-snapshot-timeout"));
+    expect(metricCall).toBeDefined();
+    vi.useRealTimers();
+  });
+
   it("maps shortcut acceptance from the existing realtime stream into immediate screenshot feedback", async () => {
     window.localStorage.setItem("offersteady.auth.access_token", "access-token");
     window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
@@ -610,6 +638,12 @@ describe("backend preview adapter", () => {
     window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
+        controller.enqueue(new TextEncoder().encode(`event: snapshot\ndata: ${JSON.stringify({
+          type: "snapshot", cursor: 0,
+          transcripts: { sessionId: "session-1", transcripts: [] },
+          candidates: { sessionId: "session-1", candidates: [] },
+          events: { sessionId: "session-1", events: [] }, runtime: null,
+        })}\n\n`));
         controller.close();
       },
     });
@@ -774,6 +808,12 @@ describe("backend preview adapter", () => {
     const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
     const subscription = adapter.subscribeRealtimeSession("session-1", () => undefined);
     await Promise.resolve();
+    streamController!.enqueue(encoder.encode(`event: snapshot\ndata: ${JSON.stringify({
+      type: "snapshot", cursor: 0,
+      transcripts: { sessionId: "session-1", transcripts: [] },
+      candidates: { sessionId: "session-1", candidates: [] },
+      events: { sessionId: "session-1", events: [] }, runtime: null,
+    })}\n\n`));
     const onAnswerUpdate = vi.fn();
     const answer = adapter.submitScreenshotAnswer(
       { interviewId: "session-1", instruction: "回答截图" },

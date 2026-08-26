@@ -330,6 +330,14 @@ def test_realtime_delivery_metrics_accept_only_content_free_fields() -> None:
     assert metrics["delivery"]["counts"]["first-snapshot"] >= 1
     assert metrics["delivery"]["latestDurationMs"]["first-snapshot"] == 86
 
+    timeout_metric = client.post(f"/api/v1/realtime-speech/sessions/{session_id}/delivery-metrics", json={
+        "userId": user_id,
+        "kind": "reconnect",
+        "durationMs": 2_000,
+        "reason": "first-snapshot-timeout",
+    })
+    assert timeout_metric.status_code == 200
+
     rejected = client.post(f"/api/v1/realtime-speech/sessions/{session_id}/delivery-metrics", json={
         "userId": user_id,
         "kind": "first-snapshot",

@@ -74,4 +74,54 @@ describe("live session leader coordination", () => {
     first.stop();
     secondChannel.close();
   });
+
+  it("releases a hidden leader and immediately transfers ownership to an eligible follower", () => {
+    vi.useFakeTimers();
+    let now = 1_000;
+    const bus = new FakeBus();
+    const first = new LiveSessionLeaderCoordinator(bus.channel(), "page-a", () => now);
+    const second = new LiveSessionLeaderCoordinator(bus.channel(), "page-b", () => now);
+    first.start({ onLeadershipChange: () => undefined, onState: () => undefined });
+    second.start({ onLeadershipChange: () => undefined, onState: () => undefined });
+    vi.advanceTimersByTime(121);
+    const leader = first.isLeader() ? first : second;
+    const follower = first.isLeader() ? second : first;
+
+    leader.setEligible(false);
+
+    expect(leader.isLeader()).toBe(false);
+    expect(follower.isLeader()).toBe(true);
+    leader.stop();
+    follower.stop();
+  });
+
+  it("keeps an ineligible page from taking leadership until it becomes visible", () => {
+    vi.useFakeTimers();
+    let now = 1_000;
+    const bus = new FakeBus();
+    const hidden = new LiveSessionLeaderCoordinator(bus.channel(), "page-hidden", () => now);
+    hidden.start({ onLeadershipChange: () => undefined, onState: () => undefined }, false);
+
+    now += 6_000;
+    vi.advanceTimersByTime(6_000);
+    expect(hidden.isLeader()).toBe(false);
+
+    hidden.setEligible(true);
+    vi.advanceTimersByTime(121);
+    expect(hidden.isLeader()).toBe(true);
+    hidden.stop();
+  });
+
+  it("clears election and heartbeat timers when stopped", () => {
+    vi.useFakeTimers();
+    const bus = new FakeBus();
+    const coordinator = new LiveSessionLeaderCoordinator(bus.channel(), "page-a", () => 1_000);
+    coordinator.start({ onLeadershipChange: () => undefined, onState: () => undefined });
+    vi.advanceTimersByTime(121);
+    expect(coordinator.isLeader()).toBe(true);
+
+    coordinator.stop();
+    expect(coordinator.isLeader()).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });
