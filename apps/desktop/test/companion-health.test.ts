@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import { BINDING_STATUS_POLL_MS, desktopBindingLeaseIdentity, hasPublisherTakenOver, mergeDisplayedSourceHealth } from "../src/renderer/CompanionApp";
-import { publisherFailureDiagnostic, publisherFailureIsTerminal } from "../src/renderer/audio/realtime-publisher";
+import { productionAudioTransportPolicy, publisherFailureDiagnostic, publisherFailureIsTerminal } from "../src/renderer/audio/realtime-publisher";
 
 describe("companion displayed source health", () => {
+  it("never falls back to the disabled legacy HTTP frame endpoint", () => {
+    expect(productionAudioTransportPolicy).toEqual({
+      protocol: "websocket-v2",
+      automaticLegacyHttpFallback: false,
+    });
+  });
+
   it("falls back to monitor health when live health is present but not active", () => {
     const merged = mergeDisplayedSourceHealth(
       [

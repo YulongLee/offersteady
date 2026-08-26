@@ -17,6 +17,7 @@ describe("replacement publisher recovery policy", () => {
     const currentTransport = {};
     const result = gate.wait(currentTransport, 4_000);
 
+    expect(gate.markMediaPending(currentTransport)).toBe(true);
     expect(gate.acknowledge(staleTransport)).toBe(false);
     expect(gate.acknowledge(currentTransport)).toBe(true);
     await expect(result).resolves.toBeUndefined();
@@ -25,11 +26,29 @@ describe("replacement publisher recovery policy", () => {
   it("fails a replacement attempt that never proves ACK progress", async () => {
     vi.useFakeTimers();
     const gate = new FreshTransportAckGate<object>(timers);
-    const result = gate.wait({}, 4_000);
+    const transport = {};
+    const result = gate.wait(transport, 4_000);
     const expectation = expect(result).rejects.toThrow("replacement-publisher-ack-timeout");
 
+    gate.markMediaPending(transport);
     await vi.advanceTimersByTimeAsync(4_000);
     await expectation;
+  });
+
+  it("keeps one replacement transport ready while its sources remain silent", async () => {
+    vi.useFakeTimers();
+    const gate = new FreshTransportAckGate<object>(timers);
+    const transport = {};
+    const result = gate.wait(transport, 4_000);
+    let settled = false;
+    void result.finally(() => { settled = true; });
+
+    await vi.advanceTimersByTimeAsync(40_000);
+
+    expect(gate.isWaitingFor(transport)).toBe(true);
+    expect(settled).toBe(false);
+    gate.acknowledge(transport);
+    await expect(result).resolves.toBeUndefined();
   });
 
   it("supersedes one pending gate and bounds publisher creation until delivery drains", async () => {

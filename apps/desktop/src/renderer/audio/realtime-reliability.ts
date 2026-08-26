@@ -15,6 +15,7 @@ export interface RealtimeSourceReliabilitySnapshot {
   readonly pendingSinceAt: number | null;
   readonly recoveryCount: number;
   readonly lastFailureReason: string | null;
+  readonly terminalFailure: boolean;
 }
 
 export interface RealtimeReliabilityDecision {
@@ -37,6 +38,7 @@ interface MutableSourceReliability {
   pendingSinceAt: number | null;
   recoveryCount: number;
   lastFailureReason: string | null;
+  terminalFailure: boolean;
 }
 
 export interface RealtimeReliabilityOptions {
@@ -77,6 +79,7 @@ export class RealtimeReliabilityController {
       pendingSinceAt: null,
       recoveryCount: 0,
       lastFailureReason: null,
+      terminalFailure: false,
     });
   }
 
@@ -87,7 +90,7 @@ export class RealtimeReliabilityController {
   recordAudioCapture(sourceKind: AudioSourceKind, atMs = Date.now()): void {
     const source = this.ensure(sourceKind, atMs);
     source.lastAudioCaptureAt = atMs;
-    if (source.lastFrameAckAt !== null && source.state !== "RECOVERING") {
+    if (!source.terminalFailure && source.lastFrameAckAt !== null && source.state !== "RECOVERING") {
       source.state = "HEALTHY";
       source.lastFailureReason = null;
     }
@@ -107,6 +110,7 @@ export class RealtimeReliabilityController {
 
   recordFrameAck(sourceKind: AudioSourceKind, atMs = Date.now(), pendingFrames = 0): void {
     const source = this.ensure(sourceKind, atMs);
+    if (source.terminalFailure) return;
     source.lastFrameAckAt = atMs;
     source.pendingFrames = Math.max(0, pendingFrames);
     source.pendingSinceAt = source.pendingFrames > 0 ? atMs : null;
@@ -130,13 +134,27 @@ export class RealtimeReliabilityController {
 
   markRecovering(sourceKind: AudioSourceKind, reason: string): void {
     const source = this.ensure(sourceKind, Date.now());
+    if (source.terminalFailure) return;
     source.state = "RECOVERING";
     source.recoveryCount += 1;
     source.lastFailureReason = reason;
   }
 
+  markTerminalLost(sourceKind: AudioSourceKind, reason: string): void {
+    const source = this.ensure(sourceKind, Date.now());
+    source.state = "LOST";
+    source.pendingFrames = 0;
+    source.pendingSinceAt = null;
+    source.lastFailureReason = reason;
+    source.terminalFailure = true;
+  }
+
   evaluate(nowMs = Date.now()): readonly RealtimeReliabilityDecision[] {
     return [...this.sources.values()].map((source) => {
+      if (source.terminalFailure) {
+        source.state = "LOST";
+        return { sourceKind: source.sourceKind, state: source.state, action: "none", reason: source.lastFailureReason };
+      }
       if (source.state === "RECOVERING") {
         return { sourceKind: source.sourceKind, state: source.state, action: "none", reason: source.lastFailureReason };
       }

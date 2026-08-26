@@ -61,6 +61,11 @@ export const sessionCapturePermissionPolicy = {
 
 export const desktopCaptureArchitecture = "electron-single-owner" as const;
 
+export const productionAudioTransportPolicy = {
+  protocol: "websocket-v2",
+  automaticLegacyHttpFallback: false,
+} as const;
+
 interface RuntimeHandle {
   readonly stop: () => Promise<void>;
 }
@@ -185,10 +190,6 @@ export const commercialSpeechEndpointingDefaults: SpeechEndpointingConfig = {
   systemTailMs: SYSTEM_SILENCE_FINALIZE_MS,
 };
 const MAX_PENDING_AUDIO_BYTES = 256_000;
-const MAX_PENDING_UPLOAD_FRAMES = 64;
-const HTTP_PUBLISH_THROTTLE_MS = 12;
-const HTTP_PUBLISH_RETRY_DELAY_MS = 120;
-const HTTP_PUBLISH_RETRY_LIMIT = 10;
 const MEDIA_OPEN_TIMEOUT_MS = 6500;
 const SYSTEM_RECOVERY_CHECK_MS = 2_000;
 const SYSTEM_CALLBACK_STALL_MS = 4_000;
@@ -236,20 +237,6 @@ export const systemAudioRecoveryReason = (snapshot: SystemAudioRecoverySnapshot)
     : snapshot.nowMs - snapshot.lastRecoveryAtMs;
   return signalSilentForMs >= delay && timeSinceRecoveryMs >= delay ? "system-signal-stalled" : null;
 };
-
-interface QueuedUploadFrame {
-  readonly sourceId: string;
-  readonly sourceKind: AudioSourceKind;
-  readonly payload: Record<string, unknown>;
-  readonly frame: ReturnType<typeof createAudioFrame>;
-}
-
-interface UploadQueueState {
-  readonly items: QueuedUploadFrame[];
-  uploading: boolean;
-  terminalFailure: boolean;
-  consecutiveFailures: number;
-}
 
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
   let timeoutId: number | undefined;
@@ -430,8 +417,6 @@ const toWebSocketEndpoint = (apiBaseUrl: string, path: string) => {
   url.pathname = `${url.pathname.replace(/\/$/, "")}${path}`;
   return url.toString();
 };
-
-const allowFrameRetryByError = (errorCode: string): boolean => errorCode !== "permission-denied" && errorCode !== "adapter-required";
 
 const downsampleToPcm16 = (input: Float32Array, inputSampleRate: number, targetSampleRate = 16_000): Uint8Array => {
   if (input.length === 0) return new Uint8Array();
@@ -654,7 +639,6 @@ export class DesktopRealtimePublisher {
   private latestHealth = new Map<AudioSourceKind, HealthSnapshot>();
   private frameCounts = new Map<AudioSourceKind, number>();
   private readonly sendBuffers = new Map<AudioSourceKind, BoundedAudioFrameBuffer>();
-  private readonly uploadQueues = new Map<AudioSourceKind, UploadQueueState>();
   private readonly lastFailureNotice = new Map<AudioSourceKind, { message: string; atMs: number }>();
   private readonly sourceRecoveryInFlight = new Set<AudioSourceKind>();
   private lastSystemSignalAtMs: number | null = null;
@@ -686,8 +670,6 @@ export class DesktopRealtimePublisher {
     this.healthUpdates = new HealthUpdateScheduler((health) => this.options.onHealth(health), 100);
     this.sendBuffers.set("microphone", new BoundedAudioFrameBuffer(MAX_PENDING_AUDIO_BYTES));
     this.sendBuffers.set("system", new BoundedAudioFrameBuffer(MAX_PENDING_AUDIO_BYTES));
-    this.uploadQueues.set("microphone", { items: [], uploading: false, terminalFailure: false, consecutiveFailures: 0 });
-    this.uploadQueues.set("system", { items: [], uploading: false, terminalFailure: false, consecutiveFailures: 0 });
   }
 
   async start() {
@@ -700,14 +682,9 @@ export class DesktopRealtimePublisher {
       this.transport?.stop();
       this.transport = null;
       const diagnostic = publisherFailureDiagnostic("microphone", error);
-      this.options.onServerEvent?.({
-        kind: "degraded",
-        payload: {
-          reason: diagnostic.errorCode,
-          message: "实时长连接暂不可用，已自动切换到兼容传输，收音将继续工作。",
-          transport: "http-frame-ingest",
-        },
-      });
+      this.options.onCaptureState("error");
+      this.options.onFailure(`实时音频连接失败，请重新连接助手后再开始面试：${diagnostic.displayMessage}`);
+      throw error;
     }
     // Electron is the single media owner for the unsigned beta. Start the
     // microphone first so a pending display-media permission cannot block the
@@ -730,7 +707,7 @@ export class DesktopRealtimePublisher {
       this.startWatchdog();
       this.options.onServerEvent?.({
         kind: "connection-state",
-        payload: { captureOwner: desktopCaptureArchitecture, transport: this.transport ? "websocket-v2" : "http-frame-ingest" },
+        payload: { captureOwner: desktopCaptureArchitecture, transport: "websocket-v2" },
       });
       this.options.onCaptureState("capturing");
       return;
@@ -756,12 +733,6 @@ export class DesktopRealtimePublisher {
     await Promise.all(this.runtimes.map(runtime => runtime.stop()));
     this.runtimes = [];
     this.latestHealth.clear();
-    this.uploadQueues.forEach((queueState) => {
-      queueState.items.length = 0;
-      queueState.uploading = false;
-      queueState.terminalFailure = false;
-      queueState.consecutiveFailures = 0;
-    });
     this.lastFailureNotice.clear();
     this.sourceRecoveryInFlight.clear();
     this.lastSystemSignalAtMs = null;
@@ -919,7 +890,7 @@ export class DesktopRealtimePublisher {
             lastFrameAtMs: nowMs,
             active: true,
           });
-          this.sendFrameHttp(input.sourceKind, eventPayload, frame, openedMedia.descriptor.id || input.sourceId);
+          this.sendFrame(input.sourceKind, eventPayload, frame, openedMedia.descriptor.id || input.sourceId);
         }
       };
       const captureProcessor = await createAudioCaptureProcessor(context, processSamples);
@@ -998,7 +969,7 @@ export class DesktopRealtimePublisher {
             durationMs: snapshot.durationMs,
             payload: snapshot.payload,
           });
-          this.sendFrameHttp(input.sourceKind, {
+          this.sendFrame(input.sourceKind, {
             type: "audio-frame",
             deviceId: frame.deviceId,
             sourceId: frame.sourceId,
@@ -1158,7 +1129,9 @@ export class DesktopRealtimePublisher {
         if (this.transport === transport) this.handleTransportEvent(event, transport);
       },
       onState: state => {
-        if (this.transport === transport) this.options.onCaptureState(state === "failed" ? "reconnecting" : state === "connected" ? "capturing" : "reconnecting");
+        if (this.transport !== transport) return;
+        const recovering = this.transportSequenceResetInProgress || this.transportRecoveryAck.isWaitingFor(transport);
+        this.options.onCaptureState(state === "connected" && !recovering ? "capturing" : "reconnecting");
       },
       onTerminal: input => {
         if (this.transport !== transport || this.stopped) return;
@@ -1169,6 +1142,9 @@ export class DesktopRealtimePublisher {
     });
     this.transport = transport;
     await transport.start();
+    const resumeOffsets = await transport.waitForResumeOffsets();
+    this.sequencer.alignNext("microphone", resumeOffsets.microphone + 1);
+    this.sequencer.alignNext("system", resumeOffsets.system + 1);
     for (const payload of pending) transport.enqueue(payload);
     return transport;
   }
@@ -1192,12 +1168,6 @@ export class DesktopRealtimePublisher {
       this.runtimes = [];
       this.sequencer.reset();
       this.sendBuffers.forEach(buffer => buffer.clear());
-      this.uploadQueues.forEach(queueState => {
-        queueState.items.length = 0;
-        queueState.uploading = false;
-        queueState.terminalFailure = false;
-        queueState.consecutiveFailures = 0;
-      });
       let lastError: unknown = null;
       let attempt = 0;
       while (!this.stopped && this.replacementPublisherBudget.claimAttempt()) {
@@ -1205,15 +1175,15 @@ export class DesktopRealtimePublisher {
         try {
           if (attempt > 1) await new Promise<void>(resolve => window.setTimeout(resolve, 250 * attempt));
           const replacementTransport = await this.openTransport();
+          const acknowledged = this.transportRecoveryAck.wait(replacementTransport, REPLACEMENT_PUBLISHER_ACK_TIMEOUT_MS);
+          void acknowledged.catch(() => undefined);
+          this.transportSequenceResetInProgress = false;
           for (const sourceInput of sourceInputs) {
             this.reliability.start(sourceInput.sourceKind);
             this.reliability.markRecovering(sourceInput.sourceKind, "transport-sequence-reset");
             const recovered = await this.startSource(sourceInput);
             if (recovered) this.runtimes.push(recovered);
           }
-          const acknowledged = this.transportRecoveryAck.wait(replacementTransport, REPLACEMENT_PUBLISHER_ACK_TIMEOUT_MS);
-          void acknowledged.catch(() => undefined);
-          this.transportSequenceResetInProgress = false;
           await acknowledged;
           this.options.onServerEvent?.({ kind: "connection-state", payload: {
             state: "transport-reset",
@@ -1224,6 +1194,7 @@ export class DesktopRealtimePublisher {
           return;
         } catch (error) {
           lastError = error;
+          this.transportSequenceResetInProgress = true;
           const failedAttempt = this.transport;
           if (failedAttempt) this.transportRecoveryAck.fail(failedAttempt, "replacement-publisher-attempt-failed");
           failedAttempt?.stop();
@@ -1232,24 +1203,37 @@ export class DesktopRealtimePublisher {
           this.runtimes = [];
           this.sequencer.reset();
           this.sendBuffers.forEach(buffer => buffer.clear());
-          this.uploadQueues.forEach(queueState => {
-            queueState.items.length = 0;
-            queueState.uploading = false;
-            queueState.terminalFailure = false;
-            queueState.consecutiveFailures = 0;
-          });
         }
       }
       if (!this.stopped) {
         for (const sourceInput of sourceInputs) {
-          this.reliability.start(sourceInput.sourceKind);
-          const recovered = await this.startSource(sourceInput);
-          if (recovered) this.runtimes.push(recovered);
+          this.reliability.markTerminalLost(sourceInput.sourceKind, "publisher-recovery-exhausted");
+          const existing = this.latestHealth.get(sourceInput.sourceKind);
+          this.updateHealth({
+            ...(existing ?? {
+              sourceId: sourceInput.sourceId,
+              sourceKind: sourceInput.sourceKind,
+              label: sourceLabel(sourceInput.sourceKind),
+            }),
+            state: "error",
+            stage: "failed",
+            level: 0,
+            active: false,
+            pendingFrameCount: 0,
+            oldestPendingFrameAgeMs: 0,
+            errorCode: "publisher-recovery-exhausted",
+          });
         }
         this.transportSequenceResetInProgress = false;
         const diagnostic = publisherFailureDiagnostic("microphone", lastError);
-        this.options.onFailure(`实时长连接自动恢复失败，已切换兼容传输：${diagnostic.displayMessage}`);
-        this.options.onCaptureState(this.runtimes.length > 0 ? "capturing" : "error");
+        this.options.onFailure(`实时音频上传已停止，请退出当前面试并重新连接助手：${diagnostic.displayMessage}`);
+        this.options.onCaptureState("error");
+        this.options.onServerEvent?.({ kind: "degraded", payload: {
+          reason: "publisher-recovery-exhausted",
+          message: "实时音频上传已停止，需要显式重新连接。",
+          retryable: false,
+        } });
+        this.emitReliability();
       }
     })().finally(() => {
       this.transportSequenceResetInProgress = false;
@@ -1269,7 +1253,8 @@ export class DesktopRealtimePublisher {
       if (typeof payload.pendingFrames === "number") this.reliability.updatePendingFrames(sourceKind, payload.pendingFrames);
       if (event.kind === "frame-accepted" || event.kind === "terminal-accepted") {
         this.reliability.recordFrameAck(sourceKind, typeof payload.lastAckAtMs === "number" ? payload.lastAckAtMs : Date.now(), typeof payload.pendingFrames === "number" ? payload.pendingFrames : 0);
-        this.transportRecoveryAck.acknowledge(transport);
+        const recovered = this.transportRecoveryAck.acknowledge(transport);
+        if (recovered) this.options.onCaptureState("capturing");
         this.replacementPublisherBudget.recordAcknowledgement(transport.pendingPayloads().length > 0);
       }
       if (typeof payload.qwenAppendAtMs === "number") this.reliability.recordQwenAppend(sourceKind, payload.qwenAppendAtMs);
@@ -1297,7 +1282,7 @@ export class DesktopRealtimePublisher {
     this.emitReliability();
   }
 
-  private sendFrameHttp(
+  private sendFrame(
     sourceKind: AudioSourceKind,
     payload: Record<string, unknown>,
     frame: ReturnType<typeof createAudioFrame>,
@@ -1320,185 +1305,31 @@ export class DesktopRealtimePublisher {
       this.sendBuffers.get(sourceKind)?.push(frame);
       this.transportDiagnostics.setRingBufferDepth(sourceKind, this.sendBuffers.get(sourceKind)?.depth() ?? 0);
       this.transport.enqueue(queuedPayload);
+      this.transportRecoveryAck.markMediaPending(this.transport);
       this.reliability.recordFrameSent(sourceKind, Date.now());
       this.refreshOwnedBufferBytes();
       return;
     }
-    const droppedFrames = this.sendBuffers.get(sourceKind)?.push(frame) ?? [];
-    this.transportDiagnostics.setRingBufferDepth(sourceKind, this.sendBuffers.get(sourceKind)?.depth() ?? 0);
-    if (droppedFrames.length > 0) {
-      this.updateHealth({
-        sourceId,
-        sourceKind,
-        label: sourceLabel(sourceKind),
-        state: "reconnecting",
-        stage: "frames-produced",
-        level: Number((this.latestHealth.get(sourceKind)?.level ?? 0).toFixed(3)),
-        active: true,
-        frameCount: this.frameCounts.get(sourceKind) ?? 0,
-        lastFrameAtMs: Date.now(),
-        errorCode: "audio-gap",
-      });
-    }
-    const queueState = this.uploadQueues.get(sourceKind);
-    if (!queueState) return;
-    if (queueState.terminalFailure) {
-      this._notifyFailure(sourceKind, `${sourceLabel(sourceKind)}未连接，已暂停语音上报，请先重连桌面端与网页。`);
-      return;
-    }
-    const queued = {
-      sourceKind,
+    this.sendBuffers.get(sourceKind)?.clear();
+    this.reliability.markTerminalLost(sourceKind, "publisher-transport-missing");
+    this.updateHealth({
       sourceId,
-      payload: queuedPayload,
-      frame,
-    };
-    if (queueState.items.length >= MAX_PENDING_UPLOAD_FRAMES) {
-      const firstInterim = queueState.items.findIndex(item => item.payload.isFinal !== true);
-      if (firstInterim < 0 && payload.isFinal !== true) {
-        this.sendBuffers.get(sourceKind)?.acknowledge(frame.sourceId, frame.sequence);
-        this._notifyFailure(sourceKind, `${sourceLabel(sourceKind)}发送队列正在保障结束帧，已跳过过期中间帧`);
-        return;
-      }
-      const dropped = firstInterim >= 0 ? queueState.items.splice(firstInterim, 1)[0] : undefined;
-      if (dropped) {
-        const droppedFrame = dropped.frame;
-        this.sendBuffers.get(sourceKind)?.acknowledge(droppedFrame.sourceId, droppedFrame.sequence);
-      }
-      if (!dropped) {
-        this._notifyFailure(sourceKind, `${sourceLabel(sourceKind)}结束帧队列已满，请检查网络连接`);
-        return;
-      }
-      this._notifyFailure(sourceKind, `${sourceLabel(sourceKind)}发送队列已满，已跳过过期中间帧并保留结束帧`);
-    }
-    queueState.items.push(queued);
-    this.reliability.recordFrameSent(sourceKind, Date.now(), queueState.items.length);
-    this.refreshOwnedBufferBytes();
-    if (!queueState.uploading) {
-      void this._drainUploadQueue(sourceKind);
-    }
+      sourceKind,
+      label: sourceLabel(sourceKind),
+      state: "error",
+      stage: "failed",
+      level: 0,
+      active: false,
+      frameCount: this.frameCounts.get(sourceKind) ?? 0,
+      lastFrameAtMs: Date.now(),
+      pendingFrameCount: 0,
+      errorCode: "publisher-transport-missing",
+    });
+    this.options.onCaptureState("error");
+    this._notifyFailure(sourceKind, `${sourceLabel(sourceKind)}上传连接已停止，请退出当前面试并重新连接助手。`);
+    this.emitReliability();
   }
 
-  private async _drainUploadQueue(sourceKind: AudioSourceKind): Promise<void> {
-    const queueState = this.uploadQueues.get(sourceKind);
-    if (!queueState || queueState.uploading) return;
-    queueState.uploading = true;
-    try {
-      while (!this.stopped && queueState.items.length > 0 && !queueState.terminalFailure) {
-        const current = queueState.items.shift();
-        if (!current) break;
-        const sentAtMs = Date.now();
-        try {
-          const response = await this.fetchImpl(`${this.options.apiBaseUrl}/realtime-speech/frames`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...current.payload, sentAtMs }),
-          });
-          if (!response.ok) {
-            let errorCode = "http-frame-rejected";
-            let message = "实时语音采集请求被后端拒绝。";
-            try {
-              const payload = await response.json() as { readonly error?: { readonly errorCode?: string; readonly message?: string } };
-              if (payload?.error?.errorCode) errorCode = payload.error.errorCode;
-              if (payload?.error?.message) message = payload.error.message;
-            } catch {
-              const fallback = await response.text().catch(() => message);
-              if (fallback) message = fallback;
-            }
-            const isBindingTransient = response.status === 409 || errorCode.startsWith("desktop-") || errorCode === "web-heartbeat-missing" || errorCode === "session-not-active";
-            if (isBindingTransient) {
-              queueState.consecutiveFailures += 1;
-              this._notifyFailure(sourceKind, `${sourceLabel(sourceKind)}未就绪：${message}`);
-              if (queueState.consecutiveFailures <= HTTP_PUBLISH_RETRY_LIMIT) {
-                queueState.items.unshift(current);
-                await new Promise<void>((resolve) => {
-                  window.setTimeout(resolve, HTTP_PUBLISH_RETRY_DELAY_MS * Math.max(1, Math.min(HTTP_PUBLISH_RETRY_LIMIT, queueState.consecutiveFailures)));
-                });
-                continue;
-              }
-            } else if (response.status >= 400 && response.status < 500) {
-              queueState.terminalFailure = true;
-              queueState.items.length = 0;
-              this._notifyFailure(sourceKind, `${sourceLabel(sourceKind)}采集链路被拒绝：${message.slice(0, 120)}`);
-              this.updateHealth({
-                sourceId: current.sourceId,
-                sourceKind,
-                label: sourceLabel(sourceKind),
-                state: "error",
-                stage: "failed",
-                level: 0,
-                active: false,
-                errorCode: "asr-failed",
-              });
-              break;
-            }
-            throw new Error(`publisher_http_frame_failed_${response.status}: ${message}`);
-          }
-          this.sendBuffers.get(sourceKind)?.acknowledge(current.sourceId, current.frame.sequence);
-          this.transportDiagnostics.setRingBufferDepth(sourceKind, this.sendBuffers.get(sourceKind)?.depth() ?? 0);
-          queueState.consecutiveFailures = 0;
-          this.reliability.recordFrameAck(sourceKind, Date.now(), queueState.items.length);
-          this.lastFailureNotice.delete(sourceKind);
-          const isTerminal = current.payload.isFinal === true;
-          this.options.onServerEvent?.({
-            kind: isTerminal ? "terminal-accepted" : "frame-accepted",
-            payload: {
-              sourceKind,
-              sourceId: current.sourceId,
-              sequence: current.frame.sequence,
-              ...(isTerminal && typeof current.payload.terminalId === "string" ? { terminalId: current.payload.terminalId } : {}),
-              ...(isTerminal ? { terminalAckAtMs: Date.now() } : {}),
-              transport: "http-frame-ingest",
-            },
-          });
-          this.updateHealth({
-            sourceId: current.sourceId,
-            sourceKind,
-            label: sourceLabel(sourceKind),
-            state: "receiving",
-            stage: "frames-published",
-            level: Number((this.latestHealth.get(sourceKind)?.level ?? 0).toFixed(3)),
-            active: true,
-            frameCount: this.frameCounts.get(sourceKind) ?? 0,
-            lastFrameAtMs: sentAtMs,
-            backendFrameCount: this.frameCounts.get(sourceKind) ?? 0,
-            lastBackendFrameAtMs: Date.now(),
-          });
-        } catch (error) {
-          queueState.consecutiveFailures += 1;
-          const diagnostic = publisherFailureDiagnostic(sourceKind, error);
-          this._notifyFailure(sourceKind, diagnostic.displayMessage);
-          this.updateHealth({
-            sourceId: current.sourceId,
-            sourceKind,
-            label: sourceLabel(sourceKind),
-            state: diagnostic.state,
-            stage: diagnostic.stage,
-            level: 0,
-            active: false,
-            errorCode: diagnostic.errorCode,
-          });
-          if (!this.stopped && queueState.consecutiveFailures <= 1 && allowFrameRetryByError(diagnostic.errorCode)) {
-            queueState.items.unshift(current);
-            await new Promise<void>((resolve) => {
-              window.setTimeout(resolve, HTTP_PUBLISH_RETRY_DELAY_MS);
-            });
-          } else {
-            queueState.terminalFailure = true;
-            queueState.items.length = 0;
-            break;
-          }
-        }
-        if (queueState.items.length > 0) {
-          await new Promise<void>((resolve) => {
-            window.setTimeout(resolve, HTTP_PUBLISH_THROTTLE_MS);
-          });
-        }
-      }
-    } finally {
-      queueState.uploading = false;
-      this.refreshOwnedBufferBytes();
-    }
-  }
 
   reliabilitySnapshot(): DesktopRealtimeReliabilitySnapshot {
     this.refreshOwnedBufferBytes();
@@ -1516,8 +1347,7 @@ export class DesktopRealtimePublisher {
 
   private refreshOwnedBufferBytes(): void {
     const bufferedPcmBytes = [...this.sendBuffers.values()].reduce((sum, buffer) => sum + buffer.pendingByteLength(), 0);
-    const queuedHttpBytes = [...this.uploadQueues.values()].reduce((sum, queue) => sum + queue.items.reduce((queueSum, item) => queueSum + item.frame.payload.byteLength, 0), 0);
-    this.resourceCounters.setOwnedArrayBufferBytes(bufferedPcmBytes + queuedHttpBytes);
+    this.resourceCounters.setOwnedArrayBufferBytes(bufferedPcmBytes);
   }
 
   private startWatchdog(): void {

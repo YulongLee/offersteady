@@ -23,6 +23,13 @@ describe("audio frame sequencing", () => {
     expect(frame(sequencer, "system-1", 2).sequence).toBe(0);
     expect(frame(sequencer, "mic-1", 2).sequence).toBe(1);
   });
+
+  it("aligns a replacement publisher to the authoritative server offset", () => {
+    const sequencer = new SourceFrameSequencer();
+    sequencer.alignNext("system", 3_600);
+    expect(frame(sequencer, "system-1", 2).sequence).toBe(3_600);
+    expect(frame(sequencer, "system-1", 2).sequence).toBe(3_601);
+  });
 });
 
 describe("bounded audio buffer", () => {

@@ -44,4 +44,21 @@ describe("desktop realtime reliability watchdog", () => {
     controller.recordFrameAck("system", 2_100);
     expect(controller.snapshot()[0]).toMatchObject({ state: "HEALTHY" });
   });
+
+  it("keeps terminal delivery loss sticky while capture callbacks continue", () => {
+    const controller = new RealtimeReliabilityController();
+    controller.start("system", 1_000);
+    controller.recordAudioCapture("system", 1_100);
+    controller.recordFrameAck("system", 1_150);
+    controller.markTerminalLost("system", "publisher-recovery-exhausted");
+    controller.recordAudioCapture("system", 9_000);
+    controller.recordFrameAck("system", 9_010);
+
+    expect(controller.evaluate(9_100)[0]).toMatchObject({
+      state: "LOST",
+      action: "none",
+      reason: "publisher-recovery-exhausted",
+    });
+    expect(controller.snapshot()[0]).toMatchObject({ terminalFailure: true });
+  });
 });

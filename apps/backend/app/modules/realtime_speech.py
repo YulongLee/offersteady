@@ -592,7 +592,7 @@ async def stream_session_runtime(
                     asyncio.to_thread(service.get_runtime, user_id=resolved_user_id, session_id=session_id),
                     asyncio.to_thread(service.list_transcripts, user_id=resolved_user_id, session_id=session_id),
                     asyncio.to_thread(service.list_candidates, user_id=resolved_user_id, session_id=session_id),
-                    asyncio.to_thread(service.list_events, user_id=resolved_user_id, session_id=session_id),
+                    asyncio.to_thread(service.list_stream_bootstrap_events, user_id=resolved_user_id, session_id=session_id),
                 )
                 cached_runtime = runtime
                 cached_transcripts = transcripts

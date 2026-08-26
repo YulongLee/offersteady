@@ -28,6 +28,7 @@ from app.ports.realtime_speech import (
     RealtimeFrameReceiptRecord,
     RealtimeAsrGatewayPort,
     RealtimeEvent,
+    RealtimeEventKind,
     RealtimePublisherRecord,
     RealtimeSourceKind,
     RealtimeSpeechRepository,
@@ -60,6 +61,17 @@ from app.services.billing_service import BillingService, UsageReservationRecord
 
 def _now_ms() -> int:
     return int(time() * 1000)
+
+
+REALTIME_STREAM_BOOTSTRAP_EVENT_KINDS: set[RealtimeEventKind] = {
+    "connection-state",
+    "answer-task-updated",
+    "screenshot-capture-updated",
+    "degraded",
+    "device-status",
+    "capture-control",
+    "screenshot-shortcut-accepted",
+}
 
 
 class RetryableAsrError(Exception):
@@ -2869,6 +2881,23 @@ class RealtimeSpeechService:
     def list_events(self, *, user_id: str, session_id: str):
         self.session_service.get_session(user_id=user_id, session_id=session_id)
         events = [item for item in self.repository.list_events_for_session(session_id=session_id) if item.owner_user_id == user_id]
+        return RealtimeEventListResponse(
+            sessionId=session_id,
+            events=[self.event_response(item) for item in events],
+        )
+
+    def list_stream_bootstrap_events(self, *, user_id: str, session_id: str):
+        """Return only latest stateful events required to materialize a live page."""
+        self.session_service.get_session(user_id=user_id, session_id=session_id)
+        events = [
+            item
+            for item in self.repository.list_latest_events_for_session(
+                session_id=session_id,
+                kinds=REALTIME_STREAM_BOOTSTRAP_EVENT_KINDS,
+            )
+            if item.owner_user_id == user_id
+        ]
+        events.sort(key=lambda item: (item.created_at_ms, item.event_id))
         return RealtimeEventListResponse(
             sessionId=session_id,
             events=[self.event_response(item) for item in events],

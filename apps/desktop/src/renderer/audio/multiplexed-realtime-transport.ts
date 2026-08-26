@@ -25,6 +25,11 @@ interface GapRecoveryState {
   lastAttemptAtMs: number;
 }
 
+export interface RealtimeResumeOffsets {
+  readonly microphone: number;
+  readonly system: number;
+}
+
 const MAX_IN_FLIGHT_FRAMES_PER_CHANNEL = 8;
 const MAX_GAP_RESENDS_PER_SEQUENCE = 3;
 const GAP_RESEND_COOLDOWN_MS = 500;
@@ -53,6 +58,12 @@ export class MultiplexedRealtimeTransport {
   private readonly gapRecoveryBySource = new Map<RealtimeAudioChannel, GapRecoveryState>();
   private readyForFrames = false;
   private recoveryRequested = false;
+  private resumeOffsets: RealtimeResumeOffsets | null = null;
+  private readonly resumeOffsetWaiters = new Set<{
+    readonly resolve: (offsets: RealtimeResumeOffsets) => void;
+    readonly reject: (error: Error) => void;
+    readonly timer: number;
+  }>();
 
   constructor(private readonly options: TransportOptions) {}
 
@@ -114,6 +125,21 @@ export class MultiplexedRealtimeTransport {
     return this.queue.map(item => ({ ...item.payload }));
   }
 
+  waitForResumeOffsets(timeoutMs = 5_000): Promise<RealtimeResumeOffsets> {
+    if (this.resumeOffsets) return Promise.resolve(this.resumeOffsets);
+    return new Promise<RealtimeResumeOffsets>((resolve, reject) => {
+      const waiter = {
+        resolve,
+        reject,
+        timer: window.setTimeout(() => {
+          this.resumeOffsetWaiters.delete(waiter);
+          reject(new Error("publisher-resume-offset-timeout"));
+        }, timeoutMs),
+      };
+      this.resumeOffsetWaiters.add(waiter);
+    });
+  }
+
   stop(): void {
     this.stopped = true;
     if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer);
@@ -127,6 +153,11 @@ export class MultiplexedRealtimeTransport {
     this.gapRecoveryBySource.clear();
     this.readyForFrames = false;
     this.recoveryRequested = false;
+    for (const waiter of this.resumeOffsetWaiters) {
+      window.clearTimeout(waiter.timer);
+      waiter.reject(new Error("publisher-transport-stopped"));
+    }
+    this.resumeOffsetWaiters.clear();
     this.publishQueueDepths();
   }
 
@@ -292,9 +323,11 @@ export class MultiplexedRealtimeTransport {
   private applyResumeOffsets(payload?: Record<string, unknown>): void {
     const resumeOffsets = payload?.resumeOffsets;
     if (typeof resumeOffsets !== "object" || resumeOffsets === null) return;
+    const acceptedOffsets: Record<RealtimeAudioChannel, number> = { microphone: -1, system: -1 };
     for (const channel of ["microphone", "system"] as const) {
       const offset = (resumeOffsets as Record<string, unknown>)[channel];
       if (typeof offset !== "number" || !Number.isInteger(offset)) continue;
+      acceptedOffsets[channel] = offset;
       this.queue = this.queue.filter(item => item.sourceKind !== channel || item.sequence > offset);
       for (const key of this.sent) {
         const [sourceKind, rawSequence] = key.split(":");
@@ -306,7 +339,13 @@ export class MultiplexedRealtimeTransport {
         return;
       }
     }
+    this.resumeOffsets = acceptedOffsets;
     this.readyForFrames = true;
+    for (const waiter of this.resumeOffsetWaiters) {
+      window.clearTimeout(waiter.timer);
+      waiter.resolve(acceptedOffsets);
+    }
+    this.resumeOffsetWaiters.clear();
     this.publishQueueDepths();
     this.flush();
   }

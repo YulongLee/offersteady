@@ -9,6 +9,13 @@ export class SourceFrameSequencer {
     return sequence;
   }
 
+  alignNext(sourceId: string, nextSequence: number): void {
+    if (!Number.isInteger(nextSequence) || nextSequence < 0) {
+      throw new Error("nextSequence must be a non-negative integer");
+    }
+    this.nextBySource.set(sourceId, nextSequence);
+  }
+
   reset(sourceId?: string): void {
     if (sourceId) this.nextBySource.delete(sourceId);
     else this.nextBySource.clear();

@@ -229,6 +229,75 @@ describe("realtime transport v2", () => {
     expect(terminals[0]?.pending).toHaveLength(1);
   });
 
+  it("replaces a stalled high-sequence publisher with a fresh sequence-zero publisher", async () => {
+    vi.stubGlobal("window", { location: { href: "https://mianshiwen.cc/interviews/session" }, setTimeout, clearTimeout });
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const terminals: Array<{ reason: string; pending: readonly Record<string, unknown>[] }> = [];
+    const oldTransport = new MultiplexedRealtimeTransport({
+      apiBaseUrl: "https://mianshiwen.cc/api/v1",
+      token: "old-high-sequence-token",
+      onEvent: () => undefined,
+      onState: () => undefined,
+      onTerminal: terminal => terminals.push(terminal),
+    });
+    await oldTransport.start();
+    acceptConnection(FakeWebSocket.instances[0]!, -1, 268);
+    oldTransport.enqueue({ sourceKind: "system", sourceId: "loopback", sequence: 269, isFinal: false });
+    expect(decodeEnvelope(FakeWebSocket.instances[0]!.sent[0]!)).toMatchObject({ sourceKind: "system", sequence: 269 });
+    FakeWebSocket.instances[0]!.close(1008);
+    expect(terminals).toEqual([expect.objectContaining({
+      reason: "publisher-credential-rejected",
+      pending: [expect.objectContaining({ sequence: 269 })],
+    })]);
+
+    const acknowledgements: unknown[] = [];
+    const replacement = new MultiplexedRealtimeTransport({
+      apiBaseUrl: "https://mianshiwen.cc/api/v1",
+      token: "fresh-replacement-token",
+      onEvent: event => acknowledgements.push(event),
+      onState: () => undefined,
+    });
+    await replacement.start();
+    acceptConnection(FakeWebSocket.instances[1]!, -1, -1);
+    replacement.enqueue({ sourceKind: "system", sourceId: "loopback", sequence: 0, isFinal: false });
+    expect(decodeEnvelope(FakeWebSocket.instances[1]!.sent[0]!)).toMatchObject({ sourceKind: "system", sequence: 0 });
+    FakeWebSocket.instances[1]!.serverEvent({ kind: "frame-accepted", payload: { sourceKind: "system", sourceId: "loopback", sequence: 0 } });
+    expect(acknowledgements).toContainEqual(expect.objectContaining({
+      kind: "frame-accepted",
+      payload: expect.objectContaining({ sourceKind: "system", sequence: 0 }),
+    }));
+    replacement.stop();
+  });
+
+  it("exposes retained server offsets so a replacement never restarts below the backend boundary", async () => {
+    vi.stubGlobal("window", { location: { href: "https://mianshiwen.cc/interviews/session" }, setTimeout, clearTimeout });
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const transport = new MultiplexedRealtimeTransport({
+      apiBaseUrl: "https://mianshiwen.cc/api/v1",
+      token: "retained-offset-token",
+      onEvent: () => undefined,
+      onState: () => undefined,
+    });
+    await transport.start();
+    const offsetsReady = transport.waitForResumeOffsets();
+    acceptConnection(FakeWebSocket.instances[0]!, -1, 3_599);
+    const offsets = await offsetsReady;
+    const sequencer = new SourceFrameSequencer();
+    sequencer.alignNext("system", offsets.system + 1);
+    const resumed = createAudioFrame(sequencer, {
+      sessionId: "session",
+      deviceId: "device",
+      sourceId: "loopback",
+      sourceKind: "system",
+      capturedAtMs: Date.now(),
+      durationMs: 100,
+      payload: new Uint8Array([1, 2]),
+    });
+    transport.enqueue({ ...resumed, audioBase64: btoa("ab") });
+    expect(decodeEnvelope(FakeWebSocket.instances[0]!.sent[0]!)).toMatchObject({ sourceKind: "system", sequence: 3_600 });
+    transport.stop();
+  });
+
   it("bounds unacknowledged websocket writes per channel", async () => {
     vi.stubGlobal("window", { location: { href: "https://mianshiwen.cc/interviews/session" }, setTimeout, clearTimeout });
     vi.stubGlobal("WebSocket", FakeWebSocket);

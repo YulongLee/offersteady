@@ -232,6 +232,8 @@ export type CompanionErrorCode =
   | "backend-mismatch"
   | "publisher-create-failed"
   | "publisher-websocket-failed"
+  | "publisher-recovery-exhausted"
+  | "publisher-transport-missing"
   | "asr-failed"
   | "incompatible-version"
   | "network-unavailable"

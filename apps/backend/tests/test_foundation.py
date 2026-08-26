@@ -27,6 +27,45 @@ def test_realtime_stream_throttles_database_backed_session_validation() -> None:
     assert should_validate_realtime_session(last_validated_at=10.0, now=25.0) is True
 
 
+def test_realtime_stream_bootstrap_is_bounded_to_latest_stateful_events() -> None:
+    user_id = "bounded-bootstrap-user"
+    session = unwrap(client.post("/api/v1/sessions", json={"userId": user_id, "title": "有界首屏测试"}))
+    session_id = session["sessionId"]
+    service = realtime_speech_service()
+    service.publish_session_event(
+        user_id=user_id,
+        session_id=session_id,
+        kind="degraded",
+        payload={"reason": "older-state"},
+    )
+    service.publish_session_event(
+        user_id=user_id,
+        session_id=session_id,
+        kind="transcript-updated",
+        payload={"segmentId": "separate-authoritative-transcript", "revision": 1},
+    )
+    service.publish_session_event(
+        user_id=user_id,
+        session_id=session_id,
+        kind="degraded",
+        payload={"reason": "latest-state"},
+    )
+    service.publish_session_event(
+        user_id=user_id,
+        session_id=session_id,
+        kind="capture-control",
+        payload={"captureState": "capturing"},
+    )
+
+    bootstrap = service.list_stream_bootstrap_events(user_id=user_id, session_id=session_id)
+    events = bootstrap.model_dump(by_alias=True)["events"]
+
+    assert {item["kind"] for item in events} == {"degraded", "capture-control"}
+    degraded = next(item for item in events if item["kind"] == "degraded")
+    assert degraded["payload"]["reason"] == "latest-state"
+    assert all(item["kind"] != "transcript-updated" for item in events)
+
+
 def test_realtime_session_snapshot_is_authorized_complete_and_lease_aware() -> None:
     user_id = "snapshot-owner-user"
     session = unwrap(client.post("/api/v1/sessions", json={"userId": user_id, "title": "恢复快照测试"}))
