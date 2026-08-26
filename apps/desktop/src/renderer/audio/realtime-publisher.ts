@@ -300,6 +300,14 @@ export const publisherFailureDiagnostic = (sourceKind: AudioSourceKind, error: u
         errorCode: "adapter-required" as const,
       };
     }
+    if (error.message === "screen-capture-permission-required") {
+      return {
+        displayMessage: "电脑输出权限未开启；请在 macOS 系统设置 → 隐私与安全性 → 屏幕与系统音频录制中允许面试稳伴随程序，然后完全退出并重新打开助手。麦克风收音会继续保持。",
+        state: "permission-denied" as const,
+        stage: "permission-denied" as const,
+        errorCode: "permission-denied" as const,
+      };
+    }
   }
   if (error instanceof DOMException && error.name === "NotAllowedError") {
     return {

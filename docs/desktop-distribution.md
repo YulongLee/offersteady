@@ -156,6 +156,8 @@ OSS 路径统一为 `desktop-releases/{platform}/{architecture}/{version}/{filen
 
 ## 本地联调诊断
 
+从伴随程序 1.1.9 起，Finder、`open`、命令行和正式安装包统一使用 `<appData>/@offersteady/desktop` 作为本地数据目录，不再根据中文产品名派生第二套设备身份。首次升级时仅在稳定目录缺失对应文件的情况下迁移旧目录中的设备配对身份、加密设备凭证和截图快捷键；不会迁移 Chromium 缓存、诊断、截图、转录或音频。排障时不得再通过 `--user-data-dir` 创建临时身份。
+
 桌面伴随助手与网页联调时，先确认 Web 和桌面指向同一个后端地址。桌面默认后端为：
 
 ```text

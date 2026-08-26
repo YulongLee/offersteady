@@ -11,6 +11,16 @@ import { ScreenshotCaptureLock } from "./screenshot-capture-lock";
 import { DesktopCaptureEventParser } from "./capture-event-stream";
 import { decideRendererRecovery } from "./renderer-recovery-policy";
 import { RealtimeTransportDiagnosticsLog } from "./realtime-transport-diagnostics-log";
+import { canAcquireDisplaySources, resolveDisplayMediaSource, type ScreenPermissionStatus } from "./display-media-access";
+import { legacyUserDataDirectories, migrateLegacyCompanionState, stableUserDataDirectory } from "./user-data-bootstrap";
+
+const originalUserDataDirectory = app.getPath("userData");
+const stableCompanionUserDataDirectory = stableUserDataDirectory(app.getPath("appData"));
+const companionLegacyUserDataDirectories = legacyUserDataDirectories(
+  app.getPath("appData"),
+  originalUserDataDirectory,
+);
+app.setPath("userData", stableCompanionUserDataDirectory);
 
 // Local ad-hoc builds cannot reliably retain Apple's separate Audio Capture
 // grant across rebuilds. Reuse the Screen & System Audio Recording grant,
@@ -266,16 +276,7 @@ const getNativeRuntimeHealth = async () => {
 
 const requestElectronScreenCaptureAccess = async () => {
   if (process.platform !== "darwin") return true;
-  if (systemPreferences.getMediaAccessStatus("screen") === "granted") return true;
-  try {
-    const sources = await desktopCapturer.getSources({
-      types: ["screen"],
-      thumbnailSize: { width: 1, height: 1 },
-    });
-    return sources.length > 0;
-  } catch {
-    return false;
-  }
+  return systemPreferences.getMediaAccessStatus("screen") === "granted";
 };
 
 const optimizeScreenshotForVision = (image: Electron.NativeImage) => {
@@ -1108,7 +1109,20 @@ const createWindow = () => {
   });
 };
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  try {
+    const migration = await migrateLegacyCompanionState({
+      stableDirectory: stableCompanionUserDataDirectory,
+      legacyDirectories: companionLegacyUserDataDirectories,
+    });
+    if (migration.copiedFiles.length > 0) {
+      console.info("[desktop-user-data] migrated allowlisted local state", {
+        copiedFiles: migration.copiedFiles,
+      });
+    }
+  } catch (error) {
+    console.warn("[desktop-user-data] legacy state migration failed; stable directory remains active", error);
+  }
   captureState = "not-connected";
   credentialVault = new DeviceCredentialVault(app.getPath("userData"), safeStorage);
   pairingIdentityStore = new DevicePairingIdentityStore(app.getPath("userData"));
@@ -1119,47 +1133,55 @@ app.whenReady().then(() => {
   });
   session.defaultSession.setPermissionCheckHandler((_webContents, permission) => allowedRuntimePermissions.has(permission));
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
-    if (Date.now() < displayMediaFailureBackoffUntil) {
+    const rejectDisplayRequest = (reason: string) => {
       try {
         callback({});
-      } catch {
-        // Electron rejects an empty response when video was requested. The
-        // renderer receives the rejection while the expensive source lookup
-        // remains in backoff.
+      } catch (error) {
+        console.warn("[desktop-capture] display media request rejected", { reason, error });
       }
+    };
+    if (Date.now() < displayMediaFailureBackoffUntil) {
+      rejectDisplayRequest("source-backoff");
       return;
     }
-    void (async () => {
-      try {
-        const sources = await desktopCapturer.getSources({
+    const permissionStatus = process.platform === "darwin"
+      ? systemPreferences.getMediaAccessStatus("screen") as ScreenPermissionStatus
+      : "granted";
+    void resolveDisplayMediaSource({
+      platform: process.platform,
+      permissionStatus,
+      getSources: () => desktopCapturer.getSources({
           types: ["screen"],
           thumbnailSize: { width: 0, height: 0 },
-        });
-        const selectedScreen = (preferredScreenSourceId
-          ? sources.find((source) => source.id === preferredScreenSourceId)
-          : null) ?? sources[0];
-        if (!selectedScreen) {
-          try {
-            callback({});
-          } catch (error) {
-            console.warn("[desktop-capture] display media callback rejected an empty source", error);
-          }
-          return;
-        }
+      }),
+      preferredSourceId: preferredScreenSourceId,
+      sourceId: source => source.id,
+    }).then((resolution) => {
+      if (resolution.kind === "permission-required") {
+        displayMediaFailureBackoffUntil = Number.POSITIVE_INFINITY;
+        rejectDisplayRequest("screen-capture-permission-required");
+        return;
+      }
+      if (resolution.kind === "unavailable") {
+        displayMediaFailureBackoffUntil = Date.now() + 5_000;
+        console.warn("[desktop-capture] display media source unavailable", resolution.error);
+        rejectDisplayRequest("display-source-unavailable");
+        return;
+      }
+      try {
+        const selectedScreen = resolution.source;
         callback({
           ...(request.videoRequested ? { video: selectedScreen } : {}),
           ...(request.audioRequested ? { audio: "loopback" } : {}),
         });
       } catch (error) {
-        displayMediaFailureBackoffUntil = Date.now() + 5_000;
-        console.warn("[desktop-capture] display media source unavailable", error);
-        try {
-          callback({});
-        } catch (callbackError) {
-          console.warn("[desktop-capture] display media callback rejected an unavailable source", callbackError);
-        }
+        console.warn("[desktop-capture] display media callback failed", error);
       }
-    })();
+    }).catch((error) => {
+      displayMediaFailureBackoffUntil = Date.now() + 5_000;
+      console.warn("[desktop-capture] unexpected display media resolution failure", error);
+      rejectDisplayRequest("unexpected-display-source-failure");
+    });
   }, { useSystemPicker: false });
   tray = new Tray(trayImage());
   updateTray();
@@ -1256,6 +1278,10 @@ ipcMain.handle("desktop:reset-pairing-identity", async () => {
 });
 
 ipcMain.handle("desktop:list-screens", async () => {
+  const permissionStatus = process.platform === "darwin"
+    ? systemPreferences.getMediaAccessStatus("screen") as ScreenPermissionStatus
+    : "granted";
+  if (!canAcquireDisplaySources(process.platform, permissionStatus)) return [];
   try {
     const sources = await desktopCapturer.getSources({
       types: ["screen"],

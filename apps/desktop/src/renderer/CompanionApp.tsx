@@ -1281,15 +1281,29 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
             meterLevel={systemAudioMeterLevel}
             meterCopy={healthCopy(systemAudioHealth, "面试官声音", systemAudioMeterLevel)}
           >
-            <select
-              aria-label="选择系统音频"
-              value={selectedSystemAudioId}
-              onChange={event => setSelectedSystemAudioId(event.target.value)}
-            >
-              {systemAudioOptions.map(source => (
-                <option key={source.id} value={source.id}>{source.label}</option>
-              ))}
-            </select>
+            <div className="screen-control">
+              <select
+                aria-label="选择系统音频"
+                value={selectedSystemAudioId}
+                onChange={event => setSelectedSystemAudioId(event.target.value)}
+              >
+                {systemAudioOptions.map(source => (
+                  <option key={source.id} value={source.id}>{source.label}</option>
+                ))}
+              </select>
+              {!isWindows && permissions.systemAudio === "denied" ? (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => {
+                    setDesktopNotice("请开启“面试稳伴随程序”的屏幕与系统音频录制权限，随后完全退出并重新打开助手。");
+                    void window.offersteady?.openPermissionSettings("screen");
+                  }}
+                >
+                  开启电脑音频权限
+                </button>
+              ) : null}
+            </div>
           </TerminalRow>
 
           <TerminalRow title="屏幕捕捉" subtitle="选择要捕捉的屏幕" statusLabel="捕捉屏幕" ready={screenReady}>

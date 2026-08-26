@@ -16,6 +16,7 @@ export const describeMediaError = (error: unknown): string => {
     return `${error.name}: ${error.message || "未知媒体错误"}`;
   }
   if (error instanceof Error) {
+    if (error.message === "screen-capture-permission-required") return "电脑输出权限未开启；请在 macOS 系统设置 → 隐私与安全性 → 屏幕与系统音频录制中允许面试稳伴随程序，然后完全退出并重新打开助手";
     if (error.message === "system-audio-unavailable") return "没有拿到电脑输出音频轨道；请确认微信、会议或网页面试声音正在这台电脑播放";
     if (error.message === "media-open-timeout") return "系统没有在限定时间内返回音频流，通常是权限弹窗未处理或屏幕录制权限未开启";
     if (error.message === "screen-video-unavailable") return "没有拿到屏幕视频轨道";
@@ -36,6 +37,13 @@ export interface MediaDevicesLike {
   getUserMedia: (constraints: MediaStreamConstraints) => Promise<MediaStream>;
   getDisplayMedia: (constraints?: DisplayMediaStreamOptions) => Promise<MediaStream>;
 }
+
+export type ScreenCapturePermissionProbe = () => Promise<boolean | undefined>;
+
+const defaultScreenCapturePermissionProbe: ScreenCapturePermissionProbe = async () => {
+  if (typeof window === "undefined") return undefined;
+  return window.offersteady?.requestScreenCaptureAccess?.().catch(() => false);
+};
 
 const closeStream = (stream: MediaStream) => {
   stream.getTracks().forEach((track) => track.stop());
@@ -232,10 +240,15 @@ export class MicrophoneAudioAdapter implements AudioSourceAdapter {
 export class SystemAudioAdapter implements AudioSourceAdapter {
   readonly kind = "system" as const;
 
-  constructor(private readonly mediaDevices: MediaDevicesLike = navigator.mediaDevices) {}
+  constructor(
+    private readonly mediaDevices: MediaDevicesLike = navigator.mediaDevices,
+    private readonly permissionProbe: ScreenCapturePermissionProbe = defaultScreenCapturePermissionProbe,
+  ) {}
 
   async getPermission(): Promise<AudioPermission> {
-    return "prompt";
+    const granted = await this.permissionProbe();
+    if (granted === undefined) return "prompt";
+    return granted ? "granted" : "denied";
   }
 
   async listSources(): Promise<readonly AudioSourceDescriptor[]> {
@@ -243,6 +256,8 @@ export class SystemAudioAdapter implements AudioSourceAdapter {
   }
 
   async open(): Promise<OpenAudioSource> {
+    const granted = await this.permissionProbe();
+    if (granted === false) throw new Error("screen-capture-permission-required");
     const openStandardCapture = () => this.mediaDevices.getDisplayMedia({
       audio: true,
       video: true,

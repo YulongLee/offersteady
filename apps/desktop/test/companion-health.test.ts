@@ -72,6 +72,12 @@ describe("companion displayed source health", () => {
       stage: "unsupported",
       errorCode: "adapter-required",
     });
+
+    expect(publisherFailureDiagnostic("system", new Error("screen-capture-permission-required"))).toMatchObject({
+      state: "permission-denied",
+      stage: "permission-denied",
+      errorCode: "permission-denied",
+    });
   });
 
   it("stops retrying publisher creation after permanent session failures", () => {

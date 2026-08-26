@@ -423,6 +423,17 @@ describe("microphone adapter", () => {
 });
 
 describe("system audio adapter diagnostics", () => {
+  it("does not request display media when the main process reports denied permission", async () => {
+    const getDisplayMedia = async () => { throw new Error("must-not-open-display-media"); };
+    const mediaDevices = {
+      enumerateDevices: async () => [],
+      getUserMedia: async () => { throw new Error("unused"); },
+      getDisplayMedia,
+    } as unknown as MediaDevicesLike;
+    await expect(new SystemAudioAdapter(mediaDevices, async () => false).open())
+      .rejects.toThrow("screen-capture-permission-required");
+  });
+
   it("captures computer output loopback without tying it to a screen source", async () => {
     const stream = {
       getAudioTracks: () => [{ stop: () => undefined }],
@@ -490,6 +501,7 @@ describe("system audio adapter diagnostics", () => {
   });
 
   it("translates common media permission errors for the desktop diagnostics UI", () => {
+    expect(describeMediaError(new Error("screen-capture-permission-required"))).toContain("完全退出并重新打开助手");
     expect(describeMediaError(new DOMException("denied", "NotAllowedError"))).toContain("拒绝");
     expect(describeMediaError(new DOMException("missing", "NotFoundError"))).toContain("没有找到");
     expect(describeMediaError(new DOMException("busy", "NotReadableError"))).toContain("占用");
