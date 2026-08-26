@@ -26,5 +26,5 @@
 - [x] 4.1 Increment companion and release metadata from 1.1.6 to 1.1.7 without changing bundle identifier or protocol 2.0
 - [x] 4.2 Build and verify macOS arm64/x64 and Windows x64 1.1.7 artifacts with immutable checksums and required signing status
 - [x] 4.3 Install and launch the verified local macOS 1.1.7 build using a recoverable 1.1.6 backup
-- [ ] 4.4 Commit and push the tested revision, deploy any compatible server changes first, then publish the 1.1.7 companion manifest
+- [x] 4.4 Commit and push the tested revision, deploy compatible server changes, and publish the 1.1.7 companion manifest
 - [ ] 4.5 Run metadata-only production health and live dual-channel acceptance checks, retaining 1.1.6 as rollback
