@@ -31,7 +31,7 @@ interface BackendSessionResponse {
 
 const MAX_PENDING_PERFORMANCE_ACKS = 16;
 const TRANSCRIPT_ACK_INTERVAL_MS = 1_000;
-export const FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS = 2_000;
+export const FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS = 5_000;
 
 interface BackendActiveSessionConflictResponse {
   readonly currentSessionId: string;

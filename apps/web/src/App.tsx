@@ -21,7 +21,7 @@ import { ABSOLUTE_MAX_SPLIT_RATIO, ABSOLUTE_MIN_SPLIT_RATIO, clampSplitRatio, in
 import { WorkspaceDivider } from "./WorkspaceDivider";
 import { authClient } from "./auth-client";
 import { materialUploadAdapter, saveMaterialDownload } from "./material-upload-adapter";
-import { isInvalidRealtimeSessionStatus, realtimeRetryDelayMs } from "./realtime-recovery";
+import { isInvalidRealtimeSessionStatus, realtimeReconnectAttemptAfterRecovery, realtimeRetryDelayMs } from "./realtime-recovery";
 import { createLiveSessionLeaderCoordinator } from "./live-session-leader";
 import { applyAppearancePreferences, persistAppearancePreferences, readAppearancePreferences, type AppearancePreferences } from "./appearance-preferences";
 import { isFreshShortcutScreenshotAcceptance, SHORTCUT_SCREENSHOT_RECOVERY_POLL_INTERVAL_MS } from "./screenshot-shortcut-feedback";
@@ -1029,7 +1029,7 @@ function LivePage() {
             realtimeStreamHealthy = true;
             realtimeHealthyRef.current = true;
             invalidSessionSuspended = false;
-            reconnectAttempt = 0;
+            reconnectAttempt = realtimeReconnectAttemptAfterRecovery(reconnectAttempt, "stream-snapshot");
             if (reconnectTimer !== null) {
               window.clearTimeout(reconnectTimer);
               reconnectTimer = null;
@@ -1055,7 +1055,7 @@ function LivePage() {
           return;
         }
         const recovered = await loadRealtime();
-        if (recovered) reconnectAttempt = 0;
+        if (recovered) reconnectAttempt = realtimeReconnectAttemptAfterRecovery(reconnectAttempt, "fallback-snapshot");
         scheduleReconnect(status);
       } finally {
         realtimeSubscribeInFlight = false;

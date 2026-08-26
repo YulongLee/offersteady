@@ -41,6 +41,17 @@ The live conversation UI SHALL stop presenting a partial as actively transcribin
 - **WHEN** a provider-final revision arrives before the stale presentation boundary
 - **THEN** the UI SHALL present the segment as confirmed and SHALL NOT show recognition incomplete
 
+### Requirement: Realtime stream recovery remains bounded
+The live conversation UI SHALL allow a commercially reasonable initial snapshot window and SHALL apply bounded backoff after a fallback snapshot so one slow stream cannot create a reconnect storm.
+
+#### Scenario: Initial stream snapshot is temporarily slow
+- **WHEN** the realtime stream is connected but its first complete snapshot needs more than two seconds and no more than five seconds to arrive
+- **THEN** the UI SHALL keep reading the stream and SHALL NOT abort an otherwise healthy subscription
+
+#### Scenario: Fallback snapshot succeeds after a stream timeout
+- **WHEN** a stream attempt times out and the authoritative HTTP fallback snapshot succeeds
+- **THEN** the UI SHALL render the recovered state and SHALL preserve increasing reconnect backoff until a stream snapshot succeeds
+
 ### Requirement: Commercial release and privacy-safe verification
 The release SHALL increment the desktop companion patch version and SHALL verify latency and recovery using metadata-only diagnostics that exclude audio, transcript content, and secrets.
 

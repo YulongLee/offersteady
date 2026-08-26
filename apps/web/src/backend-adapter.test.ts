@@ -579,6 +579,9 @@ describe("backend preview adapter", () => {
       realtimeFailure: "first-snapshot-timeout",
       message: "实时字幕首个快照等待超时",
     });
+    expect(FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS).toBe(5_000);
+    await vi.advanceTimersByTimeAsync(2_001);
+    expect(cancel).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS + 1);
     await rejected;
 

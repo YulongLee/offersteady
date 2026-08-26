@@ -49,12 +49,19 @@ The shared production Compose definition will explicitly default the watchdog to
 
 The web will stop the animated transcribing state after four seconds without a revision, matching the backend recovery deadline. This is presentation-only and does not promote the segment to provider-final.
 
+### Prevent initial snapshot timeout reconnect storms
+
+Production validation exposed a recovery-loop regression: the browser allowed only two seconds for the first complete SSE snapshot and reset its reconnect attempt after every successful HTTP fallback snapshot. A temporarily slow initial snapshot therefore caused an immediate reconnect loop even though the fallback kept the visible state recoverable.
+
+The browser will allow five seconds for the first complete SSE snapshot. A successful fallback snapshot will update the page but will not reset the stream reconnect attempt; only a successfully parsed stream snapshot resets backoff. This bounds retry load while preserving automatic recovery and does not change ASR, transcript, or billing behavior.
+
 ## Risks / Trade-offs
 
 - [Peak-relative release can split speech after a very loud syllable followed by unusually quiet speech] → Cap the release threshold, retain a 500 ms tail, allow strong speech to resume the same segment, and cover quiet/continuous speech with synthetic tests.
 - [A four-second watchdog can race a late terminal] → Keep revision monotonicity and the existing fresh-frame guard; terminal states cannot be reopened by late partials.
 - [Superseded incomplete events could duplicate a late final] → Use the stored transcript revision and terminal-state checks so the event is idempotent and later stale revisions cannot replace it.
 - [Production watchdog increases source reconnects during provider stalls] → Keep the flag independently reversible and monitor `incompleteRecoveries`, reconnects, queue depth, and terminal latency.
+- [A slow or oversized initial SSE snapshot can trigger a reconnect storm] → Use a five-second first-snapshot budget and retain exponential backoff across HTTP fallback recovery until SSE itself is healthy.
 
 ## Migration Plan
 

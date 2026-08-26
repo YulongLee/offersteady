@@ -22,3 +22,10 @@
 - [x] 4.3 Commit the tested source revision and preserve explicit backend, web, and companion rollback identifiers.
 - [x] 4.4 Deploy backend then web, publish the verified companion manifests, and verify production health and configuration.
 - [x] 4.5 Perform metadata-only production realtime validation and leave real speech acceptance pending for the user.
+
+## 5. Production Regression Recovery
+
+- [x] 5.1 Add web regressions for the five-second initial snapshot budget and reconnect backoff preservation after fallback recovery.
+- [x] 5.2 Increase the first-snapshot budget and prevent fallback HTTP success from resetting SSE reconnect backoff.
+- [x] 5.3 Run focused web regressions, the web production build, and OpenSpec strict validation.
+- [ ] 5.4 Deploy the web-only recovery patch and verify health, asset revision, and metadata-only reconnect behavior.

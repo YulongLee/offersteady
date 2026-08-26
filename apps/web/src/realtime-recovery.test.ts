@@ -4,6 +4,7 @@ import {
   INVALID_REALTIME_SESSION_RETRY_MS,
   isInvalidRealtimeSessionStatus,
   realtimeRetryDelayMs,
+  realtimeReconnectAttemptAfterRecovery,
 } from "./realtime-recovery";
 
 describe("realtime recovery policy", () => {
@@ -13,6 +14,11 @@ describe("realtime recovery policy", () => {
     expect(isInvalidRealtimeSessionStatus(403)).toBe(true);
     expect(isInvalidRealtimeSessionStatus(409)).toBe(true);
     expect(isInvalidRealtimeSessionStatus(410)).toBe(true);
+  });
+
+  it("resets retry backoff only after the SSE stream snapshot recovers", () => {
+    expect(realtimeReconnectAttemptAfterRecovery(3, "fallback-snapshot")).toBe(3);
+    expect(realtimeReconnectAttemptAfterRecovery(3, "stream-snapshot")).toBe(0);
   });
 
   it("keeps bounded exponential recovery for transient network failures", () => {

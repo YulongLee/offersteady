@@ -95,7 +95,7 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 beforeEach(() => Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 }));
 
 describe("focused live interview workspace", () => {
-  it("reconnects immediately when an aggregate recovery snapshot succeeds", async () => {
+  it("keeps reconnect backoff after an aggregate recovery snapshot succeeds", async () => {
     vi.spyOn(interviewAppAdapter, "sendDesktopSessionHeartbeat").mockImplementation(async command => ({
       pageInstanceId: command.pageInstanceId ?? null,
       leaseGeneration: 1,
@@ -113,8 +113,10 @@ describe("focused live interview workspace", () => {
 
     openLive();
 
-    await waitFor(() => expect(subscribe).toHaveBeenCalledTimes(4), { timeout: 1_000 });
-    expect(interviewAppAdapter.loadRealtimeSession).toHaveBeenCalledTimes(3);
+    await waitFor(() => expect(subscribe).toHaveBeenCalledTimes(2), { timeout: 500 });
+    expect(interviewAppAdapter.loadRealtimeSession).toHaveBeenCalledTimes(2);
+    await new Promise(resolve => window.setTimeout(resolve, 250));
+    expect(subscribe).toHaveBeenCalledTimes(2);
   });
 
   it("offers account switching and logout from the focused interview page", async () => {
