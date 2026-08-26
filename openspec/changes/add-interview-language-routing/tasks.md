@@ -35,6 +35,6 @@
 ## 6. Release And Production Verification
 
 - [x] 6.1 Run backend tests, Web tests/build, AI evals, migration checks and `openspec validate add-interview-language-routing --strict`; record exact results without using real user content.
-- [ ] 6.2 Deploy the additive migration and backward-compatible backend first, verify English prompt assets and DashScope English realtime session-update connectivity without printing API keys, then deploy the Web selector.
-- [ ] 6.3 Perform controlled production Chinese and English dual-channel interviews covering refresh/re-entry, ASR reconnect, automatic question detection, streaming quick/detail/continuation and screenshot answers; compare latency/error metrics and keep English gated if thresholds fail.
+- [x] 6.2 Deploy the additive migration and backward-compatible backend first, verify English prompt assets and DashScope English realtime session-update connectivity without printing API keys, then deploy the Web selector.
+- [x] 6.3 Perform controlled production Chinese and English dual-channel interviews covering refresh/re-entry, ASR reconnect, automatic question detection, streaming quick/detail/continuation and screenshot answers; compare latency/error metrics and keep English gated if thresholds fail.
 - [x] 6.4 Confirm the desktop audio protocol is unchanged and do not increment the companion version; if implementation reveals a required desktop modification, stop and obtain approval for a separately versioned desktop release.
