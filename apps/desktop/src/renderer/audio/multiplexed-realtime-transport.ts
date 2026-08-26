@@ -298,20 +298,18 @@ export class MultiplexedRealtimeTransport {
     const expected = payload?.expected;
     if ((sourceKind !== "microphone" && sourceKind !== "system") || typeof expected !== "number") return;
     this.options.diagnostics?.recordSequenceGap(sourceKind);
-    this.queue = this.queue.filter(item => item.sourceKind !== sourceKind || item.sequence >= expected);
-    for (const key of this.sent) if (key.startsWith(`${sourceKind}:`)) this.sent.delete(key);
-    this.publishQueueDepths();
-    const expectedItem = this.queue.find(item => item.sourceKind === sourceKind && item.sequence === expected);
-    if (!expectedItem) {
-      this.requestFreshSequence("sequence-gap-frame-unavailable", sourceKind, expected);
-      return;
-    }
     const nowMs = Date.now();
     const previous = this.gapRecoveryBySource.get(sourceKind);
     if (previous?.expected === expected && nowMs - previous.lastAttemptAtMs < GAP_RESEND_COOLDOWN_MS) return;
     const attempts = previous?.expected === expected ? previous.attempts + 1 : 1;
     if (attempts > MAX_GAP_RESENDS_PER_SEQUENCE) {
       this.requestFreshSequence("sequence-gap-retry-budget-exhausted", sourceKind, expected);
+      return;
+    }
+    this.queue = this.queue.filter(item => item.sourceKind !== sourceKind || item.sequence >= expected);
+    const expectedItem = this.queue.find(item => item.sourceKind === sourceKind && item.sequence === expected);
+    if (!expectedItem) {
+      this.requestFreshSequence("sequence-gap-frame-unavailable", sourceKind, expected);
       return;
     }
     this.gapRecoveryBySource.set(sourceKind, { expected, attempts, lastAttemptAtMs: nowMs });

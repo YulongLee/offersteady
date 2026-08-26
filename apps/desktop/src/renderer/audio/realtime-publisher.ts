@@ -12,6 +12,7 @@ import {
 } from "./realtime-reliability";
 import { RealtimeTransportDiagnostics } from "./realtime-transport-diagnostics";
 import { FreshTransportAckGate, ReplacementPublisherBudget } from "./publisher-recovery-policy";
+import { SerializedLatestSourceSwitch } from "./audio-device-hot-switch";
 
 interface DesktopBinding {
   readonly sessionId: string;
@@ -206,6 +207,8 @@ export type SystemAudioRecoveryReason =
   | "audio-callback-stalled"
   | "system-signal-stalled"
   | "watchdog-capture-lost";
+
+type AudioSourceRecoveryReason = SystemAudioRecoveryReason | "device-change";
 
 interface SystemAudioRecoverySnapshot {
   readonly nowMs: number;
@@ -650,7 +653,9 @@ export class DesktopRealtimePublisher {
   private frameCounts = new Map<AudioSourceKind, number>();
   private readonly sendBuffers = new Map<AudioSourceKind, BoundedAudioFrameBuffer>();
   private readonly lastFailureNotice = new Map<AudioSourceKind, { message: string; atMs: number }>();
-  private readonly sourceRecoveryInFlight = new Set<AudioSourceKind>();
+  private readonly sourceRecoveryInFlight = new Map<AudioSourceKind, Promise<boolean>>();
+  private readonly microphoneSwitch: SerializedLatestSourceSwitch;
+  private captureStarted = false;
   private lastSystemSignalAtMs: number | null = null;
   private lastSystemRecoveryAtMs: number | null = null;
   private systemRecoveryAttempt = 0;
@@ -680,6 +685,7 @@ export class DesktopRealtimePublisher {
     this.healthUpdates = new HealthUpdateScheduler((health) => this.options.onHealth(health), 100);
     this.sendBuffers.set("microphone", new BoundedAudioFrameBuffer(MAX_PENDING_AUDIO_BYTES));
     this.sendBuffers.set("system", new BoundedAudioFrameBuffer(MAX_PENDING_AUDIO_BYTES));
+    this.microphoneSwitch = new SerializedLatestSourceSwitch(options.microphoneId);
   }
 
   async start() {
@@ -701,11 +707,13 @@ export class DesktopRealtimePublisher {
     // candidate channel, then open the system loopback on the same app identity.
     const enabledChannels = new Set<AudioSourceKind>(this.options.diagnosticAudioChannels ?? ["microphone", "system"]);
     for (const sourceKind of enabledChannels) this.reliability.start(sourceKind);
+    const initialMicrophoneId = this.microphoneSwitch.desired;
     const microphoneRuntime = enabledChannels.has("microphone") ? await this.startSource({
       sourceKind: "microphone",
-      sourceId: this.options.microphoneId,
-      open: () => this.microphoneAdapter.open(this.options.microphoneId),
+      sourceId: initialMicrophoneId,
+      open: () => this.microphoneAdapter.open(initialMicrophoneId),
     }) : null;
+    if (microphoneRuntime) this.microphoneSwitch.markApplied(initialMicrophoneId);
     const systemRuntime = enabledChannels.has("system") ? await this.startSource({
       sourceKind: "system",
       sourceId: this.options.systemAudioId || "system-loopback",
@@ -713,6 +721,10 @@ export class DesktopRealtimePublisher {
     }) : null;
     const runtimes = [microphoneRuntime, systemRuntime];
     this.runtimes.push(...runtimes.filter((runtime): runtime is WebAudioSourceRuntime => runtime !== null));
+    this.captureStarted = true;
+    if (microphoneRuntime && this.microphoneSwitch.desired !== initialMicrophoneId) {
+      void this.switchMicrophone(this.microphoneSwitch.desired);
+    }
     if (this.runtimes.length > 0) {
       this.startWatchdog();
       this.options.onServerEvent?.({
@@ -729,6 +741,7 @@ export class DesktopRealtimePublisher {
 
   async stop() {
     this.stopped = true;
+    this.captureStarted = false;
     this.transportDiagnostics.publish();
     this.transportDiagnostics.stop();
     this.transport?.stop();
@@ -752,6 +765,23 @@ export class DesktopRealtimePublisher {
     this.sourceInputs.clear();
     this.healthUpdates.dispose();
     this.options.onHealth([]);
+  }
+
+  async switchMicrophone(sourceId: string): Promise<void> {
+    this.microphoneSwitch.stage(sourceId);
+    if (!this.captureStarted || this.stopped) return;
+    await this.microphoneSwitch.request(sourceId, async target => {
+      const input: SourceStartInput = {
+        sourceKind: "microphone",
+        sourceId: target,
+        open: () => this.microphoneAdapter.open(target),
+      };
+      let recovered = await this.recoverSource(input, "device-change");
+      if (!this.stopped && this.sourceInputs.get("microphone")?.sourceId !== target) {
+        recovered = await this.recoverSource(input, "device-change");
+      }
+      return recovered && this.sourceInputs.get("microphone")?.sourceId === target;
+    });
   }
 
   private async startSource(input: SourceStartInput): Promise<WebAudioSourceRuntime | null> {
@@ -1057,43 +1087,44 @@ export class DesktopRealtimePublisher {
     }
   }
 
-  private async recoverSource(input: SourceStartInput, reason: SystemAudioRecoveryReason) {
-    if (this.stopped || this.transportSequenceResetInProgress || this.sourceRecoveryInFlight.has(input.sourceKind)) return;
-    this.sourceRecoveryInFlight.add(input.sourceKind);
-    this.reliability.markRecovering(input.sourceKind, reason);
-    this.emitReliability();
-    if (input.sourceKind === "system") {
-      this.lastSystemRecoveryAtMs = Date.now();
-      this.systemRecoveryAttempt += 1;
-    }
-    const current = this.runtimes.find(
-      (runtime): runtime is WebAudioSourceRuntime => "sourceKind" in runtime && runtime.sourceKind === input.sourceKind,
-    );
-    this.updateHealth({
-      sourceId: current?.sourceId || input.sourceId,
-      sourceKind: input.sourceKind,
-      label: current?.label || sourceLabel(input.sourceKind),
-      state: "reconnecting",
-      stage: "track-live",
-      level: 0,
-      active: true,
-      errorCode: "audio-gap",
-    });
-    this.options.onServerEvent?.({
-      kind: "degraded",
-      payload: {
-        reason: "system-audio-auto-recovery",
-        recoveryReason: reason,
+  private recoverSource(input: SourceStartInput, reason: AudioSourceRecoveryReason): Promise<boolean> {
+    if (this.stopped || this.transportSequenceResetInProgress) return Promise.resolve(false);
+    const existing = this.sourceRecoveryInFlight.get(input.sourceKind);
+    if (existing) return existing;
+    const recovery = (async () => {
+      this.reliability.markRecovering(input.sourceKind, reason);
+      this.emitReliability();
+      if (input.sourceKind === "system") {
+        this.lastSystemRecoveryAtMs = Date.now();
+        this.systemRecoveryAttempt += 1;
+      }
+      const current = this.runtimes.find(
+        (runtime): runtime is WebAudioSourceRuntime => "sourceKind" in runtime && runtime.sourceKind === input.sourceKind,
+      );
+      this.updateHealth({
+        sourceId: current?.sourceId || input.sourceId,
         sourceKind: input.sourceKind,
-        attempt: this.systemRecoveryAttempt,
-      },
-    });
-    try {
+        label: current?.label || sourceLabel(input.sourceKind),
+        state: "reconnecting",
+        stage: "track-live",
+        level: 0,
+        active: true,
+        errorCode: "audio-gap",
+      });
+      this.options.onServerEvent?.({
+        kind: "degraded",
+        payload: {
+          reason: input.sourceKind === "system" ? "system-audio-auto-recovery" : "microphone-device-change",
+          recoveryReason: reason,
+          sourceKind: input.sourceKind,
+          attempt: input.sourceKind === "system" ? this.systemRecoveryAttempt : 1,
+        },
+      });
       if (current) {
         await current.stop();
         this.runtimes = this.runtimes.filter(runtime => runtime !== current);
       }
-      if (this.stopped) return;
+      if (this.stopped) return false;
       this.reliability.start(input.sourceKind);
       this.reliability.markRecovering(input.sourceKind, reason);
       const recovered = await this.startSource(input);
@@ -1103,12 +1134,18 @@ export class DesktopRealtimePublisher {
           kind: "connection-state",
           payload: { sourceKind: input.sourceKind, state: "reconnected", recoveryReason: reason },
         });
-      } else {
-        this.options.onFailure(`${sourceLabel(input.sourceKind)}自动恢复失败，请在助手中重新开始面试。`);
+        return true;
       }
-    } finally {
-      this.sourceRecoveryInFlight.delete(input.sourceKind);
-    }
+      this.options.onFailure(`${sourceLabel(input.sourceKind)}自动恢复失败，请在助手中重新开始面试。`);
+      return false;
+    })();
+    const tracked = recovery.finally(() => {
+      if (this.sourceRecoveryInFlight.get(input.sourceKind) === tracked) {
+        this.sourceRecoveryInFlight.delete(input.sourceKind);
+      }
+    });
+    this.sourceRecoveryInFlight.set(input.sourceKind, tracked);
+    return tracked;
   }
 
   private async createPublisher(sourceKind: AudioSourceKind | "mixed"): Promise<PublisherTokenResponse> {

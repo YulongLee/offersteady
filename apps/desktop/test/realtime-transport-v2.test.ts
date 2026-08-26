@@ -124,6 +124,35 @@ describe("realtime transport v2", () => {
     transport.stop();
   });
 
+  it("does not reopen the entire in-flight channel window for duplicate gaps inside cooldown", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    vi.stubGlobal("window", {
+      location: { href: "https://mianshiwen.cc/interviews/session" },
+      setTimeout,
+      clearTimeout,
+    });
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const transport = new MultiplexedRealtimeTransport({
+      apiBaseUrl: "https://mianshiwen.cc/api/v1",
+      token: "duplicate-gap-token",
+      onEvent: () => undefined,
+      onState: () => undefined,
+    });
+    await transport.start();
+    acceptConnection(FakeWebSocket.instances[0]!, -1, -1);
+    for (let sequence = 0; sequence < 8; sequence += 1) {
+      transport.enqueue({ sourceKind: "system", sourceId: "loopback", sequence, isFinal: false });
+    }
+    expect(FakeWebSocket.instances[0]!.sent).toHaveLength(8);
+    FakeWebSocket.instances[0]!.serverEvent({ kind: "sequence-gap", payload: { sourceKind: "system", expected: 0, received: 8 } });
+    expect(FakeWebSocket.instances[0]!.sent).toHaveLength(9);
+    FakeWebSocket.instances[0]!.serverEvent({ kind: "sequence-gap", payload: { sourceKind: "system", expected: 0, received: 8 } });
+    transport.enqueue({ sourceKind: "system", sourceId: "loopback", sequence: 8, isFinal: false });
+    expect(FakeWebSocket.instances[0]!.sent).toHaveLength(9);
+    transport.stop();
+  });
+
   it("keeps approximately two seconds of pcm and sequences by logical channel", () => {
     const sequencer = new SourceFrameSequencer();
     const buffer = new BoundedAudioFrameBuffer(64_000);

@@ -4,6 +4,7 @@ import type { DesktopNativeRuntimeHealth, DesktopPairingIdentity, DesktopRuntime
 import { MicrophoneAudioAdapter, SystemAudioAdapter, describeMediaError } from "./audio/audio-source-adapter";
 import { LocalSourceMonitor } from "./audio/local-source-monitor";
 import { DesktopRealtimePublisher, publisherFailureIsTerminal, type DesktopRealtimeReliabilitySnapshot } from "./audio/realtime-publisher";
+import { createDebouncedDeviceRefresh, reconcileMicrophoneSelection } from "./audio/audio-device-hot-switch";
 import appIconUrl from "./assets/app-icon.png";
 import { BINDING_LIVE_POLL_MS, desktopPollDelayMs } from "../main/polling-policy";
 
@@ -559,11 +560,7 @@ export function CompanionApp() {
     const sources = sortMicrophoneSources(await adapter.listSources().catch(() => [] as AudioSourceDescriptor[]));
     setMicrophoneSources(sources);
     setSelectedMicrophoneId((current) => {
-      if (preferredId && sources.some((source) => source.id === preferredId)) return preferredId;
-      const defaultSource = sources.find((source) => source.id === DEFAULT_MICROPHONE_ID || source.label.toLowerCase().startsWith("default"));
-      if (defaultSource) return defaultSource.id;
-      if (current && sources.some((source) => source.id === current)) return current;
-      return sources[0]?.id ?? DEFAULT_MICROPHONE_ID;
+      return reconcileMicrophoneSelection(sources, current, preferredId);
     });
     return sources;
   };
@@ -736,12 +733,12 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
   useEffect(() => {
     const mediaDevices = navigator.mediaDevices;
     if (!mediaDevices?.addEventListener) return;
-    const handleDeviceChange = () => {
-      void refreshMicrophoneSources();
-    };
+    const refresh = createDebouncedDeviceRefresh(() => void refreshMicrophoneSources());
+    const handleDeviceChange = () => refresh.notify();
     mediaDevices.addEventListener("devicechange", handleDeviceChange);
     return () => {
       mediaDevices.removeEventListener("devicechange", handleDeviceChange);
+      refresh.dispose();
     };
   }, []);
 
@@ -1074,10 +1071,14 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
     config?.apiBaseUrl,
     pairingIdentity?.deviceId,
     pairingIdentity?.displayName,
-    effectiveMicrophoneId,
     selectedSystemAudioId,
     publisherRetryNonce,
   ]);
+
+  useEffect(() => {
+    if (!captureEnabled) return;
+    void publisherRef.current?.switchMicrophone(effectiveMicrophoneId);
+  }, [captureEnabled, effectiveMicrophoneId]);
 
   useEffect(() => {
     const video = previewRef.current;
