@@ -19,6 +19,6 @@
 
 - [x] 4.1 Run focused desktop, backend, and web regressions plus OpenSpec strict validation.
 - [x] 4.2 Run affected workspace type checks, full tests, and production builds; record truthful results.
-- [ ] 4.3 Commit the tested source revision and preserve explicit backend, web, and companion rollback identifiers.
-- [ ] 4.4 Deploy backend then web, publish the verified companion manifests, and verify production health and configuration.
-- [ ] 4.5 Perform metadata-only production realtime validation and leave real speech acceptance pending for the user.
+- [x] 4.3 Commit the tested source revision and preserve explicit backend, web, and companion rollback identifiers.
+- [x] 4.4 Deploy backend then web, publish the verified companion manifests, and verify production health and configuration.
+- [x] 4.5 Perform metadata-only production realtime validation and leave real speech acceptance pending for the user.

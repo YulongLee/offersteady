@@ -26,4 +26,17 @@ Release 1.1.5 reduces microphone end-of-speech latency and closes abandoned real
 | macOS Intel | `OfferSteady-Companion-1.1.5-macOS-x64.dmg` | `89866188c4a74a1c5b328d65c984c3512cff1157f7afda6919628126850ee9e5` | Developer ID verified; App/DMG notarized and stapled |
 | Windows x64 | `OfferSteady-Companion-Setup-1.1.5-Windows-x64.exe` | `60d51c953ed4d9f4cd9170cddda456165f55177bb00a9ca5f64f7b7ac4dbfea6` | Unsigned; explicitly reported as `local-development` |
 
-All three artifacts were uploaded under immutable 1.1.5 OSS object keys in one publication run. The generated production manifest contains exactly the three aligned targets. Production runtime deployment and real-speech acceptance are recorded after rollout.
+All three artifacts were uploaded under immutable 1.1.5 OSS object keys in one publication run. The generated production manifest contains exactly the three aligned targets.
+
+## Production rollout
+
+- Runtime source commit: `dc8493c36d77ed49127b35f10440ab1792abc6c4`.
+- Backend image: `sha256:8c087a5b27c41c34384ea2034f90d60a70f2ce9dc361bee76e91f45267e001e8`.
+- Web image: `sha256:578aff314bd706a41156a0226934123406f87eb5e9f47ccec61a6e7d80be4c9c` with main asset `assets/main-DZs0_YMH.js`.
+- Rollback source: `cfe5ede200cd3ce164e50573ba83812dbb6159e3`; rollback Backend/Web images retain the `rollback-cfe5ede-pre-finalization` tags.
+- Production configuration reports source watchdog enabled with a 4.0-second deadline and 0.5-second poll interval.
+- Public `/healthz`, `/api/v1/web/state`, and `/offersteady-build.json` returned HTTP 200. All three 1.1.5 download routes returned HTTP 206 for byte-range probes and reported the expected immutable checksums.
+- Post-switch Backend logs contained zero matching error/traceback entries. Metadata-only realtime metrics reported protocol 2.0, raw audio persistence disabled, zero queued frames, and no active desktop transport at the time of the probe.
+- The unchanged Admin image was retained after its unnecessary rebuild hit the known npm optional native-binding issue; Admin was not part of this change and remained running.
+
+Real microphone speech-stop acceptance remains a user-operated production check because no active desktop transport was present during the metadata-only probe.
