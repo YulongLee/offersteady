@@ -92,6 +92,32 @@ def test_multiplexed_transport_acknowledges_independent_channels_and_gaps():
         assert gap["payload"] == {"sourceKind": "microphone", "expected": 1, "received": 2}
 
 
+def test_replacement_publisher_resumes_session_channel_offsets():
+    user_id, session_id, device_id, first = create_live_binding()
+    with client.websocket_connect(f"/api/v1/realtime-speech/ingest-ws?token={first['token']}&protocol=2.0") as websocket:
+        assert websocket.receive_json()["payload"]["resumeOffsets"] == {"microphone": -1, "system": -1}
+        websocket.send_json(frame(device_id=device_id, source_kind="microphone", sequence=0))
+        assert websocket.receive_json()["payload"]["sequence"] == 0
+        websocket.send_json(frame(device_id=device_id, source_kind="system", sequence=0))
+        assert websocket.receive_json()["payload"]["sequence"] == 0
+
+    replacement = unwrap(client.post("/api/v1/realtime-speech/publishers", json={
+        "userId": user_id,
+        "sessionId": session_id,
+        "sourceKind": "mixed",
+        "clientName": "Synthetic replacement transport",
+        "deviceId": device_id,
+    }))
+    assert replacement["publisherId"] != first["publisherId"]
+    with client.websocket_connect(f"/api/v1/realtime-speech/ingest-ws?token={replacement['token']}&protocol=2.0") as websocket:
+        handshake = websocket.receive_json()
+        assert handshake["payload"]["resumeOffsets"] == {"microphone": 0, "system": 0}
+        websocket.send_json(frame(device_id=device_id, source_kind="microphone", sequence=1))
+        accepted = websocket.receive_json()
+        assert accepted["kind"] == "frame-accepted"
+        assert accepted["payload"]["sequence"] == 1
+
+
 def test_multiplexed_transport_accepts_negotiated_binary_audio_without_base64():
     _user_id, session_id, device_id, publisher = create_live_binding()
     payload = frame(device_id=device_id, source_kind="system", sequence=0)

@@ -20,6 +20,7 @@
 - [x] 3.2 Run Desktop typecheck, full test suite, production build, and Backend WebSocket compatibility tests
 - [x] 3.3 Add and run a synthetic long-running dual-channel ACK-stall/recovery soak with bounded queues and no resend amplification
 - [x] 3.4 Validate `fix-dual-channel-ack-deadlock-1-1-7` with strict OpenSpec validation and inspect the final diff
+- [x] 3.5 Add a Backend regression proving a replacement publisher token inherits session-channel resume offsets
 
 ## 4. Companion 1.1.7 Release
 

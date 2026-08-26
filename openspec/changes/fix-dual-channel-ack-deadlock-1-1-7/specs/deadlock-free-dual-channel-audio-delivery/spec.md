@@ -44,6 +44,10 @@ The companion SHALL pause media writers, obtain authoritative resume offsets, al
 - **WHEN** the backend returns a non-negative channel offset
 - **THEN** the companion SHALL send only contiguous frames beginning at offset plus one and SHALL never resend frames at or below the offset
 
+#### Scenario: Replacement token preserves the session boundary
+- **WHEN** a replacement publisher token connects for the same interview session after its predecessor delivered channel frames
+- **THEN** the backend SHALL return the highest accepted offset for each logical session channel regardless of which publisher token delivered it
+
 ### Requirement: Recovery failure is visible and bounded
 The companion SHALL stop claiming healthy delivery when bounded recovery is exhausted and SHALL provide an explicit reconnect action while leaving unaffected local state safe.
 

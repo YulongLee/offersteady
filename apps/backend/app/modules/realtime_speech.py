@@ -876,7 +876,12 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
         previous_receipts = service.repository.list_frame_receipts_for_session(session_id=publisher.session_id)
         expected_sequence: dict[str, int] = {"microphone": 0, "system": 0}
         for receipt in previous_receipts:
-            if receipt.publisher_id == publisher.publisher_id and receipt.source_kind in expected_sequence:
+            # Sequence numbers are authoritative for the lifetime of the interview
+            # session and logical channel, not for one short-lived publisher token.
+            # A replacement publisher must resume after frames accepted from its
+            # predecessor; otherwise it restarts at zero and deadlocks against the
+            # server's already-advanced channel boundary.
+            if receipt.source_kind in expected_sequence:
                 expected_sequence[receipt.source_kind] = max(expected_sequence[receipt.source_kind], receipt.sequence + 1)
         frame_arrivals: deque[float] = deque()
         sequence_gap_events: dict[str, int] = {"microphone": 0, "system": 0}
