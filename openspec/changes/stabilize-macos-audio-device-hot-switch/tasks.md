@@ -21,6 +21,6 @@
 
 - [x] 4.1 Run focused hot-switch regressions, desktop type checks, full desktop tests, and OpenSpec strict validation.
 - [x] 4.2 Run affected workspace tests and production packaging checks without persisting audio or transcript content.
-- [ ] 4.3 Commit and push the tested source revision while preserving the 1.1.5 manifest as rollback.
+- [x] 4.3 Commit and push the tested source revision while preserving the 1.1.5 manifest as rollback.
 - [ ] 4.4 Publish the verified 1.1.6 companion manifests and verify production health and download checksums.
 - [ ] 4.5 Perform metadata-only production validation and leave physical headset-removal acceptance pending for the user.
