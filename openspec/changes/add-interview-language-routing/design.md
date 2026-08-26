@@ -48,6 +48,8 @@ Realtime Speech、Chat Service、Screenshot Answer 和问题识别入口先通�
 
 备选方案是让 ASR 自动检测语言。当前产品只承诺单场单语言，显式 hint 的延迟和确定性更好，也更容易定位 403、配置失败和识别质量问题，因此 MVP 不采用自动检测。
 
+2026-08-26 供应商售后确认：`qwen3-asr-flash-realtime-2026-02-10` 当前只支持公共入口 `wss://dashscope.aliyuncs.com/api-ws/v1/realtime`，不支持 Workspace 专属 Host。生产因此保持公共 WebSocket，并通过 `model` 查询参数选择模型；Workspace Host 返回的 HTTP 403 属于该模型当前产品边界，不作为密钥或生产故障。生产实测公共入口可完成 `session.created` 与英文 `session.updated`，且未输出 API Key。
+
 ### 5. Use separate English prompt assets with a language-aware resolver
 
 现有中文 Prompt 文件路径保持不变，以降低中文回归风险；在对应目录增加英语文件，例如 `system.en.md`、`quick.en.md`、`detail.en.md`、`continuation.en.md` 与 screenshot `system.en.md`。Prompt adapter 接受领域语言并返回带语言后缀的 template ID/version。英语文件缺失时 fail closed，不能回退中文。
@@ -87,5 +89,4 @@ Prompt Builder 中会影响模型或用户可见结果的中文运行时常量�
 
 ## Open Questions
 
-- DashScope 当前生产 Workspace 对英文 realtime ASR 的实际语言码和质量是否已通过供应商连通性验证；实现阶段必须用脱敏音频验证，不能只依赖文档假设。
 - 英文回答的产品口吻（美式/英式、简洁程度）初版按中性商务英语设计，具体风格可在 AI eval 评审时调整，不影响数据模型和路由。
