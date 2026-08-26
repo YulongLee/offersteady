@@ -28,4 +28,4 @@
 - [x] 5.1 Add web regressions for the five-second initial snapshot budget and reconnect backoff preservation after fallback recovery.
 - [x] 5.2 Increase the first-snapshot budget and prevent fallback HTTP success from resetting SSE reconnect backoff.
 - [x] 5.3 Run focused web regressions, the web production build, and OpenSpec strict validation.
-- [ ] 5.4 Deploy the web-only recovery patch and verify health, asset revision, and metadata-only reconnect behavior.
+- [x] 5.4 Deploy the web-only recovery patch and verify health, asset revision, and metadata-only reconnect behavior.
