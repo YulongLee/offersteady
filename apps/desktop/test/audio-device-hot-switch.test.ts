@@ -5,7 +5,7 @@ import {
   reconcileMicrophoneSelection,
   SerializedLatestSourceSwitch,
 } from "../src/renderer/audio/audio-device-hot-switch";
-import { audioSourceRecoveryAttempts } from "../src/renderer/audio/realtime-publisher";
+import { audioSourceRecoveryAttempts, microphoneSwitchRequiresRetry } from "../src/renderer/audio/realtime-publisher";
 import { BoundedAudioFrameBuffer, SourceFrameSequencer, createAudioFrame } from "../src/renderer/audio/audio-frame-buffer";
 
 const source = (id: string, label = id) => ({ id, label, kind: "microphone" as const, available: true });
@@ -82,5 +82,11 @@ describe("audio device hot switching", () => {
         { delayMs: 900, sourceId: "usb-microphone" },
         { delayMs: 2_000, sourceId: "usb-microphone" },
       ]);
+  });
+
+  it("retries an overlapping device switch when recovery wrote the desired input but attached no runtime", () => {
+    expect(microphoneSwitchRequiresRetry({ recovered: false, runtimeAttached: false })).toBe(true);
+    expect(microphoneSwitchRequiresRetry({ recovered: true, runtimeAttached: false })).toBe(true);
+    expect(microphoneSwitchRequiresRetry({ recovered: true, runtimeAttached: true })).toBe(false);
   });
 });

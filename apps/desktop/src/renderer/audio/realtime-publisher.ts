@@ -226,6 +226,11 @@ export const audioSourceRecoveryAttempts = (
   return delays.map(delayMs => ({ delayMs, sourceId: recoverySourceId }));
 };
 
+export const microphoneSwitchRequiresRetry = (input: {
+  readonly recovered: boolean;
+  readonly runtimeAttached: boolean;
+}) => !input.recovered || !input.runtimeAttached;
+
 interface SystemAudioRecoverySnapshot {
   readonly nowMs: number;
   readonly openedAtMs: number;
@@ -798,10 +803,12 @@ export class DesktopRealtimePublisher {
         open: () => this.microphoneAdapter.open(target),
       };
       let recovered = await this.recoverSource(input, "device-change");
-      if (!this.stopped && this.sourceInputs.get("microphone")?.sourceId !== target) {
+      let runtimeAttached = this.runtimes.some(runtime => "sourceKind" in runtime && runtime.sourceKind === "microphone");
+      if (!this.stopped && microphoneSwitchRequiresRetry({ recovered, runtimeAttached })) {
         recovered = await this.recoverSource(input, "device-change");
+        runtimeAttached = this.runtimes.some(runtime => "sourceKind" in runtime && runtime.sourceKind === "microphone");
       }
-      return recovered && this.sourceInputs.get("microphone")?.sourceId === target;
+      return recovered && runtimeAttached;
     });
   }
 

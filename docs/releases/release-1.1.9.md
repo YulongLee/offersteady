@@ -10,6 +10,7 @@ Release 1.1.9 separates the macOS permission and local-runtime-identity repair f
 - Gates macOS display-source acquisition on the Screen & System Audio Recording permission instead of repeatedly calling Electron while permission is denied.
 - Contains display-source failures as a typed unavailable result and prevents an unhandled rejection from terminating or destabilizing the companion.
 - Keeps microphone capture independent when computer-output permission is unavailable and shows a direct permission-settings action with restart guidance.
+- Retries a default-microphone switch when headset track-ended recovery and macOS device-change recovery overlap but no microphone runtime was actually attached.
 
 ## Acceptance boundary
 
@@ -21,9 +22,9 @@ Release 1.1.9 separates the macOS permission and local-runtime-identity repair f
 
 | Target | Artifact | SHA-256 | Signing |
 | --- | --- | --- | --- |
-| macOS Apple Silicon | `OfferSteady-Companion-1.1.9-macOS-arm64.zip` | `dd42164b5ba91b09030d43d61d4c901a22213c40cc3498deacad88a531215253` | Developer ID identity `8Y5FAR3TF3`; local acceptance ZIP, not reported as notarized production distribution |
+| macOS Apple Silicon | `OfferSteady-Companion-1.1.9-macOS-arm64.zip` | `4f9c8c2945c55a285c131d36b94a117f97acf2cd182e45ffad1684db2cbeb704` | Developer ID identity `8Y5FAR3TF3`; local acceptance ZIP, not reported as notarized production distribution |
 
-Automated acceptance passed 28 Desktop test files / 140 tests, Desktop type checking, main/renderer builds, package signature verification, and strict OpenSpec validation. Physical system-audio permission and headset-transition acceptance remains pending user consent on the installed Mac.
+Automated acceptance passed 28 Desktop test files / 141 tests, Desktop type checking, main/renderer builds, package signature verification, and strict OpenSpec validation. Physical headset-transition re-acceptance remains pending on the installed Mac.
 
 ## Privacy and security
 
