@@ -23,6 +23,14 @@ Acceptance evidence contains only runtime counters, versions, signing identity, 
 - Windows x64 is structurally validated and reports its actual signing state. If no trusted Windows signing certificate is available, the production metadata and website retain an explicit unsigned warning.
 - Immutable objects are uploaded before the production manifest changes. The manifest and Backend deployment remain recoverable to the prior release.
 
+## Production artifacts
+
+| Target | Artifact | Size (bytes) | SHA-256 | Trust state |
+| --- | --- | ---: | --- | --- |
+| macOS Apple Silicon | `OfferSteady-Companion-1.2.0-macOS-arm64.dmg` | 123038914 | `06dc51f93a3c12819a37d752def037d71e0599ffe04aa91cfe364f532afce4b5` | Developer ID verified, notarized, stapled, Gatekeeper accepted |
+| macOS Intel | `OfferSteady-Companion-1.2.0-macOS-x64.dmg` | 126704437 | `7df74754663ba6349d28a87a199fbba67f4e5cf04ba1e1b1eb3465a36215f1d0` | Developer ID verified, notarized, stapled, Gatekeeper accepted |
+| Windows 10/11 x64 | `OfferSteady-Companion-Setup-1.2.0-Windows-x64.exe` | 102011744 | `7ef74acb9d1147baf2f17eded149e15396712d3cbfa40291fe1eb1b56b7b7dd7` | Structurally validated; unsigned / `local-development` signing status |
+
 ## Rollback
 
 The local 1.1.8 and 1.1.9 packages remain intact. Production rollback restores the prior desktop release manifest and Backend image/commit; it does not delete versioned release objects or either local data directory.
