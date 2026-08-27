@@ -52,3 +52,14 @@ Production rollout was explicitly approved after local macOS ARM64 acceptance. T
 | Windows 10/11 x64 | `OfferSteady-Companion-Setup-1.2.3-Windows-x64.exe` | 102012093 | `8ba6497fda56cdc5643cdb2510b322b9671d4806c549d3d3305baa147545be1f` | NSIS payload validated with x86-64 `OfferSteady.exe`; unsigned `local-development` status retained |
 
 The arm64 and x64 macOS `app.asar` SHA-256 values are identical. The Windows packaged renderer SHA-256 matches the renderer used by the macOS release build, proving the endpointing/UI implementation is shared across all three artifacts; this is not a substitute for Intel or Windows real-hardware audio acceptance.
+
+## Production Rollout
+
+- Production source and manifest commit: `c355d4d4eee1344df104dafa692a5a65c5819d41` (`v1.2.3`).
+- Pre-rollout commit: `32a2d24889f91fd77af38dd6ac2a7c9440a14186`.
+- Rollback images: `offersteady-backend:rollback-32a2d24889f9-pre-1.2.3` and `offersteady-web:rollback-32a2d24889f9-pre-1.2.3`.
+- The production Backend container became healthy and the Web container started successfully; public `/healthz`, `/api/v1/web/state`, and `/app` returned HTTP 200 on the first post-switch check.
+- The public build manifest reports `appEnv=production` and a relative API base URL.
+- The public release state reports macOS ARM64, macOS x64, and Windows x64 at 1.2.3 with the expected signing/notarization truth.
+- All three public download routes returned HTTP 206 for a 1 KiB range request. Full streamed downloads reproduced the three published SHA-256 values.
+- Existing clients briefly produced stale live-page heartbeat and transcript-missing retry warnings while reconnecting across the container switch; the subsequent five-minute window contained no Backend WARNING, ERROR, or CRITICAL events, and no Web error lines were observed.

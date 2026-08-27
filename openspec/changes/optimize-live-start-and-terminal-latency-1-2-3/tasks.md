@@ -35,4 +35,4 @@
 
 - [x] 7.1 Verify shared endpointing/protocol code and regressions cover macOS ARM64, macOS Intel x64, and Windows x64 without platform-only forks.
 - [x] 7.2 Build and inspect the Windows x64 installer and both macOS architecture artifacts; require Developer ID/notarization/staple/Gatekeeper for macOS and truthful unsigned metadata for Windows.
-- [ ] 7.3 Publish the three 1.2.3 artifacts atomically, deploy compatible Backend/Web changes, and verify production health, manifest versions, ranged downloads, hashes, and rollback reference.
+- [x] 7.3 Publish the three 1.2.3 artifacts atomically, deploy compatible Backend/Web changes, and verify production health, manifest versions, ranged downloads, hashes, and rollback reference.
