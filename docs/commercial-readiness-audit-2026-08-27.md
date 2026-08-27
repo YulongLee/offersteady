@@ -1,7 +1,7 @@
 # OfferSteady 面试实时链路商业化审计报告
 
-审计日期：2026-08-27  
-审计对象：线上 Web、后端、Redis、Qwen 实时 ASR、伴随程序 1.2.0（macOS / Windows x64）  
+审计日期：2026-08-27
+审计对象：线上 Web、后端、Redis、Qwen 实时 ASR、伴随程序 1.2.0（macOS / Windows x64）
 审计方式：代码与 OpenSpec 复核、自动化测试、生产配置检查、生产运行态元数据与脱敏日志检查。未读取或记录音频、完整转录、API Key 或访问令牌。
 
 ## 1. 结论
