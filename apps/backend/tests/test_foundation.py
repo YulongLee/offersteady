@@ -296,6 +296,28 @@ def test_first_visible_latency_uses_only_earliest_utterance_revision() -> None:
     }
 
 
+def test_terminal_summary_measures_from_last_meaningful_speech() -> None:
+    service = realtime_speech_service()
+    session_id = "last-meaningful-terminal-session"
+    service._observe_trace(
+        "last-meaningful-terminal-trace",
+        sessionId=session_id,
+        channel="system",
+        utteranceId="bounded-system-turn",
+        desktopLastMeaningfulSpeechAtMs=1_000,
+        manualCommitSentAtMs=1_520,
+        qwenFinalReceivedAtMs=1_880,
+    )
+
+    summary = service.performance_summary(session_id=session_id)
+    assert summary["distributions"]["lastMeaningfulSpeechToCommitMs"] == {
+        "count": 1, "p50": 520, "p95": 520, "p99": 520, "max": 520,
+    }
+    assert summary["distributions"]["lastMeaningfulSpeechToFinalMs"] == {
+        "count": 1, "p50": 880, "p95": 880, "p99": 880, "max": 880,
+    }
+
+
 def test_transcript_delivery_ack_records_browser_receive_without_fake_render() -> None:
     user_id = "trace-delivery-user"
     session = unwrap(client.post("/api/v1/sessions", json={"userId": user_id, "title": "字幕投递测试"}))

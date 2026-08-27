@@ -27,6 +27,8 @@ export interface RealtimeAudioEnvelopeV2 {
   readonly vadTriggeredAtMs?: number;
   /** Source-specific attack/minimum-speech confirmation time. */
   readonly speechConfirmedAtMs?: number;
+  /** Last source-local sample classified as meaningful speech; content-free. */
+  readonly lastMeaningfulSpeechAtMs?: number;
   readonly endedAtMs: number;
   readonly durationMs: number;
   readonly codec: "pcm-s16le";

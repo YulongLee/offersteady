@@ -36,4 +36,13 @@ describe("progressive realtime transcript", () => {
     expect(transcriptPresentationState({ isFinal: true, publishedAtMs, endedAtMs: publishedAtMs }, publishedAtMs + STALE_TRANSCRIPT_MS)).toBe("final");
     expect(transcriptPresentationState({ isFinal: true, terminalState: "incomplete", publishedAtMs, endedAtMs: publishedAtMs }, publishedAtMs + 1)).toBe("stale");
   });
+
+  it("shows a bounded confirming state after terminal admission", () => {
+    expect(transcriptPresentationState({
+      isFinal: false,
+      turnState: "committing",
+      publishedAtMs: 1_800_000_000_000,
+      endedAtMs: 1_800_000_000_000,
+    })).toBe("confirming");
+  });
 });

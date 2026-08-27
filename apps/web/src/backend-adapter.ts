@@ -208,6 +208,7 @@ interface BackendRealtimeTranscriptListResponse {
     readonly startedAtMs: number;
     readonly endedAtMs: number;
     readonly isFinal: boolean;
+    readonly turnState?: "speaking" | "tail" | "committing";
     readonly terminalState?: "final" | "incomplete";
     readonly finalizationReason?: "silence" | "max-duration" | "capture-stop" | "source-recovery" | "backend-watchdog" | "provider-completed" | "provider-timeout";
     readonly overlap: boolean;
@@ -286,6 +287,8 @@ interface BackendRealtimeRuntimeResponse {
   readonly machineCodeBound: boolean;
   readonly sessionLive: boolean;
   readonly captureState?: string;
+  readonly readinessState?: "preparing" | "ready" | "degraded" | "paused" | string;
+  readonly sourceReadiness?: Readonly<Record<string, "preparing" | "ready" | "degraded" | string>>;
   readonly manualCode?: string | null;
   readonly deviceId?: string | null;
   readonly displayName?: string | null;
@@ -409,8 +412,13 @@ const materializeRealtimeDelta = (
   if (!current) return null;
   const transcriptById = new Map(current.transcripts.transcripts.map(item => [item.segmentId, item]));
   const candidateById = new Map(current.candidates.candidates.map(item => [item.candidateId, item]));
-  let runtime = current.runtime;
+  let runtime = incoming.runtime !== undefined ? incoming.runtime : current.runtime;
   for (const event of incoming.events.events) {
+    if (event.kind === "transcript-committing") {
+      const segmentId = typeof event.payload.segmentId === "string" ? event.payload.segmentId : "";
+      const existing = segmentId ? transcriptById.get(segmentId) : undefined;
+      if (existing && !existing.isFinal) transcriptById.set(segmentId, { ...existing, turnState: "committing" });
+    }
     if (event.kind === "transcript-updated") {
       const payload = event.payload;
       const segmentId = typeof payload.segmentId === "string" ? payload.segmentId : "";
@@ -439,6 +447,7 @@ const materializeRealtimeDelta = (
         startedAtMs: typeof payload.startedAtMs === "number" ? payload.startedAtMs : existing?.startedAtMs ?? event.createdAtMs,
         endedAtMs: typeof payload.endedAtMs === "number" ? payload.endedAtMs : existing?.endedAtMs ?? event.createdAtMs,
         isFinal,
+        ...(isFinal ? {} : { turnState: "speaking" as const }),
         overlap: typeof payload.overlap === "boolean" ? payload.overlap : existing?.overlap ?? false,
         ...(payload.terminalState === "final" || payload.terminalState === "incomplete" ? { terminalState: payload.terminalState } : {}),
         ...(finalizationReason ? { finalizationReason } : {}),
@@ -626,6 +635,14 @@ const runtimeNotice = (runtime: BackendRealtimeRuntimeResponse | null, degradedE
   if (!runtime) return { stage: "backend-unreachable", message: "当前 session 的实时链路状态暂不可用，请检查后端连接。" };
   if (!runtime.machineCodeBound) return { stage: runtime.stage, message: "当前 session 尚未绑定桌面伴随程序，请先输入机器码并保持网页在线。" };
   if (!runtime.sessionLive) return { stage: runtime.stage, message: "本场面试还未开始，开始面试后才会同步“面试官 / 我”的实时对话。" };
+  if (runtime.readinessState === "degraded") {
+    const unavailable = Object.entries(runtime.sourceReadiness ?? {})
+      .filter(([, state]) => state === "degraded")
+      .map(([source]) => source === "system" ? "电脑输出" : source === "microphone" ? "麦克风" : source)
+      .join("、");
+    return { stage: runtime.stage, message: `${unavailable || "实时音频"}尚未就绪，其他可用声道会继续工作；请在伴随程序中检查对应设备。` };
+  }
+  if (runtime.readinessState === "preparing") return { stage: runtime.stage, message: "实时语音链路正在准备，麦克风、电脑输出和识别服务全部就绪后即可立即开始。" };
   if (runtime.dominantBottleneck === "capture-no-frame") return { stage: runtime.stage, message: "桌面端已绑定，但真实麦克风/电脑输出还没有产生可发送音频帧；请检查伴随程序采集权限和已选输入设备。" };
   if (runtime.dominantBottleneck === "publisher-no-connect") {
     return runtime.evidence?.publisherCreated
@@ -700,14 +717,22 @@ const mapRealtimeState = (
   const latestShortcutAccepted = newestEvents.find(event => event.kind === "screenshot-shortcut-accepted" && typeof event.payload.requestId === "string");
   const latestScreenshotUpdate = newestEvents.find(event => event.kind === "screenshot-capture-updated" && typeof event.payload.requestId === "string");
   const latestAnswerUpdate = newestEvents.find(event => event.kind === "answer-task-updated" && typeof event.payload.task === "object" && event.payload.task !== null);
+  const committingSegments = new Set(newestEvents
+    .filter(event => event.kind === "transcript-committing" && typeof event.payload.segmentId === "string")
+    .map(event => String(event.payload.segmentId)));
   const useScreenshotUpdate = Boolean(latestScreenshotUpdate && (
     !latestShortcutAccepted
     || latestScreenshotUpdate.createdAtMs >= latestShortcutAccepted.createdAtMs
     || latestScreenshotUpdate.payload.requestId === latestShortcutAccepted.payload.requestId
   ));
-  const captureState = toCaptureState(runtime?.captureState)
+  const reportedCaptureState = toCaptureState(runtime?.captureState)
     ?? toCaptureState(latestDeviceStatus?.payload.captureState)
     ?? (runtime?.sessionLive && runtime.machineCodeBound ? "capturing" as const : undefined);
+  const captureState = reportedCaptureState === "capturing" && runtime?.readinessState === "preparing"
+    ? "reconnecting" as const
+    : reportedCaptureState === "capturing" && runtime?.readinessState === "degraded"
+    ? "error" as const
+    : reportedCaptureState;
   const meaningfulTranscripts = transcripts.transcripts.filter(segment => segment.text.replace(/[，。！？、；：,.!?;:~～…·\s]+/g, "").trim());
   const degraded = latestDegraded?.payload?.reason === "mixed-input"
     ? {
@@ -736,6 +761,9 @@ const mapRealtimeState = (
           startedAtMs: segment.startedAtMs,
           endedAtMs: segment.endedAtMs,
           isFinal: segment.isFinal,
+          ...(!segment.isFinal && (segment.turnState === "committing" || committingSegments.has(segment.segmentId))
+            ? { turnState: "committing" as const }
+            : !segment.isFinal ? { turnState: "speaking" as const } : {}),
           ...(segment.terminalState ? { terminalState: segment.terminalState } : {}),
           ...(segment.finalizationReason ? { finalizationReason: segment.finalizationReason } : {}),
           overlap: segment.overlap,

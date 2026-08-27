@@ -7,7 +7,7 @@ from app.ports.interview_session import InterviewLanguage
 
 
 RealtimeConnectionState = Literal["connected", "receiving-audio", "transcribing", "degraded", "reconnecting", "answer-streaming", "failed", "closed"]
-RealtimeEventKind = Literal["connection-state", "transcript-updated", "question-stable", "question-candidate", "question-confirmed", "answer-stream", "answer-completed", "answer-task-updated", "screenshot-capture-updated", "performance-ack", "degraded", "device-status", "capture-control", "screenshot-shortcut-accepted"]
+RealtimeEventKind = Literal["connection-state", "transcript-updated", "transcript-committing", "question-stable", "question-candidate", "question-confirmed", "answer-stream", "answer-completed", "answer-task-updated", "screenshot-capture-updated", "performance-ack", "degraded", "device-status", "capture-control", "screenshot-shortcut-accepted"]
 RealtimeSourceKind = Literal["microphone", "system", "mixed"]
 TranscriptRole = Literal["candidate", "interviewer"]
 QuestionCandidateState = Literal["needs-confirmation", "confirmed", "dismissed"]
@@ -56,6 +56,7 @@ class AudioFrame:
     sent_at_ms: int | None = None
     vad_triggered_at_ms: int | None = None
     speech_confirmed_at_ms: int | None = None
+    last_meaningful_speech_at_ms: int | None = None
     backend_received_at_ms: int | None = None
     diagnostics: dict[str, object] = field(default_factory=dict)
     interview_language: InterviewLanguage = "zh-CN"

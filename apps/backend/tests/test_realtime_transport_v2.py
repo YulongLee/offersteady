@@ -3,6 +3,8 @@ from __future__ import annotations
 import base64
 import json
 import queue
+import threading
+import time
 from dataclasses import replace
 from uuid import uuid4
 
@@ -12,8 +14,8 @@ from starlette.websockets import WebSocketDisconnect
 
 from app.main import create_app
 from app.deps import realtime_speech_service
-from app.ports.realtime_speech import AudioFrame
-from app.services.realtime_speech_service import RealtimeSpeechService
+from app.ports.realtime_speech import AudioFrame, TranscriptResult
+from app.services.realtime_speech_service import RealtimeSpeechService, RetryableAsrError
 
 
 client = TestClient(create_app())
@@ -48,6 +50,133 @@ def create_live_binding():
         "manualCode": manual_code,
     }))
     return user_id, session_id, device_id, publisher
+
+
+def test_publisher_attachment_rewarms_an_already_live_session(monkeypatch):
+    service = realtime_speech_service()
+    suffix = uuid4().hex[:8]
+    user_id = f"attachment-prewarm-{suffix}"
+    session = unwrap(client.post("/api/v1/sessions", json={"userId": user_id, "title": "Attachment prewarm"}))
+    unwrap(client.post(f"/api/v1/sessions/{session['sessionId']}/start", json={"userId": user_id}))
+    warmed: list[str] = []
+    complete = threading.Event()
+    with service._prewarm_metrics_lock:
+        service._prewarm_ready_by_session.pop(session["sessionId"], None)
+
+    def warm_session(**kwargs):
+        warmed.append(str(kwargs["source_kind"]))
+        if {"microphone", "system"}.issubset(warmed):
+            complete.set()
+
+    monkeypatch.setattr(service.asr_gateway, "warm_session", warm_session)
+    unwrap(client.post("/api/v1/realtime-speech/publishers", json={
+        "userId": user_id,
+        "sessionId": session["sessionId"],
+        "sourceKind": "mixed",
+        "clientName": "Restarted desktop",
+    }))
+
+    assert complete.wait(timeout=1)
+    assert set(warmed) == {"microphone", "system"}
+
+
+def test_retry_replays_the_complete_ephemeral_utterance(monkeypatch):
+    _user_id, session_id, device_id, publisher_payload = create_live_binding()
+    service = realtime_speech_service()
+    publisher = service.repository.get_publisher(publisher_payload["publisherId"])
+    assert publisher is not None
+    first = AudioFrame(
+        publisher_id=publisher.publisher_id,
+        session_id=session_id,
+        device_id=device_id,
+        source_id="native-microphone",
+        source_kind="microphone",
+        segment_id="replay-complete-segment",
+        revision=1,
+        sequence=0,
+        captured_at_ms=1_000,
+        started_at_ms=1_000,
+        ended_at_ms=1_020,
+        duration_ms=20,
+        codec="pcm-s16le",
+        sample_rate_hz=16_000,
+        channels=1,
+        is_final=False,
+        audio_bytes=b"complete-prefix-",
+    )
+    terminal = replace(
+        first,
+        revision=2,
+        sequence=1,
+        ended_at_ms=1_040,
+        duration_ms=40,
+        is_final=True,
+        audio_bytes=b"terminal-tail",
+    )
+    service._buffer_segment_audio(first)
+    service._buffer_segment_audio(terminal)
+    observed: list[bytes] = []
+
+    def finalize(*, frame: AudioFrame, attempt: int):
+        observed.append(frame.audio_bytes)
+        if attempt == 0:
+            raise RetryableAsrError("synthetic-provider-disconnect")
+        now_ms = int(time.time() * 1000)
+        return TranscriptResult(text="synthetic complete utterance", confidence=0.96, completed_at_ms=now_ms)
+
+    monkeypatch.setattr(service.asr_gateway, "finalize", finalize)
+    transcript, _result = service._transcribe_frame(publisher=publisher, frame=terminal)
+
+    assert transcript is not None
+    assert observed == [b"terminal-tail", b"complete-prefix-terminal-tail"]
+    service._clear_segment_audio(terminal)
+    assert service._replay_frame(terminal) is None
+
+
+def test_terminal_turn_remains_supervised_while_committing():
+    _user_id, session_id, device_id, publisher_payload = create_live_binding()
+    service = realtime_speech_service()
+    publisher = service.repository.get_publisher(publisher_payload["publisherId"])
+    assert publisher is not None
+    terminal = AudioFrame(
+        publisher_id=publisher.publisher_id,
+        session_id=session_id,
+        device_id=device_id,
+        source_id="native-system",
+        source_kind="system",
+        segment_id="committing-supervised-segment",
+        revision=3,
+        sequence=2,
+        captured_at_ms=1_000,
+        started_at_ms=1_000,
+        ended_at_ms=1_500,
+        duration_ms=500,
+        codec="pcm-s16le",
+        sample_rate_hz=16_000,
+        channels=1,
+        is_final=True,
+        audio_bytes=b"terminal",
+    )
+    original_enabled = service.settings.realtime_source_watchdog_enabled
+    service.settings.realtime_source_watchdog_enabled = True
+    try:
+        service._track_source_turn({"publisher": publisher, "frame": terminal})
+        assert (session_id, "system") not in service._active_source_turns
+        assert (session_id, "system", terminal.segment_id) in service._committing_source_turns
+        following = replace(
+            terminal,
+            segment_id="following-supervised-segment",
+            revision=1,
+            sequence=3,
+            is_final=False,
+        )
+        service._track_source_turn({"publisher": publisher, "frame": following})
+        assert service._active_source_turns[(session_id, "system")]["frame"] == following
+        service._complete_source_turn(terminal)
+        assert (session_id, "system", terminal.segment_id) not in service._committing_source_turns
+        assert service._active_source_turns[(session_id, "system")]["frame"] == following
+    finally:
+        service.settings.realtime_source_watchdog_enabled = original_enabled
 
 
 def frame(*, device_id: str, source_kind: str, sequence: int):

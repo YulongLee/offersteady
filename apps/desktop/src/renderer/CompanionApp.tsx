@@ -132,6 +132,18 @@ export const mergeDisplayedSourceHealth = (
 export const hasPublisherTakenOver = (live: readonly AudioSourceHealth[]) =>
   live.some((item) => (item.sourceKind === "microphone" || item.sourceKind === "system") && publisherHealthIsActive(item));
 
+export const captureStateForSourceHealth = (
+  health: readonly AudioSourceHealth[],
+  fallback: CaptureState,
+): CaptureState => {
+  const sources = ["microphone", "system"] as const;
+  const entries = sources.map(sourceKind => health.find(item => item.sourceKind === sourceKind));
+  if (entries.some(item => item && ["permission-denied", "unsupported", "unavailable", "error"].includes(item.state))) return "error";
+  if (entries.some(item => !item || item.state === "reconnecting")) return "reconnecting";
+  if (entries.every(item => item && (item.state === "silent" || item.state === "receiving"))) return "capturing";
+  return fallback;
+};
+
 const meterPercent = (level: number | undefined) => {
   if (!level || level <= 0) return 0;
   const decibels = 20 * Math.log10(Math.max(level, 0.0001));
@@ -821,11 +833,14 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
           lastLiveSessionIdRef.current = binding.sessionId;
           setDesktopNotice("面试已开始，本地助手正在启动麦克风、电脑输出和屏幕能力。");
         }
-        const nextCaptureState: CaptureState = captureState === "paused"
+        const provisionalCaptureState: CaptureState = captureState === "paused"
           ? "paused"
           : live
           ? (captureDiagnostic && (runtimeStatus?.frameReceipts?.length ?? 0) === 0 && (runtimeStatus?.transcriptCount ?? 0) === 0 ? "error" : "capturing")
           : "ready";
+        const nextCaptureState = live && provisionalCaptureState !== "paused"
+          ? captureStateForSourceHealth(sourceHealthRef.current, provisionalCaptureState)
+          : provisionalCaptureState;
         setState(nextCaptureState);
         bindingFailureCountRef.current = 0;
         applyConnectionCopy("已连接 | 网页端已绑定本机");
@@ -859,7 +874,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
             userId: binding.ownerUserId,
             deviceId: pairingIdentity.deviceId,
             manualCode: pairingIdentity.manualCode,
-            captureState,
+            captureState: nextCaptureState,
             sourceHealth: sourceHealthRef.current,
             capabilities: {
               ...capabilitiesFor(config),

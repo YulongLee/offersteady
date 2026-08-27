@@ -138,7 +138,7 @@ class Settings(BaseSettings):
     realtime_terminal_admission_timeout_seconds: float = 0.25
     realtime_terminal_ack_enabled: bool = True
     realtime_source_watchdog_enabled: bool = False
-    realtime_source_watchdog_seconds: float = 4.0
+    realtime_source_watchdog_seconds: float = 3.0
     realtime_source_watchdog_poll_seconds: float = 0.5
     realtime_event_retention: int = 1000
     realtime_event_block_ms: int = 1000
@@ -167,6 +167,9 @@ class Settings(BaseSettings):
     realtime_asr_nonblocking_partials_enabled: bool = True
     realtime_asr_prewarm_enabled: bool = True
     realtime_asr_prewarm_wait_seconds: float = 2.5
+    realtime_asr_attachment_prewarm_enabled: bool = True
+    realtime_asr_replay_buffer_enabled: bool = True
+    realtime_asr_replay_buffer_max_bytes: int = 512 * 1024
     realtime_asr_points_per_minute: int = 5
     realtime_asr_provider: str = "qwen-realtime-asr-compatible"
     realtime_asr_model: str = "qwen-realtime"

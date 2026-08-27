@@ -96,6 +96,7 @@ interface SegmentSnapshot {
   readonly startedAtMs: number;
   readonly vadTriggeredAtMs: number;
   readonly speechConfirmedAtMs: number;
+  readonly lastMeaningfulSpeechAtMs: number;
   readonly endedAtMs: number;
   readonly durationMs: number;
   readonly isFinal: boolean;
@@ -144,6 +145,8 @@ const MAX_SEGMENT_DURATION_MS = 30_000;
 const MIN_EMIT_SPEECH_MS = 60;
 const PRE_SPEECH_BUFFER_LIMIT = 4;
 const MICROPHONE_TURN_PEAK_RELEASE_RATIO = 0.15;
+const SYSTEM_TURN_PEAK_RELEASE_RATIO = 0.12;
+const MAX_MEANINGFUL_SPEECH_RELEASE_MS = 1_200;
 
 interface SourceVadProfile {
   readonly startFloor: number;
@@ -489,6 +492,7 @@ export class SpeechSegmenter {
   private attackStartedAtMs = -1;
   private vadTriggeredAtMs = 0;
   private speechConfirmedAtMs = 0;
+  private lastMeaningfulSpeechAtMs = 0;
   private noiseFloor: number;
   private turnPeakRms = 0;
   private sourceGeneration = 0;
@@ -570,6 +574,7 @@ export class SpeechSegmenter {
       this.startedAtMs = this.attackStartedAtMs;
       this.speechConfirmedAtMs = nowMs;
       this.lastSpeechAtMs = nowMs;
+      this.lastMeaningfulSpeechAtMs = nowMs;
       this.turnPeakRms = rms;
       this.lastInterimAtMs = nowMs;
       this.emitted = false;
@@ -584,8 +589,11 @@ export class SpeechSegmenter {
     }
 
     this.turnPeakRms = Math.max(this.turnPeakRms, rms);
-    const peakReleaseThreshold = this.sourceKind === "microphone" && this.config.mode === "commercial-adaptive"
-      ? Math.min(this.vadProfile().startCeiling, this.turnPeakRms * MICROPHONE_TURN_PEAK_RELEASE_RATIO)
+    const peakReleaseRatio = this.sourceKind === "system"
+      ? SYSTEM_TURN_PEAK_RELEASE_RATIO
+      : MICROPHONE_TURN_PEAK_RELEASE_RATIO;
+    const peakReleaseThreshold = this.config.mode === "commercial-adaptive"
+      ? Math.min(this.vadProfile().startCeiling, this.turnPeakRms * peakReleaseRatio)
       : 0;
     const resumeThreshold = this.lifecycle === "tail"
       ? Math.max(startThreshold, peakReleaseThreshold)
@@ -601,6 +609,7 @@ export class SpeechSegmenter {
     if (speaking) {
       this.lifecycle = "speaking";
       this.lastSpeechAtMs = nowMs;
+      this.lastMeaningfulSpeechAtMs = nowMs;
       if ((!this.emitted && nowMs - this.startedAtMs >= this.config.minimumSpeechMs) || nowMs - this.lastInterimAtMs >= this.config.interimIntervalMs) {
         this.lastInterimAtMs = nowMs;
         this.emitted = true;
@@ -614,7 +623,11 @@ export class SpeechSegmenter {
     const silenceFinalizeMs = this.config.mode === "legacy-threshold"
       ? (this.sourceKind === "system" ? this.config.systemTailMs : this.config.microphoneTailMs)
       : this.vadProfile().silenceMs;
-    if (nowMs - this.lastSpeechAtMs < silenceFinalizeMs) return [];
+    const releaseStartedAtMs = this.lastMeaningfulSpeechAtMs || this.lastSpeechAtMs;
+    if (
+      nowMs - this.lastSpeechAtMs < silenceFinalizeMs
+      && nowMs - releaseStartedAtMs < MAX_MEANINGFUL_SPEECH_RELEASE_MS
+    ) return [];
     if (!this.emitted && this.lastSpeechAtMs - this.startedAtMs < this.config.minimumSpeechMs) {
       this.reset();
       return [];
@@ -648,6 +661,7 @@ export class SpeechSegmenter {
       startedAtMs: this.startedAtMs,
       vadTriggeredAtMs: this.vadTriggeredAtMs || this.startedAtMs,
       speechConfirmedAtMs: this.speechConfirmedAtMs || this.startedAtMs,
+      lastMeaningfulSpeechAtMs: this.lastMeaningfulSpeechAtMs || this.speechConfirmedAtMs || this.startedAtMs,
       endedAtMs: nowMs,
       durationMs: Math.max(20, nowMs - this.startedAtMs),
       isFinal,
@@ -672,6 +686,7 @@ export class SpeechSegmenter {
     this.attackStartedAtMs = -1;
     this.vadTriggeredAtMs = 0;
     this.speechConfirmedAtMs = 0;
+    this.lastMeaningfulSpeechAtMs = 0;
     this.turnPeakRms = 0;
   }
 }
@@ -929,6 +944,7 @@ export class DesktopRealtimePublisher {
             startedAtMs: snapshot.startedAtMs,
             vadTriggeredAtMs: snapshot.vadTriggeredAtMs,
             speechConfirmedAtMs: snapshot.speechConfirmedAtMs,
+            lastMeaningfulSpeechAtMs: snapshot.lastMeaningfulSpeechAtMs,
             endedAtMs: snapshot.endedAtMs,
             durationMs: frame.durationMs,
             codec: "pcm-s16le",
@@ -942,6 +958,7 @@ export class DesktopRealtimePublisher {
             traceId: `${input.sourceKind}:${snapshot.segmentId}:${snapshot.revision}:${frame.sequence}`,
             diagnostics: {
               desktopVadConfirmAtMs: snapshot.speechConfirmedAtMs,
+              desktopLastMeaningfulSpeechAtMs: snapshot.lastMeaningfulSpeechAtMs,
               desktopAudioWorkletOutputAtMs: captureTiming.audioWorkletOutputAtMs,
               desktopRendererReceiveAtMs: captureTiming.rendererReceiveAtMs,
               desktopPcmConversionAtMs: pcmConversionCompleteAtMs,
@@ -1061,6 +1078,7 @@ export class DesktopRealtimePublisher {
             startedAtMs: snapshot.startedAtMs,
             vadTriggeredAtMs: snapshot.vadTriggeredAtMs,
             speechConfirmedAtMs: snapshot.speechConfirmedAtMs,
+            lastMeaningfulSpeechAtMs: snapshot.lastMeaningfulSpeechAtMs,
             endedAtMs: snapshot.endedAtMs,
             durationMs: frame.durationMs,
             codec: "pcm-s16le",

@@ -27,10 +27,13 @@ The renderer treats `ended`, `muted`, a suspended/closed AudioContext, a stalled
 - If the transport must be replaced, the desktop keeps capture attached and retries publisher creation with one bounded exponential-backoff supervisor. Transient network and service failures remain recoverable; only an explicit terminal authorization response stops automatic retry.
 - Web presence is diagnostic only. Refreshing the page does not revoke the desktop media lease.
 - The web consumer stores the latest activity cursor in session storage, hydrates once, and then consumes ordered incremental events. A cursor outside the retained Redis range forces a fresh snapshot.
+- The session SSE sends a lightweight authoritative transcript/candidate snapshot before slower runtime diagnostics, then follows with a cursor-stable runtime update. HTTP fallback never resets stream backoff; only a parsed SSE snapshot proves recovery.
 - When several partial revisions for the same transcript are already waiting in one SSE read, the backend advances the authoritative cursor across all of them but sends only the newest visible revision for that segment. The web consumer applies the same latest-only rule across a browser task and commits transcript state without waiting for the next animation frame. Final revisions and non-transcript lifecycle events are never discarded.
 - Transcript confirmation never creates an answer task. Only a user click on quick answer, manual answer, or screenshot answer may start answer generation.
 - New companions use a source-scoped `idle -> speaking -> tail -> committing -> final|incomplete` lifecycle. Terminal states are monotonic, and terminal frames are acknowledged independently of coalescible partial frames.
+- Desktop endpointing records last meaningful speech per source. System residual program noise is released using a bounded peak-relative gate, while strong speech returning during the normal tail resumes the same segment.
 - The backend source watchdog resolves abandoned partial turns as `incomplete` unless the provider supplied authoritative completion. Recovery closes only the affected source generation.
+- Terminal admission publishes a content-free `transcript-committing` event so the existing row shows bounded confirmation instead of claiming that speech is still active.
 - The dedicated answer SSE remains responsible for token-by-token first response. Its lifecycle is also published into the session stream so reconnects and cross-device views converge on the same terminal state.
 - Screenshot request stages (`requested`, `claimed`, `uploaded`, `vision-running`, terminal) use the same session event stream. Events contain identifiers and safe metadata only; screenshots and audio are never embedded.
 
@@ -73,7 +76,7 @@ Allowed diagnostics include trace IDs, session-safe IDs, channel, sequence, queu
 
 Per-revision browser delivery acknowledgements are enabled only with `?subtitleDiagnostics=1`. Normal commercial sessions acknowledge the first visible revision, at most one intermediate revision per segment per second, and the final revision. This keeps observability available without allowing diagnostic POST traffic to contend with the session SSE connection.
 
-Recommended event-flow metrics are session-stream reconnect count, resume success rate, event cursor lag, screenshot request-to-claim latency, screenshot terminal latency, fallback poll count, and duplicate event suppression count. A rise in fallback polls or cursor resets indicates push-path degradation even when the user-visible workflow still succeeds.
+Recommended event-flow metrics are last-meaningful-speech-to-terminal, terminal-to-provider-final, session-stream reconnect count, resume success rate, event cursor lag, screenshot request-to-claim latency, screenshot terminal latency, fallback poll count, and duplicate event suppression count. A rise in fallback polls or cursor resets indicates push-path degradation even when the user-visible workflow still succeeds.
 
 ## Release gates
 

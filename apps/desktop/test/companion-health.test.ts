@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { BINDING_STATUS_POLL_MS, desktopBindingLeaseIdentity, hasPublisherTakenOver, mergeDisplayedSourceHealth } from "../src/renderer/CompanionApp";
+import { BINDING_STATUS_POLL_MS, captureStateForSourceHealth, desktopBindingLeaseIdentity, hasPublisherTakenOver, mergeDisplayedSourceHealth } from "../src/renderer/CompanionApp";
 import { productionAudioTransportPolicy, publisherFailureDiagnostic, publisherFailureIsTerminal } from "../src/renderer/audio/realtime-publisher";
 
 describe("companion displayed source health", () => {
@@ -52,6 +52,18 @@ describe("companion displayed source health", () => {
     expect(hasPublisherTakenOver([
       { sourceId: "mic-live", sourceKind: "microphone", label: "麦克风", state: "receiving", stage: "signal-detected", level: 0.025, lastSignalAtMs: Date.now() },
     ])).toBe(true);
+  });
+
+  it("keeps microphone and system readiness independent instead of claiming global capture", () => {
+    expect(captureStateForSourceHealth([
+      { sourceId: "mic-live", sourceKind: "microphone", label: "麦克风", state: "receiving", stage: "signal-detected", level: 0.02 },
+      { sourceId: "sys-live", sourceKind: "system", label: "电脑输出", state: "unavailable", stage: "failed", level: 0 },
+    ], "capturing")).toBe("error");
+
+    expect(captureStateForSourceHealth([
+      { sourceId: "mic-live", sourceKind: "microphone", label: "麦克风", state: "silent", stage: "track-live", level: 0 },
+      { sourceId: "sys-live", sourceKind: "system", label: "电脑输出", state: "silent", stage: "track-live", level: 0 },
+    ], "reconnecting")).toBe("capturing");
   });
 
   it("classifies publisher transport failures separately from capture failures", () => {

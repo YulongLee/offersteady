@@ -588,22 +588,22 @@ async def stream_session_runtime(
             idle_polls = 0
             payload_type = "snapshot" if initial or not resumable else "update"
             if payload_type == "snapshot":
-                runtime, transcripts, candidates, snapshot_events = await asyncio.gather(
-                    asyncio.to_thread(service.get_runtime, user_id=resolved_user_id, session_id=session_id),
+                # Deliver visible transcript state before the more expensive
+                # runtime aggregation. This keeps first SSE paint independent
+                # from provider/source diagnostics while preserving one cursor.
+                transcripts, candidates, snapshot_events = await asyncio.gather(
                     asyncio.to_thread(service.list_transcripts, user_id=resolved_user_id, session_id=session_id),
                     asyncio.to_thread(service.list_candidates, user_id=resolved_user_id, session_id=session_id),
                     asyncio.to_thread(service.list_stream_bootstrap_events, user_id=resolved_user_id, session_id=session_id),
                 )
-                cached_runtime = runtime
                 cached_transcripts = transcripts
                 cached_candidates = candidates
-                runtime_refreshed_at = asyncio.get_running_loop().time()
                 payload = {
                     "type": payload_type,
                     "transcripts": transcripts.model_dump(by_alias=True),
                     "candidates": candidates.model_dump(by_alias=True),
                     "events": snapshot_events.model_dump(by_alias=True),
-                    "runtime": runtime.model_dump(by_alias=True),
+                    "runtime": None,
                     "ownerUserId": resolved_user_id,
                     "cursor": current_cursor,
                 }
@@ -625,6 +625,21 @@ async def stream_session_runtime(
             yield _sse_frame(payload_type, payload, cursor=current_cursor)
             last_cursor = current_cursor
             initial = False
+            if payload_type == "snapshot":
+                runtime = await asyncio.to_thread(
+                    service.get_runtime,
+                    user_id=resolved_user_id,
+                    session_id=session_id,
+                )
+                cached_runtime = runtime
+                runtime_refreshed_at = asyncio.get_running_loop().time()
+                yield _sse_frame("update", {
+                    "type": "update",
+                    "events": {"sessionId": session_id, "events": []},
+                    "runtime": runtime.model_dump(by_alias=True),
+                    "ownerUserId": resolved_user_id,
+                    "cursor": current_cursor,
+                }, cursor=current_cursor)
 
     return StreamingResponse(
         event_stream(),
@@ -754,6 +769,7 @@ async def ingest_frame(
         started_at_ms=request.started_at_ms,
         vad_triggered_at_ms=request.vad_triggered_at_ms,
         speech_confirmed_at_ms=request.speech_confirmed_at_ms,
+        last_meaningful_speech_at_ms=request.last_meaningful_speech_at_ms,
         ended_at_ms=request.ended_at_ms,
         duration_ms=request.duration_ms,
         codec=request.codec,
@@ -794,6 +810,7 @@ async def realtime_ws(websocket: WebSocket) -> None:
                     started_at_ms=payload.started_at_ms,
                     vad_triggered_at_ms=payload.vad_triggered_at_ms,
                     speech_confirmed_at_ms=payload.speech_confirmed_at_ms,
+                    last_meaningful_speech_at_ms=payload.last_meaningful_speech_at_ms,
                     ended_at_ms=payload.ended_at_ms,
                     duration_ms=payload.duration_ms,
                     codec=payload.codec,
@@ -1027,6 +1044,7 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                     started_at_ms=payload.started_at_ms,
                     vad_triggered_at_ms=payload.vad_triggered_at_ms,
                     speech_confirmed_at_ms=payload.speech_confirmed_at_ms,
+                    last_meaningful_speech_at_ms=payload.last_meaningful_speech_at_ms,
                     ended_at_ms=payload.ended_at_ms,
                     duration_ms=payload.duration_ms,
                     codec=payload.codec,

@@ -21,6 +21,7 @@ export interface SpeakerTranscriptSegment {
   readonly startedAtMs: number;
   readonly endedAtMs: number;
   readonly isFinal: boolean;
+  readonly turnState?: "speaking" | "tail" | "committing";
   /** `isFinal` remains for compatibility; terminalState distinguishes recovered incomplete turns. */
   readonly terminalState?: TranscriptTerminalState;
   readonly finalizationReason?: import("./realtime.js").RealtimeFinalizationReason;
@@ -32,6 +33,7 @@ export interface SpeakerTranscriptSegment {
     readonly channel?: string;
     readonly eventId?: string;
     readonly speechStartAtMs?: number;
+    readonly desktopLastMeaningfulSpeechAtMs?: number;
     readonly desktopWsSendAtMs?: number;
     readonly backendWsReceiveAtMs?: number;
     readonly qwenAudioAppendAtMs?: number;

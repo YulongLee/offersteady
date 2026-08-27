@@ -94,6 +94,7 @@ export const projectConversationTurns = (segments: readonly SpeakerTranscriptSeg
       transcriptConfidence: Math.min(previous.transcriptConfidence, segment.transcriptConfidence),
       endedAtMs: Math.max(previous.endedAtMs, segment.endedAtMs),
       isFinal: segment.isFinal,
+      ...(!segment.isFinal && segment.turnState ? { turnState: segment.turnState } : {}),
       ...(segment.terminalState ? { terminalState: segment.terminalState } : {}),
       ...(segment.finalizationReason ? { finalizationReason: segment.finalizationReason } : {}),
       ...(segment.publishedAtMs !== undefined ? { publishedAtMs: segment.publishedAtMs } : {}),

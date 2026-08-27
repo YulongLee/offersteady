@@ -102,6 +102,39 @@ describe("speech segmenter", () => {
     expect(terminal?.endedAtMs).toBeLessThan(3_000);
   });
 
+  it("releases system speech when residual program noise stays above the legacy continuation floor", () => {
+    const segmenter = new SpeechSegmenter("system");
+    const chunk = new Uint8Array([1, 2, 3]);
+
+    expect(segmenter.push(chunk, 0, 0.02)).toEqual([]);
+    const partial = segmenter.push(chunk, 100, 0.02);
+    expect(partial).toHaveLength(1);
+    expect(segmenter.push(chunk, 200, 0.0015)).toEqual([]);
+    expect(segmenter.currentState).toBe("tail");
+    const terminal = segmenter.push(chunk, 700, 0.0015);
+
+    expect(terminal).toHaveLength(1);
+    expect(terminal[0]).toMatchObject({
+      isFinal: true,
+      finalizationReason: "silence",
+      lastMeaningfulSpeechAtMs: 100,
+    });
+  });
+
+  it("keeps resumed system speech in the same segment during the bounded tail", () => {
+    const segmenter = new SpeechSegmenter("system");
+    const chunk = new Uint8Array([1, 2, 3]);
+
+    segmenter.push(chunk, 0, 0.02);
+    const first = segmenter.push(chunk, 100, 0.02)[0];
+    segmenter.push(chunk, 300, 0.0015);
+    const resumed = segmenter.push(chunk, 500, 0.015)[0];
+
+    expect(resumed?.segmentId).toBe(first?.segmentId);
+    expect(resumed?.isFinal).toBe(false);
+    expect(resumed?.lastMeaningfulSpeechAtMs).toBe(500);
+  });
+
   it("flushes an active turn once with an idempotency key and capture-stop reason", () => {
     const segmenter = new SpeechSegmenter("microphone");
     segmenter.push(new Uint8Array([1]), 0, 0.01);

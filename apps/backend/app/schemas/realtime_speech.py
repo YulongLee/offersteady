@@ -212,6 +212,8 @@ class RealtimeSessionRuntimeResponse(BaseModel):
     machine_code_bound: bool = Field(default=False, alias="machineCodeBound")
     session_live: bool = Field(default=False, alias="sessionLive")
     capture_state: str = Field(default="ready", alias="captureState")
+    readiness_state: str = Field(default="preparing", alias="readinessState")
+    source_readiness: dict[str, str] = Field(default_factory=dict, alias="sourceReadiness")
     manual_code: str | None = Field(default=None, alias="manualCode")
     device_id: str | None = Field(default=None, alias="deviceId")
     display_name: str | None = Field(default=None, alias="displayName")
@@ -293,6 +295,7 @@ class RealtimeFrameRequest(BaseModel):
     started_at_ms: int = Field(alias="startedAtMs")
     vad_triggered_at_ms: int | None = Field(default=None, alias="vadTriggeredAtMs")
     speech_confirmed_at_ms: int | None = Field(default=None, alias="speechConfirmedAtMs")
+    last_meaningful_speech_at_ms: int | None = Field(default=None, alias="lastMeaningfulSpeechAtMs")
     ended_at_ms: int = Field(alias="endedAtMs")
     duration_ms: int = Field(alias="durationMs")
     codec: str

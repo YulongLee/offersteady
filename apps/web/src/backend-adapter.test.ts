@@ -59,6 +59,45 @@ describe("backend preview adapter", () => {
     expect(fetchImpl.mock.calls.some(call => String(call[0]).includes("/runtime?"))).toBe(false);
   });
 
+  it("does not present a globally ready capture when one source is degraded", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const snapshot = {
+      sessionId: "session-1",
+      ownerUserId: "user-1",
+      cursor: 1,
+      resumable: true,
+      transcripts: { sessionId: "session-1", transcripts: [] },
+      candidates: { sessionId: "session-1", candidates: [] },
+      events: { sessionId: "session-1", events: [] },
+      runtime: {
+        sessionId: "session-1",
+        sessionStatus: "live",
+        stage: "live",
+        backendReachable: true,
+        deviceRegistered: true,
+        machineCodeBound: true,
+        sessionLive: true,
+        captureState: "capturing",
+        readinessState: "degraded",
+        sourceReadiness: { microphone: "ready", system: "degraded" },
+        transcriptCount: 0,
+        questionCandidateCount: 0,
+        sourceHealth: [{ sourceId: "system-loopback", sourceKind: "system", label: "电脑输出", state: "unavailable", level: 0 }],
+      },
+    };
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => new Response(JSON.stringify(envelope(
+      String(input).includes("/delivery-metrics") ? { accepted: true } : snapshot,
+    )), { status: 200, headers: { "Content-Type": "application/json" } }));
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+
+    const result = await adapter.loadRealtimeSession("session-1", undefined, { pageInstanceId: "page-1", leaseGeneration: 1 });
+
+    expect(result.captureState).toBe("error");
+    expect(result.speaker.runtimeNotice?.message).toContain("电脑输出尚未就绪");
+  });
+
   it("loads app state from the backend web state API", async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify(envelope(syntheticState)), {
       status: 200,
@@ -500,6 +539,40 @@ describe("backend preview adapter", () => {
     expect(updates.at(-1)?.speaker.transcripts).toEqual([
       expect.objectContaining({ text: "请介绍项目", isFinal: true, revision: 2 }),
     ]);
+  });
+
+  it("projects terminal admission as committing before provider final", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const push = (name: string, data: unknown) => controller.enqueue(new TextEncoder().encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`));
+        push("snapshot", {
+          type: "snapshot", cursor: 1,
+          transcripts: { sessionId: "session-1", transcripts: [{
+            segmentId: "segment-committing", sourceId: "system", sourceKind: "system", role: "interviewer",
+            revision: 2, text: "请介绍项目", transcriptConfidence: 0.9, startedAtMs: 1, endedAtMs: 2,
+            isFinal: false, overlap: false, publishedAtMs: 2,
+          }] },
+          candidates: { sessionId: "session-1", candidates: [] },
+          events: { sessionId: "session-1", events: [] }, runtime: null,
+        });
+        push("update", { type: "update", cursor: 2, events: { sessionId: "session-1", events: [{
+          eventId: "commit-1", kind: "transcript-committing", createdAtMs: 3,
+          payload: { segmentId: "segment-committing", sourceKind: "system", revision: 3, turnState: "committing" },
+        }] } });
+        controller.close();
+      },
+    });
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", vi.fn(async () => new Response(stream, {
+      status: 200, headers: { "Content-Type": "text/event-stream" },
+    })) as typeof fetch);
+    const updates: Array<{ speaker: { transcripts: readonly { turnState?: string }[] } }> = [];
+
+    await adapter.subscribeRealtimeSession("session-1", update => updates.push(update as typeof updates[number]));
+
+    expect(updates.at(-1)?.speaker.transcripts[0]?.turnState).toBe("committing");
   });
 
   it("coalesces a synchronous partial burst before updating the visible transcript store", async () => {
