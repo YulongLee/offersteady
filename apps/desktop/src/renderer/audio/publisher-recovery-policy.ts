@@ -66,25 +66,18 @@ export class FreshTransportAckGate<TTransport extends object> {
   }
 }
 
-export class ReplacementPublisherBudget {
-  private attempts = 0;
+const MAX_PUBLISHER_RECOVERY_DELAY_MS = 5_000;
 
-  constructor(readonly maximumAttempts: number) {}
-
-  claimAttempt(): boolean {
-    if (this.attempts >= this.maximumAttempts) return false;
-    this.attempts += 1;
-    return true;
-  }
-
-  recordAcknowledgement(hasPendingFrames: boolean): void {
-    if (!hasPendingFrames) this.attempts = 0;
-  }
-
-  get usedAttempts(): number {
-    return this.attempts;
-  }
-}
+/**
+ * Delay before the next replacement-publisher attempt. Attempts remain
+ * single-flight in DesktopRealtimePublisher; this helper only bounds how
+ * aggressively a live session retries during a transient outage.
+ */
+export const publisherRecoveryDelayMs = (failedAttempts: number, jitterMs = 0): number => {
+  const exponent = Math.max(0, Math.min(5, Math.trunc(failedAttempts) - 1));
+  const boundedJitter = Math.max(0, Math.min(150, Math.trunc(jitterMs)));
+  return Math.min(MAX_PUBLISHER_RECOVERY_DELAY_MS, 250 * 2 ** exponent) + boundedJitter;
+};
 
 export type RecoveryChannel = "microphone" | "system";
 

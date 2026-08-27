@@ -44,6 +44,10 @@ The desktop SHALL reconnect with the last acknowledged sequence and SHALL replay
 - **WHEN** connectivity returns after old audio has been dropped
 - **THEN** transport resumes from current audio and emits an explicit gap event
 
+#### Scenario: Desktop process restarts during a live interview
+- **WHEN** a newly started desktop publisher reconnects to an interview session that already accepted audio generations
+- **THEN** the gateway returns authoritative per-channel sequence offsets and source generations, and the desktop starts each new source above those generations without entering a stale-generation or sequence-gap retry loop
+
 ### Requirement: Immediate binary media frames
 The commercial transport SHALL send negotiated 20-100 ms audio frames immediately as binary WebSocket messages, while retaining the rolling buffer only for acknowledgement recovery.
 

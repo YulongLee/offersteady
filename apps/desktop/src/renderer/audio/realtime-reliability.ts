@@ -135,8 +135,9 @@ export class RealtimeReliabilityController {
   markRecovering(sourceKind: AudioSourceKind, reason: string): void {
     const source = this.ensure(sourceKind, Date.now());
     if (source.terminalFailure) return;
+    const newRecoveryEpisode = source.state !== "RECOVERING" || source.lastFailureReason !== reason;
     source.state = "RECOVERING";
-    source.recoveryCount += 1;
+    if (newRecoveryEpisode) source.recoveryCount += 1;
     source.lastFailureReason = reason;
   }
 

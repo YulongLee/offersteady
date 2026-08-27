@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ChannelForwardProgressGate, FreshTransportAckGate, ReplacementPublisherBudget } from "../src/renderer/audio/publisher-recovery-policy";
+import { ChannelForwardProgressGate, FreshTransportAckGate, publisherRecoveryDelayMs } from "../src/renderer/audio/publisher-recovery-policy";
 
 describe("replacement publisher recovery policy", () => {
   const timers = {
@@ -51,7 +51,7 @@ describe("replacement publisher recovery policy", () => {
     await expect(result).resolves.toBeUndefined();
   });
 
-  it("supersedes one pending gate and bounds publisher creation until delivery drains", async () => {
+  it("supersedes one pending gate and bounds retry frequency without exhausting recovery", async () => {
     vi.useFakeTimers();
     const gate = new FreshTransportAckGate<object>(timers);
     const first = gate.wait({}, 4_000);
@@ -62,12 +62,14 @@ describe("replacement publisher recovery policy", () => {
     gate.acknowledge(secondTransport);
     await expect(second).resolves.toBeUndefined();
 
-    const budget = new ReplacementPublisherBudget(3);
-    expect([budget.claimAttempt(), budget.claimAttempt(), budget.claimAttempt(), budget.claimAttempt()]).toEqual([true, true, true, false]);
-    budget.recordAcknowledgement(true);
-    expect(budget.claimAttempt()).toBe(false);
-    budget.recordAcknowledgement(false);
-    expect(budget.claimAttempt()).toBe(true);
+    expect([
+      publisherRecoveryDelayMs(1),
+      publisherRecoveryDelayMs(2),
+      publisherRecoveryDelayMs(3),
+      publisherRecoveryDelayMs(4),
+      publisherRecoveryDelayMs(20),
+    ]).toEqual([250, 500, 1_000, 2_000, 5_000]);
+    expect(publisherRecoveryDelayMs(20, 999)).toBe(5_150);
   });
 
   it("requires independent progress only from channels that produced replacement media", () => {

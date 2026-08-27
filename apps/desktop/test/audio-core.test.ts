@@ -63,6 +63,14 @@ describe("signal diagnostics", () => {
 });
 
 describe("speech segmenter", () => {
+  it("starts a replacement source above the authoritative server generation", () => {
+    const segmenter = new SpeechSegmenter("system", {}, 7);
+    const speech = new Uint8Array([1, 2]);
+    segmenter.push(speech, 0, 0.01);
+    const first = segmenter.push(speech, 100, 0.01);
+    expect(first[0]?.sourceGeneration).toBe(8);
+  });
+
   it("exposes an explicit commercial turn lifecycle and a terminal reason", () => {
     const segmenter = new SpeechSegmenter("microphone");
     const speech = new Uint8Array([1, 2, 3]);

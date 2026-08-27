@@ -35,8 +35,16 @@ const decodeEnvelope = (payload: string | ArrayBuffer) => {
   return JSON.parse(new TextDecoder().decode(bytes.slice(4, 4 + headerLength))) as Record<string, unknown>;
 };
 
-const acceptConnection = (socket: FakeWebSocket, microphone = -1, system = -1) => {
-  socket.serverEvent({ kind: "connection-state", payload: { resumeOffsets: { microphone, system } } });
+const acceptConnection = (
+  socket: FakeWebSocket,
+  microphone = -1,
+  system = -1,
+  generations: { readonly microphone: number; readonly system: number } = { microphone: 0, system: 0 },
+) => {
+  socket.serverEvent({
+    kind: "connection-state",
+    payload: { resumeOffsets: { microphone, system }, resumeSourceGenerations: generations },
+  });
 };
 
 
@@ -353,6 +361,22 @@ describe("realtime transport v2", () => {
     });
     transport.enqueue({ ...resumed, audioBase64: btoa("ab") });
     expect(decodeEnvelope(FakeWebSocket.instances[0]!.sent[0]!)).toMatchObject({ sourceKind: "system", sequence: 3_600 });
+    transport.stop();
+  });
+
+  it("exposes authoritative generations so a restarted process does not reuse a stale source generation", async () => {
+    vi.stubGlobal("window", { location: { href: "https://mianshiwen.cc/interviews/session" }, setTimeout, clearTimeout });
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const transport = new MultiplexedRealtimeTransport({
+      apiBaseUrl: "https://mianshiwen.cc/api/v1",
+      token: "retained-generation-token",
+      onEvent: () => undefined,
+      onState: () => undefined,
+    });
+    await transport.start();
+    acceptConnection(FakeWebSocket.instances[0]!, 12, 41, { microphone: 3, system: 7 });
+    await transport.waitForResumeOffsets();
+    expect(transport.authoritativeSourceGenerations()).toEqual({ microphone: 3, system: 7 });
     transport.stop();
   });
 

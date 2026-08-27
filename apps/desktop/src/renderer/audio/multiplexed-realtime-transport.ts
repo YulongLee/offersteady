@@ -30,6 +30,11 @@ export interface RealtimeResumeOffsets {
   readonly system: number;
 }
 
+export interface RealtimeResumeSourceGenerations {
+  readonly microphone: number;
+  readonly system: number;
+}
+
 export interface RealtimeChannelTransportProgress {
   readonly inFlightFrames: number;
   readonly queuedFrames: number;
@@ -67,6 +72,7 @@ export class MultiplexedRealtimeTransport {
   private readyForFrames = false;
   private recoveryRequested = false;
   private resumeOffsets: RealtimeResumeOffsets | null = null;
+  private resumeSourceGenerations: RealtimeResumeSourceGenerations = { microphone: 0, system: 0 };
   private socketGeneration = 0;
   private readonly lastAcknowledgedBySource = new Map<RealtimeAudioChannel, number>();
   private readonly sentAtByFrame = new Map<string, number>();
@@ -176,6 +182,10 @@ export class MultiplexedRealtimeTransport {
       };
       this.resumeOffsetWaiters.add(waiter);
     });
+  }
+
+  authoritativeSourceGenerations(): RealtimeResumeSourceGenerations {
+    return { ...this.resumeSourceGenerations };
   }
 
   stop(): void {
@@ -381,7 +391,15 @@ export class MultiplexedRealtimeTransport {
     const resumeOffsets = payload?.resumeOffsets;
     if (typeof resumeOffsets !== "object" || resumeOffsets === null) return;
     const acceptedOffsets: Record<RealtimeAudioChannel, number> = { microphone: -1, system: -1 };
+    const rawGenerations = payload?.resumeSourceGenerations;
+    const acceptedGenerations: Record<RealtimeAudioChannel, number> = { microphone: 0, system: 0 };
     for (const channel of ["microphone", "system"] as const) {
+      const generation = typeof rawGenerations === "object" && rawGenerations !== null
+        ? (rawGenerations as Record<string, unknown>)[channel]
+        : undefined;
+      if (typeof generation === "number" && Number.isInteger(generation) && generation >= 0) {
+        acceptedGenerations[channel] = generation;
+      }
       const offset = (resumeOffsets as Record<string, unknown>)[channel];
       if (typeof offset !== "number" || !Number.isInteger(offset)) continue;
       acceptedOffsets[channel] = offset;
@@ -404,6 +422,7 @@ export class MultiplexedRealtimeTransport {
       }
     }
     this.resumeOffsets = acceptedOffsets;
+    this.resumeSourceGenerations = acceptedGenerations;
     this.readyForFrames = true;
     for (const waiter of this.resumeOffsetWaiters) {
       window.clearTimeout(waiter.timer);

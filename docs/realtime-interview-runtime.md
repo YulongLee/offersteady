@@ -24,6 +24,7 @@ The renderer treats `ended`, `muted`, a suspended/closed AudioContext, a stalled
 - Each channel has an independent sequence. The gateway acknowledges the highest contiguous accepted sequence and explicitly reports gaps.
 - The desktop keeps at most 64 frames, approximately two seconds of 16 kHz mono PCM, and drops the oldest interim frame first.
 - A reconnect reuses the publisher token and resumes from backend receipts for that publisher.
+- If the transport must be replaced, the desktop keeps capture attached and retries publisher creation with one bounded exponential-backoff supervisor. Transient network and service failures remain recoverable; only an explicit terminal authorization response stops automatic retry.
 - Web presence is diagnostic only. Refreshing the page does not revoke the desktop media lease.
 - The web consumer stores the latest activity cursor in session storage, hydrates once, and then consumes ordered incremental events. A cursor outside the retained Redis range forces a fresh snapshot.
 - When several partial revisions for the same transcript are already waiting in one SSE read, the backend advances the authoritative cursor across all of them but sends only the newest visible revision for that segment. The web consumer applies the same latest-only rule across a browser task and commits transcript state without waiting for the next animation frame. Final revisions and non-transcript lifecycle events are never discarded.

@@ -875,6 +875,10 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
             return
         previous_receipts = service.repository.list_frame_receipts_for_session(session_id=publisher.session_id)
         expected_sequence: dict[str, int] = {"microphone": 0, "system": 0}
+        resume_source_generations: dict[str, int] = {
+            channel: service.latest_source_generation(session_id=publisher.session_id, source_kind=channel)
+            for channel in ("microphone", "system")
+        }
         for receipt in previous_receipts:
             # Sequence numbers are authoritative for the lifetime of the interview
             # session and logical channel, not for one short-lived publisher token.
@@ -883,6 +887,10 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
             # server's already-advanced channel boundary.
             if receipt.source_kind in expected_sequence:
                 expected_sequence[receipt.source_kind] = max(expected_sequence[receipt.source_kind], receipt.sequence + 1)
+                if receipt.source_generation is not None:
+                    resume_source_generations[receipt.source_kind] = max(
+                        resume_source_generations[receipt.source_kind], receipt.source_generation
+                    )
         frame_arrivals: deque[float] = deque()
         sequence_gap_events: dict[str, int] = {"microphone": 0, "system": 0}
         await websocket.send_json({
@@ -896,6 +904,7 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                 "channels": ["microphone", "system"],
                 "mediaMode": requested_media,
                 "resumeOffsets": {channel: sequence - 1 for channel, sequence in expected_sequence.items()},
+                "resumeSourceGenerations": resume_source_generations,
             },
         })
         while True:

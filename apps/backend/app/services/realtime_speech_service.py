@@ -716,6 +716,10 @@ class RealtimeSpeechService:
     def _session_source_key(session_id: str, source_kind: RealtimeSourceKind) -> tuple[str, RealtimeSourceKind]:
         return (session_id, source_kind)
 
+    def latest_source_generation(self, *, session_id: str, source_kind: RealtimeSourceKind) -> int:
+        with self._terminal_lock:
+            return self._latest_source_generations.get(self._session_source_key(session_id, source_kind), 0)
+
     def _counter_bucket(self, *, session_id: str, source_kind: RealtimeSourceKind) -> dict[str, int | float]:
         key = self._session_source_key(session_id, source_kind)
         return self._counters_by_session_source.setdefault(key, {
@@ -2378,6 +2382,7 @@ class RealtimeSpeechService:
             captured_at_ms=captured_at_ms,
             received_at_ms=_now_ms(),
             asr_status="pending",
+            source_generation=source_generation,
         ))
         return {
             "publisher": publisher,

@@ -66,6 +66,25 @@ describe("desktop realtime reliability watchdog", () => {
     expect(controller.snapshot()[0]).toMatchObject({ state: "HEALTHY" });
   });
 
+  it("keeps a missing transient transport recoverable while capture continues", () => {
+    const controller = new RealtimeReliabilityController();
+    controller.start("microphone", 1_000);
+    controller.recordAudioCapture("microphone", 1_100);
+    controller.markRecovering("microphone", "publisher-transport-missing");
+    controller.markRecovering("microphone", "publisher-transport-missing");
+
+    expect(controller.snapshot()[0]).toMatchObject({
+      state: "RECOVERING",
+      recoveryCount: 1,
+      terminalFailure: false,
+      lastFailureReason: "publisher-transport-missing",
+    });
+
+    controller.recordFrameSent("microphone", 1_200, 1);
+    controller.recordFrameAck("microphone", 1_300, 0);
+    expect(controller.evaluate(1_350)[0]).toMatchObject({ state: "HEALTHY", action: "none" });
+  });
+
   it("keeps terminal delivery loss sticky while capture callbacks continue", () => {
     const controller = new RealtimeReliabilityController();
     controller.start("system", 1_000);

@@ -75,6 +75,7 @@ class RealtimeFrameReceiptRecord:
     received_at_ms: int
     asr_status: RealtimeAsrFrameStatus = "pending"
     error_code: str | None = None
+    source_generation: int | None = None
 
 
 @dataclass(frozen=True)

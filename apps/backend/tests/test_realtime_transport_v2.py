@@ -118,6 +118,38 @@ def test_replacement_publisher_resumes_session_channel_offsets():
         assert accepted["payload"]["sequence"] == 1
 
 
+def test_replacement_publisher_resumes_above_authoritative_source_generation():
+    user_id, session_id, device_id, first = create_live_binding()
+    first_frame = {
+        **frame(device_id=device_id, source_kind="system", sequence=0),
+        "sourceGeneration": 7,
+    }
+    with client.websocket_connect(f"/api/v1/realtime-speech/ingest-ws?token={first['token']}&protocol=2.0") as websocket:
+        websocket.receive_json()
+        websocket.send_json(first_frame)
+        assert websocket.receive_json()["kind"] == "frame-accepted"
+
+    replacement = unwrap(client.post("/api/v1/realtime-speech/publishers", json={
+        "userId": user_id,
+        "sessionId": session_id,
+        "sourceKind": "mixed",
+        "clientName": "Synthetic process restart",
+        "deviceId": device_id,
+    }))
+    with client.websocket_connect(f"/api/v1/realtime-speech/ingest-ws?token={replacement['token']}&protocol=2.0") as websocket:
+        handshake = websocket.receive_json()
+        assert handshake["payload"]["resumeOffsets"]["system"] == 0
+        assert handshake["payload"]["resumeSourceGenerations"] == {"microphone": 0, "system": 7}
+        resumed = {
+            **frame(device_id=device_id, source_kind="system", sequence=1),
+            "sourceGeneration": 8,
+        }
+        websocket.send_json(resumed)
+        accepted = websocket.receive_json()
+        assert accepted["kind"] == "frame-accepted"
+        assert accepted["payload"]["sequence"] == 1
+
+
 def test_replayed_terminal_below_resume_offset_is_readmitted_until_explicitly_accepted():
     user_id, session_id, device_id, first = create_live_binding()
     partial = {

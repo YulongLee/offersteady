@@ -11,7 +11,7 @@ import {
   type RealtimeSourceReliabilitySnapshot,
 } from "./realtime-reliability";
 import { RealtimeTransportDiagnostics } from "./realtime-transport-diagnostics";
-import { ChannelForwardProgressGate, ReplacementPublisherBudget } from "./publisher-recovery-policy";
+import { ChannelForwardProgressGate, publisherRecoveryDelayMs } from "./publisher-recovery-policy";
 import { SerializedLatestSourceSwitch } from "./audio-device-hot-switch";
 
 interface DesktopBinding {
@@ -199,7 +199,6 @@ const SYSTEM_RECOVERY_STARTUP_GRACE_MS = 6_000;
 const SYSTEM_SILENCE_RECOVERY_DELAYS_MS = [30_000, 120_000, 300_000] as const;
 const SYSTEM_REOPEN_RETRY_DELAYS_MS = [0, 300, 900, 2_000] as const;
 const MICROPHONE_REOPEN_RETRY_DELAYS_MS = [0, 300, 900, 2_000] as const;
-const MAX_REPLACEMENT_PUBLISHER_ATTEMPTS = 3;
 
 export type SystemAudioRecoveryReason =
   | "track-ended"
@@ -495,9 +494,14 @@ export class SpeechSegmenter {
   private sourceGeneration = 0;
   private readonly config: SpeechEndpointingConfig;
 
-  constructor(private readonly sourceKind: AudioSourceKind, config: Partial<SpeechEndpointingConfig> = {}) {
+  constructor(
+    private readonly sourceKind: AudioSourceKind,
+    config: Partial<SpeechEndpointingConfig> = {},
+    initialSourceGeneration = 0,
+  ) {
     this.noiseFloor = sourceKind === "system" ? 0.0001 : 0.00035;
     this.config = { ...commercialSpeechEndpointingDefaults, ...config };
+    this.sourceGeneration = Math.max(0, Math.floor(initialSourceGeneration));
   }
 
   get currentNoiseFloor(): number {
@@ -696,10 +700,10 @@ export class DesktopRealtimePublisher {
   private readonly resourceCounters = new CaptureResourceCounters();
   private readonly transportDiagnostics: RealtimeTransportDiagnostics;
   private readonly sourceInputs = new Map<AudioSourceKind, SourceStartInput>();
+  private readonly sourceGenerations = new Map<AudioSourceKind, number>([["microphone", 0], ["system", 0]]);
   private watchdogTimer: number | null = null;
   private transportWatchdogRecoveryInFlight = false;
   private transportSequenceResetInProgress = false;
-  private readonly replacementPublisherBudget = new ReplacementPublisherBudget(MAX_REPLACEMENT_PUBLISHER_ATTEMPTS);
   private readonly channelForwardProgress = new ChannelForwardProgressGate<MultiplexedRealtimeTransport>();
 
   constructor(private readonly options: RealtimePublisherOptions) {
@@ -853,7 +857,11 @@ export class DesktopRealtimePublisher {
       trackedAudioNodes = 4;
       this.resourceCounters.addMediaTracks(openedMedia.stream.getTracks().length);
       trackedMediaTracks = openedMedia.stream.getTracks().length;
-      const segmenter = new SpeechSegmenter(input.sourceKind, { mode: this.options.endpointingMode ?? "commercial-adaptive" });
+      const segmenter = new SpeechSegmenter(
+        input.sourceKind,
+        { mode: this.options.endpointingMode ?? "commercial-adaptive" },
+        this.sourceGenerations.get(input.sourceKind) ?? 0,
+      );
       const openedAtMs = Date.now();
       let lastProcessAtMs = openedAtMs;
       let closing = false;
@@ -896,6 +904,10 @@ export class DesktopRealtimePublisher {
         const frames = segmenter.push(pcm16, nowMs, rms);
         for (const snapshot of frames) {
           if (snapshot.payload.byteLength === 0) continue;
+          this.sourceGenerations.set(input.sourceKind, Math.max(
+            this.sourceGenerations.get(input.sourceKind) ?? 0,
+            snapshot.sourceGeneration,
+          ));
           const frame = createAudioFrame(this.sequencer, {
             sessionId: this.options.binding.sessionId,
             deviceId: this.options.binding.deviceId,
@@ -1248,6 +1260,9 @@ export class DesktopRealtimePublisher {
     const resumeOffsets = await transport.waitForResumeOffsets();
     this.sequencer.alignNext("microphone", resumeOffsets.microphone + 1);
     this.sequencer.alignNext("system", resumeOffsets.system + 1);
+    const resumeGenerations = transport.authoritativeSourceGenerations();
+    this.sourceGenerations.set("microphone", Math.max(this.sourceGenerations.get("microphone") ?? 0, resumeGenerations.microphone));
+    this.sourceGenerations.set("system", Math.max(this.sourceGenerations.get("system") ?? 0, resumeGenerations.system));
     this.channelForwardProgress.activate(transport);
     for (const payload of pending) transport.enqueue(payload);
     return transport;
@@ -1267,6 +1282,9 @@ export class DesktopRealtimePublisher {
       } });
       failedTransport?.stop();
       if (this.transport === failedTransport) this.transport = null;
+      for (const sourceKind of ["microphone", "system"] as const) {
+        this.reliability.markRecovering(sourceKind, input.reason);
+      }
       // A transport sequence repair must not tear down healthy media capture.
       // The audio callbacks remain attached while sendFrame is gated below;
       // the replacement transport supplies authoritative resume offsets before
@@ -1276,10 +1294,21 @@ export class DesktopRealtimePublisher {
       this.sendBuffers.forEach(buffer => buffer.clear());
       let lastError: unknown = null;
       let attempt = 0;
-      while (!this.stopped && this.replacementPublisherBudget.claimAttempt()) {
+      let terminalFailure = false;
+      while (!this.stopped) {
         attempt += 1;
         try {
-          if (attempt > 1) await new Promise<void>(resolve => window.setTimeout(resolve, 250 * attempt));
+          if (attempt > 1) {
+            const delayMs = publisherRecoveryDelayMs(attempt - 1, Math.floor(Math.random() * 151));
+            this.options.onServerEvent?.({ kind: "connection-state", payload: {
+              state: "reconnecting",
+              recoveryReason: input.reason,
+              attempt,
+              retryDelayMs: delayMs,
+            } });
+            await new Promise<void>(resolve => window.setTimeout(resolve, delayMs));
+          }
+          if (this.stopped) return;
           await this.openTransport();
           this.transportSequenceResetInProgress = false;
           this.options.onServerEvent?.({ kind: "connection-state", payload: {
@@ -1291,17 +1320,19 @@ export class DesktopRealtimePublisher {
           return;
         } catch (error) {
           lastError = error;
+          terminalFailure = publisherFailureIsTerminal(error);
           this.transportSequenceResetInProgress = true;
           const failedAttempt = this.transport;
           failedAttempt?.stop();
           if (this.transport === failedAttempt) this.transport = null;
           this.sequencer.reset();
           this.sendBuffers.forEach(buffer => buffer.clear());
+          if (terminalFailure) break;
         }
       }
-      if (!this.stopped) {
+      if (!this.stopped && terminalFailure) {
         for (const sourceKind of ["microphone", "system"] as const) {
-          this.reliability.markTerminalLost(sourceKind, "publisher-recovery-exhausted");
+          this.reliability.markTerminalLost(sourceKind, "publisher-authorization-terminal");
           const existing = this.latestHealth.get(sourceKind);
           this.updateHealth({
             ...(existing ?? {
@@ -1315,16 +1346,16 @@ export class DesktopRealtimePublisher {
             active: false,
             pendingFrameCount: 0,
             oldestPendingFrameAgeMs: 0,
-            errorCode: "publisher-recovery-exhausted",
+            errorCode: "publisher-create-failed",
           });
         }
         this.transportSequenceResetInProgress = false;
         const diagnostic = publisherFailureDiagnostic("microphone", lastError);
-        this.options.onFailure(`实时音频上传已停止，请退出当前面试并重新连接助手：${diagnostic.displayMessage}`);
+        this.options.onFailure(`实时音频授权已失效，请退出当前面试并重新连接助手：${diagnostic.displayMessage}`);
         this.options.onCaptureState("error");
         this.options.onServerEvent?.({ kind: "degraded", payload: {
-          reason: "publisher-recovery-exhausted",
-          message: "实时音频上传已停止，需要显式重新连接。",
+          reason: "publisher-authorization-terminal",
+          message: "实时音频授权已失效，需要显式重新连接。",
           retryable: false,
         } });
         this.emitReliability();
@@ -1350,7 +1381,6 @@ export class DesktopRealtimePublisher {
         this.channelForwardProgress.acknowledge(transport, sourceKind);
         const allProducedChannelsAcknowledged = this.channelForwardProgress.allProducedChannelsAcknowledged(transport);
         if (allProducedChannelsAcknowledged) this.options.onCaptureState("capturing");
-        this.replacementPublisherBudget.recordAcknowledgement(!allProducedChannelsAcknowledged);
       }
       if (typeof payload.qwenAppendAtMs === "number") this.reliability.recordQwenAppend(sourceKind, payload.qwenAppendAtMs);
       if (existing && (event.kind === "frame-accepted" || event.kind === "terminal-accepted") && typeof payload.sequence === "number") {
@@ -1383,7 +1413,10 @@ export class DesktopRealtimePublisher {
     frame: ReturnType<typeof createAudioFrame>,
     sourceId: string,
   ) {
-    if (this.transportSequenceResetInProgress) return;
+    if (this.transportSequenceResetInProgress) {
+      this.markTransportRecovering(sourceKind, sourceId, "publisher-transport-resetting");
+      return;
+    }
     const ringBufferWriteAtMs = Date.now();
     const diagnostics = typeof payload.diagnostics === "object" && payload.diagnostics !== null
       ? payload.diagnostics as Record<string, unknown>
@@ -1405,23 +1438,39 @@ export class DesktopRealtimePublisher {
       this.refreshOwnedBufferBytes();
       return;
     }
-    this.sendBuffers.get(sourceKind)?.clear();
-    this.reliability.markTerminalLost(sourceKind, "publisher-transport-missing");
+    this.markTransportRecovering(sourceKind, sourceId, "publisher-transport-missing");
+    void this.recoverTransport({
+      code: 0,
+      reason: "publisher-transport-missing",
+      pending: [queuedPayload],
+      resetSequence: true,
+    });
+  }
+
+  private markTransportRecovering(
+    sourceKind: AudioSourceKind,
+    sourceId: string,
+    reason: "publisher-transport-missing" | "publisher-transport-resetting",
+  ): void {
+    this.reliability.markRecovering(sourceKind, reason);
+    const existing = this.latestHealth.get(sourceKind);
     this.updateHealth({
+      ...existing,
       sourceId,
       sourceKind,
-      label: sourceLabel(sourceKind),
-      state: "error",
-      stage: "failed",
-      level: 0,
-      active: false,
+      label: existing?.label ?? sourceLabel(sourceKind),
+      state: "reconnecting",
+      stage: "frames-produced",
+      level: existing?.level ?? 0,
+      active: true,
       frameCount: this.frameCounts.get(sourceKind) ?? 0,
       lastFrameAtMs: Date.now(),
       pendingFrameCount: 0,
       errorCode: "publisher-transport-missing",
+      lastReconnectReason: reason,
     });
-    this.options.onCaptureState("error");
-    this._notifyFailure(sourceKind, `${sourceLabel(sourceKind)}上传连接已停止，请退出当前面试并重新连接助手。`);
+    this.options.onCaptureState("reconnecting");
+    this._notifyFailure(sourceKind, `${sourceLabel(sourceKind)}上传连接中断，正在自动恢复。`);
     this.emitReliability();
   }
 
