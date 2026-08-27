@@ -19,9 +19,9 @@ The macOS release uses the same Developer ID application identity and `com.offer
 
 Automated verification uses synthetic frames and metadata-only counters. It does not store or publish interview audio, transcript text, screenshots, credentials, or personal information.
 
-## Local release artifacts
+## Production artifacts
 
-Artifact hashes and trust results are recorded here after local packaging. Production publication and deployment are intentionally unchanged until separately authorized.
+Artifact hashes and trust results were recorded after local packaging and reproduced through the public production download routes after publication.
 
 | Target | Artifact | Size (bytes) | SHA-256 | Trust state |
 | --- | --- | ---: | --- | --- |
@@ -34,3 +34,13 @@ Artifact hashes and trust results are recorded here after local packaging. Produ
 The immutable 1.2.0 packages remain available. A local rollback reinstalls 1.2.0; any later backend rollout remains independently recoverable to its prior deployment.
 
 The production pre-rollout source and manifest are commit `b505418508f014e67919b5a87407bbb9f5a9a3c2`. The running Backend image was retained before rollout as `offersteady-backend:rollback-b505418-pre-1.2.1` with image ID `sha256:c711f02944be44548f75501e4c27028b6989af4b77080c47516689809267bb74`. PostgreSQL, Redis, and Web are outside this release deployment scope.
+
+## Production deployment
+
+Production publication completed on 2026-08-27. Source commit `3479c35` and manifest commit `32a2d24889f91fd77af38dd6ac2a7c9440a14186` were pushed to `main`; release tag `v1.2.1` points to the manifest commit. The three immutable OSS objects were uploaded before the manifest switch.
+
+Only the Backend container was rebuilt and replaced. The deployed Backend image is `sha256:1fe6f42838553e68c206843c7554c1bce8709f8c4df705fcc8483a74eeec508e`; Web, PostgreSQL, and Redis retained their existing container IDs and start times. Internal and public health, billing status, and the production Web build manifest passed.
+
+The public release manifest reports macOS arm64, macOS x64, and Windows x64 at 1.2.1. Each public download returned HTTP 206 for a 1 KiB range request, and full streamed downloads reproduced the three SHA-256 values above.
+
+During the planned Backend replacement, the already-running signed 1.2.1 companion reconnected to the same live session. The microphone acknowledgement advanced from sequence 734 to 762 after recovery; both channels retained one listener, zero sequence gaps, zero resend frames, and empty queues. The new Backend logs contained zero `stale-source-generation`, zero `sequence-gap`, and zero traceback events during rollout validation. No audio or transcript content was retained in this evidence.

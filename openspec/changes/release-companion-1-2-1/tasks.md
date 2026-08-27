@@ -22,7 +22,7 @@
 
 - [x] 4.1 Re-run release gates, commit and push the verified 1.2.1 source while recording the current production manifest and Backend image as rollback points.
 - [x] 4.2 Upload all three immutable 1.2.1 artifacts and atomically generate the production Desktop manifest without deleting 1.2.0 objects.
-- [ ] 4.3 Commit, tag, and push the 1.2.1 production manifest and release identity.
-- [ ] 4.4 Deploy only the Backend service containing the compatible resume-generation handshake and retain the pre-1.2.1 Backend image.
-- [ ] 4.5 Verify internal and public health, web state, all three 1.2.1 entries, HTTP range downloads and hashes, plus a public realtime resume-generation handshake.
-- [ ] 4.6 Record production deployment evidence and rollback identifiers in the 1.2.1 release notes.
+- [x] 4.3 Commit, tag, and push the 1.2.1 production manifest and release identity.
+- [x] 4.4 Deploy only the Backend service containing the compatible resume-generation handshake and retain the pre-1.2.1 Backend image.
+- [x] 4.5 Verify internal and public health, web state, all three 1.2.1 entries, HTTP range downloads and hashes, plus a public realtime resume-generation handshake.
+- [x] 4.6 Record production deployment evidence and rollback identifiers in the 1.2.1 release notes.
