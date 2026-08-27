@@ -34,3 +34,9 @@ Acceptance evidence contains only runtime counters, versions, signing identity, 
 ## Rollback
 
 The local 1.1.8 and 1.1.9 packages remain intact. Production rollback restores the prior desktop release manifest and Backend image/commit; it does not delete versioned release objects or either local data directory.
+
+## Production deployment
+
+Production was deployed on 2026-08-27 from manifest commit `b505418508f014e67919b5a87407bbb9f5a9a3c2` and release tag `v1.2.0`. The previous Backend image is retained as `offersteady-backend:rollback-620e786-pre-1.2.0`. Only the Backend container was rebuilt; PostgreSQL, Redis, and Web were not restarted.
+
+Post-deployment verification passed the internal and public health endpoints. The public state API reported all three targets at 1.2.0, both macOS entries as verified and notarized, and Windows as `local-development` and not notarized. All three public download routes returned HTTP 206 for byte-range requests, and full downloads reproduced the SHA-256 values recorded above.

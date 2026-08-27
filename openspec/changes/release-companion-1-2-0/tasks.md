@@ -15,6 +15,6 @@
 ## 3. Publication and Deployment
 
 - [x] 3.1 Upload immutable artifacts and atomically generate the production release manifest.
-- [ ] 3.2 Commit, tag, and push the release manifest and final release identity.
-- [ ] 3.3 Preserve a production rollback point and deploy the Backend manifest update.
-- [ ] 3.4 Verify public health, web state, 1.2.0 manifest entries, download availability, and artifact hashes.
+- [x] 3.2 Commit, tag, and push the release manifest and final release identity.
+- [x] 3.3 Preserve a production rollback point and deploy the Backend manifest update.
+- [x] 3.4 Verify public health, web state, 1.2.0 manifest entries, download availability, and artifact hashes.
