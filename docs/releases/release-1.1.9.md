@@ -15,7 +15,8 @@ Release 1.1.9 separates the macOS permission and local-runtime-identity repair f
 ## Acceptance boundary
 
 - Local automated verification, packaging, installation, and physical Mac acceptance are recorded in the associated OpenSpec tasks.
-- 1.1.9 is not considered production-published until the installed signed app reports the stable pairing identity, system-audio frames receive Backend acknowledgements, and the headset transition test completes.
+- The installed signed app retained its stable pairing identity, system-audio frames received Backend acknowledgements with zero observed sequence gaps, and the headset transition completed without terminating the app or system-audio stream.
+- Removing the headset leaves this specific Mac with no microphone input device because it has no built-in microphone. A zero microphone-listener count in that hardware state is expected and is not treated as an application failure.
 - Rollback uses the retained 1.1.8 package and does not delete either local data directory.
 
 ## Local acceptance artifact
@@ -24,7 +25,7 @@ Release 1.1.9 separates the macOS permission and local-runtime-identity repair f
 | --- | --- | --- | --- |
 | macOS Apple Silicon | `OfferSteady-Companion-1.1.9-macOS-arm64.zip` | `4f9c8c2945c55a285c131d36b94a117f97acf2cd182e45ffad1684db2cbeb704` | Developer ID identity `8Y5FAR3TF3`; local acceptance ZIP, not reported as notarized production distribution |
 
-Automated acceptance passed 28 Desktop test files / 141 tests, Desktop type checking, main/renderer builds, package signature verification, and strict OpenSpec validation. Physical headset-transition re-acceptance remains pending on the installed Mac.
+Automated acceptance passed 28 Desktop test files / 141 tests, Desktop type checking, main/renderer builds, package signature verification, and strict OpenSpec validation. Physical acceptance confirmed stable pairing identity, continuous system-audio frames and acknowledgements, zero observed transport gaps/retries, and survival of the headset-removal transition. The only microphone disappearing with the headset is the expected hardware result on this Mac.
 
 ## Privacy and security
 

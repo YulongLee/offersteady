@@ -15,4 +15,4 @@
 - [x] 3.1 Increment companion metadata to 1.1.9 and document the release boundary and rollback
 - [x] 3.2 Run focused and full Desktop tests, typecheck, build, and strict OpenSpec validation
 - [x] 3.3 Build and install a clean macOS 1.1.9 companion without deleting 1.1.8 rollback artifacts
-- [ ] 3.4 Verify stable pairing identity, granted system-audio capture, Backend acknowledgements, and headset transition on the physical Mac
+- [x] 3.4 Verify stable pairing identity, granted system-audio capture, Backend acknowledgements, and headset transition on the physical Mac
