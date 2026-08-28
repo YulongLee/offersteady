@@ -54,7 +54,11 @@
 
 #### Scenario: Source queue stays healthy during normal speech
 - **WHEN** 语音输入处于正常节奏
-- **THEN** 每个 source 的缓冲区保持有界增长，并避免因频繁分配对象导致明显 GC 抖动
+- **THEN** 每个 source 的缓冲区保持有界增长，当前约 `100ms` PCM 帧立即进入 ASR sender，不为追求合并而主动领取后续帧，并避免因频繁分配对象导致明显 GC 抖动
+
+#### Scenario: Source queue develops a transient backlog
+- **WHEN** 同一 source 已有多个待处理 PCM 帧形成明确积压
+- **THEN** worker 才逐级合并相邻增量帧以追赶实时位置，完整保留音频字节和 Final，且不得等待凑满批次
 
 ### Requirement: Partial and final transcript delivery SHALL be streamed independently
 系统 MUST 将 Partial Transcript 和 Final Transcript 视为两类不同实时事件处理。网页端 MUST 能先显示 Partial Transcript，再在 Final Transcript 到达时原地更新同一句内容，而不是把每次更新都当成独立新句插入。
@@ -66,6 +70,14 @@
 #### Scenario: Partial transcript is superseded by a newer partial
 - **WHEN** 同一句话收到更新版本的 Partial Transcript
 - **THEN** 网页端覆盖旧 partial，而不是在实时对话区叠加重复句子
+
+#### Scenario: Provider emits several ordered partial revisions
+- **WHEN** ASR 为同一 utterance 依次返回多个有效 Partial revision，且实时消费链路没有超过有界积压阈值
+- **THEN** 后端 SSE 与网页状态层按 revision 顺序交付这些更新，不得无条件只保留最后一个 revision
+
+#### Scenario: Provider partial enters the publication hot path
+- **WHEN** 常驻 ASR 接收器收到一个有效 Partial Transcript
+- **THEN** 后端仅执行当前 publisher、segment 和 revision 所需的有界读写后发布 transcript event，不得在发布前扫描该 session 的全部历史 transcript 或执行稳定问题识别
 
 ### Requirement: Invalid silence and phantom transcript generation SHALL be suppressed
 系统 MUST 对静音、底噪、无效系统噪声和空白识别结果进行抑制。系统 MUST NOT 因为空白文本、低幅环境噪声或未达阈值的输入而持续生成新的实时字幕事件。

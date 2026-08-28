@@ -403,7 +403,7 @@ def test_runtime_diagnostic_failure_does_not_close_transcript_sse() -> None:
     assert wait_calls == 1
 
 
-def test_sse_batch_keeps_only_latest_revision_per_transcript_segment() -> None:
+def test_sse_batch_preserves_ordered_transcript_revisions() -> None:
     def event(event_id: str, kind: str, *, segment_id: str | None = None, revision: int = 1, is_final: bool = False) -> RealtimeEvent:
         payload: dict[str, object] = {"revision": revision, "isFinal": is_final}
         if segment_id is not None:
@@ -426,7 +426,14 @@ def test_sse_batch_keeps_only_latest_revision_per_transcript_segment() -> None:
         event("late-partial-b-3", "transcript-updated", segment_id="segment-b", revision=3),
     ])
 
-    assert [item.event_id for item in coalesced] == ["answer-started", "partial-a-2", "final-b-2"]
+    assert [item.event_id for item in coalesced] == [
+        "partial-a-1",
+        "answer-started",
+        "partial-b-1",
+        "partial-a-2",
+        "final-b-2",
+        "late-partial-b-3",
+    ]
 
 
 def test_blocking_wait_executor_does_not_starve_default_executor() -> None:

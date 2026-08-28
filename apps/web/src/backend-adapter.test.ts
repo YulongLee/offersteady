@@ -702,7 +702,7 @@ describe("backend preview adapter", () => {
     expect(updates.at(-1)?.speaker.transcripts[0]).toMatchObject({ text: "准确终稿", isFinal: true });
   });
 
-  it("coalesces a synchronous partial burst before updating the visible transcript store", async () => {
+  it("preserves each ordered partial revision through the visible transcript store", async () => {
     window.localStorage.setItem("offersteady.auth.access_token", "access-token");
     window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
     window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
@@ -738,8 +738,11 @@ describe("backend preview adapter", () => {
 
     await adapter.subscribeRealtimeSession("session-1", update => updates.push(update as typeof updates[number]));
 
-    expect(updates).toHaveLength(1);
-    expect(updates[0]?.speaker.transcripts).toEqual([
+    expect(updates).toHaveLength(51);
+    expect(updates.slice(1).map(update => update.speaker.transcripts[0]?.revision)).toEqual(
+      Array.from({ length: 50 }, (_item, index) => index + 1),
+    );
+    expect(updates.at(-1)?.speaker.transcripts).toEqual([
       expect.objectContaining({ text: "第 50 版", revision: 50 }),
     ]);
   });
@@ -1042,7 +1045,7 @@ describe("backend preview adapter", () => {
       undefined,
       onAnswerUpdate,
     );
-    await Promise.resolve();
+    await vi.waitUntil(() => fetchImpl.mock.calls.some(([input]) => String(input).endsWith("/screenshot-answer/sessions/session-1/remote-capture-requests")));
     const partialTask = { ...task, answerText: "这是部分", status: "streaming", updatedAtMs: 1, completedAtMs: null };
     streamController!.enqueue(encoder.encode(`event: update\ndata: ${JSON.stringify({
       type: "update", cursor: 1,

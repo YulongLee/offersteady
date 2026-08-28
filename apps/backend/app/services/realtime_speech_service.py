@@ -494,12 +494,6 @@ class RealtimeSpeechService:
         ]
         with publication_lock:
             suppression_reason = self._suppression_reason(result.text, frame=frame)
-            if suppression_reason is None:
-                suppression_reason = self._duplicate_nearby_suppression_reason(
-                    text=result.text,
-                    publisher=publisher,
-                    frame=frame,
-                )
             if suppression_reason is not None:
                 return
             current = self.repository.get_transcript(frame.session_id, frame.segment_id)
@@ -637,8 +631,11 @@ class RealtimeSpeechService:
                 timing = dict(event_performance)
             self._observe_trace(partial_trace_id, **timing)
             self._set_latest_timing(session_id=frame.session_id, source_kind=frame.source_kind, timing=timing)
-            # Stable/question-prefetch is deliberately after the subtitle XADD.
-            self._observe_stable_interviewer_partial(transcript)
+            # Session-wide duplicate scans remain an authoritative Final-path
+            # concern.  Partial publication must stay bounded to the current
+            # segment, and stable-question work runs after the subtitle XADD on
+            # the cold executor so it cannot delay SSE delivery.
+            self._submit_cold(self._observe_stable_interviewer_partial, transcript)
 
     def _submit_cold(self, operation, /, *args, **kwargs) -> None:
         """Run optional persistence/metrics outside the realtime publication path."""
@@ -2387,7 +2384,11 @@ class RealtimeSpeechService:
                         return
                     continue
             jobs = [job]
-            for _ in range(max(0, self.settings.realtime_ingress_coalesce_max_frames - 1)):
+            additional_frames = self._backlog_coalesce_take_count(
+                backlog_frames=work_queue.qsize(),
+                max_frames=self.settings.realtime_ingress_coalesce_max_frames,
+            )
+            for _ in range(additional_frames):
                 try:
                     jobs.append(work_queue.get_nowait())
                 except queue.Empty:
@@ -2405,6 +2406,22 @@ class RealtimeSpeechService:
                 for _ in jobs:
                     work_queue.task_done()
                 self._counter_bucket(session_id=key[0], source_kind=key[1])["queueDepth"] = work_queue.qsize()
+
+    @staticmethod
+    def _backlog_coalesce_take_count(*, backlog_frames: int, max_frames: int) -> int:
+        """Drain extra frames only after a source has developed real backlog.
+
+        One waiting frame is the normal producer/consumer hand-off and should
+        not enlarge the provider audio chunk.  Two to three waiting frames use
+        a bounded two-frame catch-up; four or more use the configured maximum.
+        No branch waits for another frame to arrive.
+        """
+        bounded_max = max(1, max_frames)
+        if bounded_max <= 1 or backlog_frames <= 1:
+            return 0
+        if backlog_frames <= 3:
+            return min(1, bounded_max - 1)
+        return min(backlog_frames, bounded_max - 1)
 
     @staticmethod
     def _coalesce_prepared_frame_jobs(jobs: list[dict[str, object]]) -> list[dict[str, object]]:

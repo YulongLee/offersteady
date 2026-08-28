@@ -73,32 +73,14 @@ def session_stream_refresh_plan(*, payload_type: str, event_kinds: set[str]) -> 
 
 
 def coalesce_transcript_revisions(events: list[RealtimeEvent]) -> list[RealtimeEvent]:
-    """Keep only the newest visible revision for each transcript in one SSE batch.
+    """Preserve Redis order for healthy transcript revision delivery.
 
-    Redis remains the authoritative ordered log and the cursor still advances
-    across every event.  The browser only needs the newest monotonic state for a
-    segment, so replaying superseded partials creates avoidable network and main
-    thread backpressure without changing the visible result.
+    Provider Partial cadence is already bounded.  Dropping revisions here makes
+    the Browser observe phrase-sized jumps and prevents end-to-end revision
+    accounting.  Queue/backpressure protection belongs at the bounded audio and
+    client-delivery queues; Final and every accepted Partial remain observable.
     """
-    latest_index_by_segment: dict[str, int] = {}
-    latest_rank_by_segment: dict[str, tuple[bool, int, int]] = {}
-    for index, event in enumerate(events):
-        if event.kind != "transcript-updated":
-            continue
-        segment_id = event.payload.get("segmentId")
-        if isinstance(segment_id, str) and segment_id:
-            revision = event.payload.get("revision")
-            rank = (event.payload.get("isFinal") is True, revision if isinstance(revision, int) else 0, index)
-            if rank > latest_rank_by_segment.get(segment_id, (False, -1, -1)):
-                latest_rank_by_segment[segment_id] = rank
-                latest_index_by_segment[segment_id] = index
-    return [
-        event
-        for index, event in enumerate(events)
-        if event.kind != "transcript-updated"
-        or not isinstance(event.payload.get("segmentId"), str)
-        or latest_index_by_segment.get(str(event.payload.get("segmentId"))) == index
-    ]
+    return list(events)
 
 
 def _sse_frame(event: str, payload: dict[str, object], *, cursor: int | None = None) -> str:

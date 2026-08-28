@@ -984,6 +984,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   private readonly fetchImpl: typeof fetch;
   private foundation: FoundationIndexResponse | null = null;
   private readonly captureEventWaiters = new Map<string, Set<(payload: Record<string, unknown>) => void>>();
+  private readonly pendingCaptureEvents = new Map<string, Record<string, unknown>>();
   private readonly acknowledgedPerformanceTraces = new Set<string>();
   private readonly acknowledgedPerformanceTraceOrder: string[] = [];
   private readonly pendingPerformanceAcks: Array<{ readonly key: string; readonly send: () => Promise<unknown> }> = [];
@@ -1113,11 +1114,29 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       if (event.kind !== "screenshot-capture-updated") continue;
       const requestId = typeof event.payload.requestId === "string" ? event.payload.requestId : "";
       if (!requestId) continue;
-      for (const listener of this.captureEventWaiters.get(requestId) ?? []) listener(event.payload);
+      const listeners = this.captureEventWaiters.get(requestId);
+      if (listeners?.size) {
+        for (const listener of listeners) listener(event.payload);
+        continue;
+      }
+      this.pendingCaptureEvents.delete(requestId);
+      this.pendingCaptureEvents.set(requestId, event.payload);
+      while (this.pendingCaptureEvents.size > 64) {
+        const oldest = this.pendingCaptureEvents.keys().next().value;
+        if (typeof oldest !== "string") break;
+        this.pendingCaptureEvents.delete(oldest);
+      }
     }
   }
 
   private waitForCaptureEvent(requestId: string, timeoutMs: number, signal?: AbortSignal): Promise<Record<string, unknown> | null> {
+    const pending = this.pendingCaptureEvents.get(requestId);
+    if (pending) {
+      this.pendingCaptureEvents.delete(requestId);
+      return signal?.aborted
+        ? Promise.reject(new DOMException("Aborted", "AbortError"))
+        : Promise.resolve(pending);
+    }
     return new Promise((resolve, reject) => {
       const listeners = this.captureEventWaiters.get(requestId) ?? new Set();
       const cleanup = () => {
@@ -1498,10 +1517,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let streamSnapshot: MaterializedRealtimeSessionStreamEvent | null = null;
-    let pendingSnapshot: MaterializedRealtimeSessionStreamEvent | null = null;
-    let pendingDeliveryEvents: BackendRealtimeEventListResponse["events"] = [];
     let terminalStatus: number | null = null;
-    let flushHandle: number | null = null;
     let latestChunkReceivedAtMs = 0;
     let firstSnapshotTimer: number | null = null;
     const clearFirstSnapshotDeadline = () => {
@@ -1528,27 +1544,6 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS,
       );
     });
-    const coalescePendingDeliveryEvents = (events: BackendRealtimeEventListResponse["events"]) => {
-      const latestTranscriptIndexBySegment = new Map<string, number>();
-      const latestTranscriptRankBySegment = new Map<string, readonly [boolean, number, number]>();
-      events.forEach((item, index) => {
-        if (item.kind !== "transcript-updated") return;
-        const segmentId = typeof item.payload.segmentId === "string" ? item.payload.segmentId : "";
-        if (!segmentId) return;
-        const rank = [item.payload.isFinal === true, typeof item.payload.revision === "number" ? item.payload.revision : 0, index] as const;
-        const current = latestTranscriptRankBySegment.get(segmentId);
-        if (!current || Number(rank[0]) > Number(current[0])
-          || (rank[0] === current[0] && (rank[1] > current[1] || (rank[1] === current[1] && rank[2] > current[2])))) {
-          latestTranscriptRankBySegment.set(segmentId, rank);
-          latestTranscriptIndexBySegment.set(segmentId, index);
-        }
-      });
-      return events.filter((item, index) => {
-        if (item.kind !== "transcript-updated") return true;
-        const segmentId = typeof item.payload.segmentId === "string" ? item.payload.segmentId : "";
-        return !segmentId || latestTranscriptIndexBySegment.get(segmentId) === index;
-      });
-    };
     const markStateUpdate = (
       payload: MaterializedRealtimeSessionStreamEvent,
       stateUpdateStartedAtMs: number,
@@ -1606,45 +1601,34 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         );
       }
     };
-    const scheduleFlush = () => {
-      if (flushHandle !== null) return;
-      const flush = () => {
-        flushHandle = null;
-        const pendingPayload = pendingSnapshot;
-        pendingSnapshot = null;
-        if (!pendingPayload || (pendingPayload.type !== "snapshot" && pendingPayload.type !== "update")) return;
-        const stateUpdateStartedAtMs = Date.now();
-        for (const item of pendingDeliveryEvents) {
-          if (item.kind !== "transcript-updated") continue;
-          const identity = subtitleRevisionIdentity(pendingPayload.events.sessionId, item.eventId, item.payload);
-          if (identity) recordSubtitleRevisionStage(identity, "store-start", stateUpdateStartedAtMs, { visibilityState: document.visibilityState });
-        }
-        const mappedState = mapRealtimeState(interviewId, pendingPayload.transcripts, pendingPayload.candidates, pendingPayload.events, pendingPayload.runtime);
-        onUpdate(mappedState, { type: pendingPayload.type, cursor: pendingPayload.cursor ?? 0 });
-        const stateUpdatedAtMs = Date.now();
-        const payload = markStateUpdate(pendingPayload, stateUpdateStartedAtMs, stateUpdatedAtMs);
-        if (typeof payload.cursor === "number") window.sessionStorage?.setItem(cursorKey, String(payload.cursor));
-        const deliveryEvents = pendingDeliveryEvents;
-        pendingDeliveryEvents = [];
-        for (const item of deliveryEvents) {
-          if (item.kind !== "transcript-updated") continue;
-          const identity = subtitleRevisionIdentity(payload.events.sessionId, item.eventId, item.payload);
-          if (!identity) continue;
-          recordSubtitleRevisionStage(identity, "store-complete", stateUpdatedAtMs, { visibilityState: document.visibilityState });
-        }
-        acknowledgeTranscriptDelivery(payload.events.sessionId, deliveryEvents, stateUpdateStartedAtMs, stateUpdatedAtMs);
-        this.publishCaptureEvents({ sessionId: payload.events.sessionId, events: deliveryEvents });
-      };
-      // State delivery must not wait for the next paint. A zero-delay task lets
-      // the parser coalesce a burst while keeping transcript state ahead of UI
-      // rendering and unrelated main-thread animation work.
-      flushHandle = window.setTimeout(flush, 0);
+    const deliverMaterialized = (
+      payload: MaterializedRealtimeSessionStreamEvent,
+      deliveryEvents: BackendRealtimeEventListResponse["events"],
+    ) => {
+      const stateUpdateStartedAtMs = Date.now();
+      for (const item of deliveryEvents) {
+        if (item.kind !== "transcript-updated") continue;
+        const identity = subtitleRevisionIdentity(payload.events.sessionId, item.eventId, item.payload);
+        if (identity) recordSubtitleRevisionStage(identity, "store-start", stateUpdateStartedAtMs, { visibilityState: document.visibilityState });
+      }
+      const mappedState = mapRealtimeState(interviewId, payload.transcripts, payload.candidates, payload.events, payload.runtime);
+      onUpdate(mappedState, { type: payload.type, cursor: payload.cursor ?? 0 });
+      const stateUpdatedAtMs = Date.now();
+      const observedPayload = markStateUpdate(payload, stateUpdateStartedAtMs, stateUpdatedAtMs);
+      if (typeof observedPayload.cursor === "number") window.sessionStorage?.setItem(cursorKey, String(observedPayload.cursor));
+      for (const item of deliveryEvents) {
+        if (item.kind !== "transcript-updated") continue;
+        const identity = subtitleRevisionIdentity(observedPayload.events.sessionId, item.eventId, item.payload);
+        if (!identity) continue;
+        recordSubtitleRevisionStage(identity, "store-complete", stateUpdatedAtMs, { visibilityState: document.visibilityState });
+      }
+      acknowledgeTranscriptDelivery(observedPayload.events.sessionId, deliveryEvents, stateUpdateStartedAtMs, stateUpdatedAtMs);
+      this.publishCaptureEvents({ sessionId: observedPayload.events.sessionId, events: deliveryEvents });
     };
     const parser = createSseParser((event) => {
       const realtimeEvent = event as unknown as { type?: string };
       if (realtimeEvent.type === "revoked") {
         terminalStatus = 410;
-        pendingSnapshot = null;
         return;
       }
       if (realtimeEvent.type !== "snapshot" && realtimeEvent.type !== "update") return;
@@ -1690,14 +1674,18 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         recordSubtitleRevisionStage(identity, "browser-chunk", receivedAtMs, { visibilityState: document.visibilityState });
         recordSubtitleRevisionStage(identity, "browser-parse", parsedAtMs, { visibilityState: document.visibilityState });
       }
-      streamSnapshot = materializeRealtimeDelta(interviewId, streamSnapshot, payload);
-      pendingSnapshot = streamSnapshot;
-      pendingDeliveryEvents = coalescePendingDeliveryEvents(
-        [...pendingDeliveryEvents, ...payload.events.events].filter(
-          (item, index, items) => items.findIndex(candidate => candidate.eventId === item.eventId) === index,
-        ),
-      );
-      scheduleFlush();
+      const orderedPayloads = payload.type === "update" && payload.events.events.length > 1
+        ? payload.events.events.map(item => ({
+            ...payload,
+            events: { ...payload.events, events: [item] },
+          } as BackendRealtimeSessionStreamEvent))
+        : [payload];
+      for (const orderedPayload of orderedPayloads) {
+        const materialized = materializeRealtimeDelta(interviewId, streamSnapshot, orderedPayload);
+        if (!materialized) continue;
+        streamSnapshot = materialized;
+        deliverMaterialized(materialized, orderedPayload.events.events);
+      }
     });
     const diagnosticsPoll = subtitleRevisionDiagnosticsEnabled()
       ? window.setInterval(() => {
@@ -1719,44 +1707,11 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       if (diagnosticsPoll !== null) window.clearInterval(diagnosticsPoll);
       if (!firstSnapshotRecorded) {
         void reader.cancel().catch(() => undefined);
-        if (flushHandle !== null) {
-          window.clearTimeout(flushHandle);
-          flushHandle = null;
-        }
       }
     }
     parser.push(decoder.decode());
     parser.flush();
     if (!firstSnapshotRecorded && terminalStatus === null && !signal?.aborted) throw firstSnapshotFailure("first-snapshot-eof");
-    const pendingFinalSnapshot = pendingSnapshot as MaterializedRealtimeSessionStreamEvent | null;
-    if (pendingFinalSnapshot) {
-      const stateUpdateStartedAtMs = Date.now();
-      for (const item of pendingDeliveryEvents) {
-        if (item.kind !== "transcript-updated") continue;
-        const identity = subtitleRevisionIdentity(pendingFinalSnapshot.events.sessionId, item.eventId, item.payload);
-        if (identity) recordSubtitleRevisionStage(identity, "store-start", stateUpdateStartedAtMs, { visibilityState: document.visibilityState });
-      }
-      onUpdate(
-        mapRealtimeState(interviewId, pendingFinalSnapshot.transcripts, pendingFinalSnapshot.candidates, pendingFinalSnapshot.events, pendingFinalSnapshot.runtime),
-        { type: pendingFinalSnapshot.type, cursor: pendingFinalSnapshot.cursor ?? 0 },
-      );
-      const stateUpdatedAtMs = Date.now();
-      const finalSnapshot = markStateUpdate(pendingFinalSnapshot, stateUpdateStartedAtMs, stateUpdatedAtMs);
-      if (typeof finalSnapshot.cursor === "number") window.sessionStorage?.setItem(cursorKey, String(finalSnapshot.cursor));
-      this.publishCaptureEvents({ sessionId: finalSnapshot.events.sessionId, events: pendingDeliveryEvents });
-      for (const item of pendingDeliveryEvents) {
-        if (item.kind !== "transcript-updated") continue;
-        const identity = subtitleRevisionIdentity(finalSnapshot.events.sessionId, item.eventId, item.payload);
-        if (identity) recordSubtitleRevisionStage(identity, "store-complete", stateUpdatedAtMs, { visibilityState: document.visibilityState });
-      }
-      acknowledgeTranscriptDelivery(finalSnapshot.events.sessionId, pendingDeliveryEvents, stateUpdateStartedAtMs, stateUpdatedAtMs);
-      pendingDeliveryEvents = [];
-      pendingSnapshot = null;
-    }
-    if (flushHandle !== null) {
-      window.clearTimeout(flushHandle);
-      flushHandle = null;
-    }
     if (terminalStatus !== null) {
       window.sessionStorage?.removeItem(cursorKey);
       const error = new AppError("validation", "当前面试已被新的面试接管") as AppError & { status: number };

@@ -170,6 +170,14 @@ Alternative considered: 只继续调一个全局 RMS 阈值。缺点是不同设
 
 Qwen Realtime 优先使用百炼 Workspace 专属地域域名。Workspace ID 未配置时继续使用显式 `WS_URL` 或公共域名作为可回滚兼容路径，不得把 Workspace ID 或 API Key写入客户端。
 
+### Decision 13: Keep the transcript partial path bounded and preserve healthy revision delivery
+
+Provider Partial 的可见字幕发布路径只允许执行当前 publisher、当前 segment 和单调 revision 所需的有界读写。跨 segment 的历史 transcript 扫描、稳定问题观察、诊断聚合等工作不得位于 Redis transcript event 之前；邻近重复与跨声道回声的权威判断保留在 Final 路径，避免为每个 Partial 扫描整场面试。
+
+正常 source 队列只处理当前 100ms 增量帧，不主动取后续帧合并。仅当队列已经出现积压时才逐级启用两帧或最多四帧的无等待合并，以完整保留 PCM 并优先追赶实时位置。
+
+Redis/SSE 和 Browser state adapter 在健康流中保留有序 transcript revision，不得无条件将同一 segment 的多个 Provider revision 压缩为最后一个。过载保护只能在明确超过有界积压阈值时启用，Final 必须始终保留，且不得通过逐字动画伪造 Provider 未提供的 revision。
+
 ## Risks / Trade-offs
 
 - [Risk] 引入 source worker、持久连接和有界队列后，系统状态机会更复杂 → Mitigation: 按 source/session 明确状态图，并增加可重复的单元测试与集成测试。

@@ -700,6 +700,67 @@ def test_realtime_worker_coalesces_backlogged_incremental_pcm_and_preserves_fina
     assert merged.ended_at_ms == 520
 
 
+def test_frame_worker_only_coalesces_after_a_real_backlog_develops():
+    assert RealtimeSpeechService._backlog_coalesce_take_count(backlog_frames=0, max_frames=4) == 0
+    assert RealtimeSpeechService._backlog_coalesce_take_count(backlog_frames=1, max_frames=4) == 0
+    assert RealtimeSpeechService._backlog_coalesce_take_count(backlog_frames=2, max_frames=4) == 1
+    assert RealtimeSpeechService._backlog_coalesce_take_count(backlog_frames=3, max_frames=4) == 1
+    assert RealtimeSpeechService._backlog_coalesce_take_count(backlog_frames=4, max_frames=4) == 3
+
+
+def test_provider_partial_hot_path_does_not_scan_session_history_or_run_question_observer(monkeypatch):
+    _user_id, session_id, device_id, publisher_payload = create_live_binding()
+    service = realtime_speech_service()
+    publisher = service.repository.get_publisher(publisher_payload["publisherId"])
+    assert publisher is not None
+    now_ms = int(time.time() * 1000)
+    frame = AudioFrame(
+        publisher_id=publisher.publisher_id,
+        session_id=session_id,
+        device_id=device_id,
+        source_id="system-fast-partial",
+        source_kind="system",
+        segment_id=f"fast-partial-{uuid4().hex}",
+        revision=1,
+        sequence=0,
+        captured_at_ms=now_ms - 100,
+        started_at_ms=now_ms - 100,
+        ended_at_ms=now_ms,
+        duration_ms=100,
+        codec="pcm-s16le",
+        sample_rate_hz=16_000,
+        channels=1,
+        is_final=False,
+        audio_bytes=b"partial-pcm",
+    )
+    cold_calls: list[str] = []
+
+    def fail_history_scan(*_args, **_kwargs):
+        raise AssertionError("partial publication scanned session history")
+
+    def fail_inline_observer(*_args, **_kwargs):
+        raise AssertionError("stable question observer ran inline")
+
+    def capture_cold(operation, *_args, **_kwargs):
+        cold_calls.append(getattr(operation, "__name__", "unknown"))
+
+    monkeypatch.setattr(service.repository, "list_transcripts_for_session", fail_history_scan)
+    monkeypatch.setattr(service, "_observe_stable_interviewer_partial", fail_inline_observer)
+    monkeypatch.setattr(service, "_submit_cold", capture_cold)
+
+    service._publish_provider_partial(frame, TranscriptResult(
+        text="请介绍你的项目",
+        confidence=0.92,
+        partial_received_at_ms=now_ms,
+        provider_revision=1,
+    ))
+
+    transcript = service.repository.get_transcript(session_id, frame.segment_id)
+    assert transcript is not None
+    assert transcript.text == "请介绍你的项目"
+    assert cold_calls == ["fail_inline_observer"]
+
+
 def test_saturated_queue_replaces_only_a_partial_and_preserves_all_terminals():
     template = AudioFrame(
         publisher_id="publisher-queue",

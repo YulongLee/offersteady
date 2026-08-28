@@ -23,6 +23,8 @@
 - [x] 3.6 Atomically supersede stale device bindings and publisher tokens when the same desktop moves to a new interview.
 - [x] 3.7 Decouple provider WebSocket receive from PCM append with one persistent event receiver per session source.
 - [x] 3.8 Track provider event and delivered revisions independently so between-frame partials are not skipped or duplicated.
+- [x] 3.9 Remove session-wide transcript scans and stable-question work from the Provider Partial publication hot path.
+- [x] 3.10 Make PCM coalescing backlog-adaptive so healthy 100ms frames enter the ASR sender immediately.
 
 ## 4. Web Transcript Streaming and Overlay Efficiency
 
@@ -36,6 +38,7 @@
 - [x] 4.8 Circuit-break invalid-session SSE recovery so polling, focus events, and reconnect timers cannot form a retry storm.
 - [x] 4.9 Exit invalid live routes immediately and move synchronous Redis SSE reads off the FastAPI event loop.
 - [x] 4.10 Reuse runtime diagnostics for two seconds during high-frequency SSE partial updates.
+- [x] 4.11 Preserve ordered healthy transcript revisions through Redis/SSE and the Browser state adapter without synthetic reveal animation.
 
 ## 5. Verification, Evals, and Rollout
 
@@ -53,3 +56,4 @@
 - [x] 5.9 Render each accepted realtime partial revision immediately without a synthetic progressive reveal delay.
 - [x] 5.10 Prefer the configured Aliyun Bailian Workspace endpoint, document its safe fallback, and verify endpoint selection without exposing credentials.
 - [x] 5.11 Stabilize visible realtime partials against temporary provider retractions while keeping growth immediate and Final authoritative.
+- [ ] 5.12 Add regressions and complete staged Backend/Web/Desktop validation for the Partial fast path and revision-preserving delivery.
