@@ -133,6 +133,57 @@ def test_retry_replays_the_complete_ephemeral_utterance(monkeypatch):
     assert service._replay_frame(terminal) is None
 
 
+def test_replay_buffer_keeps_a_rolling_tail_after_capacity_is_exceeded():
+    service = realtime_speech_service()
+    original_tail_ms = service.settings.realtime_asr_replay_tail_ms
+    original_max_bytes = service.settings.realtime_asr_replay_buffer_max_bytes
+    service.settings.realtime_asr_replay_tail_ms = 100
+    service.settings.realtime_asr_replay_buffer_max_bytes = 3_200
+    frame_base = AudioFrame(
+        publisher_id="rolling-publisher",
+        session_id=f"rolling-session-{uuid4().hex[:8]}",
+        device_id="rolling-device",
+        source_id="rolling-microphone",
+        source_kind="microphone",
+        segment_id="rolling-segment",
+        revision=1,
+        sequence=1,
+        captured_at_ms=1_000,
+        started_at_ms=1_000,
+        ended_at_ms=1_100,
+        duration_ms=100,
+        codec="pcm-s16le",
+        sample_rate_hz=16_000,
+        channels=1,
+        is_final=False,
+        audio_bytes=b"a" * 2_000,
+    )
+    second = replace(frame_base, revision=2, sequence=2, ended_at_ms=1_200, audio_bytes=b"b" * 2_000)
+    try:
+        service._buffer_segment_audio(frame_base)
+        service._buffer_segment_audio(second)
+        replay = service._replay_frame(second)
+        assert replay is not None
+        assert replay.audio_bytes == (b"a" * 1_200) + (b"b" * 2_000)
+        assert replay.duration_ms == 100
+    finally:
+        service._clear_segment_audio(second)
+        service.settings.realtime_asr_replay_tail_ms = original_tail_ms
+        service.settings.realtime_asr_replay_buffer_max_bytes = original_max_bytes
+
+
+@pytest.mark.parametrize(
+    ("prefix", "recovered", "expected"),
+    [
+        ("这是已经显示的字幕", "显示的字幕继续恢复", "这是已经显示的字幕继续恢复"),
+        ("hello world", "world again", "hello world again"),
+        ("完整内容", "", "完整内容"),
+    ],
+)
+def test_recovery_transcript_stitching_deduplicates_replayed_tail(prefix, recovered, expected):
+    assert RealtimeSpeechService._merge_recovery_transcript(prefix, recovered) == expected
+
+
 def test_missing_provider_completion_is_suppressed_without_degrading_publisher(monkeypatch):
     _user_id, session_id, device_id, publisher_payload = create_live_binding()
     service = realtime_speech_service()

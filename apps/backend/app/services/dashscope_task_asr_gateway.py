@@ -12,6 +12,7 @@ from websockets.exceptions import ConnectionClosed
 from websockets.sync.client import connect
 
 from app.core.config import Settings
+from app.core.logging import log_event
 from app.ports.interview_session import InterviewLanguage
 from app.ports.realtime_speech import AsrUsageReport, AudioFrame, RealtimeAsrGatewayPort, TranscriptResult
 from app.services.realtime_speech_service import NonRetryableAsrError, RetryableAsrError
@@ -39,7 +40,12 @@ class _SourceTaskSession:
     first_text_at_ms: int | None = None
     latest_text_at_ms: int | None = None
     completed_at_ms: int | None = None
+    sentence_final_revision: int = 0
+    segment_sentence_final_revision: int = 0
+    latest_sentence_final_at_ms: int | None = None
     receiver_error: Exception | None = None
+    provider_failure_code: str | None = None
+    provider_failure_message: str | None = None
     accepting_transcript_events: bool = True
     closed: bool = False
     latest_frame: AudioFrame | None = None
@@ -167,6 +173,7 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
             "protocol": "qwen-audio-task",
             "model": self.settings.realtime_asr_model,
             "mode": "provider-vad-task",
+            "continuous_task_enabled": int(self.settings.realtime_asr_continuous_task_enabled),
             "connection_state": self._connection_state_by_source.get(source_kind),
             "last_error_code": self._last_error_by_source.get(source_kind),
             **self.diagnostics(source_kind),
@@ -221,8 +228,14 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
 
                 if frame.is_final:
                     commit_sent_at_ms = int(time.time() * 1000)
-                    self._finish_task(session)
-                    text, first_text_at_ms, partial_at_ms, completed_at_ms = self._wait_for_final(session)
+                    continuous_completed = False
+                    if self.settings.realtime_asr_continuous_task_enabled:
+                        continuous_completed = self._wait_for_sentence_final(session)
+                    if continuous_completed:
+                        text, first_text_at_ms, partial_at_ms, completed_at_ms = self._current_segment_result(session)
+                    else:
+                        self._finish_task(session)
+                        text, first_text_at_ms, partial_at_ms, completed_at_ms = self._wait_for_final(session)
                     result = self._result(
                         session,
                         text=text,
@@ -237,9 +250,10 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
                     )
                     self._final_counts[frame.source_kind] = self._final_counts.get(frame.source_kind, 0) + 1
                     with session.event_condition:
-                        session.accepting_transcript_events = False
                         session.current_segment_id = None
-                    self._start_task(session, wait=False)
+                        session.accepting_transcript_events = True
+                    if not continuous_completed:
+                        self._start_task(session, wait=False)
                     self._connection_state_by_source[frame.source_kind] = "ready"
                     self._last_error_by_source.pop(frame.source_kind, None)
                     return result
@@ -346,7 +360,7 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
             return session
 
     def _start_task(self, session: _SourceTaskSession, *, wait: bool) -> None:
-        task_id = uuid4().hex
+        task_id = str(uuid4())
         with session.event_condition:
             session.task_id = task_id
             session.task_started = False
@@ -357,7 +371,12 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
             session.first_text_at_ms = None
             session.latest_text_at_ms = None
             session.completed_at_ms = None
+            session.sentence_final_revision = 0
+            session.segment_sentence_final_revision = 0
+            session.latest_sentence_final_at_ms = None
             session.receiver_error = None
+            session.provider_failure_code = None
+            session.provider_failure_message = None
             session.accepting_transcript_events = True
             session.delivered_revision = session.event_revision
         session.connection.send(json.dumps({
@@ -410,6 +429,13 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
             session.latest_qwen_send_enqueue_at_ms = None
             session.latest_qwen_ws_send_start_at_ms = None
             session.latest_qwen_ws_send_complete_at_ms = None
+            session.sentence_texts = {}
+            session.transcript_text = ""
+            session.first_text_at_ms = None
+            session.latest_text_at_ms = None
+            session.completed_at_ms = None
+            session.segment_sentence_final_revision = session.sentence_final_revision
+            session.accepting_transcript_events = True
             self._utterance_counts[frame.source_kind] = self._utterance_counts.get(frame.source_kind, 0) + 1
 
     def _finish_task(self, session: _SourceTaskSession) -> None:
@@ -430,6 +456,43 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
                     raise TimeoutError("qwen_audio_task_finish_timeout")
                 session.event_condition.wait(timeout=remaining)
             session.delivered_revision = session.event_revision
+            return (
+                session.transcript_text,
+                session.first_text_at_ms,
+                session.latest_text_at_ms,
+                session.completed_at_ms,
+            )
+
+    def _wait_for_sentence_final(self, session: _SourceTaskSession) -> bool:
+        deadline = time.monotonic() + max(
+            0.1,
+            min(
+                self.settings.realtime_asr_finalize_timeout_seconds,
+                self.settings.realtime_asr_continuous_task_sentence_wait_seconds,
+            ),
+        )
+        with session.event_condition:
+            while (
+                session.sentence_final_revision <= session.segment_sentence_final_revision
+                or session.latest_sentence_final_at_ms is None
+                or (
+                    session.latest_audio_appended_at_ms is not None
+                    and session.latest_sentence_final_at_ms < session.latest_audio_appended_at_ms
+                )
+            ):
+                self._raise_receiver_error(session)
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return False
+                session.event_condition.wait(timeout=remaining)
+            session.delivered_revision = session.event_revision
+            return True
+
+    @staticmethod
+    def _current_segment_result(
+        session: _SourceTaskSession,
+    ) -> tuple[str, int | None, int | None, int | None]:
+        with session.event_condition:
             return (
                 session.transcript_text,
                 session.first_text_at_ms,
@@ -467,14 +530,35 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
             except Exception as exc:
                 with session.event_condition:
                     if not session.closed:
-                        session.receiver_error = exc
+                        if session.receiver_error is None:
+                            session.receiver_error = exc
                         session.event_condition.notify_all()
+                if not session.closed:
+                    close_code, close_reason = self._connection_close_details(exc)
+                    log_event(
+                        self.logger,
+                        logging.WARNING,
+                        settings=self.settings,
+                        event="realtime_asr.connection_closed",
+                        feature="realtime-asr",
+                        action="provider-receive",
+                        source_kind=session.source_kind,
+                        connection_id=session.connection_id,
+                        task_id=session.task_id,
+                        provider_code=session.provider_failure_code,
+                        connection_lifetime_ms=max(
+                            0, int((time.monotonic() - session.created_at_monotonic) * 1000)
+                        ),
+                        close_code=close_code,
+                        close_reason=close_reason,
+                    )
                 return
             try:
                 message = json.loads(raw)
             except (json.JSONDecodeError, TypeError) as exc:
                 with session.event_condition:
-                    session.receiver_error = exc
+                    if session.receiver_error is None:
+                        session.receiver_error = exc
                     session.event_condition.notify_all()
                 return
             header = message.get("header") or {}
@@ -493,8 +577,27 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
                     detail = str(header.get("error_message") or code)
                     self._task_failure_counts[session.source_kind] = self._task_failure_counts.get(session.source_kind, 0) + 1
                     self._record_error(session.source_kind, code)
-                    session.receiver_error = self._provider_error(code, detail)
+                    if session.receiver_error is None:
+                        session.receiver_error = self._provider_error(code, detail)
+                        session.provider_failure_code = code[:128]
+                        session.provider_failure_message = detail[:256]
                     session.event_condition.notify_all()
+                    log_event(
+                        self.logger,
+                        logging.WARNING,
+                        settings=self.settings,
+                        event="realtime_asr.task_failed",
+                        feature="realtime-asr",
+                        action="provider-task",
+                        source_kind=session.source_kind,
+                        connection_id=session.connection_id,
+                        task_id=session.task_id,
+                        provider_code=code[:128],
+                        provider_message=detail[:256],
+                        connection_lifetime_ms=max(
+                            0, int((time.monotonic() - session.created_at_monotonic) * 1000)
+                        ),
+                    )
                     continue
                 if event == "task-finished":
                     session.task_finished = True
@@ -519,6 +622,9 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
                 session.latest_text_at_ms = now_ms
                 session.event_revision += 1
                 if sentence.get("sentence_end"):
+                    session.sentence_final_revision += 1
+                    session.completed_at_ms = now_ms
+                    session.latest_sentence_final_at_ms = now_ms
                     self._provider_sentence_final_counts[session.source_kind] = (
                         self._provider_sentence_final_counts.get(session.source_kind, 0) + 1
                     )
@@ -630,10 +736,21 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
 
     @staticmethod
     def _provider_error(code: str, detail: str) -> Exception:
+        del detail
         normalized = code.lower()
         if any(token in normalized for token in ("accessdenied", "unauthorized", "invalidparameter", "model.notfound")):
-            return NonRetryableAsrError(f"{code}: {detail}")
-        return RetryableAsrError(f"{code}: {detail}")
+            return NonRetryableAsrError(code)
+        return RetryableAsrError(code)
+
+    @staticmethod
+    def _connection_close_details(exc: Exception) -> tuple[int | None, str | None]:
+        received = getattr(exc, "rcvd", None)
+        code = getattr(received, "code", None)
+        reason = getattr(received, "reason", None)
+        return (
+            int(code) if isinstance(code, int) else None,
+            str(reason)[:256] if reason else None,
+        )
 
     @staticmethod
     def _raise_receiver_error(session: _SourceTaskSession) -> None:

@@ -198,6 +198,22 @@ SSE 建连后必须先读取一个轻量 bootstrap cursor，再物化并立即�
 
 每个增长 revision 的首个新增字符仍在当前渲染周期立即出现；任何已接收 revision 最迟 `650ms` 追平，防止动画形成长期延迟。Final、非前缀校正、页面不可见、减少动态效果和失去帧调度能力时立即清空蓄水池并显示权威文本。蓄水池不得生成供应商未返回的字符，不得改变回答输入、问题检测、持久化 transcript、revision 顺序或原始性能时间点，并继续复用单一全局 animation-frame 调度器以限制 CPU 开销。
 
+### Decision 17: Preserve the first provider failure and isolate recovery by source
+
+Qwen `task-failed` 后会关闭当前 WebSocket。接收器必须采用 first-error-wins：先保存供应商 `code/message`，记录 `sourceKind/connectionId/taskId/connectionLifetimeMs`，随后到达的连接关闭只能补充 close code/reason，不能覆盖原始错误。日志只记录经过截断的供应商诊断，不记录音频、字幕或凭据。
+
+一个 source 的可重试失败只关闭并恢复该 source；publisher 保持可接收状态，另一 source 不被降级或重建。只有 publisher/鉴权本身失败才允许改变整场连接状态。
+
+### Decision 18: Replay a bounded audio tail and stitch it to an in-memory transcript checkpoint
+
+断线重试缓存改为滚动尾缓冲，默认保留最近 `2000ms` PCM，并继续受全局字节上限保护；超出容量时淘汰最旧字节，而不是清空整个 segment。重试帧携带只存在于进程内的已发布字幕检查点，Provider partial/final 通过最长边界重叠去重后与检查点拼接，避免尾音频重放导致字幕倒退或缺失。该检查点不得写入日志、诊断、Redis 或数据库。
+
+### Decision 19: Reuse one healthy Qwen task across local utterances with a safe rollover fallback
+
+Qwen Audio task 模式默认在同一 `sessionId + sourceKind` 的健康连接中跨本地 utterance 复用一个 provider task。每个本地 segment 独立重置字幕状态，并以 Provider `sentence_end` 作为完成确认；正常完成不发送 `finish-task`，从而移除逐句 task 重建窗口。
+
+若本地 final 在有界时间内未看到对应 `sentence_end`，Gateway 自动执行既有 `finish-task`，等待 `task-finished` 后启动新 task。该行为由服务端 feature flag 控制，关闭后完整回退旧逐句 task 路径。
+
 ## Risks / Trade-offs
 
 - [Risk] 引入 source worker、持久连接和有界队列后，系统状态机会更复杂 → Mitigation: 按 source/session 明确状态图，并增加可重复的单元测试与集成测试。
@@ -209,6 +225,8 @@ SSE 建连后必须先读取一个轻量 bootstrap cursor，再物化并立即�
 - [Risk] 对无效 session 降低 SSE 重试频率后，短暂创建延迟可能延后恢复 → Mitigation: 页面前台恢复、网络恢复和低频状态探测成功时立即重建订阅。
 - [Risk] 暂时保留较长 partial 可能让错误尾词多停留一小段时间 → Mitigation: 仅在未定稿文本回缩时稳定显示，等长/增长修订仍即时更新，Final 无条件立即覆盖。
 - [Risk] 字幕平滑可能形成视觉积压或增加 React 更新开销 → Mitigation: 使用共享帧调度、单次有界步进和 `300ms` 强制追平；Final、后台、减少动态效果和异常状态直接显示目标文本，并通过回归测试限制活动调度数量。
+- [Risk] 持续 task 的句尾事件迟到会让本地 final 等待 → Mitigation: 只等待既有 final timeout，并自动回退逐句 task rollover；开关可即时关闭新行为。
+- [Risk] 尾音频重放可能重复少量文字 → Mitigation: 使用最长前后缀重叠拼接，且检查点仅驻留进程内，不改变原始供应商事件和隐私边界。
 
 ## Migration Plan
 

@@ -26,6 +26,10 @@
 - **WHEN** 某 source 在短时间内重复创建实时 ASR 连接
 - **THEN** 系统输出连接重建异常诊断，帮助定位长连接复用失败
 
+#### Scenario: Provider failure closes its WebSocket
+- **WHEN** Qwen task failure 后连接被供应商关闭
+- **THEN** 诊断保留 source、connection、task、首个 provider code 和连接寿命，并可补充 close code/reason，且不记录音频、字幕或凭据
+
 ### Requirement: Performance verification SHALL include TTFT and final-latency acceptance tests
 系统 MUST 提供可重复执行的性能验证方法，覆盖首字延迟（TTFT）、Partial Transcript 更新间隔、Final Transcript 耗时、CPU 使用、内存分配和 GC 抖动。验收结果 MUST 支持与优化前基线比较。
 

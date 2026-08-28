@@ -109,6 +109,7 @@ def _frame(
     revision: int = 1,
     is_final: bool = False,
     audio: bytes = b"audio",
+    segment_id: str | None = None,
 ) -> AudioFrame:
     now_ms = int(time.time() * 1000)
     return AudioFrame(
@@ -117,7 +118,7 @@ def _frame(
         device_id="device-task",
         source_id=f"source-{source_kind}",
         source_kind=source_kind,  # type: ignore[arg-type]
-        segment_id=f"segment-{source_kind}",
+        segment_id=segment_id or f"segment-{source_kind}",
         revision=revision,
         sequence=revision,
         captured_at_ms=now_ms,
@@ -159,6 +160,51 @@ def test_task_gateway_streams_binary_partial_final_and_reuses_connection(monkeyp
     assert control[0]["payload"]["parameters"]["max_sentence_silence"] == 400
     assert gateway.diagnostics("microphone")["task_finish_count"] == 1
     assert gateway.diagnostics("microphone")["final_count"] == 1
+    gateway.close_session(session_id="session-task")
+
+
+def test_task_gateway_reuses_one_task_across_provider_finalized_segments(monkeypatch) -> None:
+    socket = _TaskWebSocket()
+    monkeypatch.setattr("app.services.dashscope_task_asr_gateway.connect", lambda *args, **kwargs: socket)
+    gateway = DashScopeTaskAsrGateway(_settings(), logging.getLogger("task-continuous"))
+
+    gateway.transcribe(frame=_frame(segment_id="segment-one"), attempt=0)
+    assert socket.current_task_id is not None
+    socket.events.put(_result_event(socket.current_task_id, "第一句。", sentence_end=True))
+    first = gateway.finalize(
+        frame=_frame(segment_id="segment-one", revision=2, is_final=True, audio=b""),
+        attempt=0,
+    )
+
+    gateway.transcribe(frame=_frame(segment_id="segment-two", revision=1), attempt=0)
+    socket.events.put(_result_event(socket.current_task_id, "第二句。", sentence_end=True))
+    second = gateway.finalize(
+        frame=_frame(segment_id="segment-two", revision=2, is_final=True, audio=b""),
+        attempt=0,
+    )
+
+    control = [json.loads(item) for item in socket.sent if isinstance(item, str)]
+    assert first.text == "第一句。"
+    assert second.text == "第二句。"
+    assert [item["header"]["action"] for item in control].count("run-task") == 1
+    assert [item["header"]["action"] for item in control].count("finish-task") == 0
+    assert gateway.diagnostics("microphone")["utterance_count"] == 2
+    gateway.close_session(session_id="session-task")
+
+
+def test_task_gateway_can_disable_continuous_task_for_compatibility(monkeypatch) -> None:
+    socket = _TaskWebSocket()
+    monkeypatch.setattr("app.services.dashscope_task_asr_gateway.connect", lambda *args, **kwargs: socket)
+    gateway = DashScopeTaskAsrGateway(
+        _settings(realtime_asr_continuous_task_enabled=False),
+        logging.getLogger("task-rollover"),
+    )
+
+    gateway.finalize(frame=_frame(is_final=True), attempt=0)
+
+    control = [json.loads(item) for item in socket.sent if isinstance(item, str)]
+    assert [item["header"]["action"] for item in control].count("run-task") == 2
+    assert [item["header"]["action"] for item in control].count("finish-task") == 1
     gateway.close_session(session_id="session-task")
 
 

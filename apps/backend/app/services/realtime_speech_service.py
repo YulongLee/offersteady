@@ -476,6 +476,7 @@ class RealtimeSpeechService:
         Stable-question detection remains a downstream observer and never gates
         the subtitle event.
         """
+        result = replace(result, text=self._merge_recovery_transcript(frame.recovery_prefix_text, result.text))
         if frame.session_id in self._retired_session_ids or not result.text.strip():
             return
         publisher = self.repository.get_publisher(frame.publisher_id)
@@ -2638,7 +2639,7 @@ class RealtimeSpeechService:
         }
 
     def _buffer_segment_audio(self, frame: AudioFrame) -> None:
-        """Retain one bounded, process-local utterance for safe provider replay."""
+        """Retain a bounded rolling PCM tail for source-local provider replay."""
         if (
             not self.settings.realtime_asr_replay_buffer_enabled
             or frame.source_kind not in {"microphone", "system"}
@@ -2646,7 +2647,10 @@ class RealtimeSpeechService:
         ):
             return
         key = (frame.session_id, frame.source_kind, frame.segment_id)
-        max_bytes = max(32_000, int(self.settings.realtime_asr_replay_buffer_max_bytes))
+        max_bytes = max(3_200, int(self.settings.realtime_asr_replay_buffer_max_bytes))
+        tail_ms = max(100, min(10_000, int(self.settings.realtime_asr_replay_tail_ms)))
+        pcm_bytes_per_second = max(1, frame.sample_rate_hz * frame.channels * 2)
+        tail_bytes = min(max_bytes, max(3_200, int(pcm_bytes_per_second * tail_ms / 1000)))
         with self._segment_audio_lock:
             now_ms = _now_ms()
             ttl_ms = max(10_000, int(self.settings.realtime_source_watchdog_seconds * 2_000))
@@ -2665,7 +2669,7 @@ class RealtimeSpeechService:
                     "audio": bytearray(),
                     "lastRevision": 0,
                     "startedAtMs": frame.started_at_ms,
-                    "complete": True,
+                    "droppedBytes": 0,
                     "updatedAtMs": now_ms,
                 }
                 self._segment_audio_buffers[key] = current
@@ -2674,11 +2678,11 @@ class RealtimeSpeechService:
             audio = current.get("audio")
             if not isinstance(audio, bytearray):
                 return
-            if len(audio) + len(frame.audio_bytes) > max_bytes:
-                current["complete"] = False
-                audio.clear()
-            elif bool(current.get("complete", True)):
-                audio.extend(frame.audio_bytes)
+            audio.extend(frame.audio_bytes)
+            overflow = max(0, len(audio) - tail_bytes)
+            if overflow:
+                del audio[:overflow]
+                current["droppedBytes"] = int(current.get("droppedBytes", 0)) + overflow
             current["lastRevision"] = frame.revision
             current["updatedAtMs"] = now_ms
 
@@ -2688,20 +2692,41 @@ class RealtimeSpeechService:
         key = (frame.session_id, frame.source_kind, frame.segment_id)
         with self._segment_audio_lock:
             current = self._segment_audio_buffers.get(key)
-            if current is None or not bool(current.get("complete", False)):
+            if current is None:
                 return None
             audio = current.get("audio")
             if not isinstance(audio, bytearray) or not audio:
                 return None
             payload = bytes(audio)
-            started_at_ms = int(current.get("startedAtMs", frame.started_at_ms))
-        replay_started_at_ms = min(frame.started_at_ms, started_at_ms)
+        replay_duration_ms = max(20, int(len(payload) * 1000 / max(1, frame.sample_rate_hz * frame.channels * 2)))
+        replay_started_at_ms = max(frame.started_at_ms, frame.ended_at_ms - replay_duration_ms)
+        current_transcript = self.repository.get_transcript(frame.session_id, frame.segment_id)
         return replace(
             frame,
             audio_bytes=payload,
             started_at_ms=replay_started_at_ms,
-            duration_ms=max(20, frame.ended_at_ms - replay_started_at_ms),
+            duration_ms=replay_duration_ms,
+            recovery_prefix_text=(current_transcript.text if current_transcript is not None else None),
         )
+
+    @staticmethod
+    def _merge_recovery_transcript(prefix: str | None, recovered: str) -> str:
+        left = (prefix or "").strip()
+        right = recovered.strip()
+        if not left:
+            return right
+        if not right or right in left:
+            return left
+        if left in right:
+            return right
+        overlap = 0
+        for size in range(min(len(left), len(right)), 0, -1):
+            if left[-size:] == right[:size]:
+                overlap = size
+                break
+        suffix = right[overlap:]
+        separator = " " if overlap == 0 and left[-1:].isalnum() and suffix[:1].isalnum() else ""
+        return f"{left}{separator}{suffix}"
 
     def _clear_segment_audio(self, frame: AudioFrame) -> None:
         with self._segment_audio_lock:
@@ -2837,17 +2862,26 @@ class RealtimeSpeechService:
                 safe_error_code=exc.error_code or "asr-failed",
             )
             self.repository.save_frame_receipt(replace(pending_receipt, asr_status="failed", error_code=exc.error_code or "asr-failed"))
-            events.append(self._event_payload(self._save_event(
+            self._log(
+                logging.WARNING,
+                "realtime_speech.source_frame_failed",
                 session_id=publisher.session_id,
-                owner_user_id=publisher.owner_user_id,
-                kind="degraded",
-                payload={
+                publisher_id=publisher.publisher_id,
+                source_kind=source_kind,
+                state="source-frame-failed",
+                error_code=exc.error_code or "asr-failed",
+            )
+            # Keep the publisher WebSocket request/response contract for the
+            # companion, but do not persist this transient source retry as a
+            # session event: the Web workspace must not surface recovery noise.
+            events.append({
+                "kind": "degraded",
+                "payload": {
                     "reason": "asr-frame-failed",
                     "sourceKind": source_kind,
                     "errorCode": exc.error_code or "asr-failed",
-                    "message": str(exc),
                 },
-            )))
+            })
             return events
         finally:
             self._active_request_leave(session_id=publisher.session_id, source_kind=source_kind)
@@ -3587,6 +3621,14 @@ class RealtimeSpeechService:
                     self._close_asr_source(session_id=frame.session_id, source_kind=frame.source_kind)
                     self._log(logging.WARNING, "realtime_speech.transcribe_timeout", session_id=publisher.session_id, publisher_id=publisher.publisher_id, state="transcribe-timeout", error_code="realtime_asr_frame_timeout")
                     raise RetryableAsrError("realtime_asr_frame_timeout") from exc
+                if provider_frame.recovery_prefix_text:
+                    result = replace(
+                        result,
+                        text=self._merge_recovery_transcript(
+                            provider_frame.recovery_prefix_text,
+                            result.text,
+                        ),
+                    )
                 suppression_reason = self._suppression_reason(result.text, frame=frame)
                 if suppression_reason is None:
                     suppression_reason = self._duplicate_nearby_suppression_reason(
@@ -3660,7 +3702,7 @@ class RealtimeSpeechService:
                             result=empty_result,
                         )
                     return None, empty_result
-                self._log(logging.WARNING, "realtime_speech.transcribe_retry", session_id=publisher.session_id, publisher_id=publisher.publisher_id, state="transcribe-retry", error_code=error_code)
+                self._log(logging.WARNING, "realtime_speech.transcribe_retry", session_id=publisher.session_id, publisher_id=publisher.publisher_id, source_kind=frame.source_kind, state="transcribe-retry", error_code=error_code)
                 last_error = exc
                 if error_code == "realtime_asr_frame_timeout" or (
                     frame.is_final
@@ -3685,13 +3727,10 @@ class RealtimeSpeechService:
                 self._log(logging.ERROR, "realtime_speech.transcribe_error", session_id=publisher.session_id, publisher_id=publisher.publisher_id, state="transcribe-error", error_code=str(exc))
                 last_error = exc
                 break
-        degraded = self._transition_publisher_status(publisher, "degraded")
-        self._save_event(
-            session_id=degraded.session_id,
-            owner_user_id=degraded.owner_user_id,
-            kind="degraded",
-            payload={"publisherId": degraded.publisher_id, "reason": "asr-failed", "errorCode": last_error.__class__.__name__ if last_error else "asr_failed"},
-        )
+        # A provider failure is source-scoped. Keep the publisher and the other
+        # source alive; the caller records this frame failure and can reconnect
+        # only the affected ASR source on the next frame.
+        degraded = self.repository.save_publisher(replace(publisher, status="receiving-audio"))
         error_code = str(last_error) if last_error and str(last_error).strip() else "asr-failed"
         raise DomainRequestError("realtime-speech", "transcribe", "实时语音转写失败。", 502, error_code=error_code)
 
@@ -4397,7 +4436,17 @@ class RealtimeSpeechService:
             updatedAtMs=record.updated_at_ms,
         )
 
-    def _log(self, level: int, event: str, *, session_id: str, publisher_id: str | None, state: str, error_code: str | None = None) -> None:
+    def _log(
+        self,
+        level: int,
+        event: str,
+        *,
+        session_id: str,
+        publisher_id: str | None,
+        state: str,
+        error_code: str | None = None,
+        source_kind: str | None = None,
+    ) -> None:
         log_event(
             self.logger,
             level,
@@ -4409,4 +4458,5 @@ class RealtimeSpeechService:
             publisher_id=publisher_id,
             state=state,
             error_code=error_code,
+            source_kind=source_kind,
         )

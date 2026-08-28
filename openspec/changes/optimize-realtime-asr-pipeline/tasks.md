@@ -26,6 +26,9 @@
 - [x] 3.9 Remove session-wide transcript scans and stable-question work from the Provider Partial publication hot path.
 - [x] 3.10 Make PCM coalescing backlog-adaptive so healthy 100ms frames enter the ASR sender immediately.
 - [x] 3.11 Suppress provider-completed empty utterances without degrading publishers or recreating healthy ASR connections.
+- [x] 3.12 Preserve first-cause Qwen task failures with source/task/connection attribution and isolate recoverable failure to one source.
+- [x] 3.13 Replace all-or-nothing utterance replay with a bounded rolling PCM tail and in-memory overlap stitching.
+- [x] 3.14 Reuse one healthy Qwen task across local utterances behind a rollback-safe feature flag with task-rollover fallback.
 
 ## 4. Web Transcript Streaming and Overlay Efficiency
 
@@ -66,3 +69,4 @@
 - [x] 5.14 Add Web regressions for adaptive subtitle pacing, correction/retraction handling, Final authority, session cleanup, and bounded render scheduling.
 - [x] 5.15 Add Backend/Web regressions for immediate bootstrap delivery, bootstrap-race event preservation, healthy silent streams, and single-reader transport recovery.
 - [x] 5.16 Add Web regressions for regular batched revisions, low/high reservoir inventory, 650ms hard catch-up, correction, Final, reduced-motion, and shared scheduling.
+- [x] 5.17 Add Backend regressions for first-error preservation, source isolation, rolling-tail recovery, transcript stitching, continuous task reuse, and compatibility fallback.

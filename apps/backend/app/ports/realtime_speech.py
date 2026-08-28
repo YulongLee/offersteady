@@ -60,6 +60,9 @@ class AudioFrame:
     backend_received_at_ms: int | None = None
     diagnostics: dict[str, object] = field(default_factory=dict)
     interview_language: InterviewLanguage = "zh-CN"
+    # Process-local recovery state. It is deliberately excluded from transport,
+    # persistence and diagnostics so transcript content cannot leak into telemetry.
+    recovery_prefix_text: str | None = None
 
 
 @dataclass(frozen=True)

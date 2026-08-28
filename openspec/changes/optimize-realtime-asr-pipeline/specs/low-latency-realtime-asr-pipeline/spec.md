@@ -30,6 +30,22 @@
 - **WHEN** source 结束、会话结束或连接超时
 - **THEN** 系统优雅关闭对应 ASR 长连接并释放该 source 的流式资源
 
+#### Scenario: Consecutive local utterances use a healthy provider task
+- **WHEN** 同一 source 连续完成多个本地 utterance 且 Provider 为每句返回 `sentence_end`
+- **THEN** 系统复用同一 WebSocket 和同一 Qwen task，不在每句之间执行 `finish-task` 与 `run-task`
+
+#### Scenario: Provider sentence finalization is missing
+- **WHEN** 本地 final 到达但 Provider 未在有界时间内返回对应 `sentence_end`
+- **THEN** 系统回退到 `finish-task → task-finished → run-task` 的兼容路径，并保持下一句可继续识别
+
+#### Scenario: Provider task failure is followed by socket close
+- **WHEN** Provider 先发送包含 code/message 的 `task-failed`，随后关闭 WebSocket
+- **THEN** 系统保留首个 Provider 错误及 source/task/connection 归因，连接关闭不得将其覆盖为通用错误
+
+#### Scenario: One source fails while the other remains healthy
+- **WHEN** microphone 或 system 任一 source 发生可恢复 ASR 故障
+- **THEN** 系统只重建该 source，publisher 与另一 source 继续接收音频
+
 ### Requirement: Audio transport SHALL send incremental chunks instead of repeated cumulative segments
 系统 MUST 发送增量音频 Chunk，而不是在每次 interim 更新时重复发送同一段从头开始的累计音频。系统 MUST 为每个 source 维护顺序、时间戳和增量偏移，并 SHALL 支持后端按顺序重建流式音频上下文。
 
@@ -59,6 +75,10 @@
 #### Scenario: Source queue develops a transient backlog
 - **WHEN** 同一 source 已有多个待处理 PCM 帧形成明确积压
 - **THEN** worker 才逐级合并相邻增量帧以追赶实时位置，完整保留音频字节和 Final，且不得等待凑满批次
+
+#### Scenario: A long utterance reconnects after exceeding replay capacity
+- **WHEN** 一个 segment 的音频超过重放容量后发生 Provider 断线
+- **THEN** 系统重放最近的有界 PCM 尾部，并将恢复结果与内存中的已发布字幕检查点去重拼接，不得因缓存溢出放弃恢复或让可见字幕回缩
 
 ### Requirement: Partial and final transcript delivery SHALL be streamed independently
 系统 MUST 将 Partial Transcript 和 Final Transcript 视为两类不同实时事件处理。网页端 MUST 能先显示 Partial Transcript，再在 Final Transcript 到达时原地更新同一句内容，而不是把每次更新都当成独立新句插入。

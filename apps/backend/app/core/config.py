@@ -171,6 +171,9 @@ class Settings(BaseSettings):
     realtime_asr_attachment_prewarm_enabled: bool = True
     realtime_asr_replay_buffer_enabled: bool = True
     realtime_asr_replay_buffer_max_bytes: int = 512 * 1024
+    realtime_asr_replay_tail_ms: int = 2_000
+    realtime_asr_continuous_task_enabled: bool = True
+    realtime_asr_continuous_task_sentence_wait_seconds: float = 0.65
     realtime_asr_points_per_minute: int = 5
     realtime_asr_provider: str = "qwen-realtime-asr-compatible"
     realtime_asr_model: str = "qwen-realtime"
