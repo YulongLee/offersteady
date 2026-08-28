@@ -150,6 +150,38 @@ class EnglishVisionGateway(CapturingVisionGateway):
         )
 
 
+class DriftingEnglishVisionGateway(EnglishVisionGateway):
+    def __init__(self, *, always_chinese: bool = False) -> None:
+        super().__init__()
+        self.always_chinese = always_chinese
+        self.instructions: list[str] = []
+
+    def analyze(
+        self, *, session_id: str, instruction: str, images: list[PreparedScreenshotImage],
+        attempt: int, interview_language: str = "zh-CN",
+    ) -> VisionSummary:
+        _ = session_id, attempt
+        self.instructions.append(instruction)
+        repair = "ENGLISH-ONLY REPAIR" in instruction
+        if repair and not self.always_chinese:
+            return super().analyze(
+                session_id=session_id,
+                instruction="Answer the screenshot question.",
+                images=images,
+                attempt=attempt,
+                interview_language=interview_language,
+            )
+        return VisionSummary(
+            title="截图算法题",
+            summary_text="截图中要求解释算法思路。",
+            derived_question="请解释截图中的算法。",
+            final_answer="简要回答\n先说明核心思路。\n\n---\n\n详细回答\n再解释边界和复杂度。",
+            image_count=len(images),
+            provider_name="synthetic",
+            model_name="synthetic-vision",
+        )
+
+
 def upload_synthetic_image(service: ScreenshotAnswerService, telemetry: dict[str, object]):
     return service.upload_bytes(
         user_id="user-inline",
@@ -208,6 +240,48 @@ def test_english_screenshot_answer_stays_in_english_and_records_language_route()
     assert "Detailed Answer" in task.answer_text
     assert task.material_provenance["interviewLanguage"] == "en-US"
     assert "简要回答" not in task.answer_text
+
+
+def test_english_screenshot_repairs_chinese_provider_output() -> None:
+    service, _storage, _repository, _upload_port, _vision = build_service(
+        delivery_mode="inline", interview_language="en-US"
+    )
+    gateway = DriftingEnglishVisionGateway()
+    service.vision_gateway = gateway
+    upload = upload_synthetic_image(service, {})
+
+    task, _ = service.answer_screenshots(
+        user_id="user-inline",
+        session_id="session-inline",
+        image_ids=[upload.image_id],
+        instruction="Answer the screenshot question.",
+        stream=False,
+    )
+
+    assert task.status == "completed"
+    assert "Quick Answer" in task.answer_text
+    assert "简要回答" not in task.answer_text
+    assert any("ENGLISH-ONLY REPAIR" in item for item in gateway.instructions)
+
+
+def test_english_screenshot_repeated_chinese_output_fails_closed() -> None:
+    service, _storage, _repository, _upload_port, _vision = build_service(
+        delivery_mode="inline", interview_language="en-US"
+    )
+    service.vision_gateway = DriftingEnglishVisionGateway(always_chinese=True)
+    upload = upload_synthetic_image(service, {})
+
+    task, _ = service.answer_screenshots(
+        user_id="user-inline",
+        session_id="session-inline",
+        image_ids=[upload.image_id],
+        instruction="Answer the screenshot question.",
+        stream=False,
+    )
+
+    assert task.status == "failed"
+    assert task.error_code == "screenshot_output_language_violation"
+    assert task.answer_text == ""
 
 
 def test_inline_mode_releases_transient_bytes_when_vision_fails() -> None:

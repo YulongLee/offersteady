@@ -199,6 +199,24 @@ describe("OfferSteady web application", () => {
     expect(screen.getByRole("navigation", { name: "移动端应用导航" })).toBeInTheDocument();
   });
 
+  it("links both workbench navigation surfaces to the maintained user manual", async () => {
+    await login();
+    const expectedUrl = "https://pwksrh0z1i6.feishu.cn/drive/folder/KFlcfWorslX2hmdyyByc2fLvngp?from=from_copylink";
+    const navigations = [
+      screen.getByRole("navigation", { name: "应用导航" }),
+      screen.getByRole("navigation", { name: "移动端应用导航" }),
+    ];
+
+    for (const navigation of navigations) {
+      const manual = within(navigation).getByRole("link", { name: "用户手册" });
+      expect(manual).toHaveAttribute("href", expectedUrl);
+      expect(manual).toHaveAttribute("target", "_blank");
+      expect(manual).toHaveAttribute("rel", expect.stringContaining("noopener"));
+      expect(manual).toHaveAttribute("rel", expect.stringContaining("noreferrer"));
+      expect(within(navigation).getByRole("link", { name: /使用说明/ })).toHaveAttribute("href", "/app/guide");
+    }
+  });
+
   it("bootstraps prototype account storage for authenticated initial app sessions", async () => {
     const store = new Map<string, string>();
     Object.defineProperty(window, "localStorage", {

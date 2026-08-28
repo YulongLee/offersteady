@@ -50,6 +50,13 @@ _NORMALIZED_QUESTION_OPEN = "<normalized_question>"
 _NORMALIZED_QUESTION_CLOSE = "</normalized_question>"
 _NORMALIZATION_BUFFER_LIMIT = 800
 _DETAIL_RETRIEVAL_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="chat-detail-retrieval")
+_HAN_SCRIPT_PATTERN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+_LATIN_SCRIPT_PATTERN = re.compile(r"[A-Za-z]")
+_ENGLISH_REPAIR_DIRECTIVE = (
+    "ENGLISH-ONLY REPAIR: The previous provider attempt used the wrong output language. "
+    "Regenerate the requested content in English only. Chinese or mixed-language input is evidence, "
+    "not the output language. Do not mention this repair instruction."
+)
 
 
 def _clean_question_text(value: str) -> str:
@@ -68,6 +75,30 @@ def _resolve_normalized_question(payload: str, fallback_question: str) -> tuple[
     if not candidate or len(candidate) > 500:
         return fallback, visible, "fallback"
     return candidate, visible, "completed"
+
+
+def _english_output_violation(value: str) -> bool:
+    """Reject materially Chinese prose while allowing a small verified proper noun."""
+    han_count = len(_HAN_SCRIPT_PATTERN.findall(value))
+    if han_count < 4:
+        return False
+    latin_count = len(_LATIN_SCRIPT_PATTERN.findall(value))
+    return han_count / max(1, han_count + latin_count) >= 0.08
+
+
+def _english_repair_prompt(prompt: PromptBuildResult) -> PromptBuildResult:
+    system_prompt = f"{prompt.system_prompt}\n\n{_ENGLISH_REPAIR_DIRECTIVE}"
+    user_prompt = f"<output_language_repair>English only</output_language_repair>\n\n{prompt.user_prompt}"
+    return replace(
+        prompt,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        rendered_prompt=f"{system_prompt}\n\n{user_prompt}",
+    )
+
+
+def _english_repair_instruction(instruction: str) -> str:
+    return f"{instruction}\n\n{_ENGLISH_REPAIR_DIRECTIVE}"
 
 
 class RetryableChatError(Exception):
@@ -145,6 +176,7 @@ class InterviewPromptBuilder(PromptBuilderPort):
         answer_anchors = [item.removeprefix(anchor_prefix).strip() for item in selected_history if item.startswith(anchor_prefix)]
         history_text = "\n".join(item for item in selected_history if not item.startswith(anchor_prefix))
         sections = [
+            *(["<output_language>English only, regardless of the language of any input or evidence.</output_language>"] if english else []),
             "<authoritative_request>",
             (f"Session title: {session_title}\nCurrent question: {question}" if english else f"会话标题：{session_title}\n当前问题：{question}"),
             "</authoritative_request>",
@@ -638,6 +670,32 @@ class ChatService:
     def _prompt_metadata(provenance: dict[str, object], *, stages: dict[str, str]) -> dict[str, object]:
         return {**provenance, "promptStrategyMode": "adaptive-evidence-first", "promptStages": stages}
 
+    def _log_language_violation(
+        self,
+        *,
+        session_id: str,
+        task_id: str,
+        stage: str,
+        prompt: PromptBuildResult,
+        attempt: int,
+    ) -> None:
+        log_event(
+            self.logger,
+            logging.WARNING,
+            settings=self.settings,
+            event="chat.output_language_violation",
+            feature="live-answer",
+            action="enforce-output-language",
+            session_id=session_id,
+            task_id=task_id,
+            interview_language="en-US",
+            stage=stage,
+            prompt_template_id=prompt.prompt_config.template_id,
+            prompt_version=prompt.prompt_config.version,
+            provider_attempt=attempt,
+            error_code="chat_output_language_violation",
+        )
+
     @staticmethod
     def _size_bucket(length: int) -> str:
         return "xs" if length <= 256 else "sm" if length <= 1000 else "md" if length <= 4000 else "lg"
@@ -700,6 +758,7 @@ class ChatService:
         finish_reason: str,
         provider_attempt: int,
         task_id: str,
+        session_id: str = "unknown",
         interview_language: InterviewLanguage = "zh-CN",
     ) -> tuple[str, int, int]:
         if finish_reason in {"content-filter", "tool-calls", "unknown"}:
@@ -727,17 +786,39 @@ class ChatService:
             prompt_characters += len(continuation_prompt.rendered_prompt)
             continuation_parts: list[str] = []
             continuation_finish_reason = "stop"
-            for chunk in self.llm_gateway.stream_generate(
-                question=question,
-                prompt=continuation_prompt,
-                attempt=provider_attempt,
-            ):
-                if self._is_task_cancelled(task_id):
-                    raise ChatTaskCancelled()
-                if chunk.text:
-                    continuation_parts.append(chunk.text)
-                if chunk.provider_finish_reason is not None:
-                    continuation_finish_reason = chunk.provider_finish_reason
+            for language_attempt in range(2 if interview_language == "en-US" else 1):
+                active_prompt = (
+                    _english_repair_prompt(continuation_prompt)
+                    if language_attempt > 0
+                    else continuation_prompt
+                )
+                continuation_parts = []
+                continuation_finish_reason = "stop"
+                for chunk in self.llm_gateway.stream_generate(
+                    question=question,
+                    prompt=active_prompt,
+                    attempt=provider_attempt + language_attempt,
+                ):
+                    if self._is_task_cancelled(task_id):
+                        raise ChatTaskCancelled()
+                    if chunk.text:
+                        continuation_parts.append(chunk.text)
+                    if chunk.provider_finish_reason is not None:
+                        continuation_finish_reason = chunk.provider_finish_reason
+                if interview_language != "en-US" or not _english_output_violation("".join(continuation_parts)):
+                    break
+                self._log_language_violation(
+                    session_id=session_id,
+                    task_id=task_id,
+                    stage=f"{stage}-continuation",
+                    prompt=active_prompt,
+                    attempt=provider_attempt + language_attempt,
+                )
+            else:
+                raise NonRetryableChatError(
+                    "The answer model repeatedly returned the wrong language. Please retry this question.",
+                    code="chat_output_language_violation",
+                )
             if continuation_finish_reason in {"content-filter", "tool-calls", "unknown"}:
                 raise NonRetryableChatError(
                     "当前回答未能正常完成，请重新发起回答。",
@@ -843,7 +924,29 @@ class ChatService:
         self.repository.save_task(current_task)
         for attempt in range(self.settings.chat_retry_max_attempts + 1):
             try:
-                gateway_result = self.llm_gateway.generate(question=question, prompt=prompt, stream=stream, attempt=attempt)
+                active_prompt = (
+                    _english_repair_prompt(prompt)
+                    if session.interview_language == "en-US" and attempt > 0
+                    else prompt
+                )
+                gateway_result = self.llm_gateway.generate(
+                    question=question,
+                    prompt=active_prompt,
+                    stream=stream,
+                    attempt=attempt,
+                )
+                if session.interview_language == "en-US" and _english_output_violation(gateway_result.final_text):
+                    self._log_language_violation(
+                        session_id=session_id,
+                        task_id=current_task.task_id,
+                        stage="nonstream",
+                        prompt=active_prompt,
+                        attempt=attempt,
+                    )
+                    raise RetryableChatError(
+                        "The answer model returned the wrong language.",
+                        code="chat_output_language_violation",
+                    )
                 completed = self._complete_task(task=current_task, gateway_result=gateway_result, retry_count=attempt)
                 self.session_service.append_context(
                     user_id=user_id,
@@ -1001,6 +1104,8 @@ class ChatService:
         normalization_buffer = ""
         normalization_resolved = False
         normalized_question = question.strip()
+        quick_language_buffer = ""
+        quick_language_validated = session.interview_language != "en-US"
         quick_finish_reason = "stop"
         continuation_prompt_characters = 0
         continuation_count = 0
@@ -1010,11 +1115,20 @@ class ChatService:
         detail_retrieval_future: Future[RetrievalContext] | None = None
         for attempt in range(self.settings.chat_retry_max_attempts + 1):
             try:
+                active_quick_prompt = (
+                    _english_repair_prompt(prompt)
+                    if session.interview_language == "en-US" and attempt > 0
+                    else prompt
+                )
                 if self._is_task_cancelled(current_task.task_id):
                     cancelled = self.repository.get_task(current_task.task_id) or current_task
                     yield {"type": "cancelled", "task": cancelled}
                     return
-                for chunk in self.llm_gateway.stream_generate(question=question, prompt=prompt, attempt=attempt):
+                for chunk in self.llm_gateway.stream_generate(
+                    question=question,
+                    prompt=active_quick_prompt,
+                    attempt=attempt,
+                ):
                     if self._is_task_cancelled(current_task.task_id):
                         cancelled = self.repository.get_task(current_task.task_id) or current_task
                         yield {"type": "cancelled", "task": cancelled}
@@ -1034,6 +1148,18 @@ class ChatService:
                             normalization_buffer,
                             question,
                         )
+                        if session.interview_language == "en-US" and _english_output_violation(normalized_question):
+                            self._log_language_violation(
+                                session_id=session_id,
+                                task_id=current_task.task_id,
+                                stage="question-normalization",
+                                prompt=active_quick_prompt,
+                                attempt=attempt,
+                            )
+                            raise RetryableChatError(
+                                "The answer model normalized the question in the wrong language.",
+                                code="chat_output_language_violation",
+                            )
                         normalization_resolved = True
                         current_task = self.repository.save_task(
                             replace(
@@ -1053,7 +1179,29 @@ class ChatService:
                                 question=normalized_question,
                             )
                         yield {"type": "question-normalized", "task": current_task}
-                        visible_text = f"{'Quick Answer' if session.interview_language == 'en-US' else '简单回答'}\n{visible_text}"
+                        if session.interview_language != "en-US":
+                            visible_text = f"简单回答\n{visible_text}"
+                    if session.interview_language == "en-US" and not quick_language_validated:
+                        quick_language_buffer += visible_text
+                        if _english_output_violation(quick_language_buffer):
+                            self._log_language_violation(
+                                session_id=session_id,
+                                task_id=current_task.task_id,
+                                stage="quick",
+                                prompt=active_quick_prompt,
+                                attempt=attempt,
+                            )
+                            raise RetryableChatError(
+                                "The answer model returned the wrong language.",
+                                code="chat_output_language_violation",
+                            )
+                        script_characters = len(_HAN_SCRIPT_PATTERN.findall(quick_language_buffer)) + len(
+                            _LATIN_SCRIPT_PATTERN.findall(quick_language_buffer)
+                        )
+                        if script_characters < 24 and chunk.provider_finish_reason is None:
+                            continue
+                        visible_text = f"Quick Answer\n{quick_language_buffer}"
+                        quick_language_validated = True
                     if not visible_text:
                         continue
                     normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=visible_text, is_final=False)
@@ -1068,6 +1216,18 @@ class ChatService:
                         normalization_buffer,
                         question,
                     )
+                    if session.interview_language == "en-US" and _english_output_violation(normalized_question):
+                        self._log_language_violation(
+                            session_id=session_id,
+                            task_id=current_task.task_id,
+                            stage="question-normalization",
+                            prompt=active_quick_prompt,
+                            attempt=attempt,
+                        )
+                        raise RetryableChatError(
+                            "The answer model normalized the question in the wrong language.",
+                            code="chat_output_language_violation",
+                        )
                     normalization_resolved = True
                     current_task = self.repository.save_task(
                         replace(
@@ -1087,9 +1247,52 @@ class ChatService:
                             question=normalized_question,
                         )
                     yield {"type": "question-normalized", "task": current_task}
-                    normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=f"{'Quick Answer' if session.interview_language == 'en-US' else '简单回答'}\n{visible_text}", is_final=False)
+                    if session.interview_language == "en-US":
+                        quick_language_buffer += visible_text
+                        if _english_output_violation(quick_language_buffer):
+                            self._log_language_violation(
+                                session_id=session_id,
+                                task_id=current_task.task_id,
+                                stage="quick",
+                                prompt=active_quick_prompt,
+                                attempt=attempt,
+                            )
+                            raise RetryableChatError(
+                                "The answer model returned the wrong language.",
+                                code="chat_output_language_violation",
+                            )
+                        visible_text = f"Quick Answer\n{quick_language_buffer}"
+                        quick_language_validated = True
+                    else:
+                        visible_text = f"简单回答\n{visible_text}"
+                    normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=visible_text, is_final=False)
                     chunks.append(normalized)
                     answer_parts.append(normalized.text)
+                    current_task = self.repository.save_task(
+                        replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
+                    )
+                    yield {"type": "chunk", "task": current_task, "chunk": normalized}
+                elif session.interview_language == "en-US" and not quick_language_validated:
+                    if _english_output_violation(quick_language_buffer):
+                        self._log_language_violation(
+                            session_id=session_id,
+                            task_id=current_task.task_id,
+                            stage="quick",
+                            prompt=active_quick_prompt,
+                            attempt=attempt,
+                        )
+                        raise RetryableChatError(
+                            "The answer model returned the wrong language.",
+                            code="chat_output_language_violation",
+                        )
+                    normalized = ChatAnswerChunk(
+                        sequence=len(chunks) + 1,
+                        text=f"Quick Answer\n{quick_language_buffer}",
+                        is_final=False,
+                    )
+                    chunks.append(normalized)
+                    answer_parts.append(normalized.text)
+                    quick_language_validated = True
                     current_task = self.repository.save_task(
                         replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
                     )
@@ -1099,11 +1302,12 @@ class ChatService:
                 quick_suffix, quick_continuations, quick_prompt_characters = self._complete_answer_stage(
                     stage="quick",
                     question=normalized_question,
-                    prompt=prompt,
+                    prompt=active_quick_prompt,
                     existing_answer=quick_answer,
                     finish_reason=quick_finish_reason,
                     provider_attempt=attempt,
                     task_id=current_task.task_id,
+                    session_id=session_id,
                     interview_language=session.interview_language,
                 )
                 continuation_count += quick_continuations
@@ -1167,23 +1371,75 @@ class ChatService:
                 yield {"type": "chunk", "task": current_task, "chunk": normalized}
                 detail_parts: list[str] = []
                 detail_finish_reason = "stop"
-                for chunk in self.llm_gateway.stream_generate(question=normalized_question, prompt=detail_prompt, attempt=attempt):
-                    if self._is_task_cancelled(current_task.task_id):
-                        cancelled = self.repository.get_task(current_task.task_id) or current_task
-                        yield {"type": "cancelled", "task": cancelled}
-                        return
-                    if chunk.provider_finish_reason is not None:
-                        detail_finish_reason = chunk.provider_finish_reason
-                    if not chunk.text:
-                        continue
-                    detail_parts.append(chunk.text)
-                    normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=chunk.text, is_final=False)
-                    chunks.append(normalized)
-                    answer_parts.append(normalized.text)
-                    current_task = self.repository.save_task(
-                        replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
-                    )
-                    yield {"type": "chunk", "task": current_task, "chunk": normalized}
+                detail_chunks: list[ChatAnswerChunk] = []
+                if session.interview_language != "en-US":
+                    for chunk in self.llm_gateway.stream_generate(
+                        question=normalized_question,
+                        prompt=detail_prompt,
+                        attempt=attempt,
+                    ):
+                        if self._is_task_cancelled(current_task.task_id):
+                            cancelled = self.repository.get_task(current_task.task_id) or current_task
+                            yield {"type": "cancelled", "task": cancelled}
+                            return
+                        if chunk.provider_finish_reason is not None:
+                            detail_finish_reason = chunk.provider_finish_reason
+                        if not chunk.text:
+                            continue
+                        detail_parts.append(chunk.text)
+                        normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=chunk.text, is_final=False)
+                        chunks.append(normalized)
+                        answer_parts.append(normalized.text)
+                        current_task = self.repository.save_task(
+                            replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
+                        )
+                        yield {"type": "chunk", "task": current_task, "chunk": normalized}
+                else:
+                    for language_attempt in range(2):
+                        active_detail_prompt = (
+                            _english_repair_prompt(detail_prompt)
+                            if language_attempt > 0
+                            else detail_prompt
+                        )
+                        detail_parts = []
+                        detail_chunks = []
+                        detail_finish_reason = "stop"
+                        for chunk in self.llm_gateway.stream_generate(
+                            question=normalized_question,
+                            prompt=active_detail_prompt,
+                            attempt=attempt + language_attempt,
+                        ):
+                            if self._is_task_cancelled(current_task.task_id):
+                                cancelled = self.repository.get_task(current_task.task_id) or current_task
+                                yield {"type": "cancelled", "task": cancelled}
+                                return
+                            if chunk.provider_finish_reason is not None:
+                                detail_finish_reason = chunk.provider_finish_reason
+                            if chunk.text:
+                                detail_parts.append(chunk.text)
+                                detail_chunks.append(chunk)
+                        if not _english_output_violation("".join(detail_parts)):
+                            break
+                        self._log_language_violation(
+                            session_id=session_id,
+                            task_id=current_task.task_id,
+                            stage="detail",
+                            prompt=active_detail_prompt,
+                            attempt=attempt + language_attempt,
+                        )
+                    else:
+                        raise NonRetryableChatError(
+                            "The answer model repeatedly returned the wrong language. Please retry this question.",
+                            code="chat_output_language_violation",
+                        )
+                    for chunk in detail_chunks:
+                        normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=chunk.text, is_final=False)
+                        chunks.append(normalized)
+                        answer_parts.append(normalized.text)
+                        current_task = self.repository.save_task(
+                            replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
+                        )
+                        yield {"type": "chunk", "task": current_task, "chunk": normalized}
                 detail_answer = "".join(detail_parts).strip()
                 detail_suffix, detail_continuations, detail_prompt_characters = self._complete_answer_stage(
                     stage="detail",
@@ -1193,6 +1449,7 @@ class ChatService:
                     finish_reason=detail_finish_reason,
                     provider_attempt=attempt,
                     task_id=current_task.task_id,
+                    session_id=session_id,
                     interview_language=session.interview_language,
                 )
                 continuation_count += detail_continuations
@@ -1208,6 +1465,18 @@ class ChatService:
                 final_text = "".join(answer_parts).strip()
                 if not final_text:
                     raise NonRetryableChatError("当前对话模型返回了无效结果，请稍后重试或检查模型配置。", code="chat_provider_invalid_response")
+                if session.interview_language == "en-US" and _english_output_violation(final_text):
+                    self._log_language_violation(
+                        session_id=session_id,
+                        task_id=current_task.task_id,
+                        stage="complete",
+                        prompt=detail_prompt,
+                        attempt=attempt,
+                    )
+                    raise NonRetryableChatError(
+                        "The answer model returned the wrong language. Please retry this question.",
+                        code="chat_output_language_violation",
+                    )
                 if chunks:
                     last = chunks[-1]
                     chunks[-1] = ChatAnswerChunk(sequence=last.sequence, text=last.text, is_final=True)
@@ -1283,6 +1552,11 @@ class ChatService:
                 self._log(logging.WARNING, "chat.stream_retrying", task=current_task, session_id=session_id, question=question, retry_count=attempt + 1, error_code=exc.code)
                 if chunks:
                     break
+                normalization_buffer = ""
+                normalization_resolved = False
+                normalized_question = question.strip()
+                quick_language_buffer = ""
+                quick_language_validated = session.interview_language != "en-US"
                 continue
             except NonRetryableChatError as exc:
                 if exc.partial_suffix:

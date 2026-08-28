@@ -324,14 +324,23 @@ function ProtectedRoute() {
   return authenticated ? <Outlet /> : <Navigate to={routes.login} state={{ from: location.pathname }} replace />;
 }
 
+const USER_MANUAL_URL = "https://pwksrh0z1i6.feishu.cn/drive/folder/KFlcfWorslX2hmdyyByc2fLvngp?from=from_copylink";
+
 const navItems = [
   { to: routes.app, label: "面试", icon: "◫", end: true },
   { to: routes.library, label: "资料", icon: "◇" },
   { to: routes.billing, label: "积分与会员", icon: "点" },
   { to: routes.guide, label: "使用说明", icon: "?" },
+  { href: USER_MANUAL_URL, label: "用户手册", icon: "册" },
   { to: routes.devices, label: "设备", icon: "⌘" },
   { to: routes.settings, label: "设置", icon: "○" },
 ];
+
+function WorkbenchNavigationItems({ mobile = false }: { readonly mobile?: boolean }) {
+  return <>{navItems.map(item => "href" in item
+    ? <a key={item.href} href={item.href} target="_blank" rel="noopener noreferrer" aria-label={item.label}><span aria-hidden="true">{item.icon}</span>{mobile ? <small>{item.label}</small> : item.label}</a>
+    : <NavLink key={item.to} to={item.to} {...(item.end ? { end: true } : {})}><span>{item.icon}</span>{mobile ? <small>{item.label}</small> : item.label}</NavLink>)}</>;
+}
 
 function AccountMenu({ compact = false, dropUp = false }: { readonly compact?: boolean; readonly dropUp?: boolean }) {
   const { logout, state } = usePrototype();
@@ -361,9 +370,9 @@ function AccountMenu({ compact = false, dropUp = false }: { readonly compact?: b
 function AppLayout() {
   return (
     <div className="app-shell">
-      <aside className="app-sidebar"><Link to={routes.app}><Logo /></Link><nav aria-label="应用导航">{navItems.map(item => <NavLink key={item.to} to={item.to} {...(item.end ? { end: true } : {})}><span>{item.icon}</span>{item.label}</NavLink>)}</nav><div className="sidebar-foot"><span className="privacy-note">音频默认不保存</span><AccountMenu dropUp /></div></aside>
+      <aside className="app-sidebar"><Link to={routes.app}><Logo /></Link><nav aria-label="应用导航"><WorkbenchNavigationItems /></nav><div className="sidebar-foot"><span className="privacy-note">音频默认不保存</span><AccountMenu dropUp /></div></aside>
       <div className="app-content"><Outlet /></div>
-      <nav className="mobile-nav" aria-label="移动端应用导航">{navItems.map(item => <NavLink key={item.to} to={item.to} {...(item.end ? { end: true } : {})}><span>{item.icon}</span><small>{item.label}</small></NavLink>)}<AccountMenu compact dropUp /></nav>
+      <nav className="mobile-nav" aria-label="移动端应用导航"><WorkbenchNavigationItems mobile /><AccountMenu compact dropUp /></nav>
     </div>
   );
 }
@@ -1588,7 +1597,7 @@ function LivePage() {
     : <button className="button primary live-session-control" disabled={pageLeaseStatus === "replaced" || captureControlPending !== null || (state.captureState !== "ready" && state.captureState !== "paused")} onClick={() => state.captureState === "paused" ? void controlCapture("resume") : setCapture("capturing", "active")}>{captureControlPending === "resume" ? "恢复中…" : state.captureState === "paused" ? "恢复收音" : "开始面试"}</button>;
   const changeManualDraft = (value: string) => setActionState(current => ({ ...current, manualDraft: value, quickAnswerStatus: "idle", quickAnswerMessage: "" }));
   const conversationPanel = <ConversationMonitor state={state} onConfirmQuestion={pageLeaseStatus === "replaced" ? dismissPending : confirmPending} onDismissQuestion={dismissPending} />;
-  const answerPanel = <AnswerWorkspace answers={state.questions} viewingAnswerId={view.viewingAnswerId} newAnswerAvailable={view.newAnswerAvailable} activeTask={state.activeAnswerTask} cancelling={cancellingAnswer} cancelError={cancelAnswerError} onStop={() => void stopAnswer()} onView={answerId => setView(current => ({ ...current, viewingAnswerId: answerId, newAnswerAvailable: answerId ? current.newAnswerAvailable : false }))} onRetry={updateQuestionStatus} />;
+  const answerPanel = <AnswerWorkspace answers={state.questions} viewingAnswerId={view.viewingAnswerId} newAnswerAvailable={view.newAnswerAvailable} activeTask={state.activeAnswerTask} cancelling={cancellingAnswer} cancelError={cancelAnswerError} interviewLanguage={liveInterview?.interviewLanguage ?? "zh-CN"} onStop={() => void stopAnswer()} onView={answerId => setView(current => ({ ...current, viewingAnswerId: answerId, newAnswerAvailable: answerId ? current.newAnswerAvailable : false }))} onRetry={updateQuestionStatus} />;
 
   return <main className={`live-page focused-live-page${desktopLayout ? " desktop-live-page" : " mobile-live-page"}`}>
     <header className="live-top">

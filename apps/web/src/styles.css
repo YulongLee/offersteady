@@ -1106,7 +1106,7 @@ h1, h2, h3, p { margin-top: 0; }
   .resource-card, .library-row { grid-template-columns: auto 1fr; }
   .resource-card > .state-mark, .library-row > .state-mark { grid-column: 2; }
   .form-actions { flex-direction: column-reverse; }
-  .mobile-nav { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(7, 1fr); border-top: 1px solid var(--line); background: rgba(10,15,23,.96); backdrop-filter: blur(18px); padding-bottom: env(safe-area-inset-bottom); }
+  .mobile-nav { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(8, 1fr); border-top: 1px solid var(--line); background: rgba(10,15,23,.96); backdrop-filter: blur(18px); padding-bottom: env(safe-area-inset-bottom); }
   .mobile-nav a { min-height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--muted); }
   .mobile-nav a.active { color: var(--brand); }
   .mobile-nav small { font-size: 8px; }

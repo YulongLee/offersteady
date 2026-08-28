@@ -5,7 +5,7 @@ import pytest
 from app.core.config import Settings
 from app.ports.chat import PromptConfig
 from app.ports.screenshot_answer import VisionSummary
-from app.services.chat_service import FilePromptTemplateAdapter, InterviewPromptBuilder
+from app.services.chat_service import FilePromptTemplateAdapter, InterviewPromptBuilder, _english_output_violation
 from app.services.screenshot_answer_service import OpenAICompatibleVisionGateway, ScreenshotPromptBuilder, _screenshot_only_instruction
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -31,10 +31,33 @@ def test_versioned_english_prompt_components_load_without_runtime_translation() 
     assert "<normalized_question>" in quick
     assert "authoritative_answer_anchor" in detail
     assert "authoritative prefix" in continuation
+    assert all("OUTPUT LANGUAGE IS NON-NEGOTIABLE" in item for item in (system, quick, detail, continuation))
     assert system_config.template_id == "interview-chat-en-system"
     assert quick_config.template_id == "interview-chat-en-quick"
     assert detail_config.template_id == "interview-chat-en-detail"
     assert continuation_config.template_id == "interview-chat-en-continuation"
+
+
+def test_english_prompt_repeats_output_contract_next_to_chinese_evidence() -> None:
+    prompt = InterviewPromptBuilder().build(
+        question="介绍自己",
+        session_title="算法工程师",
+        system_prompt="English system policy",
+        conversation_history=["interviewer:请介绍项目"],
+        session_material_context_text="[简历] 负责推荐系统研发",
+        retrieval_context_text="[1] 中文知识材料",
+        prompt_config=PromptConfig(template_id="interview-chat-en-detail", version="v4", max_history_entries=6),
+    )
+
+    assert "<output_language>English only" in prompt.user_prompt
+    assert "介绍自己" in prompt.user_prompt
+    assert "负责推荐系统研发" in prompt.user_prompt
+
+
+def test_material_chinese_detector_rejects_chinese_prose_but_allows_a_small_proper_noun() -> None:
+    assert _english_output_violation("我是算法工程师，主要负责推荐系统和自然语言处理。") is True
+    assert _english_output_violation("I built a production retrieval service for 面试稳 and measured its latency carefully.") is False
+    assert _english_output_violation("I would start with the constraints, then explain the architecture and trade-offs.") is False
 
 
 def test_missing_english_prompt_fails_closed_instead_of_loading_chinese(tmp_path: Path) -> None:
@@ -100,6 +123,7 @@ def test_eval_fixtures_are_synthetic() -> None:
     ids = {item["id"] for item in records}
     assert {"quick-detail-consistent", "resume-injection", "algorithm-complete", "unreadable-schema", "fragmented-rag-question", "referential-follow-up"} <= ids
     assert {"en-fragmented-question-normalization", "en-quick-detail-continuity", "en-screenshot-answer", "zh-regression-language-default"} <= ids
+    assert {"en-chinese-question-output-enforcement", "en-chinese-evidence-output-enforcement", "en-repeated-provider-language-drift-fails-closed"} <= ids
 
 
 def test_english_language_eval_baseline_keeps_zero_regression_safety_gates() -> None:
@@ -108,6 +132,7 @@ def test_english_language_eval_baseline_keeps_zero_regression_safety_gates() -> 
     )
     assert baseline["thresholds"]["languageRouteAccuracy"] == 1.0
     assert baseline["thresholds"]["groundingSafetyPassRate"] == 1.0
+    assert baseline["thresholds"]["wrongLanguageCompletionCount"] == 0
     assert baseline["thresholds"]["chineseBaselineRegressionCount"] == 0
 
 

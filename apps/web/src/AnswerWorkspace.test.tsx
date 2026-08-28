@@ -72,4 +72,52 @@ describe("AnswerWorkspace", () => {
     expect(container.querySelector(".answer-stream-text")).not.toBeInTheDocument();
     expect(container.querySelector(".answer-markdown strong")).toHaveTextContent("稳定显示的回答");
   });
+
+  it("renders and parses the answer card in English for an English interview", () => {
+    const question = {
+      ...syntheticState.questions[0]!,
+      status: "confirmed" as const,
+      text: "Please introduce yourself.",
+      advice: {
+        ...syntheticState.questions[0]!.advice,
+        detail: "Quick Answer\nI focus on production machine-learning systems.\n\n---\n\nDetailed Answer\nI would connect verified delivery experience to the role and explain the trade-offs.",
+      },
+    };
+
+    const { container } = render(<AnswerWorkspace
+      answers={[question]}
+      viewingAnswerId={null}
+      newAnswerAvailable={false}
+      activeTask={null}
+      cancelling={false}
+      cancelError=""
+      interviewLanguage="en-US"
+      onView={() => undefined}
+      onRetry={() => undefined}
+      onStop={() => undefined}
+    />);
+
+    expect(screen.getByRole("heading", { name: "Answer" })).toBeInTheDocument();
+    expect(container.querySelector(".simple-answer .answer-section-title")).toHaveTextContent("Quick AnswerSay this first");
+    expect(container.querySelector(".detailed-answer .answer-section-title")).toHaveTextContent("Detailed AnswerNo knowledge source");
+    expect(container.querySelector(".simple-answer .answer-markdown")).toHaveTextContent("I focus on production machine-learning systems.");
+    expect(container.querySelector(".simple-answer .answer-markdown")).not.toHaveTextContent("Quick Answer");
+  });
+
+  it("keeps the existing Chinese answer labels by default", () => {
+    render(<AnswerWorkspace
+      answers={[syntheticState.questions[0]!]}
+      viewingAnswerId={null}
+      newAnswerAvailable={false}
+      activeTask={null}
+      cancelling={false}
+      cancelError=""
+      onView={() => undefined}
+      onRetry={() => undefined}
+      onStop={() => undefined}
+    />);
+
+    expect(screen.getByRole("heading", { name: "回答" })).toBeInTheDocument();
+    expect(screen.getByText("简单回答")).toBeInTheDocument();
+  });
 });

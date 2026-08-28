@@ -49,7 +49,12 @@ from app.ports.screenshot_answer import (
     VisionUsageReport,
 )
 from app.schemas.retrieval import RetrievalResponse, RetrievedChunkResponse
-from app.services.chat_service import NonRetryableChatError, RetryableChatError
+from app.services.chat_service import (
+    NonRetryableChatError,
+    RetryableChatError,
+    _english_output_violation,
+    _english_repair_instruction,
+)
 from app.services.material_object_keys import MaterialObjectKeyFactory
 from app.services.session_service import SessionService
 from app.services.billing_service import BillingService
@@ -77,7 +82,13 @@ def _screenshot_only_instruction(instruction: str, interview_language: Interview
 
 
 class RetryableVisionError(Exception):
-    pass
+    def __init__(self, message: str, *, code: str | None = None) -> None:
+        self.code = code or (
+            message
+            if re.fullmatch(r"[a-z0-9_:-]+", message)
+            else "screenshot_provider_unavailable"
+        )
+        super().__init__(message)
 
 
 class NonRetryableVisionError(Exception):
@@ -124,6 +135,7 @@ class ScreenshotPromptBuilder(ScreenshotPromptBuilderPort):
         english = "-en-" in typed_prompt_config.template_id
         screenshot_instruction = _screenshot_only_instruction(instruction, "en-US" if english else "zh-CN")
         sections = [
+            *(["<output_language>English only, regardless of the language visible in the screenshot.</output_language>"] if english else []),
             "<authoritative_screenshot_request>",
             (f"Screenshot summary: {vision_summary.title}" if english else f"截图摘要：{vision_summary.title}"),
             "</authoritative_screenshot_request>",
@@ -927,8 +939,20 @@ class ScreenshotAnswerService:
         )
         for attempt in range(self.settings.screenshot_retry_max_attempts + 1):
             try:
+                attempt_instruction = (
+                    _english_repair_instruction(screenshot_instruction)
+                    if interview_language == "en-US" and attempt > 0
+                    else screenshot_instruction
+                )
                 using_streaming_gateway = False
-                current = self.repository.save_task(replace(current, status="vision-running", updated_at_ms=_now_ms(), retry_count=attempt))
+                current = self.repository.save_task(replace(
+                    current,
+                    status="vision-running",
+                    answer_text="" if interview_language == "en-US" else current.answer_text,
+                    chunks=[] if interview_language == "en-US" else current.chunks,
+                    updated_at_ms=_now_ms(),
+                    retry_count=attempt,
+                ))
                 vision_started = perf_counter()
                 stream_analyze = getattr(self.vision_gateway, "stream_analyze", None)
                 summarize_stream = getattr(self.vision_gateway, "summary_from_stream", None)
@@ -950,11 +974,12 @@ class ScreenshotAnswerService:
                     ))
                     answer_parts: list[str] = []
                     chunks: list[ChatAnswerChunk] = []
+                    language_prefix_validated = interview_language != "en-US"
                     last_emit_at = perf_counter()
                     try:
                         for text_part in stream_analyze(
                             session_id=session_id,
-                            instruction=screenshot_instruction,
+                            instruction=attempt_instruction,
                             images=prepared,
                             attempt=attempt,
                             **_vision_language_kwargs(stream_analyze, interview_language),
@@ -963,6 +988,30 @@ class ScreenshotAnswerService:
                             if telemetry is not None and telemetry.get("first_text_ms") is None:
                                 telemetry["first_text_ms"] = _elapsed_ms(vision_started)
                             chunks.append(ChatAnswerChunk(sequence=len(chunks) + 1, text=text_part, is_final=False))
+                            if interview_language == "en-US" and not language_prefix_validated:
+                                prefix = "".join(answer_parts)
+                                if _english_output_violation(prefix):
+                                    log_event(
+                                        self.logger,
+                                        logging.WARNING,
+                                        settings=self.settings,
+                                        event="screenshot_answer.output_language_violation",
+                                        feature="screenshot-answer",
+                                        action="enforce-output-language",
+                                        session_id=session_id,
+                                        task_id=current.task_id,
+                                        interview_language="en-US",
+                                        stage="vision-stream",
+                                        prompt_template_id="screenshot-vision-direct-en",
+                                        prompt_version=self.settings.screenshot_prompt_version,
+                                        provider_attempt=attempt,
+                                        error_code="screenshot_output_language_violation",
+                                    )
+                                    raise RetryableVisionError("screenshot_output_language_violation")
+                                script_characters = len(re.findall(r"[\u3400-\u4dbf\u4e00-\u9fffA-Za-z]", prefix))
+                                if script_characters < 48:
+                                    continue
+                                language_prefix_validated = True
                             elapsed_since_emit_ms = (perf_counter() - last_emit_at) * 1000
                             if len(chunks) == 1 or elapsed_since_emit_ms >= max(20, self.settings.screenshot_progress_emit_interval_ms):
                                 current = self.repository.save_task(replace(
@@ -979,7 +1028,7 @@ class ScreenshotAnswerService:
                             raise
                         using_streaming_gateway = False
                         vision = self.vision_gateway.analyze(
-                            session_id=session_id, instruction=screenshot_instruction, images=prepared, attempt=attempt,
+                            session_id=session_id, instruction=attempt_instruction, images=prepared, attempt=attempt,
                             **_vision_language_kwargs(self.vision_gateway.analyze, interview_language),
                         )
                     else:
@@ -987,18 +1036,38 @@ class ScreenshotAnswerService:
                         if not streamed_text:
                             using_streaming_gateway = False
                             vision = self.vision_gateway.analyze(
-                                session_id=session_id, instruction=screenshot_instruction, images=prepared, attempt=attempt,
+                                session_id=session_id, instruction=attempt_instruction, images=prepared, attempt=attempt,
                                 **_vision_language_kwargs(self.vision_gateway.analyze, interview_language),
                             )
                         else:
                             vision = summarize_stream(text=streamed_text, images=prepared)
                 else:
                     vision = self.vision_gateway.analyze(
-                        session_id=session_id, instruction=screenshot_instruction, images=prepared, attempt=attempt,
+                        session_id=session_id, instruction=attempt_instruction, images=prepared, attempt=attempt,
                         **_vision_language_kwargs(self.vision_gateway.analyze, interview_language),
                     )
                 if telemetry is not None:
                     telemetry["vision_model_ms"] = _elapsed_ms(vision_started)
+                if interview_language == "en-US" and _english_output_violation(
+                    (vision.final_answer or vision.summary_text or vision.derived_question).strip()
+                ):
+                    log_event(
+                        self.logger,
+                        logging.WARNING,
+                        settings=self.settings,
+                        event="screenshot_answer.output_language_violation",
+                        feature="screenshot-answer",
+                        action="enforce-output-language",
+                        session_id=session_id,
+                        task_id=current.task_id,
+                        interview_language="en-US",
+                        stage="vision-complete",
+                        prompt_template_id="screenshot-vision-direct-en",
+                        prompt_version=self.settings.screenshot_prompt_version,
+                        provider_attempt=attempt,
+                        error_code="screenshot_output_language_violation",
+                    )
+                    raise RetryableVisionError("screenshot_output_language_violation")
                 current = self.repository.save_task(
                     replace(
                         current,
@@ -1087,12 +1156,12 @@ class ScreenshotAnswerService:
                 current,
                 status="failed",
                 retry_count=self.settings.screenshot_retry_max_attempts,
-                error_code=last_error.__class__.__name__ if last_error else "screenshot_answer_failed",
+                error_code=getattr(last_error, "code", None) or (last_error.__class__.__name__ if last_error else "screenshot_answer_failed"),
                 error_message=str(last_error) if last_error else "screenshot_answer_failed",
                 telemetry=self._telemetry_from_metrics({
                     **(telemetry or {}),
                     "failed_phase": "vision",
-                    "error_code": last_error.__class__.__name__ if last_error else "screenshot_answer_failed",
+                    "error_code": getattr(last_error, "code", None) or (last_error.__class__.__name__ if last_error else "screenshot_answer_failed"),
                 }),
                 updated_at_ms=_now_ms(),
                 completed_at_ms=_now_ms(),
@@ -1404,7 +1473,12 @@ class ScreenshotAnswerService:
         quick_heading = "Quick Answer" if interview_language == "en-US" else "简要回答"
         detail_heading = "Detailed Answer" if interview_language == "en-US" else "详细回答"
         if quick_heading not in answer_text or "---" not in answer_text or detail_heading not in answer_text:
-            answer_text = f"{quick_heading}\n{vision.derived_question.strip() or vision.title}\n\n---\n\n{detail_heading}\n{answer_text}"
+            quick_body = vision.derived_question.strip() or vision.title
+            if interview_language == "en-US" and _english_output_violation(quick_body):
+                quick_body = "Use the visible constraints to state the core solution."
+            answer_text = f"{quick_heading}\n{quick_body}\n\n---\n\n{detail_heading}\n{answer_text}"
+        if interview_language == "en-US" and _english_output_violation(answer_text):
+            raise RetryableVisionError("screenshot_output_language_violation")
         completed = replace(
             task,
             answer_text=answer_text,
