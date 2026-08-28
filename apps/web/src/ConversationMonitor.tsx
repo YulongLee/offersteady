@@ -18,6 +18,83 @@ export const formatTranscriptTimestamp = (milliseconds: number) => {
   }
   return `[${String(Math.floor(milliseconds / 60_000)).padStart(2, "0")}:${String(Math.floor(milliseconds / 1_000) % 60).padStart(2, "0")}]`;
 };
+
+const TRANSCRIPT_SMOOTHING_MAX_LAG_MS = 300;
+const TRANSCRIPT_SMOOTHING_FRAME_MS = 32;
+type TranscriptFrameJob = (timestamp: number) => boolean;
+const transcriptFrameJobs = new Set<TranscriptFrameJob>();
+let transcriptFrameHandle: number | null = null;
+
+const requestTranscriptFrame = () => {
+  if (transcriptFrameHandle !== null || transcriptFrameJobs.size === 0) return;
+  let requestIsSynchronous = true;
+  transcriptFrameHandle = -1;
+  const handle = window.requestAnimationFrame(timestamp => {
+    transcriptFrameHandle = null;
+    runTranscriptFrameJobs(timestamp, requestIsSynchronous);
+  });
+  requestIsSynchronous = false;
+  if (transcriptFrameHandle === -1) transcriptFrameHandle = handle;
+};
+
+const runTranscriptFrameJobs = (timestamp: number, synchronousFallback = false) => {
+  for (const job of [...transcriptFrameJobs]) {
+    if (!job(timestamp)) transcriptFrameJobs.delete(job);
+  }
+  if (synchronousFallback && transcriptFrameJobs.size > 0) {
+    for (const job of [...transcriptFrameJobs]) {
+      if (!job(Number.MAX_SAFE_INTEGER)) transcriptFrameJobs.delete(job);
+    }
+  }
+  requestTranscriptFrame();
+};
+
+const scheduleTranscriptFrameJob = (job: TranscriptFrameJob) => {
+  transcriptFrameJobs.add(job);
+  requestTranscriptFrame();
+};
+
+const cancelTranscriptFrameJob = (job: TranscriptFrameJob) => {
+  transcriptFrameJobs.delete(job);
+  if (transcriptFrameJobs.size === 0 && transcriptFrameHandle !== null) {
+    window.cancelAnimationFrame(transcriptFrameHandle);
+    transcriptFrameHandle = null;
+  }
+};
+
+const transcriptSmoothingEnabled = () => {
+  if (import.meta.env.VITE_REALTIME_SUBTITLE_SMOOTHING === "false") return false;
+  if (typeof window === "undefined" || typeof document === "undefined") return false;
+  if ((window as Window & { __offersteadyDisableSubtitleSmoothing?: boolean }).__offersteadyDisableSubtitleSmoothing) return false;
+  if (document.visibilityState !== "visible") return false;
+  if (typeof window.requestAnimationFrame !== "function") return false;
+  return typeof window.matchMedia !== "function" || !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+};
+
+const graphemes = (value: string) => Array.from(value);
+
+export const firstAdaptiveTranscriptText = (current: string, target: string) => {
+  if (current === target || !target.startsWith(current)) return target;
+  const currentLength = graphemes(current).length;
+  return graphemes(target).slice(0, currentLength + 1).join("");
+};
+
+export const nextAdaptiveTranscriptText = (
+  current: string,
+  target: string,
+  elapsedMs: number,
+  maxLagMs = TRANSCRIPT_SMOOTHING_MAX_LAG_MS,
+) => {
+  if (current === target || !target.startsWith(current) || elapsedMs >= maxLagMs) return target;
+  const currentUnits = graphemes(current);
+  const targetUnits = graphemes(target);
+  const remaining = targetUnits.length - currentUnits.length;
+  if (remaining <= 0) return target;
+  const remainingFrames = Math.max(1, Math.floor((maxLagMs - Math.max(0, elapsedMs)) / TRANSCRIPT_SMOOTHING_FRAME_MS));
+  const step = Math.max(1, Math.ceil(remaining / remainingFrames));
+  return targetUnits.slice(0, currentUnits.length + step).join("");
+};
+
 export const nextProgressiveTranscriptText = (current: string, target: string, isFinal = false) => {
   if (isFinal) return target;
   const compactLength = (value: string) => value
@@ -42,19 +119,64 @@ export const transcriptPresentationLabel = (presentation: TranscriptPresentation
       : presentation === "confirming" ? "已转写"
         : "转写中";
 
-function ProgressiveTranscriptText({ segment, active }: { readonly segment: SpeakerTranscriptSegment; readonly active: boolean }) {
+export function ProgressiveTranscriptText({ segment, active }: { readonly segment: SpeakerTranscriptSegment; readonly active: boolean }) {
   const text = segment.text;
-  const [visibleText, setVisibleText] = useState(text);
+  const [visibleText, setVisibleText] = useState(segment.isFinal || !active ? text : "");
+  const visibleTextRef = useRef(visibleText);
+  const targetTextRef = useRef(text);
+  const targetStartedAtRef = useRef(0);
+  const lastStepAtRef = useRef(0);
+  const frameJobRef = useRef<TranscriptFrameJob | null>(null);
   const lastPaintedEventId = useRef<string | null>(null);
   const performance = segment.performance;
   const renderStartedAtMs = useMemo(() => Date.now(), [performance?.eventId, visibleText]);
 
-  useLayoutEffect(() => {
-    setVisibleText(current => nextProgressiveTranscriptText(current, text, segment.isFinal));
-  }, [segment.isFinal, text]);
+  const updateVisibleText = (value: string) => {
+    visibleTextRef.current = value;
+    setVisibleText(value);
+  };
+
+  if (frameJobRef.current === null) {
+    frameJobRef.current = timestamp => {
+      const target = targetTextRef.current;
+      const current = visibleTextRef.current;
+      if (current === target) return false;
+      if (!transcriptSmoothingEnabled()) {
+        updateVisibleText(target);
+        return false;
+      }
+      if (timestamp - lastStepAtRef.current < TRANSCRIPT_SMOOTHING_FRAME_MS) return true;
+      lastStepAtRef.current = timestamp;
+      const next = nextAdaptiveTranscriptText(current, target, timestamp - targetStartedAtRef.current);
+      updateVisibleText(next);
+      return next !== target;
+    };
+  }
 
   useLayoutEffect(() => {
-    if (!subtitleRevisionDiagnosticsEnabled() || visibleText !== text) return;
+    const job = frameJobRef.current!;
+    const target = nextProgressiveTranscriptText(targetTextRef.current, text, segment.isFinal);
+    targetTextRef.current = target;
+    if (segment.isFinal || !active || !transcriptSmoothingEnabled()) {
+      cancelTranscriptFrameJob(job);
+      updateVisibleText(target);
+      return;
+    }
+    const now = window.performance.now();
+    targetStartedAtRef.current = now;
+    lastStepAtRef.current = now;
+    const firstFrame = firstAdaptiveTranscriptText(visibleTextRef.current, target);
+    updateVisibleText(firstFrame);
+    if (firstFrame === target) cancelTranscriptFrameJob(job);
+    else scheduleTranscriptFrameJob(job);
+  }, [active, segment.isFinal, text]);
+
+  useEffect(() => () => {
+    if (frameJobRef.current) cancelTranscriptFrameJob(frameJobRef.current);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (visibleText !== text) return;
     const eventId = performance?.eventId;
     const traceId = performance?.traceId;
     if (!eventId || !traceId || lastPaintedEventId.current === eventId) return;
@@ -68,13 +190,19 @@ function ProgressiveTranscriptText({ segment, active }: { readonly segment: Spea
       traceId,
       textLength: text.length,
     };
-    recordSubtitleRevisionStage(identity, "react-render", renderStartedAtMs, { renderedTextLength: visibleText.length });
+    if (subtitleRevisionDiagnosticsEnabled()) {
+      recordSubtitleRevisionStage(identity, "react-render", renderStartedAtMs, { renderedTextLength: visibleText.length });
+    }
     const reactCommitAtMs = Date.now();
-    recordSubtitleRevisionStage(identity, "react-commit", reactCommitAtMs, { renderedTextLength: visibleText.length });
+    if (subtitleRevisionDiagnosticsEnabled()) {
+      recordSubtitleRevisionStage(identity, "react-commit", reactCommitAtMs, { renderedTextLength: visibleText.length });
+    }
     const handle = window.requestAnimationFrame(() => {
       const browserPaintAtMs = Date.now();
       lastPaintedEventId.current = eventId;
-      recordSubtitleRevisionStage(identity, "paint", browserPaintAtMs, { renderedTextLength: visibleText.length });
+      if (subtitleRevisionDiagnosticsEnabled()) {
+        recordSubtitleRevisionStage(identity, "paint", browserPaintAtMs, { renderedTextLength: visibleText.length });
+      }
       window.dispatchEvent(new CustomEvent("offersteady:realtime-transcript-rendered", {
         detail: {
           sessionId: segment.sessionId,
@@ -123,22 +251,6 @@ export function ConversationMonitor({ state, onConfirmQuestion, onDismissQuestio
     runtime.latestFrontendRenderMs = frontendRenderMs;
     runtime.latestSegmentId = latest.id;
     runtime.renderedAtMs = Date.now();
-    const performance = latest.performance;
-    if (performance?.traceId && !subtitleRevisionDiagnosticsEnabled()) {
-      window.dispatchEvent(new CustomEvent("offersteady:realtime-transcript-rendered", {
-        detail: {
-          sessionId: latest.sessionId,
-          traceId: performance.traceId,
-          eventId: performance.eventId,
-          segmentId: latest.id,
-          isFinal: latest.isFinal,
-          browserEventReceiveAtMs: performance.browserEventReceiveAtMs,
-          browserStateUpdateAtMs: performance.browserStateUpdateAtMs,
-          browserRenderAtMs: runtime.renderedAtMs,
-          visibilityState: document.visibilityState,
-        },
-      }));
-    }
   }, [transcripts]);
   const pendingSegmentIds = new Set(state.speaker.pendingQuestion?.sourceSegmentIds ?? []);
   return <section className={`conversation-monitor ${transcripts.length === 0 ? "is-empty" : "has-transcripts"}`} aria-labelledby="conversation-title">

@@ -9,7 +9,15 @@
 
 #### Scenario: Partial transcript grows or corrects without retracting visible content
 - **WHEN** 当前面试 session 收到某一句话的增长或等长 Partial Transcript 修订
-- **THEN** 左侧实时对话栏立即原地显示该 revision 的完整最新文本，而不是追加重复对话或通过逐字追赶动画延后可见内容
+- **THEN** 左侧实时对话栏在当前渲染周期显示首个新增字符，并仅对该 revision 已收到的剩余新增文字执行自适应平滑，最迟在 `300ms` 内追平完整文本，不追加重复对话、不生成供应商未返回的内容
+
+#### Scenario: Smoothing cannot keep up with a newer revision
+- **WHEN** 新 Partial 到达时当前展示仍落后，或待显示文字无法在 `300ms` 内按单字节奏完成
+- **THEN** 展示调度器动态增加单帧步进或直接追平目标文本，不得让视觉队列持续落后真实 transcript 状态
+
+#### Scenario: Motion should not be scheduled
+- **WHEN** 页面不可见、用户启用减少动态效果、字幕不再处于活跃转写状态或浏览器缺少帧调度能力
+- **THEN** 页面直接显示当前权威目标文本，不创建持续动画或后台定时任务
 
 #### Scenario: Provider temporarily retracts a partial transcript
 - **WHEN** 同一未定稿 utterance 的较新 revision 比当前可见文本更短
@@ -17,7 +25,7 @@
 
 #### Scenario: Final transcript replaces the partial transcript
 - **WHEN** 某一句话对应的 Final Transcript 到达
-- **THEN** 系统立即使用权威 Final Transcript 替换该句的可见 partial 和状态，即使 Final 文本更短，并保留同一条对话记录的角色和顺序
+- **THEN** 系统取消该句尚未完成的平滑展示并立即使用权威 Final Transcript 替换可见 partial 和状态，即使 Final 文本更短，并保留同一条对话记录的角色和顺序
 
 #### Scenario: Empty or phantom transcript is suppressed
 - **WHEN** 实时链路返回空白文本、静音误触发结果或已失效的旧 partial

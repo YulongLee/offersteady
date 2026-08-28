@@ -76,15 +76,15 @@ describe("spec-driven interview features", () => {
     expect(screen.getAllByRole("button", { name: "支付暂未开放" })[0]).toBeDisabled();
   });
 
-  it("renders only two source-fixed roles and confirms unclear question content once", () => {
+  it("renders only two source-fixed roles and confirms unclear question content once", async () => {
     open("/app/interviews/demo/live");
     expect(screen.getAllByText("面试官").length).toBeGreaterThan(1);
     expect(screen.getByText("我")).toBeInTheDocument();
     expect(screen.queryByText("角色待确认")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /设为面试官|设为我/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "确认问题" }));
-    expect(screen.getAllByText("还有一个细节，具体怎么监控").length).toBeGreaterThan(0);
     expect(screen.queryByText("问题内容不清晰")).not.toBeInTheDocument();
+    expect((await screen.findAllByText("还有一个细节，具体怎么监控")).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "积分与会员" })).toBeInTheDocument();
   });
 });

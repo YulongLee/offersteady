@@ -39,8 +39,9 @@
 - [x] 4.8 Circuit-break invalid-session SSE recovery so polling, focus events, and reconnect timers cannot form a retry storm.
 - [x] 4.9 Exit invalid live routes immediately and move synchronous Redis SSE reads off the FastAPI event loop.
 - [x] 4.10 Reuse runtime diagnostics for two seconds during high-frequency SSE partial updates.
-- [x] 4.11 Preserve ordered healthy transcript revisions through Redis/SSE and the Browser state adapter without synthetic reveal animation.
+- [x] 4.11 Preserve ordered healthy transcript revisions through Redis/SSE and the Browser state adapter before presentation-only smoothing.
 - [x] 4.12 Move runtime diagnostic aggregation off the transcript SSE hot path and deliver it as a separate single-flight update.
+- [x] 4.13 Add bounded adaptive smoothing for received Partial text with immediate first character, shared frame scheduling, forced catch-up, and instant Final/reduced-motion fallback.
 
 ## 5. Verification, Evals, and Rollout
 
@@ -60,3 +61,4 @@
 - [x] 5.11 Stabilize visible realtime partials against temporary provider retractions while keeping growth immediate and Final authoritative.
 - [x] 5.12 Add regressions and complete staged Backend/Web/Desktop validation for the Partial fast path and revision-preserving delivery.
 - [x] 5.13 Add regressions proving empty completed utterances do not create ASR reconnect storms.
+- [x] 5.14 Add Web regressions for adaptive subtitle pacing, correction/retraction handling, Final authority, session cleanup, and bounded render scheduling.

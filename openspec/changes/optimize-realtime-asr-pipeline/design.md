@@ -164,9 +164,11 @@ Alternative considered: 只继续调一个全局 RMS 阈值。缺点是不同设
 
 实时字幕、待确认问题、当前回答任务和新建面试时的回答列表属于单场面试运行态，不得跨 session 合并。创建新草稿时前端清空上一场临时运行态；实时字幕 reconciliation 只允许合并相同 `sessionId` 的 partial/final，目标 session 变化时先过滤旧 session 内容。该清理只作用于前端当前工作区，不删除后端历史面试记录。
 
-### Decision 12: Measure provider TTFT from the first utterance append and render partials immediately
+### Decision 12: Measure provider TTFT from the first utterance append and smooth only received partial text
 
-每个 provider utterance 独立保存第一次 PCM append 时间，后续 append 不得覆盖该时间。供应商 TTFT 必须以第一次 append 到第一次有效 partial 计算，同时保留最近 append 时间用于发送路径诊断。网页收到新的 partial revision 后直接展示最新文本，不再增加逐字追赶动画；回答流式动画不受影响。
+每个 provider utterance 独立保存第一次 PCM append 时间，后续 append 不得覆盖该时间。供应商 TTFT 必须以第一次 append 到第一次有效 partial 计算，同时保留最近 append 时间用于发送路径诊断。
+
+网页接收和保存新的 partial revision 时不得延迟权威原始状态；展示层只对该 revision 已经收到的新增文字执行有界、自适应平滑。首个可见字符在当前渲染周期立即出现，剩余文字通过共享 `requestAnimationFrame` 调度器逐步展示，并在目标 revision 到达后最多 `300ms` 内追平。积压过大、Final 到达、页面进入后台、用户启用减少动态效果或调度能力不可用时直接显示权威目标文本。平滑状态不得进入回答输入、问题检测、转录持久化或性能链路原始时间计算。
 
 供应商 partial 允许修正识别假设，但网页展示不得因同一 utterance 的临时短 revision 大幅回缩。增长或等长修订继续在当前帧立即展示；较短 partial 只更新原始实时状态，展示层暂时保留最近的较长可见文本，直到后续 partial 恢复到相同长度或 final 到达。Final 始终是权威文本并立即替换展示内容。该稳定策略只作用于字幕呈现，不修改供应商原始 revision、最终转录或回答模型输入。
 
@@ -178,7 +180,7 @@ Provider Partial 的可见字幕发布路径只允许执行当前 publisher、�
 
 正常 source 队列只处理当前 100ms 增量帧，不主动取后续帧合并。仅当队列已经出现积压时才逐级启用两帧或最多四帧的无等待合并，以完整保留 PCM 并优先追赶实时位置。
 
-Redis/SSE 和 Browser state adapter 在健康流中保留有序 transcript revision，不得无条件将同一 segment 的多个 Provider revision 压缩为最后一个。过载保护只能在明确超过有界积压阈值时启用，Final 必须始终保留，且不得通过逐字动画伪造 Provider 未提供的 revision。
+Redis/SSE 和 Browser state adapter 在健康流中保留有序 transcript revision，不得无条件将同一 segment 的多个 Provider revision 压缩为最后一个。过载保护只能在明确超过有界积压阈值时启用，Final 必须始终保留。展示层可以平滑揭示某个已收到 revision 中的字符，但不得生成 Provider 未返回的文本或伪造新的 revision，诊断指标仍以原始 revision 的接收和最终追平时间为准。
 
 ### Decision 14: Treat completed empty utterances as suppressed results, not connection failures
 
@@ -194,6 +196,7 @@ Redis/SSE 和 Browser state adapter 在健康流中保留有序 transcript revis
 - [Risk] “保持 API 不变”限制了大规模接口重构 → Mitigation: 在现有 API 之下增加兼容的内部队列、事件模型和诊断字段，对外保持主要入口不变。
 - [Risk] 对无效 session 降低 SSE 重试频率后，短暂创建延迟可能延后恢复 → Mitigation: 页面前台恢复、网络恢复和低频状态探测成功时立即重建订阅。
 - [Risk] 暂时保留较长 partial 可能让错误尾词多停留一小段时间 → Mitigation: 仅在未定稿文本回缩时稳定显示，等长/增长修订仍即时更新，Final 无条件立即覆盖。
+- [Risk] 字幕平滑可能形成视觉积压或增加 React 更新开销 → Mitigation: 使用共享帧调度、单次有界步进和 `300ms` 强制追平；Final、后台、减少动态效果和异常状态直接显示目标文本，并通过回归测试限制活动调度数量。
 
 ## Migration Plan
 
