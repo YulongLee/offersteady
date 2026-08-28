@@ -3,7 +3,7 @@ import { BrowserRouter, Link, NavLink, Navigate, Outlet, Route, Routes, useLocat
 import type { AnswerTaskSnapshot, CaptureState, ContextLibrarySource } from "@offersteady/protocol";
 import { BriefcaseIcon, CaretDownIcon, ChartLineUpIcon, ChatCircleTextIcon, ClipboardTextIcon, CodeIcon, DatabaseIcon, DevicesIcon, GraduationCapIcon, IdentificationCardIcon, PaletteIcon, ScanIcon, UserFocusIcon } from "@phosphor-icons/react";
 
-import type { IdleInterviewStatus, InterviewQuestion, LiveActionState, QuestionStatus, RealtimeSessionUpdate, ScreenshotTask, SessionStatus, WebAppState } from "./domain";
+import type { IdleInterviewStatus, InterviewQuestion, LiveActionState, ProgrammingLanguage, QuestionStatus, RealtimeSessionUpdate, ScreenshotTask, SessionStatus, WebAppState } from "./domain";
 import { runAdapterOperation } from "./api-client";
 import { interviewAppAdapter } from "./app-adapter";
 import { routes } from "./routes";
@@ -514,9 +514,13 @@ function PreparationPage() {
   const [resolvingConflict, setResolvingConflict] = useState(false);
   const [savingLanguage, setSavingLanguage] = useState(false);
   const [languageError, setLanguageError] = useState("");
+  const [savingProgramming, setSavingProgramming] = useState(false);
+  const [programmingError, setProgrammingError] = useState("");
   const interview = state.interviews.find(item => item.id === id);
   const interviewTitle = interview?.title ?? "本场面试";
   const interviewLanguage = interview?.interviewLanguage ?? "zh-CN";
+  const programmingRequired = interview?.programmingRequired ?? false;
+  const programmingLanguage = interview?.programmingLanguage ?? "python";
   const selection = state.contextSelections[id] ?? state.contextSelections.demo!;
   const managedSources = managedLibrarySources(state.librarySources, state.account.id);
   const validity = selectionValidity(managedSources, selection);
@@ -562,6 +566,24 @@ function PreparationPage() {
       setLanguageError(error instanceof Error ? error.message : "面试语言保存失败，请重试。");
     } finally {
       setSavingLanguage(false);
+    }
+  };
+  const saveInterviewProgramming = async (required: boolean, language: ProgrammingLanguage | null) => {
+    if (savingProgramming) return;
+    const normalizedLanguage = required ? language ?? "python" : null;
+    if (required === programmingRequired && normalizedLanguage === (programmingRequired ? programmingLanguage : null)) return;
+    setSavingProgramming(true);
+    setProgrammingError("");
+    try {
+      const updated = await runAdapterOperation(signal => interviewAppAdapter.updateInterviewProgramming(id, required, normalizedLanguage, signal));
+      setState(current => ({
+        ...current,
+        interviews: current.interviews.map(item => item.id === id ? { ...item, ...updated } : item),
+      }));
+    } catch (error) {
+      setProgrammingError(error instanceof Error ? error.message : "编程设置保存失败，请重试。");
+    } finally {
+      setSavingProgramming(false);
     }
   };
   const downloadMaterial = async (source: ContextLibrarySource) => {
@@ -672,7 +694,7 @@ function PreparationPage() {
     }
   };
   return <main className="app-page"><Link className="back-link" to={routes.app}>← 返回面试首页</Link><PageHeader eyebrow="PREPARATION" title={interviewTitle} detail="资料与“面试资料”页面保持一致，为本场按需选择。" action={<div className="completion"><strong>{complete}/2</strong><span>{canStart ? "可进入" : "准备中"}</span></div>} />
-    <div className="prepare-grid"><section className="panel"><fieldset className="interview-language-picker" disabled={savingLanguage}><legend>面试语言</legend><p>用于本场实时识别、问题判断和 AI 回答；开始面试后将锁定。</p><div><label className={interviewLanguage === "zh-CN" ? "selected" : ""}><input type="radio" name="interview-language" value="zh-CN" checked={interviewLanguage === "zh-CN"} onChange={() => void saveInterviewLanguage("zh-CN")} /><span><strong>中文面试</strong><small>沿用当前中文识别与回答链路</small></span></label><label className={interviewLanguage === "en-US" ? "selected" : ""}><input type="radio" name="interview-language" value="en-US" checked={interviewLanguage === "en-US"} onChange={() => void saveInterviewLanguage("en-US")} /><span><strong>English Interview</strong><small>English transcription and AI answers</small></span></label></div>{savingLanguage ? <small role="status">正在保存面试语言…</small> : null}{languageError ? <div className="inline-error" role="alert">{languageError}</div> : null}</fieldset><ContextPicker sources={managedSources} selection={selection} onSave={saveSelection} onDownload={downloadMaterial} />{confirmingMaterials ? <div className="context-warning" role="status">正在提交后端校验并保存本场资料…</div> : null}{materialConfirmError ? <div className="context-warning" role="alert">{materialConfirmError}</div> : null}</section>
+    <div className="prepare-grid"><section className="panel"><fieldset className="interview-language-picker" disabled={savingLanguage}><legend>面试语言</legend><p>用于本场实时识别、问题判断和 AI 回答；开始面试后将锁定。</p><div><label className={interviewLanguage === "zh-CN" ? "selected" : ""}><input type="radio" name="interview-language" value="zh-CN" checked={interviewLanguage === "zh-CN"} onChange={() => void saveInterviewLanguage("zh-CN")} /><span><strong>中文面试</strong><small>沿用当前中文识别与回答链路</small></span></label><label className={interviewLanguage === "en-US" ? "selected" : ""}><input type="radio" name="interview-language" value="en-US" checked={interviewLanguage === "en-US"} onChange={() => void saveInterviewLanguage("en-US")} /><span><strong>English Interview</strong><small>English transcription and AI answers</small></span></label></div>{savingLanguage ? <small role="status">正在保存面试语言…</small> : null}{languageError ? <div className="inline-error" role="alert">{languageError}</div> : null}</fieldset><fieldset className="programming-preference" disabled={savingProgramming}><legend>编程设置</legend><div className="programming-toggle-row"><span><strong>需要编程</strong><small>开启后，代码题会统一使用你选择的编程语言</small></span><label className="switch-control"><input type="checkbox" role="switch" checked={programmingRequired} onChange={event => void saveInterviewProgramming(event.target.checked, event.target.checked ? programmingLanguage : null)} /><span aria-hidden="true" /></label></div>{programmingRequired ? <div className="programming-language-options" role="radiogroup" aria-label="编程语言">{([['python', 'Python'], ['java', 'Java'], ['cpp', 'C++'], ['javascript', 'JavaScript'], ['typescript', 'TypeScript'], ['go', 'Go']] as const).map(([value, label]) => <label key={value} className={programmingLanguage === value ? "selected" : ""}><input type="radio" name="programming-language" value={value} checked={programmingLanguage === value} onChange={() => void saveInterviewProgramming(true, value)} /><span>{label}</span></label>)}</div> : null}{savingProgramming ? <small role="status">正在保存编程设置…</small> : null}{programmingError ? <div className="inline-error" role="alert">{programmingError}</div> : null}</fieldset><ContextPicker sources={managedSources} selection={selection} onSave={saveSelection} onDownload={downloadMaterial} />{confirmingMaterials ? <div className="context-warning" role="status">正在提交后端校验并保存本场资料…</div> : null}{materialConfirmError ? <div className="context-warning" role="alert">{materialConfirmError}</div> : null}</section>
       <aside className="panel check-panel"><div className="panel-heading"><h2>开始前检查</h2><span>{canStart ? "可进入" : !selectionReady ? "待确认资料" : "待绑定机器"}</span></div><ul className="check-list"><li className={selectionReady ? "done" : ""}><i>{selectionReady ? "✓" : "1"}</i><div><strong>本场资料</strong><span>{validity === "unconfirmed" ? "请选择资料或确认不使用资料" : validity === "attention-required" ? "所选资料已失效，请处理" : level === "none" ? "已确认不使用个人资料" : level === "personalized" ? "简历与 JD 已选择" : "已确认使用部分资料"}</span></div></li><li className={machineReady ? "done" : ""}><i>{machineReady ? "✓" : "2"}</i><div><strong>收音机器</strong><span>{deviceBinding ? `${deviceBinding.displayName} 已连接，后台正在预热实时链路` : inputDiagnostic}</span></div></li></ul>
         <div className="machine-code-panel">
           <strong className="connection-choice-title">连接桌面助手</strong>

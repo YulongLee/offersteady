@@ -15,6 +15,7 @@ from app.ports.interview_session import (
     InterviewSessionRecord,
     InterviewSessionRepository,
     InterviewLanguage,
+    ProgrammingLanguage,
     SessionBoundDocument,
     SessionConfigSnapshot,
     SessionMaterialBinding,
@@ -43,18 +44,20 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
                     """
                     INSERT INTO interview_sessions (
                       session_id, owner_user_id, title, status, continue_target,
-                      interview_language,
+                      interview_language, programming_required, programming_language,
                       material_binding_json, config_snapshot_json, usage_totals_json,
                       integration_references_json, restart_of_session_id, started_at_ms,
                       ended_at_ms, created_at_ms, updated_at_ms, last_activity_at_ms, deleted_at_ms
                     )
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL)
                     ON CONFLICT (session_id) DO UPDATE SET
                       owner_user_id = EXCLUDED.owner_user_id,
                       title = EXCLUDED.title,
                       status = EXCLUDED.status,
                       continue_target = EXCLUDED.continue_target,
                       interview_language = EXCLUDED.interview_language,
+                      programming_required = EXCLUDED.programming_required,
+                      programming_language = EXCLUDED.programming_language,
                       material_binding_json = EXCLUDED.material_binding_json,
                       config_snapshot_json = EXCLUDED.config_snapshot_json,
                       usage_totals_json = EXCLUDED.usage_totals_json,
@@ -73,6 +76,8 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
                         session.status,
                         session.continue_target,
                         session.interview_language,
+                        session.programming_required,
+                        session.programming_language,
                         Jsonb(asdict(session.material_binding)),
                         Jsonb(asdict(session.config_snapshot)),
                         Jsonb(asdict(session.usage_totals)),
@@ -134,6 +139,26 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
                 RETURNING *
                 """,
                 (interview_language, updated_at_ms, updated_at_ms, user_id, session_id),
+            )
+            row = cursor.fetchone()
+            connection.commit()
+        return self._row_to_session(row) if row else None
+
+    def update_programming_if_preparing(
+        self, *, user_id: str, session_id: str, programming_required: bool,
+        programming_language: ProgrammingLanguage | None, updated_at_ms: int
+    ) -> InterviewSessionRecord | None:
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                UPDATE interview_sessions
+                SET programming_required = %s, programming_language = %s,
+                    updated_at_ms = %s, last_activity_at_ms = %s
+                WHERE owner_user_id = %s AND session_id = %s
+                  AND status = 'preparing' AND deleted_at_ms IS NULL
+                RETURNING *
+                """,
+                (programming_required, programming_language, updated_at_ms, updated_at_ms, user_id, session_id),
             )
             row = cursor.fetchone()
             connection.commit()
@@ -316,6 +341,7 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
                 apply_sql_migrations(cursor, [
                     REPO_ROOT / "apps/backend/migrations/versions/0028_restore_unstarted_interviews.sql",
                     REPO_ROOT / "apps/backend/migrations/versions/0033_interview_language.sql",
+                    REPO_ROOT / "apps/backend/migrations/versions/0034_interview_programming_preference.sql",
                 ])
             connection.commit()
 
@@ -329,6 +355,8 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
             owner_user_id=row["owner_user_id"],
             title=row["title"],
             interview_language=row.get("interview_language") or "zh-CN",
+            programming_required=bool(row.get("programming_required", False)),
+            programming_language=row.get("programming_language"),
             status=row["status"],
             continue_target=row["continue_target"],
             material_binding=self._material_binding_from_json(material),

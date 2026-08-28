@@ -8,6 +8,7 @@ from app.ports.interview_session import (
     InterviewSessionRecord,
     InterviewSessionRepository,
     InterviewLanguage,
+    ProgrammingLanguage,
     SessionUsageRecord,
 )
 
@@ -52,6 +53,24 @@ class InMemoryInterviewSessionRepository(InterviewSessionRepository):
             updated = replace(
                 session,
                 interview_language=interview_language,
+                updated_at_ms=updated_at_ms,
+                last_activity_at_ms=updated_at_ms,
+            )
+            self.sessions[session_id] = updated
+            return replace(updated)
+
+    def update_programming_if_preparing(
+        self, *, user_id: str, session_id: str, programming_required: bool,
+        programming_language: ProgrammingLanguage | None, updated_at_ms: int
+    ) -> InterviewSessionRecord | None:
+        with self._session_lock:
+            session = self.sessions.get(session_id)
+            if session is None or session.owner_user_id != user_id or session.status != "preparing":
+                return None
+            updated = replace(
+                session,
+                programming_required=programming_required,
+                programming_language=programming_language,
                 updated_at_ms=updated_at_ms,
                 last_activity_at_ms=updated_at_ms,
             )

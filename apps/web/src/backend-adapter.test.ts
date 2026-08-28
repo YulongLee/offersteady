@@ -960,6 +960,26 @@ describe("backend preview adapter", () => {
     expect(result.interviewLanguage).toBe("en-US");
   });
 
+  it("persists the authoritative programming preference through the session API", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(envelope({
+      sessionId: "session-1", title: "Coding interview", interviewLanguage: "zh-CN",
+      programmingRequired: true, programmingLanguage: "cpp", status: "preparing",
+      updatedAtMs: 123, materialBinding: { confirmedAtMs: null },
+    })), { status: 200, headers: { "Content-Type": "application/json" } }));
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+
+    const result = await adapter.updateInterviewProgramming("session-1", true, "cpp");
+
+    expect(fetchImpl).toHaveBeenCalledWith("http://localhost:8000/api/v1/sessions/session-1/programming", expect.objectContaining({
+      method: "PATCH",
+      body: JSON.stringify({ userId: "user-1", programmingRequired: true, programmingLanguage: "cpp" }),
+    }));
+    expect(result).toMatchObject({ programmingRequired: true, programmingLanguage: "cpp" });
+  });
+
   it("cancels a desktop shortcut screenshot through the remote capture API", async () => {
     window.localStorage.setItem("offersteady.auth.access_token", "access-token");
     window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");

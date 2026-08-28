@@ -12,6 +12,7 @@ from app.ports.interview_session import (
     InterviewLanguage,
     InterviewSessionRecord,
     InterviewSessionRepository,
+    ProgrammingLanguage,
     SessionBoundDocument,
     SessionConfigSnapshot,
     SessionContinueTarget,
@@ -47,6 +48,8 @@ class SessionService:
         user_id: str,
         title: str,
         interview_language: InterviewLanguage = "zh-CN",
+        programming_required: bool = False,
+        programming_language: ProgrammingLanguage | None = None,
         restart_of_session_id: str | None = None,
     ) -> InterviewSessionRecord:
         now_ms = _now_ms()
@@ -67,6 +70,8 @@ class SessionService:
             owner_user_id=user_id,
             title=title.strip(),
             interview_language=interview_language,
+            programming_required=programming_required,
+            programming_language=(programming_language or "python") if programming_required else None,
             status="preparing",
             continue_target="preparing",
             material_binding=material_binding,
@@ -116,6 +121,34 @@ class SessionService:
                 error_code="interview_language_locked",
             )
         raise DomainRequestError("session", "update-language", "面试语言保存失败，请重试。", 409)
+
+    def update_interview_programming(
+        self, *, user_id: str, session_id: str, programming_required: bool,
+        programming_language: ProgrammingLanguage | None
+    ) -> InterviewSessionRecord:
+        session = self.get_session(user_id=user_id, session_id=session_id)
+        if session.status != "preparing":
+            raise DomainRequestError(
+                "session", "update-programming", "面试开始后不能修改编程设置。", 409,
+                error_code="interview_programming_locked",
+            )
+        normalized_language = (programming_language or "python") if programming_required else None
+        updated = self.repository.update_programming_if_preparing(
+            user_id=user_id,
+            session_id=session_id,
+            programming_required=programming_required,
+            programming_language=normalized_language,
+            updated_at_ms=_now_ms(),
+        )
+        if updated is not None:
+            return updated
+        latest = self.get_session(user_id=user_id, session_id=session_id)
+        if latest.status != "preparing":
+            raise DomainRequestError(
+                "session", "update-programming", "面试开始后不能修改编程设置。", 409,
+                error_code="interview_programming_locked",
+            )
+        raise DomainRequestError("session", "update-programming", "编程设置保存失败，请重试。", 409)
 
     def list_sessions(self, *, user_id: str, status: str | None = None) -> list[InterviewSessionRecord]:
         sessions = self.repository.list_sessions_for_user(user_id=user_id, status=status)  # type: ignore[arg-type]
@@ -288,6 +321,8 @@ class SessionService:
             user_id=user_id,
             title=f"{session.title} · 重新开始",
             interview_language=session.interview_language,
+            programming_required=session.programming_required,
+            programming_language=session.programming_language,
             restart_of_session_id=session.session_id,
         )
         if session.material_binding.confirmed_at_ms is not None:
@@ -536,6 +571,8 @@ class SessionService:
             owner_user_id=updates.get("owner_user_id", session.owner_user_id),
             title=updates.get("title", session.title),
             interview_language=updates.get("interview_language", session.interview_language),
+            programming_required=updates.get("programming_required", session.programming_required),
+            programming_language=updates.get("programming_language", session.programming_language),
             status=updates.get("status", session.status),
             continue_target=updates.get("continue_target", self._derive_continue_target(updates.get("status", session.status))),
             material_binding=updates.get("material_binding", session.material_binding),

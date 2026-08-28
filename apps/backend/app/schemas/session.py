@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.material_formats import MaterialKind
-from app.ports.interview_session import ConversationRole, ConversationVisibility, InterviewLanguage, InterviewSessionState, SessionContinueTarget, SessionUsageKind
+from app.ports.interview_session import ConversationRole, ConversationVisibility, InterviewLanguage, InterviewSessionState, ProgrammingLanguage, SessionContinueTarget, SessionUsageKind
 
 
 class SessionDocumentSnapshotResponse(BaseModel):
@@ -109,6 +109,8 @@ class InterviewSessionResponse(BaseModel):
     owner_user_id: str = Field(alias="ownerUserId")
     title: str
     interview_language: InterviewLanguage = Field(alias="interviewLanguage")
+    programming_required: bool = Field(default=False, alias="programmingRequired")
+    programming_language: ProgrammingLanguage | None = Field(default=None, alias="programmingLanguage")
     status: InterviewSessionState
     continue_target: SessionContinueTarget = Field(alias="continueTarget")
     material_binding: SessionMaterialBindingResponse = Field(alias="materialBinding")
@@ -128,12 +130,37 @@ class CreateInterviewSessionRequest(BaseModel):
     user_id: str = Field(min_length=1, alias="userId")
     title: str = Field(min_length=1, max_length=120)
     interview_language: InterviewLanguage = Field(default="zh-CN", alias="interviewLanguage")
+    programming_required: bool = Field(default=False, alias="programmingRequired")
+    programming_language: ProgrammingLanguage | None = Field(default=None, alias="programmingLanguage")
+
+    @model_validator(mode="after")
+    def normalize_programming_preference(self):
+        if self.programming_required and self.programming_language is None:
+            self.programming_language = "python"
+        if not self.programming_required and self.programming_language is not None:
+            raise ValueError("programmingLanguage must be null when programmingRequired is false")
+        return self
 
 
 class UpdateInterviewLanguageRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
     user_id: str = Field(min_length=1, alias="userId")
     interview_language: InterviewLanguage = Field(alias="interviewLanguage")
+
+
+class UpdateInterviewProgrammingRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    user_id: str = Field(min_length=1, alias="userId")
+    programming_required: bool = Field(alias="programmingRequired")
+    programming_language: ProgrammingLanguage | None = Field(default=None, alias="programmingLanguage")
+
+    @model_validator(mode="after")
+    def validate_programming_preference(self):
+        if self.programming_required and self.programming_language is None:
+            self.programming_language = "python"
+        if not self.programming_required and self.programming_language is not None:
+            raise ValueError("programmingLanguage must be null when programmingRequired is false")
+        return self
 
 
 class ListInterviewSessionsRequest(BaseModel):

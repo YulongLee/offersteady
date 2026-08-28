@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
-from app.ports.interview_session import InterviewLanguage
+from app.ports.interview_session import InterviewLanguage, ProgrammingLanguage
 
 from app.ports.chat import ChatAnswerChunk, PromptBuildResult
 
@@ -200,6 +200,8 @@ class VisionGatewayPort(Protocol):
         images: list[PreparedScreenshotImage],
         attempt: int,
         interview_language: InterviewLanguage = "zh-CN",
+        programming_required: bool = False,
+        programming_language: ProgrammingLanguage | None = None,
     ) -> VisionSummary: ...
 
 

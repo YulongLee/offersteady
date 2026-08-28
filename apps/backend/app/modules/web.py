@@ -431,6 +431,8 @@ def _session_payload(session) -> dict[str, object]:
         "id": session.session_id,
         "title": session.title,
         "interviewLanguage": session.interview_language,
+        "programmingRequired": getattr(session, "programming_required", False),
+        "programmingLanguage": getattr(session, "programming_language", None),
         "role": session.title,
         "status": _session_status(session.status),
         "updatedAt": "刚刚",

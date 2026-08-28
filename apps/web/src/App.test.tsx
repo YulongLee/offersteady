@@ -38,6 +38,12 @@ describe("OfferSteady web application", () => {
       id,
       interviewLanguage,
     }));
+    vi.spyOn(interviewAppAdapter, "updateInterviewProgramming").mockImplementation(async (id, programmingRequired, programmingLanguage) => ({
+      ...(syntheticState.interviews.find(item => item.id === id) ?? syntheticState.interviews[0]!),
+      id,
+      programmingRequired,
+      programmingLanguage: programmingRequired ? programmingLanguage ?? "python" : null,
+    }));
     vi.spyOn(interviewAppAdapter, "getActiveInterviewConflict").mockImplementation(async id => ({ currentInterviewId: id, activeInterview: null }));
     vi.spyOn(interviewAppAdapter, "supersedeActiveInterview").mockResolvedValue([]);
     vi.spyOn(interviewAppAdapter, "controlInterviewCapture").mockImplementation(async (_id, action) => action === "pause" ? "paused" : "capturing");
@@ -384,6 +390,48 @@ describe("OfferSteady web application", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("面试语言保存失败，请重试。");
     expect(english).toBeChecked();
     expect(chinese).not.toBeChecked();
+  });
+
+  it("enables programming with Python by default and persists the selected language without changing readiness", async () => {
+    await login();
+    window.history.pushState({}, "", "/app/interviews/demo/prepare");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+
+    const programming = await screen.findByRole("switch", { name: "" });
+    expect(programming).not.toBeChecked();
+    expect(screen.queryByRole("radiogroup", { name: "编程语言" })).not.toBeInTheDocument();
+    fireEvent.click(programming);
+
+    await waitFor(() => expect(interviewAppAdapter.updateInterviewProgramming).toHaveBeenCalledWith(
+      "demo", true, "python", expect.any(AbortSignal),
+    ));
+    const python = await screen.findByRole("radio", { name: "Python" });
+    expect(python).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: "C++" }));
+    await waitFor(() => expect(interviewAppAdapter.updateInterviewProgramming).toHaveBeenLastCalledWith(
+      "demo", true, "cpp", expect.any(AbortSignal),
+    ));
+    expect(screen.getByText("1/2")).toBeInTheDocument();
+    fireEvent.click(programming);
+    await waitFor(() => expect(interviewAppAdapter.updateInterviewProgramming).toHaveBeenLastCalledWith(
+      "demo", false, null, expect.any(AbortSignal),
+    ));
+    expect(screen.queryByRole("radiogroup", { name: "编程语言" })).not.toBeInTheDocument();
+  });
+
+  it("restores the saved programming language and keeps it when a save fails", async () => {
+    const state = clonedState();
+    state.interviews = state.interviews.map(item => item.id === "demo" ? {
+      ...item, programmingRequired: true, programmingLanguage: "go",
+    } : item);
+    vi.mocked(interviewAppAdapter.updateInterviewProgramming).mockRejectedValueOnce(new Error("编程设置保存失败，请重试。"));
+    openAtWithState("/app/interviews/demo/prepare", state, true);
+
+    const go = await screen.findByRole("radio", { name: "Go" });
+    expect(go).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: "Java" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("编程设置保存失败，请重试。");
+    expect(go).toBeChecked();
   });
 
   it("keeps the user on preparation when backend session start fails", async () => {

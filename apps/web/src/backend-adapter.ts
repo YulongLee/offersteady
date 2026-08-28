@@ -2,7 +2,7 @@ import type { CaptureState, FoundationIndexResponse } from "@offersteady/protoco
 
 import type { AnswerProvenance, AnswerSourceReference, AnswerTaskSnapshot, CancelAnswerResult, OfficialCheckoutOrder, PointsRedemptionResult } from "@offersteady/protocol";
 import { AppError } from "./domain";
-import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, DesktopDeviceBinding, DesktopShortcutScreenshotUpdate, IdleInterviewStatus, InterviewAppAdapter, InterviewLanguage, InterviewQuestion, InterviewReview, InterviewSummary, InterviewWorkspaceSnapshot, PreparationAudioReadiness, ReferralActivationResult, ReferralStatus, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
+import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, DesktopDeviceBinding, DesktopShortcutScreenshotUpdate, IdleInterviewStatus, InterviewAppAdapter, InterviewLanguage, InterviewQuestion, InterviewReview, InterviewSummary, InterviewWorkspaceSnapshot, PreparationAudioReadiness, ProgrammingLanguage, ReferralActivationResult, ReferralStatus, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
 import { createJsonClient, withBaseUrl } from "./api-client";
 import { authClient } from "./auth-client";
 import { createSseParser, type LiveAnswerStreamEvent, type ManualAnswerStreamUpdate } from "./live-answer-stream";
@@ -18,6 +18,8 @@ interface BackendSessionResponse {
   readonly sessionId: string;
   readonly title: string;
   readonly interviewLanguage?: InterviewLanguage;
+  readonly programmingRequired?: boolean;
+  readonly programmingLanguage?: ProgrammingLanguage | null;
   readonly status: "preparing" | "live" | "ended";
   readonly updatedAtMs: number;
   readonly materialBinding: {
@@ -558,6 +560,8 @@ const toInterviewSummary = (session: BackendSessionResponse, fallback?: { title?
   id: session.sessionId,
   title: session.title || fallback?.title || "新的面试",
   interviewLanguage: session.interviewLanguage ?? "zh-CN",
+  programmingRequired: session.programmingRequired ?? false,
+  programmingLanguage: session.programmingRequired ? session.programmingLanguage ?? "python" : null,
   role: fallback?.role || session.title || "目标岗位",
   ...(fallback?.company?.trim() ? { company: fallback.company.trim() } : {}),
   status: session.status === "live" ? "active" : session.status,
@@ -1225,6 +1229,15 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       method: "PATCH",
       headers: authHeaders(),
       body: JSON.stringify({ userId: requireUserId(), interviewLanguage }),
+    }, signal);
+    return toInterviewSummary(updated);
+  }
+
+  async updateInterviewProgramming(id: string, programmingRequired: boolean, programmingLanguage: ProgrammingLanguage | null, signal?: AbortSignal) {
+    const updated = await this.client.request<BackendSessionResponse>(`/api/v1/sessions/${id}/programming`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ userId: requireUserId(), programmingRequired, programmingLanguage }),
     }, signal);
     return toInterviewSummary(updated);
   }

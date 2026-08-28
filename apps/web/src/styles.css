@@ -436,6 +436,23 @@ h1, h2, h3, p { margin-top: 0; }
 .interview-language-picker label span { display: grid; gap: 4px; }
 .interview-language-picker strong { font-size: 10px; }
 .interview-language-picker small { color: var(--muted); font-size: 8px; line-height: 1.45; }
+.programming-preference { border: 0; border-bottom: 1px solid var(--line); margin: 0 0 20px; padding: 0 0 20px; }
+.programming-preference legend { padding: 0; font-size: 12px; font-weight: 800; }
+.programming-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 10px; }
+.programming-toggle-row > span { display: grid; gap: 4px; }
+.programming-toggle-row strong { font-size: 10px; }
+.programming-toggle-row small, .programming-preference > small { color: var(--muted); font-size: 8px; line-height: 1.45; }
+.switch-control { position: relative; display: inline-flex; flex: 0 0 auto; cursor: pointer; }
+.switch-control input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.switch-control > span { width: 38px; height: 22px; border-radius: 999px; background: var(--line); transition: background .18s ease; }
+.switch-control > span::after { content: ""; display: block; width: 16px; height: 16px; margin: 3px; border-radius: 50%; background: #fff; transition: transform .18s ease; }
+.switch-control input:checked + span { background: var(--brand); }
+.switch-control input:checked + span::after { transform: translateX(16px); }
+.switch-control input:focus-visible + span { outline: 2px solid var(--brand); outline-offset: 2px; }
+.programming-language-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.programming-language-options label { display: flex; align-items: center; justify-content: center; min-height: 34px; border: 1px solid var(--line); border-radius: 10px; font-size: 9px; cursor: pointer; }
+.programming-language-options label.selected { border-color: rgba(110,231,189,.55); background: rgba(110,231,189,.08); color: var(--brand); }
+.programming-language-options input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .live-language-badge { color: var(--brand); font-size: 7px; font-weight: 800; letter-spacing: .04em; }
 .check-list { display: grid; gap: 15px; list-style: none; padding: 0; margin: 0 0 18px; }
 .check-list li { display: flex; gap: 11px; opacity: .58; }

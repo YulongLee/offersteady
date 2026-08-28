@@ -7,6 +7,7 @@ from app.ports.chat import PromptConfig
 from app.ports.screenshot_answer import VisionSummary
 from app.services.chat_service import FilePromptTemplateAdapter, InterviewPromptBuilder, _english_output_violation
 from app.services.screenshot_answer_service import OpenAICompatibleVisionGateway, ScreenshotPromptBuilder, _screenshot_only_instruction
+from app.services.programming_prompt import append_programming_policy, carry_programming_policy
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -108,6 +109,25 @@ def test_vision_gateway_loads_v2_policy() -> None:
     assert "Answer in English" in english_policy
     assert "complete runnable code" in english_policy
 
+def test_programming_policy_is_authoritative_in_chat_and_screenshot_prompts() -> None:
+    session = type("Session", (), {
+        "programming_required": True,
+        "programming_language": "go",
+        "interview_language": "en-US",
+    })()
+    chat_system = append_programming_policy("English chat policy", session=session)
+    continuation = carry_programming_policy("Continue the answer", chat_system)
+    assert "locked to Go" in chat_system
+    assert "```go" in continuation
+
+    gateway = OpenAICompatibleVisionGateway(Settings(_env_file=None))
+    payload = gateway._request_payload(
+        instruction="Implement the visible task", images=[], stream=False,
+        interview_language="en-US", programming_required=True, programming_language="typescript",
+    )
+    assert "locked to TypeScript" in payload["messages"][0]["content"]
+    assert "```typescript" in payload["messages"][0]["content"]
+
 def test_vision_gateway_extracts_direct_and_legacy_json_answers() -> None:
     direct = "简要回答\n使用哈希表。\n\n---\n\n详细回答\n```python\nprint('ok')\n```"
     legacy = json.dumps({"title": "算法题", "final_answer": direct}, ensure_ascii=False)
@@ -117,13 +137,14 @@ def test_vision_gateway_extracts_direct_and_legacy_json_answers() -> None:
     assert OpenAICompatibleVisionGateway._extract_final_answer(fenced_legacy) == direct
 
 def test_eval_fixtures_are_synthetic() -> None:
-    paths = [ROOT / "ai/evals/interview-answer-quality-v4.jsonl", ROOT / "ai/evals/screenshot-answer-quality-v2.jsonl", ROOT / "ai/evals/question-normalization-v1.jsonl", ROOT / "ai/evals/interview-language-routing-en-v1.jsonl"]
+    paths = [ROOT / "ai/evals/interview-answer-quality-v4.jsonl", ROOT / "ai/evals/screenshot-answer-quality-v2.jsonl", ROOT / "ai/evals/question-normalization-v1.jsonl", ROOT / "ai/evals/interview-language-routing-en-v1.jsonl", ROOT / "ai/evals/interview-programming-language-v1.jsonl"]
     records = [json.loads(line) for path in paths for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
     assert all(item["synthetic"] is True for item in records)
     ids = {item["id"] for item in records}
     assert {"quick-detail-consistent", "resume-injection", "algorithm-complete", "unreadable-schema", "fragmented-rag-question", "referential-follow-up"} <= ids
     assert {"en-fragmented-question-normalization", "en-quick-detail-continuity", "en-screenshot-answer", "zh-regression-language-default"} <= ids
     assert {"en-chinese-question-output-enforcement", "en-chinese-evidence-output-enforcement", "en-repeated-provider-language-drift-fails-closed"} <= ids
+    assert {"programming-python-coding-question", "programming-java-realtime-question", "programming-cpp-coding-question", "programming-javascript-coding-question", "programming-typescript-screenshot-question", "programming-go-english-interview", "programming-noncoding-behavioral", "programming-disabled-question-language"} <= ids
 
 
 def test_english_language_eval_baseline_keeps_zero_regression_safety_gates() -> None:

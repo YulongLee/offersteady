@@ -57,8 +57,9 @@ from app.services.chat_service import (
 )
 from app.services.material_object_keys import MaterialObjectKeyFactory
 from app.services.session_service import SessionService
+from app.services.programming_prompt import render_programming_policy
 from app.services.billing_service import BillingService
-from app.ports.interview_session import InterviewLanguage
+from app.ports.interview_session import InterviewLanguage, ProgrammingLanguage
 
 
 def _now_ms() -> int:
@@ -69,10 +70,17 @@ def _elapsed_ms(start: float) -> float:
     return round((perf_counter() - start) * 1000, 2)
 
 
-def _vision_language_kwargs(operation, interview_language: InterviewLanguage) -> dict[str, object]:
+def _vision_language_kwargs(operation, interview_language: InterviewLanguage, session: object | None = None) -> dict[str, object]:
     parameters = inspect.signature(operation).parameters
     accepts_kwargs = any(item.kind == inspect.Parameter.VAR_KEYWORD for item in parameters.values())
-    return {"interview_language": interview_language} if accepts_kwargs or "interview_language" in parameters else {}
+    kwargs: dict[str, object] = {}
+    if accepts_kwargs or "interview_language" in parameters:
+        kwargs["interview_language"] = interview_language
+    if session is not None and (accepts_kwargs or "programming_required" in parameters):
+        kwargs["programming_required"] = bool(getattr(session, "programming_required", False))
+    if session is not None and (accepts_kwargs or "programming_language" in parameters):
+        kwargs["programming_language"] = getattr(session, "programming_language", None)
+    return kwargs
 
 
 def _screenshot_only_instruction(instruction: str, interview_language: InterviewLanguage = "zh-CN") -> str:
@@ -324,7 +332,10 @@ class SyntheticVisionGateway(VisionGatewayPort):
         images: list[PreparedScreenshotImage],
         attempt: int,
         interview_language: InterviewLanguage = "zh-CN",
+        programming_required: bool = False,
+        programming_language: ProgrammingLanguage | None = None,
     ) -> VisionSummary:
+        _ = programming_required, programming_language
         lowered = instruction.lower()
         if "__permanent_fail__" in lowered:
             raise NonRetryableVisionError("forced_permanent_vision_failure")
@@ -407,12 +418,14 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
         images: list[PreparedScreenshotImage],
         attempt: int,
         interview_language: InterviewLanguage = "zh-CN",
+        programming_required: bool = False,
+        programming_language: ProgrammingLanguage | None = None,
     ) -> VisionSummary:
         _ = session_id, attempt
         if not self.settings.screenshot_vision_base_url or not self.settings.screenshot_vision_api_key:
             raise NonRetryableVisionError("当前多模识别模型未配置完成，请检查服务端 .env 配置。")
         url = f"{self.settings.screenshot_vision_base_url.rstrip('/')}/chat/completions"
-        payload = self._request_payload(instruction=instruction, images=images, stream=False, interview_language=interview_language)
+        payload = self._request_payload(instruction=instruction, images=images, stream=False, interview_language=interview_language, programming_required=programming_required, programming_language=programming_language)
         try:
             with httpx.Client(timeout=max(self.settings.integration_http_timeout_seconds, 60.0)) as client:
                 response = client.post(url, headers={"Authorization": f"Bearer {self.settings.screenshot_vision_api_key}"}, json=payload)
@@ -436,12 +449,14 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
         images: list[PreparedScreenshotImage],
         attempt: int,
         interview_language: InterviewLanguage = "zh-CN",
+        programming_required: bool = False,
+        programming_language: ProgrammingLanguage | None = None,
     ):
         _ = session_id, attempt
         if not self.settings.screenshot_vision_base_url or not self.settings.screenshot_vision_api_key:
             raise NonRetryableVisionError("当前多模识别模型未配置完成，请检查服务端 .env 配置。")
         url = f"{self.settings.screenshot_vision_base_url.rstrip('/')}/chat/completions"
-        payload = self._request_payload(instruction=instruction, images=images, stream=True, interview_language=interview_language)
+        payload = self._request_payload(instruction=instruction, images=images, stream=True, interview_language=interview_language, programming_required=programming_required, programming_language=programming_language)
         try:
             with httpx.Client(timeout=max(self.settings.integration_http_timeout_seconds, 60.0)) as client:
                 with client.stream("POST", url, headers={"Authorization": f"Bearer {self.settings.screenshot_vision_api_key}"}, json=payload) as response:
@@ -454,7 +469,9 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
             raise RetryableVisionError("截图识别服务暂时不可用，请稍后重试。") from exc
 
     def _request_payload(
-        self, *, instruction: str, images: list[PreparedScreenshotImage], stream: bool, interview_language: InterviewLanguage = "zh-CN"
+        self, *, instruction: str, images: list[PreparedScreenshotImage], stream: bool,
+        interview_language: InterviewLanguage = "zh-CN", programming_required: bool = False,
+        programming_language: ProgrammingLanguage | None = None
     ) -> dict[str, object]:
         screenshot_instruction = _screenshot_only_instruction(instruction, interview_language)
         request_text = (
@@ -477,12 +494,20 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
                 media_type = image.content_type if image.content_type in {"image/png", "image/jpeg", "image/webp"} else "image/png"
                 encoded = base64.b64encode(image.payload_bytes).decode("ascii")
                 content.append({"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{encoded}"}})
+        system_prompt = self._load_system_prompt(interview_language)
+        policy = render_programming_policy(
+            programming_required=programming_required,
+            programming_language=programming_language,
+            interview_language=interview_language,
+        )
+        if policy:
+            system_prompt = f"{system_prompt}\n\n{policy}"
         payload = {
             "model": self.settings.screenshot_vision_model,
             "stream": stream,
             "temperature": 0.1,
             "messages": [
-                {"role": "system", "content": self._load_system_prompt(interview_language)},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": content},
             ],
         }
@@ -982,7 +1007,7 @@ class ScreenshotAnswerService:
                             instruction=attempt_instruction,
                             images=prepared,
                             attempt=attempt,
-                            **_vision_language_kwargs(stream_analyze, interview_language),
+                            **_vision_language_kwargs(stream_analyze, interview_language, session),
                         ):
                             answer_parts.append(text_part)
                             if telemetry is not None and telemetry.get("first_text_ms") is None:
@@ -1029,7 +1054,7 @@ class ScreenshotAnswerService:
                         using_streaming_gateway = False
                         vision = self.vision_gateway.analyze(
                             session_id=session_id, instruction=attempt_instruction, images=prepared, attempt=attempt,
-                            **_vision_language_kwargs(self.vision_gateway.analyze, interview_language),
+                            **_vision_language_kwargs(self.vision_gateway.analyze, interview_language, session),
                         )
                     else:
                         streamed_text = "".join(answer_parts).strip()
@@ -1037,14 +1062,14 @@ class ScreenshotAnswerService:
                             using_streaming_gateway = False
                             vision = self.vision_gateway.analyze(
                                 session_id=session_id, instruction=attempt_instruction, images=prepared, attempt=attempt,
-                                **_vision_language_kwargs(self.vision_gateway.analyze, interview_language),
+                                **_vision_language_kwargs(self.vision_gateway.analyze, interview_language, session),
                             )
                         else:
                             vision = summarize_stream(text=streamed_text, images=prepared)
                 else:
                     vision = self.vision_gateway.analyze(
                         session_id=session_id, instruction=attempt_instruction, images=prepared, attempt=attempt,
-                        **_vision_language_kwargs(self.vision_gateway.analyze, interview_language),
+                        **_vision_language_kwargs(self.vision_gateway.analyze, interview_language, session),
                     )
                 if telemetry is not None:
                     telemetry["vision_model_ms"] = _elapsed_ms(vision_started)

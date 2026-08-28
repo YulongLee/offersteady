@@ -8,6 +8,7 @@ from app.material_formats import MaterialKind
 
 InterviewSessionState = Literal["preparing", "live", "ended"]
 InterviewLanguage = Literal["zh-CN", "en-US"]
+ProgrammingLanguage = Literal["python", "java", "cpp", "javascript", "typescript", "go"]
 SessionContinueTarget = Literal["preparing", "live", "history"]
 ConversationRole = Literal["system", "interviewer", "candidate", "assistant", "manual-question", "screenshot", "event"]
 ConversationVisibility = Literal["session", "ai", "review", "system-only"]
@@ -105,6 +106,8 @@ class InterviewSessionRecord:
     material_binding: SessionMaterialBinding
     config_snapshot: SessionConfigSnapshot
     usage_totals: SessionUsageTotals
+    programming_required: bool = False
+    programming_language: ProgrammingLanguage | None = None
     integration_references: list[IntegrationReference] = field(default_factory=list)
     restart_of_session_id: str | None = None
     started_at_ms: int | None = None
@@ -125,6 +128,11 @@ class InterviewSessionRepository(Protocol):
 
     def update_language_if_preparing(
         self, *, user_id: str, session_id: str, interview_language: InterviewLanguage, updated_at_ms: int
+    ) -> InterviewSessionRecord | None: ...
+
+    def update_programming_if_preparing(
+        self, *, user_id: str, session_id: str, programming_required: bool,
+        programming_language: ProgrammingLanguage | None, updated_at_ms: int
     ) -> InterviewSessionRecord | None: ...
 
     def start_if_not_ended(

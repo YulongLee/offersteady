@@ -39,6 +39,7 @@ from app.ports.commercial_hardening import AiUsageRecord, CommercialHardeningRep
 from app.ports.storage import FileStoragePort
 from app.schemas.retrieval import RetrievalResponse, RetrievedChunkResponse
 from app.services.session_service import SessionService
+from app.services.programming_prompt import append_programming_policy, carry_programming_policy
 from app.services.billing_service import BillingService
 
 
@@ -734,6 +735,7 @@ class ChatService:
         interview_language: InterviewLanguage,
     ) -> PromptBuildResult:
         system_prompt, config = self._load_stage_prompt("continuation", interview_language)
+        system_prompt = carry_programming_policy(system_prompt, original_prompt.system_prompt)
         user_prompt = (
             f"<original_request>\n{original_prompt.user_prompt}\n</original_request>\n\n"
             f"<answer_stage>{stage}</answer_stage>\n"
@@ -897,6 +899,7 @@ class ChatService:
         retrieval = self._retrieve_context(user_id=user_id, session=session, question=question)
         material_context_text, material_assembly, material_provenance = self._assemble_material_context(session=session, retrieval=retrieval)
         system_prompt, prompt_config = self.prompt_template.load_system_prompt(session.interview_language)
+        system_prompt = append_programming_policy(system_prompt, session=session)
         history_entries = self.session_service.get_context_window(user_id=user_id, session_id=session_id, limit=self.settings.chat_max_history_entries)
         prompt = self.prompt_builder.build(
             question=question,
@@ -1063,6 +1066,7 @@ class ChatService:
         )
         material_context_text, material_assembly, material_provenance = self._assemble_material_context(session=session, retrieval=quick_retrieval)
         quick_system_prompt, prompt_config = self._load_stage_prompt("quick", session.interview_language)
+        quick_system_prompt = append_programming_policy(quick_system_prompt, session=session)
         material_context_text = material_context_text[:min(2400, int(getattr(self.settings, "rag_context_max_characters", 6000)))]
         conversation_history = self._conversation_history(
             user_id=user_id,
@@ -1331,6 +1335,7 @@ class ChatService:
                     return
                 material_context_text, material_assembly, material_provenance = self._assemble_material_context(session=session, retrieval=retrieval)
                 detail_system_prompt, detail_prompt_config = self._load_stage_prompt("detail", session.interview_language)
+                detail_system_prompt = append_programming_policy(detail_system_prompt, session=session)
                 quick_answer_anchor = "".join(answer_parts).removeprefix(f"{quick_heading}\n").strip()
                 detail_prompt = self.prompt_builder.build(
                     question=normalized_question,

@@ -1,5 +1,5 @@
 import type { AnswerTaskSnapshot, BillingProduct, CancelAnswerCommand, CancelAnswerResult, CompanionDeviceStatus, ContextLibrarySource, DesktopReleaseEntry, KnowledgeCollection, KnowledgeDocumentVersion, OfficialCheckoutOrder, PointsRedemptionRequest, PointsRedemptionResult, RedemptionSuccessData, SpeakerTranscriptSegment } from "@offersteady/protocol";
-import type { InterviewAppAdapter, InterviewLanguage, InterviewSummary, WebAppState } from "./domain";
+import type { InterviewAppAdapter, InterviewLanguage, InterviewSummary, ProgrammingLanguage, WebAppState } from "./domain";
 
 const device: CompanionDeviceStatus = {
   deviceId: "synthetic-mac-device",
@@ -209,6 +209,8 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
       id: "draft",
       title: input.title.trim(),
       interviewLanguage: "zh-CN",
+      programmingRequired: false,
+      programmingLanguage: null,
       role: input.role.trim(),
       ...(input.company?.trim() ? { company: input.company.trim() } : {}),
       status: "preparing",
@@ -227,6 +229,12 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
     await delay(signal);
     const interview = syntheticState.interviews.find(item => item.id === id) ?? syntheticState.interviews[0]!;
     return { ...interview, id, interviewLanguage };
+  }
+
+  async updateInterviewProgramming(id: string, programmingRequired: boolean, programmingLanguage: ProgrammingLanguage | null, signal?: AbortSignal) {
+    await delay(signal);
+    const interview = syntheticState.interviews.find(item => item.id === id) ?? syntheticState.interviews[0]!;
+    return { ...interview, id, programmingRequired, programmingLanguage: programmingRequired ? programmingLanguage ?? "python" : null };
   }
 
   async getActiveInterviewConflict(id: string, signal?: AbortSignal) {
