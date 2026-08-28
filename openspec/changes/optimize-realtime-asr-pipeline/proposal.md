@@ -12,6 +12,7 @@
 - 增加实时语音链路的性能观测与诊断能力，覆盖 TTFT、Partial/Final Latency、Chunk 排队、ASR 往返耗时、UI 渲染滞后和异常静音触发。
 - 优化快答的问题选择：没有手动输入时，按当前轮次自动整理面试官最近的完整问题和最新未定稿片段，再提交既有回答模型。
 - 为已收到的 Partial Transcript 增加有界、自适应的字幕平滑展示：首个字符立即出现，剩余新增文本在最多 `300ms` 内追平；Final、修订校正、后台页面和减少动态效果模式保持即时展示。
+- 将网页实时订阅改为 snapshot-first：首个完整状态不再等待事件流读取；连接静默期间以服务端 keepalive 证明传输健康，只有连续缺失传输字节才从已保存 cursor 单实例恢复。
 - 保持现有 Web 产品原型、外部 API 形态、ASR 模型、LLM、Prompt 和 RAG 逻辑不变；快答仅增加确定性的对话问题整理，不改变回答策略。
 
 ## Capabilities
@@ -28,5 +29,6 @@
 - Affected desktop areas: `apps/desktop` 的麦克风 / 系统音频采集、Audio Buffer、Chunk 生成、队列调度、ASR 长连接客户端和本地状态监测。
 - Affected backend areas: `apps/backend` 的 realtime-speech service、ASR gateway、session 内流式状态机、性能指标采集和前端推送通道。
 - Affected web areas: `apps/web` 的实时对话订阅、Partial / Final 字幕合并、增量渲染和 UI 更新节流。
+- Affected transport areas: Backend SSE 首快照顺序、keepalive 健康判断和 Browser cursor 续传恢复。
 - Affected protocol areas: `packages/protocol` 中实时音频帧、阶段事件、性能指标和流式字幕契约。
 - Privacy impact: 不新增原始音频长期保存；新增性能观测必须只记录耗时、状态和统计指标，不记录音频正文或敏感原文。

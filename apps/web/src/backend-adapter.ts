@@ -33,7 +33,11 @@ interface BackendSessionResponse {
 
 const MAX_PENDING_PERFORMANCE_ACKS = 16;
 const TRANSCRIPT_ACK_INTERVAL_MS = 1_000;
-export const FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS = 2_000;
+// A healthy backend normally answers in milliseconds. This deadline is only a
+// circuit breaker for a half-open transport; keeping it above short production
+// scheduling spikes prevents destructive reconnect churn during page entry.
+export const FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS = 8_000;
+export const REALTIME_TRANSPORT_STALL_TIMEOUT_MS = 35_000;
 
 interface BackendActiveSessionConflictResponse {
   readonly currentSessionId: string;
@@ -1018,7 +1022,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   private recordRealtimeDeliveryMetric(
     interviewId: string,
     kind: "connect" | "first-snapshot" | "connected-duration" | "reconnect" | "fallback-snapshot",
-    options: { readonly durationMs?: number; readonly attempt?: number; readonly reason?: "opened" | "eof" | "network" | "aborted" | "recovered" | "first-snapshot-timeout" | "first-snapshot-eof" | "unknown" } = {},
+    options: { readonly durationMs?: number; readonly attempt?: number; readonly reason?: "opened" | "eof" | "network" | "aborted" | "recovered" | "first-snapshot-timeout" | "first-snapshot-eof" | "transport-stall" | "unknown" } = {},
   ) {
     void this.client.request(`/api/v1/realtime-speech/sessions/${interviewId}/delivery-metrics`, {
       method: "POST",
@@ -1538,6 +1542,17 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       });
       return error;
     };
+    const transportStallFailure = () => {
+      const error = new AppError("network", "实时字幕传输已静默，正在恢复连接") as AppError & {
+        realtimeFailure: "transport-stall";
+      };
+      error.realtimeFailure = "transport-stall";
+      this.recordRealtimeDeliveryMetric(interviewId, "reconnect", {
+        durationMs: Date.now() - connectedAt,
+        reason: "transport-stall",
+      });
+      return error;
+    };
     const firstSnapshotDeadline = new Promise<never>((_resolve, reject) => {
       firstSnapshotTimer = window.setTimeout(
         () => reject(firstSnapshotFailure("first-snapshot-timeout")),
@@ -1697,7 +1712,24 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       : null;
     try {
       while (true) {
-        const { done, value } = await Promise.race([reader.read(), firstSnapshotDeadline]);
+        let stallTimer: number | null = null;
+        const transportDeadline = new Promise<never>((_resolve, reject) => {
+          if (!firstSnapshotRecorded) return;
+          stallTimer = window.setTimeout(
+            () => reject(transportStallFailure()),
+            REALTIME_TRANSPORT_STALL_TIMEOUT_MS,
+          );
+        });
+        let readResult: ReadableStreamReadResult<Uint8Array>;
+        try {
+          readResult = await Promise.race([
+            reader.read(),
+            firstSnapshotRecorded ? transportDeadline : firstSnapshotDeadline,
+          ]);
+        } finally {
+          if (stallTimer !== null) window.clearTimeout(stallTimer);
+        }
+        const { done, value } = readResult;
         if (done) break;
         latestChunkReceivedAtMs = Date.now();
         parser.push(decoder.decode(value, { stream: true }));
@@ -1705,9 +1737,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     } finally {
       clearFirstSnapshotDeadline();
       if (diagnosticsPoll !== null) window.clearInterval(diagnosticsPoll);
-      if (!firstSnapshotRecorded) {
-        void reader.cancel().catch(() => undefined);
-      }
+      void reader.cancel().catch(() => undefined);
     }
     parser.push(decoder.decode());
     parser.flush();

@@ -42,6 +42,7 @@
 - [x] 4.11 Preserve ordered healthy transcript revisions through Redis/SSE and the Browser state adapter before presentation-only smoothing.
 - [x] 4.12 Move runtime diagnostic aggregation off the transcript SSE hot path and deliver it as a separate single-flight update.
 - [x] 4.13 Add bounded adaptive smoothing for received Partial text with immediate first character, shared frame scheduling, forced catch-up, and instant Final/reduced-motion fallback.
+- [x] 4.14 Make realtime SSE snapshot-first and add keepalive-aware, cursor-resumable transport stall recovery without parallel subscriptions.
 
 ## 5. Verification, Evals, and Rollout
 
@@ -62,3 +63,4 @@
 - [x] 5.12 Add regressions and complete staged Backend/Web/Desktop validation for the Partial fast path and revision-preserving delivery.
 - [x] 5.13 Add regressions proving empty completed utterances do not create ASR reconnect storms.
 - [x] 5.14 Add Web regressions for adaptive subtitle pacing, correction/retraction handling, Final authority, session cleanup, and bounded render scheduling.
+- [x] 5.15 Add Backend/Web regressions for immediate bootstrap delivery, bootstrap-race event preservation, healthy silent streams, and single-reader transport recovery.

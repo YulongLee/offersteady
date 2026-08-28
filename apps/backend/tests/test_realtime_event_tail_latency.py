@@ -349,13 +349,14 @@ def test_runtime_diagnostic_failure_does_not_close_transcript_sse() -> None:
             return None
 
         def list_session_events_after(self, **_kwargs):
-            return 1, [], True
+            raise AssertionError("snapshot startup must not read the event stream first")
 
         def get_stream_bootstrap_state(self, **_kwargs):
             return (
                 RealtimeTranscriptListResponse(sessionId="session-first-visible", transcripts=[]),
                 RealtimeQuestionCandidateListResponse(sessionId="session-first-visible", candidates=[]),
                 RealtimeEventListResponse(sessionId="session-first-visible", events=[]),
+                1,
             )
 
         def get_runtime(self, **_kwargs):
@@ -455,6 +456,7 @@ def test_runtime_refresh_never_blocks_transcript_sse_delivery() -> None:
                 RealtimeTranscriptListResponse(sessionId="session-runtime-background", transcripts=[]),
                 RealtimeQuestionCandidateListResponse(sessionId="session-runtime-background", candidates=[]),
                 RealtimeEventListResponse(sessionId="session-runtime-background", events=[]),
+                1,
             )
 
         def get_runtime(self, **_kwargs):
@@ -531,6 +533,7 @@ def test_background_runtime_refresh_is_delivered_as_separate_update() -> None:
                 RealtimeTranscriptListResponse(sessionId="session-runtime-update", transcripts=[]),
                 RealtimeQuestionCandidateListResponse(sessionId="session-runtime-update", candidates=[]),
                 RealtimeEventListResponse(sessionId="session-runtime-update", events=[]),
+                1,
             )
 
         def get_runtime(self, **_kwargs):

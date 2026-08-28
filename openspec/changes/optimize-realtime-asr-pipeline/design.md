@@ -186,6 +186,12 @@ Redis/SSE 和 Browser state adapter 在健康流中保留有序 transcript revis
 
 供应商已经明确完成 task/utterance、但没有返回有效文本时，系统将其视为静音、底噪或无效语音的空业务结果。Gateway 必须完成本轮状态清理并复用仍然健康的 source WebSocket，业务层不得把 `realtime_asr_transcript_missing` 转换为 publisher degraded 或连接重建。只有连接关闭、协议错误、task 未完成超时等传输状态不明确的错误才能关闭并重建 source connection。
 
+### Decision 15: Send the SSE bootstrap snapshot before waiting and recover only silent transports
+
+SSE 建连后必须先读取一个轻量 bootstrap cursor，再物化并立即发送完整 snapshot；首次发送不得等待 Redis `XREAD`、runtime 诊断或未来字幕事件。cursor 在物化快照前取得，因此快照构建期间产生的新事件仍会在后续 `cursor > bootstrap_cursor` 的增量读取中交付，允许状态幂等重叠但不得丢事件。
+
+浏览器以任意收到的传输字节（包括 SSE keepalive comment）刷新连接活跃时间。用户没有说话不属于故障，只要 keepalive 持续到达就不得重连；仅当首 snapshot 超时，或已经健康的连接在超过两个 keepalive 周期仍无任何字节时，才取消当前 reader，并由页面现有单实例重连协调器从 sessionStorage cursor 恢复。恢复期间不得创建并行订阅，也不得清空已经显示的字幕。
+
 ## Risks / Trade-offs
 
 - [Risk] 引入 source worker、持久连接和有界队列后，系统状态机会更复杂 → Mitigation: 按 source/session 明确状态图，并增加可重复的单元测试与集成测试。

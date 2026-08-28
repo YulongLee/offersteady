@@ -527,7 +527,6 @@ async def stream_session_runtime(
 
     async def event_stream():
         last_cursor = cursor
-        initial = True
         idle_polls = 0
         runtime_refresh_task: asyncio.Task | None = None
         runtime_refresh_pending = False
@@ -559,6 +558,27 @@ async def stream_session_runtime(
                 runtime_refresh_pending = True
 
         try:
+            # Snapshot-first startup: do not put an event-stream read in front
+            # of the browser's first usable frame. The cursor is captured by
+            # get_stream_bootstrap_state before state materialization so events
+            # racing the snapshot remain resumable on the next read.
+            transcripts, candidates, snapshot_events, bootstrap_cursor = await asyncio.to_thread(
+                service.get_stream_bootstrap_state,
+                user_id=resolved_user_id,
+                session_id=session_id,
+            )
+            last_cursor = bootstrap_cursor
+            yield _sse_frame("snapshot", {
+                "type": "snapshot",
+                "transcripts": transcripts.model_dump(by_alias=True),
+                "candidates": candidates.model_dump(by_alias=True),
+                "events": snapshot_events.model_dump(by_alias=True),
+                "runtime": None,
+                "ownerUserId": resolved_user_id,
+                "cursor": bootstrap_cursor,
+            }, cursor=bootstrap_cursor)
+            request_runtime_refresh()
+
             while True:
                 if await request.is_disconnected():
                     break
@@ -595,20 +615,18 @@ async def stream_session_runtime(
                             "reason": "session-replaced",
                         })
                         break
-                event_reader = service.list_session_events_after if initial else service.wait_for_session_events_after
                 reader_kwargs = {
                     "user_id": resolved_user_id,
                     "session_id": session_id,
                     "cursor": last_cursor,
+                    "timeout_ms": max(100, service.settings.realtime_event_block_ms),
                 }
-                if not initial:
-                    reader_kwargs["timeout_ms"] = max(100, service.settings.realtime_event_block_ms)
                 current_cursor, incremental_events, resumable = await run_realtime_event_wait(
                     request,
-                    event_reader,
+                    service.wait_for_session_events_after,
                     **reader_kwargs,
                 )
-                if not initial and current_cursor <= last_cursor:
+                if current_cursor <= last_cursor:
                     idle_polls += 1
                     keepalive_polls = max(1, 15_000 // max(100, service.settings.realtime_event_block_ms))
                     if idle_polls >= keepalive_polls:
@@ -616,16 +634,17 @@ async def stream_session_runtime(
                         idle_polls = 0
                     continue
                 idle_polls = 0
-                payload_type = "snapshot" if initial or not resumable else "update"
+                payload_type = "snapshot" if not resumable else "update"
                 if payload_type == "snapshot":
                     # Deliver visible transcript state before scheduling the
                     # more expensive runtime aggregation. Runtime diagnostics
                     # must never block this stream's transcript event loop.
-                    transcripts, candidates, snapshot_events = await asyncio.to_thread(
+                    transcripts, candidates, snapshot_events, snapshot_cursor = await asyncio.to_thread(
                         service.get_stream_bootstrap_state,
                         user_id=resolved_user_id,
                         session_id=session_id,
                     )
+                    current_cursor = snapshot_cursor
                     payload = {
                         "type": payload_type,
                         "transcripts": transcripts.model_dump(by_alias=True),
@@ -652,7 +671,6 @@ async def stream_session_runtime(
                     }
                 yield _sse_frame(payload_type, payload, cursor=current_cursor)
                 last_cursor = current_cursor
-                initial = False
                 refresh_plan = session_stream_refresh_plan(
                     payload_type=payload_type,
                     event_kinds={event.kind for event in incremental_events},

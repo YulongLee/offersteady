@@ -113,6 +113,22 @@
 - **WHEN** SSE 请求返回 `401`、`403` 或 `404`
 - **THEN** 网页进入低频恢复探测，并在登录态、网络或有效 session 恢复后重建单一订阅
 
+#### Scenario: A browser opens a realtime subscription before speech starts
+- **WHEN** 当前 session 已授权且浏览器建立 SSE 连接
+- **THEN** 后端在等待 Redis 事件或 runtime 诊断前立即发送完整 bootstrap snapshot，首快照不依赖新的语音或字幕事件
+
+#### Scenario: An event is published while the bootstrap snapshot is materialized
+- **WHEN** 后端已经取得 bootstrap cursor、尚未完成 snapshot 物化时产生新的 realtime event
+- **THEN** snapshot 发出后，后端从该 bootstrap cursor 继续读取并交付该事件，不得因启动顺序丢失更新
+
+#### Scenario: A healthy interview remains silent
+- **WHEN** 没有新字幕但 SSE keepalive 持续到达
+- **THEN** 浏览器保持当前唯一订阅，不执行首快照重试、全量轮询或重复重连
+
+#### Scenario: A healthy stream stops delivering transport bytes
+- **WHEN** 首 snapshot 已成功且连续超过两个 keepalive 周期没有收到任何 SSE 字节
+- **THEN** 浏览器取消旧 reader，并由单一重连流程使用已保存 cursor 恢复，不清空当前字幕且不创建并行订阅
+
 ### Requirement: Desktop device registration SHALL be stable and idempotent
 桌面助手 MUST 为同一安装实例复用稳定设备身份。设备首次登记成功后，后续在线维持 MUST 使用 heartbeat，渲染进程 MUST NOT 周期性重复调用设备登记接口。
 

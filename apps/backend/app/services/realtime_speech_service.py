@@ -3401,6 +3401,7 @@ class RealtimeSpeechService:
         RealtimeTranscriptListResponse,
         RealtimeQuestionCandidateListResponse,
         RealtimeEventListResponse,
+        int,
     ]:
         """Hydrate the latency-critical SSE baseline without repeated DB auth.
 
@@ -3409,6 +3410,10 @@ class RealtimeSpeechService:
         methods here would repeat that database lookup three times and can hold
         the first visible partial behind an overloaded connection pool.
         """
+        # Capture the resume boundary before materializing state. Any event
+        # published while the lists below are being read will therefore be
+        # replayed after the snapshot instead of being skipped.
+        bootstrap_cursor = self.repository.get_session_activity_version(session_id=session_id)
         transcripts = [
             item
             for item in self.repository.list_transcripts_for_session(session_id=session_id)
@@ -3441,6 +3446,7 @@ class RealtimeSpeechService:
                 sessionId=session_id,
                 events=[self.event_response(item) for item in events],
             ),
+            bootstrap_cursor,
         )
 
     def get_session_snapshot(self, *, user_id: str, session_id: str) -> RealtimeSessionSnapshotResponse:
