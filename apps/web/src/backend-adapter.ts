@@ -2,7 +2,7 @@ import type { CaptureState, FoundationIndexResponse } from "@offersteady/protoco
 
 import type { AnswerProvenance, AnswerSourceReference, AnswerTaskSnapshot, CancelAnswerResult, OfficialCheckoutOrder, PointsRedemptionResult } from "@offersteady/protocol";
 import { AppError } from "./domain";
-import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, DesktopDeviceBinding, DesktopShortcutScreenshotUpdate, IdleInterviewStatus, InterviewAppAdapter, InterviewLanguage, InterviewQuestion, InterviewReview, InterviewSummary, InterviewWorkspaceSnapshot, ReferralActivationResult, ReferralStatus, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
+import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, DesktopDeviceBinding, DesktopShortcutScreenshotUpdate, IdleInterviewStatus, InterviewAppAdapter, InterviewLanguage, InterviewQuestion, InterviewReview, InterviewSummary, InterviewWorkspaceSnapshot, PreparationAudioReadiness, ReferralActivationResult, ReferralStatus, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
 import { createJsonClient, withBaseUrl } from "./api-client";
 import { authClient } from "./auth-client";
 import { createSseParser, type LiveAnswerStreamEvent, type ManualAnswerStreamUpdate } from "./live-answer-stream";
@@ -31,7 +31,7 @@ interface BackendSessionResponse {
 
 const MAX_PENDING_PERFORMANCE_ACKS = 16;
 const TRANSCRIPT_ACK_INTERVAL_MS = 1_000;
-export const FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS = 5_000;
+export const FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS = 2_000;
 
 interface BackendActiveSessionConflictResponse {
   readonly currentSessionId: string;
@@ -225,6 +225,11 @@ interface BackendRealtimeTranscriptListResponse {
       readonly backendPushMs?: number;
       readonly captureToPublishMs?: number;
       readonly frontendRenderMs?: number;
+      readonly liveObservedAtMs?: number;
+      readonly publisherConnectedAtMs?: number;
+      readonly sourceReadyAtMs?: number;
+      readonly sourceReadyMode?: "promoted" | "opened" | "stale-fallback";
+      readonly desktopTerminalEnqueueAtMs?: number;
       readonly eventId?: string;
       readonly speechStartAtMs?: number;
       readonly desktopWsSendAtMs?: number;
@@ -363,6 +368,9 @@ interface BackendRealtimeRuntimeResponse {
     readonly state: string;
     readonly stage?: string | null;
     readonly level: number;
+    readonly lastSignalAtMs?: number | null;
+    readonly readinessState?: "unchecked" | "ready" | "stale" | string | null;
+    readonly readinessExpiresAtMs?: number | null;
     readonly errorCode?: string | null;
     readonly frameCount?: number | null;
     readonly backendFrameCount?: number | null;
@@ -572,6 +580,45 @@ const toDesktopDeviceBinding = (binding: BackendDesktopBindingResponse): Desktop
   boundAtMs: binding.boundAtMs,
   lastSeenAtMs: binding.lastSeenAtMs,
 });
+
+export const toPreparationAudioReadiness = (
+  runtime: BackendRealtimeRuntimeResponse,
+  nowMs = Date.now(),
+): PreparationAudioReadiness => {
+  const sources = (["microphone", "system"] as const).map(sourceKind => {
+    const health = runtime.sourceHealth.find(item => item.sourceKind === sourceKind);
+    const backendState = runtime.sourceReadiness?.[sourceKind];
+    const signalFresh = Boolean(
+      health?.lastSignalAtMs
+      && nowMs >= health.lastSignalAtMs
+      && nowMs - health.lastSignalAtMs <= 120_000,
+    );
+    const degraded = backendState === "degraded" || ["unavailable", "permission-denied", "error"].includes(health?.state ?? "");
+    const ready = backendState === "ready" && signalFresh;
+    const label = sourceKind === "system" ? "电脑输出" : "麦克风";
+    return {
+      sourceKind,
+      state: degraded ? "degraded" as const : ready ? "ready" as const : "checking" as const,
+      ...(health?.lastSignalAtMs ? { lastSignalAtMs: health.lastSignalAtMs } : {}),
+      message: degraded
+        ? `${label}不可用，请在伴随程序中重新检查`
+        : ready
+          ? `${label}声音检查通过`
+          : health?.state === "silent"
+            ? `${label}已打开，等待检测到真实声音`
+            : `${label}和识别服务正在准备`,
+    };
+  });
+  return {
+    state: sources.some(item => item.state === "degraded")
+      ? "degraded"
+      : sources.every(item => item.state === "ready")
+        ? "ready"
+        : "checking",
+    sources,
+    updatedAtMs: nowMs,
+  };
+};
 
 const answerTextFromTask = (task: BackendLiveAnswerTaskResponse) => {
   const chunkText = task.chunks?.length ? [...task.chunks].sort((left, right) => left.sequence - right.sequence).map(chunk => chunk.text).join("") : "";
@@ -1297,6 +1344,15 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       if (error instanceof Error && (error.message.includes("404") || error.message.includes("尚未绑定"))) return null;
       return null;
     }
+  }
+
+  async getPreparationAudioReadiness(interviewId: string, signal?: AbortSignal) {
+    const runtime = await this.client.request<BackendRealtimeRuntimeResponse>(
+      `/api/v1/realtime-speech/sessions/${interviewId}/runtime?userId=${encodeURIComponent(requireUserId())}`,
+      { headers: authHeaders() },
+      signal,
+    );
+    return toPreparationAudioReadiness(runtime);
   }
 
   async sendDesktopSessionHeartbeat(command: Parameters<InterviewAppAdapter["sendDesktopSessionHeartbeat"]>[0], signal?: AbortSignal) {

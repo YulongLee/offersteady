@@ -85,6 +85,17 @@ export interface DesktopDeviceBinding {
   readonly lastSeenAtMs: number;
 }
 
+export interface PreparationAudioReadiness {
+  readonly state: "checking" | "ready" | "degraded";
+  readonly updatedAtMs: number;
+  readonly sources: readonly {
+    readonly sourceKind: "microphone" | "system";
+    readonly state: "checking" | "ready" | "degraded";
+    readonly lastSignalAtMs?: number;
+    readonly message: string;
+  }[];
+}
+
 export interface RecentDesktopDevice {
   readonly deviceId: string;
   readonly displayName: string;
@@ -275,6 +286,7 @@ export interface InterviewAppAdapter {
   getLastDesktopDevice?(signal?: AbortSignal): Promise<RecentDesktopDevice | null>;
   listDesktopDevices?(signal?: AbortSignal): Promise<readonly AccountDesktopDevice[]>;
   getDesktopDeviceBinding(interviewId: string, signal?: AbortSignal): Promise<DesktopDeviceBinding | null>;
+  getPreparationAudioReadiness(interviewId: string, signal?: AbortSignal): Promise<PreparationAudioReadiness>;
   sendDesktopSessionHeartbeat(command: { interviewId: string; bindingId?: string | null; page: "preparation" | "live"; pageInstanceId?: string }, signal?: AbortSignal): Promise<{ pageInstanceId: string | null; leaseGeneration: number; leaseExpiresAtMs: number }>;
   loadRealtimeSession(interviewId: string, signal?: AbortSignal, lease?: { readonly pageInstanceId: string; readonly leaseGeneration: number }): Promise<RealtimeSessionUpdate>;
   loadInterviewWorkspace(interviewId: string, signal?: AbortSignal): Promise<InterviewWorkspaceSnapshot>;

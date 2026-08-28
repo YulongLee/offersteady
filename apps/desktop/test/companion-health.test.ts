@@ -1,9 +1,22 @@
 import { describe, expect, it } from "vitest";
 
-import { BINDING_STATUS_POLL_MS, captureStateForSourceHealth, desktopBindingLeaseIdentity, hasPublisherTakenOver, mergeDisplayedSourceHealth } from "../src/renderer/CompanionApp";
-import { productionAudioTransportPolicy, publisherFailureDiagnostic, publisherFailureIsTerminal } from "../src/renderer/audio/realtime-publisher";
+import { BINDING_STATUS_POLL_MS, captureStateForReliability, captureStateForSourceHealth, desktopActiveConnectionQuery, desktopBindingLeaseIdentity, hasPublisherTakenOver, mergeDisplayedSourceHealth } from "../src/renderer/CompanionApp";
+import { AUDIO_READINESS_TTL_MS, readinessFields, signalEvidenceIsFresh, sourceHealthIsAudioReady } from "../src/renderer/audio/audio-readiness";
+import { productionAudioTransportPolicy, publisherCaptureStateForTransport, publisherFailureDiagnostic, publisherFailureIsTerminal } from "../src/renderer/audio/realtime-publisher";
 
 describe("companion displayed source health", () => {
+  it("requires fresh real-signal evidence instead of treating an open silent track as checked", () => {
+    const nowMs = 200_000;
+    const silent = { sourceId: "system", sourceKind: "system", label: "电脑输出", state: "silent", stage: "track-live", level: 0 } as const;
+    const checked = { ...silent, lastSignalAtMs: nowMs - 1_000 };
+
+    expect(sourceHealthIsAudioReady(silent, nowMs)).toBe(false);
+    expect(sourceHealthIsAudioReady(checked, nowMs)).toBe(true);
+    expect(sourceHealthIsAudioReady(checked, nowMs + AUDIO_READINESS_TTL_MS + 1)).toBe(false);
+    expect(signalEvidenceIsFresh(undefined, nowMs)).toBe(false);
+    expect(readinessFields(nowMs - 1_000, nowMs)).toMatchObject({ readinessState: "ready", readinessExpiresAtMs: nowMs - 1_000 + AUDIO_READINESS_TTL_MS });
+    expect(readinessFields(nowMs - AUDIO_READINESS_TTL_MS - 1, nowMs)).toMatchObject({ readinessState: "stale" });
+  });
   it("never falls back to the disabled legacy HTTP frame endpoint", () => {
     expect(productionAudioTransportPolicy).toEqual({
       protocol: "websocket-v2",
@@ -64,6 +77,37 @@ describe("companion displayed source health", () => {
       { sourceId: "mic-live", sourceKind: "microphone", label: "麦克风", state: "silent", stage: "track-live", level: 0 },
       { sourceId: "sys-live", sourceKind: "system", label: "电脑输出", state: "silent", stage: "track-live", level: 0 },
     ], "reconnecting")).toBe("capturing");
+
+    expect(captureStateForSourceHealth([
+      { sourceId: "mic-live", sourceKind: "microphone", label: "麦克风", state: "silent", stage: "track-live", level: 0 },
+    ], "capturing")).toBe("capturing");
+
+    expect(captureStateForSourceHealth([
+      { sourceId: "mic-live", sourceKind: "microphone", label: "麦克风", state: "reconnecting", stage: "stream-opened", level: 0 },
+      { sourceId: "sys-live", sourceKind: "system", label: "电脑输出", state: "silent", stage: "track-live", level: 0 },
+    ], "capturing")).toBe("reconnecting");
+  });
+
+  it("reserves reconnecting for recovery after the publisher was healthy", () => {
+    expect(publisherCaptureStateForTransport("reconnecting", false, false)).toBeNull();
+    expect(publisherCaptureStateForTransport("connected", false, false)).toBe("capturing");
+    expect(publisherCaptureStateForTransport("reconnecting", true, false)).toBe("reconnecting");
+    expect(publisherCaptureStateForTransport("reconnecting", true, true)).toBe("reconnecting");
+
+    expect(captureStateForReliability(["STARTING"], false, "capturing")).toBe("capturing");
+    expect(captureStateForReliability(["RECOVERING"], false, "capturing")).toBe("capturing");
+    expect(captureStateForReliability(["RECOVERING"], true, "capturing")).toBe("reconnecting");
+    expect(captureStateForReliability(["HEALTHY", "HEALTHY"], true, "reconnecting")).toBe("capturing");
+  });
+
+  it("pins active-connection polls to the established live binding", () => {
+    expect(desktopActiveConnectionQuery(
+      { deviceId: "device-1", manualCode: "123456" },
+      {
+        bindingId: "binding-live",
+        sessionId: "session-live",
+      },
+    )).toBe("manualCode=123456&pinnedSessionId=session-live&pinnedBindingId=binding-live");
   });
 
   it("classifies publisher transport failures separately from capture failures", () => {
@@ -99,7 +143,7 @@ describe("companion displayed source health", () => {
   });
 
   it("follows backend binding leases on a realtime cadence", () => {
-    expect(BINDING_STATUS_POLL_MS).toBe(5_000);
+    expect(BINDING_STATUS_POLL_MS).toBeLessThanOrEqual(2_000);
     expect(desktopBindingLeaseIdentity({
       bindingId: "binding-new",
       bindingGeneration: 4,

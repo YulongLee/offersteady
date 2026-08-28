@@ -64,7 +64,7 @@ def session_stream_refresh_plan(*, payload_type: str, event_kinds: set[str]) -> 
     snapshot = payload_type == "snapshot"
     return {
         "runtime": snapshot or bool(event_kinds & {
-            "connection-state", "transcript-updated", "degraded", "device-status", "capture-control",
+            "connection-state", "degraded", "device-status", "capture-control",
         }),
         "transcripts": snapshot or "transcript-updated" in event_kinds,
         "candidates": snapshot or bool(event_kinds & {"question-candidate", "question-confirmed"}),
@@ -448,9 +448,16 @@ async def get_desktop_active_connection(
     device_id: str,
     request: Request,
     manual_code: str = Query(alias="manualCode"),
+    pinned_session_id: str | None = Query(default=None, alias="pinnedSessionId"),
+    pinned_binding_id: str | None = Query(default=None, alias="pinnedBindingId"),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[dict[str, object]]:
-    connection = service.get_desktop_active_connection(device_id=device_id, manual_code=manual_code)
+    connection = service.get_desktop_active_connection(
+        device_id=device_id,
+        manual_code=manual_code,
+        pinned_session_id=pinned_session_id,
+        pinned_binding_id=pinned_binding_id,
+    )
     return success_response(request=request, data=connection, timestamp=utc_now_iso())
 
 
@@ -544,6 +551,26 @@ async def stream_session_runtime(
         cached_candidates = None
         runtime_refreshed_at = 0.0
         session_validated_at = asyncio.get_running_loop().time()
+
+        async def best_effort_runtime():
+            nonlocal runtime_refreshed_at
+            runtime_refreshed_at = asyncio.get_running_loop().time()
+            try:
+                return await asyncio.to_thread(
+                    service.get_runtime,
+                    user_id=resolved_user_id,
+                    session_id=session_id,
+                )
+            except Exception as exc:  # diagnostics must never terminate subtitles
+                logger.warning(
+                    "realtime_speech.stream_runtime_refresh_failed",
+                    extra={
+                        "session_id": session_id,
+                        "error_code": type(exc).__name__,
+                    },
+                )
+                return None
+
         while True:
             if await request.is_disconnected():
                 break
@@ -591,10 +618,10 @@ async def stream_session_runtime(
                 # Deliver visible transcript state before the more expensive
                 # runtime aggregation. This keeps first SSE paint independent
                 # from provider/source diagnostics while preserving one cursor.
-                transcripts, candidates, snapshot_events = await asyncio.gather(
-                    asyncio.to_thread(service.list_transcripts, user_id=resolved_user_id, session_id=session_id),
-                    asyncio.to_thread(service.list_candidates, user_id=resolved_user_id, session_id=session_id),
-                    asyncio.to_thread(service.list_stream_bootstrap_events, user_id=resolved_user_id, session_id=session_id),
+                transcripts, candidates, snapshot_events = await asyncio.to_thread(
+                    service.get_stream_bootstrap_state,
+                    user_id=resolved_user_id,
+                    session_id=session_id,
                 )
                 cached_transcripts = transcripts
                 cached_candidates = candidates
@@ -622,24 +649,29 @@ async def stream_session_runtime(
                     "ownerUserId": resolved_user_id,
                     "cursor": current_cursor,
                 }
+                refresh_plan = session_stream_refresh_plan(
+                    payload_type=payload_type,
+                    event_kinds={event.kind for event in incremental_events},
+                )
+                if refresh_plan["runtime"]:
+                    runtime = await best_effort_runtime()
+                    if runtime is not None:
+                        cached_runtime = runtime
+                        payload["runtime"] = runtime.model_dump(by_alias=True)
             yield _sse_frame(payload_type, payload, cursor=current_cursor)
             last_cursor = current_cursor
             initial = False
             if payload_type == "snapshot":
-                runtime = await asyncio.to_thread(
-                    service.get_runtime,
-                    user_id=resolved_user_id,
-                    session_id=session_id,
-                )
-                cached_runtime = runtime
-                runtime_refreshed_at = asyncio.get_running_loop().time()
-                yield _sse_frame("update", {
-                    "type": "update",
-                    "events": {"sessionId": session_id, "events": []},
-                    "runtime": runtime.model_dump(by_alias=True),
-                    "ownerUserId": resolved_user_id,
-                    "cursor": current_cursor,
-                }, cursor=current_cursor)
+                runtime = await best_effort_runtime()
+                if runtime is not None:
+                    cached_runtime = runtime
+                    yield _sse_frame("update", {
+                        "type": "update",
+                        "events": {"sessionId": session_id, "events": []},
+                        "runtime": runtime.model_dump(by_alias=True),
+                        "ownerUserId": resolved_user_id,
+                        "cursor": current_cursor,
+                    }, cursor=current_cursor)
 
     return StreamingResponse(
         event_stream(),

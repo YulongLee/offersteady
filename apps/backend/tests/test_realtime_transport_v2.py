@@ -133,6 +133,44 @@ def test_retry_replays_the_complete_ephemeral_utterance(monkeypatch):
     assert service._replay_frame(terminal) is None
 
 
+def test_missing_provider_completion_does_not_retry_the_same_terminal(monkeypatch):
+    _user_id, session_id, device_id, publisher_payload = create_live_binding()
+    service = realtime_speech_service()
+    publisher = service.repository.get_publisher(publisher_payload["publisherId"])
+    assert publisher is not None
+    terminal = AudioFrame(
+        publisher_id=publisher.publisher_id,
+        session_id=session_id,
+        device_id=device_id,
+        source_id="native-system",
+        source_kind="system",
+        segment_id="missing-provider-completion",
+        revision=2,
+        sequence=1,
+        captured_at_ms=1_000,
+        started_at_ms=1_000,
+        ended_at_ms=1_500,
+        duration_ms=500,
+        codec="pcm-s16le",
+        sample_rate_hz=16_000,
+        channels=1,
+        is_final=True,
+        audio_bytes=b"terminal",
+    )
+    attempts: list[int] = []
+
+    def finalize(*, frame: AudioFrame, attempt: int):
+        attempts.append(attempt)
+        raise RetryableAsrError("realtime_asr_transcript_missing")
+
+    monkeypatch.setattr(service.asr_gateway, "finalize", finalize)
+    with pytest.raises(Exception) as error:
+        service._transcribe_frame(publisher=publisher, frame=terminal)
+
+    assert getattr(error.value, "error_code", None) == "realtime_asr_transcript_missing"
+    assert attempts == [0]
+
+
 def test_terminal_turn_remains_supervised_while_committing():
     _user_id, session_id, device_id, publisher_payload = create_live_binding()
     service = realtime_speech_service()

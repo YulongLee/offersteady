@@ -51,12 +51,15 @@ export class LiveSessionLeaderCoordinator {
         window.clearTimeout(this.electionTimer);
         this.electionTimer = null;
       }
-      const wasLeader = this.leader;
-      this.setLeader(false);
-      if (wasLeader) this.post("release");
-      if (this.leaderPageId === this.pageId) this.leaderPageId = null;
+      // A sole live page must keep its healthy network stream while the user
+      // briefly switches to the interview app or companion. Releasing here
+      // forced a full SSE recovery on every visibility transition and delayed
+      // already-published first partials. A visible follower can still take
+      // over immediately through the probe branch below.
+      if (!this.leader && this.leaderPageId === this.pageId) this.leaderPageId = null;
       return;
     }
+    if (this.leader) return;
     this.lastLeaderAt = 0;
     this.requestElection();
   }
@@ -84,7 +87,13 @@ export class LiveSessionLeaderCoordinator {
     const message = event.data;
     if (!message || message.pageId === this.pageId) return;
     if (message.type === "probe") {
-      if (this.eligible && this.leader) this.post("leader");
+      if (this.leader && !this.eligible) {
+        this.post("release");
+        this.setLeader(false);
+        if (this.leaderPageId === this.pageId) this.leaderPageId = null;
+      } else if (this.eligible && this.leader) {
+        this.post("leader");
+      }
       return;
     }
     if (message.type === "release") {

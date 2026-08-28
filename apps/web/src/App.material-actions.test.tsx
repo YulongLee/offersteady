@@ -20,6 +20,13 @@ const open = (path: string, mutate?: (state: WebAppState) => void) => {
     }));
   }
   vi.spyOn(interviewAppAdapter, "getDesktopDeviceBinding").mockResolvedValue(null);
+  vi.spyOn(interviewAppAdapter, "getPreparationAudioReadiness").mockImplementation(async () => {
+    const nowMs = Date.now();
+    return { state: "ready", updatedAtMs: nowMs, sources: [
+      { sourceKind: "microphone", state: "ready", lastSignalAtMs: nowMs, message: "麦克风声音检查通过" },
+      { sourceKind: "system", state: "ready", lastSignalAtMs: nowMs, message: "电脑输出声音检查通过" },
+    ] };
+  });
   vi.spyOn(interviewAppAdapter, "getActiveInterviewConflict").mockResolvedValue({
     currentInterviewId: "demo",
     activeInterview: null,
@@ -331,19 +338,25 @@ describe("categorized materials and reachable live actions", () => {
     expect(screen.queryByRole("checkbox", { name: /数据用途/ })).not.toBeInTheDocument();
   });
 
-  it("enters live workspace without audio readiness and keeps capture stopped", async () => {
+  it("allows a bound silent preparation session to start without a mandatory sound gate", async () => {
     open("/app/interviews/demo/prepare", state => {
       const device = state.preparation.device!;
       state.preparation = { ...state.preparation, device: { ...device, capabilities: { ...device.capabilities, systemAudio: "denied" } } };
+    });
+    vi.mocked(interviewAppAdapter.getPreparationAudioReadiness).mockResolvedValue({
+      state: "checking",
+      updatedAtMs: Date.now(),
+      sources: [
+        { sourceKind: "microphone", state: "ready", lastSignalAtMs: Date.now(), message: "麦克风声音检查通过" },
+        { sourceKind: "system", state: "checking", message: "电脑输出已打开，等待检测到真实声音" },
+      ],
     });
     expect(screen.getByText("本地端会继续检查收音、系统音频和问题检测")).toBeInTheDocument();
     await connectWithMachineCode();
     const start = screen.getByRole("button", { name: /开始面试/ });
     await waitFor(() => expect(start).toBeEnabled());
-    fireEvent.click(start);
-    expect(await screen.findByText("等待开始面试")).toBeInTheDocument();
-    expect(screen.getByText("这台设备 · 已连接，未采集")).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "手动输入面试官的问题" })).toBeInTheDocument();
+    expect(screen.queryByText(/声音检查/)).not.toBeInTheDocument();
+    expect(screen.getByText(/无需播放测试音或提前说话/)).toBeInTheDocument();
   });
 
   it("requires a machine code before starting when no companion is connected", async () => {
@@ -354,7 +367,9 @@ describe("categorized materials and reachable live actions", () => {
     expect(screen.getByText("请输入桌面伴随程序中的 6 位机器码，绑定本场收音机器")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /开始面试/ })).toBeDisabled();
     await connectWithMachineCode();
-    fireEvent.click(screen.getByRole("button", { name: /开始面试/ }));
+    const start = screen.getByRole("button", { name: /开始面试/ });
+    await waitFor(() => expect(start).toBeEnabled());
+    fireEvent.click(start);
     expect(await screen.findByText("等待开始面试")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "手动输入面试官的问题" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /截屏回答/ })).toBeInTheDocument();

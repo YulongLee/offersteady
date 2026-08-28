@@ -29,7 +29,7 @@ describe("progressive realtime transcript", () => {
   });
 
   it("stops claiming an abandoned partial is actively transcribing", () => {
-    expect(STALE_TRANSCRIPT_MS).toBe(4_000);
+    expect(STALE_TRANSCRIPT_MS).toBe(1_500);
     const publishedAtMs = 1_800_000_000_000;
     expect(transcriptPresentationState({ isFinal: false, publishedAtMs, endedAtMs: publishedAtMs }, publishedAtMs + STALE_TRANSCRIPT_MS - 1)).toBe("transcribing");
     expect(transcriptPresentationState({ isFinal: false, publishedAtMs, endedAtMs: publishedAtMs }, publishedAtMs + STALE_TRANSCRIPT_MS)).toBe("stale");
@@ -38,11 +38,14 @@ describe("progressive realtime transcript", () => {
   });
 
   it("shows a bounded confirming state after terminal admission", () => {
-    expect(transcriptPresentationState({
+    const publishedAtMs = 1_800_000_000_000;
+    const committing = {
       isFinal: false,
-      turnState: "committing",
-      publishedAtMs: 1_800_000_000_000,
-      endedAtMs: 1_800_000_000_000,
-    })).toBe("confirming");
+      turnState: "committing" as const,
+      publishedAtMs,
+      endedAtMs: publishedAtMs,
+    };
+    expect(transcriptPresentationState(committing, publishedAtMs + STALE_TRANSCRIPT_MS - 1)).toBe("confirming");
+    expect(transcriptPresentationState(committing, publishedAtMs + STALE_TRANSCRIPT_MS)).toBe("stale");
   });
 });

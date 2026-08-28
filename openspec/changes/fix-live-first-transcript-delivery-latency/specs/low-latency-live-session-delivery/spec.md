@@ -5,7 +5,11 @@ For one browser and interview session, the system SHALL allow at most one eligib
 
 #### Scenario: Current leader becomes hidden
 - **WHEN** the current realtime leader page changes from visible to hidden
-- **THEN** it releases leadership, cancels its active SSE stream, and stops leader heartbeats without stopping desktop audio capture
+- **THEN** it keeps its existing healthy SSE while no visible follower requests ownership, without stopping desktop audio capture
+
+#### Scenario: Visible follower challenges a hidden leader
+- **WHEN** a visible follower probes while the current leader is hidden or frozen
+- **THEN** the hidden leader immediately releases ownership and the visible follower takes over without waiting for the watchdog
 
 #### Scenario: Visible follower receives release
 - **WHEN** an eligible visible follower receives the current leader's release message
@@ -16,7 +20,7 @@ For one browser and interview session, the system SHALL allow at most one eligib
 - **THEN** deterministic election and the server page lease keep at most one page subscribed and the follower consumes relayed state
 
 ### Requirement: First authoritative snapshot has a bounded deadline
-The Web realtime consumer MUST receive and apply the first authoritative SSE snapshot within a two-second client deadline after a successful response, or terminate that stream attempt as a recoverable first-snapshot timeout.
+The Web realtime consumer MUST receive and apply the first authoritative SSE snapshot within a two-second client deadline after a successful response, or terminate that stream attempt as a recoverable first-snapshot timeout. Initial hydration MUST validate ownership once and MUST NOT repeat independent session lookups for transcripts, candidates and bootstrap events.
 
 #### Scenario: Response headers arrive without a snapshot
 - **WHEN** the SSE request succeeds but no valid snapshot is parsed within two seconds
@@ -47,6 +51,24 @@ After the first authoritative snapshot, the page MUST consume the existing curso
 #### Scenario: Page returns to the foreground
 - **WHEN** a previously hidden page becomes visible and regains ownership
 - **THEN** it resumes from the stored cursor or aggregate snapshot and preserves monotonic transcript and terminal state
+
+### Requirement: Transcript delivery is isolated from diagnostic aggregation
+The Backend MUST send transcript and session-event payloads independently from the more expensive runtime diagnostic aggregation. Failure or slowness while calculating runtime diagnostics MUST NOT close an otherwise healthy transcript SSE stream.
+
+#### Scenario: Runtime aggregation fails after the first snapshot
+- **WHEN** the first transcript snapshot has been sent and runtime diagnostic aggregation raises an error
+- **THEN** the SSE stream remains open, records a content-free warning, and continues delivering cursor-ordered transcript events
+
+#### Scenario: Reconnect provides a resumable cursor
+- **WHEN** a browser reconnects with a cursor still inside the retained Redis event window
+- **THEN** the server reads only events after that cursor for catch-up and does not scan the full event history before delivering new partial transcripts
+
+### Requirement: Realtime transcript SSE uses streaming proxy semantics
+The production proxy MUST route realtime transcript SSE without WebSocket upgrade headers, response buffering, caching or compression and MUST retain a long read timeout.
+
+#### Scenario: Browser opens the transcript stream
+- **WHEN** the browser requests the realtime transcript SSE endpoint
+- **THEN** proxy headers preserve HTTP streaming and each server event can flush immediately without waiting for an HTTP response buffer
 
 ### Requirement: Delivery recovery diagnostics remain content-free
 The system MUST record connection, first-snapshot timeout, recovery and reconnect timing without including transcript text, audio, credentials or personal profile content.

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { BackendPreviewInterviewAdapter, FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS } from "./backend-adapter";
+import { BackendPreviewInterviewAdapter, FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS, toPreparationAudioReadiness } from "./backend-adapter";
 import { syntheticState } from "./test-state";
 
 const envelope = (data: unknown) => ({
@@ -22,6 +22,38 @@ describe("backend preview adapter", () => {
         removeItem: vi.fn((key: string) => store.delete(key)),
       },
     });
+  });
+
+  it("requires fresh real-signal and provider readiness for the preparation sound gate", () => {
+    const nowMs = 500_000;
+    const runtime = {
+      sessionId: "session-ready",
+      sessionStatus: "preparing",
+      stage: "bound",
+      backendReachable: true,
+      deviceRegistered: true,
+      machineCodeBound: true,
+      sessionLive: false,
+      readinessState: "ready",
+      sourceReadiness: { microphone: "ready", system: "ready" },
+      transcriptCount: 0,
+      questionCandidateCount: 0,
+      sourceHealth: [
+        { sourceId: "mic", sourceKind: "microphone", label: "麦克风", state: "silent", level: 0, lastSignalAtMs: nowMs - 1_000 },
+        { sourceId: "system", sourceKind: "system", label: "电脑输出", state: "silent", level: 0, lastSignalAtMs: nowMs - 120_001 },
+      ],
+    } as const;
+
+    const checking = toPreparationAudioReadiness(runtime, nowMs);
+    expect(checking.state).toBe("checking");
+    expect(checking.sources.find(item => item.sourceKind === "microphone")?.state).toBe("ready");
+    expect(checking.sources.find(item => item.sourceKind === "system")?.state).toBe("checking");
+
+    const ready = toPreparationAudioReadiness({
+      ...runtime,
+      sourceHealth: runtime.sourceHealth.map(item => ({ ...item, lastSignalAtMs: nowMs - 1_000 })),
+    }, nowMs);
+    expect(ready.state).toBe("ready");
   });
 
   it("hydrates realtime state with one aggregated snapshot request and carries the page lease", async () => {
@@ -652,9 +684,7 @@ describe("backend preview adapter", () => {
       realtimeFailure: "first-snapshot-timeout",
       message: "实时字幕首个快照等待超时",
     });
-    expect(FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS).toBe(5_000);
-    await vi.advanceTimersByTimeAsync(2_001);
-    expect(cancel).not.toHaveBeenCalled();
+    expect(FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS).toBe(2_000);
     await vi.advanceTimersByTimeAsync(FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS + 1);
     await rejected;
 

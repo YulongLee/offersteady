@@ -59,7 +59,11 @@ describe("web application states", () => {
       expect(screen.getByText(/网页不会申请麦克风或屏幕权限/)).toBeInTheDocument();
     }
     fireEvent.click(screen.getByRole("button", { name: captureState === "permission-required" ? "关闭提示" : "重新诊断" }));
-    expect(screen.getByText("等待开始面试")).toBeInTheDocument();
+    if (captureState === "permission-required") {
+      expect(screen.getByText("等待开始面试")).toBeInTheDocument();
+    } else {
+      expect(screen.getAllByText(message).length).toBeGreaterThan(0);
+    }
   });
 
   it("shows managed processing and failed sources as unavailable in preparation", () => {

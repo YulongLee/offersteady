@@ -81,6 +81,18 @@ describe("live workspace answer pagination", () => {
     expect(reconciled.transcripts).toEqual([incomplete]);
   });
 
+  it("keeps a newer turn visible when an older turn finalizes late", () => {
+    const original = syntheticState.speaker.transcripts[0]!;
+    const olderFinal = { ...original, id: "older", revision: 4, isFinal: true, text: "较早问题最终稿", startedAtMs: 100, endedAtMs: 800 };
+    const newerPartial = { ...original, id: "newer", revision: 2, isFinal: false, text: "新的问题正在显示", startedAtMs: 900, endedAtMs: 1_200 };
+    const reconciled = reconcileRealtimeSpeaker(
+      { ...syntheticState.speaker, transcripts: [newerPartial] },
+      { ...syntheticState.speaker, transcripts: [olderFinal, newerPartial] },
+    );
+
+    expect(reconciled.transcripts).toEqual([olderFinal, newerPartial]);
+  });
+
   it("drops realtime content from another interview session instead of merging it", () => {
     const current = syntheticState.speaker;
     const incoming = {

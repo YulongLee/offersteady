@@ -1,4 +1,4 @@
-import type { AudioSourceHealth, AudioSourceKind, RealtimeFinalizationReason, RealtimeTurnState } from "@offersteady/protocol";
+import type { AudioSourceHealth, AudioSourceKind, CaptureState, RealtimeFinalizationReason, RealtimeTurnState } from "@offersteady/protocol";
 
 import { BoundedAudioFrameBuffer, createAudioFrame, SourceFrameSequencer } from "./audio-frame-buffer";
 import { MicrophoneAudioAdapter, SystemAudioAdapter, describeMediaError, type OpenAudioSource } from "./audio-source-adapter";
@@ -13,6 +13,7 @@ import {
 import { RealtimeTransportDiagnostics } from "./realtime-transport-diagnostics";
 import { ChannelForwardProgressGate, publisherRecoveryDelayMs } from "./publisher-recovery-policy";
 import { SerializedLatestSourceSwitch } from "./audio-device-hot-switch";
+import { WarmSourceHandoff, type AudioCalibrationSnapshot } from "./warm-source-handoff";
 
 interface DesktopBinding {
   readonly sessionId: string;
@@ -36,6 +37,15 @@ interface HealthSnapshot extends AudioSourceHealth {
   readonly active: boolean;
 }
 
+export function clearRecoveredHealthFields<T extends AudioSourceHealth>(health: T): T {
+  if (health.state !== "silent" && health.state !== "receiving") return health;
+  return {
+    ...health,
+    errorCode: undefined,
+    lastReconnectReason: undefined,
+  };
+}
+
 interface RealtimePublisherCallbacks {
   readonly onHealth: (health: readonly AudioSourceHealth[]) => void;
   readonly onCaptureState: (state: "capturing" | "permission-required" | "reconnecting" | "error") => void;
@@ -52,6 +62,8 @@ interface RealtimePublisherOptions extends RealtimePublisherCallbacks {
   readonly endpointingMode?: EndpointingMode;
   readonly fetchImpl?: typeof fetch;
   readonly diagnosticAudioChannels?: readonly AudioSourceKind[];
+  readonly warmSources?: WarmSourceHandoff;
+  readonly liveObservedAtMs?: number;
 }
 
 export const sessionCapturePermissionPolicy = {
@@ -125,11 +137,23 @@ export interface DesktopRealtimeReliabilitySnapshot {
 export type EndpointingMode = "legacy-threshold" | "commercial-adaptive";
 export type SpeechTurnLifecycle = "idle" | RealtimeTurnState | "final" | "incomplete";
 
+export const publisherCaptureStateForTransport = (
+  state: "connected" | "reconnecting" | "failed",
+  previouslyConnected: boolean,
+  recovering: boolean,
+): Parameters<RealtimePublisherCallbacks["onCaptureState"]>[0] | null => {
+  if (state === "connected" && !recovering) return "capturing";
+  if (previouslyConnected || recovering) return "reconnecting";
+  return null;
+};
+
 export interface SpeechEndpointingConfig {
   readonly mode: EndpointingMode;
   readonly interimIntervalMs: number;
   readonly minimumSpeechMs: number;
   readonly maximumTurnMs: number;
+  readonly microphoneMaximumTurnMs: number;
+  readonly systemMaximumTurnMs: number;
   readonly microphoneTailMs: number;
   readonly systemTailMs: number;
 }
@@ -139,14 +163,23 @@ const MICROPHONE_SPEECH_CONTINUE_THRESHOLD = 0.0018;
 const SYSTEM_SPEECH_START_THRESHOLD = 0.0008;
 const SYSTEM_SPEECH_CONTINUE_THRESHOLD = 0.0005;
 const INTERIM_INTERVAL_MS = 100;
-const MICROPHONE_SILENCE_FINALIZE_MS = 500;
-const SYSTEM_SILENCE_FINALIZE_MS = 500;
+const MICROPHONE_SILENCE_FINALIZE_MS = 480;
+const SYSTEM_SILENCE_FINALIZE_MS = 350;
 const MAX_SEGMENT_DURATION_MS = 30_000;
 const MIN_EMIT_SPEECH_MS = 60;
-const PRE_SPEECH_BUFFER_LIMIT = 4;
+const MICROPHONE_PRE_SPEECH_BUFFER_LIMIT = 12;
+const SYSTEM_PRE_SPEECH_BUFFER_LIMIT = 12;
 const MICROPHONE_TURN_PEAK_RELEASE_RATIO = 0.15;
 const SYSTEM_TURN_PEAK_RELEASE_RATIO = 0.12;
 const MAX_MEANINGFUL_SPEECH_RELEASE_MS = 1_200;
+const SYSTEM_QUIET_ACTIVITY_FLOOR = 0.0004;
+const SYSTEM_QUIET_ACTIVITY_RANGE = 0.00016;
+const SYSTEM_QUIET_ACTIVITY_RATIO = 1.25;
+const SYSTEM_QUIET_ACTIVITY_SAMPLES = 5;
+const MICROPHONE_QUIET_ACTIVITY_FLOOR = 0.0012;
+const MICROPHONE_QUIET_ACTIVITY_RANGE = 0.00035;
+const MICROPHONE_QUIET_ACTIVITY_RATIO = 1.3;
+const MICROPHONE_QUIET_ACTIVITY_SAMPLES = 6;
 
 interface SourceVadProfile {
   readonly startFloor: number;
@@ -161,27 +194,27 @@ interface SourceVadProfile {
 }
 
 const MICROPHONE_VAD_PROFILE: SourceVadProfile = {
-  startFloor: 0.0012,
+  startFloor: 0.0016,
   startCeiling: 0.012,
   continuationFloor: 0.0011,
   continuationCeiling: 0.008,
   startNoiseMultiplier: 3.2,
   continuationNoiseMultiplier: 2,
-  attackMs: 20,
-  minimumSpeechMs: 60,
+  attackMs: 100,
+  minimumSpeechMs: 100,
   silenceMs: MICROPHONE_SILENCE_FINALIZE_MS,
 };
 
 const SYSTEM_VAD_PROFILE: SourceVadProfile = {
   // Keep the floor low enough for quiet meeting audio, English initials and
   // short numbers. A short attack window rejects one-frame digital noise.
-  startFloor: 0.001,
-  startCeiling: 0.004,
+  startFloor: 0.0008,
+  startCeiling: 0.0025,
   continuationFloor: SYSTEM_SPEECH_CONTINUE_THRESHOLD,
   continuationCeiling: 0.0025,
-  startNoiseMultiplier: 3.2,
+  startNoiseMultiplier: 2.6,
   continuationNoiseMultiplier: 2,
-  attackMs: 40,
+  attackMs: 60,
   minimumSpeechMs: 60,
   silenceMs: SYSTEM_SILENCE_FINALIZE_MS,
 };
@@ -191,6 +224,8 @@ export const commercialSpeechEndpointingDefaults: SpeechEndpointingConfig = {
   interimIntervalMs: INTERIM_INTERVAL_MS,
   minimumSpeechMs: MIN_EMIT_SPEECH_MS,
   maximumTurnMs: 12_000,
+  microphoneMaximumTurnMs: 12_000,
+  systemMaximumTurnMs: 8_000,
   microphoneTailMs: MICROPHONE_SILENCE_FINALIZE_MS,
   systemTailMs: SYSTEM_SILENCE_FINALIZE_MS,
 };
@@ -496,14 +531,21 @@ export class SpeechSegmenter {
   private noiseFloor: number;
   private turnPeakRms = 0;
   private sourceGeneration = 0;
+  private readonly quietActivityRms: number[] = [];
   private readonly config: SpeechEndpointingConfig;
 
   constructor(
     private readonly sourceKind: AudioSourceKind,
     config: Partial<SpeechEndpointingConfig> = {},
     initialSourceGeneration = 0,
+    initialCalibration?: AudioCalibrationSnapshot,
   ) {
-    this.noiseFloor = sourceKind === "system" ? 0.0001 : 0.00035;
+    const defaultNoiseFloor = sourceKind === "system" ? 0.0001 : 0.00035;
+    const calibrationMinimum = sourceKind === "system" ? 0.00005 : 0.0001;
+    const calibrationMaximum = sourceKind === "system" ? 0.0005 : 0.004;
+    this.noiseFloor = initialCalibration && initialCalibration.sampleCount >= 3
+      ? Math.max(calibrationMinimum, Math.min(calibrationMaximum, initialCalibration.noiseFloor))
+      : defaultNoiseFloor;
     this.config = { ...commercialSpeechEndpointingDefaults, ...config };
     this.sourceGeneration = Math.max(0, Math.floor(initialSourceGeneration));
   }
@@ -542,12 +584,29 @@ export class SpeechSegmenter {
   }
 
   private observeNoise(rms: number): void {
-    const ceiling = this.sourceKind === "system" ? 0.0025 : 0.008;
+    const ceiling = this.sourceKind === "system" ? 0.0015 : 0.008;
     if (!Number.isFinite(rms) || rms < 0 || rms >= ceiling) return;
     const next = this.noiseFloor * 0.94 + rms * 0.06;
     const minimum = this.sourceKind === "system" ? 0.00005 : 0.0001;
-    const maximum = this.sourceKind === "system" ? 0.0015 : 0.004;
+    const maximum = this.sourceKind === "system" ? 0.0005 : 0.004;
     this.noiseFloor = Math.max(minimum, Math.min(maximum, next));
+  }
+
+  private observesSustainedQuietActivity(rms: number): boolean {
+    const floor = this.sourceKind === "system" ? SYSTEM_QUIET_ACTIVITY_FLOOR : MICROPHONE_QUIET_ACTIVITY_FLOOR;
+    const requiredRange = this.sourceKind === "system" ? SYSTEM_QUIET_ACTIVITY_RANGE : MICROPHONE_QUIET_ACTIVITY_RANGE;
+    const requiredRatio = this.sourceKind === "system" ? SYSTEM_QUIET_ACTIVITY_RATIO : MICROPHONE_QUIET_ACTIVITY_RATIO;
+    const requiredSamples = this.sourceKind === "system" ? SYSTEM_QUIET_ACTIVITY_SAMPLES : MICROPHONE_QUIET_ACTIVITY_SAMPLES;
+    if (rms < floor) {
+      this.quietActivityRms.length = 0;
+      return false;
+    }
+    this.quietActivityRms.push(rms);
+    while (this.quietActivityRms.length > requiredSamples) this.quietActivityRms.shift();
+    if (this.quietActivityRms.length < requiredSamples) return false;
+    const minimum = Math.min(...this.quietActivityRms);
+    const maximum = Math.max(...this.quietActivityRms);
+    return maximum - minimum >= requiredRange && maximum / Math.max(minimum, 0.000001) >= requiredRatio;
   }
 
   push(payload: Uint8Array, nowMs: number, rms: number): SegmentSnapshot[] {
@@ -555,9 +614,13 @@ export class SpeechSegmenter {
     if (this.lifecycle === "idle") {
       if (payload.byteLength > 0) {
         this.preSpeechChunks.push(payload);
-        while (this.preSpeechChunks.length > PRE_SPEECH_BUFFER_LIMIT) this.preSpeechChunks.shift();
+        const bufferLimit = this.sourceKind === "system"
+          ? SYSTEM_PRE_SPEECH_BUFFER_LIMIT
+          : MICROPHONE_PRE_SPEECH_BUFFER_LIMIT;
+        while (this.preSpeechChunks.length > bufferLimit) this.preSpeechChunks.shift();
       }
-      if (rms < startThreshold) {
+      const sustainedQuietActivity = this.observesSustainedQuietActivity(rms);
+      if (rms < startThreshold && !sustainedQuietActivity) {
         this.observeNoise(rms);
         this.attackStartedAtMs = -1;
         return [];
@@ -580,6 +643,7 @@ export class SpeechSegmenter {
       this.emitted = false;
       if (this.preSpeechChunks.length > 0) this.unsentChunks.push(...this.preSpeechChunks);
       this.preSpeechChunks.length = 0;
+      this.quietActivityRms.length = 0;
       if (nowMs - this.startedAtMs >= this.vadProfile().minimumSpeechMs) {
         this.lastInterimAtMs = nowMs;
         this.emitted = true;
@@ -600,7 +664,11 @@ export class SpeechSegmenter {
       : Math.max(continueThreshold, peakReleaseThreshold);
     const speaking = rms >= resumeThreshold;
     if (payload.byteLength > 0) this.unsentChunks.push(payload);
-    const maximumTurnMs = this.config.mode === "legacy-threshold" ? MAX_SEGMENT_DURATION_MS : this.config.maximumTurnMs;
+    const maximumTurnMs = this.config.mode === "legacy-threshold"
+      ? MAX_SEGMENT_DURATION_MS
+      : this.sourceKind === "system"
+        ? this.config.systemMaximumTurnMs
+        : this.config.microphoneMaximumTurnMs;
     if (nowMs - this.startedAtMs >= maximumTurnMs) {
       const boundedFinalSnapshot = this.finalize(nowMs, "max-duration");
       this.reset();
@@ -688,6 +756,7 @@ export class SpeechSegmenter {
     this.speechConfirmedAtMs = 0;
     this.lastMeaningfulSpeechAtMs = 0;
     this.turnPeakRms = 0;
+    this.quietActivityRms.length = 0;
   }
 }
 
@@ -716,9 +785,14 @@ export class DesktopRealtimePublisher {
   private readonly transportDiagnostics: RealtimeTransportDiagnostics;
   private readonly sourceInputs = new Map<AudioSourceKind, SourceStartInput>();
   private readonly sourceGenerations = new Map<AudioSourceKind, number>([["microphone", 0], ["system", 0]]);
+  private readonly sourceStartModes = new Map<AudioSourceKind, "promoted" | "opened" | "stale-fallback">();
+  private readonly sourceReadyAtMs = new Map<AudioSourceKind, number>();
+  private readonly sourceCalibrations = new Map<AudioSourceKind, AudioCalibrationSnapshot>();
+  private publisherConnectedAtMs: number | null = null;
   private watchdogTimer: number | null = null;
   private transportWatchdogRecoveryInFlight = false;
   private transportSequenceResetInProgress = false;
+  private transportHasConnected = false;
   private readonly channelForwardProgress = new ChannelForwardProgressGate<MultiplexedRealtimeTransport>();
 
   constructor(private readonly options: RealtimePublisherOptions) {
@@ -736,10 +810,11 @@ export class DesktopRealtimePublisher {
   async start() {
     this.stopped = false;
     this.transportDiagnostics.start();
-    this.options.onCaptureState("reconnecting");
     try {
       await this.openTransport();
+      this.publisherConnectedAtMs = Date.now();
     } catch (error) {
+      this.options.warmSources?.close();
       this.transport?.stop();
       this.transport = null;
       const diagnostic = publisherFailureDiagnostic("microphone", error);
@@ -756,14 +831,15 @@ export class DesktopRealtimePublisher {
     const microphoneRuntime = enabledChannels.has("microphone") ? await this.startSource({
       sourceKind: "microphone",
       sourceId: initialMicrophoneId,
-      open: () => this.microphoneAdapter.open(initialMicrophoneId),
+      open: () => this.openWarmOrFallback("microphone", () => this.microphoneAdapter.open(initialMicrophoneId)),
     }) : null;
     if (microphoneRuntime) this.microphoneSwitch.markApplied(initialMicrophoneId);
     const systemRuntime = enabledChannels.has("system") ? await this.startSource({
       sourceKind: "system",
       sourceId: this.options.systemAudioId || "system-loopback",
-      open: () => this.systemAudioAdapter.open(),
+      open: () => this.openWarmOrFallback("system", () => this.systemAudioAdapter.open()),
     }) : null;
+    this.options.warmSources?.close();
     const runtimes = [microphoneRuntime, systemRuntime];
     this.runtimes.push(...runtimes.filter((runtime): runtime is WebAudioSourceRuntime => runtime !== null));
     this.captureStarted = true;
@@ -784,6 +860,34 @@ export class DesktopRealtimePublisher {
     throw new Error("all_audio_sources_failed");
   }
 
+  private async openWarmOrFallback(
+    sourceKind: AudioSourceKind,
+    fallback: () => Promise<OpenAudioSource>,
+  ): Promise<OpenAudioSource> {
+    const warmed = this.options.warmSources?.take(sourceKind);
+    if (warmed?.source) {
+      if (warmed.calibration) this.sourceCalibrations.set(sourceKind, warmed.calibration);
+      this.sourceStartModes.set(sourceKind, "promoted");
+      const sourceReadyAtMs = Date.now();
+      this.sourceReadyAtMs.set(sourceKind, sourceReadyAtMs);
+      this.options.onServerEvent?.({
+        kind: "connection-state",
+        payload: { sourceKind, sourceStartMode: "promoted", sourceReadyAtMs },
+      });
+      return warmed.source;
+    }
+    const mode = warmed?.outcome === "stale" ? "stale-fallback" : "opened";
+    this.sourceStartModes.set(sourceKind, mode);
+    const opened = await fallback();
+    const sourceReadyAtMs = Date.now();
+    this.sourceReadyAtMs.set(sourceKind, sourceReadyAtMs);
+    this.options.onServerEvent?.({
+      kind: "connection-state",
+      payload: { sourceKind, sourceStartMode: mode, sourceReadyAtMs },
+    });
+    return opened;
+  }
+
   async stop() {
     this.stopped = true;
     this.captureStarted = false;
@@ -791,6 +895,7 @@ export class DesktopRealtimePublisher {
     this.transportDiagnostics.stop();
     this.transport?.stop();
     this.transport = null;
+    this.transportHasConnected = false;
     this.channelForwardProgress.clear();
     this.transportRecovery = null;
     if (this.watchdogTimer !== null) {
@@ -876,6 +981,7 @@ export class DesktopRealtimePublisher {
         input.sourceKind,
         { mode: this.options.endpointingMode ?? "commercial-adaptive" },
         this.sourceGenerations.get(input.sourceKind) ?? 0,
+        this.sourceCalibrations.get(input.sourceKind),
       );
       const openedAtMs = Date.now();
       let lastProcessAtMs = openedAtMs;
@@ -957,6 +1063,10 @@ export class DesktopRealtimePublisher {
             terminalId: snapshot.terminalId,
             traceId: `${input.sourceKind}:${snapshot.segmentId}:${snapshot.revision}:${frame.sequence}`,
             diagnostics: {
+              liveObservedAtMs: this.options.liveObservedAtMs,
+              publisherConnectedAtMs: this.publisherConnectedAtMs ?? undefined,
+              sourceReadyAtMs: this.sourceReadyAtMs.get(input.sourceKind),
+              sourceReadyMode: this.sourceStartModes.get(input.sourceKind) ?? "opened",
               desktopVadConfirmAtMs: snapshot.speechConfirmedAtMs,
               desktopLastMeaningfulSpeechAtMs: snapshot.lastMeaningfulSpeechAtMs,
               desktopAudioWorkletOutputAtMs: captureTiming.audioWorkletOutputAtMs,
@@ -1265,7 +1375,9 @@ export class DesktopRealtimePublisher {
       onState: state => {
         if (this.transport !== transport) return;
         const recovering = this.transportSequenceResetInProgress;
-        this.options.onCaptureState(state === "connected" && !recovering ? "capturing" : "reconnecting");
+        const nextCaptureState = publisherCaptureStateForTransport(state, this.transportHasConnected, recovering);
+        if (state === "connected" && !recovering) this.transportHasConnected = true;
+        if (nextCaptureState !== null) this.options.onCaptureState(nextCaptureState);
       },
       onTerminal: input => {
         if (this.transport !== transport || this.stopped) return;
@@ -1408,6 +1520,9 @@ export class DesktopRealtimePublisher {
       if (existing && (event.kind === "delivery-diagnostics" || event.kind === "sequence-gap" || event.kind === "frame-accepted" || event.kind === "terminal-accepted")) {
         this.updateHealth({
           ...existing,
+          ...(event.kind === "frame-accepted" || event.kind === "terminal-accepted"
+            ? { state: existing.level > 0 ? "receiving" as const : "silent" as const, stage: "frames-produced" as const }
+            : {}),
           ...(typeof payload.pendingFrames === "number" ? { pendingFrameCount: payload.pendingFrames } : {}),
           ...(typeof payload.oldestPendingFrameAgeMs === "number" ? { oldestPendingFrameAgeMs: payload.oldestPendingFrameAgeMs } : {}),
           ...(typeof payload.droppedFrames === "number" ? { droppedFrameCount: payload.droppedFrames } : {}),
@@ -1436,6 +1551,7 @@ export class DesktopRealtimePublisher {
       return;
     }
     const ringBufferWriteAtMs = Date.now();
+    const publisherEnqueueAtMs = Date.now();
     const diagnostics = typeof payload.diagnostics === "object" && payload.diagnostics !== null
       ? payload.diagnostics as Record<string, unknown>
       : {};
@@ -1444,7 +1560,8 @@ export class DesktopRealtimePublisher {
       diagnostics: {
         ...diagnostics,
         desktopRingBufferWriteAtMs: ringBufferWriteAtMs,
-        desktopPublisherEnqueueAtMs: Date.now(),
+        desktopPublisherEnqueueAtMs: publisherEnqueueAtMs,
+        ...(payload.isFinal === true ? { desktopTerminalEnqueueAtMs: publisherEnqueueAtMs } : {}),
       },
     };
     if (this.transport) {
@@ -1553,10 +1670,10 @@ export class DesktopRealtimePublisher {
   }
 
   private updateHealth(next: HealthSnapshot) {
-    const merged = {
+    const merged = clearRecoveredHealthFields({
       ...this.latestHealth.get(next.sourceKind),
       ...next,
-    };
+    });
     this.latestHealth.set(next.sourceKind, merged);
     const ordered = [...this.latestHealth.values()]
       .sort((left, right) => left.sourceKind.localeCompare(right.sourceKind))

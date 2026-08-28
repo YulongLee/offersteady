@@ -1,7 +1,19 @@
 from __future__ import annotations
 
 from app.ports.realtime_speech import RealtimeFrameReceiptRecord, RealtimePublisherRecord, WebSessionHeartbeatRecord
-from app.services.realtime_speech_service import RealtimeSpeechService
+from app.services.realtime_speech_service import PREPARATION_AUDIO_READINESS_TTL_MS, RealtimeSpeechService, preparation_signal_is_fresh
+
+
+def test_preparation_readiness_requires_fresh_real_signal() -> None:
+    now_ms = 500_000
+
+    assert preparation_signal_is_fresh(last_signal_at_ms=None, now_ms=now_ms) is False
+    assert preparation_signal_is_fresh(last_signal_at_ms=now_ms - 1_000, now_ms=now_ms) is True
+    assert preparation_signal_is_fresh(
+        last_signal_at_ms=now_ms - PREPARATION_AUDIO_READINESS_TTL_MS - 1,
+        now_ms=now_ms,
+    ) is False
+    assert preparation_signal_is_fresh(last_signal_at_ms=now_ms + 1, now_ms=now_ms) is False
 
 
 def test_runtime_evidence_separates_synthetic_asr_probe_from_real_desktop_frames() -> None:

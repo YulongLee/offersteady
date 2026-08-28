@@ -4,6 +4,8 @@ import type { DesktopNativeRuntimeHealth, DesktopPairingIdentity, DesktopRuntime
 import { MicrophoneAudioAdapter, SystemAudioAdapter, describeMediaError } from "./audio/audio-source-adapter";
 import { LocalSourceMonitor } from "./audio/local-source-monitor";
 import { DesktopRealtimePublisher, publisherFailureIsTerminal, type DesktopRealtimeReliabilitySnapshot } from "./audio/realtime-publisher";
+import { WarmSourceHandoff } from "./audio/warm-source-handoff";
+import { sourceHealthIsAudioReady } from "./audio/audio-readiness";
 import { createDebouncedDeviceRefresh, reconcileMicrophoneSelection } from "./audio/audio-device-hot-switch";
 import appIconUrl from "./assets/app-icon.png";
 import { BINDING_LIVE_POLL_MS, desktopPollDelayMs } from "../main/polling-policy";
@@ -66,6 +68,7 @@ interface DesktopPairingStatus {
   readonly authoritative?: boolean;
   readonly leaseVersion?: string | null;
   readonly refreshAfterMs?: number;
+  readonly bindingLockState?: "unlocked" | "held" | "released";
   readonly binding?: DesktopActiveBinding | null;
 }
 
@@ -74,6 +77,18 @@ export const desktopBindingLeaseIdentity = (binding: DesktopActiveBinding | null
 
 export const captureEnabledForBinding = (sessionStatus: string | null, captureState: string | null) =>
   sessionStatus === "live" && captureState !== "paused";
+
+export const desktopActiveConnectionQuery = (
+  identity: Pick<DesktopPairingIdentity, "manualCode" | "deviceId">,
+  pinnedBinding: Pick<DesktopActiveBinding, "sessionId" | "bindingId"> | null,
+) => {
+  const query = new URLSearchParams({ manualCode: identity.manualCode });
+  if (pinnedBinding) {
+    query.set("pinnedSessionId", pinnedBinding.sessionId);
+    query.set("pinnedBindingId", pinnedBinding.bindingId);
+  }
+  return query.toString();
+};
 
 interface DesktopRuntimeStatus {
   readonly sessionId: string;
@@ -139,8 +154,19 @@ export const captureStateForSourceHealth = (
   const sources = ["microphone", "system"] as const;
   const entries = sources.map(sourceKind => health.find(item => item.sourceKind === sourceKind));
   if (entries.some(item => item && ["permission-denied", "unsupported", "unavailable", "error"].includes(item.state))) return "error";
-  if (entries.some(item => !item || item.state === "reconnecting")) return "reconnecting";
+  if (entries.some(item => item?.state === "reconnecting")) return "reconnecting";
   if (entries.every(item => item && (item.state === "silent" || item.state === "receiving"))) return "capturing";
+  return fallback;
+};
+
+export const captureStateForReliability = (
+  states: readonly string[],
+  previouslyHealthy: boolean,
+  fallback: CaptureState,
+): CaptureState => {
+  if (states.includes("LOST") || states.includes("DEGRADED")) return "error";
+  if (states.includes("RECOVERING")) return previouslyHealthy ? "reconnecting" : fallback;
+  if (states.length > 0 && states.every(state => state === "HEALTHY")) return "capturing";
   return fallback;
 };
 
@@ -201,6 +227,9 @@ const permissionFromHealth = (health: AudioSourceHealth | undefined, current: Au
   if (health.state === "receiving" || health.state === "silent") return "granted";
   return current;
 };
+
+const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
+  state === "receiving" || state === "silent";
 
 export const screenCaptureReadyForPermission = (permission: AudioPermission, previewReady: boolean) =>
   permission === "granted" || previewReady;
@@ -283,16 +312,16 @@ function guideUrl(url: string | undefined) {
   }
 }
 
-export function liveInterviewUrl(url: string | undefined, sessionId: string) {
+export function workspaceEntryUrl(url: string | undefined) {
   const workspaceUrl = normalizeWorkspaceUrl(url);
   try {
     const parsed = new URL(workspaceUrl);
-    parsed.pathname = `/app/interviews/${encodeURIComponent(sessionId)}/live`;
+    parsed.pathname = "/app";
     parsed.search = "";
     parsed.hash = "";
     return parsed.toString();
   } catch {
-    return `http://localhost:5173/app/interviews/${encodeURIComponent(sessionId)}/live`;
+    return "http://localhost:5173/app";
   }
 }
 
@@ -341,12 +370,16 @@ const fetchActiveBinding = async (runtime: DesktopRuntimeConfig, identity: Deskt
   return desktopBackendFetch(runtime, `/realtime-speech/desktop-devices/${encodeURIComponent(identity.deviceId)}/binding?${query.toString()}`);
 };
 
-const fetchPairingStatus = async (runtime: DesktopRuntimeConfig, identity: DesktopPairingIdentity) => {
+const fetchPairingStatus = async (
+  runtime: DesktopRuntimeConfig,
+  identity: DesktopPairingIdentity,
+  pinnedBinding: Pick<DesktopActiveBinding, "sessionId" | "bindingId"> | null,
+) => {
   const query = new URLSearchParams({
     manualCode: identity.manualCode,
     deviceId: identity.deviceId,
   });
-  let response = await desktopBackendFetch(runtime, `/realtime-speech/desktop-devices/${encodeURIComponent(identity.deviceId)}/active-connection?manualCode=${encodeURIComponent(identity.manualCode)}`);
+  let response = await desktopBackendFetch(runtime, `/realtime-speech/desktop-devices/${encodeURIComponent(identity.deviceId)}/active-connection?${desktopActiveConnectionQuery(identity, pinnedBinding)}`);
   if (response.status === 404) {
     response = await desktopBackendFetch(runtime, `/realtime-speech/desktop-devices/pairing-status?${query.toString()}`);
   }
@@ -428,6 +461,9 @@ export function CompanionApp() {
   const previewRequestIdRef = useRef(0);
   const publisherRef = useRef<DesktopRealtimePublisher | null>(null);
   const localMonitorRef = useRef<LocalSourceMonitor | null>(null);
+  const warmSourceHandoffRef = useRef<WarmSourceHandoff | null>(null);
+  const captureEnabledRef = useRef(false);
+  const liveObservedAtMsRef = useRef<number | null>(null);
   const systemAudioAdapterRef = useRef(new SystemAudioAdapter());
   const sourceHealthRef = useRef<readonly AudioSourceHealth[]>([]);
   const liveSourceHealthRef = useRef<readonly AudioSourceHealth[]>([]);
@@ -435,6 +471,9 @@ export function CompanionApp() {
   const lastBindingSessionIdRef = useRef<string | null>(null);
   const lastLiveSessionIdRef = useRef<string | null>(null);
   const lastPublisherKickSessionIdRef = useRef<string | null>(null);
+  const activeBindingRef = useRef<DesktopActiveBinding | null>(null);
+  const bindingSessionStatusRef = useRef<string | null>(null);
+  const bindingCaptureStateRef = useRef<string | null>(null);
   const [webOpenNotice, setWebOpenNotice] = useState("");
 
   useEffect(() => {
@@ -459,6 +498,12 @@ export function CompanionApp() {
   const [captureDiagnostic, setCaptureDiagnostic] = useState<string | null>(null);
   const sourceHealthState = mergeDisplayedSourceHealth(liveSourceHealthState, monitorSourceHealthState);
   const captureEnabled = captureEnabledForBinding(bindingSessionStatus, bindingCaptureState);
+  activeBindingRef.current = activeBinding;
+  bindingSessionStatusRef.current = bindingSessionStatus;
+  bindingCaptureStateRef.current = bindingCaptureState;
+  captureEnabledRef.current = captureEnabled;
+  if (captureEnabled && liveObservedAtMsRef.current === null) liveObservedAtMsRef.current = Date.now();
+  if (!captureEnabled) liveObservedAtMsRef.current = null;
   const publisherHasTakenOver = useMemo(
     () => captureEnabled && hasPublisherTakenOver(liveSourceHealthState),
     [captureEnabled, liveSourceHealthState],
@@ -610,10 +655,12 @@ export function CompanionApp() {
   const systemAudioHealth = sourceHealthState.find(item => item.sourceKind === "system");
   const microphoneMeterLevel = useSmoothedMeterPercent(microphoneHealth?.level);
   const systemAudioMeterLevel = useSmoothedMeterPercent(systemAudioHealth?.level);
-const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
-  state === "receiving" || state === "silent";
-  const microphoneReady = isCaptureSourceReady(microphoneHealth?.state);
-  const systemAudioReady = isCaptureSourceReady(systemAudioHealth?.state);
+  const microphoneReady = captureEnabled
+    ? isCaptureSourceReady(microphoneHealth?.state)
+    : sourceHealthIsAudioReady(microphoneHealth);
+  const systemAudioReady = captureEnabled
+    ? isCaptureSourceReady(systemAudioHealth?.state)
+    : sourceHealthIsAudioReady(systemAudioHealth);
   const screenReady = screenCaptureReadyForPermission(screenPermission, screenCaptureReady);
   const nativeRuntimeReady = nativeRuntimeHealth?.ready === true;
   const isWindows = config?.platform === "windows";
@@ -777,7 +824,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       try {
         let pairingStatus: DesktopPairingStatus;
         try {
-          pairingStatus = await fetchPairingStatus(config, pairingIdentity);
+          pairingStatus = await fetchPairingStatus(config, pairingIdentity, activeBindingRef.current);
         } catch {
           const response = await fetchActiveBinding(config, pairingIdentity);
           if (!response.ok) throw new Error(await readBackendError(response));
@@ -796,11 +843,31 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
         }
         consecutivePollFailures = 0;
         bindingFailureCountRef.current = 0;
+        const pinnedBinding = activeBindingRef.current;
+        if (
+          pinnedBinding
+          && bindingSessionStatusRef.current === "live"
+          && pairingStatus.binding?.bindingId !== pinnedBinding.bindingId
+          && pairingStatus.bindingLockState !== "released"
+        ) {
+          pairingStatus = {
+            ...pairingStatus,
+            state: "bound",
+            bound: true,
+            sessionStatus: "live",
+            captureState: bindingCaptureStateRef.current ?? "capturing",
+            bindingLockState: "held",
+            binding: pinnedBinding,
+          };
+        }
         if (!pairingStatus.bound || !pairingStatus.binding) {
           if (!stopped) {
             const staleBinding = pairingStatus.state === "stale-bound" && pairingStatus.binding ? pairingStatus.binding : null;
             const nextState: CaptureState = pairingStatus.registered ? "ready" : "not-connected";
             const displayState: CaptureState = staleBinding ? "reconnecting" : nextState;
+            activeBindingRef.current = staleBinding;
+            bindingSessionStatusRef.current = null;
+            bindingCaptureStateRef.current = null;
             setActiveBinding(staleBinding);
             setBindingSessionStatus(null);
             setBindingCaptureState(null);
@@ -822,6 +889,9 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
         const captureState = pairingStatus.captureState === "paused" ? "paused" : live ? "capturing" : "ready";
         nextDelayMs = desktopPollDelayMs(live ? "live" : "idle", 0, "binding");
         if (stopped) return;
+        activeBindingRef.current = binding;
+        bindingSessionStatusRef.current = sessionStatus;
+        bindingCaptureStateRef.current = captureState;
         setActiveBinding(binding);
         setBindingSessionStatus(sessionStatus);
         setBindingCaptureState(captureState);
@@ -956,7 +1026,12 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
     return () => {
       cancelled = true;
       if (localMonitorRef.current === monitor) localMonitorRef.current = null;
-      void monitor.stop();
+      if (captureEnabledRef.current) {
+        warmSourceHandoffRef.current?.close();
+        warmSourceHandoffRef.current = monitor.takeWarmSources();
+      } else {
+        void monitor.stop();
+      }
     };
   }, [bindingCaptureState, captureEnabled, publisherHasTakenOver, effectiveMicrophoneId, selectedSystemAudioId]);
 
@@ -964,6 +1039,8 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
     if (!config || !pairingIdentity || !activeBinding || !captureEnabled) {
       void publisherRef.current?.stop();
       publisherRef.current = null;
+      warmSourceHandoffRef.current?.close();
+      warmSourceHandoffRef.current = null;
       if (!activeBinding) {
         sourceHealthRef.current = [];
         setLiveSourceHealthState([]);
@@ -971,6 +1048,10 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       return;
     }
     let cancelled = false;
+    let publisherWasHealthy = false;
+    const warmSources = warmSourceHandoffRef.current ?? localMonitorRef.current?.takeWarmSources() ?? undefined;
+    warmSourceHandoffRef.current = null;
+    localMonitorRef.current = null;
     const publisher = new DesktopRealtimePublisher({
       apiBaseUrl: config.apiBaseUrl,
       binding: {
@@ -983,6 +1064,8 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       microphoneId: effectiveMicrophoneId,
       systemAudioId: selectedSystemAudioId || "system-loopback",
       endpointingMode: config.realtimeEndpointing.mode,
+      ...(warmSources ? { warmSources } : {}),
+      ...(liveObservedAtMsRef.current !== null ? { liveObservedAtMs: liveObservedAtMsRef.current } : {}),
       ...(diagnosticAudioChannels ? { diagnosticAudioChannels } : {}),
       fetchImpl: (input, init) => desktopBackendFetch(config, String(input), init),
       onHealth: (health) => {
@@ -998,6 +1081,7 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       },
       onCaptureState: (captureState) => {
         if (cancelled) return;
+        if (captureState === "capturing") publisherWasHealthy = true;
         setState(captureState);
         window.offersteady?.publishCaptureState(captureState);
       },
@@ -1005,18 +1089,16 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
         if (cancelled) return;
         reliabilityRef.current = snapshot;
         const states = snapshot.sources.map((source) => source.state);
-        if (states.includes("LOST")) {
+        const nextCaptureState = captureStateForReliability(states, publisherWasHealthy, "capturing");
+        if (nextCaptureState === "error") {
           setState("error");
-          setCaptureDiagnostic("实时收音链路已中断，助手正在自动恢复。");
+          setCaptureDiagnostic(states.includes("LOST") ? "实时收音链路已中断，助手正在自动恢复。" : "实时收音链路不稳定，助手正在检查并恢复。");
           window.offersteady?.publishCaptureState("error");
-        } else if (states.includes("RECOVERING") || states.includes("STARTING")) {
+        } else if (nextCaptureState === "reconnecting") {
           setState("reconnecting");
           window.offersteady?.publishCaptureState("reconnecting");
-        } else if (states.includes("DEGRADED")) {
-          setState("error");
-          setCaptureDiagnostic("实时收音链路不稳定，助手正在检查并恢复。");
-          window.offersteady?.publishCaptureState("error");
-        } else if (states.length > 0 && states.every((sourceState) => sourceState === "HEALTHY")) {
+        } else if (nextCaptureState === "capturing" && states.length > 0 && states.every((sourceState) => sourceState === "HEALTHY")) {
+          publisherWasHealthy = true;
           setState("capturing");
           setCaptureDiagnostic(null);
           window.offersteady?.publishCaptureState("capturing");
@@ -1051,19 +1133,19 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
       },
     });
     publisherRef.current = publisher;
-    void (async () => {
-      const monitor = localMonitorRef.current;
-      localMonitorRef.current = null;
-      await monitor?.stop();
-      if (cancelled) return;
-      await publisher.start();
-    })().catch((error) => {
+    void publisher.start().catch((error) => {
         if (cancelled) return;
         const message = error instanceof Error ? error.message : "采集链路启动失败";
         setConnectionInfo(message);
         if (publisherRef.current === publisher) publisherRef.current = null;
         void publisher.stop();
         if (publisherFailureIsTerminal(error)) {
+          activeBindingRef.current = null;
+          bindingSessionStatusRef.current = null;
+          bindingCaptureStateRef.current = null;
+          setActiveBinding(null);
+          setBindingSessionStatus(null);
+          setBindingCaptureState(null);
           setConnectionInfo("本场发布通道已失效，正在等待网页重新连接当前设备。");
           return;
         }
@@ -1214,26 +1296,15 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
     }
   };
 
-  const openResolvedUrl = async (target: "home" | "workspace" | "guide" | "current-interview") => {
-    const configuredWorkspace = normalizeWorkspaceUrl(config?.webWorkspaceUrl);
+  const openResolvedUrl = async (target: "home" | "workspace" | "guide") => {
+    const configuredWorkspace = workspaceEntryUrl(config?.webWorkspaceUrl);
     const configuredHome = homeUrl(config?.webWorkspaceUrl);
     const configuredGuide = guideUrl(config?.webWorkspaceUrl);
-    const configuredCurrentInterview = activeBinding
-      ? liveInterviewUrl(config?.webWorkspaceUrl, activeBinding.sessionId)
-      : configuredWorkspace;
     const candidates = target === "home"
       ? [configuredHome, "http://localhost:5173/", "http://localhost:4173/", "http://127.0.0.1:5173/", "http://127.0.0.1:4173/"]
       : target === "guide"
         ? [configuredGuide, "http://localhost:5173/app/guide", "http://localhost:4173/app/guide", "http://127.0.0.1:5173/app/guide", "http://127.0.0.1:4173/app/guide"]
-        : target === "current-interview" && activeBinding
-          ? [
-              configuredCurrentInterview,
-              liveInterviewUrl("http://localhost:5173/app", activeBinding.sessionId),
-              liveInterviewUrl("http://localhost:4173/app", activeBinding.sessionId),
-              liveInterviewUrl("http://127.0.0.1:5173/app", activeBinding.sessionId),
-              liveInterviewUrl("http://127.0.0.1:4173/app", activeBinding.sessionId),
-            ]
-          : [configuredWorkspace, "http://localhost:5173/app", "http://localhost:4173/app", "http://127.0.0.1:5173/app", "http://127.0.0.1:4173/app"];
+        : [configuredWorkspace, "http://localhost:5173/app", "http://localhost:4173/app", "http://127.0.0.1:5173/app", "http://127.0.0.1:4173/app"];
     for (const candidate of candidates) {
       const ok = await window.offersteady?.probeWebUrl(candidate).catch(() => false);
       if (ok) {
@@ -1306,18 +1377,6 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
                   <option key={source.id} value={source.id}>{source.label}</option>
                 ))}
               </select>
-              {!isWindows && permissions.systemAudio === "denied" ? (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => {
-                    setDesktopNotice("请开启“面试稳伴随程序”的屏幕与系统音频录制权限，随后完全退出并重新打开助手。");
-                    void window.offersteady?.openPermissionSettings("screen");
-                  }}
-                >
-                  开启电脑音频权限
-                </button>
-              ) : null}
             </div>
           </TerminalRow>
 
@@ -1417,10 +1476,10 @@ const isCaptureSourceReady = (state: AudioSourceHealth["state"] | undefined) =>
                 <button
                   type="button"
                   className="interview-link-button"
-                  onClick={() => { void openResolvedUrl(activeBinding ? "current-interview" : "home"); }}
+                  onClick={() => { void openResolvedUrl("workspace"); }}
                 >
                   <span className={activeBinding ? "status-light green" : "status-light red"} />
-                  <span>{activeBinding ? "进入当前面试" : "打开面试"}</span>
+                  <span>打开面试稳网站</span>
                 </button>
               </div>
             </div>

@@ -28,15 +28,18 @@ export const nextProgressiveTranscriptText = (current: string, target: string, i
   return target;
 };
 
-export const STALE_TRANSCRIPT_MS = 4_000;
+export const STALE_TRANSCRIPT_MS = 1_500;
 export type TranscriptPresentationState = "final" | "transcribing" | "confirming" | "stale";
 export const transcriptPresentationState = (
   segment: { readonly isFinal: boolean; readonly turnState?: "speaking" | "tail" | "committing"; readonly terminalState?: "final" | "incomplete"; readonly publishedAtMs?: number; readonly endedAtMs: number },
   nowMs = Date.now(),
 ): TranscriptPresentationState => {
   if (segment.isFinal) return segment.terminalState === "incomplete" ? "stale" : "final";
-  if (segment.turnState === "committing") return "confirming";
   const lastRevisionAtMs = segment.publishedAtMs ?? segment.endedAtMs;
+  if (segment.turnState === "committing") {
+    if (lastRevisionAtMs >= 1_000_000_000_000 && nowMs - lastRevisionAtMs >= STALE_TRANSCRIPT_MS) return "stale";
+    return "confirming";
+  }
   if (lastRevisionAtMs >= 1_000_000_000_000 && nowMs - lastRevisionAtMs >= STALE_TRANSCRIPT_MS) return "stale";
   return "transcribing";
 };

@@ -2,6 +2,8 @@ import type { AudioSourceHealth, AudioSourceKind } from "@offersteady/protocol";
 
 import { MicrophoneAudioAdapter, SystemAudioAdapter, describeMediaError, type OpenAudioSource } from "./audio-source-adapter";
 import { calculateRms } from "./signal-diagnostics";
+import { WarmSourceHandoff, type AudioCalibrationSnapshot } from "./warm-source-handoff";
+import { readinessFields, sourceSignalVerificationThreshold } from "./audio-readiness";
 
 interface LocalSourceMonitorOptions {
   readonly microphoneId: string;
@@ -16,11 +18,13 @@ interface SourceRuntime {
   readonly context: AudioContext;
   readonly node: MediaStreamAudioSourceNode;
   readonly processor: ScriptProcessorNode;
-  readonly stop: () => Promise<void>;
+  readonly release: (closeMedia: boolean) => Promise<void>;
+  readonly lastSignalAtMs: () => number | undefined;
+  readonly calibration: () => AudioCalibrationSnapshot;
 }
 
-const SIGNAL_THRESHOLD = 0.0008;
 const MEDIA_OPEN_TIMEOUT_MS = 6500;
+const CALLBACK_STALL_MS = 4_000;
 
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
   let timeoutId: number | undefined;
@@ -82,10 +86,26 @@ export class LocalSourceMonitor {
 
   async stop() {
     this.stopped = true;
-    await Promise.all(this.runtimes.map((runtime) => runtime.stop()));
+    await Promise.all(this.runtimes.map((runtime) => runtime.release(true)));
     this.runtimes = [];
     this.latestHealth.clear();
     this.options.onHealth([]);
+  }
+
+  takeWarmSources(): WarmSourceHandoff {
+    this.stopped = true;
+    const runtimes = this.runtimes;
+    this.runtimes = [];
+    const handoff = new WarmSourceHandoff(runtimes.map(runtime => ({
+      sourceKind: runtime.sourceKind,
+      source: runtime.media,
+      lastSignalAtMs: runtime.lastSignalAtMs(),
+      calibration: runtime.calibration(),
+    })));
+    for (const runtime of runtimes) void runtime.release(false);
+    this.latestHealth.clear();
+    this.options.onHealth([]);
+    return handoff;
   }
 
   private async startSource(input: {
@@ -109,6 +129,12 @@ export class LocalSourceMonitor {
       const node = context.createMediaStreamSource(media.stream);
       const processor = context.createScriptProcessor(4096, 1, 1);
       const sink = connectProcessor(context, processor);
+      const signalThreshold = sourceSignalVerificationThreshold(input.sourceKind);
+      let lastSignalAtMs: number | undefined;
+      let lastCallbackAtMs = Date.now();
+      let noiseFloor = input.sourceKind === "system" ? 0.0001 : 0.00035;
+      let calibrationSampleCount = 0;
+      let consecutiveSignalCallbacks = 0;
 
       node.connect(processor);
       this.updateHealth({
@@ -125,19 +151,45 @@ export class LocalSourceMonitor {
         const samples = event.inputBuffer.getChannelData(0);
         const rms = calculateRms(samples);
         const nowMs = Date.now();
+        lastCallbackAtMs = nowMs;
+        if (rms < signalThreshold * 1.25) {
+          noiseFloor = Math.max(
+            input.sourceKind === "system" ? 0.00005 : 0.0001,
+            Math.min(input.sourceKind === "system" ? 0.0005 : 0.004, noiseFloor * 0.94 + rms * 0.06),
+          );
+          calibrationSampleCount += 1;
+        }
+        consecutiveSignalCallbacks = rms >= Math.max(signalThreshold, noiseFloor * 2.4)
+          ? consecutiveSignalCallbacks + 1
+          : 0;
+        if (consecutiveSignalCallbacks >= 2) lastSignalAtMs = nowMs;
         this.updateHealth({
           sourceId: media.descriptor.id || input.sourceId,
           sourceKind: input.sourceKind,
           label: media.descriptor.label || input.fallbackLabel,
-          state: rms >= SIGNAL_THRESHOLD ? "receiving" : "silent",
-          stage: rms >= SIGNAL_THRESHOLD ? "signal-detected" : "track-live",
+          state: rms >= signalThreshold ? "receiving" : "silent",
+          stage: rms >= signalThreshold ? "signal-detected" : "track-live",
           level: Number(rms.toFixed(3)),
-          ...(rms >= SIGNAL_THRESHOLD ? { lastSignalAtMs: nowMs } : {}),
+          noiseFloor: Number(noiseFloor.toFixed(6)),
+          ...readinessFields(lastSignalAtMs, nowMs),
         });
       };
 
-      media.stream.getTracks().forEach((track) => {
-        track.addEventListener("ended", () => {
+      const stallTimer = window.setInterval(() => {
+        if (this.stopped || Date.now() - lastCallbackAtMs <= CALLBACK_STALL_MS) return;
+        this.updateHealth({
+          sourceId: media.descriptor.id || input.sourceId,
+          sourceKind: input.sourceKind,
+          label: media.descriptor.label || input.fallbackLabel,
+          state: "unavailable",
+          stage: "failed",
+          level: 0,
+          readinessState: "stale",
+          errorCode: "source-unavailable",
+        });
+      }, 1_000);
+
+      const handleTrackEnded = () => {
           this.updateHealth({
             sourceId: media.descriptor.id || input.sourceId,
             sourceKind: input.sourceKind,
@@ -145,9 +197,26 @@ export class LocalSourceMonitor {
             state: "unavailable",
             stage: "failed",
             level: 0,
+            readinessState: "stale",
             errorCode: "source-unavailable",
           });
+      };
+      const handleTrackMuted = () => {
+        this.updateHealth({
+          sourceId: media.descriptor.id || input.sourceId,
+          sourceKind: input.sourceKind,
+          label: media.descriptor.label || input.fallbackLabel,
+          state: "unavailable",
+          stage: "failed",
+          level: 0,
+          readinessState: "stale",
+          errorCode: "source-unavailable",
         });
+      };
+      const tracks = media.stream.getTracks();
+      tracks.forEach((track) => {
+        track.addEventListener("ended", handleTrackEnded);
+        track.addEventListener("mute", handleTrackMuted);
       });
 
       return {
@@ -156,11 +225,23 @@ export class LocalSourceMonitor {
         context,
         node,
         processor,
-        stop: async () => {
+        lastSignalAtMs: () => lastSignalAtMs,
+        calibration: () => ({
+          noiseFloor,
+          sampleCount: calibrationSampleCount,
+          calibratedAtMs: lastCallbackAtMs,
+        }),
+        release: async (closeMedia) => {
+          window.clearInterval(stallTimer);
+          tracks.forEach((track) => {
+            track.removeEventListener("ended", handleTrackEnded);
+            track.removeEventListener("mute", handleTrackMuted);
+          });
+          processor.onaudioprocess = null;
           processor.disconnect();
           sink.disconnect();
           node.disconnect();
-          media.close();
+          if (closeMedia) media.close();
           await context.close().catch(() => undefined);
         },
       };

@@ -129,9 +129,15 @@ class RealtimeStageTimingResponse(BaseModel):
     asr_ttft_ms: int | None = Field(default=None, alias="asrTtftMs")
     final_transcript_ms: int | None = Field(default=None, alias="finalTranscriptMs")
     stop_to_terminal_ms: int | None = Field(default=None, alias="stopToTerminalMs")
+    last_meaningful_speech_to_publish_ms: int | None = Field(default=None, alias="lastMeaningfulSpeechToPublishMs")
     backend_push_ms: int | None = Field(default=None, alias="backendPushMs")
     capture_to_publish_ms: int | None = Field(default=None, alias="captureToPublishMs")
     frontend_render_ms: int | None = Field(default=None, alias="frontendRenderMs")
+    live_observed_at_ms: int | None = Field(default=None, alias="liveObservedAtMs")
+    publisher_connected_at_ms: int | None = Field(default=None, alias="publisherConnectedAtMs")
+    source_ready_at_ms: int | None = Field(default=None, alias="sourceReadyAtMs")
+    source_ready_mode: str | None = Field(default=None, alias="sourceReadyMode")
+    desktop_terminal_enqueue_at_ms: int | None = Field(default=None, alias="desktopTerminalEnqueueAtMs")
     session_id: str | None = Field(default=None, alias="sessionId")
     channel: str | None = None
     sequence: int | None = None

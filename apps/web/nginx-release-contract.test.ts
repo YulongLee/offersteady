@@ -18,4 +18,21 @@ describe("production nginx release contract", () => {
       /location = \/offersteady-build\.json \{[\s\S]*?Cache-Control "no-store";/,
     );
   });
+
+  it("proxies realtime transcript SSE without websocket upgrade or buffering", () => {
+    const nginxConfig = readFileSync(
+      resolve(process.cwd(), "../../infra/nginx/default.conf"),
+      "utf8",
+    );
+    const sseLocation = nginxConfig.match(
+      /location ~ \^\/api\/v1\/realtime-speech\/sessions\/\[\^\/\]\+\/stream\$ \{[\s\S]*?\n  \}/,
+    )?.[0] ?? "";
+
+    expect(sseLocation).toContain('proxy_set_header Connection "";');
+    expect(sseLocation).toContain("proxy_buffering off;");
+    expect(sseLocation).toContain("proxy_cache off;");
+    expect(sseLocation).toContain("gzip off;");
+    expect(sseLocation).toContain("proxy_read_timeout 3600s;");
+    expect(sseLocation).not.toContain("proxy_set_header Upgrade");
+  });
 });

@@ -42,6 +42,13 @@ describe("OfferSteady web application", () => {
     vi.spyOn(interviewAppAdapter, "supersedeActiveInterview").mockResolvedValue([]);
     vi.spyOn(interviewAppAdapter, "controlInterviewCapture").mockImplementation(async (_id, action) => action === "pause" ? "paused" : "capturing");
     vi.spyOn(interviewAppAdapter, "getDesktopDeviceBinding").mockResolvedValue(null);
+    vi.spyOn(interviewAppAdapter, "getPreparationAudioReadiness").mockImplementation(async () => {
+      const nowMs = Date.now();
+      return { state: "ready", updatedAtMs: nowMs, sources: [
+        { sourceKind: "microphone", state: "ready", lastSignalAtMs: nowMs, message: "麦克风声音检查通过" },
+        { sourceKind: "system", state: "ready", lastSignalAtMs: nowMs, message: "电脑输出声音检查通过" },
+      ] };
+    });
     vi.spyOn(interviewAppAdapter, "getLastDesktopDevice").mockResolvedValue({
       deviceId: "fixture-last-device",
       displayName: "上次使用的 Mac",
@@ -234,7 +241,7 @@ describe("OfferSteady web application", () => {
     fireEvent.click(screen.getByRole("button", { name: /保存并准备/ }));
     expect(await screen.findByRole("heading", { name: "前端架构师终面" })).toBeInTheDocument();
     expect(screen.getByText("输入机器码连接本场")).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("button", { name: "一键连接上次设备" }));
+    fireEvent.click(await screen.findByRole("button", { name: "一键连接上次设备" }, { timeout: 3_000 }));
     await waitFor(() => expect(interviewAppAdapter.bindDesktopDevice).toHaveBeenCalledWith({
       interviewId: "draft",
       reuseLastDevice: true,
@@ -315,9 +322,9 @@ describe("OfferSteady web application", () => {
     window.dispatchEvent(new PopStateEvent("popstate"));
     fireEvent.click(await screen.findByRole("button", { name: "一键连接上次设备" }));
     const start = await screen.findByRole("button", { name: /开始面试/ });
-    expect(start).toBeEnabled();
+    await waitFor(() => expect(start).toBeEnabled());
     expect(screen.queryByRole("checkbox", { name: /数据用途/ })).not.toBeInTheDocument();
-    expect(screen.getByText(/本地端会沿用首次授权并检查音频与问题检测/)).toBeInTheDocument();
+    expect(screen.getByText(/后台正在预热实时链路/)).toBeInTheDocument();
     expect(screen.getByText(/麦克风和屏幕权限只由桌面助手首次申请/)).toBeInTheDocument();
     fireEvent.click(start);
     await waitFor(() => expect(interviewAppAdapter.startInterviewSession).toHaveBeenCalledWith("demo", expect.any(AbortSignal)));
@@ -367,7 +374,9 @@ describe("OfferSteady web application", () => {
     window.history.pushState({}, "", "/app/interviews/demo/prepare");
     window.dispatchEvent(new PopStateEvent("popstate"));
     fireEvent.click(await screen.findByRole("button", { name: "一键连接上次设备" }));
-    fireEvent.click(await screen.findByRole("button", { name: /开始面试/ }));
+    const start = await screen.findByRole("button", { name: /开始面试/ });
+    await waitFor(() => expect(start).toBeEnabled());
+    fireEvent.click(start);
     expect(await screen.findByRole("alert")).toHaveTextContent("后端会话启动失败，请重试");
     expect(screen.getByRole("heading", { name: "高级前端工程师面试" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "实时对话" })).not.toBeInTheDocument();

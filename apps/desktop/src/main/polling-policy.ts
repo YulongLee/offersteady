@@ -1,5 +1,6 @@
 export const SCREENSHOT_LIVE_POLL_MS = 1_200;
-export const BINDING_LIVE_POLL_MS = 5_000;
+export const BINDING_LIVE_POLL_MS = 2_000;
+export const BINDING_WAITING_POLL_MS = 250;
 export const DESKTOP_IDLE_POLL_MS = 10_000;
 export const DESKTOP_FAILURE_MIN_POLL_MS = 5_000;
 export const DESKTOP_FAILURE_MAX_POLL_MS = 30_000;
@@ -15,6 +16,6 @@ export const desktopPollDelayMs = (
   channel: "screenshot" | "binding" = "screenshot",
 ) => {
   if (state === "failure") return desktopFailureBackoffMs(consecutiveFailures);
-  if (state === "idle") return DESKTOP_IDLE_POLL_MS;
+  if (state === "idle") return channel === "binding" ? BINDING_WAITING_POLL_MS : DESKTOP_IDLE_POLL_MS;
   return channel === "binding" ? BINDING_LIVE_POLL_MS : SCREENSHOT_LIVE_POLL_MS;
 };

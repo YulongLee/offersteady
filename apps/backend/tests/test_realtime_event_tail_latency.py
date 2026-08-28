@@ -6,8 +6,20 @@ import threading
 import time
 from dataclasses import asdict
 
-from app.modules.realtime_speech import coalesce_transcript_revisions, session_stream_refresh_plan
+from types import SimpleNamespace
+
+from app.modules.realtime_speech import (
+    coalesce_transcript_revisions,
+    session_stream_refresh_plan,
+    stream_session_runtime,
+)
 from app.ports.realtime_speech import RealtimeEvent
+from app.schemas.realtime_speech import (
+    RealtimeEventListResponse,
+    RealtimeEventResponse,
+    RealtimeQuestionCandidateListResponse,
+    RealtimeTranscriptListResponse,
+)
 from app.services.realtime_event_wait import RealtimeEventWaitExecutor
 from app.services.redis_realtime_speech_repository import RedisRealtimeSpeechRepository
 
@@ -293,8 +305,102 @@ def test_session_stream_refreshes_only_event_specific_snapshots() -> None:
     snapshot = session_stream_refresh_plan(payload_type="snapshot", event_kinds=set())
 
     assert screenshot == {"runtime": False, "transcripts": False, "candidates": False, "events": False}
-    assert transcript == {"runtime": True, "transcripts": True, "candidates": False, "events": False}
+    assert transcript == {"runtime": False, "transcripts": True, "candidates": False, "events": False}
+    recovered_device = session_stream_refresh_plan(
+        payload_type="update", event_kinds={"device-status"}
+    )
+    assert recovered_device["runtime"] is True
     assert snapshot == {"runtime": True, "transcripts": True, "candidates": True, "events": True}
+
+
+def test_runtime_diagnostic_failure_does_not_close_transcript_sse() -> None:
+    class RequestStub:
+        app = SimpleNamespace(state=SimpleNamespace())
+
+        async def is_disconnected(self) -> bool:
+            return False
+
+    partial = RealtimeEvent(
+        event_id="partial-event-1",
+        session_id="session-first-visible",
+        owner_user_id="first-visible-owner",
+        kind="transcript-updated",
+        payload={
+            "segmentId": "segment-first-visible",
+            "sourceId": "system-loopback",
+            "sourceKind": "system",
+            "role": "interviewer",
+            "revision": 1,
+            "text": "synthetic partial",
+            "isFinal": False,
+            "transcriptConfidence": 0.9,
+            "startedAtMs": 1,
+            "endedAtMs": 2,
+            "overlap": False,
+        },
+        created_at_ms=2,
+    )
+
+    class ServiceStub:
+        settings = SimpleNamespace(realtime_event_block_ms=100)
+        wait_calls = 0
+
+        def require_active_realtime_session(self, **_kwargs) -> None:
+            return None
+
+        def list_session_events_after(self, **_kwargs):
+            return 1, [], True
+
+        def get_stream_bootstrap_state(self, **_kwargs):
+            return (
+                RealtimeTranscriptListResponse(sessionId="session-first-visible", transcripts=[]),
+                RealtimeQuestionCandidateListResponse(sessionId="session-first-visible", candidates=[]),
+                RealtimeEventListResponse(sessionId="session-first-visible", events=[]),
+            )
+
+        def get_runtime(self, **_kwargs):
+            raise RuntimeError("synthetic runtime diagnostic failure")
+
+        def wait_for_session_events_after(self, **_kwargs):
+            self.wait_calls += 1
+            return 2, [partial], True
+
+        def observe_sse_delivery(self, events, *, sent_at_ms):
+            del sent_at_ms
+            return events
+
+        def event_response(self, event):
+            return RealtimeEventResponse(
+                eventId=event.event_id,
+                kind=event.kind,
+                payload=event.payload,
+                createdAtMs=event.created_at_ms,
+            )
+
+    async def scenario() -> tuple[str, str, int]:
+        service = ServiceStub()
+        response = await stream_session_runtime(
+            "session-first-visible",
+            RequestStub(),
+            user_id="first-visible-owner",
+            cursor=0,
+            page_instance_id=None,
+            lease_generation=None,
+            auth_context=None,
+            service=service,
+        )
+        iterator = response.body_iterator
+        first = await iterator.__anext__()
+        second = await iterator.__anext__()
+        await iterator.aclose()
+        return str(first), str(second), service.wait_calls
+
+    first, second, wait_calls = asyncio.run(scenario())
+
+    assert 'event: snapshot' in first
+    assert 'event: update' in second
+    assert 'partial-event-1' in second
+    assert wait_calls == 1
 
 
 def test_sse_batch_keeps_only_latest_revision_per_transcript_segment() -> None:

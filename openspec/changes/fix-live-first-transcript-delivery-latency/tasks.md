@@ -17,3 +17,12 @@
 - [x] 3.2 Validate this OpenSpec change strictly and document the implementation and rollback behavior
 - [x] 3.3 Deploy the minimum required production services, pass health/version/error-rate gates and preserve rollback artifacts
 - [ ] 3.4 Run a privacy-safe production acceptance test for first-transcript delivery and hand the live page back to the user for confirmation
+
+## 4. First-visible regression hardening
+
+- [x] 4.1 Preserve one healthy SSE when the sole live page becomes hidden and transfer immediately when a visible follower probes
+- [x] 4.2 Consolidate Backend first-snapshot hydration and prevent runtime diagnostic failures from terminating transcript delivery
+- [x] 4.3 Add a dedicated Nginx SSE route without WebSocket upgrade, buffering, caching or compression
+- [x] 4.4 Add coordinator, Web adapter, Backend stream and proxy regressions for the observed eight-second failure mode
+- [x] 4.5 Run focused/full Web and Backend tests, type checks, production builds and strict OpenSpec validation
+- [ ] 4.6 Start the local companion and run a privacy-safe first-visible physical acceptance test with the user

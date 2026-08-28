@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { MicrophoneAudioAdapter, SystemAudioAdapter, describeMediaError, type MediaDevicesLike } from "../src/renderer/audio/audio-source-adapter";
 import { BoundedAudioFrameBuffer, SourceFrameSequencer, createAudioFrame } from "../src/renderer/audio/audio-frame-buffer";
-import { SpeechSegmenter, systemAudioRecoveryReason } from "../src/renderer/audio/realtime-publisher";
+import { SpeechSegmenter, clearRecoveredHealthFields, commercialSpeechEndpointingDefaults, systemAudioRecoveryReason } from "../src/renderer/audio/realtime-publisher";
 import { calculateRms, isSilent } from "../src/renderer/audio/signal-diagnostics";
 
 const frame = (sequencer: SourceFrameSequencer, sourceId: string, bytes: number) =>
@@ -155,8 +155,8 @@ describe("speech segmenter", () => {
     expect(segmenter.push(new Uint8Array([0]), 500, 0.001)).toEqual([]);
     const secondPartial = segmenter.push(speech, 530, 0.009);
     expect(secondPartial).toHaveLength(1);
-    expect(segmenter.push(new Uint8Array([0]), 1_029, 0.001)).toEqual([]);
-    const finalized = segmenter.push(new Uint8Array([0]), 1_030, 0.001);
+    expect(segmenter.push(new Uint8Array([0]), 1_009, 0.001)).toEqual([]);
+    const finalized = segmenter.push(new Uint8Array([0]), 1_010, 0.001);
 
     expect(finalized).toHaveLength(1);
     expect(finalized[0]?.isFinal).toBe(true);
@@ -173,12 +173,12 @@ describe("speech segmenter", () => {
     expect(partial).toHaveLength(1);
     expect(segmenter.push(chunk, 200, 0.004)).toEqual([]);
     expect(segmenter.currentState).toBe("tail");
-    expect(segmenter.push(chunk, 599, 0.004)).toEqual([]);
-    const terminal = segmenter.push(chunk, 600, 0.004);
+    expect(segmenter.push(chunk, 579, 0.004)).toEqual([]);
+    const terminal = segmenter.push(chunk, 580, 0.004);
 
     expect(terminal).toHaveLength(1);
     expect(terminal[0]).toMatchObject({ isFinal: true, finalizationReason: "silence" });
-    expect((terminal[0]?.endedAtMs ?? 0) - 200).toBeLessThanOrEqual(500);
+    expect((terminal[0]?.endedAtMs ?? 0) - 200).toBeLessThanOrEqual(480);
   });
 
   it("keeps quiet microphone speech active when it remains strong relative to its turn peak", () => {
@@ -186,10 +186,13 @@ describe("speech segmenter", () => {
     const chunk = new Uint8Array([1, 2]);
     for (let index = 0; index < 20; index += 1) segmenter.push(chunk, index * 20, 0.0002);
 
-    expect(segmenter.push(chunk, 420, 0.0014)).toEqual([]);
-    const firstPartial = segmenter.push(chunk, 500, 0.0014);
+    const quietSpeech = [0.0012, 0.00165, 0.0013, 0.00175, 0.00125, 0.0017, 0.0014, 0.00165];
+    let firstPartial: ReturnType<SpeechSegmenter["push"]> = [];
+    quietSpeech.forEach((rms, index) => {
+      firstPartial = segmenter.push(chunk, 420 + index * 50, rms);
+    });
     expect(firstPartial).toHaveLength(1);
-    expect(segmenter.push(chunk, 900, 0.0013).some(item => item.isFinal)).toBe(false);
+    expect(segmenter.push(chunk, 900, 0.0015).some(item => item.isFinal)).toBe(false);
     expect(segmenter.currentState).toBe("speaking");
   });
 
@@ -200,8 +203,8 @@ describe("speech segmenter", () => {
     const third = new Uint8Array([5, 6]);
 
     expect(segmenter.push(first, 0, 0.013)).toEqual([]);
-    const firstPartial = segmenter.push(second, 70, 0.013);
-    const secondPartial = segmenter.push(third, 180, 0.013);
+    const firstPartial = segmenter.push(second, 100, 0.013);
+    const secondPartial = segmenter.push(third, 220, 0.013);
 
     expect(firstPartial[0]?.revision).toBe(1);
     expect(firstPartial[0]?.isFinal).toBe(false);
@@ -211,16 +214,16 @@ describe("speech segmenter", () => {
     expect(Array.from(secondPartial[0]?.payload ?? [])).toEqual([5, 6]);
   });
 
-  it.each(["microphone", "system"] as const)("emits the first %s payload at the earliest valid speech boundary", sourceKind => {
+  it.each(["microphone", "system"] as const)("emits the first %s payload at its sustained speech boundary", sourceKind => {
     const segmenter = new SpeechSegmenter(sourceKind);
     const chunks = [1, 2, 3].map(value => new Uint8Array([value]));
 
     expect(segmenter.push(chunks[0]!, 0, 0.01)).toEqual([]);
-    expect(segmenter.push(chunks[1]!, 43, 0.01)).toEqual([]);
-    const first = segmenter.push(chunks[2]!, 86, 0.01);
+    expect(segmenter.push(chunks[1]!, 50, 0.01)).toEqual([]);
+    const first = segmenter.push(chunks[2]!, sourceKind === "microphone" ? 100 : 70, 0.01);
 
     expect(first).toHaveLength(1);
-    expect(first[0]).toMatchObject({ isFinal: false, revision: 1, startedAtMs: 0, endedAtMs: 86 });
+    expect(first[0]).toMatchObject({ isFinal: false, revision: 1, startedAtMs: 0 });
     expect(Array.from(first[0]?.payload ?? [])).toEqual([1, 2, 3]);
   });
 
@@ -251,17 +254,67 @@ describe("speech segmenter", () => {
     expect(microphone.push(digitalAudio, 100, 0.001)).toEqual([]);
   });
 
+  it("starts sustained quiet system speech below the previous 0.001 floor and keeps its pre-speech audio", () => {
+    const segmenter = new SpeechSegmenter("system");
+    const chunks = Array.from({ length: 7 }, (_, index) => new Uint8Array([index + 1]));
+
+    expect(segmenter.push(chunks[0]!, 0, 0.00048)).toEqual([]);
+    expect(segmenter.push(chunks[1]!, 45, 0.00068)).toEqual([]);
+    expect(segmenter.push(chunks[2]!, 90, 0.00056)).toEqual([]);
+    expect(segmenter.push(chunks[3]!, 135, 0.0007)).toEqual([]);
+    expect(segmenter.push(chunks[4]!, 180, 0.00054)).toEqual([]);
+    expect(segmenter.push(chunks[5]!, 225, 0.00072)).toEqual([]);
+    const first = segmenter.push(chunks[6]!, 270, 0.00055);
+
+    expect(first).toHaveLength(1);
+    expect(first[0]?.startedAtMs).toBe(180);
+    expect(Array.from(first[0]?.payload ?? [])).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it("does not publish true low-level digital silence", () => {
+    const segmenter = new SpeechSegmenter("system");
+    const silence = new Uint8Array([0, 0]);
+    for (let index = 0; index < 200; index += 1) {
+      expect(segmenter.push(silence, index * 20, 0.00005)).toEqual([]);
+    }
+    expect(segmenter.currentState).toBe("idle");
+  });
+
   it("adapts to a quiet microphone after observing a low noise floor", () => {
     const segmenter = new SpeechSegmenter("microphone");
     const chunk = new Uint8Array([1, 2]);
     for (let index = 0; index < 20; index += 1) {
       expect(segmenter.push(chunk, index * 20, 0.0002)).toEqual([]);
     }
-    expect(segmenter.push(chunk, 420, 0.0013)).toEqual([]);
-    const partial = segmenter.push(chunk, 500, 0.0013);
+    const speechRms = [0.0012, 0.0017, 0.00125, 0.00175, 0.0013, 0.00168, 0.00122, 0.0017];
+    let partial: ReturnType<SpeechSegmenter["push"]> = [];
+    speechRms.forEach((rms, index) => {
+      partial = segmenter.push(chunk, 420 + index * 50, rms);
+    });
     expect(partial).toHaveLength(1);
     expect(partial[0]?.isFinal).toBe(false);
-    expect(segmenter.currentNoiseFloor).toBeLessThan(0.00035);
+    expect(segmenter.currentNoiseFloor).toBeLessThan(0.0005);
+  });
+
+  it("rejects steady microphone room noise and isolated keyboard-like transients", () => {
+    const segmenter = new SpeechSegmenter("microphone");
+    const chunk = new Uint8Array([1, 2]);
+    for (let index = 0; index < 40; index += 1) {
+      expect(segmenter.push(chunk, index * 20, 0.00125)).toEqual([]);
+    }
+    expect(segmenter.push(chunk, 900, 0.02)).toEqual([]);
+    expect(segmenter.push(chunk, 940, 0.0004)).toEqual([]);
+    expect(segmenter.currentState).toBe("idle");
+  });
+
+  it("rejects varying system noise that lacks sufficient sustained range", () => {
+    const segmenter = new SpeechSegmenter("system");
+    const chunk = new Uint8Array([1, 2]);
+    for (let index = 0; index < 80; index += 1) {
+      const rms = index % 2 === 0 ? 0.00052 : 0.00058;
+      expect(segmenter.push(chunk, index * 20, rms)).toEqual([]);
+    }
+    expect(segmenter.currentState).toBe("idle");
   });
 
   it("keeps Feishu system speech in one segment across a short digital pause", () => {
@@ -275,29 +328,53 @@ describe("speech segmenter", () => {
     const continued = segmenter.push(speech, 430, 0.01);
     expect(continued).toHaveLength(1);
     expect(continued[0]?.segmentId).toBe(firstPartial[0]?.segmentId);
-    expect(segmenter.push(new Uint8Array([0]), 929, 0.0001)).toEqual([]);
-    const finalized = segmenter.push(new Uint8Array([0]), 930, 0.0001);
+    expect(segmenter.push(new Uint8Array([0]), 779, 0.0001)).toEqual([]);
+    const finalized = segmenter.push(new Uint8Array([0]), 780, 0.0001);
     expect(finalized).toHaveLength(1);
     expect(finalized[0]?.isFinal).toBe(true);
   });
 
   it("finalizes uninterrupted speech at the bounded maximum duration", () => {
-    const segmenter = new SpeechSegmenter("microphone");
+    const segmenter = new SpeechSegmenter("system");
     const speech = new Uint8Array([1, 2, 3]);
 
     expect(segmenter.push(speech, 0, 0.01)).toEqual([]);
     const firstPartial = segmenter.push(speech, 100, 0.01);
     expect(firstPartial).toHaveLength(1);
-    const boundedFinal = segmenter.push(speech, 12_000, 0.01);
+    const boundedFinal = segmenter.push(speech, 8_000, 0.01);
 
     expect(boundedFinal).toHaveLength(1);
     expect(boundedFinal[0]?.isFinal).toBe(true);
     expect(boundedFinal[0]?.segmentId).toBe(firstPartial[0]?.segmentId);
-    expect(boundedFinal[0]?.durationMs).toBe(12_000);
+    expect(boundedFinal[0]?.durationMs).toBe(8_000);
     expect(boundedFinal[0]?.finalizationReason).toBe("max-duration");
-    expect(segmenter.push(speech, 12_020, 0.01)).toEqual([]);
-    const nextPartial = segmenter.push(speech, 12_120, 0.01);
+    expect(commercialSpeechEndpointingDefaults.systemMaximumTurnMs).toBeLessThan(12_000);
+    expect(commercialSpeechEndpointingDefaults.microphoneMaximumTurnMs).toBe(12_000);
+    expect(segmenter.push(speech, 8_020, 0.01)).toEqual([]);
+    const nextPartial = segmenter.push(speech, 8_120, 0.01);
     expect(nextPartial[0]?.segmentId).not.toBe(firstPartial[0]?.segmentId);
+  });
+
+  it("uses a faster system tail while retaining a conservative microphone tail", () => {
+    expect(commercialSpeechEndpointingDefaults.systemTailMs).toBe(350);
+    expect(commercialSpeechEndpointingDefaults.microphoneTailMs).toBe(480);
+  });
+
+  it("clears stale transport diagnostics after a source becomes healthy", () => {
+    expect(clearRecoveredHealthFields({
+      sourceId: "microphone-default",
+      sourceKind: "microphone",
+      label: "麦克风",
+      state: "receiving",
+      stage: "frames-produced",
+      level: 0.2,
+      errorCode: "publisher-transport-missing",
+      lastReconnectReason: "publisher-transport-missing",
+    })).toMatchObject({
+      state: "receiving",
+      errorCode: undefined,
+      lastReconnectReason: undefined,
+    });
   });
 });
 

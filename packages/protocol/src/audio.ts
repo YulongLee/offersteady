@@ -119,6 +119,8 @@ export interface AudioSourceHealth {
   readonly stage?: AudioSourceHealthStage;
   readonly level: number;
   readonly lastSignalAtMs?: number;
+  readonly readinessState?: "unchecked" | "ready" | "stale";
+  readonly readinessExpiresAtMs?: number;
   readonly frameCount?: number;
   readonly lastFrameAtMs?: number;
   readonly backendFrameCount?: number;
@@ -130,6 +132,8 @@ export interface AudioSourceHealth {
   readonly lastAckAtMs?: number;
   readonly lastReconnectReason?: string;
   readonly noiseFloor?: number;
+  readonly calibrationSampleCount?: number;
+  readonly speechCandidateAtMs?: number;
   readonly captureProcessor?: "audio-worklet" | "script-processor" | "native";
   readonly endpointingMode?: "legacy-threshold" | "commercial-adaptive";
   readonly turnState?: "idle" | "speaking" | "tail" | "committing" | "final" | "incomplete";
@@ -161,9 +165,15 @@ export interface RealtimeStageTiming {
   readonly asrTtftMs?: number;
   readonly finalTranscriptMs?: number;
   readonly stopToTerminalMs?: number;
+  readonly lastMeaningfulSpeechToPublishMs?: number;
   readonly backendPushMs?: number;
   readonly captureToPublishMs?: number;
   readonly frontendRenderMs?: number;
+  readonly liveObservedAtMs?: number;
+  readonly publisherConnectedAtMs?: number;
+  readonly sourceReadyAtMs?: number;
+  readonly sourceReadyMode?: "promoted" | "opened" | "stale-fallback";
+  readonly desktopTerminalEnqueueAtMs?: number;
 }
 
 export interface RealtimeRuntimeCounters {

@@ -138,7 +138,7 @@ class Settings(BaseSettings):
     realtime_terminal_admission_timeout_seconds: float = 0.25
     realtime_terminal_ack_enabled: bool = True
     realtime_source_watchdog_enabled: bool = False
-    realtime_source_watchdog_seconds: float = 3.0
+    realtime_source_watchdog_seconds: float = 2.5
     realtime_source_watchdog_poll_seconds: float = 0.5
     realtime_event_retention: int = 1000
     realtime_event_block_ms: int = 1000
@@ -161,7 +161,7 @@ class Settings(BaseSettings):
     interview_idle_reaper_batch_size: int = 100
     realtime_asr_frame_timeout_seconds: float = 12.0
     realtime_asr_partial_timeout_seconds: float = 0.03
-    realtime_asr_finalize_timeout_seconds: float = 8.0
+    realtime_asr_finalize_timeout_seconds: float = 2.0
     realtime_asr_retry_max_attempts: int = 1
     realtime_asr_persistent_sessions_enabled: bool = True
     realtime_asr_nonblocking_partials_enabled: bool = True

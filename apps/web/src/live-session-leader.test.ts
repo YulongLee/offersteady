@@ -75,24 +75,26 @@ describe("live session leader coordination", () => {
     secondChannel.close();
   });
 
-  it("releases a hidden leader and immediately transfers ownership to an eligible follower", () => {
+  it("keeps the sole hidden leader stream and transfers immediately when a visible follower probes", () => {
     vi.useFakeTimers();
     let now = 1_000;
     const bus = new FakeBus();
     const first = new LiveSessionLeaderCoordinator(bus.channel(), "page-a", () => now);
-    const second = new LiveSessionLeaderCoordinator(bus.channel(), "page-b", () => now);
     first.start({ onLeadershipChange: () => undefined, onState: () => undefined });
+    vi.advanceTimersByTime(121);
+    expect(first.isLeader()).toBe(true);
+
+    first.setEligible(false);
+    expect(first.isLeader()).toBe(true);
+
+    const second = new LiveSessionLeaderCoordinator(bus.channel(), "page-b", () => now);
     second.start({ onLeadershipChange: () => undefined, onState: () => undefined });
     vi.advanceTimersByTime(121);
-    const leader = first.isLeader() ? first : second;
-    const follower = first.isLeader() ? second : first;
 
-    leader.setEligible(false);
-
-    expect(leader.isLeader()).toBe(false);
-    expect(follower.isLeader()).toBe(true);
-    leader.stop();
-    follower.stop();
+    expect(first.isLeader()).toBe(false);
+    expect(second.isLeader()).toBe(true);
+    first.stop();
+    second.stop();
   });
 
   it("keeps an ineligible page from taking leadership until it becomes visible", () => {

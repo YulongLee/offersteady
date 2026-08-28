@@ -1044,6 +1044,10 @@ const createWindow = () => {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // The companion is normally behind the interview browser. Realtime
+      // binding polls and audio callbacks must not be clamped to background
+      // renderer timer intervals when this window loses focus.
+      backgroundThrottling: false,
     },
   });
   mainWindow = window;

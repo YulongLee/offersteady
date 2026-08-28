@@ -289,6 +289,19 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
     return null;
   }
 
+  async getPreparationAudioReadiness(_interviewId: string, signal?: AbortSignal) {
+    await delay(signal);
+    const nowMs = Date.now();
+    return {
+      state: "ready" as const,
+      updatedAtMs: nowMs,
+      sources: [
+        { sourceKind: "microphone" as const, state: "ready" as const, lastSignalAtMs: nowMs, message: "麦克风声音检查通过" },
+        { sourceKind: "system" as const, state: "ready" as const, lastSignalAtMs: nowMs, message: "电脑输出声音检查通过" },
+      ],
+    };
+  }
+
   async sendDesktopSessionHeartbeat(_command: Parameters<InterviewAppAdapter["sendDesktopSessionHeartbeat"]>[0], signal?: AbortSignal) {
     await delay(signal);
     return { pageInstanceId: _command.pageInstanceId ?? null, leaseGeneration: _command.page === "live" ? 1 : 0, leaseExpiresAtMs: Date.now() + 30_000 };
@@ -347,7 +360,7 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
           inference: "该建议来自测试适配器，用于模拟后端 Chat Service 返回。",
           uncertain: false,
           provenance: { selectionRevision: 0, usedSources: [] },
-        },
+  },
       },
       task: {
         id: taskId,

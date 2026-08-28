@@ -18,7 +18,7 @@ def test_partial_frame_uses_configured_asr_budget() -> None:
 
 
 def test_final_frame_budget_covers_finalize_wait() -> None:
-    assert timeout_budget(configured=4.0, finalize=8.0, is_final=True) == 9.0
+    assert timeout_budget(configured=4.0, finalize=2.0, is_final=True) == 4.0
 
 
 def test_asr_budget_remains_bounded() -> None:

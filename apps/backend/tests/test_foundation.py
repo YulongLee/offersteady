@@ -305,8 +305,10 @@ def test_terminal_summary_measures_from_last_meaningful_speech() -> None:
         channel="system",
         utteranceId="bounded-system-turn",
         desktopLastMeaningfulSpeechAtMs=1_000,
+        desktopTerminalEnqueueAtMs=1_350,
         manualCommitSentAtMs=1_520,
         qwenFinalReceivedAtMs=1_880,
+        browserPaintAtMs=2_000,
     )
 
     summary = service.performance_summary(session_id=session_id)
@@ -316,6 +318,36 @@ def test_terminal_summary_measures_from_last_meaningful_speech() -> None:
     assert summary["distributions"]["lastMeaningfulSpeechToFinalMs"] == {
         "count": 1, "p50": 880, "p95": 880, "p99": 880, "max": 880,
     }
+    assert summary["distributions"]["lastMeaningfulSpeechToTerminalEnqueueMs"] == {
+        "count": 1, "p50": 350, "p95": 350, "p99": 350, "max": 350,
+    }
+    assert summary["distributions"]["terminalEnqueueToProviderFinalMs"] == {
+        "count": 1, "p50": 530, "p95": 530, "p99": 530, "max": 530,
+    }
+    assert summary["distributions"]["providerFinalToBrowserPaintMs"] == {
+        "count": 1, "p50": 120, "p95": 120, "p99": 120, "max": 120,
+    }
+
+
+def test_start_summary_reports_warm_promotion_boundaries() -> None:
+    service = realtime_speech_service()
+    session_id = "warm-promotion-summary-session"
+    service._observe_trace(
+        "warm-promotion-trace",
+        sessionId=session_id,
+        channel="system",
+        utteranceId="warm-first-turn",
+        liveObservedAtMs=1_000,
+        publisherConnectedAtMs=1_080,
+        sourceReadyAtMs=1_100,
+        sourceReadyMode="promoted",
+        desktopWsSendAtMs=1_160,
+    )
+
+    summary = service.performance_summary(session_id=session_id)
+    assert summary["distributions"]["liveToPublisherConnectedMs"]["p95"] == 80
+    assert summary["distributions"]["publisherConnectedToSourceReadyMs"]["p95"] == 20
+    assert summary["distributions"]["liveToFirstFrameSendMs"]["p95"] == 160
 
 
 def test_transcript_delivery_ack_records_browser_receive_without_fake_render() -> None:
@@ -3111,6 +3143,82 @@ def test_new_device_binding_becomes_the_users_only_active_realtime_interview() -
     assert stale_stream.status_code == 410
 
 
+def test_live_desktop_binding_is_pinned_and_cannot_be_taken_over_by_another_account() -> None:
+    owner_session = unwrap(client.post("/api/v1/sessions", json={
+        "userId": "live-device-owner",
+        "title": "正在使用设备的面试",
+    }))
+    challenger_session = unwrap(client.post("/api/v1/sessions", json={
+        "userId": "live-device-challenger",
+        "title": "试图抢占设备的面试",
+    }))
+    unwrap(client.post("/api/v1/realtime-speech/desktop-devices/register", json={
+        "deviceId": "pinned-live-device",
+        "manualCode": "318765",
+        "displayName": "Pinned Live Mac",
+        "capabilities": {"microphone": True, "systemAudio": True},
+    }))
+    owner_binding = unwrap(client.post(
+        f"/api/v1/realtime-speech/sessions/{owner_session['sessionId']}/desktop-binding",
+        json={"userId": "live-device-owner", "manualCode": "318765"},
+    ))
+    unwrap(client.post(
+        f"/api/v1/sessions/{owner_session['sessionId']}/start",
+        json={"userId": "live-device-owner"},
+    ))
+
+    pinned = unwrap(client.get(
+        "/api/v1/realtime-speech/desktop-devices/pinned-live-device/active-connection",
+        params={
+            "manualCode": "318765",
+            "pinnedSessionId": owner_session["sessionId"],
+            "pinnedBindingId": owner_binding["bindingId"],
+        },
+    ))
+    assert pinned["bindingLockState"] == "held"
+    assert pinned["binding"]["sessionId"] == owner_session["sessionId"]
+    assert pinned["binding"]["bindingId"] == owner_binding["bindingId"]
+
+    takeover = client.post(
+        f"/api/v1/realtime-speech/sessions/{challenger_session['sessionId']}/desktop-binding",
+        json={"userId": "live-device-challenger", "manualCode": "318765"},
+    )
+    assert takeover.status_code == 409
+    assert takeover.json()["error"]["details"]["errorCode"] == "desktop_device_live_in_use"
+
+    still_pinned = unwrap(client.get(
+        "/api/v1/realtime-speech/desktop-devices/pinned-live-device/active-connection",
+        params={
+            "manualCode": "318765",
+            "pinnedSessionId": owner_session["sessionId"],
+            "pinnedBindingId": owner_binding["bindingId"],
+        },
+    ))
+    assert still_pinned["bindingLockState"] == "held"
+    assert still_pinned["binding"]["sessionId"] == owner_session["sessionId"]
+
+    unwrap(client.post(
+        f"/api/v1/sessions/{owner_session['sessionId']}/end",
+        json={"userId": "live-device-owner"},
+    ))
+    replacement = unwrap(client.post(
+        f"/api/v1/realtime-speech/sessions/{challenger_session['sessionId']}/desktop-binding",
+        json={"userId": "live-device-challenger", "manualCode": "318765"},
+    ))
+    assert replacement["sessionId"] == challenger_session["sessionId"]
+
+    released = unwrap(client.get(
+        "/api/v1/realtime-speech/desktop-devices/pinned-live-device/active-connection",
+        params={
+            "manualCode": "318765",
+            "pinnedSessionId": owner_session["sessionId"],
+            "pinnedBindingId": owner_binding["bindingId"],
+        },
+    ))
+    assert released["bindingLockState"] == "released"
+    assert released["binding"]["sessionId"] == challenger_session["sessionId"]
+
+
 def test_realtime_runtime_tracks_frame_receipts_and_asr_status(monkeypatch) -> None:
     session = unwrap(client.post("/api/v1/sessions", json={
         "userId": "runtime-status-user",
@@ -3168,6 +3276,7 @@ def test_realtime_runtime_tracks_frame_receipts_and_asr_status(monkeypatch) -> N
             "traceId": "trace-runtime-mic-1",
             "startedAtMs": 1000,
             "endedAtMs": 1800,
+            "lastMeaningfulSpeechAtMs": 1500,
             "durationMs": 800,
             "codec": "pcm-s16le",
             "sampleRateHz": 16000,
@@ -3188,6 +3297,10 @@ def test_realtime_runtime_tracks_frame_receipts_and_asr_status(monkeypatch) -> N
     assert "captureToIngestMs" in runtime["performance"]["latestBySource"]["microphone"]
     assert runtime["performance"]["latestBySource"]["microphone"]["traceId"] == "trace-runtime-mic-1"
     assert runtime["performance"]["latestBySource"]["microphone"]["captureToSendMs"] == 80
+    assert (
+        runtime["performance"]["latestBySource"]["microphone"]["lastMeaningfulSpeechToPublishMs"]
+        - runtime["performance"]["latestBySource"]["microphone"]["stopToTerminalMs"]
+    ) == 300
     if runtime["sourceHealth"]:
         assert "providerMode" in runtime["sourceHealth"][0]
     transcripts = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/transcripts", params={"userId": "runtime-status-user"}))
@@ -3382,20 +3495,89 @@ def test_live_start_bounds_provider_prewarm_wait(monkeypatch) -> None:
     original_enabled = service.settings.realtime_asr_prewarm_enabled
     original_warm = service.asr_gateway.warm_session
     service.settings.realtime_asr_prewarm_enabled = True
-    service.settings.realtime_asr_prewarm_wait_seconds = 0.02
+    service.settings.realtime_asr_prewarm_wait_seconds = 0.5
     monkeypatch.setattr(service.asr_gateway, "warm_session", lambda **_kwargs: release.wait(timeout=1))
     try:
         started = monotonic()
         response = client.post(f"/api/v1/sessions/{session['sessionId']}/start", json={"userId": user_id})
         elapsed = monotonic() - started
         assert response.status_code == 200
-        # The provider stub blocks for one second. HTTP/repository overhead is
-        # intentionally excluded from the 20 ms gate, so assert only that the
-        # request did not inherit the provider's unbounded wait.
-        assert elapsed < 0.75
+        # The provider stub blocks for one second and the legacy path waited up
+        # to the configured 500 ms. Entry now only schedules the background work.
+        assert elapsed < 0.35
     finally:
         release.set()
         service.settings.realtime_asr_prewarm_wait_seconds = original_wait
+        service.settings.realtime_asr_prewarm_enabled = original_enabled
+        monkeypatch.setattr(service.asr_gateway, "warm_session", original_warm)
+
+
+def test_preparing_binding_prewarms_both_channels_without_live_publication(monkeypatch) -> None:
+    service = realtime_speech_service()
+    user_id = "preparing-warm-readiness-user"
+    calls: list[str] = []
+    ready = threading.Event()
+    original_enabled = service.settings.realtime_asr_prewarm_enabled
+    original_warm = service.asr_gateway.warm_session
+    service.settings.realtime_asr_prewarm_enabled = True
+
+    def record_warm(**kwargs) -> None:
+        calls.append(kwargs["source_kind"])
+        if {"microphone", "system"}.issubset(calls):
+            ready.set()
+
+    monkeypatch.setattr(service.asr_gateway, "warm_session", record_warm)
+    try:
+        session = unwrap(client.post("/api/v1/sessions", json={
+            "userId": user_id,
+            "title": "Preparing warm readiness",
+        }))
+        session_id = session["sessionId"]
+        unwrap(client.post("/api/v1/realtime-speech/desktop-devices/register", json={
+            "deviceId": "device-preparing-warm",
+            "manualCode": "674125",
+            "displayName": "Preparing warm companion",
+            "capabilities": {"microphone": "granted", "systemAudio": "granted", "screenCapture": False},
+        }))
+
+        unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/desktop-binding", json={
+            "userId": user_id,
+            "manualCode": "674125",
+        }))
+
+        assert ready.wait(timeout=1)
+        assert set(calls) == {"microphone", "system"}
+        assert unwrap(client.get(f"/api/v1/sessions/{session_id}", params={"userId": user_id}))["status"] == "preparing"
+        publisher = client.post("/api/v1/realtime-speech/publishers", json={
+            "userId": user_id,
+            "sessionId": session_id,
+            "sourceKind": "mixed",
+            "clientName": "must-stay-live-only",
+        })
+        assert publisher.status_code == 400
+        runtime = unwrap(client.get(
+            f"/api/v1/realtime-speech/sessions/{session_id}/runtime",
+            params={"userId": user_id},
+        ))
+        assert runtime["publishers"] == []
+        assert runtime["frameReceipts"] == []
+        assert runtime["transcriptCount"] == 0
+
+        with service._prewarm_metrics_lock:
+            service._prewarm_ready_at_by_session[session_id] = {"microphone": 0, "system": 0}
+        calls.clear()
+        ready.clear()
+        unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/desktop-binding", json={
+            "userId": user_id,
+            "manualCode": "674125",
+        }))
+        assert ready.wait(timeout=1)
+        assert set(calls) == {"microphone", "system"}
+
+        service._reset_realtime_session(session_id=session_id, retired=True)
+        assert session_id not in service._prewarm_ready_by_session
+        assert session_id not in service._prewarm_ready_at_by_session
+    finally:
         service.settings.realtime_asr_prewarm_enabled = original_enabled
         monkeypatch.setattr(service.asr_gateway, "warm_session", original_warm)
 
