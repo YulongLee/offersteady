@@ -1,6 +1,6 @@
 {
   "name": "@offersteady/desktop",
-  "version": "1.2.10",
+  "version": "1.2.11",
   "description": "面试稳 macOS 与 Windows 音频伴随程序",
   "author": "OfferSteady",
   "private": true,

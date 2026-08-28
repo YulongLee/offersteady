@@ -450,12 +450,21 @@ const materializeRealtimeDelta = (
         sourceKind,
         role,
         revision,
-        text: typeof payload.text === "string" ? payload.text : existing?.text ?? "",
+        text: (() => {
+          const incomingText = typeof payload.text === "string" ? payload.text : existing?.text ?? "";
+          if (isFinal || !existing || existing.isFinal) return incomingText;
+          const compact = (value: string) => value
+            .replace(/\s+/g, "")
+            .replace(/[，。！？、；：,.!?;:~～…·\-—_]+/g, "");
+          return compact(incomingText).length < compact(existing.text).length ? existing.text : incomingText;
+        })(),
         transcriptConfidence: typeof payload.transcriptConfidence === "number" ? payload.transcriptConfidence : existing?.transcriptConfidence ?? 0,
         startedAtMs: typeof payload.startedAtMs === "number" ? payload.startedAtMs : existing?.startedAtMs ?? event.createdAtMs,
         endedAtMs: typeof payload.endedAtMs === "number" ? payload.endedAtMs : existing?.endedAtMs ?? event.createdAtMs,
         isFinal,
-        ...(isFinal ? {} : { turnState: "speaking" as const }),
+        ...(isFinal ? {} : {
+          turnState: existing?.turnState === "committing" ? "committing" as const : "speaking" as const,
+        }),
         overlap: typeof payload.overlap === "boolean" ? payload.overlap : existing?.overlap ?? false,
         ...(payload.terminalState === "final" || payload.terminalState === "incomplete" ? { terminalState: payload.terminalState } : {}),
         ...(finalizationReason ? { finalizationReason } : {}),

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import queue
@@ -103,6 +104,25 @@ class _RevisionPerAppendFakeWebSocket(_StreamingFakeWebSocket):
             lambda: self.events.put({
                 "type": "conversation.item.input_audio_transcription.text",
                 "text": f"持续流式识别第{revision}版",
+            }),
+        ).start()
+
+
+class _PostCommitPartialFakeWebSocket(_StreamingFakeWebSocket):
+    def send(self, payload: str) -> None:
+        message = json.loads(payload)
+        self.sent.append(message)
+        if message["type"] != "input_audio_buffer.commit":
+            return
+        self.events.put({
+            "type": "conversation.item.input_audio_transcription.text",
+            "text": "提交后补齐尾词",
+        })
+        threading.Timer(
+            0.01,
+            lambda: self.events.put({
+                "type": "conversation.item.input_audio_transcription.completed",
+                "transcript": "提交后补齐尾词完成",
             }),
         ).start()
 
@@ -258,6 +278,56 @@ def test_gateway_delivers_each_unseen_provider_revision_before_commit(monkeypatc
     assert all(item.completed_at_ms is None for item in delivered_partials)
     assert not any(message["type"] == "input_audio_buffer.commit" for message in socket.sent)
     gateway._close_source_session("session-stream:microphone")
+
+
+def test_gateway_delivers_post_commit_partial_before_authoritative_final(monkeypatch) -> None:
+    socket = _PostCommitPartialFakeWebSocket()
+    monkeypatch.setattr("app.services.dashscope_realtime_asr_gateway.connect", lambda *args, **kwargs: socket)
+    gateway = DashScopeRealtimeAsrGateway(
+        Settings(realtime_asr_api_key="test-key", realtime_asr_finalize_timeout_seconds=0.5),
+        logging.getLogger("test-post-commit-partial"),
+    )
+    delivered: list[object] = []
+    gateway.set_partial_listener(lambda _frame, result: delivered.append(result))
+
+    final = gateway.transcribe(frame=_frame(revision=1, is_final=True, audio=b"tail"), attempt=0)
+
+    assert [item.text for item in delivered] == ["提交后补齐尾词"]
+    assert final.text == "提交后补齐尾词完成"
+    assert final.commit_sent_at_ms is not None
+    assert final.partial_received_at_ms is not None
+    assert final.partial_received_at_ms >= final.commit_sent_at_ms
+    gateway._close_source_session("session-stream:microphone")
+
+
+def test_gateway_commit_silence_experiment_is_disabled_by_default_and_bounded(monkeypatch) -> None:
+    default_socket = _StreamingFakeWebSocket()
+    sockets = iter([default_socket, _StreamingFakeWebSocket()])
+    monkeypatch.setattr("app.services.dashscope_realtime_asr_gateway.connect", lambda *args, **kwargs: next(sockets))
+    default_gateway = DashScopeRealtimeAsrGateway(
+        Settings(realtime_asr_api_key="test-key", realtime_asr_finalize_timeout_seconds=0.5),
+        logging.getLogger("test-default-commit-flush"),
+    )
+    default_gateway.transcribe(frame=_frame(revision=1, is_final=True, audio=b"tail"), attempt=0)
+    assert [item["type"] for item in default_socket.sent].count("input_audio_buffer.append") == 1
+    default_gateway._close_source_session("session-stream:microphone")
+
+    enabled_socket = next(iter([_StreamingFakeWebSocket()]))
+    monkeypatch.setattr("app.services.dashscope_realtime_asr_gateway.connect", lambda *args, **kwargs: enabled_socket)
+    enabled_gateway = DashScopeRealtimeAsrGateway(
+        Settings(
+            realtime_asr_api_key="test-key",
+            realtime_asr_finalize_timeout_seconds=0.5,
+            realtime_asr_commit_silence_ms=100,
+        ),
+        logging.getLogger("test-enabled-commit-flush"),
+    )
+    enabled_gateway.transcribe(frame=_frame(revision=1, is_final=True, audio=b"tail"), attempt=0)
+    appends = [item for item in enabled_socket.sent if item["type"] == "input_audio_buffer.append"]
+    assert len(appends) == 2
+    assert len(base64.b64decode(str(appends[-1]["audio"]))) == 3_200
+    assert set(base64.b64decode(str(appends[-1]["audio"]))) == {0}
+    enabled_gateway._close_source_session("session-stream:microphone")
 
 
 def test_gateway_does_not_wait_for_provider_partial_after_audio_append(monkeypatch) -> None:

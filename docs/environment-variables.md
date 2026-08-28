@@ -108,10 +108,14 @@
 - `OFFERSTEADY_REALTIME_ASR_BASE_URL`
 - `OFFERSTEADY_REALTIME_ASR_WS_URL`
 - `OFFERSTEADY_REALTIME_ASR_MODEL`
+- `OFFERSTEADY_REALTIME_ASR_PROTOCOL`：`qwen3-realtime` 使用旧 `/api-ws/v1/realtime` 会话协议；`qwen-audio-task` 使用 Qwen Audio 3 的 `/api-ws/v1/inference` 任务协议。协议、模型和入口必须作为同一个回滚单元修改。
+- `OFFERSTEADY_REALTIME_ASR_INFERENCE_WS_URL`：Qwen Audio 3 Streaming 的任务协议入口。当前验证通过的是 `wss://dashscope.aliyuncs.com/api-ws/v1/inference`；Workspace 专属入口仍返回 `Endpoint.AccessDenied`，未经重新验证不得用于生产。
+- `OFFERSTEADY_REALTIME_ASR_MAX_SENTENCE_SILENCE_MS`：Qwen Audio 3 服务端 VAD 句尾静音阈值，默认 `400` 毫秒，服务端适配器限制为 `200–6000` 毫秒。
 - `OFFERSTEADY_REALTIME_ASR_WORKSPACE_ID`：百炼业务空间 ID；配置后 Qwen Realtime 优先连接该空间对应的地域专属域名。该值只配置在服务端，不下发客户端。
 - `OFFERSTEADY_REALTIME_ASR_WORKSPACE_REGION`：Workspace 地域，默认 `cn-beijing`；必须与 API Key 和业务空间所属地域一致。
 - `OFFERSTEADY_REALTIME_ASR_PERSISTENT_SESSIONS_ENABLED`：同一面试同一声道跨话语复用 Qwen WebSocket，生产默认开启
 - `OFFERSTEADY_REALTIME_ASR_NONBLOCKING_PARTIALS_ENABLED`：非最终帧发送后不等待供应商 partial
+- `OFFERSTEADY_REALTIME_ASR_COMMIT_SILENCE_MS`：Manual Commit 前追加的零 PCM 毫秒数，默认 `0`（关闭），服务端强制限制为 `0–160`；仅用于隔离尾词延迟实验，未经真实验收不得在生产开启
 - `OFFERSTEADY_REALTIME_ASR_PREWARM_ENABLED`：进入正式面试后预热麦克风和系统音频 ASR 会话，默认开启
 - `OFFERSTEADY_REALTIME_ASR_PREWARM_WAIT_SECONDS`：进入正式面试时等待双声道并行 ASR 预热完成的最长秒数，默认 `2.5`；超时后继续进入并使用惰性连接兜底
 - `OFFERSTEADY_REALTIME_ASR_POINTS_PER_MINUTE`：实时面试每个会话分钟的积分价格，默认 `5`；会员有效时不扣积分

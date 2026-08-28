@@ -299,6 +299,24 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                         session.latest_qwen_ws_send_complete_at_ms = qwen_ws_send_complete_at_ms
                     session.updated_at_monotonic = time.monotonic()
                 if frame.is_final:
+                    commit_silence_ms = max(0, min(160, int(self.settings.realtime_asr_commit_silence_ms)))
+                    if commit_silence_ms > 0:
+                        silence_bytes = bytes(
+                            max(2, int(frame.sample_rate_hz * frame.channels * 2 * commit_silence_ms / 1_000))
+                        )
+                        self._append_counts[frame.source_kind] = self._append_counts.get(frame.source_kind, 0) + (
+                            (len(silence_bytes) + 6399) // 6400
+                        )
+                        qwen_ws_send_start_at_ms, qwen_ws_send_complete_at_ms = self._send_audio_chunks(
+                            session.connection,
+                            silence_bytes,
+                            event_id_prefix=f"{frame.segment_id}-{frame.revision}-commit-silence",
+                        )
+                        audio_appended_at_ms = int(time.time() * 1000)
+                        with session.event_condition:
+                            session.latest_audio_appended_at_ms = audio_appended_at_ms
+                            session.latest_qwen_ws_send_start_at_ms = qwen_ws_send_start_at_ms
+                            session.latest_qwen_ws_send_complete_at_ms = qwen_ws_send_complete_at_ms
                     session.connection.send(json.dumps({
                         "event_id": f"rt-commit-{frame.segment_id}-{frame.revision}",
                         "type": "input_audio_buffer.commit",
@@ -553,7 +571,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             has_new_revision = session.event_revision > session.delivered_revision
             transcript_text = session.transcript_text if finalize or has_new_revision else ""
             first_text_at_ms = session.first_text_at_ms
-            partial_received_at_ms = session.latest_text_at_ms if has_new_revision else None
+            partial_received_at_ms = session.latest_text_at_ms if finalize or has_new_revision else None
             completed_at_ms = session.completed_at_ms
             if has_new_revision:
                 session.delivered_revision = session.event_revision

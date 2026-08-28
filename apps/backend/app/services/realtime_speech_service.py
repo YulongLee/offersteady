@@ -2119,6 +2119,7 @@ class RealtimeSpeechService:
                 }}]
             displaced = self._replace_queued_partial_with_terminal(work_queue, prepared)
             if displaced:
+                self._promote_queued_terminal(work_queue, frame.terminal_id)
                 self._publish_committing_event(publisher=publisher, frame=frame)
                 if frame.terminal_id:
                     self._mark_terminal_accepted(frame)
@@ -2138,6 +2139,8 @@ class RealtimeSpeechService:
                     "terminalId": frame.terminal_id,
                     "displacedPartial": displaced is not None,
                 }}]
+        if frame.is_final:
+            self._promote_queued_terminal(work_queue, frame.terminal_id)
         if frame.is_final and frame.terminal_id:
             self._publish_committing_event(publisher=publisher, frame=frame)
             self._mark_terminal_accepted(frame)
@@ -2285,6 +2288,58 @@ class RealtimeSpeechService:
                 "publishedAtMs": now_ms,
             },
         )
+
+    @staticmethod
+    def _promote_queued_terminal(
+        work_queue: "queue.Queue[dict[str, object]]",
+        terminal_id: str | None,
+    ) -> bool:
+        """Fold a contiguous same-segment PCM prefix into its terminal work unit."""
+        with work_queue.mutex:
+            target_index = next((
+                index for index, candidate in enumerate(work_queue.queue)
+                if isinstance(candidate.get("frame"), AudioFrame)
+                and candidate["frame"].is_final
+                and (terminal_id is None or candidate["frame"].terminal_id == terminal_id)
+            ), None)
+            if target_index is None or target_index <= 0:
+                return False
+            terminal_job = work_queue.queue[target_index]
+            terminal_frame = terminal_job.get("frame")
+            assert isinstance(terminal_frame, AudioFrame)
+            run_start = target_index
+            for index in range(target_index - 1, -1, -1):
+                candidate_frame = work_queue.queue[index].get("frame")
+                if (
+                    not isinstance(candidate_frame, AudioFrame)
+                    or candidate_frame.is_final
+                    or candidate_frame.segment_id != terminal_frame.segment_id
+                    or candidate_frame.source_kind != terminal_frame.source_kind
+                ):
+                    break
+                run_start = index
+            if run_start == target_index:
+                return False
+            prefix_jobs = list(work_queue.queue)[run_start:target_index]
+            prefix_frames = [job["frame"] for job in prefix_jobs]
+            earliest_started_at_ms = min(frame.started_at_ms for frame in prefix_frames)
+            merged = dict(terminal_job)
+            merged["frame"] = replace(
+                terminal_frame,
+                started_at_ms=earliest_started_at_ms,
+                duration_ms=max(20, terminal_frame.ended_at_ms - earliest_started_at_ms),
+                audio_bytes=b"".join(frame.audio_bytes for frame in prefix_frames) + terminal_frame.audio_bytes,
+            )
+            merged["coalesced_frame_count"] = sum(
+                int(job.get("coalesced_frame_count", 1)) for job in [*prefix_jobs, terminal_job]
+            )
+            for _ in range(target_index - run_start + 1):
+                del work_queue.queue[run_start]
+            work_queue.queue.insert(run_start, merged)
+            work_queue.unfinished_tasks -= len(prefix_jobs)
+            work_queue.not_empty.notify()
+            work_queue.not_full.notify_all()
+            return True
 
     @staticmethod
     def _replace_queued_partial_with_terminal(
@@ -2711,6 +2766,7 @@ class RealtimeSpeechService:
         assert isinstance(source_kind, str)
         events: list[dict[str, object]] = []
         existing_terminal = self.repository.get_transcript(frame.session_id, frame.segment_id)
+        visible_text_length_before_final = len(existing_terminal.text) if existing_terminal is not None else 0
         if existing_terminal is not None and existing_terminal.is_final:
             self.repository.save_frame_receipt(replace(pending_receipt, asr_status="accepted"))
             if frame.is_final:
@@ -2796,6 +2852,7 @@ class RealtimeSpeechService:
             "sendToIngestMs": (max(0, ingest_received_at_ms - int(sent_at_ms)) if isinstance(sent_at_ms, int) else None),
             "captureToIngestMs": max(0, ingest_received_at_ms - captured_at_ms),
             "queueWaitMs": max(0, worker_dequeued_at_ms - queue_enter_at_ms),
+            "terminalQueueWaitMs": max(0, worker_dequeued_at_ms - queue_enter_at_ms) if frame.is_final else None,
             "asrTtftMs": (max(0, transcript_result.first_text_at_ms - asr_started_at_ms) if transcript_result.first_text_at_ms is not None else None),
             "finalTranscriptMs": (max(0, transcript_result.completed_at_ms - asr_started_at_ms) if transcript_result.completed_at_ms is not None else None),
             "stopToTerminalMs": (max(0, published_at_ms - frame.ended_at_ms) if frame.is_final else None),
@@ -2835,6 +2892,24 @@ class RealtimeSpeechService:
             "browserRenderAtMs": None,
             "speechEndDetectedAtMs": frame.ended_at_ms if frame.is_final else None,
             "manualCommitSentAtMs": transcript_result.commit_sent_at_ms,
+            "commitToLastPartialMs": (
+                max(0, transcript_result.partial_received_at_ms - transcript_result.commit_sent_at_ms)
+                if frame.is_final
+                and transcript_result.partial_received_at_ms is not None
+                and transcript_result.commit_sent_at_ms is not None
+                and transcript_result.partial_received_at_ms >= transcript_result.commit_sent_at_ms
+                else None
+            ),
+            "commitToFinalMs": (
+                max(0, transcript_result.completed_at_ms - transcript_result.commit_sent_at_ms)
+                if frame.is_final
+                and transcript_result.completed_at_ms is not None
+                and transcript_result.commit_sent_at_ms is not None
+                else None
+            ),
+            "finalAddedCharacterCount": (
+                max(0, len(transcript_result.text) - visible_text_length_before_final) if frame.is_final else None
+            ),
             "asrSessionLockWaitStartAtMs": transcript_result.asr_lock_wait_start_at_ms,
             "asrSessionLockAcquiredAtMs": transcript_result.asr_lock_acquired_at_ms,
             "qwenSendEnqueueAtMs": transcript_result.qwen_send_enqueue_at_ms,

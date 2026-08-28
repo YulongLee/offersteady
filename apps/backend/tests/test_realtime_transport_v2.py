@@ -741,3 +741,52 @@ def test_saturated_queue_replaces_only_a_partial_and_preserves_all_terminals():
     assert isinstance(frames[0], AudioFrame) and frames[0].terminal_id == "prior"
     assert isinstance(frames[1], AudioFrame) and frames[1].terminal_id == "new"
     assert frames[1].audio_bytes == b"pendingtail"
+
+
+def test_terminal_promotion_folds_contiguous_same_segment_pcm_without_overtaking_prior_terminal():
+    template = AudioFrame(
+        publisher_id="publisher-priority",
+        session_id="session-priority",
+        device_id="device-priority",
+        source_id="mic-priority",
+        source_kind="microphone",
+        segment_id="segment-priority",
+        revision=1,
+        sequence=0,
+        captured_at_ms=100,
+        started_at_ms=100,
+        ended_at_ms=200,
+        duration_ms=100,
+        codec="pcm-s16le",
+        sample_rate_hz=16000,
+        channels=1,
+        is_final=False,
+        audio_bytes=b"one",
+    )
+    prior_terminal = replace(template, segment_id="prior", is_final=True, terminal_id="prior")
+    second = replace(template, revision=2, sequence=1, ended_at_ms=300, audio_bytes=b"two")
+    terminal = replace(
+        template,
+        revision=3,
+        sequence=2,
+        ended_at_ms=400,
+        is_final=True,
+        terminal_id="current",
+        audio_bytes=b"tail",
+    )
+    work_queue: queue.Queue[dict[str, object]] = queue.Queue(maxsize=8)
+    work_queue.put_nowait({"frame": prior_terminal})
+    work_queue.put_nowait({"frame": template})
+    work_queue.put_nowait({"frame": second})
+    work_queue.put_nowait({"frame": terminal})
+
+    assert RealtimeSpeechService._promote_queued_terminal(work_queue, "current") is True
+    jobs = [work_queue.get_nowait(), work_queue.get_nowait()]
+    frames = [job["frame"] for job in jobs]
+    assert isinstance(frames[0], AudioFrame) and frames[0].terminal_id == "prior"
+    assert isinstance(frames[1], AudioFrame) and frames[1].terminal_id == "current"
+    assert frames[1].audio_bytes == b"onetwotail"
+    assert jobs[1]["coalesced_frame_count"] == 3
+    work_queue.task_done()
+    work_queue.task_done()
+    assert work_queue.unfinished_tasks == 0

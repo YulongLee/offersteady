@@ -109,6 +109,8 @@ interface SegmentSnapshot {
   readonly vadTriggeredAtMs: number;
   readonly speechConfirmedAtMs: number;
   readonly lastMeaningfulSpeechAtMs: number;
+  readonly tailStartedAtMs?: number;
+  readonly adaptiveTailMs?: number;
   readonly endedAtMs: number;
   readonly durationMs: number;
   readonly isFinal: boolean;
@@ -165,6 +167,9 @@ const SYSTEM_SPEECH_CONTINUE_THRESHOLD = 0.0005;
 const INTERIM_INTERVAL_MS = 100;
 const MICROPHONE_SILENCE_FINALIZE_MS = 480;
 const SYSTEM_SILENCE_FINALIZE_MS = 350;
+const MICROPHONE_CLEAR_SILENCE_FINALIZE_MS = 280;
+const SYSTEM_CLEAR_SILENCE_FINALIZE_MS = 220;
+const MIN_TAIL_OBSERVATION_MS = 80;
 const MAX_SEGMENT_DURATION_MS = 30_000;
 const MIN_EMIT_SPEECH_MS = 60;
 const MICROPHONE_PRE_SPEECH_BUFFER_LIMIT = 12;
@@ -532,6 +537,8 @@ export class SpeechSegmenter {
   private vadTriggeredAtMs = 0;
   private speechConfirmedAtMs = 0;
   private lastMeaningfulSpeechAtMs = 0;
+  private tailStartedAtMs = 0;
+  private selectedTailMs = 0;
   private noiseFloor: number;
   private turnPeakRms = 0;
   private sourceGeneration = 0;
@@ -632,6 +639,16 @@ export class SpeechSegmenter {
     );
   }
 
+  private adaptiveSilenceMs(rms: number, continuationThreshold: number): number {
+    const ceiling = this.vadProfile().silenceMs;
+    if (this.config.mode !== "commercial-adaptive") return ceiling;
+    const clearFloor = this.sourceKind === "system"
+      ? SYSTEM_CLEAR_SILENCE_FINALIZE_MS
+      : MICROPHONE_CLEAR_SILENCE_FINALIZE_MS;
+    const ambientBoundary = Math.max(this.noiseFloor * 1.6, continuationThreshold * 0.75);
+    return rms <= ambientBoundary ? clearFloor : ceiling;
+  }
+
   push(payload: Uint8Array, nowMs: number, rms: number): SegmentSnapshot[] {
     const { start: startThreshold, continuation: continueThreshold } = this.thresholds();
     if (this.lifecycle === "idle") {
@@ -661,6 +678,8 @@ export class SpeechSegmenter {
       this.speechConfirmedAtMs = nowMs;
       this.lastSpeechAtMs = nowMs;
       this.lastMeaningfulSpeechAtMs = nowMs;
+      this.tailStartedAtMs = 0;
+      this.selectedTailMs = 0;
       this.turnPeakRms = rms;
       this.lastInterimAtMs = nowMs;
       this.emitted = false;
@@ -702,6 +721,8 @@ export class SpeechSegmenter {
       this.lifecycle = "speaking";
       this.lastSpeechAtMs = nowMs;
       this.lastMeaningfulSpeechAtMs = nowMs;
+      this.tailStartedAtMs = 0;
+      this.selectedTailMs = 0;
       if ((!this.emitted && nowMs - this.startedAtMs >= this.config.minimumSpeechMs) || nowMs - this.lastInterimAtMs >= this.config.interimIntervalMs) {
         this.lastInterimAtMs = nowMs;
         this.emitted = true;
@@ -710,14 +731,25 @@ export class SpeechSegmenter {
       return [];
     }
 
+    if (this.lifecycle !== "tail") this.tailStartedAtMs = nowMs;
     this.lifecycle = "tail";
     this.observeNoise(rms);
     const silenceFinalizeMs = this.config.mode === "legacy-threshold"
       ? (this.sourceKind === "system" ? this.config.systemTailMs : this.config.microphoneTailMs)
-      : this.vadProfile().silenceMs;
+      : this.adaptiveSilenceMs(rms, continueThreshold);
+    this.selectedTailMs = Math.max(this.selectedTailMs, silenceFinalizeMs);
     const releaseStartedAtMs = this.lastMeaningfulSpeechAtMs || this.lastSpeechAtMs;
+    const conservativeTailMs = this.config.mode === "legacy-threshold"
+      ? silenceFinalizeMs
+      : this.vadProfile().silenceMs;
+    const shortTailNeedsObservation = this.selectedTailMs < conservativeTailMs
+      && nowMs - this.lastSpeechAtMs < conservativeTailMs
+      && nowMs - this.tailStartedAtMs < MIN_TAIL_OBSERVATION_MS;
     if (
-      nowMs - this.lastSpeechAtMs < silenceFinalizeMs
+      (
+        nowMs - this.lastSpeechAtMs < this.selectedTailMs
+        || shortTailNeedsObservation
+      )
       && nowMs - releaseStartedAtMs < MAX_MEANINGFUL_SPEECH_RELEASE_MS
     ) return [];
     if (!this.emitted && this.lastSpeechAtMs - this.startedAtMs < this.config.minimumSpeechMs) {
@@ -754,6 +786,8 @@ export class SpeechSegmenter {
       vadTriggeredAtMs: this.vadTriggeredAtMs || this.startedAtMs,
       speechConfirmedAtMs: this.speechConfirmedAtMs || this.startedAtMs,
       lastMeaningfulSpeechAtMs: this.lastMeaningfulSpeechAtMs || this.speechConfirmedAtMs || this.startedAtMs,
+      ...(this.tailStartedAtMs > 0 ? { tailStartedAtMs: this.tailStartedAtMs } : {}),
+      ...(this.selectedTailMs > 0 ? { adaptiveTailMs: this.selectedTailMs } : {}),
       endedAtMs: nowMs,
       durationMs: Math.max(20, nowMs - this.startedAtMs),
       isFinal,
@@ -779,6 +813,8 @@ export class SpeechSegmenter {
     this.vadTriggeredAtMs = 0;
     this.speechConfirmedAtMs = 0;
     this.lastMeaningfulSpeechAtMs = 0;
+    this.tailStartedAtMs = 0;
+    this.selectedTailMs = 0;
     this.turnPeakRms = 0;
     this.quietActivityRms.length = 0;
     this.recentSystemActivityRms.length = 0;
@@ -1094,6 +1130,9 @@ export class DesktopRealtimePublisher {
               sourceReadyMode: this.sourceStartModes.get(input.sourceKind) ?? "opened",
               desktopVadConfirmAtMs: snapshot.speechConfirmedAtMs,
               desktopLastMeaningfulSpeechAtMs: snapshot.lastMeaningfulSpeechAtMs,
+              desktopTailStartedAtMs: snapshot.tailStartedAtMs,
+              desktopAdaptiveTailMs: snapshot.adaptiveTailMs,
+              ...(snapshot.isFinal ? { desktopSpeechEndDetectedAtMs: snapshot.endedAtMs } : {}),
               desktopAudioWorkletOutputAtMs: captureTiming.audioWorkletOutputAtMs,
               desktopRendererReceiveAtMs: captureTiming.rendererReceiveAtMs,
               desktopPcmConversionAtMs: pcmConversionCompleteAtMs,

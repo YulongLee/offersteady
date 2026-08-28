@@ -611,7 +611,7 @@ describe("backend preview adapter", () => {
     ]);
   });
 
-  it("projects terminal admission as committing before provider final", async () => {
+  it("keeps post-commit partial growth visible without reactivating or retracting the draft", async () => {
     window.localStorage.setItem("offersteady.auth.access_token", "access-token");
     window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
     window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
@@ -632,17 +632,74 @@ describe("backend preview adapter", () => {
           eventId: "commit-1", kind: "transcript-committing", createdAtMs: 3,
           payload: { segmentId: "segment-committing", sourceKind: "system", revision: 3, turnState: "committing" },
         }] } });
+        push("update", { type: "update", cursor: 3, events: { sessionId: "session-1", events: [{
+          eventId: "tail-growth", kind: "transcript-updated", createdAtMs: 4,
+          payload: {
+            segmentId: "segment-committing", sourceId: "system", sourceKind: "system", role: "interviewer",
+            revision: 4, text: "请介绍项目的性能优化", isFinal: false, transcriptConfidence: 0.9,
+            startedAtMs: 1, endedAtMs: 3, overlap: false,
+          },
+        }] } });
+        push("update", { type: "update", cursor: 4, events: { sessionId: "session-1", events: [{
+          eventId: "tail-retraction", kind: "transcript-updated", createdAtMs: 5,
+          payload: {
+            segmentId: "segment-committing", sourceId: "system", sourceKind: "system", role: "interviewer",
+            revision: 5, text: "请介绍项目", isFinal: false, transcriptConfidence: 0.9,
+            startedAtMs: 1, endedAtMs: 4, overlap: false,
+          },
+        }] } });
         controller.close();
       },
     });
     const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", vi.fn(async () => new Response(stream, {
       status: 200, headers: { "Content-Type": "text/event-stream" },
     })) as typeof fetch);
-    const updates: Array<{ speaker: { transcripts: readonly { turnState?: string }[] } }> = [];
+    const updates: Array<{ speaker: { transcripts: readonly { turnState?: string; text: string; isFinal: boolean }[] } }> = [];
 
     await adapter.subscribeRealtimeSession("session-1", update => updates.push(update as typeof updates[number]));
 
     expect(updates.at(-1)?.speaker.transcripts[0]?.turnState).toBe("committing");
+    expect(updates.at(-1)?.speaker.transcripts[0]?.text).toBe("请介绍项目的性能优化");
+    expect(updates.at(-1)?.speaker.transcripts[0]?.isFinal).toBe(false);
+  });
+
+  it("accepts an authoritative final correction after a committing draft and rejects a later partial", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const push = (name: string, data: unknown) => controller.enqueue(new TextEncoder().encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`));
+        push("snapshot", {
+          type: "snapshot", cursor: 1,
+          transcripts: { sessionId: "session-1", transcripts: [{
+            segmentId: "segment-final-tail", sourceId: "system", sourceKind: "system", role: "interviewer",
+            revision: 3, text: "较长但不准确的临时识别", transcriptConfidence: 0.82,
+            startedAtMs: 1, endedAtMs: 2, isFinal: false, turnState: "committing", overlap: false,
+          }] },
+          candidates: { sessionId: "session-1", candidates: [] },
+          events: { sessionId: "session-1", events: [] }, runtime: null,
+        });
+        const event = (revision: number, text: string, isFinal: boolean) => ({
+          eventId: `final-tail-${revision}`, kind: "transcript-updated", createdAtMs: revision,
+          payload: {
+            segmentId: "segment-final-tail", sourceId: "system", sourceKind: "system", role: "interviewer",
+            revision, text, isFinal, transcriptConfidence: 0.96, startedAtMs: 1, endedAtMs: revision, overlap: false,
+          },
+        });
+        push("update", { type: "update", cursor: 2, events: { sessionId: "session-1", events: [event(4, "准确终稿", true)] } });
+        push("update", { type: "update", cursor: 3, events: { sessionId: "session-1", events: [event(5, "迟到局部", false)] } });
+        controller.close();
+      },
+    });
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", vi.fn(async () => new Response(stream, {
+      status: 200, headers: { "Content-Type": "text/event-stream" },
+    })) as typeof fetch);
+    const updates: Array<{ speaker: { transcripts: readonly { text: string; isFinal: boolean }[] } }> = [];
+
+    await adapter.subscribeRealtimeSession("session-1", update => updates.push(update as typeof updates[number]));
+
+    expect(updates.at(-1)?.speaker.transcripts[0]).toMatchObject({ text: "准确终稿", isFinal: true });
   });
 
   it("coalesces a synchronous partial burst before updating the visible transcript store", async () => {

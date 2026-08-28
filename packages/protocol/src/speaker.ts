@@ -62,8 +62,12 @@ export interface SpeakerTranscriptSegment {
     readonly textLength?: number;
     readonly captureToIngestMs?: number;
     readonly queueWaitMs?: number;
+    readonly terminalQueueWaitMs?: number;
     readonly asrTtftMs?: number;
     readonly finalTranscriptMs?: number;
+    readonly commitToLastPartialMs?: number;
+    readonly commitToFinalMs?: number;
+    readonly finalAddedCharacterCount?: number;
     readonly backendPushMs?: number;
     readonly frontendRenderMs?: number;
   };

@@ -162,6 +162,7 @@ class Settings(BaseSettings):
     realtime_asr_frame_timeout_seconds: float = 12.0
     realtime_asr_partial_timeout_seconds: float = 0.03
     realtime_asr_finalize_timeout_seconds: float = 2.0
+    realtime_asr_commit_silence_ms: int = 0
     realtime_asr_retry_max_attempts: int = 1
     realtime_asr_persistent_sessions_enabled: bool = True
     realtime_asr_nonblocking_partials_enabled: bool = True
@@ -173,6 +174,9 @@ class Settings(BaseSettings):
     realtime_asr_points_per_minute: int = 5
     realtime_asr_provider: str = "qwen-realtime-asr-compatible"
     realtime_asr_model: str = "qwen-realtime"
+    realtime_asr_protocol: str = "qwen3-realtime"
+    realtime_asr_inference_ws_url: str = "wss://dashscope.aliyuncs.com/api-ws/v1/inference"
+    realtime_asr_max_sentence_silence_ms: int = 400
     realtime_question_auto_confirm_threshold: float = 0.85
     runtime_performance_telemetry_enabled: bool = True
     runtime_performance_telemetry_ttl_seconds: int = 7 * 24 * 60 * 60

@@ -181,6 +181,24 @@ describe("speech segmenter", () => {
     expect((terminal[0]?.endedAtMs ?? 0) - 200).toBeLessThanOrEqual(480);
   });
 
+  it.each([
+    ["microphone", 280],
+    ["system", 220],
+  ] as const)("uses the short adaptive %s tail only for clear ambient silence", (sourceKind, expectedTailMs) => {
+    const segmenter = new SpeechSegmenter(sourceKind);
+    const chunk = new Uint8Array([1, 2, 3]);
+
+    segmenter.push(chunk, 0, 0.02);
+    const partial = segmenter.push(chunk, 100, 0.02)[0];
+    expect(partial?.isFinal).toBe(false);
+    expect(segmenter.push(chunk, 140, 0.00005)).toEqual([]);
+    expect(segmenter.push(chunk, 100 + expectedTailMs - 1, 0.00005)).toEqual([]);
+    const terminal = segmenter.push(chunk, 100 + expectedTailMs, 0.00005)[0];
+
+    expect(terminal).toMatchObject({ isFinal: true, adaptiveTailMs: expectedTailMs, tailStartedAtMs: 140 });
+    expect(terminal?.lastMeaningfulSpeechAtMs).toBe(100);
+  });
+
   it("keeps quiet microphone speech active when it remains strong relative to its turn peak", () => {
     const segmenter = new SpeechSegmenter("microphone");
     const chunk = new Uint8Array([1, 2]);

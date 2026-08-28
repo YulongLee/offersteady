@@ -654,7 +654,12 @@ class RealtimeAsrVerifier(BaseVerifier):
     def verify(self, context: VerificationContext) -> VerificationItemResult:
         recorder = VerificationItemRecorder(context=context, item_id=self.item_id, title=self.title, provider_name=self.provider_name)
         settings = context.settings
-        ws_url = settings.realtime_asr_ws_url or settings.realtime_asr_base_url or "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
+        protocol = (settings.realtime_asr_protocol or "qwen3-realtime").strip().lower()
+        ws_url = (
+            settings.realtime_asr_inference_ws_url
+            if protocol == "qwen-audio-task"
+            else settings.realtime_asr_ws_url or settings.realtime_asr_base_url or "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
+        )
         self._require(ws_url and settings.realtime_asr_api_key, code="realtime_asr_config_missing", message="Realtime ASR websocket URL or API key is not configured.")
         try:
             import websocket
@@ -663,6 +668,13 @@ class RealtimeAsrVerifier(BaseVerifier):
 
         def websocket_roundtrip() -> dict[str, Any]:
             model_name = settings.realtime_asr_model
+            if protocol == "qwen-audio-task":
+                return self._task_protocol_roundtrip(
+                    websocket=websocket,
+                    settings=settings,
+                    ws_url=ws_url,
+                    model_name=model_name,
+                )
             connect_url = ws_url
             if "model=" not in connect_url:
                 separator = "&" if "?" in connect_url else "?"
@@ -749,6 +761,98 @@ class RealtimeAsrVerifier(BaseVerifier):
 
         recorder.run_step("websocket_roundtrip", websocket_roundtrip, success_summary="Connected to the realtime ASR websocket and received a transcript event.")
         return recorder.finalize(status="passed", attempts=1, summary="Realtime ASR verification passed.")
+
+    def _task_protocol_roundtrip(self, *, websocket, settings: Settings, ws_url: str, model_name: str) -> dict[str, Any]:  # noqa: ANN001
+        task_id = uuid4().hex
+        websocket_client = websocket.create_connection(
+            ws_url,
+            header=[f"Authorization: Bearer {settings.realtime_asr_api_key}"],
+            timeout=settings.integration_http_timeout_seconds,
+        )
+        transcript_text = ""
+        transcript_events = 0
+        task_started = False
+        task_finished = False
+        audio_source = "synthetic-tone"
+        try:
+            websocket_client.send(json.dumps({
+                "header": {"action": "run-task", "task_id": task_id, "streaming": "duplex"},
+                "payload": {
+                    "task_group": "audio",
+                    "task": "asr",
+                    "function": "recognition",
+                    "model": model_name,
+                    "parameters": {
+                        "format": "pcm",
+                        "sample_rate": 16000,
+                        "language_hints": ["zh", "en"],
+                        "semantic_punctuation_enabled": False,
+                        "max_sentence_silence": max(
+                            200, min(6000, int(settings.realtime_asr_max_sentence_silence_ms))
+                        ),
+                        "heartbeat": True,
+                    },
+                    "input": {},
+                },
+            }))
+            first_event = json.loads(websocket_client.recv())
+            first_header = first_event.get("header") or {}
+            if first_header.get("event") == "task-failed":
+                raise VerificationError(
+                    str(first_header.get("error_code") or "realtime_asr_task_failed"),
+                    str(first_header.get("error_message") or "Realtime ASR task failed."),
+                )
+            if first_header.get("event") != "task-started":
+                raise VerificationError(
+                    "realtime_asr_task_not_started",
+                    "Realtime ASR task protocol did not acknowledge run-task.",
+                )
+            task_started = True
+            audio_chunks, audio_source = self._audio_chunks_for_verification()
+            for chunk in audio_chunks:
+                websocket_client.send(chunk, opcode=websocket.ABNF.OPCODE_BINARY)
+                time_module.sleep(0.1)
+            websocket_client.send(json.dumps({
+                "header": {"action": "finish-task", "task_id": task_id, "streaming": "duplex"},
+                "payload": {"input": {}},
+            }))
+            websocket_client.settimeout(max(10, settings.integration_http_timeout_seconds))
+            for _ in range(80):
+                message = json.loads(websocket_client.recv())
+                header = message.get("header") or {}
+                event = header.get("event")
+                if event == "task-failed":
+                    raise VerificationError(
+                        str(header.get("error_code") or "realtime_asr_task_failed"),
+                        str(header.get("error_message") or "Realtime ASR task failed."),
+                    )
+                if event == "result-generated":
+                    sentence = (((message.get("payload") or {}).get("output") or {}).get("sentence") or {})
+                    text = sentence.get("text")
+                    if isinstance(text, str) and text.strip():
+                        transcript_text = text.strip()
+                        transcript_events += 1
+                if event == "task-finished":
+                    task_finished = True
+                    break
+        finally:
+            try:
+                websocket_client.close()
+            except Exception:
+                pass
+        if not task_finished:
+            raise VerificationError("realtime_asr_task_not_finished", "Realtime ASR task did not finish.")
+        if not transcript_text:
+            raise VerificationError("realtime_asr_transcript_missing", "Realtime ASR task did not return transcript text.")
+        return {
+            "model": model_name,
+            "protocol": "qwen-audio-task",
+            "taskStarted": task_started,
+            "taskFinished": task_finished,
+            "transcriptEvents": transcript_events,
+            "transcriptCharacters": len(transcript_text),
+            "audioSource": audio_source,
+        }
 
     def _sample_pcm16_audio(self, *, duration_samples: int = 1600) -> bytes:
         sample_rate = 16000

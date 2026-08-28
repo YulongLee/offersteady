@@ -82,6 +82,7 @@ from .services.realtime_speech_repository import InMemoryRealtimeSpeechRepositor
 from .services.redis_realtime_speech_repository import RedisRealtimeSpeechRepository
 from .services.redis_live_task_repositories import RedisChatRepository, RedisScreenshotAnswerRepository
 from .services.dashscope_realtime_asr_gateway import DashScopeRealtimeAsrGateway
+from .services.dashscope_task_asr_gateway import DashScopeTaskAsrGateway
 from .services.realtime_speech_service import RealtimeSpeechService, SyntheticRealtimeAsrGateway
 
 import psycopg
@@ -466,8 +467,17 @@ def realtime_asr_gateway() -> RealtimeAsrGatewayPort:
         "OFFERSTEADY_REALTIME_ASR_API_KEY": settings.realtime_asr_api_key,
     })
     if settings.realtime_asr_api_key and (not os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("OFFERSTEADY_TEST_USE_REMOTE_REALTIME_ASR") == "1"):
-        return DashScopeRealtimeAsrGateway(settings, logger())
+        return _configured_realtime_asr_gateway(settings, logger())
     return SyntheticRealtimeAsrGateway(settings)
+
+
+def _configured_realtime_asr_gateway(settings: Settings, gateway_logger) -> RealtimeAsrGatewayPort:  # noqa: ANN001
+    protocol = (settings.realtime_asr_protocol or "qwen3-realtime").strip().lower()
+    if protocol == "qwen-audio-task":
+        return DashScopeTaskAsrGateway(settings, gateway_logger)
+    if protocol == "qwen3-realtime":
+        return DashScopeRealtimeAsrGateway(settings, gateway_logger)
+    raise RuntimeError(f"Unsupported realtime ASR protocol: {protocol}")
 
 
 @lru_cache(maxsize=1)
