@@ -403,6 +403,170 @@ def test_runtime_diagnostic_failure_does_not_close_transcript_sse() -> None:
     assert wait_calls == 1
 
 
+def test_runtime_refresh_never_blocks_transcript_sse_delivery() -> None:
+    class RequestStub:
+        app = SimpleNamespace(state=SimpleNamespace())
+
+        async def is_disconnected(self) -> bool:
+            return False
+
+    runtime_started = threading.Event()
+    release_runtime = threading.Event()
+    partial = RealtimeEvent(
+        event_id="partial-fast-path",
+        session_id="session-runtime-background",
+        owner_user_id="runtime-background-owner",
+        kind="transcript-updated",
+        payload={
+            "segmentId": "segment-runtime-background",
+            "sourceId": "system-loopback",
+            "sourceKind": "system",
+            "role": "interviewer",
+            "revision": 1,
+            "text": "partial must not wait for runtime",
+            "isFinal": False,
+            "transcriptConfidence": 0.9,
+            "startedAtMs": 1,
+            "endedAtMs": 2,
+            "overlap": False,
+        },
+        created_at_ms=2,
+    )
+    device_status = RealtimeEvent(
+        event_id="device-status-slow-runtime",
+        session_id="session-runtime-background",
+        owner_user_id="runtime-background-owner",
+        kind="device-status",
+        payload={"status": "connected"},
+        created_at_ms=3,
+    )
+
+    class ServiceStub:
+        settings = SimpleNamespace(realtime_event_block_ms=100)
+
+        def require_active_realtime_session(self, **_kwargs) -> None:
+            return None
+
+        def list_session_events_after(self, **_kwargs):
+            return 1, [], True
+
+        def get_stream_bootstrap_state(self, **_kwargs):
+            return (
+                RealtimeTranscriptListResponse(sessionId="session-runtime-background", transcripts=[]),
+                RealtimeQuestionCandidateListResponse(sessionId="session-runtime-background", candidates=[]),
+                RealtimeEventListResponse(sessionId="session-runtime-background", events=[]),
+            )
+
+        def get_runtime(self, **_kwargs):
+            runtime_started.set()
+            release_runtime.wait(1)
+            return SimpleNamespace(model_dump=lambda **_kwargs: {"status": "connected"})
+
+        def wait_for_session_events_after(self, **_kwargs):
+            return 3, [partial, device_status], True
+
+        def observe_sse_delivery(self, events, *, sent_at_ms):
+            del sent_at_ms
+            return events
+
+        def event_response(self, event):
+            return RealtimeEventResponse(
+                eventId=event.event_id,
+                kind=event.kind,
+                payload=event.payload,
+                createdAtMs=event.created_at_ms,
+            )
+
+    async def scenario() -> tuple[str, float, bool]:
+        response = await stream_session_runtime(
+            "session-runtime-background",
+            RequestStub(),
+            user_id="runtime-background-owner",
+            cursor=0,
+            page_instance_id=None,
+            lease_generation=None,
+            auth_context=None,
+            service=ServiceStub(),
+        )
+        iterator = response.body_iterator
+        await iterator.__anext__()
+        started = time.perf_counter()
+        update = await iterator.__anext__()
+        elapsed = time.perf_counter() - started
+        started_in_background = runtime_started.wait(0.2)
+        release_runtime.set()
+        await iterator.aclose()
+        return str(update), elapsed, started_in_background
+
+    update, elapsed, started_in_background = asyncio.run(scenario())
+
+    assert 'partial-fast-path' in update
+    assert 'device-status-slow-runtime' in update
+    assert '"runtime"' not in update
+    assert elapsed < 0.1
+    assert started_in_background is True
+
+
+def test_background_runtime_refresh_is_delivered_as_separate_update() -> None:
+    class RequestStub:
+        app = SimpleNamespace(state=SimpleNamespace())
+
+        async def is_disconnected(self) -> bool:
+            return False
+
+    runtime_completed = threading.Event()
+
+    class ServiceStub:
+        settings = SimpleNamespace(realtime_event_block_ms=100)
+        runtime_calls = 0
+
+        def require_active_realtime_session(self, **_kwargs) -> None:
+            return None
+
+        def list_session_events_after(self, **_kwargs):
+            return 1, [], True
+
+        def get_stream_bootstrap_state(self, **_kwargs):
+            return (
+                RealtimeTranscriptListResponse(sessionId="session-runtime-update", transcripts=[]),
+                RealtimeQuestionCandidateListResponse(sessionId="session-runtime-update", candidates=[]),
+                RealtimeEventListResponse(sessionId="session-runtime-update", events=[]),
+            )
+
+        def get_runtime(self, **_kwargs):
+            self.runtime_calls += 1
+            runtime_completed.set()
+            return SimpleNamespace(model_dump=lambda **_kwargs: {"status": "connected"})
+
+        def wait_for_session_events_after(self, **_kwargs):
+            runtime_completed.wait(0.2)
+            return 1, [], True
+
+    async def scenario() -> tuple[str, int]:
+        service = ServiceStub()
+        response = await stream_session_runtime(
+            "session-runtime-update",
+            RequestStub(),
+            user_id="runtime-update-owner",
+            cursor=0,
+            page_instance_id=None,
+            lease_generation=None,
+            auth_context=None,
+            service=service,
+        )
+        iterator = response.body_iterator
+        await iterator.__anext__()
+        runtime_update = await iterator.__anext__()
+        await iterator.aclose()
+        return str(runtime_update), service.runtime_calls
+
+    runtime_update, runtime_calls = asyncio.run(scenario())
+
+    assert '"events":{"sessionId":"session-runtime-update","events":[]}' in runtime_update
+    assert '"runtime":{"status":"connected"}' in runtime_update
+    assert runtime_calls == 1
+
+
 def test_sse_batch_preserves_ordered_transcript_revisions() -> None:
     def event(event_id: str, kind: str, *, segment_id: str | None = None, revision: int = 1, is_final: bool = False) -> RealtimeEvent:
         payload: dict[str, object] = {"revision": revision, "isFinal": is_final}

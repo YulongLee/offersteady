@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 from collections import deque
+from contextlib import suppress
 from time import time
 
 from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisconnect
@@ -528,15 +529,11 @@ async def stream_session_runtime(
         last_cursor = cursor
         initial = True
         idle_polls = 0
-        cached_runtime = None
-        cached_transcripts = None
-        cached_candidates = None
-        runtime_refreshed_at = 0.0
+        runtime_refresh_task: asyncio.Task | None = None
+        runtime_refresh_pending = False
         session_validated_at = asyncio.get_running_loop().time()
 
         async def best_effort_runtime():
-            nonlocal runtime_refreshed_at
-            runtime_refreshed_at = asyncio.get_running_loop().time()
             try:
                 return await asyncio.to_thread(
                     service.get_runtime,
@@ -553,107 +550,120 @@ async def stream_session_runtime(
                 )
                 return None
 
-        while True:
-            if await request.is_disconnected():
-                break
-            loop_now = asyncio.get_running_loop().time()
-            if should_validate_realtime_session(last_validated_at=session_validated_at, now=loop_now):
-                try:
-                    await asyncio.to_thread(
-                        service.require_active_realtime_session,
+        def request_runtime_refresh() -> None:
+            nonlocal runtime_refresh_task, runtime_refresh_pending
+            if runtime_refresh_task is None:
+                runtime_refresh_task = asyncio.create_task(best_effort_runtime())
+                runtime_refresh_pending = False
+            else:
+                runtime_refresh_pending = True
+
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+
+                if runtime_refresh_task is not None and runtime_refresh_task.done():
+                    runtime = runtime_refresh_task.result()
+                    runtime_refresh_task = None
+                    if runtime_refresh_pending:
+                        request_runtime_refresh()
+                    if runtime is not None:
+                        yield _sse_frame("update", {
+                            "type": "update",
+                            "events": {"sessionId": session_id, "events": []},
+                            "runtime": runtime.model_dump(by_alias=True),
+                            "ownerUserId": resolved_user_id,
+                            "cursor": last_cursor,
+                        }, cursor=last_cursor)
+
+                loop_now = asyncio.get_running_loop().time()
+                if should_validate_realtime_session(last_validated_at=session_validated_at, now=loop_now):
+                    try:
+                        await asyncio.to_thread(
+                            service.require_active_realtime_session,
+                            user_id=resolved_user_id,
+                            session_id=session_id,
+                            page_instance_id=page_instance_id,
+                            lease_generation=lease_generation,
+                        )
+                        session_validated_at = loop_now
+                    except DomainRequestError:
+                        yield _sse_frame("revoked", {
+                            "type": "revoked",
+                            "sessionId": session_id,
+                            "reason": "session-replaced",
+                        })
+                        break
+                event_reader = service.list_session_events_after if initial else service.wait_for_session_events_after
+                reader_kwargs = {
+                    "user_id": resolved_user_id,
+                    "session_id": session_id,
+                    "cursor": last_cursor,
+                }
+                if not initial:
+                    reader_kwargs["timeout_ms"] = max(100, service.settings.realtime_event_block_ms)
+                current_cursor, incremental_events, resumable = await run_realtime_event_wait(
+                    request,
+                    event_reader,
+                    **reader_kwargs,
+                )
+                if not initial and current_cursor <= last_cursor:
+                    idle_polls += 1
+                    keepalive_polls = max(1, 15_000 // max(100, service.settings.realtime_event_block_ms))
+                    if idle_polls >= keepalive_polls:
+                        yield ": keepalive\n\n"
+                        idle_polls = 0
+                    continue
+                idle_polls = 0
+                payload_type = "snapshot" if initial or not resumable else "update"
+                if payload_type == "snapshot":
+                    # Deliver visible transcript state before scheduling the
+                    # more expensive runtime aggregation. Runtime diagnostics
+                    # must never block this stream's transcript event loop.
+                    transcripts, candidates, snapshot_events = await asyncio.to_thread(
+                        service.get_stream_bootstrap_state,
                         user_id=resolved_user_id,
                         session_id=session_id,
-                        page_instance_id=page_instance_id,
-                        lease_generation=lease_generation,
                     )
-                    session_validated_at = loop_now
-                except DomainRequestError:
-                    yield _sse_frame("revoked", {
-                        "type": "revoked",
-                        "sessionId": session_id,
-                        "reason": "session-replaced",
-                    })
-                    break
-            event_reader = service.list_session_events_after if initial else service.wait_for_session_events_after
-            reader_kwargs = {
-                "user_id": resolved_user_id,
-                "session_id": session_id,
-                "cursor": last_cursor,
-            }
-            if not initial:
-                reader_kwargs["timeout_ms"] = max(100, service.settings.realtime_event_block_ms)
-            current_cursor, incremental_events, resumable = await run_realtime_event_wait(
-                request,
-                event_reader,
-                **reader_kwargs,
-            )
-            if not initial and current_cursor <= last_cursor:
-                idle_polls += 1
-                keepalive_polls = max(1, 15_000 // max(100, service.settings.realtime_event_block_ms))
-                if idle_polls >= keepalive_polls:
-                    yield ": keepalive\n\n"
-                    idle_polls = 0
-                continue
-            idle_polls = 0
-            payload_type = "snapshot" if initial or not resumable else "update"
-            if payload_type == "snapshot":
-                # Deliver visible transcript state before the more expensive
-                # runtime aggregation. This keeps first SSE paint independent
-                # from provider/source diagnostics while preserving one cursor.
-                transcripts, candidates, snapshot_events = await asyncio.to_thread(
-                    service.get_stream_bootstrap_state,
-                    user_id=resolved_user_id,
-                    session_id=session_id,
-                )
-                cached_transcripts = transcripts
-                cached_candidates = candidates
-                payload = {
-                    "type": payload_type,
-                    "transcripts": transcripts.model_dump(by_alias=True),
-                    "candidates": candidates.model_dump(by_alias=True),
-                    "events": snapshot_events.model_dump(by_alias=True),
-                    "runtime": None,
-                    "ownerUserId": resolved_user_id,
-                    "cursor": current_cursor,
-                }
-            else:
-                # Normal updates are event deltas. Full state is reserved for
-                # initial entry and expired-cursor recovery.
-                incremental_events = coalesce_transcript_revisions(incremental_events)
-                sse_sent_at_ms = int(time() * 1000)
-                incremental_events = service.observe_sse_delivery(incremental_events, sent_at_ms=sse_sent_at_ms)
-                payload = {
-                    "type": payload_type,
-                    "events": {
-                        "sessionId": session_id,
-                        "events": [service.event_response(event).model_dump(by_alias=True) for event in incremental_events],
-                    },
-                    "ownerUserId": resolved_user_id,
-                    "cursor": current_cursor,
-                }
+                    payload = {
+                        "type": payload_type,
+                        "transcripts": transcripts.model_dump(by_alias=True),
+                        "candidates": candidates.model_dump(by_alias=True),
+                        "events": snapshot_events.model_dump(by_alias=True),
+                        "runtime": None,
+                        "ownerUserId": resolved_user_id,
+                        "cursor": current_cursor,
+                    }
+                else:
+                    # Normal updates are event deltas. Full state is reserved
+                    # for initial entry and expired-cursor recovery.
+                    incremental_events = coalesce_transcript_revisions(incremental_events)
+                    sse_sent_at_ms = int(time() * 1000)
+                    incremental_events = service.observe_sse_delivery(incremental_events, sent_at_ms=sse_sent_at_ms)
+                    payload = {
+                        "type": payload_type,
+                        "events": {
+                            "sessionId": session_id,
+                            "events": [service.event_response(event).model_dump(by_alias=True) for event in incremental_events],
+                        },
+                        "ownerUserId": resolved_user_id,
+                        "cursor": current_cursor,
+                    }
+                yield _sse_frame(payload_type, payload, cursor=current_cursor)
+                last_cursor = current_cursor
+                initial = False
                 refresh_plan = session_stream_refresh_plan(
                     payload_type=payload_type,
                     event_kinds={event.kind for event in incremental_events},
                 )
                 if refresh_plan["runtime"]:
-                    runtime = await best_effort_runtime()
-                    if runtime is not None:
-                        cached_runtime = runtime
-                        payload["runtime"] = runtime.model_dump(by_alias=True)
-            yield _sse_frame(payload_type, payload, cursor=current_cursor)
-            last_cursor = current_cursor
-            initial = False
-            if payload_type == "snapshot":
-                runtime = await best_effort_runtime()
-                if runtime is not None:
-                    cached_runtime = runtime
-                    yield _sse_frame("update", {
-                        "type": "update",
-                        "events": {"sessionId": session_id, "events": []},
-                        "runtime": runtime.model_dump(by_alias=True),
-                        "ownerUserId": resolved_user_id,
-                        "cursor": current_cursor,
-                    }, cursor=current_cursor)
+                    request_runtime_refresh()
+        finally:
+            if runtime_refresh_task is not None:
+                runtime_refresh_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await runtime_refresh_task
 
     return StreamingResponse(
         event_stream(),

@@ -63,6 +63,8 @@ provider event revision 与业务已发布 revision 必须使用两个独立游�
 
 网页 SSE 的高频字幕快照不得在每个 partial 上重新构建完整 runtime 诊断。runtime 诊断按最多每两秒刷新并在中间字幕事件中复用，transcript/candidate/event 仍按活动 cursor 更新，从而避免诊断聚合与 ASR worker 争用 Redis 和运行态锁。
 
+runtime 诊断刷新 MUST 作为单飞后台任务执行。包含 `device-status`、连接状态或降级状态的事件批次仍须先发送原始事件，不能在 `yield SSE` 前等待完整 runtime 聚合；后台刷新完成后通过独立的 runtime-only update 补发。刷新期间再次收到诊断刷新请求时只记录一次待刷新状态，不并发创建重复聚合任务。
+
 Redis 活动 cursor 必须随每次 transcript revision 独立持久化，不能只依赖 operational event stream。否则字幕已经写入但 SSE 无法感知，只能退化为定时轮询。网页在 SSE 尚未收到首个 snapshot 或连接中断时使用一秒兜底同步，流恢复后立即停止兜底请求。
 
 这样做的收益：

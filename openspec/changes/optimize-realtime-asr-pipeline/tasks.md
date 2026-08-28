@@ -40,6 +40,7 @@
 - [x] 4.9 Exit invalid live routes immediately and move synchronous Redis SSE reads off the FastAPI event loop.
 - [x] 4.10 Reuse runtime diagnostics for two seconds during high-frequency SSE partial updates.
 - [x] 4.11 Preserve ordered healthy transcript revisions through Redis/SSE and the Browser state adapter without synthetic reveal animation.
+- [x] 4.12 Move runtime diagnostic aggregation off the transcript SSE hot path and deliver it as a separate single-flight update.
 
 ## 5. Verification, Evals, and Rollout
 
