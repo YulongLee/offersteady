@@ -200,7 +200,10 @@ class RealtimeSpeechService:
         self._trace_records: dict[str, dict[str, object]] = {}
         self._trace_order: deque[str] = deque(maxlen=4096)
         self._queue_wait_samples: dict[tuple[str, RealtimeSourceKind], deque[int]] = {}
-        self._provider_partial_publish_lock = threading.Lock()
+        # Provider receive pumps run independently per source/session. Striped
+        # locks preserve monotonic publication for one source without making an
+        # unrelated interview wait behind its repository/SSE hot path.
+        self._provider_partial_publish_locks = tuple(threading.Lock() for _ in range(32))
         self._prewarm_metrics_lock = threading.Lock()
         self._prewarm_metrics: dict[str, dict[str, int]] = {
             source_kind: {"scheduled": 0, "ready": 0, "failed": 0, "timedOut": 0, "latestDurationMs": 0, "maxDurationMs": 0}
@@ -486,7 +489,10 @@ class RealtimeSpeechService:
             if frame.trace_id and result.provider_revision is not None
             else frame.trace_id
         )
-        with self._provider_partial_publish_lock:
+        publication_lock = self._provider_partial_publish_locks[
+            hash((frame.session_id, frame.source_kind)) % len(self._provider_partial_publish_locks)
+        ]
+        with publication_lock:
             suppression_reason = self._suppression_reason(result.text, frame=frame)
             if suppression_reason is None:
                 suppression_reason = self._duplicate_nearby_suppression_reason(

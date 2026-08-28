@@ -130,6 +130,44 @@ describe("backend preview adapter", () => {
     expect(result.speaker.runtimeNotice?.message).toContain("电脑输出尚未就绪");
   });
 
+  it("keeps reported live capture active when runtime readiness is preparing", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const snapshot = {
+      sessionId: "session-1",
+      ownerUserId: "user-1",
+      cursor: 1,
+      resumable: true,
+      transcripts: { sessionId: "session-1", transcripts: [] },
+      candidates: { sessionId: "session-1", candidates: [] },
+      events: { sessionId: "session-1", events: [] },
+      runtime: {
+        sessionId: "session-1",
+        sessionStatus: "live",
+        stage: "live",
+        backendReachable: true,
+        deviceRegistered: true,
+        machineCodeBound: true,
+        sessionLive: true,
+        captureState: "capturing",
+        readinessState: "preparing",
+        sourceReadiness: { microphone: "ready", system: "ready" },
+        transcriptCount: 0,
+        questionCandidateCount: 0,
+        sourceHealth: [],
+      },
+    };
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => new Response(JSON.stringify(envelope(
+      String(input).includes("/delivery-metrics") ? { accepted: true } : snapshot,
+    )), { status: 200, headers: { "Content-Type": "application/json" } }));
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+
+    const result = await adapter.loadRealtimeSession("session-1", undefined, { pageInstanceId: "page-1", leaseGeneration: 1 });
+
+    expect(result.captureState).toBe("capturing");
+  });
+
   it("loads app state from the backend web state API", async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify(envelope(syntheticState)), {
       status: 200,

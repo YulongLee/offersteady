@@ -775,9 +775,7 @@ const mapRealtimeState = (
   const reportedCaptureState = toCaptureState(runtime?.captureState)
     ?? toCaptureState(latestDeviceStatus?.payload.captureState)
     ?? (runtime?.sessionLive && runtime.machineCodeBound ? "capturing" as const : undefined);
-  const captureState = reportedCaptureState === "capturing" && runtime?.readinessState === "preparing"
-    ? "reconnecting" as const
-    : reportedCaptureState === "capturing" && runtime?.readinessState === "degraded"
+  const captureState = reportedCaptureState === "capturing" && runtime?.readinessState === "degraded"
     ? "error" as const
     : reportedCaptureState;
   const meaningfulTranscripts = transcripts.transcripts.filter(segment => segment.text.replace(/[，。！？、；：,.!?;:~～…·\s]+/g, "").trim());

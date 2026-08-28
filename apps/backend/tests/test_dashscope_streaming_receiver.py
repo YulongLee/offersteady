@@ -86,6 +86,27 @@ class _PartialAfterTwoAppendsFakeWebSocket(_StreamingFakeWebSocket):
             ).start()
 
 
+class _RevisionPerAppendFakeWebSocket(_StreamingFakeWebSocket):
+    def __init__(self) -> None:
+        super().__init__()
+        self.append_count = 0
+
+    def send(self, payload: str) -> None:
+        message = json.loads(payload)
+        self.sent.append(message)
+        if message["type"] != "input_audio_buffer.append":
+            return
+        self.append_count += 1
+        revision = self.append_count
+        threading.Timer(
+            0.005,
+            lambda: self.events.put({
+                "type": "conversation.item.input_audio_transcription.text",
+                "text": f"持续流式识别第{revision}版",
+            }),
+        ).start()
+
+
 def _frame(*, revision: int, is_final: bool, audio: bytes) -> AudioFrame:
     return AudioFrame(
         publisher_id="publisher-stream",
@@ -197,6 +218,45 @@ def test_gateway_preserves_first_append_timestamp_until_first_partial(monkeypatc
     partial = delivered_partials[0]
     assert partial.first_audio_appended_at_ms == first.audio_appended_at_ms
     assert partial.audio_appended_at_ms == second.audio_appended_at_ms
+    gateway._close_source_session("session-stream:microphone")
+
+
+def test_gateway_delivers_each_unseen_provider_revision_before_commit(monkeypatch) -> None:
+    socket = _RevisionPerAppendFakeWebSocket()
+    monkeypatch.setattr(
+        "app.services.dashscope_realtime_asr_gateway.connect",
+        lambda *args, **kwargs: socket,
+    )
+    gateway = DashScopeRealtimeAsrGateway(
+        Settings(
+            realtime_asr_api_key="test-key",
+            realtime_asr_nonblocking_partials_enabled=True,
+        ),
+        logging.getLogger("test-continuous-partial-revisions"),
+    )
+    delivered_partials: list[object] = []
+    delivered = threading.Event()
+
+    def observe(_frame, result) -> None:  # noqa: ANN001
+        delivered_partials.append(result)
+        if len(delivered_partials) == 2:
+            delivered.set()
+
+    gateway.set_partial_listener(observe)
+    gateway.transcribe(frame=_frame(revision=1, is_final=False, audio=b"first"), attempt=0)
+    time.sleep(0.02)
+    gateway.transcribe(frame=_frame(revision=2, is_final=False, audio=b"second"), attempt=0)
+
+    assert delivered.wait(timeout=0.2)
+    assert [item.text for item in delivered_partials] == [
+        "持续流式识别第1版",
+        "持续流式识别第2版",
+    ]
+    assert [item.provider_revision for item in delivered_partials] == sorted(
+        item.provider_revision for item in delivered_partials
+    )
+    assert all(item.completed_at_ms is None for item in delivered_partials)
+    assert not any(message["type"] == "input_audio_buffer.commit" for message in socket.sent)
     gateway._close_source_session("session-stream:microphone")
 
 

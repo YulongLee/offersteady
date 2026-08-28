@@ -180,6 +180,10 @@ const MICROPHONE_QUIET_ACTIVITY_FLOOR = 0.0012;
 const MICROPHONE_QUIET_ACTIVITY_RANGE = 0.00035;
 const MICROPHONE_QUIET_ACTIVITY_RATIO = 1.3;
 const MICROPHONE_QUIET_ACTIVITY_SAMPLES = 6;
+const SYSTEM_MEANINGFUL_ACTIVITY_SAMPLES = 3;
+const SYSTEM_MEANINGFUL_ACTIVITY_RANGE = 0.00018;
+const SYSTEM_MEANINGFUL_ACTIVITY_RATIO = 1.18;
+const SYSTEM_HIGH_CONFIDENCE_FLOOR = 0.0025;
 
 interface SourceVadProfile {
   readonly startFloor: number;
@@ -532,6 +536,7 @@ export class SpeechSegmenter {
   private turnPeakRms = 0;
   private sourceGeneration = 0;
   private readonly quietActivityRms: number[] = [];
+  private readonly recentSystemActivityRms: number[] = [];
   private readonly config: SpeechEndpointingConfig;
 
   constructor(
@@ -609,6 +614,24 @@ export class SpeechSegmenter {
     return maximum - minimum >= requiredRange && maximum / Math.max(minimum, 0.000001) >= requiredRatio;
   }
 
+  private observesMeaningfulSystemActivity(rms: number, startThreshold: number): boolean {
+    if (this.sourceKind !== "system" || this.config.mode === "legacy-threshold") return true;
+    this.recentSystemActivityRms.push(rms);
+    while (this.recentSystemActivityRms.length > SYSTEM_MEANINGFUL_ACTIVITY_SAMPLES) {
+      this.recentSystemActivityRms.shift();
+    }
+    const highConfidenceFloor = Math.max(SYSTEM_HIGH_CONFIDENCE_FLOOR, startThreshold * 1.8);
+    if (rms >= highConfidenceFloor) return true;
+    if (this.recentSystemActivityRms.length < SYSTEM_MEANINGFUL_ACTIVITY_SAMPLES) return false;
+    const minimum = Math.min(...this.recentSystemActivityRms);
+    const maximum = Math.max(...this.recentSystemActivityRms);
+    const requiredRange = Math.max(SYSTEM_MEANINGFUL_ACTIVITY_RANGE, this.noiseFloor * 0.8);
+    return (
+      maximum - minimum >= requiredRange
+      && maximum / Math.max(minimum, 0.000001) >= SYSTEM_MEANINGFUL_ACTIVITY_RATIO
+    );
+  }
+
   push(payload: Uint8Array, nowMs: number, rms: number): SegmentSnapshot[] {
     const { start: startThreshold, continuation: continueThreshold } = this.thresholds();
     if (this.lifecycle === "idle") {
@@ -662,7 +685,8 @@ export class SpeechSegmenter {
     const resumeThreshold = this.lifecycle === "tail"
       ? Math.max(startThreshold, peakReleaseThreshold)
       : Math.max(continueThreshold, peakReleaseThreshold);
-    const speaking = rms >= resumeThreshold;
+    const aboveContinuationThreshold = rms >= resumeThreshold;
+    const speaking = aboveContinuationThreshold && this.observesMeaningfulSystemActivity(rms, startThreshold);
     if (payload.byteLength > 0) this.unsentChunks.push(payload);
     const maximumTurnMs = this.config.mode === "legacy-threshold"
       ? MAX_SEGMENT_DURATION_MS
@@ -757,6 +781,7 @@ export class SpeechSegmenter {
     this.lastMeaningfulSpeechAtMs = 0;
     this.turnPeakRms = 0;
     this.quietActivityRms.length = 0;
+    this.recentSystemActivityRms.length = 0;
   }
 }
 

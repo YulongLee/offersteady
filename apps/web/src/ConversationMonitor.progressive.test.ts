@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { nextProgressiveTranscriptText, STALE_TRANSCRIPT_MS, transcriptPresentationState } from "./ConversationMonitor";
+import { nextProgressiveTranscriptText, transcriptPresentationLabel, transcriptPresentationState } from "./ConversationMonitor";
 
 describe("progressive realtime transcript", () => {
   it("shows the complete latest partial revision immediately", () => {
@@ -28,24 +28,19 @@ describe("progressive realtime transcript", () => {
     expect(nextProgressiveTranscriptText("请介绍一下你最近负责的项目", "请介绍项目", true)).toBe("请介绍项目");
   });
 
-  it("stops claiming an abandoned partial is actively transcribing", () => {
-    expect(STALE_TRANSCRIPT_MS).toBe(1_500);
-    const publishedAtMs = 1_800_000_000_000;
-    expect(transcriptPresentationState({ isFinal: false, publishedAtMs, endedAtMs: publishedAtMs }, publishedAtMs + STALE_TRANSCRIPT_MS - 1)).toBe("transcribing");
-    expect(transcriptPresentationState({ isFinal: false, publishedAtMs, endedAtMs: publishedAtMs }, publishedAtMs + STALE_TRANSCRIPT_MS)).toBe("stale");
-    expect(transcriptPresentationState({ isFinal: true, publishedAtMs, endedAtMs: publishedAtMs }, publishedAtMs + STALE_TRANSCRIPT_MS)).toBe("final");
-    expect(transcriptPresentationState({ isFinal: true, terminalState: "incomplete", publishedAtMs, endedAtMs: publishedAtMs }, publishedAtMs + 1)).toBe("stale");
+  it("does not infer incomplete from the client age of a partial", () => {
+    expect(transcriptPresentationState({ isFinal: false })).toBe("transcribing");
+    expect(transcriptPresentationState({ isFinal: true })).toBe("final");
+    expect(transcriptPresentationState({ isFinal: true, terminalState: "incomplete" })).toBe("stale");
   });
 
-  it("shows a bounded confirming state after terminal admission", () => {
-    const publishedAtMs = 1_800_000_000_000;
+  it("freezes a committing partial without turning it incomplete while final reconciles", () => {
     const committing = {
       isFinal: false,
       turnState: "committing" as const,
-      publishedAtMs,
-      endedAtMs: publishedAtMs,
     };
-    expect(transcriptPresentationState(committing, publishedAtMs + STALE_TRANSCRIPT_MS - 1)).toBe("confirming");
-    expect(transcriptPresentationState(committing, publishedAtMs + STALE_TRANSCRIPT_MS)).toBe("stale");
+    expect(transcriptPresentationState(committing)).toBe("confirming");
+    expect(transcriptPresentationLabel("confirming")).toBe("已转写");
+    expect(transcriptPresentationLabel("stale")).toBe("识别未完成");
   });
 });

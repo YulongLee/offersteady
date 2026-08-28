@@ -334,6 +334,26 @@ describe("speech segmenter", () => {
     expect(finalized[0]?.isFinal).toBe(true);
   });
 
+  it("releases system speech over steady above-floor residual program energy", () => {
+    const segmenter = new SpeechSegmenter("system");
+    const chunk = new Uint8Array([1, 2, 3]);
+
+    expect(segmenter.push(chunk, 0, 0.01)).toEqual([]);
+    const firstPartial = segmenter.push(chunk, 100, 0.009);
+    expect(firstPartial).toHaveLength(1);
+    expect(segmenter.push(chunk, 200, 0.008)).toHaveLength(1);
+
+    let terminal: ReturnType<SpeechSegmenter["push"]> = [];
+    for (let nowMs = 300; nowMs <= 800; nowMs += 100) {
+      terminal = segmenter.push(chunk, nowMs, 0.0018);
+      if (terminal.some(item => item.isFinal)) break;
+    }
+
+    expect(terminal).toHaveLength(1);
+    expect(terminal[0]).toMatchObject({ isFinal: true, finalizationReason: "silence" });
+    expect(terminal[0]?.endedAtMs).toBeLessThanOrEqual(800);
+  });
+
   it("finalizes uninterrupted speech at the bounded maximum duration", () => {
     const segmenter = new SpeechSegmenter("system");
     const speech = new Uint8Array([1, 2, 3]);

@@ -48,8 +48,15 @@ describe("web application states", () => {
     expect(screen.queryByText("模型推断")).not.toBeInTheDocument();
   });
 
+  it("keeps automatic reconnect recovery internal", () => {
+    renderState("/app/interviews/demo/live", state => { state.captureState = "reconnecting"; });
+    expect(screen.queryByText("设备正在重连")).not.toBeInTheDocument();
+    expect(screen.getByText(/这台设备 · 正在收音/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "暂停收音" })).toBeInTheDocument();
+    expect(screen.getByText("面试进行中")).toBeInTheDocument();
+  });
+
   it.each([
-    ["reconnecting", "设备正在重连"],
     ["permission-required", "助手采集能力不可用"],
     ["error", "桌面设备连接异常"],
   ] as const)("provides recovery for desktop state %s", (captureState, message) => {

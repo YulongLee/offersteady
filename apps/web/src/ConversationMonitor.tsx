@@ -28,21 +28,19 @@ export const nextProgressiveTranscriptText = (current: string, target: string, i
   return target;
 };
 
-export const STALE_TRANSCRIPT_MS = 1_500;
 export type TranscriptPresentationState = "final" | "transcribing" | "confirming" | "stale";
 export const transcriptPresentationState = (
-  segment: { readonly isFinal: boolean; readonly turnState?: "speaking" | "tail" | "committing"; readonly terminalState?: "final" | "incomplete"; readonly publishedAtMs?: number; readonly endedAtMs: number },
-  nowMs = Date.now(),
+  segment: { readonly isFinal: boolean; readonly turnState?: "speaking" | "tail" | "committing"; readonly terminalState?: "final" | "incomplete" },
 ): TranscriptPresentationState => {
   if (segment.isFinal) return segment.terminalState === "incomplete" ? "stale" : "final";
-  const lastRevisionAtMs = segment.publishedAtMs ?? segment.endedAtMs;
-  if (segment.turnState === "committing") {
-    if (lastRevisionAtMs >= 1_000_000_000_000 && nowMs - lastRevisionAtMs >= STALE_TRANSCRIPT_MS) return "stale";
-    return "confirming";
-  }
-  if (lastRevisionAtMs >= 1_000_000_000_000 && nowMs - lastRevisionAtMs >= STALE_TRANSCRIPT_MS) return "stale";
+  if (segment.turnState === "committing") return "confirming";
   return "transcribing";
 };
+export const transcriptPresentationLabel = (presentation: TranscriptPresentationState) =>
+  presentation === "final" ? "已确认"
+    : presentation === "stale" ? "识别未完成"
+      : presentation === "confirming" ? "已转写"
+        : "转写中";
 
 function ProgressiveTranscriptText({ segment, active }: { readonly segment: SpeakerTranscriptSegment; readonly active: boolean }) {
   const text = segment.text;
@@ -108,12 +106,6 @@ export function ConversationMonitor({ state, onConfirmQuestion, onDismissQuestio
   const viewport = useRef<HTMLDivElement>(null);
   const followLatest = useRef(true);
   const transcripts = useMemo(() => projectConversationTurns(state.speaker.transcripts), [state.speaker.transcripts]);
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    if (!transcripts.some(segment => !segment.isFinal)) return;
-    const timer = window.setInterval(() => setNowMs(Date.now()), 1_000);
-    return () => window.clearInterval(timer);
-  }, [transcripts]);
   useEffect(() => { const node = viewport.current; if (node && followLatest.current) node.scrollTop = node.scrollHeight; }, [transcripts.length, transcripts.at(-1)?.revision]);
   useEffect(() => {
     const latest = transcripts.at(-1);
@@ -159,8 +151,8 @@ export function ConversationMonitor({ state, onConfirmQuestion, onDismissQuestio
       {transcripts.map(segment => {
         const role = segment.role;
         const hasPendingQuestion = segment.sourceSegmentIds.some(id => pendingSegmentIds.has(id));
-        const presentation = transcriptPresentationState(segment, nowMs);
-        return <article key={segment.id} className={`conversation-turn ${role}`}><time>{formatTranscriptTimestamp(segment.startedAtMs)}</time><div><div className="conversation-turn-meta"><strong>{role === "candidate" ? "我" : "面试官"}</strong><small>{presentation === "final" ? "已确认" : presentation === "stale" ? "识别未完成" : presentation === "confirming" ? "正在确认" : "转写中"}{segment.overlap ? " · 声音重叠" : ""}</small></div><ProgressiveTranscriptText segment={segment} active={presentation === "transcribing"} />{hasPendingQuestion && state.speaker.pendingQuestion ? <div className="inline-question-confirm"><span>问题内容不清晰</span><strong>{state.speaker.pendingQuestion.text}</strong><small>确认文本后可点击“快答”生成回答；确认本身不会开始回答或扣费。</small><div><button onClick={onDismissQuestion}>忽略</button><button className="confirm" onClick={onConfirmQuestion}>确认问题</button></div></div> : null}</div></article>;
+        const presentation = transcriptPresentationState(segment);
+        return <article key={segment.id} className={`conversation-turn ${role}`}><time>{formatTranscriptTimestamp(segment.startedAtMs)}</time><div><div className="conversation-turn-meta"><strong>{role === "candidate" ? "我" : "面试官"}</strong><small>{transcriptPresentationLabel(presentation)}{segment.overlap ? " · 声音重叠" : ""}</small></div><ProgressiveTranscriptText segment={segment} active={presentation === "transcribing"} />{hasPendingQuestion && state.speaker.pendingQuestion ? <div className="inline-question-confirm"><span>问题内容不清晰</span><strong>{state.speaker.pendingQuestion.text}</strong><small>确认文本后可点击“快答”生成回答；确认本身不会开始回答或扣费。</small><div><button onClick={onDismissQuestion}>忽略</button><button className="confirm" onClick={onConfirmQuestion}>确认问题</button></div></div> : null}</div></article>;
       })}
     </div>
   </section>;
