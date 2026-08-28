@@ -3636,11 +3636,29 @@ class RealtimeSpeechService:
                 )
                 return stored, result
             except RetryableAsrError as exc:
-                self._log(logging.WARNING, "realtime_speech.transcribe_retry", session_id=publisher.session_id, publisher_id=publisher.publisher_id, state="transcribe-retry", error_code=str(exc))
+                error_code = str(exc)
+                if error_code == "realtime_asr_transcript_missing":
+                    # A provider can successfully finish a silent/noise-only
+                    # utterance without producing text.  This is an empty
+                    # business result, not a transport failure: do not degrade
+                    # the publisher or enter a connection recreation loop.
+                    empty_result = TranscriptResult(
+                        text="",
+                        confidence=0.0,
+                        suppressed_reason="blank",
+                    )
+                    if frame.is_final:
+                        self._finalize_suppressed_partial(
+                            publisher=publisher,
+                            frame=frame,
+                            result=empty_result,
+                        )
+                    return None, empty_result
+                self._log(logging.WARNING, "realtime_speech.transcribe_retry", session_id=publisher.session_id, publisher_id=publisher.publisher_id, state="transcribe-retry", error_code=error_code)
                 last_error = exc
-                if str(exc) == "realtime_asr_frame_timeout" or (
+                if error_code == "realtime_asr_frame_timeout" or (
                     frame.is_final
-                    and str(exc) in {"realtime_asr_transcript_missing", "realtime_asr_timeout"}
+                    and error_code == "realtime_asr_timeout"
                 ):
                     # Retrying a terminal after provider completion is missing
                     # doubles visible latency and risks mixing late provider

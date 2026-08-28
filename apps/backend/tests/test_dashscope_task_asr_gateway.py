@@ -17,7 +17,13 @@ from app.services.realtime_speech_service import NonRetryableAsrError, Retryable
 
 
 class _TaskWebSocket:
-    def __init__(self, *, fail_on_finish: bool = False, omit_finish: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        fail_on_finish: bool = False,
+        omit_finish: bool = False,
+        emit_results: bool = True,
+    ) -> None:
         self.events: queue.Queue[dict[str, object]] = queue.Queue()
         self.sent: list[str | bytes] = []
         self.closed = False
@@ -25,13 +31,14 @@ class _TaskWebSocket:
         self.binary_count = 0
         self.fail_on_finish = fail_on_finish
         self.omit_finish = omit_finish
+        self.emit_results = emit_results
 
     def send(self, payload: str | bytes, opcode=None) -> None:  # noqa: ANN001
         del opcode
         self.sent.append(payload)
         if isinstance(payload, bytes):
             self.binary_count += 1
-            if self.binary_count == 1 and self.current_task_id:
+            if self.emit_results and self.binary_count == 1 and self.current_task_id:
                 self.events.put(_result_event(self.current_task_id, "流式部分", sentence_end=False))
             return
         message = json.loads(payload)
@@ -51,7 +58,8 @@ class _TaskWebSocket:
                 "payload": {},
             })
         elif action == "finish-task" and not self.omit_finish:
-            self.events.put(_result_event(task_id, "流式部分已经完成。", sentence_end=True))
+            if self.emit_results:
+                self.events.put(_result_event(task_id, "流式部分已经完成。", sentence_end=True))
             self.events.put({"header": {"event": "task-finished", "task_id": task_id}, "payload": {}})
 
     def recv(self, timeout=None):  # noqa: ANN001
@@ -204,6 +212,24 @@ def test_task_gateway_suppresses_empty_results_and_keeps_diagnostics_content_fre
     assert runtime["protocol"] == "qwen-audio-task"
     assert runtime["model"] == "qwen-audio-3.0-asr-flash-streaming"
     assert not any(token in key.lower() for key in runtime for token in ("audio_bytes", "api_key", "transcript"))
+    gateway.close_session(session_id="session-task")
+
+
+def test_task_gateway_empty_completed_utterance_reuses_healthy_connection(monkeypatch) -> None:
+    socket = _TaskWebSocket(emit_results=False)
+    monkeypatch.setattr("app.services.dashscope_task_asr_gateway.connect", lambda *args, **kwargs: socket)
+    gateway = DashScopeTaskAsrGateway(_settings(), logging.getLogger("task-empty-final"))
+
+    result = gateway.finalize(frame=_frame(is_final=True), attempt=0)
+
+    assert result.text == ""
+    assert result.completed_at_ms is not None
+    assert result.connection_id == "microphone-task-1"
+    assert socket.closed is False
+    assert gateway.diagnostics("microphone")["asr_connection_create_count"] == 1
+    control = [json.loads(item) for item in socket.sent if isinstance(item, str)]
+    assert [item["header"]["action"] for item in control].count("run-task") == 2
+    assert [item["header"]["action"] for item in control].count("finish-task") == 1
     gateway.close_session(session_id="session-task")
 
 

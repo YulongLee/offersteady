@@ -90,6 +90,10 @@
 - **WHEN** ASR 返回空白、仅空格或无有效文本的 partial/final 结果
 - **THEN** 系统丢弃该结果，不更新实时对话区
 
+#### Scenario: Provider completes an utterance without transcript text
+- **WHEN** ASR task 或 utterance 已正常完成，但静音、底噪或无效语音没有产生有效文本
+- **THEN** 系统抑制该空结果、完成当前 segment，并复用健康 source 连接，不得降级 publisher、重试同一音频或重建 ASR WebSocket
+
 #### Scenario: ASR returns a meaningful short Chinese response
 - **WHEN** ASR 返回“好的”“是的”“对”“行”等具有明确语义的中文短句
 - **THEN** 系统将该短句作为有效实时字幕发布，不得仅因字数较短或属于常见回答而抑制

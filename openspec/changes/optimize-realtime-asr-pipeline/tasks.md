@@ -25,6 +25,7 @@
 - [x] 3.8 Track provider event and delivered revisions independently so between-frame partials are not skipped or duplicated.
 - [x] 3.9 Remove session-wide transcript scans and stable-question work from the Provider Partial publication hot path.
 - [x] 3.10 Make PCM coalescing backlog-adaptive so healthy 100ms frames enter the ASR sender immediately.
+- [x] 3.11 Suppress provider-completed empty utterances without degrading publishers or recreating healthy ASR connections.
 
 ## 4. Web Transcript Streaming and Overlay Efficiency
 
@@ -57,3 +58,4 @@
 - [x] 5.10 Prefer the configured Aliyun Bailian Workspace endpoint, document its safe fallback, and verify endpoint selection without exposing credentials.
 - [x] 5.11 Stabilize visible realtime partials against temporary provider retractions while keeping growth immediate and Final authoritative.
 - [x] 5.12 Add regressions and complete staged Backend/Web/Desktop validation for the Partial fast path and revision-preserving delivery.
+- [x] 5.13 Add regressions proving empty completed utterances do not create ASR reconnect storms.

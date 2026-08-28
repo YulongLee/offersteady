@@ -178,6 +178,10 @@ Provider Partial 的可见字幕发布路径只允许执行当前 publisher、�
 
 Redis/SSE 和 Browser state adapter 在健康流中保留有序 transcript revision，不得无条件将同一 segment 的多个 Provider revision 压缩为最后一个。过载保护只能在明确超过有界积压阈值时启用，Final 必须始终保留，且不得通过逐字动画伪造 Provider 未提供的 revision。
 
+### Decision 14: Treat completed empty utterances as suppressed results, not connection failures
+
+供应商已经明确完成 task/utterance、但没有返回有效文本时，系统将其视为静音、底噪或无效语音的空业务结果。Gateway 必须完成本轮状态清理并复用仍然健康的 source WebSocket，业务层不得把 `realtime_asr_transcript_missing` 转换为 publisher degraded 或连接重建。只有连接关闭、协议错误、task 未完成超时等传输状态不明确的错误才能关闭并重建 source connection。
+
 ## Risks / Trade-offs
 
 - [Risk] 引入 source worker、持久连接和有界队列后，系统状态机会更复杂 → Mitigation: 按 source/session 明确状态图，并增加可重复的单元测试与集成测试。

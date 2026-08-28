@@ -133,7 +133,7 @@ def test_retry_replays_the_complete_ephemeral_utterance(monkeypatch):
     assert service._replay_frame(terminal) is None
 
 
-def test_missing_provider_completion_does_not_retry_the_same_terminal(monkeypatch):
+def test_missing_provider_completion_is_suppressed_without_degrading_publisher(monkeypatch):
     _user_id, session_id, device_id, publisher_payload = create_live_binding()
     service = realtime_speech_service()
     publisher = service.repository.get_publisher(publisher_payload["publisherId"])
@@ -164,11 +164,13 @@ def test_missing_provider_completion_does_not_retry_the_same_terminal(monkeypatc
         raise RetryableAsrError("realtime_asr_transcript_missing")
 
     monkeypatch.setattr(service.asr_gateway, "finalize", finalize)
-    with pytest.raises(Exception) as error:
-        service._transcribe_frame(publisher=publisher, frame=terminal)
+    transcript, result = service._transcribe_frame(publisher=publisher, frame=terminal)
 
-    assert getattr(error.value, "error_code", None) == "realtime_asr_transcript_missing"
+    assert transcript is None
+    assert result.text == ""
+    assert result.suppressed_reason == "blank"
     assert attempts == [0]
+    assert service.repository.get_publisher(publisher.publisher_id).status != "degraded"
 
 
 def test_terminal_turn_remains_supervised_while_committing():

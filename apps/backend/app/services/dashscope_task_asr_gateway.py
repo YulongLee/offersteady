@@ -429,8 +429,6 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
                 if remaining <= 0:
                     raise TimeoutError("qwen_audio_task_finish_timeout")
                 session.event_condition.wait(timeout=remaining)
-            if not session.transcript_text.strip():
-                raise RetryableAsrError("realtime_asr_transcript_missing")
             session.delivered_revision = session.event_revision
             return (
                 session.transcript_text,
