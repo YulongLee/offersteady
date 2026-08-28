@@ -30,5 +30,5 @@
 - [x] 6.1 Re-run release-critical verification and strict OpenSpec validation against the exact rollout tree.
 - [x] 6.2 Build and verify the versioned 1.2.10 Apple Silicon, Intel macOS, and Windows x64 production artifacts.
 - [x] 6.3 Upload versioned desktop artifacts and atomically update the production download manifest without exposing incomplete targets.
-- [ ] 6.4 Commit and push the reviewed release baseline, retain production Backend/Web rollback images, and deploy only the changed application services without recreating PostgreSQL or Redis.
-- [ ] 6.5 Verify public health, Web build manifest, download metadata/artifacts, realtime endpoints, and record the production release evidence.
+- [x] 6.4 Commit and push the reviewed release baseline, retain production Backend/Web rollback images, and deploy only the changed application services without recreating PostgreSQL or Redis.
+- [x] 6.5 Verify public health, Web build manifest, download metadata/artifacts, realtime endpoints, and record the production release evidence.

@@ -29,3 +29,14 @@ All three versioned artifacts were uploaded before the Backend manifest changed.
 - Do not recreate PostgreSQL or Redis during rollout or rollback.
 - Roll back Web independently if presentation behavior regresses; roll back Backend and Web together if realtime event compatibility regresses.
 - The prior 1.2.9 desktop objects remain versioned in OSS and can be restored in the manifest without deleting 1.2.10 artifacts.
+
+## Production Rollout
+
+- Release source and deployed application commit: `4d3a491e5b64a39183de54ded8787b0131181888`.
+- Pre-rollout source: `5e660d5144f08baa0d0579fce47eb46a650ff12b`.
+- Retained images: `offersteady-backend:rollback-5e660d5-pre-1.2.10` and `offersteady-web:rollback-5e660d5-pre-1.2.10`.
+- Backend and Web were rebuilt serially and switched with `--no-deps`; PostgreSQL, Redis, Analytics, and Admin were not recreated.
+- Backend reported `healthy` and Web reported `running` after the switch.
+- Public `/healthz`, `/app`, `/api/v1/web/state`, and `/api/v1/realtime-speech/status` returned HTTP 200.
+- The public Web build manifest reported `appEnv=production` and `apiBaseUrl=/`.
+- The public download manifest exposed macOS arm64, macOS x64, and Windows x64 at version 1.2.10. Each download endpoint returned HTTP 206 for a one-byte range with the expected total size and content type.
