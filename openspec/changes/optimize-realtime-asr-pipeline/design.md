@@ -210,9 +210,9 @@ Qwen `task-failed` 后会关闭当前 WebSocket。接收器必须采用 first-er
 
 ### Decision 19: Reuse one healthy Qwen task across local utterances with a safe rollover fallback
 
-Qwen Audio task 模式默认在同一 `sessionId + sourceKind` 的健康连接中跨本地 utterance 复用一个 provider task。每个本地 segment 独立重置字幕状态，并以 Provider `sentence_end` 作为完成确认；正常完成不发送 `finish-task`，从而移除逐句 task 重建窗口。
+Qwen Audio task 模式允许在同一 `sessionId + sourceKind` 的健康连接中跨本地 utterance 复用一个 provider task。每个本地 segment 独立重置字幕状态，并以 Provider `sentence_end` 作为完成确认；正常完成不发送 `finish-task`，从而移除逐句 task 重建窗口。
 
-若本地 final 在有界时间内未看到对应 `sentence_end`，Gateway 自动执行既有 `finish-task`，等待 `task-finished` 后启动新 task。该行为由服务端 feature flag 控制，关闭后完整回退旧逐句 task 路径。
+生产真实双声道验证发现，该模型会在 provider task 约 `23s` 没有有效请求后返回 `CLIENT_ERROR request timeout` 并以 WebSocket `1007` 关闭；同时桌面 final 尾帧经常晚于 Provider `sentence_end`，导致多数句子仍进入 task rollover。因此该行为由服务端 feature flag 控制且默认关闭：生产保持 WebSocket 长连接，但每个本地 utterance 使用独立 task。仅在后续 Provider 明确支持 task 空闲保活并通过长期验证后才允许开启。
 
 ## Risks / Trade-offs
 
@@ -225,7 +225,7 @@ Qwen Audio task 模式默认在同一 `sessionId + sourceKind` 的健康连接�
 - [Risk] 对无效 session 降低 SSE 重试频率后，短暂创建延迟可能延后恢复 → Mitigation: 页面前台恢复、网络恢复和低频状态探测成功时立即重建订阅。
 - [Risk] 暂时保留较长 partial 可能让错误尾词多停留一小段时间 → Mitigation: 仅在未定稿文本回缩时稳定显示，等长/增长修订仍即时更新，Final 无条件立即覆盖。
 - [Risk] 字幕平滑可能形成视觉积压或增加 React 更新开销 → Mitigation: 使用共享帧调度、单次有界步进和 `300ms` 强制追平；Final、后台、减少动态效果和异常状态直接显示目标文本，并通过回归测试限制活动调度数量。
-- [Risk] 持续 task 的句尾事件迟到会让本地 final 等待 → Mitigation: 只等待既有 final timeout，并自动回退逐句 task rollover；开关可即时关闭新行为。
+- [Risk] 持续 task 的句尾事件迟到或空闲超时会让本地 final 等待并重建连接 → Mitigation: 生产默认关闭持续 task，使用同 WebSocket 上的逐句 task rollover；实验开关只用于受控验证。
 - [Risk] 尾音频重放可能重复少量文字 → Mitigation: 使用最长前后缀重叠拼接，且检查点仅驻留进程内，不改变原始供应商事件和隐私边界。
 
 ## Migration Plan

@@ -16,7 +16,7 @@ The API key remains in the server secret environment. The Workspace-specific inf
 - The protocol adapter waits for `task-started` before sending raw 16 kHz mono PCM as binary WebSocket frames.
 - One provider WebSocket is isolated per interview/source and is reused across application segments.
 - Non-empty `result-generated` events publish monotonic partial revisions; empty heartbeat/sentence-begin events stay invisible.
-- A healthy provider `sentence_end` completes the local segment while the same Qwen task remains active for the next utterance. If sentence finalization misses the bounded grace period, the adapter falls back to `finish-task` / `task-finished` and starts a fresh task.
+- Production reuses one WebSocket per source but finishes and starts a provider task for each local utterance. Cross-utterance task reuse remains experimental and disabled because production verification observed a provider `CLIENT_ERROR request timeout` after approximately 23 seconds of task inactivity.
 - A failed or ambiguous task closes only the affected source connection.
 - `task-failed` keeps the first provider code/message and source/task/connection attribution even when the provider subsequently closes the socket.
 - A reconnect replays only the bounded rolling PCM tail and stitches it to an in-memory transcript checkpoint; neither audio nor checkpoint text is persisted or logged.

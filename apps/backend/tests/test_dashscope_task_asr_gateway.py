@@ -166,7 +166,10 @@ def test_task_gateway_streams_binary_partial_final_and_reuses_connection(monkeyp
 def test_task_gateway_reuses_one_task_across_provider_finalized_segments(monkeypatch) -> None:
     socket = _TaskWebSocket()
     monkeypatch.setattr("app.services.dashscope_task_asr_gateway.connect", lambda *args, **kwargs: socket)
-    gateway = DashScopeTaskAsrGateway(_settings(), logging.getLogger("task-continuous"))
+    gateway = DashScopeTaskAsrGateway(
+        _settings(realtime_asr_continuous_task_enabled=True),
+        logging.getLogger("task-continuous"),
+    )
 
     gateway.transcribe(frame=_frame(segment_id="segment-one"), attempt=0)
     assert socket.current_task_id is not None
@@ -205,6 +208,21 @@ def test_task_gateway_can_disable_continuous_task_for_compatibility(monkeypatch)
     control = [json.loads(item) for item in socket.sent if isinstance(item, str)]
     assert [item["header"]["action"] for item in control].count("run-task") == 2
     assert [item["header"]["action"] for item in control].count("finish-task") == 1
+    gateway.close_session(session_id="session-task")
+
+
+def test_task_gateway_defaults_to_per_utterance_tasks_on_a_persistent_socket(monkeypatch) -> None:
+    socket = _TaskWebSocket()
+    monkeypatch.setattr("app.services.dashscope_task_asr_gateway.connect", lambda *args, **kwargs: socket)
+    gateway = DashScopeTaskAsrGateway(_settings(), logging.getLogger("task-safe-default"))
+
+    gateway.finalize(frame=_frame(is_final=True), attempt=0)
+
+    control = [json.loads(item) for item in socket.sent if isinstance(item, str)]
+    assert gateway.runtime_status("microphone")["continuous_task_enabled"] == 0
+    assert [item["header"]["action"] for item in control].count("run-task") == 2
+    assert [item["header"]["action"] for item in control].count("finish-task") == 1
+    assert gateway.diagnostics("microphone")["asr_connection_create_count"] == 1
     gateway.close_session(session_id="session-task")
 
 

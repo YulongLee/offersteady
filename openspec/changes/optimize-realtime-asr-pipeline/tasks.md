@@ -29,6 +29,7 @@
 - [x] 3.12 Preserve first-cause Qwen task failures with source/task/connection attribution and isolate recoverable failure to one source.
 - [x] 3.13 Replace all-or-nothing utterance replay with a bounded rolling PCM tail and in-memory overlap stitching.
 - [x] 3.14 Reuse one healthy Qwen task across local utterances behind a rollback-safe feature flag with task-rollover fallback.
+- [x] 3.15 Default production to per-utterance Qwen tasks on a persistent source WebSocket after the provider rejected idle continuous tasks.
 
 ## 4. Web Transcript Streaming and Overlay Efficiency
 
@@ -70,3 +71,4 @@
 - [x] 5.15 Add Backend/Web regressions for immediate bootstrap delivery, bootstrap-race event preservation, healthy silent streams, and single-reader transport recovery.
 - [x] 5.16 Add Web regressions for regular batched revisions, low/high reservoir inventory, 650ms hard catch-up, correction, Final, reduced-motion, and shared scheduling.
 - [x] 5.17 Add Backend regressions for first-error preservation, source isolation, rolling-tail recovery, transcript stitching, continuous task reuse, and compatibility fallback.
+- [x] 5.18 Add a regression proving the safe default rolls tasks per utterance without recreating the source WebSocket.

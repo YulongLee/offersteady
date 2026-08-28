@@ -31,8 +31,12 @@
 - **THEN** 系统优雅关闭对应 ASR 长连接并释放该 source 的流式资源
 
 #### Scenario: Consecutive local utterances use a healthy provider task
-- **WHEN** 同一 source 连续完成多个本地 utterance 且 Provider 为每句返回 `sentence_end`
+- **WHEN** 实验性持续 task 开关显式开启、同一 source 连续完成多个本地 utterance 且 Provider 为每句返回 `sentence_end`
 - **THEN** 系统复用同一 WebSocket 和同一 Qwen task，不在每句之间执行 `finish-task` 与 `run-task`
+
+#### Scenario: Production uses the provider-safe task lifecycle
+- **WHEN** 生产使用默认配置处理同一 source 的连续 utterance
+- **THEN** 系统复用同一 WebSocket，但为每句话完成 `finish-task → task-finished → run-task`，不得留下会在约 23 秒空闲后失败的活动 provider task
 
 #### Scenario: Provider sentence finalization is missing
 - **WHEN** 本地 final 到达但 Provider 未在有界时间内返回对应 `sentence_end`

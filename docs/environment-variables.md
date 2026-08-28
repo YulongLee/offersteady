@@ -111,7 +111,7 @@
 - `OFFERSTEADY_REALTIME_ASR_PROTOCOL`：`qwen3-realtime` 使用旧 `/api-ws/v1/realtime` 会话协议；`qwen-audio-task` 使用 Qwen Audio 3 的 `/api-ws/v1/inference` 任务协议。协议、模型和入口必须作为同一个回滚单元修改。
 - `OFFERSTEADY_REALTIME_ASR_INFERENCE_WS_URL`：Qwen Audio 3 Streaming 的任务协议入口。当前验证通过的是 `wss://dashscope.aliyuncs.com/api-ws/v1/inference`；Workspace 专属入口仍返回 `Endpoint.AccessDenied`，未经重新验证不得用于生产。
 - `OFFERSTEADY_REALTIME_ASR_MAX_SENTENCE_SILENCE_MS`：Qwen Audio 3 服务端 VAD 句尾静音阈值，默认 `400` 毫秒，服务端适配器限制为 `200–6000` 毫秒。
-- `OFFERSTEADY_REALTIME_ASR_CONTINUOUS_TASK_ENABLED`：Qwen Audio task 在同一声道跨本地话语复用一个 Provider task，默认开启；句尾确认超时自动回退逐句 task 轮换，关闭后完整使用旧路径。
+- `OFFERSTEADY_REALTIME_ASR_CONTINUOUS_TASK_ENABLED`：实验性 Qwen Audio task 跨本地话语复用，默认关闭。生产保持同一声道 WebSocket 长连接，但每句话执行独立 `finish-task → run-task`；当前模型持续 task 空闲约 23 秒会返回 `CLIENT_ERROR request timeout`，未经重新验证不得开启。
 - `OFFERSTEADY_REALTIME_ASR_CONTINUOUS_TASK_SENTENCE_WAIT_SECONDS`：连续 task 等待 Provider `sentence_end` 的短暂宽限，默认 `0.65` 秒；超时立即进入兼容 task 轮换，不无限等待。
 - `OFFERSTEADY_REALTIME_ASR_REPLAY_TAIL_MS`：Provider 断线时每个声道保留的滚动 PCM 尾部，默认 `2000` 毫秒；仅驻留后端进程内，并受 `OFFERSTEADY_REALTIME_ASR_REPLAY_BUFFER_MAX_BYTES` 上限约束。
 - `OFFERSTEADY_REALTIME_ASR_WORKSPACE_ID`：百炼业务空间 ID；配置后 Qwen Realtime 优先连接该空间对应的地域专属域名。该值只配置在服务端，不下发客户端。
