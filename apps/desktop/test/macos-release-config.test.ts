@@ -17,6 +17,7 @@ describe("macOS Developer ID release configuration", () => {
     expect(config).toContain("strictVerify: true");
     expect(config).toContain("notarize: true");
     expect(config).toContain("target: dmg");
+    expect(config).toContain("signIgnore: '/(?:Resources|resources)/.*\\.(?:asar|bin|dat|pak)$'");
     expect(config).toContain("Contents/Resources/app/native/macos-capture/OfferSteadyCaptureRuntime");
     expect(config).not.toMatch(/identity:\s*["']?-["']?/);
   });

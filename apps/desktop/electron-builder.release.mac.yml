@@ -19,6 +19,10 @@ mac:
   minimumSystemVersion: 14.2.0
   entitlements: build/entitlements.mac.release.plist
   entitlementsInherit: build/entitlements.mac.release.inherit.plist
+  # Electron resource payloads are sealed by the enclosing bundles. Treating
+  # them as Mach-O binaries causes thousands of duplicate timestamp requests
+  # through framework symlinks and makes an official build nondeterministic.
+  signIgnore: '/(?:Resources|resources)/.*\.(?:asar|bin|dat|pak)$'
   binaries:
     - Contents/Resources/app/native/macos-capture/OfferSteadyCaptureRuntime
   extendInfo:

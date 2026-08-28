@@ -14,6 +14,7 @@ describe("isolated desktop Beta release", () => {
     expect(config).toContain("hardenedRuntime: true");
     expect(config).toContain("forceCodeSigning: true");
     expect(config).toContain("notarize: true");
+    expect(config).toContain("signIgnore: '/(?:Resources|resources)/.*\\.(?:asar|bin|dat|pak)$'");
   });
 
   it("pins a packaged Beta application to the Beta Web and API origins", () => {
