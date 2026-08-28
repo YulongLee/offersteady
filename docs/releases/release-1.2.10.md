@@ -32,7 +32,7 @@ All three versioned artifacts were uploaded before the Backend manifest changed.
 
 ## Production Rollout
 
-- Release source and deployed application commit: `4d3a491e5b64a39183de54ded8787b0131181888`.
+- Release source and deployed application commit: `4d3a491e15b64a39183de54ded8787b013118188`.
 - Pre-rollout source: `5e660d5144f08baa0d0579fce47eb46a650ff12b`.
 - Retained images: `offersteady-backend:rollback-5e660d5-pre-1.2.10` and `offersteady-web:rollback-5e660d5-pre-1.2.10`.
 - Backend and Web were rebuilt serially and switched with `--no-deps`; PostgreSQL, Redis, Analytics, and Admin were not recreated.
