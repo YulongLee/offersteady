@@ -9,11 +9,15 @@
 
 #### Scenario: Partial transcript grows or corrects without retracting visible content
 - **WHEN** 当前面试 session 收到某一句话的增长或等长 Partial Transcript 修订
-- **THEN** 左侧实时对话栏在当前渲染周期显示首个新增字符，并仅对该 revision 已收到的剩余新增文字执行自适应平滑，最迟在 `300ms` 内追平完整文本，不追加重复对话、不生成供应商未返回的内容
+- **THEN** 左侧实时对话栏在当前渲染周期显示首个新增字符，并将该 revision 已收到的剩余新增文字放入有界蓄水池，根据最近 revision 间隔与库存深度动态展示，最迟在 `650ms` 内追平完整文本，不追加重复对话、不生成供应商未返回的内容
 
-#### Scenario: Smoothing cannot keep up with a newer revision
-- **WHEN** 新 Partial 到达时当前展示仍落后，或待显示文字无法在 `300ms` 内按单字节奏完成
-- **THEN** 展示调度器动态增加单帧步进或直接追平目标文本，不得让视觉队列持续落后真实 transcript 状态
+#### Scenario: Reservoir receives regular batched revisions
+- **WHEN** ASR 以约 `500ms` 的间隔持续返回多个字符组成的 Partial revision
+- **THEN** 展示调度器根据最近到达间隔调整出水速度，使已接收字符尽量均匀覆盖到下一批预计到达时间，而不是在每批开头集中显示后长时间停顿
+
+#### Scenario: Reservoir cannot keep up with a newer revision
+- **WHEN** 新 Partial 到达时当前展示仍落后、库存突然增大或待显示文字无法在 `650ms` 内按单字节奏完成
+- **THEN** 展示调度器缩短出水间隔、动态增加单帧 grapheme 步进或直接追平目标文本，不得让视觉队列持续落后真实 transcript 状态
 
 #### Scenario: Motion should not be scheduled
 - **WHEN** 页面不可见、用户启用减少动态效果、字幕不再处于活跃转写状态或浏览器缺少帧调度能力

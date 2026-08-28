@@ -8,6 +8,7 @@ import {
   nextAdaptiveTranscriptText,
   nextProgressiveTranscriptText,
   ProgressiveTranscriptText,
+  TRANSCRIPT_RESERVOIR_MAX_LAG_MS,
   transcriptPresentationLabel,
   transcriptPresentationState,
 } from "./ConversationMonitor";
@@ -45,6 +46,7 @@ describe("progressive realtime transcript", () => {
     frameId = 0;
     frameCallbacks = new Map();
     now = window.performance.now();
+    vi.spyOn(window.performance, "now").mockImplementation(() => now);
     vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => {
       const id = ++frameId;
       frameCallbacks.set(id, callback);
@@ -59,6 +61,7 @@ describe("progressive realtime transcript", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -67,12 +70,22 @@ describe("progressive realtime transcript", () => {
     expect(firstAdaptiveTranscriptText("你好", "你好，请介绍项目")).toBe("你好，");
   });
 
-  it("dynamically increases its step and always catches up within 300ms", () => {
+  it("slows a low reservoir toward the expected next revision", () => {
+    const target = "面试问题测试文本";
+    const first = firstAdaptiveTranscriptText("", target);
+    const tooEarly = nextAdaptiveTranscriptText(first, target, 20, TRANSCRIPT_RESERVOIR_MAX_LAG_MS, 500, 20);
+    const paced = nextAdaptiveTranscriptText(first, target, 60, TRANSCRIPT_RESERVOIR_MAX_LAG_MS, 500, 60);
+    expect(tooEarly).toBe(first);
+    expect(paced.length).toBeGreaterThan(first.length);
+    expect(paced.length).toBeLessThan(target.length);
+  });
+
+  it("increases its step for a high reservoir and always catches up within 650ms", () => {
     const target = "面".repeat(100);
     const first = firstAdaptiveTranscriptText("", target);
-    const progressing = nextAdaptiveTranscriptText(first, target, 32);
-    expect(progressing.length).toBeGreaterThan(first.length);
-    expect(nextAdaptiveTranscriptText(progressing, target, 300)).toBe(target);
+    const progressing = nextAdaptiveTranscriptText(first, target, 32, TRANSCRIPT_RESERVOIR_MAX_LAG_MS, 500, 32);
+    expect(progressing.length - first.length).toBeGreaterThan(1);
+    expect(nextAdaptiveTranscriptText(progressing, target, TRANSCRIPT_RESERVOIR_MAX_LAG_MS)).toBe(target);
   });
 
   it("recovers from an ASR correction at the first changed character", () => {
@@ -97,10 +110,39 @@ describe("progressive realtime transcript", () => {
     expect(paragraph).toHaveTextContent("请");
     expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
 
-    runFrame(40);
+    runFrame(90);
     expect(paragraph.textContent!.length).toBeGreaterThan(1);
-    runFrame(300);
+    runFrame(650);
     expect(paragraph).toHaveTextContent("请介绍你的项目");
+  });
+
+  it("keeps draining between regular batched revisions instead of emptying immediately", () => {
+    const view = render(createElement(ProgressiveTranscriptText, {
+      segment: segment({ text: "一二三四五六七八九十" }), active: true,
+    }));
+    const paragraph = view.container.querySelector("p")!;
+    const observedLengths: number[] = [paragraph.textContent!.length];
+    for (let elapsed = 0; elapsed < 400; elapsed += 50) {
+      runFrame(50);
+      observedLengths.push(paragraph.textContent!.length);
+    }
+    expect(observedLengths.at(-1)).toBeGreaterThan(observedLengths[0]!);
+    expect(observedLengths.at(-1)).toBeLessThan(10);
+
+    view.rerender(createElement(ProgressiveTranscriptText, {
+      segment: segment({ revision: 2, text: "一二三四五六七八九十一二三四五六七八九十" }), active: true,
+    }));
+    const beforeDrain = paragraph.textContent!.length;
+    const secondRevisionLengths: number[] = [];
+    for (let elapsed = 0; elapsed < 400; elapsed += 50) {
+      runFrame(50);
+      secondRevisionLengths.push(paragraph.textContent!.length);
+    }
+    expect(secondRevisionLengths[0]).toBeGreaterThanOrEqual(beforeDrain);
+    expect(new Set(secondRevisionLengths).size).toBeGreaterThan(4);
+    expect(secondRevisionLengths[3]).toBeLessThan(20);
+    runFrame(TRANSCRIPT_RESERVOIR_MAX_LAG_MS);
+    expect(paragraph).toHaveTextContent("一二三四五六七八九十一二三四五六七八九十");
   });
 
   it("flushes an authoritative Final immediately and cancels pending smoothing", () => {

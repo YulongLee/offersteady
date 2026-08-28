@@ -192,6 +192,12 @@ SSE 建连后必须先读取一个轻量 bootstrap cursor，再物化并立即�
 
 浏览器以任意收到的传输字节（包括 SSE keepalive comment）刷新连接活跃时间。用户没有说话不属于故障，只要 keepalive 持续到达就不得重连；仅当首 snapshot 超时，或已经健康的连接在超过两个 keepalive 周期仍无任何字节时，才取消当前 reader，并由页面现有单实例重连协调器从 sessionStorage cursor 恢复。恢复期间不得创建并行订阅，也不得清空已经显示的字幕。
 
+### Decision 16: Pace received Partial text through an adaptive subtitle reservoir
+
+上一版按单个 revision 固定在 `300ms` 内清空新增字符。当供应商 revision 间隔约为 `500–1000ms` 时，展示库存会在下一批到达前耗尽，用户仍然看到“快速出一段、停顿、再出一段”。新展示层为每个活跃 utterance 维护仅存在于 React 组件内的字符蓄水池，并使用最近 revision 到达间隔的 EWMA 与当前待显示 grapheme 数量计算出水节奏：库存较低时放慢到接近下一批预计到达时间，库存较高时缩短间隔或单帧输出多个字符。
+
+每个增长 revision 的首个新增字符仍在当前渲染周期立即出现；任何已接收 revision 最迟 `650ms` 追平，防止动画形成长期延迟。Final、非前缀校正、页面不可见、减少动态效果和失去帧调度能力时立即清空蓄水池并显示权威文本。蓄水池不得生成供应商未返回的字符，不得改变回答输入、问题检测、持久化 transcript、revision 顺序或原始性能时间点，并继续复用单一全局 animation-frame 调度器以限制 CPU 开销。
+
 ## Risks / Trade-offs
 
 - [Risk] 引入 source worker、持久连接和有界队列后，系统状态机会更复杂 → Mitigation: 按 source/session 明确状态图，并增加可重复的单元测试与集成测试。

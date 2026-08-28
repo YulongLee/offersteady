@@ -19,8 +19,12 @@ export const formatTranscriptTimestamp = (milliseconds: number) => {
   return `[${String(Math.floor(milliseconds / 60_000)).padStart(2, "0")}:${String(Math.floor(milliseconds / 1_000) % 60).padStart(2, "0")}]`;
 };
 
-const TRANSCRIPT_SMOOTHING_MAX_LAG_MS = 300;
-const TRANSCRIPT_SMOOTHING_FRAME_MS = 32;
+export const TRANSCRIPT_RESERVOIR_MAX_LAG_MS = 650;
+const TRANSCRIPT_RESERVOIR_DEFAULT_REVISION_INTERVAL_MS = 520;
+const TRANSCRIPT_RESERVOIR_MIN_REVISION_INTERVAL_MS = 120;
+const TRANSCRIPT_RESERVOIR_MAX_REVISION_INTERVAL_MS = 1_200;
+const TRANSCRIPT_RESERVOIR_MIN_STEP_MS = 28;
+const TRANSCRIPT_RESERVOIR_MAX_STEP_MS = 90;
 type TranscriptFrameJob = (timestamp: number) => boolean;
 const transcriptFrameJobs = new Set<TranscriptFrameJob>();
 let transcriptFrameHandle: number | null = null;
@@ -83,15 +87,32 @@ export const nextAdaptiveTranscriptText = (
   current: string,
   target: string,
   elapsedMs: number,
-  maxLagMs = TRANSCRIPT_SMOOTHING_MAX_LAG_MS,
+  maxLagMs = TRANSCRIPT_RESERVOIR_MAX_LAG_MS,
+  observedRevisionIntervalMs = TRANSCRIPT_RESERVOIR_DEFAULT_REVISION_INTERVAL_MS,
+  elapsedSinceLastStepMs = Number.POSITIVE_INFINITY,
 ) => {
   if (current === target || !target.startsWith(current) || elapsedMs >= maxLagMs) return target;
   const currentUnits = graphemes(current);
   const targetUnits = graphemes(target);
   const remaining = targetUnits.length - currentUnits.length;
   if (remaining <= 0) return target;
-  const remainingFrames = Math.max(1, Math.floor((maxLagMs - Math.max(0, elapsedMs)) / TRANSCRIPT_SMOOTHING_FRAME_MS));
-  const step = Math.max(1, Math.ceil(remaining / remainingFrames));
+  const expectedIntervalMs = Math.min(
+    TRANSCRIPT_RESERVOIR_MAX_REVISION_INTERVAL_MS,
+    Math.max(TRANSCRIPT_RESERVOIR_MIN_REVISION_INTERVAL_MS, observedRevisionIntervalMs),
+  );
+  const desiredDrainDeadlineMs = Math.min(maxLagMs, Math.max(220, expectedIntervalMs * 0.95));
+  const remainingDrainMs = Math.max(1, desiredDrainDeadlineMs - Math.max(0, elapsedMs));
+  const cadenceMs = Math.min(
+    TRANSCRIPT_RESERVOIR_MAX_STEP_MS,
+    Math.max(TRANSCRIPT_RESERVOIR_MIN_STEP_MS, remainingDrainMs / remaining),
+  );
+  if (elapsedSinceLastStepMs < cadenceMs) return current;
+  const remainingSteps = Math.max(1, Math.floor(remainingDrainMs / cadenceMs));
+  const catchUpStep = Math.max(1, Math.ceil(remaining / remainingSteps));
+  const elapsedStep = Number.isFinite(elapsedSinceLastStepMs)
+    ? Math.max(1, Math.floor(elapsedSinceLastStepMs / cadenceMs))
+    : 1;
+  const step = Math.max(catchUpStep, elapsedStep);
   return targetUnits.slice(0, currentUnits.length + step).join("");
 };
 
@@ -126,6 +147,8 @@ export function ProgressiveTranscriptText({ segment, active }: { readonly segmen
   const targetTextRef = useRef(text);
   const targetStartedAtRef = useRef(0);
   const lastStepAtRef = useRef(0);
+  const lastRevisionAtRef = useRef(0);
+  const revisionIntervalRef = useRef(TRANSCRIPT_RESERVOIR_DEFAULT_REVISION_INTERVAL_MS);
   const frameJobRef = useRef<TranscriptFrameJob | null>(null);
   const lastPaintedEventId = useRef<string | null>(null);
   const performance = segment.performance;
@@ -145,9 +168,16 @@ export function ProgressiveTranscriptText({ segment, active }: { readonly segmen
         updateVisibleText(target);
         return false;
       }
-      if (timestamp - lastStepAtRef.current < TRANSCRIPT_SMOOTHING_FRAME_MS) return true;
+      const next = nextAdaptiveTranscriptText(
+        current,
+        target,
+        timestamp - targetStartedAtRef.current,
+        TRANSCRIPT_RESERVOIR_MAX_LAG_MS,
+        revisionIntervalRef.current,
+        timestamp - lastStepAtRef.current,
+      );
+      if (next === current) return true;
       lastStepAtRef.current = timestamp;
-      const next = nextAdaptiveTranscriptText(current, target, timestamp - targetStartedAtRef.current);
       updateVisibleText(next);
       return next !== target;
     };
@@ -163,6 +193,14 @@ export function ProgressiveTranscriptText({ segment, active }: { readonly segmen
       return;
     }
     const now = window.performance.now();
+    if (lastRevisionAtRef.current > 0) {
+      const observedInterval = Math.min(
+        TRANSCRIPT_RESERVOIR_MAX_REVISION_INTERVAL_MS,
+        Math.max(TRANSCRIPT_RESERVOIR_MIN_REVISION_INTERVAL_MS, now - lastRevisionAtRef.current),
+      );
+      revisionIntervalRef.current = revisionIntervalRef.current * 0.65 + observedInterval * 0.35;
+    }
+    lastRevisionAtRef.current = now;
     targetStartedAtRef.current = now;
     lastStepAtRef.current = now;
     const firstFrame = firstAdaptiveTranscriptText(visibleTextRef.current, target);
