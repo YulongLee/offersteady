@@ -32,6 +32,6 @@
 - Affected desktop areas: `apps/desktop` 的麦克风 / 系统音频采集、Audio Buffer、Chunk 生成、队列调度、ASR 长连接客户端和本地状态监测。
 - Affected backend areas: `apps/backend` 的 realtime-speech service、ASR gateway、session 内流式状态机、性能指标采集和前端推送通道。
 - Affected web areas: `apps/web` 的实时对话订阅、Partial / Final 字幕合并、增量渲染和 UI 更新节流。
-- Affected transport areas: Backend SSE 首快照顺序、keepalive 健康判断和 Browser cursor 续传恢复。
+- Affected transport areas: Backend SSE 首快照顺序、keepalive 健康判断、Browser cursor 续传恢复，以及公网反向代理对 SSE 的无压缩即时转发。
 - Affected protocol areas: `packages/protocol` 中实时音频帧、阶段事件、性能指标和流式字幕契约。
 - Privacy impact: 不新增原始音频长期保存；新增性能观测必须只记录耗时、状态和统计指标，不记录音频正文或敏感原文。

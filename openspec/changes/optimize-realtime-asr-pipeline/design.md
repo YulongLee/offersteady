@@ -216,6 +216,12 @@ Qwen Audio task 模式允许在同一 `sessionId + sourceKind` 的健康连接�
 
 生产真实双声道验证发现，该模型会在 provider task 约 `23s` 没有有效请求后返回 `CLIENT_ERROR request timeout` 并以 WebSocket `1007` 关闭；同时桌面 final 尾帧经常晚于 Provider `sentence_end`，导致多数句子仍进入 task rollover。因此该行为由服务端 feature flag 控制且默认关闭：生产保持 WebSocket 长连接，但每个本地 utterance 使用独立 task。当前句 `task-finished` 后不得预启动下一 task，预热也只建立 WebSocket；下一句话的首个音频帧在同一连接上先执行 `run-task` 并确认 `task-started`，随后立即追加 PCM。仅在后续 Provider 明确支持 task 空闲保活并通过长期验证后才允许开启持续 task。
 
+### Decision 20: Bypass compression and force immediate flush for public realtime SSE
+
+公网 Caddy 必须在通用 gzip 路由之前精确匹配实时字幕 SSE。该路由不启用 `encode`，设置 `Cache-Control: no-cache, no-transform`，并以 `flush_interval -1` 将每次上游写入立即转发。普通 Web、静态资源和非 SSE API 继续经过 gzip 路由。
+
+内层 Nginx 的 `proxy_buffering off` 和 `gzip off` 不能阻止外层 Caddy 再次压缩响应；小型 SSE event 进入 gzip writer 后可能等待后续数据才产生压缩块。因此无压缩要求必须在所有公网响应变换层显式保持，并由版本化配置与线上响应头回归共同约束。
+
 ## Risks / Trade-offs
 
 - [Risk] 引入 source worker、持久连接和有界队列后，系统状态机会更复杂 → Mitigation: 按 source/session 明确状态图，并增加可重复的单元测试与集成测试。
@@ -229,6 +235,7 @@ Qwen Audio task 模式允许在同一 `sessionId + sourceKind` 的健康连接�
 - [Risk] 高频 revision 可能增加 React 更新次数 → Mitigation: 保持稳定 utterance key、只更新当前 segment，并将公共前缀和可变尾部分节点渲染；内容路径不创建动画帧或定时器。
 - [Risk] 持续 task 的句尾事件迟到或空闲超时会让本地 final 等待并重建连接 → Mitigation: 生产默认关闭持续 task，使用同 WebSocket 上的逐句 task rollover；实验开关只用于受控验证。
 - [Risk] 尾音频重放可能重复少量文字 → Mitigation: 使用最长前后缀重叠拼接，且检查点仅驻留进程内，不改变原始供应商事件和隐私边界。
+- [Risk] 公网 SSE 路由匹配漂移会重新落入通用 gzip 路由 → Mitigation: 对精确 path、无 `encode`、即时 flush 和普通流量压缩分别增加配置契约测试，部署后检查真实公网响应头并保留可立即恢复的旧配置。
 
 ## Migration Plan
 

@@ -157,6 +157,10 @@
 - **WHEN** 首 snapshot 已成功且连续超过两个 keepalive 周期没有收到任何 SSE 字节
 - **THEN** 浏览器取消旧 reader，并由单一重连流程使用已保存 cursor 恢复，不清空当前字幕且不创建并行订阅
 
+#### Scenario: Public reverse proxies deliver a realtime transcript revision
+- **WHEN** Backend 为实时字幕 SSE 生成一个 snapshot、partial revision、final revision 或 keepalive 字节
+- **THEN** 公网入口按事件即时 flush，且不得对该 SSE 响应执行 gzip、转换或聚合；普通页面和非 SSE 接口仍可启用响应压缩
+
 ### Requirement: Desktop device registration SHALL be stable and idempotent
 桌面助手 MUST 为同一安装实例复用稳定设备身份。设备首次登记成功后，后续在线维持 MUST 使用 heartbeat，渲染进程 MUST NOT 周期性重复调用设备登记接口。
 

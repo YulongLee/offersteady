@@ -7,6 +7,7 @@
 - `docker/`: Web、Backend 的镜像构建文件
 - `compose/`: 本地与生产相近环境的多服务启动基线
 - `nginx/`: 统一入口、静态资源分发与 API 反向代理配置
+- `caddy/`: 公网 TLS 入口配置；生产实时字幕 SSE 路由禁止响应压缩并强制即时 flush
 - `postgres/`: PostgreSQL / pgvector 初始化脚本与约定
 
 敏感配置通过环境变量注入，不写入仓库。
@@ -20,6 +21,10 @@ docker compose --env-file .env.production -f infra/compose/docker-compose.founda
 ```
 
 `.env.production` 必须只存在于服务器，不提交 Git。完整步骤见 [`docs/v0-1-server-deployment.md`](../docs/v0-1-server-deployment.md)。
+
+生产宿主机 Caddy 使用 `caddy/Caddyfile.production`。部署前必须运行
+`caddy validate --config infra/caddy/Caddyfile.production`，更新时保留旧配置副本，
+并确认实时字幕 SSE 响应没有 `Content-Encoding`。普通页面和接口继续使用 gzip。
 
 ## 支付回调
 

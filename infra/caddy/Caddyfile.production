@@ -1,0 +1,19 @@
+mianshiwen.cn, www.mianshiwen.cn {
+    @realtime_sse path_regexp realtime_sse ^/api/v1/realtime-speech/sessions/[^/]+/stream$
+    handle @realtime_sse {
+        header Cache-Control "no-cache, no-transform"
+        reverse_proxy 127.0.0.1:8080 {
+            flush_interval -1
+        }
+    }
+
+    handle {
+        encode gzip
+        reverse_proxy 127.0.0.1:8080
+    }
+}
+
+admin.mianshiwen.cn {
+    encode gzip
+    reverse_proxy 127.0.0.1:8081
+}
