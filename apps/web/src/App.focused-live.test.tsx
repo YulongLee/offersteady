@@ -444,13 +444,17 @@ describe("focused live interview workspace", () => {
     const input = screen.getByRole("textbox", { name: "手动输入面试官的问题" });
     fireEvent.change(input, { target: { value: "验证流式首段的问题" } });
     fireEvent.click(screen.getByRole("button", { name: "快答" }));
-    expect(screen.getByRole("button", { name: "快答" })).toBeDisabled();
-    expect(screen.getByText("正在生成回答，请稍候")).toBeInTheDocument();
+    const quickAnswerButton = screen.getByRole("button", { name: "快答" });
+    expect(quickAnswerButton).toBeDisabled();
+    expect(quickAnswerButton).toHaveTextContent("快答");
+    expect(quickAnswerButton).not.toHaveTextContent(/快答中|已回答|生成中/);
+    expect(screen.queryByText("正在生成回答，请稍候")).not.toBeInTheDocument();
     expect(await screen.findByText("流式首段已经出现。")).toBeInTheDocument();
     expect(screen.queryByText("流式首段已经出现。最终回答也完成。")).not.toBeInTheDocument();
     finishStream();
     expect(await screen.findByText("流式首段已经出现。最终回答也完成。")).toBeInTheDocument();
-    expect(await screen.findByText("快答已完成")).toBeInTheDocument();
+    await waitFor(() => expect(quickAnswerButton).not.toBeDisabled());
+    expect(screen.queryByText("快答已完成")).not.toBeInTheDocument();
   });
 
   it("does not let workspace polling shorten a visible streamed quick answer", async () => {
@@ -506,7 +510,8 @@ describe("focused live interview workspace", () => {
     expect(screen.getByLabelText("回答正文")).toHaveTextContent("这是已经稳定展示的较长合成回答。");
     expect(screen.queryByText("较短旧快照")).not.toBeInTheDocument();
     finishStream();
-    expect(await screen.findByText("快答已完成")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "快答" })).not.toBeDisabled());
+    expect(screen.queryByText("快答已完成")).not.toBeInTheDocument();
   });
 
   it("stops the active answer without stopping capture and releases reserved points", async () => {
@@ -567,7 +572,8 @@ describe("focused live interview workspace", () => {
     expect(screenshotButton).toHaveTextContent("直接截取共享屏幕并进入回答");
     expect(screenshotButton).not.toHaveTextContent(/处理中|已回答/);
     expect((await screen.findAllByText("请设计一个支持实时协作的 Web 系统。")).length).toBeGreaterThan(0);
-    expect(await screen.findByText("截屏回答已完成，答案已显示")).toBeInTheDocument();
+    await waitFor(() => expect(screenshotButton).not.toBeDisabled());
+    expect(screen.queryByText("截屏回答已完成，答案已显示")).not.toBeInTheDocument();
     expect(screen.queryByText("上传并识别")).not.toBeInTheDocument();
     const instruction = submitScreenshot.mock.calls.at(-1)?.[0].instruction ?? "";
     expect(instruction).toContain("只依据当前截图");
@@ -609,13 +615,13 @@ describe("focused live interview workspace", () => {
     expect(screenshotButton).toBeDisabled();
     expect(screenshotButton).toHaveTextContent("截屏回答");
     expect(screenshotButton).not.toHaveTextContent("正在生成截图答案");
-    expect(screen.getAllByText("正在生成截图答案")).toHaveLength(1);
+    expect(screen.queryByText("正在生成截图答案")).not.toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
 
     await waitFor(() => expect(cancelShortcut).toHaveBeenCalledWith("shortcut-shot-1", expect.any(AbortSignal)));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(screen.getByText("截屏回答已取消")).toBeInTheDocument();
+    expect(screen.queryByText("截屏回答已取消")).not.toBeInTheDocument();
   });
 
   it("shows shortcut feedback as soon as realtime acceptance arrives instead of waiting for recovery polling", async () => {
@@ -745,7 +751,7 @@ describe("focused live interview workspace", () => {
     }));
 
     expect(await screen.findByText("新的截图回答")).toBeInTheDocument();
-    expect(screen.getByText("截屏回答已完成，答案已显示")).toBeInTheDocument();
+    expect(screen.queryByText("截屏回答已完成，答案已显示")).not.toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
     act(() => publishRealtime?.({
@@ -758,7 +764,7 @@ describe("focused live interview workspace", () => {
     }));
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByText("截屏回答已完成，答案已显示")).toBeInTheDocument();
+    expect(screen.queryByText("截屏回答已完成，答案已显示")).not.toBeInTheDocument();
   });
 
   it("confirms detected question text without creating an answer before quick answer is clicked", () => {
