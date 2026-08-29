@@ -18,9 +18,9 @@
 
 ## 4. Production Release
 
-- [ ] 4.1 Commit and push the accepted 1.2.12 source baseline
-- [ ] 4.2 Build, notarize and verify macOS arm64 and x64 production DMGs
-- [ ] 4.3 Build and structurally verify the Windows x64 installer
-- [ ] 4.4 Upload immutable artifacts and atomically update the production desktop manifest
+- [x] 4.1 Commit and push the accepted 1.2.12 source baseline
+- [x] 4.2 Build, notarize and verify macOS arm64 and x64 production DMGs
+- [x] 4.3 Build and structurally verify the Windows x64 installer
+- [x] 4.4 Upload immutable artifacts and atomically update the production desktop manifest
 - [ ] 4.5 Commit and push the manifest and release record, then deploy the Backend manifest consumer
 - [ ] 4.6 Verify production health, manifest versions and byte-range download routes for all three platforms
