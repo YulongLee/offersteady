@@ -96,6 +96,7 @@ def _settings(**overrides) -> Settings:  # noqa: ANN003
         "realtime_asr_api_key": "test-key",
         "realtime_asr_protocol": "qwen-audio-task",
         "realtime_asr_model": "qwen-audio-3.0-asr-flash-streaming",
+        "realtime_asr_max_sentence_silence_ms": 300,
         "realtime_asr_connect_timeout_seconds": 0.2,
         "realtime_asr_finalize_timeout_seconds": 0.2,
         **overrides,
@@ -157,7 +158,7 @@ def test_task_gateway_streams_binary_partial_final_and_reuses_connection(monkeyp
     assert [item["header"]["action"] for item in control].count("run-task") == 2
     assert [item["header"]["action"] for item in control].count("finish-task") == 1
     assert control[0]["payload"]["model"] == "qwen-audio-3.0-asr-flash-streaming"
-    assert control[0]["payload"]["parameters"]["max_sentence_silence"] == 400
+    assert control[0]["payload"]["parameters"]["max_sentence_silence"] == 300
     assert gateway.diagnostics("microphone")["task_finish_count"] == 1
     assert gateway.diagnostics("microphone")["final_count"] == 1
     gateway.close_session(session_id="session-task")

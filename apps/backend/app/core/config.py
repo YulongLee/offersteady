@@ -179,7 +179,7 @@ class Settings(BaseSettings):
     realtime_asr_model: str = "qwen-realtime"
     realtime_asr_protocol: str = "qwen3-realtime"
     realtime_asr_inference_ws_url: str = "wss://dashscope.aliyuncs.com/api-ws/v1/inference"
-    realtime_asr_max_sentence_silence_ms: int = 400
+    realtime_asr_max_sentence_silence_ms: int = 300
     realtime_question_auto_confirm_threshold: float = 0.85
     runtime_performance_telemetry_enabled: bool = True
     runtime_performance_telemetry_ttl_seconds: int = 7 * 24 * 60 * 60
