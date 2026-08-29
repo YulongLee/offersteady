@@ -43,6 +43,8 @@ describe("companion interview wording", () => {
     expect(source).toContain('statusLabel="面试官声音"');
     expect(source).not.toContain("开启电脑音频权限");
     expect(source).not.toContain("等待声音检查");
+    expect(source).not.toContain('activeBinding ? "status-light green" : "status-light red"');
+    expect(source).toContain("connectionPresentationHealth === \"healthy\"");
   });
 
   it("shows screen imagery only in an on-demand preview dialog", () => {

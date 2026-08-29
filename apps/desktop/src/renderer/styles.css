@@ -255,6 +255,7 @@ select:focus {
 .source-light.green {
   background: var(--brand);
   box-shadow: 0 0 0 5px rgba(110, 231, 189, .09);
+  animation: healthy-status-breathe 2.4s ease-in-out infinite;
 }
 
 .row-control {
@@ -713,6 +714,25 @@ select:focus {
 .status-light.green {
   background: var(--brand);
   box-shadow: 0 0 0 5px rgba(110, 231, 189, .09);
+  animation: healthy-status-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes healthy-status-breathe {
+  0%, 100% {
+    opacity: .72;
+    box-shadow: 0 0 0 4px rgba(110, 231, 189, .07);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 0 6px rgba(110, 231, 189, .14);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .source-light.green,
+  .status-light.green {
+    animation: none;
+  }
 }
 
 .muted-chip {

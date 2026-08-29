@@ -1,10 +1,40 @@
 import { describe, expect, it } from "vitest";
 
-import { BINDING_STATUS_POLL_MS, captureStateForReliability, captureStateForSourceHealth, desktopActiveConnectionQuery, desktopBindingLeaseIdentity, hasPublisherTakenOver, mergeDisplayedSourceHealth } from "../src/renderer/CompanionApp";
+import { audioSourcePresentationHealth, BINDING_STATUS_POLL_MS, captureStateForReliability, captureStateForSourceHealth, companionPresentationHealth, desktopActiveConnectionQuery, desktopBindingLeaseIdentity, hasPublisherTakenOver, mergeDisplayedSourceHealth, permissionPresentationHealth } from "../src/renderer/CompanionApp";
 import { AUDIO_READINESS_TTL_MS, readinessFields, signalEvidenceIsFresh, sourceHealthIsAudioReady } from "../src/renderer/audio/audio-readiness";
 import { productionAudioTransportPolicy, publisherCaptureStateForTransport, publisherFailureDiagnostic, publisherFailureIsTerminal } from "../src/renderer/audio/realtime-publisher";
 
 describe("companion displayed source health", () => {
+  it("keeps normal idle, live silence, and transient recovery green", () => {
+    expect(companionPresentationHealth("permission-required", false)).toBe("healthy");
+    expect(companionPresentationHealth("ready", true, false)).toBe("healthy");
+    expect(companionPresentationHealth("capturing", true, true)).toBe("healthy");
+    expect(companionPresentationHealth("reconnecting", true, true)).toBe("healthy");
+    expect(companionPresentationHealth("error", true, true)).toBe("healthy");
+
+    expect(audioSourcePresentationHealth({
+      sourceId: "mic", sourceKind: "microphone", label: "麦克风", state: "silent", stage: "track-live", level: 0,
+    }, "granted")).toBe("healthy");
+    expect(audioSourcePresentationHealth({
+      sourceId: "system", sourceKind: "system", label: "电脑输出", state: "reconnecting", stage: "stream-opened", level: 0,
+    }, "granted")).toBe("healthy");
+  });
+
+  it("turns red only for confirmed connection, permission, or source faults", () => {
+    expect(companionPresentationHealth("not-connected", true)).toBe("fault");
+    expect(companionPresentationHealth("permission-required", true)).toBe("fault");
+    expect(companionPresentationHealth("error", true, false)).toBe("fault");
+
+    for (const state of ["permission-denied", "permission-required", "unsupported", "unavailable", "error"] as const) {
+      expect(audioSourcePresentationHealth({
+        sourceId: "source", sourceKind: "microphone", label: "音频", state, level: 0,
+      }, "granted")).toBe("fault");
+    }
+    expect(audioSourcePresentationHealth(undefined, "denied")).toBe("fault");
+    expect(permissionPresentationHealth("denied", false)).toBe("fault");
+    expect(permissionPresentationHealth("denied", true)).toBe("healthy");
+  });
+
   it("requires fresh real-signal evidence instead of treating an open silent track as checked", () => {
     const nowMs = 200_000;
     const silent = { sourceId: "system", sourceKind: "system", label: "电脑输出", state: "silent", stage: "track-live", level: 0 } as const;

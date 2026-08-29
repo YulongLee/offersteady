@@ -22,6 +22,37 @@ export const companionStatusCopy: Record<CaptureState, { title: string; detail: 
 
 export const companionPrimaryAction = (state: CaptureState): string => state === "capturing" ? "已连接" : "复制连接码";
 
+export type CompanionPresentationHealth = "healthy" | "fault";
+
+export const companionPresentationHealth = (
+  state: CaptureState,
+  initialized: boolean,
+  hasActiveBinding = false,
+): CompanionPresentationHealth => {
+  if (!initialized) return "healthy";
+  if (state === "not-connected" || state === "permission-required") return "fault";
+  if (state === "error" && !hasActiveBinding) return "fault";
+  return "healthy";
+};
+
+export const audioSourcePresentationHealth = (
+  health: AudioSourceHealth | undefined,
+  permission: AudioPermission = "unknown",
+): CompanionPresentationHealth => {
+  if (health?.state === "permission-denied"
+    || health?.state === "permission-required"
+    || health?.state === "unsupported"
+    || health?.state === "unavailable"
+    || health?.state === "error") return "fault";
+  if (permission === "denied") return "fault";
+  return "healthy";
+};
+
+export const permissionPresentationHealth = (
+  permission: AudioPermission,
+  confirmedReady = false,
+): CompanionPresentationHealth => confirmedReady || permission !== "denied" ? "healthy" : "fault";
+
 const defaultScreens: readonly DesktopScreenSource[] = [
   { id: "display-1", label: "显示器 1", thumbnailDataUrl: null },
 ];
@@ -662,6 +693,14 @@ export function CompanionApp() {
     ? isCaptureSourceReady(systemAudioHealth?.state)
     : sourceHealthIsAudioReady(systemAudioHealth);
   const screenReady = screenCaptureReadyForPermission(screenPermission, screenCaptureReady);
+  const connectionPresentationHealth = companionPresentationHealth(
+    state,
+    config !== null && pairingIdentity !== null,
+    activeBinding !== null,
+  );
+  const microphonePresentationHealth = audioSourcePresentationHealth(microphoneHealth, permissions.microphone);
+  const systemAudioPresentationHealth = audioSourcePresentationHealth(systemAudioHealth, permissions.systemAudio);
+  const screenPresentationHealth = permissionPresentationHealth(screenPermission, screenCaptureReady);
   const nativeRuntimeReady = nativeRuntimeHealth?.ready === true;
   const isWindows = config?.platform === "windows";
 
@@ -1337,7 +1376,7 @@ export function CompanionApp() {
             title="麦克风"
             subtitle="识别你的声音"
             statusLabel="我的声音"
-            ready={microphoneReady}
+            presentationHealth={microphonePresentationHealth}
             meterLevel={microphoneMeterLevel}
             meterCopy={healthCopy(microphoneHealth, "我的声音", microphoneMeterLevel)}
           >
@@ -1363,7 +1402,7 @@ export function CompanionApp() {
             title="电脑输出"
             subtitle="识别你能听到的面试官声音"
             statusLabel="面试官声音"
-            ready={systemAudioReady}
+            presentationHealth={systemAudioPresentationHealth}
             meterLevel={systemAudioMeterLevel}
             meterCopy={healthCopy(systemAudioHealth, "面试官声音", systemAudioMeterLevel)}
           >
@@ -1380,7 +1419,7 @@ export function CompanionApp() {
             </div>
           </TerminalRow>
 
-          <TerminalRow title="屏幕捕捉" subtitle="选择要捕捉的屏幕" statusLabel="捕捉屏幕" ready={screenReady}>
+          <TerminalRow title="屏幕捕捉" subtitle="选择要捕捉的屏幕" statusLabel="捕捉屏幕" presentationHealth={screenPresentationHealth}>
             <div className="screen-control">
               <select
                 aria-label="选择屏幕捕捉来源"
@@ -1478,7 +1517,11 @@ export function CompanionApp() {
                   className="interview-link-button"
                   onClick={() => { void openResolvedUrl("workspace"); }}
                 >
-                  <span className={activeBinding ? "status-light green" : "status-light red"} />
+                  <span
+                    className={`status-light ${connectionPresentationHealth === "healthy" ? "green" : "red"}`}
+                    aria-label={connectionPresentationHealth === "healthy" ? "助手运行正常" : "助手连接异常"}
+                    title={connectionPresentationHealth === "healthy" ? "助手运行正常" : "助手连接异常"}
+                  />
                   <span>打开面试稳网站</span>
                 </button>
               </div>
@@ -1500,7 +1543,7 @@ function TerminalRow(props: {
   readonly title: string;
   readonly subtitle: string;
   readonly statusLabel: string;
-  readonly ready: boolean;
+  readonly presentationHealth: CompanionPresentationHealth;
   readonly children: ReactNode;
   readonly meterLevel?: number;
   readonly meterCopy?: string;
@@ -1511,7 +1554,7 @@ function TerminalRow(props: {
         <h2>{props.title}</h2>
         <p>{props.subtitle}</p>
         <span className="source-status">
-          <SourceLight ready={props.ready} />
+          <SourceLight health={props.presentationHealth} />
           <span>{props.statusLabel}</span>
         </span>
       </div>
@@ -1530,12 +1573,13 @@ function TerminalRow(props: {
   );
 }
 
-function SourceLight(props: { readonly ready: boolean }) {
+function SourceLight(props: { readonly health: CompanionPresentationHealth }) {
+  const healthy = props.health === "healthy";
   return (
     <span
-      className={props.ready ? "source-light green" : "source-light red"}
-      title={props.ready ? "已选择可用设备" : "未检测到可用设备"}
-      aria-label={props.ready ? "已选择可用设备" : "未检测到可用设备"}
+      className={healthy ? "source-light green" : "source-light red"}
+      title={healthy ? "通道运行正常" : "通道需要检查"}
+      aria-label={healthy ? "通道运行正常" : "通道需要检查"}
     />
   );
 }
