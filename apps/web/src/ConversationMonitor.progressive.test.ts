@@ -1,28 +1,16 @@
-import { act, render } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { render } from "@testing-library/react";
 import type { SpeakerTranscriptSegment } from "@offersteady/protocol";
 import { createElement } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  adaptiveTranscriptReservoirLag,
-  finalTranscriptTailDuration,
-  firstAdaptiveTranscriptText,
-  nextAdaptiveTranscriptText,
-  nextFinalTranscriptTailText,
-  nextProgressiveTranscriptText,
-  ProgressiveTranscriptText,
-  TRANSCRIPT_FINAL_TAIL_MAX_MS,
-  TRANSCRIPT_RESERVOIR_MIN_LAG_MS,
-  TRANSCRIPT_RESERVOIR_MAX_LAG_MS,
+  ImmediateTranscriptText,
+  splitImmediateTranscriptRevision,
   transcriptPresentationLabel,
   transcriptPresentationState,
 } from "./ConversationMonitor";
 
-describe("progressive realtime transcript", () => {
-  let frameId = 0;
-  let frameCallbacks: Map<number, FrameRequestCallback>;
-  let now = 1_000;
-
+describe("immediate realtime transcript", () => {
   const segment = (overrides: Partial<SpeakerTranscriptSegment> = {}): SpeakerTranscriptSegment => ({
     id: "segment-1",
     sessionId: "session-1",
@@ -40,29 +28,9 @@ describe("progressive realtime transcript", () => {
     ...overrides,
   });
 
-  const runFrame = (advanceMs: number) => {
-    now = Math.max(now, window.performance.now()) + advanceMs;
-    const callbacks = [...frameCallbacks.values()];
-    frameCallbacks.clear();
-    act(() => callbacks.forEach(callback => callback(now)));
-  };
-
   beforeEach(() => {
-    frameId = 0;
-    frameCallbacks = new Map();
-    now = window.performance.now();
-    vi.spyOn(window.performance, "now").mockImplementation(() => now);
-    vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => {
-      const id = ++frameId;
-      frameCallbacks.set(id, callback);
-      return id;
-    }));
-    vi.stubGlobal("cancelAnimationFrame", vi.fn((id: number) => { frameCallbacks.delete(id); }));
-    Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
-    Object.defineProperty(window, "matchMedia", {
-      configurable: true,
-      value: vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
-    });
+    vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
   });
 
   afterEach(() => {
@@ -70,157 +38,86 @@ describe("progressive realtime transcript", () => {
     vi.unstubAllGlobals();
   });
 
-  it("reveals the first received character immediately", () => {
-    expect(firstAdaptiveTranscriptText("", "你好，请介绍项目")).toBe("你");
-    expect(firstAdaptiveTranscriptText("你好", "你好，请介绍项目")).toBe("你好，");
+  it("splits a growing revision into an unchanged prefix and its new tail", () => {
+    expect(splitImmediateTranscriptRevision("请介绍项目", "请介绍项目经验")).toEqual({
+      stablePrefix: "请介绍项目",
+      mutableTail: "经验",
+    });
   });
 
-  it("slows a low reservoir toward the expected next revision", () => {
-    const target = "面试问题测试文本";
-    const first = firstAdaptiveTranscriptText("", target);
-    const tooEarly = nextAdaptiveTranscriptText(first, target, 20, TRANSCRIPT_RESERVOIR_MAX_LAG_MS, 500, 20);
-    const paced = nextAdaptiveTranscriptText(first, target, 140, TRANSCRIPT_RESERVOIR_MAX_LAG_MS, 500, 140);
-    expect(tooEarly).toBe(first);
-    expect(paced.length).toBeGreaterThan(first.length);
-    expect(paced.length).toBeLessThan(target.length);
+  it("isolates only the corrected tail without retaining the old hypothesis", () => {
+    expect(splitImmediateTranscriptRevision("项目负责上线", "项目复盘结果")).toEqual({
+      stablePrefix: "项目",
+      mutableTail: "复盘结果",
+    });
   });
 
-  it("derives an 800-1000ms reservoir from observed provider cadence", () => {
-    expect(adaptiveTranscriptReservoirLag(395)).toBe(TRANSCRIPT_RESERVOIR_MIN_LAG_MS);
-    expect(adaptiveTranscriptReservoirLag(720)).toBe(900);
-    expect(adaptiveTranscriptReservoirLag(987)).toBe(TRANSCRIPT_RESERVOIR_MAX_LAG_MS);
+  it("accepts a shorter authoritative partial immediately", () => {
+    expect(splitImmediateTranscriptRevision("请介绍一下你最近负责的项目", "请介绍项目")).toEqual({
+      stablePrefix: "请介绍",
+      mutableTail: "项目",
+    });
   });
 
-  it("increases its step for a high reservoir and always catches up within 1000ms", () => {
-    const target = "面".repeat(100);
-    const first = firstAdaptiveTranscriptText("", target);
-    const progressing = nextAdaptiveTranscriptText(first, target, 32, TRANSCRIPT_RESERVOIR_MAX_LAG_MS, 500, 32);
-    expect(progressing.length - first.length).toBeGreaterThan(1);
-    expect(nextAdaptiveTranscriptText(progressing, target, TRANSCRIPT_RESERVOIR_MAX_LAG_MS)).toBe(target);
+  it("compares Unicode graphemes without splitting surrogate pairs", () => {
+    expect(splitImmediateTranscriptRevision("支持😀旧方案", "支持😀新方案")).toEqual({
+      stablePrefix: "支持😀",
+      mutableTail: "新方案",
+    });
   });
 
-  it("bounds prefix-growing Final tails between 150ms and 250ms", () => {
-    expect(finalTranscriptTailDuration(1)).toBe(150);
-    expect(finalTranscriptTailDuration(5)).toBe(200);
-    expect(finalTranscriptTailDuration(9)).toBe(TRANSCRIPT_FINAL_TAIL_MAX_MS);
-    expect(nextFinalTranscriptTailText("已有文本", "已有文本和新增尾字", 0, 200)).toBe("已有文本和");
-    expect(nextFinalTranscriptTailText("已有文本", "已有文本和新增尾字", 200, 200)).toBe("已有文本和新增尾字");
-    expect(nextFinalTranscriptTailText("错误文本", "纠正文本", 0, 200)).toBe("纠正文本");
-  });
-
-  it("recovers from an ASR correction at the first changed character", () => {
-    expect(nextProgressiveTranscriptText("项目负责", "项目复盘")).toBe("项目复盘");
-  });
-
-  it("keeps the last longer visible partial during a temporary provider retraction", () => {
-    expect(nextProgressiveTranscriptText("请介绍一下你最近负责的项目", "请介绍项目")).toBe("请介绍一下你最近负责的项目");
-  });
-
-  it("ignores punctuation when deciding whether a partial retracted", () => {
-    expect(nextProgressiveTranscriptText("请介绍项目。", "请介绍项目")).toBe("请介绍项目");
-  });
-
-  it("lets an authoritative final replace a longer visible partial", () => {
-    expect(nextProgressiveTranscriptText("请介绍一下你最近负责的项目", "请介绍项目", true)).toBe("请介绍项目");
-  });
-
-  it("smooths a received partial with one shared frame loop and catches up", () => {
-    const view = render(createElement(ProgressiveTranscriptText, { segment: segment(), active: true }));
-    const paragraph = view.container.querySelector("p")!;
-    expect(paragraph).toHaveTextContent("请");
-    expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
-
-    runFrame(140);
-    expect(paragraph.textContent!.length).toBeGreaterThan(1);
-    runFrame(TRANSCRIPT_RESERVOIR_MAX_LAG_MS);
-    expect(paragraph).toHaveTextContent("请介绍你的项目");
-  });
-
-  it("keeps draining between regular batched revisions instead of emptying immediately", () => {
-    const view = render(createElement(ProgressiveTranscriptText, {
-      segment: segment({ text: "一二三四五六七八九十" }), active: true,
-    }));
-    const paragraph = view.container.querySelector("p")!;
-    const observedLengths: number[] = [paragraph.textContent!.length];
-    for (let elapsed = 0; elapsed < 400; elapsed += 50) {
-      runFrame(50);
-      observedLengths.push(paragraph.textContent!.length);
-    }
-    expect(observedLengths.at(-1)).toBeGreaterThan(observedLengths[0]!);
-    expect(observedLengths.at(-1)).toBeLessThan(10);
-
-    view.rerender(createElement(ProgressiveTranscriptText, {
-      segment: segment({ revision: 2, text: "一二三四五六七八九十一二三四五六七八九十" }), active: true,
-    }));
-    const beforeDrain = paragraph.textContent!.length;
-    const secondRevisionLengths: number[] = [];
-    for (let elapsed = 0; elapsed < 400; elapsed += 50) {
-      runFrame(50);
-      secondRevisionLengths.push(paragraph.textContent!.length);
-    }
-    expect(secondRevisionLengths[0]).toBeGreaterThanOrEqual(beforeDrain);
-    expect(new Set(secondRevisionLengths).size).toBeGreaterThan(4);
-    expect(secondRevisionLengths[3]).toBeLessThan(20);
-    runFrame(TRANSCRIPT_RESERVOIR_MAX_LAG_MS);
-    expect(paragraph).toHaveTextContent("一二三四五六七八九十一二三四五六七八九十");
-  });
-
-  it("flushes an authoritative Final immediately and cancels pending smoothing", () => {
-    const view = render(createElement(ProgressiveTranscriptText, { segment: segment(), active: true }));
-    expect(view.container.querySelector("p")).toHaveTextContent("请");
-    view.rerender(createElement(ProgressiveTranscriptText, { segment: segment({ revision: 2, text: "最终文本", isFinal: true }), active: false }));
-    expect(view.container.querySelector("p")).toHaveTextContent("最终文本");
-    expect(cancelAnimationFrame).toHaveBeenCalled();
-  });
-
-  it("quickly smooths only the added tail of a prefix-growing Final", () => {
-    const partialText = "已有完整部分";
-    const finalText = "已有完整部分以及新增尾字";
-    const view = render(createElement(ProgressiveTranscriptText, {
-      segment: segment({ text: partialText }), active: true,
-    }));
-    const paragraph = view.container.querySelector("p")!;
-    runFrame(TRANSCRIPT_RESERVOIR_MAX_LAG_MS);
-    expect(paragraph).toHaveTextContent(partialText);
-
-    view.rerender(createElement(ProgressiveTranscriptText, {
-      segment: segment({ revision: 2, text: finalText, isFinal: true }), active: false,
-    }));
-    expect(paragraph).not.toHaveTextContent(finalText);
-    expect(paragraph.textContent).toBe("已有完整部分以");
-    runFrame(100);
-    expect(paragraph.textContent!.length).toBeGreaterThan(partialText.length + 1);
-    expect(paragraph).not.toHaveTextContent(finalText);
-    runFrame(TRANSCRIPT_FINAL_TAIL_MAX_MS);
-    expect(paragraph).toHaveTextContent(finalText);
-  });
-
-  it("renders a prefix-growing Final immediately for reduced motion", () => {
-    const partialText = "已有完整部分";
-    const finalText = "已有完整部分以及新增尾字";
-    const view = render(createElement(ProgressiveTranscriptText, {
-      segment: segment({ text: partialText }), active: true,
-    }));
-    runFrame(TRANSCRIPT_RESERVOIR_MAX_LAG_MS);
-    vi.mocked(window.matchMedia).mockReturnValue({ matches: true } as MediaQueryList);
-    view.rerender(createElement(ProgressiveTranscriptText, {
-      segment: segment({ revision: 2, text: finalText, isFinal: true }), active: false,
-    }));
-    expect(view.container.querySelector("p")).toHaveTextContent(finalText);
-  });
-
-  it("renders immediately for reduced motion and does not schedule smoothing", () => {
-    vi.mocked(window.matchMedia).mockReturnValue({ matches: true } as MediaQueryList);
-    const view = render(createElement(ProgressiveTranscriptText, { segment: segment(), active: true }));
+  it("renders the complete first partial in the initial React render", () => {
+    const view = render(createElement(ImmediateTranscriptText, { segment: segment(), active: true }));
     expect(view.container.querySelector("p")).toHaveTextContent("请介绍你的项目");
     expect(requestAnimationFrame).not.toHaveBeenCalled();
   });
 
-  it("cancels its shared frame job when the session row unmounts", () => {
-    const view = render(createElement(ProgressiveTranscriptText, { segment: segment(), active: true }));
-    expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
-    view.unmount();
-    expect(cancelAnimationFrame).toHaveBeenCalledTimes(1);
+  it("renders a growing revision immediately without a reservoir or animation", () => {
+    const view = render(createElement(ImmediateTranscriptText, {
+      segment: segment({ text: "请介绍项目" }), active: true,
+    }));
+    view.rerender(createElement(ImmediateTranscriptText, {
+      segment: segment({ revision: 2, text: "请介绍项目经验" }), active: true,
+    }));
+    const paragraph = view.container.querySelector("p")!;
+    expect(paragraph).toHaveTextContent("请介绍项目经验");
+    expect([...paragraph.querySelectorAll(":scope > span")].slice(0, 2).map(node => node.textContent)).toEqual([
+      "请介绍项目", "经验",
+    ]);
+    expect(requestAnimationFrame).not.toHaveBeenCalled();
+  });
+
+  it("replaces a corrected provider tail in the same render", () => {
+    const view = render(createElement(ImmediateTranscriptText, {
+      segment: segment({ text: "项目负责上线" }), active: true,
+    }));
+    view.rerender(createElement(ImmediateTranscriptText, {
+      segment: segment({ revision: 2, text: "项目复盘结果" }), active: true,
+    }));
+    expect(view.container.querySelector("p")).toHaveTextContent("项目复盘结果");
+    expect(view.container.querySelector("p")).not.toHaveTextContent("负责上线");
+  });
+
+  it("renders a shorter provider revision immediately instead of waiting for Final", () => {
+    const view = render(createElement(ImmediateTranscriptText, {
+      segment: segment({ text: "请介绍一下你最近负责的项目" }), active: true,
+    }));
+    view.rerender(createElement(ImmediateTranscriptText, {
+      segment: segment({ revision: 2, text: "请介绍项目" }), active: true,
+    }));
+    expect(view.container.querySelector("p")).toHaveTextContent("请介绍项目");
+    expect(view.container.querySelector("p")).not.toHaveTextContent("最近负责");
+  });
+
+  it("renders Final immediately with no tail animation", () => {
+    const view = render(createElement(ImmediateTranscriptText, {
+      segment: segment({ text: "已有部分" }), active: true,
+    }));
+    view.rerender(createElement(ImmediateTranscriptText, {
+      segment: segment({ revision: 2, text: "已有部分以及最终尾字", isFinal: true }), active: false,
+    }));
+    expect(view.container.querySelector("p")).toHaveTextContent("已有部分以及最终尾字");
+    expect(requestAnimationFrame).not.toHaveBeenCalled();
   });
 
   it("does not infer incomplete from the client age of a partial", () => {
@@ -230,11 +127,7 @@ describe("progressive realtime transcript", () => {
   });
 
   it("freezes a committing partial without turning it incomplete while final reconciles", () => {
-    const committing = {
-      isFinal: false,
-      turnState: "committing" as const,
-    };
-    expect(transcriptPresentationState(committing)).toBe("confirming");
+    expect(transcriptPresentationState({ isFinal: false, turnState: "committing" })).toBe("confirming");
     expect(transcriptPresentationLabel("confirming")).toBe("已转写");
     expect(transcriptPresentationLabel("stale")).toBe("识别未完成");
   });

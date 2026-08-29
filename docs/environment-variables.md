@@ -170,7 +170,6 @@ OFFERSTEADY_ALIPAY_RETURN_URL=https://mianshiwen.cn/app/billing
 
 - `VITE_APP_ENV`
 - `VITE_API_BASE_URL`
-- `VITE_REALTIME_SUBTITLE_SMOOTHING`：实时字幕展示平滑开关，默认启用；设置为 `false` 时直接展示每个已收到的 ASR revision，可用于快速回滚展示层优化。
 - `VITE_PUBLIC_APP_VERSION`
 
 前端只允许读取 `VITE_` 前缀变量，不得读取 OSS、数据库或服务端密钥。产品运行时不再支持 `VITE_APP_DATA_SOURCE=fixture` 或 strict/fallback 开关；页面数据统一来自 `VITE_API_BASE_URL` 指向的 Backend API。

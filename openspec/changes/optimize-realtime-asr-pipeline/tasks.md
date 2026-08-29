@@ -50,6 +50,7 @@
 - [x] 4.14 Make realtime SSE snapshot-first and add keepalive-aware, cursor-resumable transport stall recovery without parallel subscriptions.
 - [x] 4.15 Replace per-revision fixed smoothing with an utterance-local adaptive subtitle reservoir driven by revision cadence and inventory depth.
 - [x] 4.16 Tune the subtitle reservoir to a measured 800–1000ms adaptive window and smooth prefix-growing Final tails within 150–250ms while keeping corrective Final authoritative.
+- [x] 4.17 Remove presentation buffering and stale shorter-partial retention so every accepted revision renders immediately with longest-common-prefix tail isolation.
 
 ## 5. Verification, Evals, and Rollout
 
@@ -76,3 +77,4 @@
 - [x] 5.18 Add a regression proving the safe default rolls tasks per utterance without recreating the source WebSocket.
 - [x] 5.19 Add regressions proving prewarm does not start an idle task and the next audio frame lazily starts a new task on the existing WebSocket.
 - [x] 5.20 Add Web regressions for measured reservoir bounds, low-inventory pacing, prefix-growing Final tails, corrective Final immediacy, and reduced-motion fallback.
+- [x] 5.21 Add Web regressions for immediate growth, correction, retraction and Final rendering in both the stream adapter and transcript component.

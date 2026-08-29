@@ -164,13 +164,13 @@ Alternative considered: 只继续调一个全局 RMS 阈值。缺点是不同设
 
 实时字幕、待确认问题、当前回答任务和新建面试时的回答列表属于单场面试运行态，不得跨 session 合并。创建新草稿时前端清空上一场临时运行态；实时字幕 reconciliation 只允许合并相同 `sessionId` 的 partial/final，目标 session 变化时先过滤旧 session 内容。该清理只作用于前端当前工作区，不删除后端历史面试记录。
 
-### Decision 12: Measure provider TTFT from the first utterance append and smooth only received partial text
+### Decision 12: Measure provider TTFT from the first utterance append and render only the latest accepted revision
 
 每个 provider utterance 独立保存第一次 PCM append 时间，后续 append 不得覆盖该时间。供应商 TTFT 必须以第一次 append 到第一次有效 partial 计算，同时保留最近 append 时间用于发送路径诊断。
 
-网页接收和保存新的 partial revision 时不得延迟权威原始状态；展示层只对该 revision 已经收到的新增文字执行有界、自适应平滑。首个可见字符在当前渲染周期立即出现，剩余文字通过共享 `requestAnimationFrame` 调度器逐步展示；具体蓄水窗口和追平规则以 Decision 16 为准。页面进入后台、用户启用减少动态效果或调度能力不可用时直接显示权威目标文本。平滑状态不得进入回答输入、问题检测、转录持久化或性能链路原始时间计算。
+网页状态层接收合法的新 partial revision 后必须立即采用其完整权威文本；展示层不得通过 debounce、throttle、逐字动画、字幕蓄水池或旧 revision 保留延迟任何已收到字符。展示组件按上一 revision 与当前 revision 的最长公共 grapheme 前缀拆分稳定前缀和可变尾部，使 React 在同一 render 中只更新变化尾部，同时保证 DOM 文本与当前业务 state 完全一致。
 
-供应商 partial 允许修正识别假设，但网页展示不得因同一 utterance 的临时短 revision 大幅回缩。增长或等长修订继续在当前帧开始展示；较短 partial 只更新原始实时状态，展示层暂时保留最近的较长可见文本，直到后续 partial 恢复到相同长度或 final 到达。Final 始终立即更新权威业务状态；只有纯前缀增长的新增尾字可以按 Decision 16 做短时展示平滑，纠错或回缩 Final 必须立即覆盖。该稳定策略只作用于字幕呈现，不修改供应商原始 revision、最终转录或回答模型输入。
+供应商 partial 允许增长、纠错或回缩识别假设。网页状态层必须对三类合法新 revision 采用相同的即时覆盖规则，不得继续显示供应商已经撤回的较长假设。Final 到达时立即更新权威业务状态和全部可见文本；Final 不执行尾字动画。稳定性来自 revision 单调性、stable utterance identity、Final 冻结和最长公共前缀 DOM 隔离，而不是让用户看到过期文本。
 
 Qwen Realtime 优先使用百炼 Workspace 专属地域域名。Workspace ID 未配置时继续使用显式 `WS_URL` 或公共域名作为可回滚兼容路径，不得把 Workspace ID 或 API Key写入客户端。
 
@@ -180,7 +180,7 @@ Provider Partial 的可见字幕发布路径只允许执行当前 publisher、�
 
 正常 source 队列只处理当前 100ms 增量帧，不主动取后续帧合并。仅当队列已经出现积压时才逐级启用两帧或最多四帧的无等待合并，以完整保留 PCM 并优先追赶实时位置。
 
-Redis/SSE 和 Browser state adapter 在健康流中保留有序 transcript revision，不得无条件将同一 segment 的多个 Provider revision 压缩为最后一个。过载保护只能在明确超过有界积压阈值时启用，Final 必须始终保留。展示层可以平滑揭示某个已收到 revision 中的字符，但不得生成 Provider 未返回的文本或伪造新的 revision，诊断指标仍以原始 revision 的接收和最终追平时间为准。
+Redis/SSE 和 Browser state adapter 在健康流中保留有序 transcript revision，不得无条件将同一 segment 的多个 Provider revision 压缩为最后一个。过载保护只能在明确超过有界积压阈值时启用，Final 必须始终保留。展示层必须在当前 render 完整呈现每个已接受 revision，不得生成 Provider 未返回的文本、伪造 revision 或延迟已收到字符；诊断指标仍以原始 revision 的接收和浏览器 paint 时间为准。
 
 ### Decision 14: Treat completed empty utterances as suppressed results, not connection failures
 
@@ -192,13 +192,13 @@ SSE 建连后必须先读取一个轻量 bootstrap cursor，再物化并立即�
 
 浏览器以任意收到的传输字节（包括 SSE keepalive comment）刷新连接活跃时间。用户没有说话不属于故障，只要 keepalive 持续到达就不得重连；仅当首 snapshot 超时，或已经健康的连接在超过两个 keepalive 周期仍无任何字节时，才取消当前 reader，并由页面现有单实例重连协调器从 sessionStorage cursor 恢复。恢复期间不得创建并行订阅，也不得清空已经显示的字幕。
 
-### Decision 16: Pace received Partial text through an adaptive subtitle reservoir
+### Decision 16: Prefer revision truth and stable-tail DOM updates over presentation buffering
 
-上一版按单个 revision 固定在 `300ms` 内清空新增字符。当供应商 revision 间隔约为 `500–1000ms` 时，展示库存会在下一批到达前耗尽，用户仍然看到“快速出一段、停顿、再出一段”。新展示层为每个活跃 utterance 维护仅存在于 React 组件内的字符蓄水池，并使用最近 revision 到达间隔的 EWMA 与当前待显示 grapheme 数量计算出水节奏：库存较低时放慢到接近下一批预计到达时间，库存较高时缩短间隔或单帧输出多个字符。
+生产样本表明 Provider 同一 utterance 内 Partial 间隔约为 P50 `549ms`、P95 `969ms`，同时在五分钟内出现 `102` 次非前缀尾部纠错；纠错替换长度为 P50 `5`、P95 约 `17` 个字符。此前 `800–1000ms` 蓄水池让可见文本长期落后权威 state，较短 Partial 保留又让旧假设一直停留到 Final，而非前缀纠错会突然整段替换。这三种行为共同造成“慢、被覆盖、内容不匹配”。
 
-线上实际样本显示 Provider Partial 间隔为 P50 `395ms`、P95 `987ms`，每批新增字符为 P50 `3`、P95 `9`；固定 `650ms` 上限和 `90ms` 最大单字间隔会让低库存过早排空。因此每个增长 revision 的首个新增字符仍在当前渲染周期立即出现，剩余字符按 EWMA revision 间隔的 `1.25` 倍计算目标窗口，并限制在 `800–1000ms`。低库存允许更长的单字间隔，高库存仍动态增加步进，任何已接收 Partial 最迟在其目标窗口内追平。
+新展示策略移除所有字幕内容动画和本地 target queue。Browser state adapter 对每个单调新 revision 直接保存供应商文本，包括较短 Partial；React 组件在当前 render 直接输出完整文本。组件只计算上一 revision 与当前 revision 的最长公共 grapheme 前缀，并将剩余内容放入独立尾部节点，因此增长、纠错和回缩只改变必要的尾部 DOM，而不会延迟或伪造文本。
 
-Final 的权威状态继续立即进入业务 state。若 Final 只是当前可见文本的前缀增长，则仅对已收到的新增尾字执行 `150–250ms` 快速平滑；非前缀纠错、回缩、页面不可见、减少动态效果和失去帧调度能力时立即显示完整权威 Final。该展示动画不得改变回答输入、问题检测、持久化 transcript、revision 顺序或原始性能时间点，并继续复用单一全局 animation-frame 调度器以限制 CPU 开销。
+Final 使用同一即时路径并冻结在 revision reconciliation 层，迟到 Partial 不得覆盖 Final。`requestAnimationFrame` 只允许用于提交后的性能 paint acknowledgment，不参与内容揭示；回答输入、问题检测、持久化 transcript 和性能原始时间继续消费权威业务 state。
 
 ### Decision 17: Preserve the first provider failure and isolate recovery by source
 
@@ -225,8 +225,8 @@ Qwen Audio task 模式允许在同一 `sessionId + sourceKind` 的健康连接�
 - [Risk] 更多性能指标可能增加日志量 → Mitigation: 只保留摘要计数、采样指标和聚合窗口，不记录高频原始媒体内容。
 - [Risk] “保持 API 不变”限制了大规模接口重构 → Mitigation: 在现有 API 之下增加兼容的内部队列、事件模型和诊断字段，对外保持主要入口不变。
 - [Risk] 对无效 session 降低 SSE 重试频率后，短暂创建延迟可能延后恢复 → Mitigation: 页面前台恢复、网络恢复和低频状态探测成功时立即重建订阅。
-- [Risk] 暂时保留较长 partial 可能让错误尾词多停留一小段时间 → Mitigation: 仅在未定稿文本回缩时稳定显示，等长/增长修订仍即时更新，Final 无条件立即覆盖。
-- [Risk] 更长的字幕平滑窗口可能形成视觉积压或增加 React 更新开销 → Mitigation: 使用共享帧调度、库存自适应步进和 `1000ms` 硬上限；前缀增长型 Final 最多 `250ms`，纠错 Final、后台、减少动态效果和异常状态直接显示目标文本，并通过回归测试限制活动调度数量。
+- [Risk] Provider Partial 本身会修正尾部，完全即时展示无法保证未定稿文字永不变化 → Mitigation: 保证 Final 冻结和 revision 单调性，并以最长公共前缀隔离可变尾部；产品不通过展示过期文本制造虚假稳定。
+- [Risk] 高频 revision 可能增加 React 更新次数 → Mitigation: 保持稳定 utterance key、只更新当前 segment，并将公共前缀和可变尾部分节点渲染；内容路径不创建动画帧或定时器。
 - [Risk] 持续 task 的句尾事件迟到或空闲超时会让本地 final 等待并重建连接 → Mitigation: 生产默认关闭持续 task，使用同 WebSocket 上的逐句 task rollover；实验开关只用于受控验证。
 - [Risk] 尾音频重放可能重复少量文字 → Mitigation: 使用最长前后缀重叠拼接，且检查点仅驻留进程内，不改变原始供应商事件和隐私边界。
 
