@@ -31,6 +31,16 @@ All three artifacts were uploaded to immutable versioned OSS paths before the Ba
 ## Rollout and rollback
 
 - Accepted source baseline: `607245d`.
+- Production manifest and deployed Backend commit: `e70ef31`.
+- Previous Backend image retained as `offersteady-backend:rollback-0e7e118-pre-1.2.12`.
 - Deploy only the Backend manifest consumer; PostgreSQL, Redis, Web, Admin, and realtime configuration remain unchanged.
 - Verify public health, Web state, all three manifest versions, and HTTP byte-range download routes after deployment.
 - Rollback restores the previous tracked desktop release manifest and rebuilds Backend only. Versioned OSS objects are retained, and no user data is removed.
+
+## Production verification
+
+- Backend became healthy after the single-service replacement.
+- Web, Admin, Analytics, PostgreSQL, and Redis container identities remained unchanged.
+- Public `/healthz`, `/app`, `/api/v1/web/state`, and `/offersteady-build.json` returned HTTP 200.
+- The public release manifest reported macOS arm64, macOS x64, and Windows x64 at version 1.2.12 with their expected trust metadata.
+- All three public download routes returned HTTP 206 for a one-byte range, and each `Content-Range` total matched the published artifact size.
