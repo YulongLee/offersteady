@@ -102,26 +102,29 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
         interview_language: InterviewLanguage = "zh-CN",
     ) -> None:
         now_ms = int(time.time() * 1000)
-        self._get_or_create_source_session(AudioFrame(
-            publisher_id=f"prewarm:{session_id}:{source_kind}",
-            session_id=session_id,
-            device_id="prewarm",
-            source_id=f"prewarm:{source_kind}",
-            source_kind=source_kind,  # type: ignore[arg-type]
-            segment_id=f"prewarm:{source_kind}",
-            revision=0,
-            sequence=0,
-            captured_at_ms=now_ms,
-            started_at_ms=now_ms,
-            ended_at_ms=now_ms,
-            duration_ms=0,
-            codec="pcm-s16le",
-            sample_rate_hz=sample_rate_hz,
-            channels=1,
-            is_final=False,
-            audio_bytes=b"",
-            interview_language=interview_language,
-        ))
+        self._get_or_create_source_session(
+            AudioFrame(
+                publisher_id=f"prewarm:{session_id}:{source_kind}",
+                session_id=session_id,
+                device_id="prewarm",
+                source_id=f"prewarm:{source_kind}",
+                source_kind=source_kind,  # type: ignore[arg-type]
+                segment_id=f"prewarm:{source_kind}",
+                revision=0,
+                sequence=0,
+                captured_at_ms=now_ms,
+                started_at_ms=now_ms,
+                ended_at_ms=now_ms,
+                duration_ms=0,
+                codec="pcm-s16le",
+                sample_rate_hz=sample_rate_hz,
+                channels=1,
+                is_final=False,
+                audio_bytes=b"",
+                interview_language=interview_language,
+            ),
+            start_task=False,
+        )
 
     def transcribe(self, *, frame: AudioFrame, attempt: int) -> TranscriptResult:
         del attempt
@@ -252,8 +255,6 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
                     with session.event_condition:
                         session.current_segment_id = None
                         session.accepting_transcript_events = True
-                    if not continuous_completed:
-                        self._start_task(session, wait=False)
                     self._connection_state_by_source[frame.source_kind] = "ready"
                     self._last_error_by_source.pop(frame.source_kind, None)
                     return result
@@ -289,7 +290,12 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
             self._close_source_session(self._source_session_key(frame))
             raise RetryableAsrError("realtime_asr_connection_failed") from exc
 
-    def _get_or_create_source_session(self, frame: AudioFrame) -> _SourceTaskSession:
+    def _get_or_create_source_session(
+        self,
+        frame: AudioFrame,
+        *,
+        start_task: bool = True,
+    ) -> _SourceTaskSession:
         key = self._source_session_key(frame)
         with self._source_sessions_lock:
             creation_lock = self._source_creation_locks.setdefault(key, threading.Lock())
@@ -354,8 +360,9 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
             )
             session.receiver_thread = receiver
             receiver.start()
-            with session.lock:
-                self._start_task(session, wait=True)
+            if start_task:
+                with session.lock:
+                    self._start_task(session, wait=True)
             self._connection_state_by_source[frame.source_kind] = "ready"
             return session
 
@@ -404,6 +411,10 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
             self._ensure_task_started(session)
 
     def _ensure_task_started(self, session: _SourceTaskSession) -> None:
+        with session.event_condition:
+            should_start = session.task_id is None or session.task_finished
+        if should_start:
+            self._start_task(session, wait=False)
         deadline = time.monotonic() + max(0.1, self.settings.realtime_asr_connect_timeout_seconds)
         with session.event_condition:
             while not session.task_started:

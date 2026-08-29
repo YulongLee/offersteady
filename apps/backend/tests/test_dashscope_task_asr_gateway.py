@@ -155,7 +155,7 @@ def test_task_gateway_streams_binary_partial_final_and_reuses_connection(monkeyp
     assert final.connection_id == "microphone-task-1"
     assert len([item for item in socket.sent if isinstance(item, bytes)]) == 3
     control = [json.loads(item) for item in socket.sent if isinstance(item, str)]
-    assert [item["header"]["action"] for item in control].count("run-task") == 2
+    assert [item["header"]["action"] for item in control].count("run-task") == 1
     assert [item["header"]["action"] for item in control].count("finish-task") == 1
     assert control[0]["payload"]["model"] == "qwen-audio-3.0-asr-flash-streaming"
     assert control[0]["payload"]["parameters"]["max_sentence_silence"] == 300
@@ -207,7 +207,7 @@ def test_task_gateway_can_disable_continuous_task_for_compatibility(monkeypatch)
     gateway.finalize(frame=_frame(is_final=True), attempt=0)
 
     control = [json.loads(item) for item in socket.sent if isinstance(item, str)]
-    assert [item["header"]["action"] for item in control].count("run-task") == 2
+    assert [item["header"]["action"] for item in control].count("run-task") == 1
     assert [item["header"]["action"] for item in control].count("finish-task") == 1
     gateway.close_session(session_id="session-task")
 
@@ -218,11 +218,45 @@ def test_task_gateway_defaults_to_per_utterance_tasks_on_a_persistent_socket(mon
     gateway = DashScopeTaskAsrGateway(_settings(), logging.getLogger("task-safe-default"))
 
     gateway.finalize(frame=_frame(is_final=True), attempt=0)
+    gateway.transcribe(frame=_frame(segment_id="segment-two", revision=1), attempt=0)
 
     control = [json.loads(item) for item in socket.sent if isinstance(item, str)]
     assert gateway.runtime_status("microphone")["continuous_task_enabled"] == 0
     assert [item["header"]["action"] for item in control].count("run-task") == 2
     assert [item["header"]["action"] for item in control].count("finish-task") == 1
+    assert gateway.diagnostics("microphone")["asr_connection_create_count"] == 1
+    gateway.close_session(session_id="session-task")
+
+
+def test_task_gateway_prewarms_socket_and_starts_tasks_only_when_audio_arrives(monkeypatch) -> None:
+    socket = _TaskWebSocket()
+    monkeypatch.setattr("app.services.dashscope_task_asr_gateway.connect", lambda *args, **kwargs: socket)
+    gateway = DashScopeTaskAsrGateway(_settings(), logging.getLogger("task-lazy-start"))
+
+    gateway.warm_session(session_id="session-task", source_kind="microphone")
+
+    controls_after_warm = [json.loads(item) for item in socket.sent if isinstance(item, str)]
+    assert controls_after_warm == []
+    assert socket.current_task_id is None
+    assert gateway.diagnostics("microphone")["asr_connection_create_count"] == 1
+    assert gateway.diagnostics("microphone")["task_start_count"] == 0
+
+    gateway.finalize(frame=_frame(segment_id="segment-one", is_final=True), attempt=0)
+
+    controls_after_final = [json.loads(item) for item in socket.sent if isinstance(item, str)]
+    assert [item["header"]["action"] for item in controls_after_final] == ["run-task", "finish-task"]
+    assert gateway.diagnostics("microphone")["task_start_count"] == 1
+    assert gateway.diagnostics("microphone")["task_finish_count"] == 1
+
+    gateway.transcribe(frame=_frame(segment_id="segment-two", revision=1), attempt=0)
+
+    controls_after_next_audio = [json.loads(item) for item in socket.sent if isinstance(item, str)]
+    assert [item["header"]["action"] for item in controls_after_next_audio] == [
+        "run-task",
+        "finish-task",
+        "run-task",
+    ]
+    assert gateway.diagnostics("microphone")["task_start_count"] == 2
     assert gateway.diagnostics("microphone")["asr_connection_create_count"] == 1
     gateway.close_session(session_id="session-task")
 
@@ -266,6 +300,7 @@ def test_task_gateway_suppresses_empty_results_and_keeps_diagnostics_content_fre
     monkeypatch.setattr("app.services.dashscope_task_asr_gateway.connect", lambda *args, **kwargs: socket)
     gateway = DashScopeTaskAsrGateway(_settings(), logging.getLogger("task-diagnostics"))
     gateway.warm_session(session_id="session-task", source_kind="microphone")
+    gateway.transcribe(frame=_frame(), attempt=0)
     task_id = socket.current_task_id
     assert task_id is not None
     socket.events.put(_result_event(task_id, "", sentence_end=False))
@@ -293,7 +328,7 @@ def test_task_gateway_empty_completed_utterance_reuses_healthy_connection(monkey
     assert socket.closed is False
     assert gateway.diagnostics("microphone")["asr_connection_create_count"] == 1
     control = [json.loads(item) for item in socket.sent if isinstance(item, str)]
-    assert [item["header"]["action"] for item in control].count("run-task") == 2
+    assert [item["header"]["action"] for item in control].count("run-task") == 1
     assert [item["header"]["action"] for item in control].count("finish-task") == 1
     gateway.close_session(session_id="session-task")
 

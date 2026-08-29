@@ -208,11 +208,11 @@ Qwen `task-failed` 后会关闭当前 WebSocket。接收器必须采用 first-er
 
 断线重试缓存改为滚动尾缓冲，默认保留最近 `2000ms` PCM，并继续受全局字节上限保护；超出容量时淘汰最旧字节，而不是清空整个 segment。重试帧携带只存在于进程内的已发布字幕检查点，Provider partial/final 通过最长边界重叠去重后与检查点拼接，避免尾音频重放导致字幕倒退或缺失。该检查点不得写入日志、诊断、Redis 或数据库。
 
-### Decision 19: Reuse one healthy Qwen task across local utterances with a safe rollover fallback
+### Decision 19: Reuse the source WebSocket while lazily rolling provider tasks per utterance
 
 Qwen Audio task 模式允许在同一 `sessionId + sourceKind` 的健康连接中跨本地 utterance 复用一个 provider task。每个本地 segment 独立重置字幕状态，并以 Provider `sentence_end` 作为完成确认；正常完成不发送 `finish-task`，从而移除逐句 task 重建窗口。
 
-生产真实双声道验证发现，该模型会在 provider task 约 `23s` 没有有效请求后返回 `CLIENT_ERROR request timeout` 并以 WebSocket `1007` 关闭；同时桌面 final 尾帧经常晚于 Provider `sentence_end`，导致多数句子仍进入 task rollover。因此该行为由服务端 feature flag 控制且默认关闭：生产保持 WebSocket 长连接，但每个本地 utterance 使用独立 task。仅在后续 Provider 明确支持 task 空闲保活并通过长期验证后才允许开启。
+生产真实双声道验证发现，该模型会在 provider task 约 `23s` 没有有效请求后返回 `CLIENT_ERROR request timeout` 并以 WebSocket `1007` 关闭；同时桌面 final 尾帧经常晚于 Provider `sentence_end`，导致多数句子仍进入 task rollover。因此该行为由服务端 feature flag 控制且默认关闭：生产保持 WebSocket 长连接，但每个本地 utterance 使用独立 task。当前句 `task-finished` 后不得预启动下一 task，预热也只建立 WebSocket；下一句话的首个音频帧在同一连接上先执行 `run-task` 并确认 `task-started`，随后立即追加 PCM。仅在后续 Provider 明确支持 task 空闲保活并通过长期验证后才允许开启持续 task。
 
 ## Risks / Trade-offs
 

@@ -30,6 +30,7 @@
 - [x] 3.13 Replace all-or-nothing utterance replay with a bounded rolling PCM tail and in-memory overlap stitching.
 - [x] 3.14 Reuse one healthy Qwen task across local utterances behind a rollback-safe feature flag with task-rollover fallback.
 - [x] 3.15 Default production to per-utterance Qwen tasks on a persistent source WebSocket after the provider rejected idle continuous tasks.
+- [x] 3.16 Keep prewarmed source WebSockets idle without an active Qwen task and lazily start each provider task on the next utterance's first audio frame.
 
 ## 4. Web Transcript Streaming and Overlay Efficiency
 
@@ -72,3 +73,4 @@
 - [x] 5.16 Add Web regressions for regular batched revisions, low/high reservoir inventory, 650ms hard catch-up, correction, Final, reduced-motion, and shared scheduling.
 - [x] 5.17 Add Backend regressions for first-error preservation, source isolation, rolling-tail recovery, transcript stitching, continuous task reuse, and compatibility fallback.
 - [x] 5.18 Add a regression proving the safe default rolls tasks per utterance without recreating the source WebSocket.
+- [x] 5.19 Add regressions proving prewarm does not start an idle task and the next audio frame lazily starts a new task on the existing WebSocket.

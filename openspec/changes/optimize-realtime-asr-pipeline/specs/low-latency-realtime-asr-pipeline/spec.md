@@ -36,7 +36,11 @@
 
 #### Scenario: Production uses the provider-safe task lifecycle
 - **WHEN** 生产使用默认配置处理同一 source 的连续 utterance
-- **THEN** 系统复用同一 WebSocket，但为每句话完成 `finish-task → task-finished → run-task`，不得留下会在约 23 秒空闲后失败的活动 provider task
+- **THEN** 系统复用同一 WebSocket，为当前句完成 `finish-task → task-finished` 后保持无活动 task 的空闲连接，并在下一句话首个音频帧到达时执行 `run-task → task-started → append PCM`，不得留下会在约 23 秒空闲后失败的活动 provider task
+
+#### Scenario: Source session is prewarmed before speech
+- **WHEN** 面试准备或连接恢复流程预热某个 source，但该 source 尚无音频帧
+- **THEN** 系统只建立可复用的 Provider WebSocket，不启动 Qwen task；首个音频帧到达后才在该连接上启动本句 task
 
 #### Scenario: Provider sentence finalization is missing
 - **WHEN** 本地 final 到达但 Provider 未在有界时间内返回对应 `sentence_end`

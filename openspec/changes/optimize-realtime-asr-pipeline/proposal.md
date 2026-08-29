@@ -15,7 +15,7 @@
 - 将网页实时订阅改为 snapshot-first：首个完整状态不再等待事件流读取；连接静默期间以服务端 keepalive 证明传输健康，只有连续缺失传输字节才从已保存 cursor 单实例恢复。
 - 强化 Qwen Audio task 的声道级恢复：保留 `task-failed` 的首个供应商错误归因、避免后续连接关闭覆盖根因，并保证单声道故障不降级整场 publisher。
 - 将断线重放改为有界滚动尾音频，并用仅驻留内存的字幕检查点做重叠拼接，避免长句超过缓存后完全失去恢复能力或恢复后字幕回缩。
-- 保持同一 source 的 Qwen WebSocket 长连接复用；跨 utterance 复用同一个 provider task 仅保留为默认关闭的实验开关，生产使用 `finish-task → run-task` 逐句轮换以规避模型约 23 秒 task 空闲超时。
+- 保持同一 source 的 Qwen WebSocket 长连接复用；跨 utterance 复用同一个 provider task 仅保留为默认关闭的实验开关。生产逐句完成 `finish-task`，空闲期间不预启动下一 task，下一句话首个音频帧到达时再执行 `run-task`，以规避模型约 23 秒 task 空闲超时。
 - 保持现有 Web 产品原型、外部 API 形态、ASR 模型、LLM、Prompt 和 RAG 逻辑不变；快答仅增加确定性的对话问题整理，不改变回答策略。
 
 ## Capabilities
