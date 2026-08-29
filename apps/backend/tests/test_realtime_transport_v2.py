@@ -15,10 +15,91 @@ from starlette.websockets import WebSocketDisconnect
 from app.main import create_app
 from app.deps import realtime_speech_service
 from app.ports.realtime_speech import AudioFrame, TranscriptResult
-from app.services.realtime_speech_service import RealtimeSpeechService, RetryableAsrError
+from app.services.realtime_speech_service import (
+    RealtimeSpeechService,
+    RetryableAsrError,
+    stabilize_visible_transcript_text,
+)
 
 
 client = TestClient(create_app())
+
+
+def test_visible_transcript_stabilization_keeps_growth_fast_and_blocks_retractions():
+    assert stabilize_visible_transcript_text(
+        current_text="请介绍项目",
+        incoming_text="请介绍项目的性能优化",
+        is_final=False,
+    ) == "请介绍项目的性能优化"
+    assert stabilize_visible_transcript_text(
+        current_text="请介绍项目的性能优化",
+        incoming_text="请介绍项目",
+        is_final=False,
+    ) == "请介绍项目的性能优化"
+    assert stabilize_visible_transcript_text(
+        current_text="旧的临时识别文本",
+        incoming_text="准确终稿",
+        is_final=True,
+    ) == "准确终稿"
+    assert stabilize_visible_transcript_text(
+        current_text="请介绍项目的性能优化",
+        incoming_text="请介绍项目",
+        is_final=True,
+    ) == "请介绍项目的性能优化"
+
+
+def test_strict_prefix_final_freezes_the_fuller_published_partial(monkeypatch):
+    _user_id, session_id, device_id, publisher_payload = create_live_binding()
+    service = realtime_speech_service()
+    publisher = service.repository.get_publisher(publisher_payload["publisherId"])
+    assert publisher is not None
+    now_ms = int(time.time() * 1000)
+    partial_frame = AudioFrame(
+        publisher_id=publisher.publisher_id,
+        session_id=session_id,
+        device_id=device_id,
+        source_id="system-prefix-final",
+        source_kind="system",
+        segment_id=f"prefix-final-{uuid4().hex}",
+        revision=1,
+        sequence=0,
+        captured_at_ms=now_ms - 200,
+        started_at_ms=now_ms - 200,
+        ended_at_ms=now_ms - 100,
+        duration_ms=100,
+        codec="pcm-s16le",
+        sample_rate_hz=16_000,
+        channels=1,
+        is_final=False,
+        audio_bytes=b"partial",
+    )
+    service._publish_provider_partial(partial_frame, TranscriptResult(
+        text="请介绍项目的性能优化",
+        confidence=0.9,
+        partial_received_at_ms=now_ms - 50,
+        provider_revision=1,
+    ))
+    terminal = replace(
+        partial_frame,
+        revision=2,
+        sequence=1,
+        ended_at_ms=now_ms,
+        duration_ms=200,
+        is_final=True,
+        audio_bytes=b"terminal",
+    )
+    monkeypatch.setattr(service.asr_gateway, "finalize", lambda **_kwargs: TranscriptResult(
+        text="请介绍项目",
+        confidence=0.96,
+        completed_at_ms=now_ms,
+    ))
+
+    transcript, result = service._transcribe_frame(publisher=publisher, frame=terminal)
+
+    assert transcript is not None
+    assert transcript.text == "请介绍项目的性能优化"
+    assert transcript.is_final is True
+    assert result.text == "请介绍项目的性能优化"
 
 
 def unwrap(response):
@@ -811,6 +892,19 @@ def test_provider_partial_hot_path_does_not_scan_session_history_or_run_question
     transcript = service.repository.get_transcript(session_id, frame.segment_id)
     assert transcript is not None
     assert transcript.text == "请介绍你的项目"
+    assert cold_calls == ["fail_inline_observer"]
+
+    service._publish_provider_partial(replace(frame, revision=2), TranscriptResult(
+        text="请介绍",
+        confidence=0.93,
+        partial_received_at_ms=now_ms + 1,
+        provider_revision=2,
+    ))
+
+    stabilized = service.repository.get_transcript(session_id, frame.segment_id)
+    assert stabilized is not None
+    assert stabilized.text == "请介绍你的项目"
+    assert stabilized.revision == transcript.revision
     assert cold_calls == ["fail_inline_observer"]
 
 

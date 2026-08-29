@@ -52,6 +52,7 @@
 - [x] 4.16 Tune the subtitle reservoir to a measured 800–1000ms adaptive window and smooth prefix-growing Final tails within 150–250ms while keeping corrective Final authoritative.
 - [x] 4.17 Remove presentation buffering and stale shorter-partial retention so every accepted revision renders immediately with longest-common-prefix tail isolation.
 - [x] 4.18 Route public realtime transcript SSE outside Caddy response compression and force each upstream write to flush immediately.
+- [x] 4.19 Stabilize shorter provider Partial retractions in Backend and Browser state without delaying normal growth or authoritative Final corrections.
 
 ## 5. Verification, Evals, and Rollout
 
@@ -80,3 +81,4 @@
 - [x] 5.20 Add Web regressions for measured reservoir bounds, low-inventory pacing, prefix-growing Final tails, corrective Final immediacy, and reduced-motion fallback.
 - [x] 5.21 Add Web regressions for immediate growth, correction, retraction and Final rendering in both the stream adapter and transcript component.
 - [x] 5.22 Add a production Caddy contract test and staged rollout checks for uncompressed realtime SSE while preserving ordinary gzip traffic.
+- [x] 5.23 Add Backend and Web regressions proving shorter Partial/strict-prefix Final revisions cannot erase visible transcript text.

@@ -409,6 +409,18 @@ interface MaterializedRealtimeSessionStreamEvent extends BackendRealtimeSessionS
 type BackendRealtimeTranscript = BackendRealtimeTranscriptListResponse["transcripts"][number];
 type BackendRealtimeCandidate = BackendRealtimeQuestionCandidateListResponse["candidates"][number];
 
+const stabilizeVisibleTranscriptText = (
+  existingText: string | undefined,
+  incomingText: string,
+  isFinal: boolean,
+): string => {
+  const current = existingText?.trim() ?? "";
+  const incoming = incomingText.trim();
+  if (!current || incoming.length >= current.length) return incoming;
+  if (!isFinal || current.startsWith(incoming)) return current;
+  return incoming;
+};
+
 const materializeRealtimeDelta = (
   interviewId: string,
   current: MaterializedRealtimeSessionStreamEvent | null,
@@ -445,6 +457,7 @@ const materializeRealtimeDelta = (
         : existing?.sourceKind;
       const role = payload.role === "candidate" || payload.role === "interviewer" ? payload.role : existing?.role;
       if (!sourceKind || !role) continue;
+      const incomingText = typeof payload.text === "string" ? payload.text : existing?.text ?? "";
       const finalizationReason = typeof payload.finalizationReason === "string" && [
         "silence", "max-duration", "capture-stop", "source-recovery", "backend-watchdog", "provider-completed", "provider-timeout",
       ].includes(payload.finalizationReason)
@@ -456,7 +469,7 @@ const materializeRealtimeDelta = (
         sourceKind,
         role,
         revision,
-        text: typeof payload.text === "string" ? payload.text : existing?.text ?? "",
+        text: stabilizeVisibleTranscriptText(existing?.text, incomingText, isFinal),
         transcriptConfidence: typeof payload.transcriptConfidence === "number" ? payload.transcriptConfidence : existing?.transcriptConfidence ?? 0,
         startedAtMs: typeof payload.startedAtMs === "number" ? payload.startedAtMs : existing?.startedAtMs ?? event.createdAtMs,
         endedAtMs: typeof payload.endedAtMs === "number" ? payload.endedAtMs : existing?.endedAtMs ?? event.createdAtMs,

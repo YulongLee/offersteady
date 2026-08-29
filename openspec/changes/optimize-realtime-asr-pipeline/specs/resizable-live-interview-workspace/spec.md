@@ -9,7 +9,7 @@
 
 #### Scenario: Partial transcript grows or corrects
 - **WHEN** 当前面试 session 收到某一句话的合法新 Partial Transcript revision
-- **THEN** 左侧实时对话栏在同一 React render 中完整显示该 revision 的权威文本，不追加重复对话、不保留旧 revision、不生成供应商未返回的内容
+- **THEN** 左侧实时对话栏在同一 React render 中显示该 revision 的新增或纠正文本，不追加重复对话、不生成供应商未返回的内容
 
 #### Scenario: Provider corrects the mutable tail
 - **WHEN** ASR 的新 revision 与上一 revision 具有相同前缀但改写了尾部假设
@@ -25,11 +25,11 @@
 
 #### Scenario: Provider temporarily retracts a partial transcript
 - **WHEN** 同一未定稿 utterance 的较新 revision 比当前可见文本更短
-- **THEN** 左侧实时对话栏立即采用较短的新 revision，并仅替换最长公共前缀之后的可变尾部，不得继续显示已经被供应商撤回的旧假设
+- **THEN** 左侧实时对话栏保留当前较长可见文本，不得让临时回缩删除用户已经看到的内容；后续增长或 Final 仍按各自规则继续更新
 
 #### Scenario: Final transcript replaces the partial transcript
 - **WHEN** 某一句话对应的 Final Transcript 到达
-- **THEN** 系统在同一 render 中使用权威 Final Transcript 更新业务状态和全部可见文本，不执行尾字动画，并保留同一条对话记录的角色和顺序
+- **THEN** 系统在同一 render 中使用权威 Final Transcript 更新业务状态和全部可见文本，不执行尾字动画，并保留同一条对话记录的角色和顺序；若 Final 只是当前可见文本的严格短前缀，则保留较完整可见文本并将其冻结为 Final
 
 #### Scenario: Empty or phantom transcript is suppressed
 - **WHEN** 实时链路返回空白文本、静音误触发结果或已失效的旧 partial

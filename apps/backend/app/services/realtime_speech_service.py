@@ -84,6 +84,23 @@ def preparation_signal_is_fresh(*, last_signal_at_ms: int | None, now_ms: int) -
     )
 
 
+def stabilize_visible_transcript_text(*, current_text: str, incoming_text: str, is_final: bool) -> str:
+    """Prevent a newer ASR revision from erasing already visible speech.
+
+    Partial hypotheses may temporarily retract while the provider revises its
+    decoding window. Growth and equal/longer corrections remain immediate. A
+    shorter non-prefix Final is still authoritative, while a strict-prefix
+    Final is treated as a truncated commit and freezes the fuller visible text.
+    """
+    current = current_text.strip()
+    incoming = incoming_text.strip()
+    if not current or len(incoming) >= len(current):
+        return incoming
+    if not is_final or current.startswith(incoming):
+        return current
+    return incoming
+
+
 class RetryableAsrError(Exception):
     pass
 
@@ -500,6 +517,13 @@ class RealtimeSpeechService:
             current = self.repository.get_transcript(frame.session_id, frame.segment_id)
             if current is not None and current.is_final:
                 return
+            visible_text = stabilize_visible_transcript_text(
+                current_text=current.text if current is not None else "",
+                incoming_text=result.text,
+                is_final=False,
+            )
+            if current is not None and visible_text == current.text.strip():
+                return
             published_at_ms = _now_ms()
             first_partial = current is None
             first_partial_at_ms = (
@@ -585,7 +609,7 @@ class RealtimeSpeechService:
                 source_kind=frame.source_kind,
                 role="candidate" if frame.source_kind == "microphone" else "interviewer",
                 revision=max(frame.revision, current.revision + 1 if current is not None else frame.revision),
-                text=result.text.strip(),
+                text=visible_text,
                 transcript_confidence=result.confidence,
                 started_at_ms=frame.started_at_ms,
                 ended_at_ms=frame.ended_at_ms,
@@ -3645,6 +3669,12 @@ class RealtimeSpeechService:
                         )
                     return None, replace(result, suppressed_reason=suppression_reason)
                 current = self.repository.get_transcript(frame.session_id, frame.segment_id)
+                visible_text = stabilize_visible_transcript_text(
+                    current_text=current.text if current is not None else "",
+                    incoming_text=result.text,
+                    is_final=frame.is_final,
+                )
+                result = replace(result, text=visible_text)
                 created_at_ms = current.created_at_ms if current is not None else _now_ms()
                 published_at_ms = _now_ms()
                 performance = {

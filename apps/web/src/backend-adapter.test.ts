@@ -611,7 +611,7 @@ describe("backend preview adapter", () => {
     ]);
   });
 
-  it("keeps a committing draft state while immediately accepting a shorter newer partial", async () => {
+  it("keeps a committing draft state without letting a shorter partial erase visible text", async () => {
     window.localStorage.setItem("offersteady.auth.access_token", "access-token");
     window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
     window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
@@ -659,7 +659,7 @@ describe("backend preview adapter", () => {
     await adapter.subscribeRealtimeSession("session-1", update => updates.push(update as typeof updates[number]));
 
     expect(updates.at(-1)?.speaker.transcripts[0]?.turnState).toBe("committing");
-    expect(updates.at(-1)?.speaker.transcripts[0]?.text).toBe("请介绍项目");
+    expect(updates.at(-1)?.speaker.transcripts[0]?.text).toBe("请介绍项目的性能优化");
     expect(updates.at(-1)?.speaker.transcripts[0]?.isFinal).toBe(false);
   });
 
@@ -700,6 +700,47 @@ describe("backend preview adapter", () => {
     await adapter.subscribeRealtimeSession("session-1", update => updates.push(update as typeof updates[number]));
 
     expect(updates.at(-1)?.speaker.transcripts[0]).toMatchObject({ text: "准确终稿", isFinal: true });
+  });
+
+  it("freezes the fuller visible text when Final is only a strict-prefix truncation", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const push = (name: string, data: unknown) => controller.enqueue(new TextEncoder().encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`));
+        push("snapshot", {
+          type: "snapshot", cursor: 1,
+          transcripts: { sessionId: "session-1", transcripts: [{
+            segmentId: "segment-prefix-final", sourceId: "system", sourceKind: "system", role: "interviewer",
+            revision: 2, text: "请介绍项目的性能优化", transcriptConfidence: 0.9,
+            startedAtMs: 1, endedAtMs: 2, isFinal: false, overlap: false,
+          }] },
+          candidates: { sessionId: "session-1", candidates: [] },
+          events: { sessionId: "session-1", events: [] }, runtime: null,
+        });
+        push("update", { type: "update", cursor: 2, events: { sessionId: "session-1", events: [{
+          eventId: "prefix-final", kind: "transcript-updated", createdAtMs: 3,
+          payload: {
+            segmentId: "segment-prefix-final", sourceId: "system", sourceKind: "system", role: "interviewer",
+            revision: 3, text: "请介绍项目", isFinal: true, transcriptConfidence: 0.95,
+            startedAtMs: 1, endedAtMs: 3, overlap: false,
+          },
+        }] } });
+        controller.close();
+      },
+    });
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", vi.fn(async () => new Response(stream, {
+      status: 200, headers: { "Content-Type": "text/event-stream" },
+    })) as typeof fetch);
+    const updates: Array<{ speaker: { transcripts: readonly { text: string; isFinal: boolean }[] } }> = [];
+
+    await adapter.subscribeRealtimeSession("session-1", update => updates.push(update as typeof updates[number]));
+
+    expect(updates.at(-1)?.speaker.transcripts[0]).toMatchObject({
+      text: "请介绍项目的性能优化",
+      isFinal: true,
+    });
   });
 
   it("preserves each ordered partial revision through the visible transcript store", async () => {
