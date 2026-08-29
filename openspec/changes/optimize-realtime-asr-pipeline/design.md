@@ -168,9 +168,9 @@ Alternative considered: 只继续调一个全局 RMS 阈值。缺点是不同设
 
 每个 provider utterance 独立保存第一次 PCM append 时间，后续 append 不得覆盖该时间。供应商 TTFT 必须以第一次 append 到第一次有效 partial 计算，同时保留最近 append 时间用于发送路径诊断。
 
-网页接收和保存新的 partial revision 时不得延迟权威原始状态；展示层只对该 revision 已经收到的新增文字执行有界、自适应平滑。首个可见字符在当前渲染周期立即出现，剩余文字通过共享 `requestAnimationFrame` 调度器逐步展示，并在目标 revision 到达后最多 `300ms` 内追平。积压过大、Final 到达、页面进入后台、用户启用减少动态效果或调度能力不可用时直接显示权威目标文本。平滑状态不得进入回答输入、问题检测、转录持久化或性能链路原始时间计算。
+网页接收和保存新的 partial revision 时不得延迟权威原始状态；展示层只对该 revision 已经收到的新增文字执行有界、自适应平滑。首个可见字符在当前渲染周期立即出现，剩余文字通过共享 `requestAnimationFrame` 调度器逐步展示；具体蓄水窗口和追平规则以 Decision 16 为准。页面进入后台、用户启用减少动态效果或调度能力不可用时直接显示权威目标文本。平滑状态不得进入回答输入、问题检测、转录持久化或性能链路原始时间计算。
 
-供应商 partial 允许修正识别假设，但网页展示不得因同一 utterance 的临时短 revision 大幅回缩。增长或等长修订继续在当前帧立即展示；较短 partial 只更新原始实时状态，展示层暂时保留最近的较长可见文本，直到后续 partial 恢复到相同长度或 final 到达。Final 始终是权威文本并立即替换展示内容。该稳定策略只作用于字幕呈现，不修改供应商原始 revision、最终转录或回答模型输入。
+供应商 partial 允许修正识别假设，但网页展示不得因同一 utterance 的临时短 revision 大幅回缩。增长或等长修订继续在当前帧开始展示；较短 partial 只更新原始实时状态，展示层暂时保留最近的较长可见文本，直到后续 partial 恢复到相同长度或 final 到达。Final 始终立即更新权威业务状态；只有纯前缀增长的新增尾字可以按 Decision 16 做短时展示平滑，纠错或回缩 Final 必须立即覆盖。该稳定策略只作用于字幕呈现，不修改供应商原始 revision、最终转录或回答模型输入。
 
 Qwen Realtime 优先使用百炼 Workspace 专属地域域名。Workspace ID 未配置时继续使用显式 `WS_URL` 或公共域名作为可回滚兼容路径，不得把 Workspace ID 或 API Key写入客户端。
 
@@ -196,7 +196,9 @@ SSE 建连后必须先读取一个轻量 bootstrap cursor，再物化并立即�
 
 上一版按单个 revision 固定在 `300ms` 内清空新增字符。当供应商 revision 间隔约为 `500–1000ms` 时，展示库存会在下一批到达前耗尽，用户仍然看到“快速出一段、停顿、再出一段”。新展示层为每个活跃 utterance 维护仅存在于 React 组件内的字符蓄水池，并使用最近 revision 到达间隔的 EWMA 与当前待显示 grapheme 数量计算出水节奏：库存较低时放慢到接近下一批预计到达时间，库存较高时缩短间隔或单帧输出多个字符。
 
-每个增长 revision 的首个新增字符仍在当前渲染周期立即出现；任何已接收 revision 最迟 `650ms` 追平，防止动画形成长期延迟。Final、非前缀校正、页面不可见、减少动态效果和失去帧调度能力时立即清空蓄水池并显示权威文本。蓄水池不得生成供应商未返回的字符，不得改变回答输入、问题检测、持久化 transcript、revision 顺序或原始性能时间点，并继续复用单一全局 animation-frame 调度器以限制 CPU 开销。
+线上实际样本显示 Provider Partial 间隔为 P50 `395ms`、P95 `987ms`，每批新增字符为 P50 `3`、P95 `9`；固定 `650ms` 上限和 `90ms` 最大单字间隔会让低库存过早排空。因此每个增长 revision 的首个新增字符仍在当前渲染周期立即出现，剩余字符按 EWMA revision 间隔的 `1.25` 倍计算目标窗口，并限制在 `800–1000ms`。低库存允许更长的单字间隔，高库存仍动态增加步进，任何已接收 Partial 最迟在其目标窗口内追平。
+
+Final 的权威状态继续立即进入业务 state。若 Final 只是当前可见文本的前缀增长，则仅对已收到的新增尾字执行 `150–250ms` 快速平滑；非前缀纠错、回缩、页面不可见、减少动态效果和失去帧调度能力时立即显示完整权威 Final。该展示动画不得改变回答输入、问题检测、持久化 transcript、revision 顺序或原始性能时间点，并继续复用单一全局 animation-frame 调度器以限制 CPU 开销。
 
 ### Decision 17: Preserve the first provider failure and isolate recovery by source
 
@@ -224,7 +226,7 @@ Qwen Audio task 模式允许在同一 `sessionId + sourceKind` 的健康连接�
 - [Risk] “保持 API 不变”限制了大规模接口重构 → Mitigation: 在现有 API 之下增加兼容的内部队列、事件模型和诊断字段，对外保持主要入口不变。
 - [Risk] 对无效 session 降低 SSE 重试频率后，短暂创建延迟可能延后恢复 → Mitigation: 页面前台恢复、网络恢复和低频状态探测成功时立即重建订阅。
 - [Risk] 暂时保留较长 partial 可能让错误尾词多停留一小段时间 → Mitigation: 仅在未定稿文本回缩时稳定显示，等长/增长修订仍即时更新，Final 无条件立即覆盖。
-- [Risk] 字幕平滑可能形成视觉积压或增加 React 更新开销 → Mitigation: 使用共享帧调度、单次有界步进和 `300ms` 强制追平；Final、后台、减少动态效果和异常状态直接显示目标文本，并通过回归测试限制活动调度数量。
+- [Risk] 更长的字幕平滑窗口可能形成视觉积压或增加 React 更新开销 → Mitigation: 使用共享帧调度、库存自适应步进和 `1000ms` 硬上限；前缀增长型 Final 最多 `250ms`，纠错 Final、后台、减少动态效果和异常状态直接显示目标文本，并通过回归测试限制活动调度数量。
 - [Risk] 持续 task 的句尾事件迟到或空闲超时会让本地 final 等待并重建连接 → Mitigation: 生产默认关闭持续 task，使用同 WebSocket 上的逐句 task rollover；实验开关只用于受控验证。
 - [Risk] 尾音频重放可能重复少量文字 → Mitigation: 使用最长前后缀重叠拼接，且检查点仅驻留进程内，不改变原始供应商事件和隐私边界。
 

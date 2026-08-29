@@ -9,14 +9,14 @@
 
 #### Scenario: Partial transcript grows or corrects without retracting visible content
 - **WHEN** 当前面试 session 收到某一句话的增长或等长 Partial Transcript 修订
-- **THEN** 左侧实时对话栏在当前渲染周期显示首个新增字符，并将该 revision 已收到的剩余新增文字放入有界蓄水池，根据最近 revision 间隔与库存深度动态展示，最迟在 `650ms` 内追平完整文本，不追加重复对话、不生成供应商未返回的内容
+- **THEN** 左侧实时对话栏在当前渲染周期显示首个新增字符，并将该 revision 已收到的剩余新增文字放入有界蓄水池，根据最近 revision 间隔与库存深度动态展示，目标追平窗口限制在 `800–1000ms`，不追加重复对话、不生成供应商未返回的内容
 
 #### Scenario: Reservoir receives regular batched revisions
 - **WHEN** ASR 以约 `500ms` 的间隔持续返回多个字符组成的 Partial revision
 - **THEN** 展示调度器根据最近到达间隔调整出水速度，使已接收字符尽量均匀覆盖到下一批预计到达时间，而不是在每批开头集中显示后长时间停顿
 
 #### Scenario: Reservoir cannot keep up with a newer revision
-- **WHEN** 新 Partial 到达时当前展示仍落后、库存突然增大或待显示文字无法在 `650ms` 内按单字节奏完成
+- **WHEN** 新 Partial 到达时当前展示仍落后、库存突然增大或待显示文字无法在当前 `800–1000ms` 目标窗口内按单字节奏完成
 - **THEN** 展示调度器缩短出水间隔、动态增加单帧 grapheme 步进或直接追平目标文本，不得让视觉队列持续落后真实 transcript 状态
 
 #### Scenario: Motion should not be scheduled
@@ -29,7 +29,7 @@
 
 #### Scenario: Final transcript replaces the partial transcript
 - **WHEN** 某一句话对应的 Final Transcript 到达
-- **THEN** 系统取消该句尚未完成的平滑展示并立即使用权威 Final Transcript 替换可见 partial 和状态，即使 Final 文本更短，并保留同一条对话记录的角色和顺序
+- **THEN** 系统立即使用权威 Final Transcript 更新业务状态；若 Final 只是当前可见文本的前缀增长，则在 `150–250ms` 内快速展示新增尾字，若 Final 包含纠错、回缩或非前缀替换则立即替换可见文本，并保留同一条对话记录的角色和顺序
 
 #### Scenario: Empty or phantom transcript is suppressed
 - **WHEN** 实时链路返回空白文本、静音误触发结果或已失效的旧 partial

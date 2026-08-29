@@ -19,12 +19,15 @@ export const formatTranscriptTimestamp = (milliseconds: number) => {
   return `[${String(Math.floor(milliseconds / 60_000)).padStart(2, "0")}:${String(Math.floor(milliseconds / 1_000) % 60).padStart(2, "0")}]`;
 };
 
-export const TRANSCRIPT_RESERVOIR_MAX_LAG_MS = 650;
+export const TRANSCRIPT_RESERVOIR_MIN_LAG_MS = 800;
+export const TRANSCRIPT_RESERVOIR_MAX_LAG_MS = 1_000;
+export const TRANSCRIPT_FINAL_TAIL_MIN_MS = 150;
+export const TRANSCRIPT_FINAL_TAIL_MAX_MS = 250;
 const TRANSCRIPT_RESERVOIR_DEFAULT_REVISION_INTERVAL_MS = 520;
 const TRANSCRIPT_RESERVOIR_MIN_REVISION_INTERVAL_MS = 120;
 const TRANSCRIPT_RESERVOIR_MAX_REVISION_INTERVAL_MS = 1_200;
 const TRANSCRIPT_RESERVOIR_MIN_STEP_MS = 28;
-const TRANSCRIPT_RESERVOIR_MAX_STEP_MS = 90;
+const TRANSCRIPT_RESERVOIR_MAX_STEP_MS = 400;
 type TranscriptFrameJob = (timestamp: number) => boolean;
 const transcriptFrameJobs = new Set<TranscriptFrameJob>();
 let transcriptFrameHandle: number | null = null;
@@ -77,6 +80,22 @@ const transcriptSmoothingEnabled = () => {
 
 const graphemes = (value: string) => Array.from(value);
 
+export const adaptiveTranscriptReservoirLag = (observedRevisionIntervalMs: number) => Math.min(
+  TRANSCRIPT_RESERVOIR_MAX_LAG_MS,
+  Math.max(
+    TRANSCRIPT_RESERVOIR_MIN_LAG_MS,
+    Math.round(observedRevisionIntervalMs * 1.25),
+  ),
+);
+
+export const finalTranscriptTailDuration = (addedGraphemes: number) => Math.min(
+  TRANSCRIPT_FINAL_TAIL_MAX_MS,
+  Math.max(
+    TRANSCRIPT_FINAL_TAIL_MIN_MS,
+    Math.round(TRANSCRIPT_FINAL_TAIL_MIN_MS + Math.max(0, addedGraphemes - 1) * 12.5),
+  ),
+);
+
 export const firstAdaptiveTranscriptText = (current: string, target: string) => {
   if (current === target || !target.startsWith(current)) return target;
   const currentLength = graphemes(current).length;
@@ -100,7 +119,7 @@ export const nextAdaptiveTranscriptText = (
     TRANSCRIPT_RESERVOIR_MAX_REVISION_INTERVAL_MS,
     Math.max(TRANSCRIPT_RESERVOIR_MIN_REVISION_INTERVAL_MS, observedRevisionIntervalMs),
   );
-  const desiredDrainDeadlineMs = Math.min(maxLagMs, Math.max(220, expectedIntervalMs * 0.95));
+  const desiredDrainDeadlineMs = Math.min(maxLagMs, adaptiveTranscriptReservoirLag(expectedIntervalMs));
   const remainingDrainMs = Math.max(1, desiredDrainDeadlineMs - Math.max(0, elapsedMs));
   const cadenceMs = Math.min(
     TRANSCRIPT_RESERVOIR_MAX_STEP_MS,
@@ -114,6 +133,21 @@ export const nextAdaptiveTranscriptText = (
     : 1;
   const step = Math.max(catchUpStep, elapsedStep);
   return targetUnits.slice(0, currentUnits.length + step).join("");
+};
+
+export const nextFinalTranscriptTailText = (
+  start: string,
+  target: string,
+  elapsedMs: number,
+  durationMs: number,
+) => {
+  if (start === target || !target.startsWith(start) || elapsedMs >= durationMs) return target;
+  const startUnits = graphemes(start);
+  const targetUnits = graphemes(target);
+  const added = targetUnits.length - startUnits.length;
+  if (added <= 0) return target;
+  const revealed = Math.max(1, Math.ceil(added * Math.max(0, elapsedMs) / Math.max(1, durationMs)));
+  return targetUnits.slice(0, startUnits.length + revealed).join("");
 };
 
 export const nextProgressiveTranscriptText = (current: string, target: string, isFinal = false) => {
@@ -149,6 +183,9 @@ export function ProgressiveTranscriptText({ segment, active }: { readonly segmen
   const lastStepAtRef = useRef(0);
   const lastRevisionAtRef = useRef(0);
   const revisionIntervalRef = useRef(TRANSCRIPT_RESERVOIR_DEFAULT_REVISION_INTERVAL_MS);
+  const animationModeRef = useRef<"partial" | "final-tail">("partial");
+  const animationStartTextRef = useRef(visibleText);
+  const animationDurationRef = useRef(TRANSCRIPT_RESERVOIR_MIN_LAG_MS);
   const frameJobRef = useRef<TranscriptFrameJob | null>(null);
   const lastPaintedEventId = useRef<string | null>(null);
   const performance = segment.performance;
@@ -168,14 +205,22 @@ export function ProgressiveTranscriptText({ segment, active }: { readonly segmen
         updateVisibleText(target);
         return false;
       }
-      const next = nextAdaptiveTranscriptText(
-        current,
-        target,
-        timestamp - targetStartedAtRef.current,
-        TRANSCRIPT_RESERVOIR_MAX_LAG_MS,
-        revisionIntervalRef.current,
-        timestamp - lastStepAtRef.current,
-      );
+      const elapsedMs = timestamp - targetStartedAtRef.current;
+      const next = animationModeRef.current === "final-tail"
+        ? nextFinalTranscriptTailText(
+          animationStartTextRef.current,
+          target,
+          elapsedMs,
+          animationDurationRef.current,
+        )
+        : nextAdaptiveTranscriptText(
+          current,
+          target,
+          elapsedMs,
+          TRANSCRIPT_RESERVOIR_MAX_LAG_MS,
+          revisionIntervalRef.current,
+          timestamp - lastStepAtRef.current,
+        );
       if (next === current) return true;
       lastStepAtRef.current = timestamp;
       updateVisibleText(next);
@@ -187,12 +232,31 @@ export function ProgressiveTranscriptText({ segment, active }: { readonly segmen
     const job = frameJobRef.current!;
     const target = nextProgressiveTranscriptText(targetTextRef.current, text, segment.isFinal);
     targetTextRef.current = target;
-    if (segment.isFinal || !active || !transcriptSmoothingEnabled()) {
+    const current = visibleTextRef.current;
+    const smoothingEnabled = transcriptSmoothingEnabled();
+    const smoothFinalTail = segment.isFinal && target.startsWith(current) && target !== current;
+    if (!smoothingEnabled || (!active && !smoothFinalTail)) {
       cancelTranscriptFrameJob(job);
       updateVisibleText(target);
       return;
     }
     const now = window.performance.now();
+    if (smoothFinalTail) {
+      animationModeRef.current = "final-tail";
+      animationStartTextRef.current = current;
+      animationDurationRef.current = finalTranscriptTailDuration(
+        graphemes(target).length - graphemes(current).length,
+      );
+      targetStartedAtRef.current = now;
+      lastStepAtRef.current = now;
+      const firstFrame = firstAdaptiveTranscriptText(current, target);
+      updateVisibleText(firstFrame);
+      if (firstFrame === target) cancelTranscriptFrameJob(job);
+      else scheduleTranscriptFrameJob(job);
+      return;
+    }
+    animationModeRef.current = "partial";
+    animationStartTextRef.current = current;
     if (lastRevisionAtRef.current > 0) {
       const observedInterval = Math.min(
         TRANSCRIPT_RESERVOIR_MAX_REVISION_INTERVAL_MS,
@@ -201,6 +265,7 @@ export function ProgressiveTranscriptText({ segment, active }: { readonly segmen
       revisionIntervalRef.current = revisionIntervalRef.current * 0.65 + observedInterval * 0.35;
     }
     lastRevisionAtRef.current = now;
+    animationDurationRef.current = adaptiveTranscriptReservoirLag(revisionIntervalRef.current);
     targetStartedAtRef.current = now;
     lastStepAtRef.current = now;
     const firstFrame = firstAdaptiveTranscriptText(visibleTextRef.current, target);

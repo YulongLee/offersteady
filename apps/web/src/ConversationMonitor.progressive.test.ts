@@ -4,10 +4,15 @@ import type { SpeakerTranscriptSegment } from "@offersteady/protocol";
 import { createElement } from "react";
 
 import {
+  adaptiveTranscriptReservoirLag,
+  finalTranscriptTailDuration,
   firstAdaptiveTranscriptText,
   nextAdaptiveTranscriptText,
+  nextFinalTranscriptTailText,
   nextProgressiveTranscriptText,
   ProgressiveTranscriptText,
+  TRANSCRIPT_FINAL_TAIL_MAX_MS,
+  TRANSCRIPT_RESERVOIR_MIN_LAG_MS,
   TRANSCRIPT_RESERVOIR_MAX_LAG_MS,
   transcriptPresentationLabel,
   transcriptPresentationState,
@@ -74,18 +79,33 @@ describe("progressive realtime transcript", () => {
     const target = "面试问题测试文本";
     const first = firstAdaptiveTranscriptText("", target);
     const tooEarly = nextAdaptiveTranscriptText(first, target, 20, TRANSCRIPT_RESERVOIR_MAX_LAG_MS, 500, 20);
-    const paced = nextAdaptiveTranscriptText(first, target, 60, TRANSCRIPT_RESERVOIR_MAX_LAG_MS, 500, 60);
+    const paced = nextAdaptiveTranscriptText(first, target, 140, TRANSCRIPT_RESERVOIR_MAX_LAG_MS, 500, 140);
     expect(tooEarly).toBe(first);
     expect(paced.length).toBeGreaterThan(first.length);
     expect(paced.length).toBeLessThan(target.length);
   });
 
-  it("increases its step for a high reservoir and always catches up within 650ms", () => {
+  it("derives an 800-1000ms reservoir from observed provider cadence", () => {
+    expect(adaptiveTranscriptReservoirLag(395)).toBe(TRANSCRIPT_RESERVOIR_MIN_LAG_MS);
+    expect(adaptiveTranscriptReservoirLag(720)).toBe(900);
+    expect(adaptiveTranscriptReservoirLag(987)).toBe(TRANSCRIPT_RESERVOIR_MAX_LAG_MS);
+  });
+
+  it("increases its step for a high reservoir and always catches up within 1000ms", () => {
     const target = "面".repeat(100);
     const first = firstAdaptiveTranscriptText("", target);
     const progressing = nextAdaptiveTranscriptText(first, target, 32, TRANSCRIPT_RESERVOIR_MAX_LAG_MS, 500, 32);
     expect(progressing.length - first.length).toBeGreaterThan(1);
     expect(nextAdaptiveTranscriptText(progressing, target, TRANSCRIPT_RESERVOIR_MAX_LAG_MS)).toBe(target);
+  });
+
+  it("bounds prefix-growing Final tails between 150ms and 250ms", () => {
+    expect(finalTranscriptTailDuration(1)).toBe(150);
+    expect(finalTranscriptTailDuration(5)).toBe(200);
+    expect(finalTranscriptTailDuration(9)).toBe(TRANSCRIPT_FINAL_TAIL_MAX_MS);
+    expect(nextFinalTranscriptTailText("已有文本", "已有文本和新增尾字", 0, 200)).toBe("已有文本和");
+    expect(nextFinalTranscriptTailText("已有文本", "已有文本和新增尾字", 200, 200)).toBe("已有文本和新增尾字");
+    expect(nextFinalTranscriptTailText("错误文本", "纠正文本", 0, 200)).toBe("纠正文本");
   });
 
   it("recovers from an ASR correction at the first changed character", () => {
@@ -110,9 +130,9 @@ describe("progressive realtime transcript", () => {
     expect(paragraph).toHaveTextContent("请");
     expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
 
-    runFrame(90);
+    runFrame(140);
     expect(paragraph.textContent!.length).toBeGreaterThan(1);
-    runFrame(650);
+    runFrame(TRANSCRIPT_RESERVOIR_MAX_LAG_MS);
     expect(paragraph).toHaveTextContent("请介绍你的项目");
   });
 
@@ -151,6 +171,42 @@ describe("progressive realtime transcript", () => {
     view.rerender(createElement(ProgressiveTranscriptText, { segment: segment({ revision: 2, text: "最终文本", isFinal: true }), active: false }));
     expect(view.container.querySelector("p")).toHaveTextContent("最终文本");
     expect(cancelAnimationFrame).toHaveBeenCalled();
+  });
+
+  it("quickly smooths only the added tail of a prefix-growing Final", () => {
+    const partialText = "已有完整部分";
+    const finalText = "已有完整部分以及新增尾字";
+    const view = render(createElement(ProgressiveTranscriptText, {
+      segment: segment({ text: partialText }), active: true,
+    }));
+    const paragraph = view.container.querySelector("p")!;
+    runFrame(TRANSCRIPT_RESERVOIR_MAX_LAG_MS);
+    expect(paragraph).toHaveTextContent(partialText);
+
+    view.rerender(createElement(ProgressiveTranscriptText, {
+      segment: segment({ revision: 2, text: finalText, isFinal: true }), active: false,
+    }));
+    expect(paragraph).not.toHaveTextContent(finalText);
+    expect(paragraph.textContent).toBe("已有完整部分以");
+    runFrame(100);
+    expect(paragraph.textContent!.length).toBeGreaterThan(partialText.length + 1);
+    expect(paragraph).not.toHaveTextContent(finalText);
+    runFrame(TRANSCRIPT_FINAL_TAIL_MAX_MS);
+    expect(paragraph).toHaveTextContent(finalText);
+  });
+
+  it("renders a prefix-growing Final immediately for reduced motion", () => {
+    const partialText = "已有完整部分";
+    const finalText = "已有完整部分以及新增尾字";
+    const view = render(createElement(ProgressiveTranscriptText, {
+      segment: segment({ text: partialText }), active: true,
+    }));
+    runFrame(TRANSCRIPT_RESERVOIR_MAX_LAG_MS);
+    vi.mocked(window.matchMedia).mockReturnValue({ matches: true } as MediaQueryList);
+    view.rerender(createElement(ProgressiveTranscriptText, {
+      segment: segment({ revision: 2, text: finalText, isFinal: true }), active: false,
+    }));
+    expect(view.container.querySelector("p")).toHaveTextContent(finalText);
   });
 
   it("renders immediately for reduced motion and does not schedule smoothing", () => {
