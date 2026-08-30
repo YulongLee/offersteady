@@ -1,9 +1,42 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AnswerActionBar } from "./AnswerActionBar";
 import { MobileInterviewControls } from "./MobileInterviewControls";
 
 describe("quiet live answer actions", () => {
+  it("lets desktop users request quick-answer guidance before a question is available", () => {
+    const onQuickAnswer = vi.fn();
+    render(<AnswerActionBar
+      manualDraft=""
+      latestInterviewerQuestion=""
+      screenshotTask={null}
+      onQuickAnswer={onQuickAnswer}
+      onScreenshot={vi.fn()}
+    />);
+
+    const button = screen.getByRole("button", { name: "快答" });
+    expect(button).not.toBeDisabled();
+    fireEvent.click(button);
+    expect(onQuickAnswer).toHaveBeenCalledOnce();
+  });
+
+  it("lets mobile users request quick-answer guidance before a question is available", () => {
+    const onQuickAnswer = vi.fn();
+    render(<MobileInterviewControls
+      manualDraft=""
+      latestInterviewerQuestion=""
+      screenshotTask={null}
+      onChange={vi.fn()}
+      onQuickAnswer={onQuickAnswer}
+      onScreenshot={vi.fn()}
+    />);
+
+    const button = screen.getByRole("button", { name: "快答" });
+    expect(button).not.toBeDisabled();
+    fireEvent.click(button);
+    expect(onQuickAnswer).toHaveBeenCalledOnce();
+  });
+
   it("keeps desktop action labels stable and hides task status copy", () => {
     const { rerender } = render(<AnswerActionBar
       manualDraft="合成面试问题"

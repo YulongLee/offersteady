@@ -299,6 +299,47 @@ describe("focused live interview workspace", () => {
     expect(actions).not.toHaveTextContent(/\d+\s*点/);
   });
 
+  it("explains an empty quick answer without submitting and clears the feedback after recovery", async () => {
+    vi.spyOn(interviewAppAdapter, "sendDesktopSessionHeartbeat").mockImplementation(async command => ({
+      pageInstanceId: command.pageInstanceId ?? null,
+      leaseGeneration: 1,
+      leaseExpiresAtMs: Date.now() + 30_000,
+    }));
+    let publishRealtime: ((update: RealtimeSessionUpdate) => void) | null = null;
+    vi.spyOn(interviewAppAdapter, "subscribeRealtimeSession").mockImplementation(async (_id, onUpdate, signal) => {
+      publishRealtime = onUpdate;
+      await new Promise<void>((_resolve, reject) => signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true }));
+    });
+    const submitAnswer = vi.spyOn(interviewAppAdapter, "submitManualAnswer");
+
+    openLive(state => {
+      state.speaker = { ...state.speaker, pendingQuestion: null, transcripts: [] };
+      state.questions = [];
+      state.activeAnswerTask = null;
+    });
+    await waitFor(() => expect(publishRealtime).not.toBeNull());
+
+    const quickAnswer = screen.getByRole("button", { name: "快答" });
+    expect(quickAnswer).not.toBeDisabled();
+    fireEvent.click(quickAnswer);
+
+    expect(screen.getByText("未能识别到面试官的问题")).toBeInTheDocument();
+    expect(screen.getByText("请等待面试官问题识别完成，或在左侧手动输入问题后再使用快答。")).toBeInTheDocument();
+    expect(submitAnswer).not.toHaveBeenCalled();
+
+    const input = screen.getByRole("textbox", { name: "手动输入面试官的问题" });
+    fireEvent.change(input, { target: { value: "手动补充的问题" } });
+    expect(screen.queryByText("未能识别到面试官的问题")).not.toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: "" } });
+    fireEvent.click(quickAnswer);
+    expect(screen.getByText("未能识别到面试官的问题")).toBeInTheDocument();
+
+    act(() => publishRealtime?.({ speaker: structuredClone(syntheticState.speaker) }));
+    await waitFor(() => expect(screen.queryByText("未能识别到面试官的问题")).not.toBeInTheDocument());
+    expect(submitAnswer).not.toHaveBeenCalled();
+  });
+
   it("uses the latest detected interviewer question when quick answering without manual text", async () => {
     openLive();
     fireEvent.click(screen.getByRole("button", { name: "快答" }));

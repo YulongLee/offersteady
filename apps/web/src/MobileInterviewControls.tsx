@@ -24,7 +24,6 @@ export function MobileInterviewControls({
   onQuickAnswer,
   onScreenshot,
 }: Props) {
-  const canQuickAnswer = Boolean(manualDraft.trim() || latestInterviewerQuestion.trim());
   const quickBusy = quickAnswerStatus === "processing";
   const screenshotBusy = screenshotAnswerStatus === "processing" || Boolean(screenshotTask && !["completed", "failed", "cancelled"].includes(screenshotTask.stage));
   return <section className="mobile-interview-controls" aria-label="面试操作">
@@ -40,7 +39,7 @@ export function MobileInterviewControls({
       />
     </label>
     <div className="mobile-interview-actions">
-      <button className="button primary" aria-label="快答" disabled={disabled || !canQuickAnswer || quickBusy} onClick={onQuickAnswer}>
+      <button className="button primary" aria-label="快答" disabled={disabled || quickBusy} title={manualDraft.trim() ? "根据输入的问题立即回答" : latestInterviewerQuestion.trim() ? "根据最近一条面试官问题立即回答" : "点击查看为什么当前无法快答"} onClick={onQuickAnswer}>
         快答
       </button>
       <button className="button ghost" aria-label="截屏回答" disabled={disabled || screenshotBusy} onClick={onScreenshot}>

@@ -13,7 +13,6 @@ interface Props {
 }
 
 export function AnswerActionBar({ manualDraft, latestInterviewerQuestion = "", screenshotTask, onQuickAnswer, onScreenshot, disabled = false, quickAnswerStatus = "idle", screenshotAnswerStatus = "idle" }: Props) {
-  const canQuickAnswer = Boolean(manualDraft.trim() || latestInterviewerQuestion.trim());
   const quickBusy = quickAnswerStatus === "processing";
   const screenshotBusy = screenshotAnswerStatus === "processing" || Boolean(screenshotTask && !["completed", "failed", "cancelled"].includes(screenshotTask.stage));
   return <section className="answer-action-bar" aria-label="面试操作">
@@ -21,7 +20,7 @@ export function AnswerActionBar({ manualDraft, latestInterviewerQuestion = "", s
       <button
         className="button primary action-tile"
         aria-label="快答"
-        disabled={disabled || !canQuickAnswer || quickBusy}
+        disabled={disabled || quickBusy}
         title={manualDraft.trim() ? "根据左侧输入的问题立即回答" : latestInterviewerQuestion.trim() ? "根据最近一条面试官问题立即回答" : "请先输入问题或等待面试官对话同步"}
         onClick={onQuickAnswer}
       >
