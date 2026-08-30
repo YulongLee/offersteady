@@ -104,6 +104,8 @@
   "contact": {
     "email": "contact@oneshowailab.com",
     "filingNumber": "浙ICP备2026052190号-1",
-    "filingUrl": "https://beian.miit.gov.cn"
+    "filingUrl": "https://beian.miit.gov.cn",
+    "publicSecurityFilingNumber": "浙公网安备33010602014812号",
+    "publicSecurityFilingUrl": "https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=33010602014812"
   }
 }

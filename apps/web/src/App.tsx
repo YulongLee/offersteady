@@ -220,7 +220,13 @@ function LandingPage() {
             <nav className="footer-column" aria-label="页脚资源导航"><h2>更多内容</h2><Link to={`${routes.publicGuide}#desktop`}>下载安装说明</Link><a href="/guides/interview-preparation">面试准备清单</a><a href="/guides/star-interview-answer">STAR 回答结构</a><a href="/guides/audio-troubleshooting">收音问题排查</a><a href="/security">安全说明</a><a href="/about">关于产品</a><a href="/contact">联系我们</a><Link to={routes.terms}>用户协议</Link><Link to={routes.privacy}>隐私政策</Link></nav>
           </div>
         </details>
-        <div className="public-footer-legal"><span>© 2026 面试稳AI助手 · OneShow AI Lab</span><a href="https://beian.miit.gov.cn" target="_blank" rel="noreferrer">浙ICP备2026052190号-1</a></div>
+        <div className="public-footer-legal">
+          <span>© 2026 面试稳AI助手 · OneShow AI Lab</span>
+          <div className="public-footer-filings" aria-label="网站备案信息">
+            <a href="https://beian.miit.gov.cn" target="_blank" rel="noreferrer">浙ICP备2026052190号-1</a>
+            <a href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=33010602014812" target="_blank" rel="noreferrer">浙公网安备33010602014812号</a>
+          </div>
+        </div>
       </footer>
     </main>
   );

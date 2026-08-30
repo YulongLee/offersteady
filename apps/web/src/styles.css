@@ -280,6 +280,7 @@ h1, h2, h3, p { margin-top: 0; }
 .footer-more[open] > summary svg { transform: rotate(180deg); }
 .footer-more-grid { display: grid; grid-template-columns: repeat(2, minmax(180px, 1fr)); gap: 48px; max-width: 620px; margin: 0 auto; padding: 8px 0 34px; }
 .public-footer-legal { min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-top: 1px solid var(--line); }
+.public-footer-filings { min-width: 0; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px 18px; }
 .public-footer-legal a { color: var(--muted); text-decoration: none; }
 .public-footer-legal a:hover { color: var(--brand); }
 .login-legal-copy a { color: var(--brand); margin: 0 3px; text-decoration: none; }
@@ -1112,6 +1113,7 @@ h1, h2, h3, p { margin-top: 0; }
   .footer-primary-links h2 { grid-column: 1 / -1; }
   .footer-more-grid { grid-template-columns: 1fr; gap: 28px; padding-inline: 4px; }
   .public-footer-legal { min-height: 86px; align-items: flex-start; flex-direction: column; justify-content: center; gap: 8px; }
+  .public-footer-filings { justify-content: flex-start; }
   .app-shell { display: block; padding-bottom: 68px; }
   .app-sidebar { display: none; }
   .app-page, .app-page.narrow { width: min(100% - 28px, 1160px); padding-top: 28px; }

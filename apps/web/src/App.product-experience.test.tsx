@@ -9,12 +9,16 @@ import { syntheticState } from "./test-state";
 const open = (path: string, authenticated = true, mutate?: (state: WebAppState) => void) => { mockSuccessfulMaterialUploadAdapter(); const state = structuredClone(syntheticState); mutate?.(state); window.history.pushState({}, "", path); return render(<App initialAuthenticated={authenticated} initialState={state} />); };
 
 describe("optimized product experience", () => {
-  it("matches the filed website name and exposes the MIIT filing link", () => {
+  it("matches the filed website name and exposes the official filing links", () => {
     open("/", false);
     expect(document.title).toBe("AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳");
     expect(screen.getAllByText("面试稳AI助手").length).toBeGreaterThan(0);
     const filing = screen.getByRole("link", { name: "浙ICP备2026052190号-1" });
     expect(filing).toHaveAttribute("href", "https://beian.miit.gov.cn");
+    const publicSecurityFiling = screen.getByRole("link", { name: "浙公网安备33010602014812号" });
+    expect(publicSecurityFiling).toHaveAttribute("href", "https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=33010602014812");
+    expect(publicSecurityFiling).toHaveAttribute("target", "_blank");
+    expect(publicSecurityFiling).toHaveAttribute("rel", "noreferrer");
     const hero = screen.getByRole("heading", { name: /更从容地冲刺 Offer/ }).closest("section");
     expect(hero).not.toBeNull();
     expect(within(hero!).getByRole("link", { name: /免费使用/ })).toHaveAttribute("href", "/login");
@@ -57,6 +61,7 @@ describe("optimized product experience", () => {
     expect(within(footer!).getByRole("link", { name: "用户协议" })).toHaveAttribute("href", "/terms");
     expect(within(footer!).getByRole("link", { name: "隐私政策" })).toHaveAttribute("href", "/privacy");
     expect(within(footer!).getByRole("link", { name: "浙ICP备2026052190号-1" })).toHaveAttribute("href", "https://beian.miit.gov.cn");
+    expect(within(footer!).getByRole("link", { name: "浙公网安备33010602014812号" })).toHaveAttribute("href", "https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=33010602014812");
   });
 
   it("uses product-value messaging and exposes SMS login without pretending it is live", () => {
