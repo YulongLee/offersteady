@@ -65,15 +65,3 @@ PYTHONPATH=apps/backend OFFERSTEADY_BENCHMARK_LABEL=commercial-finalization-cand
 - concurrency 10 aggregate snapshot p95/p99: 15.72 ms / 15.72 ms，0 errors
 
 这个结果只证明本地协议、队列和终态归并没有引入明显控制面开销。它不包含公网、DashScope、设备驱动和浏览器渲染延迟，因此不能单独作为正式商业发布依据。完整门禁和隔离 Beta 步骤见 [commercial-realtime-finalization-beta.md](commercial-realtime-finalization-beta.md)。
-
-## 2026-09-01 稳定字幕续写回归
-
-本轮只调整后端进程内的 Provider 假设与可见文本合并，不修改音频采集、PCM 发送周期、ASR 模型、WebSocket、SSE 或 React 展示路径。
-
-- 100,000 次合并调用：179.422 ms
-- 单次平均：1.794 微秒
-- 网络请求、定时器、持久化写入：0
-- 回归覆盖：稳定前缀不回缩、早期词纠错后继续增长、临时回缩恢复不重复、Final 清理短期状态
-- 回滚边界：仅回滚对应后端提交并重建 Backend；Web 与 Desktop 无需降级
-
-该微基准仅证明文本合并热路径没有引入可见计算开销。正式上线后仍需通过现有匿名阶段指标观察 Provider revision gap、Qwen-to-event 和端到端 Partial 延迟。

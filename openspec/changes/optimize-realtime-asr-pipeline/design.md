@@ -200,8 +200,6 @@ SSE 建连后必须先读取一个轻量 bootstrap cursor，再物化并立即�
 
 Final 使用同一即时路径并冻结在 revision reconciliation 层，迟到 Partial 不得覆盖 Final。Final 只允许补充或修正有界可变尾部；较短 Final 或修改稳定前缀的 Final 直接冻结较完整已稳定正文。`requestAnimationFrame` 只允许用于提交后的性能 paint acknowledgment，不参与内容揭示；回答输入、问题检测、持久化 transcript 和性能原始时间继续消费已稳定的业务 state。
 
-后端必须将“上一版 Provider 完整假设”与“当前可见稳定正文”分开维护。若 Provider 改写稳定前缀，系统保留可见正文，但可基于上一版 Provider 假设的有界尾部锚点提取本 revision 真正新增的后缀并立即追加；即使当前 revision 没有安全锚点，也要推进短期 Provider 假设游标，使下一次正常前缀增长能够继续追加，而不能因一次早期纠错永久冻结该 utterance。该状态只在进程内按 `sessionId + segmentId` 保存，Final、句子完成或 session 重置时立即释放，不进入日志、Redis 或数据库。
-
 ### Decision 17: Preserve the first provider failure and isolate recovery by source
 
 Qwen `task-failed` 后会关闭当前 WebSocket。接收器必须采用 first-error-wins：先保存供应商 `code/message`，记录 `sourceKind/connectionId/taskId/connectionLifetimeMs`，随后到达的连接关闭只能补充 close code/reason，不能覆盖原始错误。日志只记录经过截断的供应商诊断，不记录音频、字幕或凭据。

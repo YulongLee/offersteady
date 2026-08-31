@@ -54,7 +54,6 @@
 - [x] 4.18 Route public realtime transcript SSE outside Caddy response compression and force each upstream write to flush immediately.
 - [x] 4.19 Stabilize shorter provider Partial retractions in Backend and Browser state without delaying normal growth or authoritative Final corrections.
 - [x] 4.20 Protect a bounded stable transcript prefix from equal/longer non-prefix Provider revisions in Backend and Browser state without adding presentation buffering.
-- [x] 4.21 Separate raw Provider hypotheses from visible stable text so prefix rewrites cannot freeze later growth or overwrite published content.
 
 ## 5. Verification, Evals, and Rollout
 
@@ -85,4 +84,3 @@
 - [x] 5.22 Add a production Caddy contract test and staged rollout checks for uncompressed realtime SSE while preserving ordinary gzip traffic.
 - [x] 5.23 Add Backend and Web regressions proving shorter Partial/strict-prefix Final revisions cannot erase visible transcript text.
 - [x] 5.24 Add Backend and Web regressions for equal-length rewrites, longer stable-prefix rewrites, bounded tail corrections, Final freezing, and frontend defense-in-depth.
-- [x] 5.25 Add regressions for post-rewrite growth, temporary retraction recovery, non-duplication, bounded in-memory state cleanup, and hot-path cost.

@@ -77,7 +77,6 @@ PREPARATION_PREWARM_FRESH_MS = 120_000
 PREPARATION_AUDIO_READINESS_TTL_MS = 120_000
 TRANSCRIPT_MUTABLE_TAIL_CODEPOINTS = 16
 TRANSCRIPT_MIN_STABLE_PREFIX_CODEPOINTS = 2
-TRANSCRIPT_PROVIDER_ANCHOR_CODEPOINTS = 32
 
 
 def preparation_signal_is_fresh(*, last_signal_at_ms: int | None, now_ms: int) -> bool:
@@ -112,59 +111,6 @@ def stabilize_visible_transcript_text(*, current_text: str, incoming_text: str, 
     if common_prefix_length >= stable_prefix_length:
         return incoming
     return current
-
-
-def advance_visible_transcript_text(
-    *,
-    current_text: str,
-    previous_provider_text: str,
-    incoming_text: str,
-    is_final: bool,
-) -> str:
-    """Advance visible text after a destructive Provider hypothesis rewrite.
-
-    Qwen emits complete hypotheses. If it corrects an early token, comparing
-    the new hypothesis only with the already-visible text can suppress every
-    later prefix-growing revision. Keep the visible text monotonic, but use
-    the previous raw hypothesis to recover only the genuinely new suffix.
-    The bounded suffix-anchor search is pure in-memory work and never buffers
-    or delays a Provider event.
-    """
-    current = current_text.strip()
-    previous_provider = previous_provider_text.strip()
-    incoming = incoming_text.strip()
-    stabilized = stabilize_visible_transcript_text(
-        current_text=current,
-        incoming_text=incoming,
-        is_final=is_final,
-    )
-    if stabilized != current or not current or not previous_provider or not incoming:
-        return stabilized
-    if previous_provider.startswith(incoming):
-        return current
-    if incoming.startswith(previous_provider):
-        suffix = incoming[len(previous_provider):]
-    else:
-        suffix = ""
-        bounded_previous = previous_provider[-TRANSCRIPT_PROVIDER_ANCHOR_CODEPOINTS:]
-        minimum_anchor = 3 if any("\u4e00" <= unit <= "\u9fff" for unit in bounded_previous) else 4
-        for size in range(len(bounded_previous), minimum_anchor - 1, -1):
-            anchor = bounded_previous[-size:]
-            anchor_at = incoming.rfind(anchor)
-            if anchor_at >= 0:
-                suffix = incoming[anchor_at + size:]
-                break
-    if not suffix or current.endswith(suffix):
-        return current
-    separator = (
-        " "
-        if current[-1:].isascii()
-        and suffix[:1].isascii()
-        and current[-1:].isalnum()
-        and suffix[:1].isalnum()
-        else ""
-    )
-    return f"{current}{separator}{suffix}"
 
 
 class RetryableAsrError(Exception):
@@ -279,8 +225,6 @@ class RealtimeSpeechService:
         self._session_language_cache: dict[str, InterviewLanguage] = {}
         self._publisher_status_cache: dict[str, str] = {}
         self._stable_question_state: dict[tuple[str, str], dict[str, object]] = {}
-        self._provider_hypothesis_lock = threading.Lock()
-        self._provider_hypotheses: dict[tuple[str, str], str] = {}
         self._trace_lock = threading.Lock()
         self._trace_records: dict[str, dict[str, object]] = {}
         self._trace_order: deque[str] = deque(maxlen=4096)
@@ -302,31 +246,6 @@ class RealtimeSpeechService:
         partial_listener_setter = getattr(self.asr_gateway, "set_partial_listener", None)
         if callable(partial_listener_setter):
             partial_listener_setter(self._publish_provider_partial)
-
-    def _advance_provider_transcript(
-        self,
-        *,
-        session_id: str,
-        segment_id: str,
-        current_text: str,
-        incoming_text: str,
-        is_final: bool,
-    ) -> str:
-        key = (session_id, segment_id)
-        incoming = incoming_text.strip()
-        with self._provider_hypothesis_lock:
-            previous_provider = self._provider_hypotheses.get(key, current_text)
-            visible = advance_visible_transcript_text(
-                current_text=current_text,
-                previous_provider_text=previous_provider,
-                incoming_text=incoming,
-                is_final=is_final,
-            )
-            if is_final:
-                self._provider_hypotheses.pop(key, None)
-            elif len(incoming) >= len(previous_provider.strip()) and not previous_provider.strip().startswith(incoming):
-                self._provider_hypotheses[key] = incoming
-            return visible
 
     def start_live_session(self, *, user_id: str, session_id: str) -> InterviewSessionRecord:
         """Start one commercial interview, charge its first minute and prewarm ASR."""
@@ -610,9 +529,7 @@ class RealtimeSpeechService:
             current = self.repository.get_transcript(frame.session_id, frame.segment_id)
             if current is not None and current.is_final:
                 return
-            visible_text = self._advance_provider_transcript(
-                session_id=frame.session_id,
-                segment_id=frame.segment_id,
+            visible_text = stabilize_visible_transcript_text(
                 current_text=current.text if current is not None else "",
                 incoming_text=result.text,
                 is_final=False,
@@ -2878,8 +2795,6 @@ class RealtimeSpeechService:
     def _complete_source_turn(self, frame: AudioFrame) -> None:
         with self._watchdog_lock:
             self._committing_source_turns.pop((frame.session_id, frame.source_kind, frame.segment_id), None)
-        with self._provider_hypothesis_lock:
-            self._provider_hypotheses.pop((frame.session_id, frame.segment_id), None)
 
     def _clear_session_audio(self, session_id: str) -> None:
         with self._segment_audio_lock:
@@ -3790,9 +3705,7 @@ class RealtimeSpeechService:
                         )
                     return None, replace(result, suppressed_reason=suppression_reason)
                 current = self.repository.get_transcript(frame.session_id, frame.segment_id)
-                visible_text = self._advance_provider_transcript(
-                    session_id=frame.session_id,
-                    segment_id=frame.segment_id,
+                visible_text = stabilize_visible_transcript_text(
                     current_text=current.text if current is not None else "",
                     incoming_text=result.text,
                     is_final=frame.is_final,
@@ -4016,10 +3929,6 @@ class RealtimeSpeechService:
             }
             self._committing_source_turns = {
                 key: value for key, value in self._committing_source_turns.items() if key[0] != session_id
-            }
-        with self._provider_hypothesis_lock:
-            self._provider_hypotheses = {
-                key: value for key, value in self._provider_hypotheses.items() if key[0] != session_id
             }
         self._clear_session_audio(session_id)
 
