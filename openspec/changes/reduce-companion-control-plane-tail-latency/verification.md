@@ -18,8 +18,11 @@ All tests use synthetic state and timing data; no user audio, transcript, screen
 - Both macOS artifacts passed signing, App/DMG notarization, stapling and Gatekeeper verification.
 - The Windows NSIS installer passed payload and x86-64 executable validation under the existing unsigned distribution policy.
 
-## Production checks pending
+## Production checks
 
-- Confirm production interview activity before Backend replacement.
-- Smoke test health, Web state, release manifest and download byte ranges.
-- Compare control-plane request rate, ordinary API P95 and errors after rollout.
+- Active interview count was zero before replacing only the Backend container.
+- Backend health, Web state and build endpoints passed; PostgreSQL, Redis, Web, Admin and Analytics were not replaced.
+- The public release manifest reported all three platforms at 1.2.13 and all byte-range download probes returned HTTP 206 with matching totals.
+- A privacy-safe post-rollout sample contained 552 requests, ordinary API P95 294.15ms, P99 441.41ms and zero 5xx responses.
+- The previously observed headline P95 was about 2.94s, but it included long-lived screenshot SSE durations. The new ordinary API number excludes those streams by design, so the two values verify the corrected metric boundary rather than proving an equivalent workload speedup.
+- Old 1.2.12 companions still produce the old request cadence. Request-rate reduction must be evaluated after 1.2.13 client adoption; live 2-second lease refresh is intentionally preserved.

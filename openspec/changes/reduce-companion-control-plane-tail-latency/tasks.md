@@ -19,5 +19,5 @@
 
 - [x] 4.1 Run focused desktop/backend tests and relevant typecheck/build suites
 - [x] 4.2 Validate the OpenSpec change strictly and document executed verification
-- [ ] 4.3 Confirm production activity, deploy with rollback readiness, and run health/core endpoint smoke tests
-- [ ] 4.4 Compare production request rates, ordinary API P95 and errors after deployment without recording user content
+- [x] 4.3 Confirm production activity, deploy with rollback readiness, and run health/core endpoint smoke tests
+- [x] 4.4 Compare production request rates, ordinary API P95 and errors after deployment without recording user content

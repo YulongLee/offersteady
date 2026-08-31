@@ -35,3 +35,15 @@ All three artifacts were uploaded to immutable versioned OSS paths before the Ba
 - Confirm no active interview before replacing the single Backend service.
 - PostgreSQL, Redis, Web, Admin and Analytics services are not replaced.
 - Rollback restores the prior Backend image and the 1.2.12 release manifest; versioned 1.2.13 objects remain recoverable and no user data is deleted.
+
+## Production verification
+
+- Production source and manifest commit: `5d9df60`.
+- Previous Backend image retained as `offersteady-backend:rollback-e75abc3-pre-1.2.13`.
+- Active interview count was zero immediately before the single Backend replacement.
+- Backend became healthy; PostgreSQL, Redis, Web, Admin and Analytics container identities remained unchanged.
+- `/healthz`, `/app`, `/api/v1/web/state` and `/offersteady-build.json` returned HTTP 200.
+- The public manifest reported macOS arm64, macOS x64 and Windows x64 at 1.2.13.
+- All three public download routes returned HTTP 206 for a one-byte range and advertised totals matching the release manifest.
+- The first privacy-safe post-rollout log window contained 552 requests, ordinary API P95 294.15ms, P99 441.41ms and zero server errors. This short window is a smoke result, not a long-term capacity baseline.
+- Existing 1.2.12 clients continue their old polling cadence until upgraded; the request-volume benefit is expected only as 1.2.13 adoption increases.
