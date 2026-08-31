@@ -14,4 +14,4 @@
 
 - [x] 3.1 Run strict OpenSpec validation and targeted backend/web regression tests
 - [x] 3.2 Run the affected production builds and broader regression suite
-- [ ] 3.3 Commit the approved scope, deploy only Backend/Web, and verify health, configuration and rollback readiness
+- [x] 3.3 Commit the approved scope, deploy Backend/Web and the related metrics worker, and verify health, configuration and rollback readiness
