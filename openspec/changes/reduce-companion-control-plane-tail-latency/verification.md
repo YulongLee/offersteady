@@ -12,9 +12,14 @@
 
 All tests use synthetic state and timing data; no user audio, transcript, screenshot, answer or identity content was recorded.
 
-## Release checks pending
+## Release artifacts
 
-- Verify aligned 1.2.13 macOS arm64, macOS x64 and Windows x64 artifacts.
+- Aligned 1.2.13 macOS arm64, macOS x64 and Windows x64 artifacts were built and uploaded to immutable OSS paths.
+- Both macOS artifacts passed signing, App/DMG notarization, stapling and Gatekeeper verification.
+- The Windows NSIS installer passed payload and x86-64 executable validation under the existing unsigned distribution policy.
+
+## Production checks pending
+
 - Confirm production interview activity before Backend replacement.
 - Smoke test health, Web state, release manifest and download byte ranges.
 - Compare control-plane request rate, ordinary API P95 and errors after rollout.

@@ -20,11 +20,18 @@ Release 1.2.13 reduces companion control-plane request amplification and correct
 
 ## Production artifacts
 
-Production artifact sizes, SHA-256 values, signing/notarization results and publication paths are recorded after all three aligned platform packages are built and verified.
+| Target | Artifact | Bytes | SHA-256 | Verification |
+| --- | --- | ---: | --- | --- |
+| macOS Apple Silicon | `OfferSteady-Companion-1.2.13-macOS-arm64.dmg` | 126298991 | `e9b149512bf214e9cdf234cfaadefc170a485bea84f313723eda5af4d70ada44` | Developer ID verified; App/DMG notarized, stapled and Gatekeeper accepted |
+| macOS Intel | `OfferSteady-Companion-1.2.13-macOS-x64.dmg` | 129835199 | `ed90d9873869ded60657ed78905af24a7b520ef2c90d3dbd2409d673e7bd686c` | Developer ID verified; App/DMG notarized, stapled and Gatekeeper accepted |
+| Windows 10/11 x64 | `OfferSteady-Companion-Setup-1.2.13-Windows-x64.exe` | 102149516 | `910696a06402d52cdcd9180c943bb67b2c2383b3f85e3bc22ee14ddf2fa6f47f` | NSIS payload and x86-64 executable validated; existing unsigned `local-development` signing status retained |
+
+All three artifacts were uploaded to immutable versioned OSS paths before the Backend production manifest changed. The manifest is the atomic website publication boundary.
 
 ## Rollout and rollback
 
 - Publish immutable versioned artifacts before switching the checked-in release manifest.
+- Accepted source baseline: `66b422f`.
 - Confirm no active interview before replacing the single Backend service.
 - PostgreSQL, Redis, Web, Admin and Analytics services are not replaced.
 - Rollback restores the prior Backend image and the 1.2.12 release manifest; versioned 1.2.13 objects remain recoverable and no user data is deleted.
