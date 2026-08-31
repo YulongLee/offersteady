@@ -1897,6 +1897,26 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         body: JSON.stringify({ userId: requireUserId() }),
       }).catch(() => undefined);
     };
+    let firstRenderAcknowledgementScheduled = false;
+    const acknowledgeFirstRender = (task: BackendScreenshotAnswerTaskResponse) => {
+      const answerText = screenshotAnswerText(task);
+      if (!answerText || firstRenderAcknowledgementScheduled) return;
+      firstRenderAcknowledgementScheduled = true;
+      const acknowledge = () => this.acknowledgeRuntimePerformance(
+        command.interviewId,
+        captureRequest.requestId,
+        "screenshot-first-render",
+        captureRequest.createdAtMs,
+        task.taskId,
+        {
+          browserRenderAtMs: Date.now(),
+          renderedTextLength: answerText.length,
+          visibilityState: document.visibilityState,
+        },
+      );
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(acknowledge);
+      else window.setTimeout(acknowledge, 0);
+    };
     try {
       const deadlineAt = Date.now() + 120000;
       let recoveryDelayMs = 1000;
@@ -1911,15 +1931,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
             : null;
           if (pushedTask) {
             onAnswerUpdate?.(toSubmitScreenshotAnswerResult(pushedTask, command.instruction));
-            if (screenshotAnswerText(pushedTask)) {
-              this.acknowledgeRuntimePerformance(
-                command.interviewId,
-                captureRequest.requestId,
-                "screenshot-first-render",
-                captureRequest.createdAtMs,
-                pushedTask.taskId,
-              );
-            }
+            acknowledgeFirstRender(pushedTask);
           }
           if (pushedStatus === "completed" && pushedTask) return toSubmitScreenshotAnswerResult(pushedTask, command.instruction);
           if (pushedStatus === "cancelled") throw new DOMException("Aborted", "AbortError");
@@ -1934,15 +1946,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         onStage?.(screenshotStageToTask(current));
         if (current.answerTask) {
           onAnswerUpdate?.(toSubmitScreenshotAnswerResult(current.answerTask, command.instruction));
-          if (screenshotAnswerText(current.answerTask)) {
-            this.acknowledgeRuntimePerformance(
-              command.interviewId,
-              captureRequest.requestId,
-              "screenshot-first-render",
-              captureRequest.createdAtMs,
-              current.answerTask.taskId,
-            );
-          }
+          acknowledgeFirstRender(current.answerTask);
         }
         if (current.status === "completed" && current.answerTask) return toSubmitScreenshotAnswerResult(current.answerTask, command.instruction);
         if (current.status === "cancelled") throw new DOMException("Aborted", "AbortError");

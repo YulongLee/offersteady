@@ -1187,11 +1187,15 @@ describe("backend preview adapter", () => {
       errorCode: null, errorMessage: null, createdAtMs: 1, updatedAtMs: 2, completedAtMs: 2,
       visionSummaryTitle: "截图题目", telemetry: {}, chunks: [],
     };
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+    const captureCreatedAtMs = Date.now();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = String(input);
       if (url.includes("/realtime-speech/sessions/session-1/stream")) return new Response(stream, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+      if (url.includes("/realtime-speech/sessions/session-1/performance-ack")) {
+        return new Response(JSON.stringify(envelope({ accepted: true })), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
       if (url.endsWith("/screenshot-answer/sessions/session-1/remote-capture-requests")) {
-        return new Response(JSON.stringify(envelope({ requestId: "shot-request-1", sessionId: "session-1", ownerUserId: "user-1", deviceId: "device-1", manualCode: "123456", instruction: "回答截图", status: "requested", stage: "requested", createdAtMs: 1, updatedAtMs: 1, telemetry: {} })), { status: 200, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify(envelope({ requestId: "shot-request-1", sessionId: "session-1", ownerUserId: "user-1", deviceId: "device-1", manualCode: "123456", instruction: "回答截图", status: "requested", stage: "requested", createdAtMs: captureCreatedAtMs, updatedAtMs: captureCreatedAtMs, telemetry: {} })), { status: 200, headers: { "Content-Type": "application/json" } });
       }
       throw new Error(`unexpected fetch ${url}`);
     });
@@ -1230,6 +1234,16 @@ describe("backend preview adapter", () => {
       runtime: null,
     })}\n\n`));
     await expect(answer).resolves.toMatchObject({ question: { text: "回答截图", advice: { detail: "这是截图答案。" } } });
+    await vi.waitFor(() => expect(fetchImpl.mock.calls.filter(([input]) => String(input).includes("/performance-ack"))).toHaveLength(1));
+    const performanceAckCall = fetchImpl.mock.calls.find(([input]) => String(input).includes("/performance-ack"));
+    const performanceAckInit = performanceAckCall?.[1];
+    expect(performanceAckInit).toBeDefined();
+    expect(JSON.parse(String(performanceAckInit?.body))).toMatchObject({
+      traceId: "shot-request-1",
+      taskId: "shot-task-1",
+      stage: "screenshot-first-render",
+      renderedTextLength: 4,
+    });
     streamController!.close();
     await subscription;
     expect(fetchImpl.mock.calls.some(([input]) => String(input).includes("/capture-requests/shot-request-1?"))).toBe(false);

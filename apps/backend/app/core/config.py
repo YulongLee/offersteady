@@ -126,6 +126,7 @@ class Settings(BaseSettings):
     screenshot_vision_max_long_edge: int = 1600
     screenshot_vision_jpeg_quality: int = 72
     screenshot_vision_streaming_enabled: bool = True
+    screenshot_vision_enable_thinking: bool = False
     screenshot_progress_emit_interval_ms: int = 120
     realtime_publisher_ttl_seconds: int = 1800
     realtime_protocol_version: str = "2.0"

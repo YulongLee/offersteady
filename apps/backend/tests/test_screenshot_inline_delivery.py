@@ -360,9 +360,24 @@ def test_vision_gateway_embeds_payload_as_data_url_without_logging_content(monke
 
     content = captured["messages"][1]["content"]  # type: ignore[index]
     image_url = content[1]["image_url"]["url"]  # type: ignore[index]
+    assert captured["enable_thinking"] is False
     assert image_url.startswith("data:image/png;base64,")
     assert base64.b64decode(image_url.split(",", 1)[1]) == SYNTHETIC_PNG
     assert result.final_answer.startswith("简要回答")  # type: ignore[union-attr]
+
+
+def test_vision_gateway_thinking_mode_is_explicit_and_screenshot_scoped() -> None:
+    disabled = OpenAICompatibleVisionGateway(Settings(_env_file=None))
+    enabled = OpenAICompatibleVisionGateway(Settings(
+        _env_file=None,
+        screenshot_vision_enable_thinking=True,
+    ))
+
+    disabled_payload = disabled._request_payload(instruction="合成题", images=[], stream=True)
+    enabled_payload = enabled._request_payload(instruction="合成题", images=[], stream=True)
+
+    assert disabled_payload["enable_thinking"] is False
+    assert enabled_payload["enable_thinking"] is True
 
 
 def test_invalid_screenshot_delivery_mode_is_rejected() -> None:
@@ -374,12 +389,17 @@ def test_streaming_screenshot_publishes_partial_before_terminal_completion() -> 
     service, _storage, _repository, _upload_port, _vision = build_service(delivery_mode="inline")
     service.settings.screenshot_progress_emit_interval_ms = 20
     service.vision_gateway = StreamingVisionGateway()
+    recorded_usage = []
+    service.commercial_repository = SimpleNamespace(
+        record_ai_usage=lambda usage: recorded_usage.append(usage) or usage,
+    )
     upload = upload_synthetic_image(service, {})
     updates = []
+    telemetry: dict[str, object] = {}
 
     task, _ = service.answer_screenshots(
         user_id="user-inline", session_id="session-inline", image_ids=[upload.image_id],
-        instruction="只回答截图", stream=True, on_task_update=updates.append,
+        instruction="只回答截图", stream=True, on_task_update=updates.append, telemetry=telemetry,
     )
 
     partials = [item for item in updates if item.status == "streaming" and item.answer_text]
@@ -387,6 +407,9 @@ def test_streaming_screenshot_publishes_partial_before_terminal_completion() -> 
     assert partials[0].answer_text.startswith("简要回答")
     assert task.status == "completed"
     assert task.answer_text.endswith("再给出完整实现。")
+    assert task.telemetry.first_text_ms is not None
+    assert len(recorded_usage) == 1
+    assert recorded_usage[0].first_token_ms == max(0, round(task.telemetry.first_text_ms))
 
 
 def test_streaming_screenshot_falls_back_to_complete_response_before_any_chunk() -> None:

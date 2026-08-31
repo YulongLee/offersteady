@@ -505,6 +505,7 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
         payload = {
             "model": self.settings.screenshot_vision_model,
             "stream": stream,
+            "enable_thinking": self.settings.screenshot_vision_enable_thinking,
             "temperature": 0.1,
             "messages": [
                 {"role": "system", "content": system_prompt},
@@ -678,6 +679,7 @@ class ScreenshotAnswerService:
         status: str,
         started_at_ms: int,
         usage: UsageReport | None = None,
+        first_token_ms: int | None = None,
         safe_error_code: str | None = None,
     ) -> None:
         if self.commercial_repository is None:
@@ -694,6 +696,7 @@ class ScreenshotAnswerService:
                 session_id=session_id,
                 total_units=usage.total_tokens if usage is not None else None,
                 duration_ms=max(0, _now_ms() - started_at_ms),
+                first_token_ms=first_token_ms,
                 safe_error_code=safe_error_code,
                 created_at_ms=_now_ms(),
             ))
@@ -1159,6 +1162,11 @@ class ScreenshotAnswerService:
                 self._record_ai_usage(
                     user_id=user_id, session_id=session_id, task_id=completed.task_id,
                     status="succeeded", started_at_ms=completed.created_at_ms, usage=vision.usage,
+                    first_token_ms=(
+                        max(0, round(float(telemetry["first_text_ms"])))
+                        if telemetry is not None and telemetry.get("first_text_ms") is not None
+                        else None
+                    ),
                 )
                 return completed, self._to_retrieval_response(retrieval_context)
             except (RetryableVisionError, RetryableChatError) as exc:

@@ -540,6 +540,7 @@ class OpenAICompatibleVisionVerifier(BaseVerifier):
             payload = {
                 "model": settings.screenshot_vision_model,
                 "stream": False,
+                "enable_thinking": settings.screenshot_vision_enable_thinking,
                 "messages": [
                     {
                         "role": "user",

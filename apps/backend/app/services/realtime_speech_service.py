@@ -1088,6 +1088,19 @@ class RealtimeSpeechService:
             "p99": self._percentile(answer_click_to_render_samples, 0.99),
             "max": max(answer_click_to_render_samples) if answer_click_to_render_samples else None,
         }
+        screenshot_click_to_render_samples = [
+            int(item["screenshotClickToRenderMs"])
+            for item in records
+            if item.get("telemetryStage") == "screenshot-first-render"
+            and isinstance(item.get("screenshotClickToRenderMs"), int)
+        ]
+        distributions["screenshotClickToRenderMs"] = {
+            "count": len(screenshot_click_to_render_samples),
+            "p50": self._percentile(screenshot_click_to_render_samples, 0.50),
+            "p95": self._percentile(screenshot_click_to_render_samples, 0.95),
+            "p99": self._percentile(screenshot_click_to_render_samples, 0.99),
+            "max": max(screenshot_click_to_render_samples) if screenshot_click_to_render_samples else None,
+        }
         revision_stages = {
             "qwen": "qwenPartialReceivedAtMs",
             "event": "transcriptEventCreatedAtMs",
@@ -4401,6 +4414,7 @@ class RealtimeSpeechService:
             "firstVisibleAtMs": first_visible_at_ms,
             "sseYieldAtMs": sse_yield_at_ms,
             "answerClickToRenderMs": duration_ms if stage == "answer-first-render" else None,
+            "screenshotClickToRenderMs": duration_ms if stage == "screenshot-first-render" else None,
         }
         self._observe_trace(trace_id, **{
             key: value for key, value in browser_fields.items() if value is not None

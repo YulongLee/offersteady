@@ -1,3 +1,4 @@
 {"input":{"instruction":"__retry_once__ 请根据截图回答","images":["retry-shot.png"]},"expected":{"checks":["retries_once_then_completes","returns_stream_chunks","final_chunk_marked"]}}
 {"input":{"instruction":"__permanent_fail__ 触发视觉失败","images":["fail-shot.png"]},"expected":{"checks":["returns_failed_status","does_not_claim_completed_answer"]}}
 {"input":{"instruction":"__capture_cancel__ 用户取消当前屏幕截取","capture":"current-screen"},"expected":{"checks":["returns_cancelled_without_answer_task","does_not_store_unconfirmed_capture"]}}
+{"input":{"instruction":"请直接回答合成截图中的算法题","images":["synthetic-algorithm.png"],"runtime":{"enable_thinking":false}},"expected":{"checks":["provider_request_explicitly_disables_thinking","first_visible_text_is_streamed","final_answer_contract_unchanged","no_screenshot_or_answer_content_in_latency_metrics"]}}

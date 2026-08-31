@@ -167,6 +167,16 @@ def test_runtime_performance_ack_accepts_only_allowlisted_metadata() -> None:
         "renderedTextLength": 18,
     })
     assert answer_accepted.status_code == 200
+    screenshot_accepted = client.post(f"/api/v1/realtime-speech/sessions/{session_id}/performance-ack", json={
+        "userId": "performance-ack-user",
+        "traceId": "screenshot-request-safe-1",
+        "stage": "screenshot-first-render",
+        "durationMs": 2_341,
+        "taskId": "screenshot-task-safe-1",
+        "browserRenderAtMs": 2_341,
+        "renderedTextLength": 12,
+    })
+    assert screenshot_accepted.status_code == 200
     answer_summary = unwrap(client.get(
         f"/api/v1/realtime-speech/sessions/{session_id}/performance-summary",
         params={"userId": "performance-ack-user"},
@@ -178,6 +188,9 @@ def test_runtime_performance_ack_accepts_only_allowlisted_metadata() -> None:
     assert answer_summary["distributions"]["answerAdmissionToSseYieldMs"]["p95"] == 1_305
     assert answer_summary["distributions"]["answerBrowserReceiveToRenderMs"]["p95"] == 10
     assert answer_summary["distributions"]["answerClickToRenderMs"]["p95"] == 731
+    assert answer_summary["distributions"]["screenshotClickToRenderMs"] == {
+        "count": 1, "p50": 2_341, "p95": 2_341, "p99": 2_341, "max": 2_341,
+    }
     traces = unwrap(client.get(
         f"/api/v1/realtime-speech/sessions/{session_id}/performance-traces",
         params={"userId": "performance-ack-user"},
