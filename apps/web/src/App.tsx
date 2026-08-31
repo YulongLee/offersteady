@@ -25,6 +25,7 @@ import { isInvalidRealtimeSessionStatus, realtimeReconnectAttemptAfterRecovery, 
 import { createLiveSessionLeaderCoordinator } from "./live-session-leader";
 import { applyAppearancePreferences, persistAppearancePreferences, readAppearancePreferences, type AppearancePreferences } from "./appearance-preferences";
 import { isFreshShortcutScreenshotAcceptance, SHORTCUT_SCREENSHOT_RECOVERY_POLL_INTERVAL_MS } from "./screenshot-shortcut-feedback";
+import type { LiveAnswerStreamEvent } from "./live-answer-stream";
 import "./styles.css";
 
 
@@ -1235,6 +1236,7 @@ function LivePage() {
     setActionState(current => ({ ...current, manualDraft: "" }));
     setView(current => ({ ...current, viewingAnswerId: null, newAnswerAvailable: false }));
     let pendingStreamUpdate: Parameters<NonNullable<Parameters<typeof interviewAppAdapter.submitManualAnswer>[2]>>[0] | null = null;
+    let firstAnswerTiming: LiveAnswerStreamEvent["timing"];
     let streamRenderTimer: number | null = null;
     const applyStreamUpdate = (update: NonNullable<typeof pendingStreamUpdate>) => {
       setState(current => ({
@@ -1262,6 +1264,7 @@ function LivePage() {
           ...(update.event.receivedAtMs === undefined ? {} : { browserEventReceiveAtMs: update.event.receivedAtMs }),
           browserRenderAtMs: Date.now(),
           renderedTextLength: renderedText.length,
+          timing: update.event.timing,
         });
         if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(acknowledge));
         else window.setTimeout(acknowledge, 0);
@@ -1280,7 +1283,10 @@ function LivePage() {
       const controller = new AbortController();
       manualAnswerController.current = controller;
       const result = await runAdapterOperation(signal => interviewAppAdapter.submitManualAnswer({ interviewId: id, question: trimmed, idempotencyKey: command, ...frozenQuestion, clickedAtMs }, signal, update => {
-        pendingStreamUpdate = update;
+        firstAnswerTiming ??= update.event.timing;
+        pendingStreamUpdate = firstAnswerTiming && !update.event.timing
+          ? { ...update, event: { ...update.event, timing: firstAnswerTiming } }
+          : update;
         if (["completed", "failed", "cancelled"].includes(update.event.type)) flushStreamUpdate();
         else if (streamRenderTimer === null) streamRenderTimer = window.setTimeout(flushStreamUpdate, 100);
       }), controller.signal);

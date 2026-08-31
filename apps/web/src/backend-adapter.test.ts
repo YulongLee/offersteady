@@ -361,6 +361,13 @@ describe("backend preview adapter", () => {
       browserEventReceiveAtMs: Date.now() - 20,
       browserRenderAtMs: Date.now(),
       renderedTextLength: 12,
+      timing: {
+        serverAcceptedAtMs: 100,
+        providerRequestAtMs: 200,
+        providerFirstTokenAtMs: 900,
+        firstVisibleAtMs: 1_400,
+        sseYieldAtMs: 1_405,
+      },
     });
     adapter.acknowledgeAnswerFirstRender({
       interviewId: "session-1",
@@ -380,6 +387,11 @@ describe("backend preview adapter", () => {
       stage: "answer-first-render",
       taskId: "answer-safe-1",
       renderedTextLength: 12,
+      serverAcceptedAtMs: 100,
+      providerRequestAtMs: 200,
+      providerFirstTokenAtMs: 900,
+      firstVisibleAtMs: 1_400,
+      sseYieldAtMs: 1_405,
     });
     expect(body).not.toHaveProperty("question");
     expect(body).not.toHaveProperty("answer");

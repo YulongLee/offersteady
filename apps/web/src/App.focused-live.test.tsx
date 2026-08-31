@@ -478,7 +478,21 @@ describe("focused live interview workspace", () => {
           updatedAtMs: Date.now(),
         },
       };
-      onStreamUpdate?.({ result: started, event: { type: "chunk", task: {}, chunk: { sequence: 1, text: "流式首段已经出现。", isFinal: false } } });
+      onStreamUpdate?.({
+        result: started,
+        event: {
+          type: "chunk",
+          task: {},
+          chunk: { sequence: 1, text: "流式首段已经出现。", isFinal: false },
+          timing: {
+            serverAcceptedAtMs: 100,
+            providerRequestAtMs: 200,
+            providerFirstTokenAtMs: 900,
+            firstVisibleAtMs: 1_400,
+            sseYieldAtMs: 1_405,
+          },
+        },
+      });
       await completion;
       return {
         question: { ...started.question, status: "confirmed" as const, advice: { ...started.question.advice, detail: "流式首段已经出现。最终回答也完成。" } },
@@ -500,6 +514,15 @@ describe("focused live interview workspace", () => {
     expect(await screen.findByText("流式首段已经出现。最终回答也完成。")).toBeInTheDocument();
     await waitFor(() => expect(quickAnswerButton).not.toBeDisabled());
     await waitFor(() => expect(interviewAppAdapter.acknowledgeAnswerFirstRender).toHaveBeenCalledTimes(1));
+    expect(interviewAppAdapter.acknowledgeAnswerFirstRender).toHaveBeenCalledWith(expect.objectContaining({
+      timing: {
+        serverAcceptedAtMs: 100,
+        providerRequestAtMs: 200,
+        providerFirstTokenAtMs: 900,
+        firstVisibleAtMs: 1_400,
+        sseYieldAtMs: 1_405,
+      },
+    }));
     expect(screen.queryByText("快答已完成")).not.toBeInTheDocument();
   });
 

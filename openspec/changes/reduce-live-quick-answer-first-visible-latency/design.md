@@ -45,6 +45,8 @@ Alternative: create an async provider gateway immediately. Rejected because the 
 
 The task records opaque timestamps for server acceptance, provider request start, first raw provider token, first visible answer event, and SSE yield. The browser acknowledges the first non-empty answer render once. Telemetry stores only trace/task identifiers, timestamps, durations, language, status, and size buckets; it never stores content.
 
+The `answer-first-render` acknowledgement persists the server timestamps echoed by the first SSE chunk together with browser receive/render timestamps. The performance summary derives same-clock server and browser stage durations separately; cross-device wall-clock subtraction is not used as an authoritative latency measurement.
+
 Alternative: infer first-visible latency from provider `first_token_ms`. Rejected because normalization output is intentionally hidden and the provider metric cannot represent the user-visible result.
 
 ## Risks / Trade-offs

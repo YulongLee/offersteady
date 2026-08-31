@@ -1065,6 +1065,11 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       readonly browserRenderAtMs?: number;
       readonly renderedRevision?: number;
       readonly renderedTextLength?: number;
+      readonly serverAcceptedAtMs?: number;
+      readonly providerRequestAtMs?: number;
+      readonly providerFirstTokenAtMs?: number;
+      readonly firstVisibleAtMs?: number;
+      readonly sseYieldAtMs?: number;
       readonly segmentId?: string;
       readonly isFinal?: boolean;
       readonly visibilityState?: DocumentVisibilityState;
@@ -1112,6 +1117,11 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
           ...(browserRenderAtMs === undefined ? {} : { browserRenderAtMs }),
           ...(delivery?.renderedRevision === undefined ? {} : { renderedRevision: delivery.renderedRevision }),
           ...(delivery?.renderedTextLength === undefined ? {} : { renderedTextLength: delivery.renderedTextLength }),
+          ...(delivery?.serverAcceptedAtMs === undefined ? {} : { serverAcceptedAtMs: delivery.serverAcceptedAtMs }),
+          ...(delivery?.providerRequestAtMs === undefined ? {} : { providerRequestAtMs: delivery.providerRequestAtMs }),
+          ...(delivery?.providerFirstTokenAtMs === undefined ? {} : { providerFirstTokenAtMs: delivery.providerFirstTokenAtMs }),
+          ...(delivery?.firstVisibleAtMs === undefined ? {} : { firstVisibleAtMs: delivery.firstVisibleAtMs }),
+          ...(delivery?.sseYieldAtMs === undefined ? {} : { sseYieldAtMs: delivery.sseYieldAtMs }),
           ...(delivery?.visibilityState ? { visibilityState: delivery.visibilityState } : {}),
         }),
       }));
@@ -1845,7 +1855,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     return latest;
   }
 
-  acknowledgeAnswerFirstRender(command: { interviewId: string; taskId: string; clickedAtMs: number; browserEventReceiveAtMs?: number; browserRenderAtMs: number; renderedTextLength: number }) {
+  acknowledgeAnswerFirstRender(command: { interviewId: string; taskId: string; clickedAtMs: number; browserEventReceiveAtMs?: number; browserRenderAtMs: number; renderedTextLength: number; timing?: LiveAnswerStreamEvent["timing"] }) {
     this.acknowledgeRuntimePerformance(
       command.interviewId,
       command.taskId,
@@ -1857,6 +1867,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         browserRenderAtMs: command.browserRenderAtMs,
         renderedTextLength: command.renderedTextLength,
         visibilityState: document.visibilityState,
+        ...command.timing,
       },
     );
   }

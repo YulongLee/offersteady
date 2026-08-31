@@ -1034,6 +1034,12 @@ class RealtimeSpeechService:
             "lastMeaningfulSpeechToTerminalEnqueueMs": ("desktopLastMeaningfulSpeechAtMs", "desktopTerminalEnqueueAtMs"),
             "terminalEnqueueToProviderFinalMs": ("desktopTerminalEnqueueAtMs", "qwenFinalReceivedAtMs"),
             "providerFinalToBrowserPaintMs": ("qwenFinalReceivedAtMs", "browserPaintAtMs"),
+            "answerAdmissionToProviderMs": ("serverAcceptedAtMs", "providerRequestAtMs"),
+            "answerProviderToFirstTokenMs": ("providerRequestAtMs", "providerFirstTokenAtMs"),
+            "answerFirstTokenToVisibleMs": ("providerFirstTokenAtMs", "firstVisibleAtMs"),
+            "answerVisibleToSseYieldMs": ("firstVisibleAtMs", "sseYieldAtMs"),
+            "answerAdmissionToSseYieldMs": ("serverAcceptedAtMs", "sseYieldAtMs"),
+            "answerBrowserReceiveToRenderMs": ("browserEventReceiveAtMs", "browserRenderAtMs"),
         }
         distributions: dict[str, object] = {}
         utterance_groups: dict[tuple[object, object, object], list[dict[str, object]]] = {}
@@ -1042,6 +1048,11 @@ class RealtimeSpeechService:
             if key[2] is not None:
                 utterance_groups.setdefault(key, []).append(item)
         for name, (start_key, end_key) in pairs.items():
+            candidate_records = (
+                [item for item in records if item.get("telemetryStage") == "answer-first-render"]
+                if name.startswith("answer")
+                else records
+            )
             if name in {
                 "speechStartToFirstFrameSendMs",
                 "liveToFirstFrameSendMs",
@@ -1056,7 +1067,7 @@ class RealtimeSpeechService:
                     if starts and ends and min(ends) >= min(starts):
                         samples.append(min(ends) - min(starts))
             else:
-                samples = [int(item[end_key]) - int(item[start_key]) for item in records if isinstance(item.get(start_key), int) and isinstance(item.get(end_key), int) and int(item[end_key]) >= int(item[start_key])]
+                samples = [int(item[end_key]) - int(item[start_key]) for item in candidate_records if isinstance(item.get(start_key), int) and isinstance(item.get(end_key), int) and int(item[end_key]) >= int(item[start_key])]
             distributions[name] = {
                 "count": len(samples),
                 "p50": self._percentile(samples, 0.50),
@@ -1064,6 +1075,19 @@ class RealtimeSpeechService:
                 "p99": self._percentile(samples, 0.99),
                 "max": max(samples) if samples else None,
             }
+        answer_click_to_render_samples = [
+            int(item["answerClickToRenderMs"])
+            for item in records
+            if item.get("telemetryStage") == "answer-first-render"
+            and isinstance(item.get("answerClickToRenderMs"), int)
+        ]
+        distributions["answerClickToRenderMs"] = {
+            "count": len(answer_click_to_render_samples),
+            "p50": self._percentile(answer_click_to_render_samples, 0.50),
+            "p95": self._percentile(answer_click_to_render_samples, 0.95),
+            "p99": self._percentile(answer_click_to_render_samples, 0.99),
+            "max": max(answer_click_to_render_samples) if answer_click_to_render_samples else None,
+        }
         revision_stages = {
             "qwen": "qwenPartialReceivedAtMs",
             "event": "transcriptEventCreatedAtMs",
@@ -4327,6 +4351,11 @@ class RealtimeSpeechService:
         browser_event_receive_at_ms: int | None = None,
         browser_state_update_at_ms: int | None = None,
         browser_render_at_ms: int | None = None,
+        server_accepted_at_ms: int | None = None,
+        provider_request_at_ms: int | None = None,
+        provider_first_token_at_ms: int | None = None,
+        first_visible_at_ms: int | None = None,
+        sse_yield_at_ms: int | None = None,
         visibility_state: str | None = None,
         browser_stream_chunk_received_at_ms: int | None = None,
         browser_event_parsed_at_ms: int | None = None,
@@ -4348,25 +4377,34 @@ class RealtimeSpeechService:
                         source_kind=source_kind,  # type: ignore[arg-type]
                         timing={**timing, "frontendRenderMs": duration_ms},
                     )
-            browser_fields = {
-                "eventId": event_id,
-                "browserEventReceiveAtMs": browser_event_receive_at_ms,
-                "browserStateUpdateAtMs": browser_state_update_at_ms,
-                "browserRenderAtMs": browser_render_at_ms,
-                "visibilityState": visibility_state,
-                "browserStreamChunkReceivedAtMs": browser_stream_chunk_received_at_ms,
-                "browserEventParsedAtMs": browser_event_parsed_at_ms,
-                "transcriptStoreUpdateStartAtMs": transcript_store_update_start_at_ms,
-                "transcriptStoreUpdateCompleteAtMs": transcript_store_update_complete_at_ms,
-                "reactRenderStartAtMs": react_render_start_at_ms,
-                "reactCommitAtMs": react_commit_at_ms,
-                "browserPaintAtMs": browser_paint_at_ms,
-                "renderedRevision": rendered_revision,
-                "renderedTextLength": rendered_text_length,
-            }
-            self._observe_trace(trace_id, **{
-                key: value for key, value in browser_fields.items() if value is not None
-            })
+        browser_fields = {
+            "sessionId": session_id,
+            "taskId": task_id,
+            "telemetryStage": stage,
+            "eventId": event_id,
+            "browserEventReceiveAtMs": browser_event_receive_at_ms,
+            "browserStateUpdateAtMs": browser_state_update_at_ms,
+            "browserRenderAtMs": browser_render_at_ms,
+            "visibilityState": visibility_state,
+            "browserStreamChunkReceivedAtMs": browser_stream_chunk_received_at_ms,
+            "browserEventParsedAtMs": browser_event_parsed_at_ms,
+            "transcriptStoreUpdateStartAtMs": transcript_store_update_start_at_ms,
+            "transcriptStoreUpdateCompleteAtMs": transcript_store_update_complete_at_ms,
+            "reactRenderStartAtMs": react_render_start_at_ms,
+            "reactCommitAtMs": react_commit_at_ms,
+            "browserPaintAtMs": browser_paint_at_ms,
+            "renderedRevision": rendered_revision,
+            "renderedTextLength": rendered_text_length,
+            "serverAcceptedAtMs": server_accepted_at_ms,
+            "providerRequestAtMs": provider_request_at_ms,
+            "providerFirstTokenAtMs": provider_first_token_at_ms,
+            "firstVisibleAtMs": first_visible_at_ms,
+            "sseYieldAtMs": sse_yield_at_ms,
+            "answerClickToRenderMs": duration_ms if stage == "answer-first-render" else None,
+        }
+        self._observe_trace(trace_id, **{
+            key: value for key, value in browser_fields.items() if value is not None
+        })
         log_event(
             self.logger,
             logging.INFO,
