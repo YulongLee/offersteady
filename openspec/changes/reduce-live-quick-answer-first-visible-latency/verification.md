@@ -43,3 +43,13 @@ Date: 2026-08-31
 - New Backend logs contained no `ERROR`, `CRITICAL`, `Traceback`, or `Exception` entries during release verification.
 - Previous Backend/Web images are retained as `rollback-65907e4`; previous hashed Web assets were also retained in the running Web container for already-open browser tabs.
 - Exact click-to-first-render improvement will be compared from the first real post-release quick-answer samples now that all stages are measurable.
+
+### Answer render telemetry correction
+
+- Runtime commit: `5f5ddcdf38f04b1cec05282398419e7613253fc9`.
+- The browser now returns the five content-free server/SSE timestamps from the first visible chunk together with browser receive/render timestamps; a 100ms render coalescing window cannot discard the first timing envelope.
+- `answer-first-render` acknowledgements are retained in the bounded in-memory trace store and expose seven answer-stage distributions without persisting question or answer content.
+- Backend full suite: 391 passed, 14 skipped. JavaScript/TypeScript suites: 658 passed. Workspace typecheck, production builds, Python compilation, diff checks, and strict OpenSpec validation passed.
+- One unrelated 140ms ASR concurrency timing assertion exceeded its limit while backend and Node suites competed for CPU; it passed three isolated repetitions and the complete backend suite passed when rerun without parallel build load.
+- A stale database session remained marked `live`, but it had no activity for about 66 minutes; deployment proceeded only after operational metrics confirmed zero active desktop transports, zero ASR workers, and zero queued audio frames immediately before build and replacement.
+- Backend and Web are healthy, the public metrics endpoint exposes the new answer distributions, previous static assets remain available to already-open tabs, and rollback images are retained as `rollback-3d0613c`.

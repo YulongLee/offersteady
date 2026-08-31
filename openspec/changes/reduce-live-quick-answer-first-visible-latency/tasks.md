@@ -22,4 +22,4 @@
 - [x] 4.1 Run focused backend/web tests, AI evals, typecheck, production builds, and a synthetic pre/post latency benchmark.
 - [x] 4.2 Validate this OpenSpec change strictly and document measured results plus rollback controls.
 - [x] 4.3 Commit and push scoped changes, deploy only affected services, verify production health/logs/billing, and compare post-deploy timing without interrupting active interviews.
-- [ ] 4.4 Run the full regression/build suite and deploy the telemetry correction only when no live interview is active.
+- [x] 4.4 Run the full regression/build suite and deploy the telemetry correction only when no live interview is active.
