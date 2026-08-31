@@ -9,15 +9,11 @@
 
 #### Scenario: Partial transcript grows or corrects
 - **WHEN** 当前面试 session 收到某一句话的合法新 Partial Transcript revision
-- **THEN** 左侧实时对话栏在同一 React render 中显示该 revision 的新增文本或有界尾部纠正，不追加重复对话、不替换已稳定前缀、不生成供应商未返回的内容
+- **THEN** 左侧实时对话栏在同一 React render 中显示该 revision 的新增或纠正文本，不追加重复对话、不生成供应商未返回的内容
 
 #### Scenario: Provider corrects the mutable tail
 - **WHEN** ASR 的新 revision 与上一 revision 具有相同前缀但改写了尾部假设
-- **THEN** 渲染层保留已稳定前缀对应的 DOM 内容，并在当前 render 中直接替换有界可变尾部，不得因 revision 更长而改写尾部窗口之前的已见正文
-
-#### Scenario: Provider rewrites content before the mutable tail
-- **WHEN** 同一 utterance 的更高 revision 修改了有界可变尾部之前的文本
-- **THEN** 浏览器状态层必须保留当前稳定前缀，即使后端误发破坏性 revision 也不得让用户看到整段前文消失
+- **THEN** 渲染层保留最长公共前缀对应的稳定 DOM 内容，并在当前 render 中直接替换可变尾部，页面文本必须与新 revision 完全一致
 
 #### Scenario: Batched provider revision contains several new characters
 - **WHEN** ASR 一次返回由多个字符组成的新 revision
@@ -33,7 +29,7 @@
 
 #### Scenario: Final transcript replaces the partial transcript
 - **WHEN** 某一句话对应的 Final Transcript 到达
-- **THEN** 系统在同一 render 中冻结稳定合并后的 Final Transcript，不执行尾字动画，并保留同一条对话记录的角色和顺序；Final 可以补充或纠正有界可变尾部，但不得删除或改写已稳定前缀
+- **THEN** 系统在同一 render 中使用权威 Final Transcript 更新业务状态和全部可见文本，不执行尾字动画，并保留同一条对话记录的角色和顺序；若 Final 只是当前可见文本的严格短前缀，则保留较完整可见文本并将其冻结为 Final
 
 #### Scenario: Empty or phantom transcript is suppressed
 - **WHEN** 实时链路返回空白文本、静音误触发结果或已失效的旧 partial

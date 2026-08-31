@@ -717,7 +717,7 @@ describe("backend preview adapter", () => {
     expect(updates.at(-1)?.speaker.transcripts[0]?.isFinal).toBe(false);
   });
 
-  it("freezes stable visible text when Final attempts a full rewrite and rejects a later partial", async () => {
+  it("accepts an authoritative final correction after a committing draft and rejects a later partial", async () => {
     window.localStorage.setItem("offersteady.auth.access_token", "access-token");
     window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
     window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
@@ -753,7 +753,7 @@ describe("backend preview adapter", () => {
 
     await adapter.subscribeRealtimeSession("session-1", update => updates.push(update as typeof updates[number]));
 
-    expect(updates.at(-1)?.speaker.transcripts[0]).toMatchObject({ text: "较长但不准确的临时识别", isFinal: true });
+    expect(updates.at(-1)?.speaker.transcripts[0]).toMatchObject({ text: "准确终稿", isFinal: true });
   });
 
   it("freezes the fuller visible text when Final is only a strict-prefix truncation", async () => {

@@ -42,7 +42,7 @@ describe("live workspace answer pagination", () => {
     expect(clampSplitRatio(95, bounds)).toBe(bounds.max);
   });
 
-  it("keeps the newest revision metadata without accepting a stable-prefix rewrite", () => {
+  it("keeps only the newest visible revision for a realtime utterance", () => {
     const current = syntheticState.speaker;
     const original = current.transcripts[0]!;
     const reconciled = reconcileRealtimeSpeaker(current, {
@@ -54,40 +54,9 @@ describe("live workspace answer pagination", () => {
       ],
     });
     expect(reconciled.transcripts.filter(segment => segment.id === original.id)).toEqual([
-      expect.objectContaining({ revision: original.revision + 2, text: original.text, isFinal: true }),
+      expect.objectContaining({ revision: original.revision + 2, text: "最终实时文本", isFinal: true }),
     ]);
     expect(reconciled.transcripts.some(segment => segment.id === "blank-segment")).toBe(false);
-  });
-
-  it("allows bounded tail correction but blocks a longer rewrite before the stable prefix", () => {
-    const original = {
-      ...syntheticState.speaker.transcripts[0]!,
-      text: "请介绍一下你在上一家公司负责的核心项目上线",
-      revision: 4,
-      isFinal: false,
-    };
-    const tailCorrection = {
-      ...original,
-      text: "请介绍一下你在上一家公司负责的核心项目复盘结果",
-      revision: 5,
-    };
-    const corrected = reconcileRealtimeSpeaker(
-      { ...syntheticState.speaker, transcripts: [original] },
-      { ...syntheticState.speaker, transcripts: [tailCorrection] },
-    );
-    expect(corrected.transcripts[0]).toMatchObject({ revision: 5, text: tailCorrection.text });
-
-    const destructive = {
-      ...tailCorrection,
-      text: `能否重新改写${tailCorrection.text}并追加内容`,
-      revision: 6,
-      isFinal: true,
-    };
-    const frozen = reconcileRealtimeSpeaker(corrected, {
-      ...syntheticState.speaker,
-      transcripts: [destructive],
-    });
-    expect(frozen.transcripts[0]).toMatchObject({ revision: 6, text: tailCorrection.text, isFinal: true });
   });
 
   it("does not let a stale snapshot overwrite a newer partial revision", () => {

@@ -75,8 +75,6 @@ REALTIME_STREAM_BOOTSTRAP_EVENT_KINDS: set[RealtimeEventKind] = {
 }
 PREPARATION_PREWARM_FRESH_MS = 120_000
 PREPARATION_AUDIO_READINESS_TTL_MS = 120_000
-TRANSCRIPT_MUTABLE_TAIL_CODEPOINTS = 16
-TRANSCRIPT_MIN_STABLE_PREFIX_CODEPOINTS = 2
 
 
 def preparation_signal_is_fresh(*, last_signal_at_ms: int | None, now_ms: int) -> bool:
@@ -87,30 +85,20 @@ def preparation_signal_is_fresh(*, last_signal_at_ms: int | None, now_ms: int) -
 
 
 def stabilize_visible_transcript_text(*, current_text: str, incoming_text: str, is_final: bool) -> str:
-    """Keep published speech monotonic outside a bounded mutable tail.
+    """Prevent a newer ASR revision from erasing already visible speech.
 
-    Provider revisions are complete hypotheses, not append-only deltas. Normal
-    prefix growth stays immediate, while retractions and rewrites before the
-    mutable tail retain the already-visible text. Final freezes the same stable
-    business text instead of reintroducing a destructive provider rewrite.
+    Partial hypotheses may temporarily retract while the provider revises its
+    decoding window. Growth and equal/longer corrections remain immediate. A
+    shorter non-prefix Final is still authoritative, while a strict-prefix
+    Final is treated as a truncated commit and freezes the fuller visible text.
     """
     current = current_text.strip()
     incoming = incoming_text.strip()
-    if not current or incoming.startswith(current):
+    if not current or len(incoming) >= len(current):
         return incoming
-    if not incoming or current.startswith(incoming) or len(incoming) < len(current):
+    if not is_final or current.startswith(incoming):
         return current
-    common_prefix_length = 0
-    for current_unit, incoming_unit in zip(current, incoming):
-        if current_unit != incoming_unit:
-            break
-        common_prefix_length += 1
-    stable_prefix_length = max(0, len(current) - TRANSCRIPT_MUTABLE_TAIL_CODEPOINTS)
-    if len(current) >= TRANSCRIPT_MIN_STABLE_PREFIX_CODEPOINTS * 2:
-        stable_prefix_length = max(stable_prefix_length, TRANSCRIPT_MIN_STABLE_PREFIX_CODEPOINTS)
-    if common_prefix_length >= stable_prefix_length:
-        return incoming
-    return current
+    return incoming
 
 
 class RetryableAsrError(Exception):

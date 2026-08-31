@@ -1,4 +1,4 @@
-import { canApplyTranscriptRevision, stabilizeVisibleTranscriptText, type SpeakerTranscriptSegment } from "@offersteady/protocol";
+import { canApplyTranscriptRevision, type SpeakerTranscriptSegment } from "@offersteady/protocol";
 
 export const CONVERSATION_TURN_JOIN_GAP_MS = 700;
 export const CONVERSATION_TURN_MAX_DURATION_MS = 45_000;
@@ -32,8 +32,7 @@ export const reconcileTranscriptRevisions = (segments: readonly SpeakerTranscrip
     if (!compactTranscriptText(segment.text)) continue;
     const current = latestById.get(segment.id);
     if (canApplyTranscriptRevision(current, segment)) {
-      const stableText = stabilizeVisibleTranscriptText(current?.text, segment.text, segment.isFinal);
-      latestById.set(segment.id, stableText === segment.text ? segment : { ...segment, text: stableText });
+      latestById.set(segment.id, segment);
     }
   }
   return [...latestById.values()].sort((left, right) => left.startedAtMs - right.startedAtMs || left.revision - right.revision);

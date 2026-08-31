@@ -1,4 +1,4 @@
-import { canApplyTranscriptRevision, stabilizeVisibleTranscriptText, type AnswerTaskSnapshot } from "@offersteady/protocol";
+import { canApplyTranscriptRevision, type AnswerTaskSnapshot } from "@offersteady/protocol";
 import type { InterviewQuestion, InterviewWorkspaceSnapshot, LiveWorkspaceViewState, SpeakerPresentationState, WebAppState } from "./domain";
 import { flattenTranscriptLifecycle } from "./conversation-turns";
 
@@ -184,8 +184,7 @@ export const reconcileRealtimeSpeaker = (
     if (!hasVisibleTranscriptText(segment.text)) continue;
     const existing = latestById.get(segment.id);
     if (canApplyTranscriptRevision(existing, segment)) {
-      const stableText = stabilizeVisibleTranscriptText(existing?.text, segment.text, segment.isFinal);
-      latestById.set(segment.id, stableText === segment.text ? segment : { ...segment, text: stableText });
+      latestById.set(segment.id, segment);
     }
   }
   return {

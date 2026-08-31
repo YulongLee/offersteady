@@ -97,11 +97,7 @@
 
 #### Scenario: Partial transcript is superseded by a newer partial
 - **WHEN** 同一句话收到更新版本的 Partial Transcript
-- **THEN** 系统在同一 utterance 中立即应用正常增长或有界可变尾部纠错，保留已稳定前缀且不叠加重复句子
-
-#### Scenario: A longer provider revision rewrites stable visible text
-- **WHEN** 更新的 Partial 虽然同长或更长，但在有界可变尾部之前修改了已展示正文
-- **THEN** 后端不得以“文本更长”为由整段替换已稳定内容，并继续以原 revision 速度发布后续合法增长
+- **THEN** 网页端覆盖旧 partial，而不是在实时对话区叠加重复句子
 
 #### Scenario: Provider emits several ordered partial revisions
 - **WHEN** ASR 为同一 utterance 依次返回多个有效 Partial revision，且实时消费链路没有超过有界积压阈值
