@@ -101,6 +101,42 @@ export const canApplyTranscriptRevision = (
   return terminalRank(incomingTerminal) > terminalRank(currentTerminal);
 };
 
+export const TRANSCRIPT_MUTABLE_TAIL_CODEPOINTS = 16;
+export const TRANSCRIPT_MIN_STABLE_PREFIX_CODEPOINTS = 2;
+
+/**
+ * Provider partials are complete hypotheses rather than append-only deltas.
+ * Keep normal growth immediate, allow corrections only inside a bounded tail,
+ * and never let a newer revision erase the stable visible prefix.
+ */
+export const stabilizeVisibleTranscriptText = (
+  existingText: string | undefined,
+  incomingText: string,
+  _isFinal: boolean,
+): string => {
+  const current = existingText?.trim() ?? "";
+  const incoming = incomingText.trim();
+  if (!current) return incoming;
+  const currentUnits = Array.from(current);
+  const incomingUnits = Array.from(incoming);
+  const startsWith = (whole: readonly string[], prefix: readonly string[]) => (
+    prefix.length <= whole.length && prefix.every((unit, index) => whole[index] === unit)
+  );
+  if (startsWith(incomingUnits, currentUnits)) return incoming;
+  if (!incoming || startsWith(currentUnits, incomingUnits) || incomingUnits.length < currentUnits.length) return current;
+  let commonPrefixLength = 0;
+  while (
+    commonPrefixLength < currentUnits.length
+    && commonPrefixLength < incomingUnits.length
+    && currentUnits[commonPrefixLength] === incomingUnits[commonPrefixLength]
+  ) commonPrefixLength += 1;
+  let stablePrefixLength = Math.max(0, currentUnits.length - TRANSCRIPT_MUTABLE_TAIL_CODEPOINTS);
+  if (currentUnits.length >= TRANSCRIPT_MIN_STABLE_PREFIX_CODEPOINTS * 2) {
+    stablePrefixLength = Math.max(stablePrefixLength, TRANSCRIPT_MIN_STABLE_PREFIX_CODEPOINTS);
+  }
+  return commonPrefixLength >= stablePrefixLength ? incoming : current;
+};
+
 export interface LegacySpeakerTranscriptSegment extends Omit<SpeakerTranscriptSegment, "sourceKind" | "role"> {
   readonly sourceKind: LegacySpeakerSourceKind;
   readonly role: LegacyInterviewRole;

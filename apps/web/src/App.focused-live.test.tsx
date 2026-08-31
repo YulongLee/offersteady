@@ -422,15 +422,17 @@ describe("focused live interview workspace", () => {
     ));
   });
 
-  it("renders only the newest revision of one transcript segment", () => {
+  it("renders only the newest append-only revision of one transcript segment", () => {
+    let updatedText = "";
     openLive(state => {
       const original = state.speaker.transcripts[0]!;
+      updatedText = `${original.text} 请继续说明。`;
       state.speaker = { ...state.speaker, transcripts: [
           ...state.speaker.transcripts,
-          { ...original, revision: original.revision + 1, text: "修订后的合成面试官问题" },
+          { ...original, revision: original.revision + 1, text: updatedText },
         ] };
     });
-    expect(screen.getByText("修订后的合成面试官问题")).toBeInTheDocument();
+    expect(screen.getByText(updatedText)).toBeInTheDocument();
     expect(screen.queryByText("请介绍一个你负责过的、最有挑战的前端项目。", { selector: ".conversation-turn p" })).not.toBeInTheDocument();
   });
 

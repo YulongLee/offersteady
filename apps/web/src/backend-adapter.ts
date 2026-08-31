@@ -1,4 +1,4 @@
-import type { CaptureState, FoundationIndexResponse } from "@offersteady/protocol";
+import { stabilizeVisibleTranscriptText, type CaptureState, type FoundationIndexResponse } from "@offersteady/protocol";
 
 import type { AnswerProvenance, AnswerSourceReference, AnswerTaskSnapshot, CancelAnswerResult, OfficialCheckoutOrder, PointsRedemptionResult } from "@offersteady/protocol";
 import { AppError } from "./domain";
@@ -409,18 +409,6 @@ interface MaterializedRealtimeSessionStreamEvent extends BackendRealtimeSessionS
 
 type BackendRealtimeTranscript = BackendRealtimeTranscriptListResponse["transcripts"][number];
 type BackendRealtimeCandidate = BackendRealtimeQuestionCandidateListResponse["candidates"][number];
-
-const stabilizeVisibleTranscriptText = (
-  existingText: string | undefined,
-  incomingText: string,
-  isFinal: boolean,
-): string => {
-  const current = existingText?.trim() ?? "";
-  const incoming = incomingText.trim();
-  if (!current || incoming.length >= current.length) return incoming;
-  if (!isFinal || current.startsWith(incoming)) return current;
-  return incoming;
-};
 
 const materializeRealtimeDelta = (
   interviewId: string,

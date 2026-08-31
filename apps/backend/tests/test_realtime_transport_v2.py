@@ -25,7 +25,7 @@ from app.services.realtime_speech_service import (
 client = TestClient(create_app())
 
 
-def test_visible_transcript_stabilization_keeps_growth_fast_and_blocks_retractions():
+def test_visible_transcript_stabilization_keeps_growth_fast_and_blocks_destructive_revisions():
     assert stabilize_visible_transcript_text(
         current_text="请介绍项目",
         incoming_text="请介绍项目的性能优化",
@@ -40,12 +40,46 @@ def test_visible_transcript_stabilization_keeps_growth_fast_and_blocks_retractio
         current_text="旧的临时识别文本",
         incoming_text="准确终稿",
         is_final=True,
-    ) == "准确终稿"
+    ) == "旧的临时识别文本"
     assert stabilize_visible_transcript_text(
         current_text="请介绍项目的性能优化",
         incoming_text="请介绍项目",
         is_final=True,
     ) == "请介绍项目的性能优化"
+
+
+def test_visible_transcript_stabilization_allows_only_bounded_tail_corrections():
+    current = "请介绍一下你在上一家公司负责的核心项目上线"
+    tail_correction = "请介绍一下你在上一家公司负责的核心项目复盘结果"
+    assert stabilize_visible_transcript_text(
+        current_text=current,
+        incoming_text=tail_correction,
+        is_final=False,
+    ) == tail_correction
+
+    stable_prefix_rewrite = "能否请你介绍在上一家公司负责的核心项目上线与复盘结果"
+    assert len(stable_prefix_rewrite) >= len(current)
+    assert stabilize_visible_transcript_text(
+        current_text=current,
+        incoming_text=stable_prefix_rewrite,
+        is_final=False,
+    ) == current
+    assert stabilize_visible_transcript_text(
+        current_text=current,
+        incoming_text=stable_prefix_rewrite,
+        is_final=True,
+    ) == current
+
+
+def test_visible_transcript_stabilization_blocks_equal_length_prefix_rewrite():
+    current = "这是已经展示给用户的完整面试问题内容"
+    rewrite = f"那{current[1:]}"
+    assert len(rewrite) == len(current)
+    assert stabilize_visible_transcript_text(
+        current_text=current,
+        incoming_text=rewrite,
+        is_final=False,
+    ) == current
 
 
 def test_strict_prefix_final_freezes_the_fuller_published_partial(monkeypatch):
@@ -895,10 +929,22 @@ def test_provider_partial_hot_path_does_not_scan_session_history_or_run_question
     assert cold_calls == ["fail_inline_observer"]
 
     service._publish_provider_partial(replace(frame, revision=2), TranscriptResult(
-        text="请介绍",
-        confidence=0.93,
+        text="能否请你详细介绍一下你负责的项目经验",
+        confidence=0.94,
         partial_received_at_ms=now_ms + 1,
         provider_revision=2,
+    ))
+
+    destructive = service.repository.get_transcript(session_id, frame.segment_id)
+    assert destructive is not None
+    assert destructive.text == "请介绍你的项目"
+    assert destructive.revision == transcript.revision
+
+    service._publish_provider_partial(replace(frame, revision=2), TranscriptResult(
+        text="请介绍",
+        confidence=0.93,
+        partial_received_at_ms=now_ms + 2,
+        provider_revision=3,
     ))
 
     stabilized = service.repository.get_transcript(session_id, frame.segment_id)

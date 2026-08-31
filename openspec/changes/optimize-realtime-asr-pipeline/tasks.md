@@ -53,6 +53,7 @@
 - [x] 4.17 Remove presentation buffering and stale shorter-partial retention so every accepted revision renders immediately with longest-common-prefix tail isolation.
 - [x] 4.18 Route public realtime transcript SSE outside Caddy response compression and force each upstream write to flush immediately.
 - [x] 4.19 Stabilize shorter provider Partial retractions in Backend and Browser state without delaying normal growth or authoritative Final corrections.
+- [x] 4.20 Protect a bounded stable transcript prefix from equal/longer non-prefix Provider revisions in Backend and Browser state without adding presentation buffering.
 
 ## 5. Verification, Evals, and Rollout
 
@@ -82,3 +83,4 @@
 - [x] 5.21 Add Web regressions for immediate growth, correction, retraction and Final rendering in both the stream adapter and transcript component.
 - [x] 5.22 Add a production Caddy contract test and staged rollout checks for uncompressed realtime SSE while preserving ordinary gzip traffic.
 - [x] 5.23 Add Backend and Web regressions proving shorter Partial/strict-prefix Final revisions cannot erase visible transcript text.
+- [x] 5.24 Add Backend and Web regressions for equal-length rewrites, longer stable-prefix rewrites, bounded tail corrections, Final freezing, and frontend defense-in-depth.
