@@ -19,4 +19,4 @@
 
 - [x] 4.1 Run focused backend/web tests, AI evals, typecheck, production builds, and a synthetic pre/post latency benchmark.
 - [x] 4.2 Validate this OpenSpec change strictly and document measured results plus rollback controls.
-- [ ] 4.3 Commit and push scoped changes, deploy only affected services, verify production health/logs/billing, and compare post-deploy timing without interrupting active interviews.
+- [x] 4.3 Commit and push scoped changes, deploy only affected services, verify production health/logs/billing, and compare post-deploy timing without interrupting active interviews.

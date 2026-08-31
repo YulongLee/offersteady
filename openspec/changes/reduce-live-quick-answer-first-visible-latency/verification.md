@@ -32,3 +32,14 @@ Date: 2026-08-31
 - Roll back Backend and Web to commit `65907e4f4834fefb958ba6643c329d89aebeab40`.
 - No database migration or data rollback is required.
 - The additive SSE `timing` field is ignored by older clients.
+
+### Production release
+
+- Runtime commit: `3d0613c02fc327a2ba2818e549c0f410c0749b00`.
+- Active live sessions were checked twice and remained zero before the Backend/Web replacement.
+- Only Backend and Web were rebuilt and replaced; PostgreSQL, Redis, Admin, Analytics, and desktop release artifacts were not changed.
+- Public Backend health and Web build metadata endpoints passed after replacement.
+- The production `qwen_chat` integration probe passed against `deepseek-v4-flash` without entering user billing or interview data paths.
+- New Backend logs contained no `ERROR`, `CRITICAL`, `Traceback`, or `Exception` entries during release verification.
+- Previous Backend/Web images are retained as `rollback-65907e4`; previous hashed Web assets were also retained in the running Web container for already-open browser tabs.
+- Exact click-to-first-render improvement will be compared from the first real post-release quick-answer samples now that all stages are measurable.
