@@ -103,6 +103,14 @@
 - **WHEN** 更新的 Partial 虽然同长或更长，但在有界可变尾部之前修改了已展示正文
 - **THEN** 后端不得以“文本更长”为由整段替换已稳定内容，并继续以原 revision 速度发布后续合法增长
 
+#### Scenario: Provider continues growing after rewriting an early token
+- **WHEN** Provider 的完整假设改写了稳定前缀，随后在该修订或下一修订继续增加句尾文字
+- **THEN** 后端保留已展示正文并仅追加相对上一版 Provider 假设确认新增的后缀，不得覆盖既有文字，也不得因前缀分歧冻结该 utterance 的后续增长
+
+#### Scenario: Provider temporarily retracts before resuming growth
+- **WHEN** Provider 临时返回较短假设，随后恢复上一完整假设并继续增加文字
+- **THEN** 后端保留较长可见正文和上一完整 Provider 游标，恢复时只追加新增后缀，不得重复已有文字
+
 #### Scenario: Provider emits several ordered partial revisions
 - **WHEN** ASR 为同一 utterance 依次返回多个有效 Partial revision，且实时消费链路没有超过有界积压阈值
 - **THEN** 后端 SSE 与网页状态层按 revision 顺序交付这些更新，不得无条件只保留最后一个 revision

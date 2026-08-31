@@ -18,6 +18,7 @@ from app.ports.realtime_speech import AudioFrame, TranscriptResult
 from app.services.realtime_speech_service import (
     RealtimeSpeechService,
     RetryableAsrError,
+    advance_visible_transcript_text,
     stabilize_visible_transcript_text,
 )
 
@@ -82,6 +83,56 @@ def test_visible_transcript_stabilization_blocks_equal_length_prefix_rewrite():
     ) == current
 
 
+def test_visible_transcript_resumes_growth_after_provider_rewrites_an_early_token():
+    current = "请介绍你的项目"
+    rewritten = "能否请你详细介绍一下你负责的项目经验"
+    assert advance_visible_transcript_text(
+        current_text=current,
+        previous_provider_text=current,
+        incoming_text=rewritten,
+        is_final=False,
+    ) == "请介绍你的项目经验"
+    assert advance_visible_transcript_text(
+        current_text="请介绍你的项目经验",
+        previous_provider_text=rewritten,
+        incoming_text=f"{rewritten}和成果",
+        is_final=False,
+    ) == "请介绍你的项目经验和成果"
+
+
+def test_visible_transcript_does_not_duplicate_after_temporary_provider_retraction():
+    current = "请介绍你的项目"
+    assert advance_visible_transcript_text(
+        current_text=current,
+        previous_provider_text=current,
+        incoming_text="请介绍",
+        is_final=False,
+    ) == current
+    assert advance_visible_transcript_text(
+        current_text=current,
+        previous_provider_text=current,
+        incoming_text="请介绍你的项目和成果",
+        is_final=False,
+    ) == "请介绍你的项目和成果"
+
+
+def test_visible_transcript_recovers_on_the_next_growth_without_a_safe_rewrite_anchor():
+    current = "甲乙丙丁"
+    rewritten = "天地玄黄宇宙"
+    assert advance_visible_transcript_text(
+        current_text=current,
+        previous_provider_text=current,
+        incoming_text=rewritten,
+        is_final=False,
+    ) == current
+    assert advance_visible_transcript_text(
+        current_text=current,
+        previous_provider_text=rewritten,
+        incoming_text=f"{rewritten}洪荒",
+        is_final=False,
+    ) == "甲乙丙丁洪荒"
+
+
 def test_strict_prefix_final_freezes_the_fuller_published_partial(monkeypatch):
     _user_id, session_id, device_id, publisher_payload = create_live_binding()
     service = realtime_speech_service()
@@ -134,6 +185,7 @@ def test_strict_prefix_final_freezes_the_fuller_published_partial(monkeypatch):
     assert transcript.text == "请介绍项目的性能优化"
     assert transcript.is_final is True
     assert result.text == "请介绍项目的性能优化"
+    assert (session_id, partial_frame.segment_id) not in service._provider_hypotheses
 
 
 def unwrap(response):
@@ -935,23 +987,35 @@ def test_provider_partial_hot_path_does_not_scan_session_history_or_run_question
         provider_revision=2,
     ))
 
-    destructive = service.repository.get_transcript(session_id, frame.segment_id)
-    assert destructive is not None
-    assert destructive.text == "请介绍你的项目"
-    assert destructive.revision == transcript.revision
+    corrected = service.repository.get_transcript(session_id, frame.segment_id)
+    assert corrected is not None
+    assert corrected.text == "请介绍你的项目经验"
+    assert corrected.revision > transcript.revision
 
-    service._publish_provider_partial(replace(frame, revision=2), TranscriptResult(
-        text="请介绍",
-        confidence=0.93,
+    service._publish_provider_partial(replace(frame, revision=3), TranscriptResult(
+        text="能否请你详细介绍一下你负责的项目经验和成果",
+        confidence=0.95,
         partial_received_at_ms=now_ms + 2,
         provider_revision=3,
     ))
 
+    resumed = service.repository.get_transcript(session_id, frame.segment_id)
+    assert resumed is not None
+    assert resumed.text == "请介绍你的项目经验和成果"
+    assert resumed.revision > corrected.revision
+
+    service._publish_provider_partial(replace(frame, revision=4), TranscriptResult(
+        text="请介绍",
+        confidence=0.93,
+        partial_received_at_ms=now_ms + 3,
+        provider_revision=4,
+    ))
+
     stabilized = service.repository.get_transcript(session_id, frame.segment_id)
     assert stabilized is not None
-    assert stabilized.text == "请介绍你的项目"
-    assert stabilized.revision == transcript.revision
-    assert cold_calls == ["fail_inline_observer"]
+    assert stabilized.text == "请介绍你的项目经验和成果"
+    assert stabilized.revision == resumed.revision
+    assert cold_calls == ["fail_inline_observer", "fail_inline_observer", "fail_inline_observer"]
 
 
 def test_saturated_queue_replaces_only_a_partial_and_preserves_all_terminals():
