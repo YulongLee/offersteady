@@ -7,6 +7,9 @@ import { syntheticState } from "./test-state";
 import { AppError, type RealtimeSessionUpdate, type WebAppState } from "./domain";
 
 const openLive = (mutate?: (state: WebAppState) => void) => {
+  if (interviewAppAdapter.acknowledgeAnswerFirstRender && !vi.isMockFunction(interviewAppAdapter.acknowledgeAnswerFirstRender)) {
+    vi.spyOn(interviewAppAdapter, "acknowledgeAnswerFirstRender").mockImplementation(() => undefined);
+  }
   if (!vi.isMockFunction(interviewAppAdapter.submitManualAnswer)) {
     vi.spyOn(interviewAppAdapter, "submitManualAnswer").mockImplementation(async command => {
       const taskId = `answer-${command.idempotencyKey.replace(/[^a-zA-Z0-9-]/g, "-")}`;
@@ -471,6 +474,7 @@ describe("focused live interview workspace", () => {
           status: "generating" as const,
           question: command.question,
           partialText: "流式首段已经出现。",
+          clickedAtMs: command.clickedAtMs ?? Date.now(),
           updatedAtMs: Date.now(),
         },
       };
@@ -495,6 +499,7 @@ describe("focused live interview workspace", () => {
     finishStream();
     expect(await screen.findByText("流式首段已经出现。最终回答也完成。")).toBeInTheDocument();
     await waitFor(() => expect(quickAnswerButton).not.toBeDisabled());
+    await waitFor(() => expect(interviewAppAdapter.acknowledgeAnswerFirstRender).toHaveBeenCalledTimes(1));
     expect(screen.queryByText("快答已完成")).not.toBeInTheDocument();
   });
 

@@ -41,6 +41,24 @@ def test_gateway_uses_stage_specific_token_budgets() -> None:
     assert gateway._max_tokens_for_prompt(_prompt("interview-chat-continuation-detail")) == 654
 
 
+def test_gateway_reuses_and_closes_one_injected_http_client() -> None:
+    class FakeHttpClient:
+        def __init__(self) -> None:
+            self.closed = 0
+
+        def close(self) -> None:
+            self.closed += 1
+
+    client = FakeHttpClient()
+    gateway = QwenCompatibleGateway(get_settings(), http_client=client)  # type: ignore[arg-type]
+
+    assert gateway._client() is client
+    assert gateway._client() is client
+
+    gateway.close()
+    assert client.closed == 1
+
+
 def test_incomplete_detection_covers_length_dangling_syntax_and_code_fences() -> None:
     assert ChatService._answer_looks_incomplete("回答完整。", "stop") is False
     assert ChatService._answer_looks_incomplete("回答到了长度上限。", "length") is True

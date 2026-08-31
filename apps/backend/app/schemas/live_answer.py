@@ -81,6 +81,7 @@ class LiveAnswerStreamEvent(BaseModel):
     error_code: str | None = Field(default=None, alias="errorCode")
     error_message: str | None = Field(default=None, alias="errorMessage")
     partial_text: str | None = Field(default=None, alias="partialText")
+    timing: dict[str, int] | None = None
 
 
 class CancelLiveAnswerRequest(BaseModel):

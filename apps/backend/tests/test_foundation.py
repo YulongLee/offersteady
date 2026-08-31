@@ -151,6 +151,18 @@ def test_runtime_performance_ack_accepts_only_allowlisted_metadata() -> None:
     # product event stream, otherwise every rendered transcript amplifies SSE.
     assert events == []
 
+    answer_accepted = client.post(f"/api/v1/realtime-speech/sessions/{session_id}/performance-ack", json={
+        "userId": "performance-ack-user",
+        "traceId": "answer-task-safe-1",
+        "stage": "answer-first-render",
+        "durationMs": 731,
+        "taskId": "answer-task-safe-1",
+        "browserEventReceiveAtMs": 1_000,
+        "browserRenderAtMs": 1_010,
+        "renderedTextLength": 18,
+    })
+    assert answer_accepted.status_code == 200
+
     rejected = client.post(f"/api/v1/realtime-speech/sessions/{session_id}/performance-ack", json={
         "userId": "performance-ack-user", "traceId": "trace-safe-2",
         "stage": "transcript-render", "durationMs": 10,
@@ -1674,8 +1686,6 @@ def test_qwen_gateway_classifies_provider_http_failures(monkeypatch) -> None:
             return self.response
 
     settings = get_settings().model_copy(update={"chat_qwen_base_url": "https://provider.example/v1", "chat_qwen_api_key": "test-key"})
-    gateway = QwenCompatibleGateway(settings)
-
     cases = [
         (FakeResponse(401), NonRetryableChatError, "chat_provider_auth_failed"),
         (FakeResponse(403), NonRetryableChatError, "chat_provider_auth_failed"),
@@ -1684,7 +1694,7 @@ def test_qwen_gateway_classifies_provider_http_failures(monkeypatch) -> None:
         (httpx.ConnectError("offline"), RetryableChatError, "chat_provider_unavailable"),
     ]
     for response, error_type, code in cases:
-        monkeypatch.setattr("app.services.chat_service.httpx.Client", lambda *_args, response=response, **_kwargs: FakeClient(response))
+        gateway = QwenCompatibleGateway(settings, http_client=FakeClient(response))
         try:
             gateway._request_completion(prompt=prompt_fixture())
         except error_type as exc:
@@ -1743,6 +1753,13 @@ def test_live_answer_stream_emits_ordered_events_and_persists_completion() -> No
     assert [event["type"] for event in events][0] == "task-started"
     chunk_events = [event for event in events if event["type"] == "chunk"]
     assert len(chunk_events) >= 2
+    assert set(chunk_events[0]["timing"]) == {
+        "serverAcceptedAtMs", "providerRequestAtMs", "providerFirstTokenAtMs", "firstVisibleAtMs", "sseYieldAtMs",
+    }
+    assert chunk_events[0]["timing"]["serverAcceptedAtMs"] <= chunk_events[0]["timing"]["providerRequestAtMs"]
+    assert chunk_events[0]["timing"]["providerRequestAtMs"] <= chunk_events[0]["timing"]["firstVisibleAtMs"]
+    assert chunk_events[0]["timing"]["firstVisibleAtMs"] <= chunk_events[0]["timing"]["sseYieldAtMs"]
+    assert all("timing" not in event for event in chunk_events[1:])
     assert [event["chunk"]["sequence"] for event in chunk_events] == list(range(1, len(chunk_events) + 1))
     assert events[-1]["type"] == "completed"
     assert events[-1]["task"]["status"] == "completed"
@@ -1755,6 +1772,37 @@ def test_live_answer_stream_emits_ordered_events_and_persists_completion() -> No
     assert answer_events[0]["payload"]["trigger"] == "manual"
     assert answer_events[-1]["payload"]["task"]["status"] == "completed"
     assert not any(event["kind"] == "answer-stream" for event in session_events)
+
+
+def test_live_answer_startup_reuses_one_validated_session_snapshot(monkeypatch) -> None:
+    from app.deps import chat_service as chat_service_dep
+
+    user_id = "chat-startup-snapshot-user"
+    session = unwrap(client.post("/api/v1/sessions", json={"userId": user_id, "title": "启动快照测试"}))
+    session_id = session["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": user_id}))
+    service = chat_service_dep()
+    original_get_session = service.session_service.get_session
+    calls = 0
+
+    def counted_get_session(*, user_id: str, session_id: str):
+        nonlocal calls
+        calls += 1
+        return original_get_session(user_id=user_id, session_id=session_id)
+
+    monkeypatch.setattr(service.session_service, "get_session", counted_get_session)
+    stream = service.stream_answer_question(user_id=user_id, session_id=session_id, question="如何降低快答首字延迟？")
+    started = next(stream)
+
+    assert started["type"] == "task-started"
+    assert calls == 1
+    context_entries = service.session_service.repository.list_context_entries(session_id=session_id)
+    assert context_entries[-1].related_task_id == started["task"].task_id
+    assert context_entries[-1].source_kind == "manual-input"
+
+    outcome, _ = service.cancel_task(user_id=user_id, task_id=started["task"].task_id)
+    assert outcome == "cancelled"
+    assert list(stream)[0]["type"] == "cancelled"
 
 
 def test_live_answer_prefetches_detail_retrieval_during_quick_generation(monkeypatch) -> None:

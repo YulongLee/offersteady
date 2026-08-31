@@ -53,6 +53,13 @@ def create_app() -> FastAPI:
                 with suppress(asyncio.CancelledError):
                     await task
             realtime_event_wait_executor.shutdown()
+            from app.deps import llm_gateway_port
+
+            if llm_gateway_port.cache_info().currsize:
+                gateway = llm_gateway_port()
+                close = getattr(gateway, "close", None)
+                if callable(close):
+                    close()
 
     application = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
     application.add_middleware(

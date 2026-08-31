@@ -351,8 +351,12 @@ class SessionService:
         content: str,
         visibility: str,
         related_task_id: str | None = None,
+        validated_session: InterviewSessionRecord | None = None,
+        activity_already_touched: bool = False,
     ) -> ConversationContextEntry:
-        session = self.get_session(user_id=user_id, session_id=session_id)
+        session = validated_session or self.get_session(user_id=user_id, session_id=session_id)
+        if session.session_id != session_id or session.owner_user_id != user_id:
+            raise DomainRequestError("session", "append-context", "不能向其他用户的面试会话追加上下文。", 403)
         if session.status == "ended":
             raise DomainRequestError("session", "append-context", "已结束的会话不能继续追加上下文。", 400)
         now_ms = _now_ms()
@@ -369,11 +373,22 @@ class SessionService:
             created_at_ms=now_ms,
         )
         stored = self.repository.append_context_entry(entry)
-        self._save_session(session, updated_at_ms=now_ms, last_activity_at_ms=now_ms)
+        if not activity_already_touched:
+            self._save_session(session, updated_at_ms=now_ms, last_activity_at_ms=now_ms)
         return stored
 
-    def get_context_window(self, *, user_id: str, session_id: str, limit: int | None = None) -> list[ConversationContextEntry]:
-        self.get_session(user_id=user_id, session_id=session_id)
+    def get_context_window(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        limit: int | None = None,
+        validated_session: InterviewSessionRecord | None = None,
+    ) -> list[ConversationContextEntry]:
+        if validated_session is None:
+            self.get_session(user_id=user_id, session_id=session_id)
+        elif validated_session.session_id != session_id or validated_session.owner_user_id != user_id:
+            raise DomainRequestError("session", "context-window", "不能查看其他用户的面试会话上下文。", 403)
         entries = self.repository.list_context_entries(session_id=session_id)
         if limit is None or limit <= 0:
             return entries

@@ -344,6 +344,48 @@ describe("backend preview adapter", () => {
     expect(result.task).toMatchObject({ id: "task-1", questionId: "task-1", status: "completed", completedText: "先讲指标，再讲采集，最后讲告警闭环。" });
   });
 
+  it("acknowledges the first rendered answer once with content-free timing", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const fetchImpl = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify(envelope({ accepted: true })), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+
+    adapter.acknowledgeAnswerFirstRender({
+      interviewId: "session-1",
+      taskId: "answer-safe-1",
+      clickedAtMs: Date.now() - 500,
+      browserEventReceiveAtMs: Date.now() - 20,
+      browserRenderAtMs: Date.now(),
+      renderedTextLength: 12,
+    });
+    adapter.acknowledgeAnswerFirstRender({
+      interviewId: "session-1",
+      taskId: "answer-safe-1",
+      clickedAtMs: Date.now() - 500,
+      browserRenderAtMs: Date.now(),
+      renderedTextLength: 99,
+    });
+
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    const request = fetchImpl.mock.calls[0]!;
+    expect(String(request[0])).toContain("/realtime-speech/sessions/session-1/performance-ack");
+    const body = JSON.parse(String(request[1]?.body)) as Record<string, unknown>;
+    expect(body).toMatchObject({
+      userId: "user-1",
+      traceId: "answer-safe-1",
+      stage: "answer-first-render",
+      taskId: "answer-safe-1",
+      renderedTextLength: 12,
+    });
+    expect(body).not.toHaveProperty("question");
+    expect(body).not.toHaveProperty("answer");
+    expect(body).not.toHaveProperty("content");
+  });
+
   it("streams manual live answer events through the backend stream API", async () => {
     window.localStorage.setItem("offersteady.auth.access_token", "access-token");
     window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");

@@ -13,6 +13,14 @@ export interface LiveAnswerStreamEvent {
   readonly errorCode?: string;
   readonly errorMessage?: string;
   readonly partialText?: string;
+  readonly receivedAtMs?: number;
+  readonly timing?: {
+    readonly serverAcceptedAtMs?: number;
+    readonly providerRequestAtMs?: number;
+    readonly providerFirstTokenAtMs?: number;
+    readonly firstVisibleAtMs?: number;
+    readonly sseYieldAtMs?: number;
+  };
 }
 
 export interface ManualAnswerStreamUpdate {

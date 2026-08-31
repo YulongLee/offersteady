@@ -15,6 +15,7 @@ export interface AnswerTaskSnapshot {
   readonly completedText?: string;
   readonly provenance?: AnswerProvenance;
   readonly materialContextStatus?: "not-assembled" | "ready" | "degraded" | "no-context" | string;
+  readonly clickedAtMs?: number;
   readonly updatedAtMs: number;
 }
 

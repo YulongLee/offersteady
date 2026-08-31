@@ -107,6 +107,9 @@ class Settings(BaseSettings):
     chat_qwen_model: str = "qwen-plus"
     chat_qwen_api_key: str | None = None
     chat_qwen_base_url: str | None = None
+    chat_http_max_connections: int = 32
+    chat_http_max_keepalive_connections: int = 16
+    chat_http_keepalive_expiry_seconds: float = 30.0
     screenshot_prompt_template_path: str = "ai/prompts/screenshot-answer/system.md"
     screenshot_prompt_version: str = "v2"
     screenshot_max_history_entries: int = 4

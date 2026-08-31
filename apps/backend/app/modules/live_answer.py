@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from time import time
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
@@ -76,6 +77,7 @@ def _to_stream_event(payload: dict) -> LiveAnswerStreamEvent:
         errorCode=payload.get("error_code"),
         errorMessage=payload.get("error_message"),
         partialText=payload.get("partial_text"),
+        timing=payload.get("timing"),
     )
 
 
@@ -149,6 +151,7 @@ async def stream_live_answer(
     user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
 
     def events() -> Iterator[str]:
+        first_visible_sent = False
         for payload in service.stream_answer_question(
             user_id=user_id,
             session_id=request.session_id,
@@ -168,6 +171,11 @@ async def stream_live_answer(
                     phase=phase,
                     task=payload.get("task"),
                 )
+            if not first_visible_sent and phase == "chunk" and payload.get("chunk") is not None:
+                first_visible_sent = True
+                timing = dict(payload.get("timing") or {})
+                timing["sseYieldAtMs"] = int(time() * 1000)
+                payload = {**payload, "timing": timing}
             yield _sse_frame(_to_stream_event(payload))
 
     return StreamingResponse(

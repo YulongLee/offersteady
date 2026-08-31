@@ -1224,12 +1224,13 @@ function LivePage() {
     frozenQuestion?: { readonly questionId: string; readonly questionRevision: number; readonly clickedAtMs: number; readonly prefetchRevision: number },
   ) => {
     const trimmed = text.trim(); if (!trimmed) return;
+    const clickedAtMs = frozenQuestion?.clickedAtMs ?? Date.now();
     const command = `manual:${id}:${trimmed}`; if (submittedCommands.current.has(command)) return;
     submittedCommands.current.add(command); setNotice("");
     setActionState(current => ({ ...current, quickAnswerStatus: "processing", quickAnswerMessage: "" }));
     const pendingId = replaceQuestionId ?? `manual-pending-${Date.now()}`;
     const pendingQuestion = pendingManualQuestion(trimmed, pendingId);
-    const pendingTask: AnswerTaskSnapshot = { id: `pending:${pendingId}`, interviewId: id, userId: state.account.id, billingUsageId: `pending:${pendingId}`, questionId: pendingId, question: trimmed, revision: 1, status: "generating", partialText: "正在调用当前对话模型生成回答…", updatedAtMs: Date.now() };
+    const pendingTask: AnswerTaskSnapshot = { id: `pending:${pendingId}`, interviewId: id, userId: state.account.id, billingUsageId: `pending:${pendingId}`, questionId: pendingId, question: trimmed, revision: 1, status: "generating", partialText: "正在调用当前对话模型生成回答…", clickedAtMs, updatedAtMs: Date.now() };
     setState(current => ({ ...current, questions: replaceQuestionId ? current.questions.map(item => item.id === replaceQuestionId ? pendingQuestion : item) : [pendingQuestion, ...current.questions], activeAnswerTask: pendingTask }));
     setActionState(current => ({ ...current, manualDraft: "" }));
     setView(current => ({ ...current, viewingAnswerId: null, newAnswerAvailable: false }));
@@ -1247,6 +1248,24 @@ function LivePage() {
           { preferIncomingTask: true },
         ),
       }));
+      const renderedText = update.result.task.partialText ?? update.result.task.completedText ?? "";
+      if (
+        update.event.type === "chunk"
+        && renderedText.trim()
+        && update.result.task.clickedAtMs
+        && interviewAppAdapter.acknowledgeAnswerFirstRender
+      ) {
+        const acknowledge = () => interviewAppAdapter.acknowledgeAnswerFirstRender?.({
+          interviewId: id,
+          taskId: update.result.task.id,
+          clickedAtMs: update.result.task.clickedAtMs!,
+          ...(update.event.receivedAtMs === undefined ? {} : { browserEventReceiveAtMs: update.event.receivedAtMs }),
+          browserRenderAtMs: Date.now(),
+          renderedTextLength: renderedText.length,
+        });
+        if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(acknowledge));
+        else window.setTimeout(acknowledge, 0);
+      }
     };
     const flushStreamUpdate = () => {
       if (streamRenderTimer !== null) window.clearTimeout(streamRenderTimer);
@@ -1260,7 +1279,7 @@ function LivePage() {
       manualAnswerController.current?.abort();
       const controller = new AbortController();
       manualAnswerController.current = controller;
-      const result = await runAdapterOperation(signal => interviewAppAdapter.submitManualAnswer({ interviewId: id, question: trimmed, idempotencyKey: command, ...frozenQuestion }, signal, update => {
+      const result = await runAdapterOperation(signal => interviewAppAdapter.submitManualAnswer({ interviewId: id, question: trimmed, idempotencyKey: command, ...frozenQuestion, clickedAtMs }, signal, update => {
         pendingStreamUpdate = update;
         if (["completed", "failed", "cancelled"].includes(update.event.type)) flushStreamUpdate();
         else if (streamRenderTimer === null) streamRenderTimer = window.setTimeout(flushStreamUpdate, 100);

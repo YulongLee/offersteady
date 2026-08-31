@@ -203,8 +203,37 @@ class InterviewPromptBuilder(PromptBuilderPort):
 
 
 class QwenCompatibleGateway(LLMGatewayPort):
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, *, http_client: httpx.Client | None = None) -> None:
         self.settings = settings
+        self._http_client = http_client
+        self._http_client_lock = threading.Lock()
+
+    def _client(self) -> httpx.Client:
+        client = self._http_client
+        if client is not None:
+            return client
+        with self._http_client_lock:
+            if self._http_client is None:
+                max_connections = max(1, self.settings.chat_http_max_connections)
+                self._http_client = httpx.Client(
+                    timeout=self.settings.integration_http_timeout_seconds,
+                    limits=httpx.Limits(
+                        max_connections=max_connections,
+                        max_keepalive_connections=min(
+                            max_connections,
+                            max(1, self.settings.chat_http_max_keepalive_connections),
+                        ),
+                        keepalive_expiry=max(1.0, self.settings.chat_http_keepalive_expiry_seconds),
+                    ),
+                )
+            return self._http_client
+
+    def close(self) -> None:
+        with self._http_client_lock:
+            client = self._http_client
+            self._http_client = None
+        if client is not None:
+            client.close()
 
     def generate(
         self,
@@ -330,11 +359,9 @@ class QwenCompatibleGateway(LLMGatewayPort):
                 {"role": "user", "content": prompt.user_prompt},
             ],
         }
-        timeout_seconds = self.settings.integration_http_timeout_seconds
         started_at = _now_ms()
         try:
-            with httpx.Client(timeout=timeout_seconds) as client:
-                response = client.post(url, headers={"Authorization": f"Bearer {self.settings.chat_qwen_api_key}"}, json=payload)
+            response = self._client().post(url, headers={"Authorization": f"Bearer {self.settings.chat_qwen_api_key}"}, json=payload)
         except httpx.HTTPError as exc:
             raise RetryableChatError("当前对话模型暂时不可用，请稍后重试。", code="chat_provider_unavailable") from exc
         finally:
@@ -379,23 +406,21 @@ class QwenCompatibleGateway(LLMGatewayPort):
             ],
         }
         sequence = 0
-        timeout_seconds = self.settings.integration_http_timeout_seconds
         started_at = _now_ms()
         try:
-            with httpx.Client(timeout=timeout_seconds) as client:
-                with client.stream("POST", url, headers={"Authorization": f"Bearer {self.settings.chat_qwen_api_key}"}, json=payload) as response:
-                    self._raise_for_provider_status(response.status_code)
-                    for line in response.iter_lines():
-                        text, finish_reason = self._extract_stream_line(line)
-                        if not text and finish_reason is None:
-                            continue
-                        sequence += 1
-                        yield ChatAnswerChunk(
-                            sequence=sequence,
-                            text=text,
-                            is_final=finish_reason is not None,
-                            provider_finish_reason=finish_reason,
-                        )
+            with self._client().stream("POST", url, headers={"Authorization": f"Bearer {self.settings.chat_qwen_api_key}"}, json=payload) as response:
+                self._raise_for_provider_status(response.status_code)
+                for line in response.iter_lines():
+                    text, finish_reason = self._extract_stream_line(line)
+                    if not text and finish_reason is None:
+                        continue
+                    sequence += 1
+                    yield ChatAnswerChunk(
+                        sequence=sequence,
+                        text=text,
+                        is_final=finish_reason is not None,
+                        provider_finish_reason=finish_reason,
+                    )
         except httpx.HTTPError as exc:
             raise RetryableChatError("当前对话模型暂时不可用，请稍后重试。", code="chat_provider_unavailable") from exc
         finally:
@@ -656,11 +681,12 @@ class ChatService:
         loader = getattr(self.prompt_template, "load_stage_prompt", None)
         return loader(stage, interview_language) if callable(loader) else self.prompt_template.load_system_prompt(interview_language)
 
-    def _conversation_history(self, *, user_id: str, session_id: str, question: str) -> list[str]:
+    def _conversation_history(self, *, user_id: str, session_id: str, question: str, session=None) -> list[str]:
         entries = self.session_service.get_context_window(
             user_id=user_id,
             session_id=session_id,
             limit=self.settings.chat_max_history_entries + 1,
+            validated_session=session,
         )
         history = [f"{item.role}:{item.content}" for item in entries]
         if history and history[-1] == f"manual-question:{question.strip()}":
@@ -894,6 +920,8 @@ class ChatService:
             content=question,
             visibility="session",
             related_task_id=task.task_id,
+            validated_session=session,
+            activity_already_touched=True,
         )
         conversation_history = self._conversation_history(user_id=user_id, session_id=session_id, question=question)
         retrieval = self._retrieve_context(user_id=user_id, session=session, question=question)
@@ -1013,6 +1041,7 @@ class ChatService:
         question_id: str | None = None, question_revision: int | None = None,
         clicked_at_ms: int | None = None, prefetch_revision: int | None = None,
     ) -> Iterator[dict]:
+        answer_accepted_at_ms = _now_ms()
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         if session.status != "live":
             raise DomainRequestError("live-answer", "start-stream", "只有进行中的面试会话才能发起实时回答。", 400)
@@ -1050,6 +1079,8 @@ class ChatService:
             content=question,
             visibility="session",
             related_task_id=task.task_id,
+            validated_session=session,
+            activity_already_touched=True,
         )
         quick_retrieval = self._prepared_retrieval(
             session_id=session_id,
@@ -1072,6 +1103,7 @@ class ChatService:
             user_id=user_id,
             session_id=session_id,
             question=question,
+            session=session,
         )
         prompt = self.prompt_builder.build(
             question=question,
@@ -1115,8 +1147,36 @@ class ChatService:
         continuation_count = 0
         last_error: Exception | None = None
         stream_started_at_ms = _now_ms()
+        provider_request_at_ms = stream_started_at_ms
         first_token_at_ms: int | None = None
+        first_visible_at_ms: int | None = None
         detail_retrieval_future: Future[RetrievalContext] | None = None
+
+        def mark_first_visible() -> dict[str, int] | None:
+            nonlocal first_visible_at_ms
+            if first_visible_at_ms is not None:
+                return None
+            first_visible_at_ms = _now_ms()
+            timing = {
+                "serverAcceptedAtMs": answer_accepted_at_ms,
+                "providerRequestAtMs": provider_request_at_ms,
+                "providerFirstTokenAtMs": first_token_at_ms or first_visible_at_ms,
+                "firstVisibleAtMs": first_visible_at_ms,
+            }
+            log_event(
+                self.logger,
+                logging.INFO,
+                settings=self.settings,
+                event="chat.first_visible_answer",
+                feature="live-answer",
+                action="first-visible-answer",
+                session_id=session_id,
+                task_id=current_task.task_id,
+                admission_to_visible_ms=max(0, first_visible_at_ms - answer_accepted_at_ms),
+                provider_to_visible_ms=max(0, first_visible_at_ms - provider_request_at_ms),
+            )
+            return timing
+
         for attempt in range(self.settings.chat_retry_max_attempts + 1):
             try:
                 active_quick_prompt = (
@@ -1141,6 +1201,18 @@ class ChatService:
                         quick_finish_reason = chunk.provider_finish_reason
                     if chunk.text and first_token_at_ms is None:
                         first_token_at_ms = _now_ms()
+                        log_event(
+                            self.logger,
+                            logging.INFO,
+                            settings=self.settings,
+                            event="chat.provider_first_token",
+                            feature="live-answer",
+                            action="provider-first-token",
+                            session_id=session_id,
+                            task_id=current_task.task_id,
+                            admission_to_provider_ms=max(0, provider_request_at_ms - answer_accepted_at_ms),
+                            provider_first_token_ms=max(0, first_token_at_ms - provider_request_at_ms),
+                        )
                     visible_text = chunk.text
                     if not normalization_resolved:
                         normalization_buffer += chunk.text
@@ -1214,7 +1286,8 @@ class ChatService:
                     current_task = self.repository.save_task(
                         replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
                     )
-                    yield {"type": "chunk", "task": current_task, "chunk": normalized}
+                    timing = mark_first_visible()
+                    yield {"type": "chunk", "task": current_task, "chunk": normalized, **({"timing": timing} if timing else {})}
                 if not normalization_resolved:
                     normalized_question, visible_text, normalization_status = _resolve_normalized_question(
                         normalization_buffer,
@@ -1275,7 +1348,8 @@ class ChatService:
                     current_task = self.repository.save_task(
                         replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
                     )
-                    yield {"type": "chunk", "task": current_task, "chunk": normalized}
+                    timing = mark_first_visible()
+                    yield {"type": "chunk", "task": current_task, "chunk": normalized, **({"timing": timing} if timing else {})}
                 elif session.interview_language == "en-US" and not quick_language_validated:
                     if _english_output_violation(quick_language_buffer):
                         self._log_language_violation(
@@ -1300,7 +1374,8 @@ class ChatService:
                     current_task = self.repository.save_task(
                         replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
                     )
-                    yield {"type": "chunk", "task": current_task, "chunk": normalized}
+                    timing = mark_first_visible()
+                    yield {"type": "chunk", "task": current_task, "chunk": normalized, **({"timing": timing} if timing else {})}
                 quick_heading = "Quick Answer" if session.interview_language == "en-US" else "简单回答"
                 quick_answer = "".join(answer_parts).removeprefix(f"{quick_heading}\n").strip()
                 quick_suffix, quick_continuations, quick_prompt_characters = self._complete_answer_stage(

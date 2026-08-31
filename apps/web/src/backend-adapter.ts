@@ -74,6 +74,7 @@ interface BackendLiveAnswerTaskResponse {
   readonly rawQuestion?: string | null;
   readonly normalizedQuestion?: string | null;
   readonly questionNormalizationStatus?: "pending" | "completed" | "fallback" | "not-requested";
+  readonly clickedAtMs?: number | null;
   readonly answerText: string;
   readonly status: "queued" | "streaming" | "completed" | "failed" | "cancelled";
   readonly errorMessage?: string | null;
@@ -901,6 +902,7 @@ const toSubmitManualAnswerResult = (
     ...(task.status === "completed" ? { completedText: answerTextFromTask(task) } : { partialText: answerTextFromTask(task) || "正在调用当前对话模型生成回答…" }),
     provenance: provenanceFromTask(task),
     ...(task.materialContextStatus ? { materialContextStatus: task.materialContextStatus } : {}),
+    ...(task.clickedAtMs ? { clickedAtMs: task.clickedAtMs } : {}),
     updatedAtMs: task.updatedAtMs,
   },
 });
@@ -1804,7 +1806,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       if (event.type === "failed" && (event.errorMessage || event.partialText)) {
         failureMessage = event.errorMessage ?? failureMessage;
       }
-      onStreamUpdate({ result, event });
+      onStreamUpdate({ result, event: { ...event, receivedAtMs: Date.now() } });
     };
     const requestInit: RequestInit = {
       method: "POST",
@@ -1841,6 +1843,22 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     parser.flush();
     if (!latest) throw new AppError("validation", failureMessage);
     return latest;
+  }
+
+  acknowledgeAnswerFirstRender(command: { interviewId: string; taskId: string; clickedAtMs: number; browserEventReceiveAtMs?: number; browserRenderAtMs: number; renderedTextLength: number }) {
+    this.acknowledgeRuntimePerformance(
+      command.interviewId,
+      command.taskId,
+      "answer-first-render",
+      command.clickedAtMs,
+      command.taskId,
+      {
+        ...(command.browserEventReceiveAtMs === undefined ? {} : { browserEventReceiveAtMs: command.browserEventReceiveAtMs }),
+        browserRenderAtMs: command.browserRenderAtMs,
+        renderedTextLength: command.renderedTextLength,
+        visibilityState: document.visibilityState,
+      },
+    );
   }
 
   async submitScreenshotAnswer(command: Parameters<InterviewAppAdapter["submitScreenshotAnswer"]>[0], signal?: AbortSignal, onStage?: (task: ScreenshotTask) => void, onAnswerUpdate?: (result: SubmitManualAnswerResult) => void) {
