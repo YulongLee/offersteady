@@ -53,8 +53,11 @@ class RequestWindow:
     def request_class(path: str) -> str:
         if path.startswith("/api/v1/realtime-speech/sessions/") and path.endswith("/snapshot"):
             return "recovery_snapshot"
-        if path.startswith("/api/v1/realtime-speech/sessions/") and path.endswith("/stream"):
-            return "sse_handshake"
+        if path.endswith("/stream") and (
+            path.startswith("/api/v1/realtime-speech/sessions/")
+            or path.startswith("/api/v1/screenshot-answer/")
+        ):
+            return "sse_stream"
         return "control_api"
 
     def record(self, *, path: str, elapsed_ms: float, status_code: int) -> None:
@@ -70,22 +73,27 @@ class RequestWindow:
         with self._lock:
             self._prune(now)
             events = list(self._events)
-        durations = [item[1] for item in events]
-        errors = sum(1 for item in events if item[2] >= 500)
+        ordinary_events = [item for item in events if item[3] != "sse_stream"]
+        durations = [item[1] for item in ordinary_events]
+        errors = sum(1 for item in ordinary_events if item[2] >= 500)
         span_minutes = max(1.0, min(5.0, (now - events[0][0]) / 60_000)) if events else 1.0
         result = {
             "apiP95Ms": round(percentile(durations, 0.95) or 0.0, 2),
-            "apiErrorRate": round(errors * 100 / len(events), 2) if events else 0.0,
+            "apiErrorRate": round(errors * 100 / len(ordinary_events), 2) if ordinary_events else 0.0,
             "requestsPerMinute": round(len(events) / span_minutes, 2),
         }
         for request_class, prefix in (
             ("control_api", "controlApi"),
             ("recovery_snapshot", "recoverySnapshot"),
-            ("sse_handshake", "sseHandshake"),
+            ("sse_stream", "sseStreamDuration"),
         ):
             classified = [item[1] for item in events if item[3] == request_class]
             result[f"{prefix}P95Ms"] = round(percentile(classified, 0.95) or 0.0, 2)
             result[f"{prefix}RequestCount"] = len(classified)
+        # Preserve the existing response fields for older admin clients while
+        # exposing the accurate full-connection duration name to new clients.
+        result["sseHandshakeP95Ms"] = result["sseStreamDurationP95Ms"]
+        result["sseHandshakeRequestCount"] = result["sseStreamDurationRequestCount"]
         return result
 
     def _prune(self, current: int) -> None:
@@ -205,6 +213,10 @@ class AdminCapacityMonitor:
                     "sseHandshake": {
                         "p95Ms": current.get("sseHandshakeP95Ms"),
                         "requestCount": current.get("sseHandshakeRequestCount"),
+                    },
+                    "sseStreamDuration": {
+                        "p95Ms": current.get("sseStreamDurationP95Ms"),
+                        "requestCount": current.get("sseStreamDurationRequestCount"),
                     },
                 },
                 "databaseConnectionLimit": database_limit,

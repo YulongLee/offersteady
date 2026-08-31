@@ -7,6 +7,7 @@ import { DeviceCredentialVault } from "./credential-vault";
 import { DevicePairingIdentityStore } from "./device-pairing";
 import { DEFAULT_SCREENSHOT_SHORTCUT, SCREENSHOT_SHORTCUT_OPTIONS, ScreenshotShortcutStore, isSupportedScreenshotShortcut } from "./screenshot-shortcut";
 import { desktopPollDelayMs } from "./polling-policy";
+import { screenshotStreamEligible, screenshotStreamTransition } from "./screenshot-stream-policy";
 import { ScreenshotCaptureLock } from "./screenshot-capture-lock";
 import { DesktopCaptureEventParser } from "./capture-event-stream";
 import { decideRendererRecovery } from "./renderer-recovery-policy";
@@ -71,6 +72,7 @@ let desktopRegistrationInFlight = false;
 let remoteScreenshotPollInFlight = false;
 let remoteScreenshotPollFailureCount = 0;
 let remoteScreenshotStreamController: AbortController | null = null;
+let remoteScreenshotLoopGeneration = 0;
 let displayMediaFailureBackoffUntil = 0;
 let rendererRecoveryAttempts: readonly number[] = [];
 let rendererRecoveryResetTimer: NodeJS.Timeout | null = null;
@@ -472,7 +474,7 @@ const getLiveDesktopBinding = async () => {
 };
 
 const getDesktopScreenshotPollingState = async () => {
-  const liveBindingState = captureState === "capturing" || captureState === "error";
+  const liveBindingState = screenshotStreamEligible(captureState);
   if (!pairingIdentityStore || !liveBindingState) return { live: false as const, identity: null };
   const identity = await pairingIdentityStore.loadOrCreate(`${app.getName()} · ${process.platform === "darwin" ? "Mac" : "Desktop"}`);
   return { live: true as const, identity };
@@ -986,15 +988,21 @@ const consumeRemoteScreenshotEventStream = async (
 };
 
 const startRemoteScreenshotRequestLoop = () => {
+  const generation = ++remoteScreenshotLoopGeneration;
   if (screenshotRequestTimer) clearTimeout(screenshotRequestTimer);
   remoteScreenshotStreamController?.abort();
   remoteScreenshotStreamController = null;
   remoteScreenshotPollFailureCount = 0;
   const schedule = (delayMs: number) => {
+    if (generation !== remoteScreenshotLoopGeneration || isQuitting) return;
     screenshotRequestTimer = setTimeout(() => void run(), delayMs);
   };
   const run = async () => {
-    if (remoteScreenshotPollInFlight || isQuitting) return;
+    if (generation !== remoteScreenshotLoopGeneration || isQuitting) return;
+    if (remoteScreenshotPollInFlight) {
+      schedule(50);
+      return;
+    }
     remoteScreenshotPollInFlight = true;
     let streamController: AbortController | null = null;
     try {
@@ -1028,6 +1036,17 @@ const startRemoteScreenshotRequestLoop = () => {
     }
   };
   void run();
+};
+
+const stopRemoteScreenshotRequestLoop = () => {
+  remoteScreenshotLoopGeneration += 1;
+  if (screenshotRequestTimer) {
+    clearTimeout(screenshotRequestTimer);
+    screenshotRequestTimer = null;
+  }
+  remoteScreenshotStreamController?.abort();
+  remoteScreenshotStreamController = null;
+  remoteScreenshotPollFailureCount = 0;
 };
 
 const createWindow = () => {
@@ -1206,7 +1225,9 @@ ipcMain.on("capture:set-state", (_event, state: CaptureState) => {
   const previousState = captureState;
   captureState = state;
   updateTray();
-  if (state !== previousState) startRemoteScreenshotRequestLoop();
+  const transition = screenshotStreamTransition(previousState, state);
+  if (transition === "start") startRemoteScreenshotRequestLoop();
+  else if (transition === "stop") stopRemoteScreenshotRequestLoop();
 });
 
 ipcMain.on("desktop:renderer-reliability-heartbeat", (event, heartbeat: RendererReliabilityHeartbeat) => {

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   BINDING_LIVE_POLL_MS,
+  BINDING_WAITING_MAX_POLL_MS,
   BINDING_WAITING_POLL_MS,
   DESKTOP_FAILURE_MAX_POLL_MS,
   DESKTOP_IDLE_POLL_MS,
@@ -16,7 +17,8 @@ describe("desktop idle polling policy", () => {
     expect(desktopPollDelayMs("live", 0, "binding")).toBe(BINDING_LIVE_POLL_MS);
     expect(desktopPollDelayMs("idle", 0, "screenshot")).toBe(DESKTOP_IDLE_POLL_MS);
     expect(desktopPollDelayMs("idle", 0, "binding")).toBe(BINDING_WAITING_POLL_MS);
-    expect(BINDING_WAITING_POLL_MS).toBeLessThanOrEqual(250);
+    expect(BINDING_WAITING_POLL_MS).toBe(1_000);
+    expect(BINDING_LIVE_POLL_MS).toBe(2_000);
     expect(DESKTOP_IDLE_POLL_MS).toBeGreaterThanOrEqual(10_000);
   });
 
@@ -41,6 +43,12 @@ describe("desktop idle polling policy", () => {
     const mainSource = readFileSync(new URL("../src/main/index.ts", import.meta.url), "utf8");
 
     expect(mainSource).toContain("backgroundThrottling: false");
-    expect(BINDING_WAITING_POLL_MS).toBeLessThanOrEqual(250);
+    expect(BINDING_WAITING_POLL_MS).toBeGreaterThanOrEqual(1_000);
+  });
+
+  it("honors bounded server refresh suggestions while waiting", () => {
+    expect(desktopPollDelayMs("idle", 0, "binding", 250)).toBe(BINDING_WAITING_POLL_MS);
+    expect(desktopPollDelayMs("idle", 0, "binding", 2_500)).toBe(2_500);
+    expect(desktopPollDelayMs("idle", 0, "binding", 20_000)).toBe(BINDING_WAITING_MAX_POLL_MS);
   });
 });

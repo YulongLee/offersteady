@@ -9,6 +9,7 @@ import { sourceHealthIsAudioReady } from "./audio/audio-readiness";
 import { createDebouncedDeviceRefresh, reconcileMicrophoneSelection } from "./audio/audio-device-hot-switch";
 import appIconUrl from "./assets/app-icon.png";
 import { BINDING_LIVE_POLL_MS, desktopPollDelayMs } from "../main/polling-policy";
+import { DeviceStatusPublishGate } from "./device-status-publish-gate";
 
 export const companionStatusCopy: Record<CaptureState, { title: string; detail: string }> = {
   "not-connected": { title: "设备离线", detail: "助手尚未完成服务登记，请检查网络后重试。" },
@@ -505,6 +506,7 @@ export function CompanionApp() {
   const activeBindingRef = useRef<DesktopActiveBinding | null>(null);
   const bindingSessionStatusRef = useRef<string | null>(null);
   const bindingCaptureStateRef = useRef<string | null>(null);
+  const deviceStatusPublishGateRef = useRef(new DeviceStatusPublishGate());
   const [webOpenNotice, setWebOpenNotice] = useState("");
 
   useEffect(() => {
@@ -881,6 +883,7 @@ export function CompanionApp() {
           };
         }
         consecutivePollFailures = 0;
+        nextDelayMs = desktopPollDelayMs("idle", 0, "binding", pairingStatus.refreshAfterMs);
         bindingFailureCountRef.current = 0;
         const pinnedBinding = activeBindingRef.current;
         if (
@@ -976,23 +979,49 @@ export function CompanionApp() {
           setPublisherRetryNonce((value) => value + 1);
         }
         window.offersteady?.publishCaptureState(nextCaptureState);
-        await desktopBackendFetch(config, `/realtime-speech/sessions/${encodeURIComponent(binding.sessionId)}/device-status`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: binding.ownerUserId,
-            deviceId: pairingIdentity.deviceId,
-            manualCode: pairingIdentity.manualCode,
-            captureState: nextCaptureState,
-            sourceHealth: sourceHealthRef.current,
-            capabilities: {
-              ...capabilitiesFor(config),
-              screenCapture: screenReady,
-              nativeRuntimeReady,
-              nativeRuntimeErrors: nativeRuntimeHealth?.errors ?? [],
-            },
-          }),
-        }).catch(() => undefined);
+        const deviceStatusPayload = {
+          userId: binding.ownerUserId,
+          deviceId: pairingIdentity.deviceId,
+          manualCode: pairingIdentity.manualCode,
+          captureState: nextCaptureState,
+          sourceHealth: sourceHealthRef.current,
+          capabilities: {
+            ...capabilitiesFor(config),
+            screenCapture: screenReady,
+            nativeRuntimeReady,
+            nativeRuntimeErrors: nativeRuntimeHealth?.errors ?? [],
+          },
+        };
+        const semanticStatus = {
+          ...deviceStatusPayload,
+          sessionId: binding.sessionId,
+          sourceHealth: deviceStatusPayload.sourceHealth.map((source) => ({
+            sourceId: source.sourceId,
+            sourceKind: source.sourceKind,
+            state: source.state,
+            stage: source.stage,
+            readinessState: source.readinessState,
+            captureProcessor: source.captureProcessor,
+            endpointingMode: source.endpointingMode,
+            turnState: source.turnState,
+            finalizationReason: source.finalizationReason,
+            errorCode: source.errorCode,
+          })),
+        };
+        const publishDecision = deviceStatusPublishGateRef.current.shouldPublish(semanticStatus);
+        if (publishDecision.publish) {
+          try {
+            const response = await desktopBackendFetch(config, `/realtime-speech/sessions/${encodeURIComponent(binding.sessionId)}/device-status`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(deviceStatusPayload),
+            });
+            if (!response.ok) throw new Error(await readBackendError(response));
+            deviceStatusPublishGateRef.current.markSuccessful(publishDecision.fingerprint);
+          } catch {
+            // Keep the previous successful fingerprint so the next control cycle retries.
+          }
+        }
       } catch (error) {
         if (stopped) return;
         consecutivePollFailures += 1;

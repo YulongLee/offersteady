@@ -30,16 +30,19 @@ def test_request_window_classifies_control_recovery_and_sse_without_payloads() -
     window = RequestWindow()
     window.record(path="/api/v1/interviews", elapsed_ms=80, status_code=200)
     window.record(path="/api/v1/realtime-speech/sessions/synthetic/snapshot", elapsed_ms=240, status_code=200)
-    window.record(path="/api/v1/realtime-speech/sessions/synthetic/stream", elapsed_ms=35, status_code=200)
+    window.record(path="/api/v1/realtime-speech/sessions/synthetic/stream", elapsed_ms=3_500, status_code=200)
+    window.record(path="/api/v1/screenshot-answer/desktop-devices/synthetic/capture-requests/stream", elapsed_ms=9_000, status_code=200)
     summary = window.summary()
 
     assert summary["apiP95Ms"] == 240
     assert summary["controlApiP95Ms"] == 80
     assert summary["recoverySnapshotP95Ms"] == 240
-    assert summary["sseHandshakeP95Ms"] == 35
+    assert summary["sseStreamDurationP95Ms"] == 9_000
+    assert summary["sseStreamDurationRequestCount"] == 2
+    assert summary["sseHandshakeP95Ms"] == 9_000
     assert summary["controlApiRequestCount"] == 1
     assert summary["recoverySnapshotRequestCount"] == 1
-    assert summary["sseHandshakeRequestCount"] == 1
+    assert summary["sseHandshakeRequestCount"] == 2
     assert "synthetic" not in str(summary)
 
 
