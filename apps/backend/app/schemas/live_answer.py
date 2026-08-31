@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from typing import Literal
 
@@ -19,6 +19,13 @@ class LiveAnswerQuestionRequest(BaseModel):
     question_revision: int | None = Field(default=None, ge=1, alias="questionRevision")
     clicked_at_ms: int | None = Field(default=None, ge=1, alias="clickedAtMs")
     prefetch_revision: int | None = Field(default=None, ge=1, alias="prefetchRevision")
+    trigger_mode: Literal["manual", "auto"] = Field(default="manual", alias="triggerMode")
+
+    @model_validator(mode="after")
+    def require_candidate_for_auto(self):
+        if self.trigger_mode == "auto" and not self.question_id:
+            raise ValueError("questionId is required when triggerMode is auto")
+        return self
 
 
 class LiveAnswerChunkResponse(BaseModel):

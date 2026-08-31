@@ -14,7 +14,8 @@ from app.main import create_app
 from app.modules.realtime_speech import should_validate_realtime_session
 from app.deps import realtime_speech_service
 from app.ports.authentication import SmsChallengeRecord
-from app.ports.realtime_speech import AudioFrame, RealtimeEvent, TranscriptResult
+from app.ports.realtime_speech import AudioFrame, QuestionCandidateRecord, RealtimeEvent, TranscriptResult
+from app.core.errors import DomainRequestError
 from app.ports.chat import ChatAnswerChunk, PromptBuildResult, PromptConfig
 from app.ports.retrieval import RetrievalContext
 from app.services.chat_service import NonRetryableChatError, QwenCompatibleGateway, RetryableChatError
@@ -531,6 +532,144 @@ def unwrap(response):
     assert "requestId" in payload
     assert "meta" in payload
     return payload["data"]
+
+
+def test_auto_answer_is_default_off_and_live_session_scoped() -> None:
+    user_id = "auto-answer-session-user"
+    created = unwrap(client.post("/api/v1/sessions", json={"userId": user_id, "title": "自动回答开关测试"}))
+    session_id = created["sessionId"]
+    assert created["autoAnswerEnabled"] is False
+    assert created["autoAnswerEnabledAtMs"] is None
+
+    before_live = client.patch(
+        f"/api/v1/sessions/{session_id}/auto-answer",
+        json={"userId": user_id, "enabled": True},
+    )
+    assert before_live.status_code == 409
+
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": user_id}))
+    enabled = unwrap(client.patch(
+        f"/api/v1/sessions/{session_id}/auto-answer",
+        json={"userId": user_id, "enabled": True},
+    ))
+    assert enabled["autoAnswerEnabled"] is True
+    assert isinstance(enabled["autoAnswerEnabledAtMs"], int)
+
+    forbidden = client.patch(
+        f"/api/v1/sessions/{session_id}/auto-answer",
+        json={"userId": "another-auto-answer-user", "enabled": False},
+    )
+    assert forbidden.status_code == 403
+
+    disabled = unwrap(client.patch(
+        f"/api/v1/sessions/{session_id}/auto-answer",
+        json={"userId": user_id, "enabled": False},
+    ))
+    assert disabled["autoAnswerEnabled"] is False
+    assert disabled["autoAnswerEnabledAtMs"] is None
+
+
+def test_auto_answer_candidate_claim_is_future_only_and_idempotent() -> None:
+    user_id = "auto-answer-claim-user"
+    created = unwrap(client.post("/api/v1/sessions", json={"userId": user_id, "title": "自动回答认领测试"}))
+    session_id = created["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": user_id}))
+    enabled = unwrap(client.patch(
+        f"/api/v1/sessions/{session_id}/auto-answer",
+        json={"userId": user_id, "enabled": True},
+    ))
+    enabled_at_ms = enabled["autoAnswerEnabledAtMs"]
+    service = realtime_speech_service()
+
+    old = QuestionCandidateRecord(
+        candidate_id=f"question:{session_id}:old",
+        session_id=session_id,
+        owner_user_id=user_id,
+        source_segment_ids=["old"],
+        text="请介绍一下你自己。",
+        state="confirmed",
+        reason="auto-confirmed",
+        confidence=0.96,
+        created_at_ms=enabled_at_ms - 1,
+        updated_at_ms=enabled_at_ms - 1,
+    )
+    service.repository.save_candidate(old)
+    try:
+        service.claim_auto_answer_candidate(user_id=user_id, session_id=session_id, candidate_id=old.candidate_id)
+        raise AssertionError("historical candidate must not be claimed")
+    except DomainRequestError as error:
+        assert error.error_code == "auto_answer_candidate_ineligible"
+
+    eligible = QuestionCandidateRecord(
+        candidate_id=f"question:{session_id}:eligible",
+        session_id=session_id,
+        owner_user_id=user_id,
+        source_segment_ids=["eligible"],
+        text="请说明你如何设计高可用服务。",
+        state="confirmed",
+        reason="auto-confirmed",
+        confidence=0.97,
+        created_at_ms=enabled_at_ms + 1,
+        updated_at_ms=enabled_at_ms + 1,
+    )
+    service.repository.save_candidate(eligible)
+    claim = service.claim_auto_answer_candidate(
+        user_id=user_id, session_id=session_id, candidate_id=eligible.candidate_id
+    )
+    assert claim.answer_task_id and claim.answer_task_id.startswith("claim:")
+    try:
+        service.claim_auto_answer_candidate(user_id=user_id, session_id=session_id, candidate_id=eligible.candidate_id)
+        raise AssertionError("claimed candidate must not be claimed twice")
+    except DomainRequestError as error:
+        assert error.error_code == "auto_answer_candidate_claimed"
+
+
+def test_auto_answer_stream_reuses_live_answer_and_binds_candidate_once() -> None:
+    user_id = "auto-answer-stream-user"
+    created = unwrap(client.post("/api/v1/sessions", json={"userId": user_id, "title": "自动回答流测试"}))
+    session_id = created["sessionId"]
+    unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": user_id}))
+    enabled = unwrap(client.patch(
+        f"/api/v1/sessions/{session_id}/auto-answer",
+        json={"userId": user_id, "enabled": True},
+    ))
+    candidate = QuestionCandidateRecord(
+        candidate_id=f"question:{session_id}:stream",
+        session_id=session_id,
+        owner_user_id=user_id,
+        source_segment_ids=["stream"],
+        text="请介绍一次你处理线上故障的经历。",
+        state="confirmed",
+        reason="auto-confirmed",
+        confidence=0.98,
+        created_at_ms=enabled["autoAnswerEnabledAtMs"] + 1,
+        updated_at_ms=enabled["autoAnswerEnabledAtMs"] + 1,
+    )
+    service = realtime_speech_service()
+    service.repository.save_candidate(candidate)
+    body = {
+        "userId": user_id,
+        "sessionId": session_id,
+        "question": candidate.text,
+        "stream": True,
+        "idempotencyKey": f"auto:{session_id}:{candidate.candidate_id}",
+        "questionId": candidate.candidate_id,
+        "questionRevision": 1,
+        "clickedAtMs": enabled["autoAnswerEnabledAtMs"] + 2,
+        "prefetchRevision": 1,
+        "triggerMode": "auto",
+    }
+    with client.stream("POST", "/api/v1/live-answer/questions/stream", json=body) as response:
+        assert response.status_code == 200
+        events = parse_sse_events("".join(response.iter_text()))
+    assert any(item.get("type") == "task-started" for item in events)
+    assert any(item.get("type") == "completed" for item in events)
+    stored = service.repository.get_candidate(candidate.candidate_id)
+    assert stored is not None
+    assert stored.answer_task_id and not stored.answer_task_id.startswith("claim:")
+
+    duplicate = client.post("/api/v1/live-answer/questions/stream", json=body)
+    assert duplicate.status_code == 409
 
 
 def parse_sse_events(text: str) -> list[dict]:

@@ -737,11 +737,13 @@ function LivePage() {
   const [realtimeDiagnosisNonce, setRealtimeDiagnosisNonce] = useState(0);
   const [idleStatus, setIdleStatus] = useState<IdleInterviewStatus | null>(null);
   const [continuingInterview, setContinuingInterview] = useState(false);
+  const [autoAnswerSaving, setAutoAnswerSaving] = useState(false);
   const [splitBounds, setSplitBounds] = useState({ min: ABSOLUTE_MIN_SPLIT_RATIO, max: ABSOLUTE_MAX_SPLIT_RATIO });
   const [mobilePanel, setMobilePanel] = useState<"answer" | "conversation">("answer");
   const workspaceRef = useRef<HTMLDivElement>(null);
   const desktopLayout = useDesktopLiveLayout();
   const submittedCommands = useRef(new Set<string>());
+  const attemptedAutoCandidates = useRef(new Set<string>());
   const previousLatestId = useRef(state.questions[0]?.id);
   const screenshotController = useRef<AbortController | null>(null);
   const manualAnswerController = useRef<AbortController | null>(null);
@@ -1193,11 +1195,11 @@ function LivePage() {
     }
   };
   const activeTaskFor = (question: InterviewQuestion, usageId: string): AnswerTaskSnapshot => ({ id: `answer:${question.id}:${Date.now()}`, interviewId: id, userId: state.account.id, billingUsageId: usageId, questionId: question.id, question: question.text, revision: 1, status: "generating", partialText: "正在整理回答结构…", updatedAtMs: Date.now() });
-  const pendingManualQuestion = (text: string, questionId: string): InterviewQuestion => ({
+  const pendingManualQuestion = (text: string, questionId: string, input: InterviewQuestion["input"] = "manual"): InterviewQuestion => ({
     ...active,
     id: questionId,
     text,
-    input: "manual",
+    input,
     askedAt: "刚刚",
     status: "generating",
     advice: {
@@ -1222,15 +1224,15 @@ function LivePage() {
   const submitManualText = async (
     text: string,
     replaceQuestionId?: string,
-    frozenQuestion?: { readonly questionId: string; readonly questionRevision: number; readonly clickedAtMs: number; readonly prefetchRevision: number },
+    frozenQuestion?: { readonly questionId: string; readonly questionRevision: number; readonly clickedAtMs: number; readonly prefetchRevision: number; readonly triggerMode?: "manual" | "auto" },
   ) => {
     const trimmed = text.trim(); if (!trimmed) return;
     const clickedAtMs = frozenQuestion?.clickedAtMs ?? Date.now();
-    const command = `manual:${id}:${trimmed}`; if (submittedCommands.current.has(command)) return;
+    const command = frozenQuestion?.triggerMode === "auto" ? `auto:${id}:${frozenQuestion.questionId}` : `manual:${id}:${trimmed}`; if (submittedCommands.current.has(command)) return;
     submittedCommands.current.add(command); setNotice("");
     setActionState(current => ({ ...current, quickAnswerStatus: "processing", quickAnswerMessage: "" }));
     const pendingId = replaceQuestionId ?? `manual-pending-${Date.now()}`;
-    const pendingQuestion = pendingManualQuestion(trimmed, pendingId);
+    const pendingQuestion = pendingManualQuestion(trimmed, pendingId, frozenQuestion?.triggerMode === "auto" ? "desktop-audio" : "manual");
     const pendingTask: AnswerTaskSnapshot = { id: `pending:${pendingId}`, interviewId: id, userId: state.account.id, billingUsageId: `pending:${pendingId}`, questionId: pendingId, question: trimmed, revision: 1, status: "generating", partialText: "正在调用当前对话模型生成回答…", clickedAtMs, updatedAtMs: Date.now() };
     setState(current => ({ ...current, questions: replaceQuestionId ? current.questions.map(item => item.id === replaceQuestionId ? pendingQuestion : item) : [pendingQuestion, ...current.questions], activeAnswerTask: pendingTask }));
     setActionState(current => ({ ...current, manualDraft: "" }));
@@ -1312,6 +1314,59 @@ function LivePage() {
       if (streamRenderTimer !== null) window.clearTimeout(streamRenderTimer);
       manualAnswerController.current = null;
       submittedCommands.current.delete(command);
+    }
+  };
+  useEffect(() => {
+    const candidate = state.speaker.autoAnswerQuestion;
+    const enabledAtMs = liveInterview?.autoAnswerEnabledAtMs ?? null;
+    const taskBusy = Boolean(state.activeAnswerTask && ["pending", "generating"].includes(state.activeAnswerTask.status));
+    if (
+      !liveInterview?.autoAnswerEnabled
+      || !enabledAtMs
+      || !candidate
+      || (candidate.createdAtMs ?? 0) < enabledAtMs
+      || candidate.answerTaskId
+      || candidate.state !== "auto-confirmed"
+      || state.speaker.mode !== "dual-channel"
+      || !["capturing", "reconnecting"].includes(state.captureState)
+      || pageLeaseStatus !== "active"
+      || taskBusy
+      || attemptedAutoCandidates.current.has(candidate.id)
+    ) return;
+    attemptedAutoCandidates.current.add(candidate.id);
+    void submitManualText(candidate.text, undefined, {
+      questionId: candidate.id,
+      questionRevision: candidate.revision,
+      clickedAtMs: Date.now(),
+      prefetchRevision: candidate.revision,
+      triggerMode: "auto",
+    });
+  }, [
+    liveInterview?.autoAnswerEnabled,
+    liveInterview?.autoAnswerEnabledAtMs,
+    pageLeaseStatus,
+    state.activeAnswerTask?.id,
+    state.activeAnswerTask?.status,
+    state.captureState,
+    state.speaker.autoAnswerQuestion?.id,
+    state.speaker.autoAnswerQuestion?.answerTaskId,
+    state.speaker.mode,
+  ]);
+  const toggleAutoAnswer = async (enabled: boolean) => {
+    if (autoAnswerSaving || pageLeaseStatus === "replaced") return;
+    setAutoAnswerSaving(true);
+    setNotice("");
+    try {
+      const updated = await runAdapterOperation(signal => interviewAppAdapter.updateInterviewAutoAnswer(id, enabled, signal));
+      attemptedAutoCandidates.current.clear();
+      setState(current => ({
+        ...current,
+        interviews: current.interviews.map(item => item.id === id ? { ...item, ...updated } : item),
+      }));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "自动回答设置保存失败，请稍后重试。");
+    } finally {
+      setAutoAnswerSaving(false);
     }
   };
   const latestInterviewerQuestion = () => extractLatestInterviewerQuestion(state.speaker);
@@ -1665,7 +1720,7 @@ function LivePage() {
     <header className="live-top">
       <Link to={routes.app} aria-label="返回面试首页"><Logo /></Link>
       <div className="live-session-heading"><strong>{interviewTitle}</strong><span><i className={captureActive ? "recording-dot" : "online-dot"} /> {desktopLayout ? `这台设备 · ${captureStatus}` : captureStatus}</span><small className="live-language-badge">{interviewLanguageLabel}</small></div>
-      {desktopLayout ? <div className="live-top-actions"><Link className="live-balance" to={routes.billing}>积分与会员</Link><span>18:24</span><AccountMenu compact />{captureButton}<button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束面试</button></div> : <div className="mobile-live-top-actions">{captureButton}<details className="mobile-live-more"><summary aria-label="更多面试操作">•••</summary><div><Link to={routes.billing}>积分与会员</Link><Link to={routes.settings}>用户设置</Link><button className="danger" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束面试</button></div></details></div>}
+      {desktopLayout ? <div className="live-top-actions"><div className="live-auto-answer"><span>自动回答</span><label className="switch-control"><input type="checkbox" role="switch" aria-label="自动回答" checked={liveInterview?.autoAnswerEnabled ?? false} disabled={autoAnswerSaving || pageLeaseStatus === "replaced"} onChange={event => void toggleAutoAnswer(event.target.checked)} /><span aria-hidden="true" /></label></div><Link className="live-balance" to={routes.billing}>积分与会员</Link><span>18:24</span><AccountMenu compact />{captureButton}<button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束面试</button></div> : <div className="mobile-live-top-actions"><div className="live-auto-answer mobile"><span>自动</span><label className="switch-control"><input type="checkbox" role="switch" aria-label="自动回答" checked={liveInterview?.autoAnswerEnabled ?? false} disabled={autoAnswerSaving || pageLeaseStatus === "replaced"} onChange={event => void toggleAutoAnswer(event.target.checked)} /><span aria-hidden="true" /></label></div>{captureButton}<details className="mobile-live-more"><summary aria-label="更多面试操作">•••</summary><div><Link to={routes.billing}>积分与会员</Link><Link to={routes.settings}>用户设置</Link><button className="danger" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束面试</button></div></details></div>}
     </header>
     {idleStatus?.state === "warning" ? <div className="global-live-alert" role="status"><strong>本场面试即将因空闲自动结束</strong><span>连续 20 分钟没有音频、回答或截图活动会释放当前设备连接，历史记录仍会保留。</span><button className="button primary" disabled={continuingInterview} onClick={() => void continueIdleInterview()}>{continuingInterview ? "正在继续…" : "继续本场面试"}</button></div> : null}
     {pageLeaseStatus === "replaced" ? <div className="global-live-alert replaced-page-alert" role="status"><strong>本场面试已在其他页面继续</strong><span>当前页面已停止收音同步、实时订阅和回答请求；已显示内容仍可查看。关闭此页或返回面试首页即可。</span><Link className="button primary" to={routes.app}>返回面试首页</Link></div> : null}

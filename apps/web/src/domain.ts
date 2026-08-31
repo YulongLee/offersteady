@@ -23,6 +23,8 @@ export interface InterviewSummary {
   readonly interviewLanguage?: InterviewLanguage;
   readonly programmingRequired?: boolean;
   readonly programmingLanguage?: ProgrammingLanguage | null;
+  readonly autoAnswerEnabled?: boolean;
+  readonly autoAnswerEnabledAtMs?: number | null;
   readonly role: string;
   readonly company?: string;
   readonly status: SessionStatus;
@@ -192,6 +194,7 @@ export interface SpeakerPresentationState {
   readonly mode: "dual-channel" | "manual-only";
   readonly transcripts: readonly SpeakerTranscriptSegment[];
   readonly pendingQuestion: QuestionCandidateEvent | null;
+  readonly autoAnswerQuestion?: QuestionCandidateEvent | null;
   readonly degradation: AudioSourceDegradedEvent | null;
   readonly runtimeNotice: {
     readonly stage: string;
@@ -228,6 +231,7 @@ export interface SubmitManualAnswerCommand {
   readonly questionRevision?: number;
   readonly clickedAtMs?: number;
   readonly prefetchRevision?: number;
+  readonly triggerMode?: "manual" | "auto";
 }
 
 export interface SubmitScreenshotAnswerCommand {
@@ -278,6 +282,7 @@ export interface InterviewAppAdapter {
   createDraft(input: { title: string; role: string; company?: string }, signal?: AbortSignal): Promise<InterviewSummary>;
   updateInterviewLanguage(id: string, interviewLanguage: InterviewLanguage, signal?: AbortSignal): Promise<InterviewSummary>;
   updateInterviewProgramming(id: string, programmingRequired: boolean, programmingLanguage: ProgrammingLanguage | null, signal?: AbortSignal): Promise<InterviewSummary>;
+  updateInterviewAutoAnswer(id: string, enabled: boolean, signal?: AbortSignal): Promise<InterviewSummary>;
   confirmInterviewMaterials(selection: SessionContextSelection, signal?: AbortSignal): Promise<SessionContextSelection>;
   getActiveInterviewConflict(id: string, signal?: AbortSignal): Promise<ActiveInterviewConflict>;
   supersedeActiveInterview(command: { interviewId: string; expectedPreviousInterviewId: string }, signal?: AbortSignal): Promise<readonly string[]>;

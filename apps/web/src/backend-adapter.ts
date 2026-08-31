@@ -20,6 +20,8 @@ interface BackendSessionResponse {
   readonly interviewLanguage?: InterviewLanguage;
   readonly programmingRequired?: boolean;
   readonly programmingLanguage?: ProgrammingLanguage | null;
+  readonly autoAnswerEnabled?: boolean;
+  readonly autoAnswerEnabledAtMs?: number | null;
   readonly status: "preparing" | "live" | "ended";
   readonly updatedAtMs: number;
   readonly materialBinding: {
@@ -277,6 +279,9 @@ interface BackendRealtimeQuestionCandidateListResponse {
     readonly state: "needs-confirmation" | "confirmed" | "dismissed";
     readonly reason: string;
     readonly confidence: number;
+    readonly answerTaskId?: string | null;
+    readonly createdAtMs?: number;
+    readonly updatedAtMs?: number;
   }[];
 }
 
@@ -573,6 +578,8 @@ const toInterviewSummary = (session: BackendSessionResponse, fallback?: { title?
   interviewLanguage: session.interviewLanguage ?? "zh-CN",
   programmingRequired: session.programmingRequired ?? false,
   programmingLanguage: session.programmingRequired ? session.programmingLanguage ?? "python" : null,
+  autoAnswerEnabled: session.autoAnswerEnabled ?? false,
+  autoAnswerEnabledAtMs: session.autoAnswerEnabledAtMs ?? null,
   role: fallback?.role || session.title || "目标岗位",
   ...(fallback?.company?.trim() ? { company: fallback.company.trim() } : {}),
   status: session.status === "live" ? "active" : session.status,
@@ -782,6 +789,10 @@ const mapRealtimeState = (
   runtime: BackendRealtimeRuntimeResponse | null,
 ) => {
   const pending = candidates.candidates.find(candidate => candidate.state === "needs-confirmation");
+  const newestConfirmed = [...candidates.candidates]
+    .filter(candidate => candidate.state === "confirmed" && candidate.reason === "auto-confirmed")
+    .sort((left, right) => (right.createdAtMs ?? 0) - (left.createdAtMs ?? 0))[0];
+  const confirmed = newestConfirmed && !newestConfirmed.answerTaskId ? newestConfirmed : undefined;
   const newestEvents = [...events.events].sort((left, right) => right.createdAtMs - left.createdAtMs);
   const latestDeviceStatus = newestEvents.find(event => event.kind === "device-status");
   const latestDegraded = newestEvents.find(event => event.kind === "degraded");
@@ -849,6 +860,19 @@ const mapRealtimeState = (
         reason: pending.reason === "low-transcript-confidence" ? "low-transcript-confidence" as const : "high-confidence-question" as const,
         confidence: pending.confidence,
       } : null,
+      autoAnswerQuestion: confirmed ? {
+        id: confirmed.candidateId,
+        sessionId: candidates.sessionId || interviewId,
+        revision: 1,
+        sourceSegmentIds: confirmed.sourceSegmentIds,
+        text: confirmed.text,
+        state: "auto-confirmed" as const,
+        reason: "high-confidence-question" as const,
+        confidence: confirmed.confidence,
+        answerTaskId: confirmed.answerTaskId ?? null,
+        ...(confirmed.createdAtMs === undefined ? {} : { createdAtMs: confirmed.createdAtMs }),
+        ...(confirmed.updatedAtMs === undefined ? {} : { updatedAtMs: confirmed.updatedAtMs }),
+      } : null,
       degradation: degraded,
       runtimeNotice: meaningfulTranscripts.length > 0 ? null : runtimeNotice(runtime, latestDegraded),
     },
@@ -867,7 +891,7 @@ const mapRealtimeState = (
     ...(latestAnswerUpdate ? {
       answerUpdate: toSubmitManualAnswerResult(
         latestAnswerUpdate.payload.task as unknown as BackendLiveAnswerTaskResponse,
-        "manual",
+        latestAnswerUpdate.payload.trigger === "auto" ? "desktop-audio" : "manual",
       ),
     } : {}),
   };
@@ -1279,6 +1303,15 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       method: "PATCH",
       headers: authHeaders(),
       body: JSON.stringify({ userId: requireUserId(), programmingRequired, programmingLanguage }),
+    }, signal);
+    return toInterviewSummary(updated);
+  }
+
+  async updateInterviewAutoAnswer(id: string, enabled: boolean, signal?: AbortSignal) {
+    const updated = await this.client.request<BackendSessionResponse>(`/api/v1/sessions/${id}/auto-answer`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ userId: requireUserId(), enabled }),
     }, signal);
     return toInterviewSummary(updated);
   }
@@ -1801,9 +1834,10 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         ...(command.questionRevision ? { questionRevision: command.questionRevision } : {}),
         ...(command.clickedAtMs ? { clickedAtMs: command.clickedAtMs } : {}),
         ...(command.prefetchRevision ? { prefetchRevision: command.prefetchRevision } : {}),
+        ...(command.triggerMode === "auto" ? { triggerMode: "auto" } : {}),
       }),
     }, signal);
-    return toSubmitManualAnswerResult(result.task);
+    return toSubmitManualAnswerResult(result.task, command.triggerMode === "auto" ? "desktop-audio" : "manual");
   }
 
   private async submitManualAnswerStream(command: Parameters<InterviewAppAdapter["submitManualAnswer"]>[0], signal: AbortSignal | undefined, onStreamUpdate: (update: ManualAnswerStreamUpdate) => void): Promise<SubmitManualAnswerResult> {
@@ -1811,7 +1845,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     let failureMessage = "回答生成失败，请稍后重试。";
     const emit = (event: LiveAnswerStreamEvent) => {
       if (!event.task) return;
-      const result = toSubmitManualAnswerResult(event.task as BackendLiveAnswerTaskResponse);
+      const result = toSubmitManualAnswerResult(event.task as BackendLiveAnswerTaskResponse, command.triggerMode === "auto" ? "desktop-audio" : "manual");
       latest = result;
       if (event.type === "failed" && (event.errorMessage || event.partialText)) {
         failureMessage = event.errorMessage ?? failureMessage;
@@ -1835,6 +1869,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         ...(command.questionRevision ? { questionRevision: command.questionRevision } : {}),
         ...(command.clickedAtMs ? { clickedAtMs: command.clickedAtMs } : {}),
         ...(command.prefetchRevision ? { prefetchRevision: command.prefetchRevision } : {}),
+        ...(command.triggerMode === "auto" ? { triggerMode: "auto" } : {}),
       }),
     };
     if (signal) requestInit.signal = signal;

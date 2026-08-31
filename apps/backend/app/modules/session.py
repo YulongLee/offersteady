@@ -26,6 +26,7 @@ from app.schemas.session import (
     SupersedeActiveSessionResponse,
     UpdateInterviewLanguageRequest,
     UpdateInterviewProgrammingRequest,
+    UpdateInterviewAutoAnswerRequest,
 )
 from app.services.realtime_speech_service import RealtimeSpeechService
 from app.services.session_service import SessionService
@@ -49,6 +50,8 @@ def _to_session_response(session) -> InterviewSessionResponse:
         interviewLanguage=session.interview_language,
         programmingRequired=getattr(session, "programming_required", False),
         programmingLanguage=getattr(session, "programming_language", None),
+        autoAnswerEnabled=getattr(session, "auto_answer_enabled", False),
+        autoAnswerEnabledAtMs=getattr(session, "auto_answer_enabled_at_ms", None),
         status=session.status,
         continueTarget=session.continue_target,
         materialBinding={
@@ -319,6 +322,22 @@ async def update_interview_programming(
         session_id=session_id,
         programming_required=request.programming_required,
         programming_language=request.programming_language,
+    )
+    return success_response(request=request_context, data=_to_session_response(session), timestamp=utc_now_iso())
+
+
+@router.patch("/{session_id}/auto-answer", response_model=ApiEnvelope[InterviewSessionResponse])
+async def update_interview_auto_answer(
+    session_id: str,
+    request_context: Request,
+    request: UpdateInterviewAutoAnswerRequest,
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: SessionService = Depends(session_service),
+) -> ApiEnvelope[InterviewSessionResponse]:
+    session = service.update_auto_answer(
+        user_id=resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context),
+        session_id=session_id,
+        enabled=request.enabled,
     )
     return success_response(request=request_context, data=_to_session_response(session), timestamp=utc_now_iso())
 

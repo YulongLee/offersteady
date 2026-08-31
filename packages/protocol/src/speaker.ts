@@ -144,6 +144,9 @@ export interface QuestionCandidateEvent {
   readonly state: QuestionCandidateState;
   readonly reason: QuestionTriggerReason;
   readonly confidence: number;
+  readonly answerTaskId?: string | null;
+  readonly createdAtMs?: number;
+  readonly updatedAtMs?: number;
 }
 
 export interface QuestionConfirmedEvent {

@@ -93,6 +93,7 @@ def _publish_answer_task_event(
     session_id: str,
     phase: str,
     task,
+    trigger: str = "manual",
 ) -> None:
     if task is None:
         return
@@ -102,7 +103,7 @@ def _publish_answer_task_event(
         kind="answer-task-updated",
         payload={
             "phase": phase,
-            "trigger": "manual",
+            "trigger": trigger,
             "task": _to_task_response(task).model_dump(by_alias=True),
         },
     )
@@ -126,14 +127,38 @@ async def start_live_answer(
     realtime: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[LiveAnswerResponse]:
     user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
-    task, retrieval = service.answer_question(
-        user_id=user_id,
-        session_id=request.session_id,
-        question=request.question,
-        stream=request.stream,
-        usage_id=request.idempotency_key,
+    claim = None
+    if request.trigger_mode == "auto":
+        claim = realtime.claim_auto_answer_candidate(
+            user_id=user_id, session_id=request.session_id, candidate_id=request.question_id or ""
+        )
+    claim_bound = False
+    try:
+        task, retrieval = service.answer_question(
+            user_id=user_id,
+            session_id=request.session_id,
+            question=request.question,
+            stream=request.stream,
+            usage_id=request.idempotency_key,
+        )
+        if claim is not None:
+            realtime.bind_auto_answer_candidate(
+                user_id=user_id, candidate_id=claim.candidate_id,
+                claim_id=claim.answer_task_id or "", task_id=task.task_id,
+            )
+            claim_bound = True
+    finally:
+        if claim is not None:
+            if claim_bound:
+                realtime.finish_auto_answer_candidate(user_id=user_id, candidate_id=claim.candidate_id)
+            else:
+                realtime.release_auto_answer_candidate(
+                    user_id=user_id, candidate_id=claim.candidate_id, claim_id=claim.answer_task_id or ""
+                )
+    _publish_answer_task_event(
+        realtime, user_id=user_id, session_id=request.session_id,
+        phase=task.status, task=task, trigger=request.trigger_mode,
     )
-    _publish_answer_task_event(realtime, user_id=user_id, session_id=request.session_id, phase=task.status, task=task)
     return success_response(
         request=request_context,
         data=LiveAnswerResponse(task=_to_task_response(task), retrieval=retrieval),
@@ -149,34 +174,58 @@ async def stream_live_answer(
     realtime: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> StreamingResponse:
     user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
+    claim = None
+    if request.trigger_mode == "auto":
+        claim = realtime.claim_auto_answer_candidate(
+            user_id=user_id, session_id=request.session_id, candidate_id=request.question_id or ""
+        )
 
     def events() -> Iterator[str]:
         first_visible_sent = False
-        for payload in service.stream_answer_question(
-            user_id=user_id,
-            session_id=request.session_id,
-            question=request.question,
-            usage_id=request.idempotency_key,
-            question_id=request.question_id,
-            question_revision=request.question_revision,
-            clicked_at_ms=request.clicked_at_ms,
-            prefetch_revision=request.prefetch_revision,
-        ):
-            phase = str(payload.get("type") or "update")
-            if phase in {"task-started", "retrieval", "complete", "completed", "error", "failed", "cancelled"}:
-                _publish_answer_task_event(
-                    realtime,
-                    user_id=user_id,
-                    session_id=request.session_id,
-                    phase=phase,
-                    task=payload.get("task"),
-                )
-            if not first_visible_sent and phase == "chunk" and payload.get("chunk") is not None:
-                first_visible_sent = True
-                timing = dict(payload.get("timing") or {})
-                timing["sseYieldAtMs"] = int(time() * 1000)
-                payload = {**payload, "timing": timing}
-            yield _sse_frame(_to_stream_event(payload))
+        claim_bound = False
+        try:
+            for payload in service.stream_answer_question(
+                user_id=user_id,
+                session_id=request.session_id,
+                question=request.question,
+                usage_id=request.idempotency_key,
+                question_id=request.question_id,
+                question_revision=request.question_revision,
+                clicked_at_ms=request.clicked_at_ms,
+                prefetch_revision=request.prefetch_revision,
+            ):
+                phase = str(payload.get("type") or "update")
+                task = payload.get("task")
+                if claim is not None and not claim_bound and task is not None:
+                    realtime.bind_auto_answer_candidate(
+                        user_id=user_id, candidate_id=claim.candidate_id,
+                        claim_id=claim.answer_task_id or "", task_id=task.task_id,
+                    )
+                    claim_bound = True
+                if phase in {"task-started", "retrieval", "complete", "completed", "error", "failed", "cancelled"}:
+                    _publish_answer_task_event(
+                        realtime,
+                        user_id=user_id,
+                        session_id=request.session_id,
+                        phase=phase,
+                        task=task,
+                        trigger=request.trigger_mode,
+                    )
+                if not first_visible_sent and phase == "chunk" and payload.get("chunk") is not None:
+                    first_visible_sent = True
+                    timing = dict(payload.get("timing") or {})
+                    timing["sseYieldAtMs"] = int(time() * 1000)
+                    payload = {**payload, "timing": timing}
+                yield _sse_frame(_to_stream_event(payload))
+        finally:
+            if claim is not None:
+                if claim_bound:
+                    realtime.finish_auto_answer_candidate(user_id=user_id, candidate_id=claim.candidate_id)
+                else:
+                    realtime.release_auto_answer_candidate(
+                        user_id=user_id, candidate_id=claim.candidate_id,
+                        claim_id=claim.answer_task_id or "",
+                    )
 
     return StreamingResponse(
         events(),

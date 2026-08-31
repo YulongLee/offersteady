@@ -98,6 +98,81 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 beforeEach(() => Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 }));
 
 describe("focused live interview workspace", () => {
+  it("keeps automatic answer off by default and persists an explicit toggle", async () => {
+    const update = vi.spyOn(interviewAppAdapter, "updateInterviewAutoAnswer").mockImplementation(async (id, enabled) => ({
+      ...syntheticState.interviews[0]!,
+      id,
+      status: "active",
+      autoAnswerEnabled: enabled,
+      autoAnswerEnabledAtMs: enabled ? Date.now() : null,
+    }));
+    openLive(state => {
+      state.interviews = state.interviews.map(item => item.id === "demo" ? {
+        ...item,
+        status: "active",
+        autoAnswerEnabled: false,
+        autoAnswerEnabledAtMs: null,
+      } : item);
+    });
+
+    const toggle = screen.getByRole("switch", { name: "自动回答" });
+    expect(toggle).not.toBeChecked();
+    fireEvent.click(toggle);
+
+    await waitFor(() => expect(update).toHaveBeenCalledWith("demo", true, expect.any(AbortSignal)));
+    await waitFor(() => expect(toggle).toBeChecked());
+  });
+
+  it("submits one future confirmed interviewer candidate through the existing stream", async () => {
+    vi.spyOn(interviewAppAdapter, "sendDesktopSessionHeartbeat").mockImplementation(async command => ({
+      pageInstanceId: command.pageInstanceId ?? null,
+      leaseGeneration: 1,
+      leaseExpiresAtMs: Date.now() + 30_000,
+    }));
+    vi.spyOn(interviewAppAdapter, "subscribeRealtimeSession").mockImplementation(async (_id, _onUpdate, signal) => {
+      await new Promise<void>((_resolve, reject) => signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true }));
+    });
+    const submit = vi.spyOn(interviewAppAdapter, "submitManualAnswer");
+    openLive(state => {
+      state.captureState = "capturing";
+      state.interviews = state.interviews.map(item => item.id === "demo" ? {
+        ...item,
+        status: "active",
+        autoAnswerEnabled: true,
+        autoAnswerEnabledAtMs: 100,
+      } : item);
+      state.speaker = {
+        ...state.speaker,
+        autoAnswerQuestion: {
+          id: "question:demo:auto-1",
+          sessionId: "demo",
+          revision: 1,
+          sourceSegmentIds: ["auto-segment-1"],
+          text: "请介绍你负责的高可用项目。",
+          state: "auto-confirmed",
+          reason: "high-confidence-question",
+          confidence: 0.97,
+          answerTaskId: null,
+          createdAtMs: 200,
+          updatedAtMs: 200,
+        },
+      };
+      state.activeAnswerTask = null;
+    });
+
+    await waitFor(() => expect(submit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        interviewId: "demo",
+        question: "请介绍你负责的高可用项目。",
+        questionId: "question:demo:auto-1",
+        triggerMode: "auto",
+      }),
+      expect.any(AbortSignal),
+      expect.any(Function),
+    ));
+    expect(submit).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps reconnect backoff after an aggregate recovery snapshot succeeds", async () => {
     vi.spyOn(interviewAppAdapter, "sendDesktopSessionHeartbeat").mockImplementation(async command => ({
       pageInstanceId: command.pageInstanceId ?? null,

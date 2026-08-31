@@ -148,11 +148,13 @@ export const isolateRealtimeSpeakerSession = (
 ): SpeakerPresentationState => {
   const hasForeignSessionState = speaker.transcripts.some(segment => segment.sessionId !== sessionId)
     || Boolean(speaker.pendingQuestion && speaker.pendingQuestion.sessionId !== sessionId)
+    || Boolean(speaker.autoAnswerQuestion && speaker.autoAnswerQuestion.sessionId !== sessionId)
     || Boolean(speaker.degradation && speaker.degradation.sessionId !== sessionId);
   return {
     ...speaker,
     transcripts: speaker.transcripts.filter(segment => segment.sessionId === sessionId),
     pendingQuestion: speaker.pendingQuestion?.sessionId === sessionId ? speaker.pendingQuestion : null,
+    autoAnswerQuestion: speaker.autoAnswerQuestion?.sessionId === sessionId ? speaker.autoAnswerQuestion : null,
     degradation: speaker.degradation?.sessionId === sessionId ? speaker.degradation : null,
     runtimeNotice: hasForeignSessionState ? null : speaker.runtimeNotice,
   };
@@ -166,6 +168,7 @@ export const resetTransientInterviewState = (state: WebAppState): WebAppState =>
     mode: "dual-channel",
     transcripts: [],
     pendingQuestion: null,
+    autoAnswerQuestion: null,
     degradation: null,
     runtimeNotice: null,
   },

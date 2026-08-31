@@ -77,6 +77,24 @@ class InMemoryInterviewSessionRepository(InterviewSessionRepository):
             self.sessions[session_id] = updated
             return replace(updated)
 
+    def update_auto_answer_if_live(
+        self, *, user_id: str, session_id: str, enabled: bool,
+        enabled_at_ms: int | None, updated_at_ms: int
+    ) -> InterviewSessionRecord | None:
+        with self._session_lock:
+            session = self.sessions.get(session_id)
+            if session is None or session.owner_user_id != user_id or session.status != "live":
+                return None
+            updated = replace(
+                session,
+                auto_answer_enabled=enabled,
+                auto_answer_enabled_at_ms=enabled_at_ms,
+                updated_at_ms=updated_at_ms,
+                last_activity_at_ms=updated_at_ms,
+            )
+            self.sessions[session_id] = updated
+            return replace(updated)
+
     def start_if_not_ended(
         self, *, user_id: str, session_id: str, started_at_ms: int
     ) -> InterviewSessionRecord | None:

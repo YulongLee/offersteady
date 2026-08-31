@@ -111,6 +111,8 @@ class InterviewSessionResponse(BaseModel):
     interview_language: InterviewLanguage = Field(alias="interviewLanguage")
     programming_required: bool = Field(default=False, alias="programmingRequired")
     programming_language: ProgrammingLanguage | None = Field(default=None, alias="programmingLanguage")
+    auto_answer_enabled: bool = Field(default=False, alias="autoAnswerEnabled")
+    auto_answer_enabled_at_ms: int | None = Field(default=None, alias="autoAnswerEnabledAtMs")
     status: InterviewSessionState
     continue_target: SessionContinueTarget = Field(alias="continueTarget")
     material_binding: SessionMaterialBindingResponse = Field(alias="materialBinding")
@@ -161,6 +163,12 @@ class UpdateInterviewProgrammingRequest(BaseModel):
         if not self.programming_required and self.programming_language is not None:
             raise ValueError("programmingLanguage must be null when programmingRequired is false")
         return self
+
+
+class UpdateInterviewAutoAnswerRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    user_id: str = Field(min_length=1, alias="userId")
+    enabled: bool
 
 
 class ListInterviewSessionsRequest(BaseModel):

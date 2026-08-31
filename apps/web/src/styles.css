@@ -539,6 +539,11 @@ h1, h2, h3, p { margin-top: 0; }
 .live-balance { color: var(--brand); border: 1px solid rgba(110,231,189,.18); border-radius: 999px; padding: 6px 9px; font-size: 8px; }
 .live-top-actions button { display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 8px; padding: 8px 12px; cursor: pointer; font-size: 9px; }
 .live-top-actions .account-menu-popover button { border: 1px solid var(--line); }
+.live-auto-answer { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 9px; white-space: nowrap; }
+.live-auto-answer > .switch-control { flex: 0 0 auto; }
+.live-auto-answer > .switch-control > span { width: 31px; height: 18px; }
+.live-auto-answer > .switch-control > span::after { width: 12px; height: 12px; }
+.live-auto-answer > .switch-control input:checked + span::after { transform: translateX(13px); }
 .live-session-control { white-space: nowrap; }
 .mobile-live-top-actions, .mobile-live-workspace { display: none; }
 .global-live-alert { position: fixed; z-index: 25; top: 72px; left: 50%; width: min(560px, calc(100% - 32px)); display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; align-items: center; transform: translateX(-50%); border: 1px solid rgba(243,189,96,.25); border-radius: 11px; background: #251d10; box-shadow: 0 14px 45px rgba(0,0,0,.4); padding: 12px 14px; }
@@ -1141,6 +1146,7 @@ h1, h2, h3, p { margin-top: 0; }
   .mobile-live-page .live-session-heading > strong { display: block; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; }
   .mobile-live-page .live-session-heading > span { display: flex; gap: 6px; color: var(--muted); font-size: 9px; }
   .mobile-live-top-actions { position: relative; display: flex; align-items: center; gap: 6px; }
+  .mobile-live-top-actions .live-auto-answer { min-height: 42px; gap: 4px; border: 1px solid var(--line); border-radius: 11px; padding: 5px 7px; font-size: 9px; }
   .mobile-live-top-actions .live-session-control { min-width: 76px; min-height: 42px; padding: 8px 10px; font-size: 10px; }
   .mobile-live-more { position: relative; }
   .mobile-live-more summary { display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-2); color: var(--text); cursor: pointer; font-size: 15px; letter-spacing: 2px; list-style: none; }

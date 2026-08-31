@@ -108,6 +108,8 @@ class InterviewSessionRecord:
     usage_totals: SessionUsageTotals
     programming_required: bool = False
     programming_language: ProgrammingLanguage | None = None
+    auto_answer_enabled: bool = False
+    auto_answer_enabled_at_ms: int | None = None
     integration_references: list[IntegrationReference] = field(default_factory=list)
     restart_of_session_id: str | None = None
     started_at_ms: int | None = None
@@ -133,6 +135,11 @@ class InterviewSessionRepository(Protocol):
     def update_programming_if_preparing(
         self, *, user_id: str, session_id: str, programming_required: bool,
         programming_language: ProgrammingLanguage | None, updated_at_ms: int
+    ) -> InterviewSessionRecord | None: ...
+
+    def update_auto_answer_if_live(
+        self, *, user_id: str, session_id: str, enabled: bool,
+        enabled_at_ms: int | None, updated_at_ms: int
     ) -> InterviewSessionRecord | None: ...
 
     def start_if_not_ended(

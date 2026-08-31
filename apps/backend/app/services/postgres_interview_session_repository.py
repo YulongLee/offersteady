@@ -45,11 +45,12 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
                     INSERT INTO interview_sessions (
                       session_id, owner_user_id, title, status, continue_target,
                       interview_language, programming_required, programming_language,
+                      auto_answer_enabled, auto_answer_enabled_at_ms,
                       material_binding_json, config_snapshot_json, usage_totals_json,
                       integration_references_json, restart_of_session_id, started_at_ms,
                       ended_at_ms, created_at_ms, updated_at_ms, last_activity_at_ms, deleted_at_ms
                     )
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL)
                     ON CONFLICT (session_id) DO UPDATE SET
                       owner_user_id = EXCLUDED.owner_user_id,
                       title = EXCLUDED.title,
@@ -58,6 +59,8 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
                       interview_language = EXCLUDED.interview_language,
                       programming_required = EXCLUDED.programming_required,
                       programming_language = EXCLUDED.programming_language,
+                      auto_answer_enabled = EXCLUDED.auto_answer_enabled,
+                      auto_answer_enabled_at_ms = EXCLUDED.auto_answer_enabled_at_ms,
                       material_binding_json = EXCLUDED.material_binding_json,
                       config_snapshot_json = EXCLUDED.config_snapshot_json,
                       usage_totals_json = EXCLUDED.usage_totals_json,
@@ -78,6 +81,8 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
                         session.interview_language,
                         session.programming_required,
                         session.programming_language,
+                        session.auto_answer_enabled,
+                        session.auto_answer_enabled_at_ms,
                         Jsonb(asdict(session.material_binding)),
                         Jsonb(asdict(session.config_snapshot)),
                         Jsonb(asdict(session.usage_totals)),
@@ -179,6 +184,26 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
                 RETURNING *
                 """,
                 (started_at_ms, started_at_ms, started_at_ms, user_id, session_id),
+            )
+            row = cursor.fetchone()
+            connection.commit()
+        return self._row_to_session(row) if row else None
+
+    def update_auto_answer_if_live(
+        self, *, user_id: str, session_id: str, enabled: bool,
+        enabled_at_ms: int | None, updated_at_ms: int
+    ) -> InterviewSessionRecord | None:
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                UPDATE interview_sessions
+                SET auto_answer_enabled = %s, auto_answer_enabled_at_ms = %s,
+                    updated_at_ms = %s, last_activity_at_ms = %s
+                WHERE owner_user_id = %s AND session_id = %s
+                  AND status = 'live' AND deleted_at_ms IS NULL
+                RETURNING *
+                """,
+                (enabled, enabled_at_ms, updated_at_ms, updated_at_ms, user_id, session_id),
             )
             row = cursor.fetchone()
             connection.commit()
@@ -342,6 +367,7 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
                     REPO_ROOT / "apps/backend/migrations/versions/0028_restore_unstarted_interviews.sql",
                     REPO_ROOT / "apps/backend/migrations/versions/0033_interview_language.sql",
                     REPO_ROOT / "apps/backend/migrations/versions/0034_interview_programming_preference.sql",
+                    REPO_ROOT / "apps/backend/migrations/versions/0035_session_auto_answer.sql",
                 ])
             connection.commit()
 
@@ -357,6 +383,8 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
             interview_language=row.get("interview_language") or "zh-CN",
             programming_required=bool(row.get("programming_required", False)),
             programming_language=row.get("programming_language"),
+            auto_answer_enabled=bool(row.get("auto_answer_enabled", False)),
+            auto_answer_enabled_at_ms=row.get("auto_answer_enabled_at_ms"),
             status=row["status"],
             continue_target=row["continue_target"],
             material_binding=self._material_binding_from_json(material),

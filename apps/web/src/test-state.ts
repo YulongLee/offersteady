@@ -211,6 +211,8 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
       interviewLanguage: "zh-CN",
       programmingRequired: false,
       programmingLanguage: null,
+      autoAnswerEnabled: false,
+      autoAnswerEnabledAtMs: null,
       role: input.role.trim(),
       ...(input.company?.trim() ? { company: input.company.trim() } : {}),
       status: "preparing",
@@ -235,6 +237,12 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
     await delay(signal);
     const interview = syntheticState.interviews.find(item => item.id === id) ?? syntheticState.interviews[0]!;
     return { ...interview, id, programmingRequired, programmingLanguage: programmingRequired ? programmingLanguage ?? "python" : null };
+  }
+
+  async updateInterviewAutoAnswer(id: string, enabled: boolean, signal?: AbortSignal) {
+    await delay(signal);
+    const interview = syntheticState.interviews.find(item => item.id === id) ?? syntheticState.interviews[0]!;
+    return { ...interview, id, autoAnswerEnabled: enabled, autoAnswerEnabledAtMs: enabled ? Date.now() : null };
   }
 
   async getActiveInterviewConflict(id: string, signal?: AbortSignal) {
@@ -359,7 +367,7 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
         id: taskId,
         askedAt: "刚刚",
         text: command.question,
-        input: "manual",
+        input: command.triggerMode === "auto" ? "desktop-audio" : "manual",
         status: "confirmed",
         advice: {
           outline: ["先直接回应问题", "结合你的真实经历展开", "用可核对的结果收尾"],

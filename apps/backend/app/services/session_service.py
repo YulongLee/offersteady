@@ -150,6 +150,31 @@ class SessionService:
             )
         raise DomainRequestError("session", "update-programming", "编程设置保存失败，请重试。", 409)
 
+    def update_auto_answer(
+        self, *, user_id: str, session_id: str, enabled: bool
+    ) -> InterviewSessionRecord:
+        session = self.get_session(user_id=user_id, session_id=session_id)
+        if session.status != "live":
+            raise DomainRequestError(
+                "session", "update-auto-answer", "自动回答只能在进行中的面试里设置。", 409,
+                error_code="auto_answer_session_not_live",
+            )
+        now_ms = _now_ms()
+        enabled_at_ms = now_ms if enabled else None
+        updated = self.repository.update_auto_answer_if_live(
+            user_id=user_id,
+            session_id=session_id,
+            enabled=enabled,
+            enabled_at_ms=enabled_at_ms,
+            updated_at_ms=now_ms,
+        )
+        if updated is not None:
+            return updated
+        raise DomainRequestError(
+            "session", "update-auto-answer", "自动回答状态保存失败，请刷新后重试。", 409,
+            error_code="auto_answer_update_conflict",
+        )
+
     def list_sessions(self, *, user_id: str, status: str | None = None) -> list[InterviewSessionRecord]:
         sessions = self.repository.list_sessions_for_user(user_id=user_id, status=status)  # type: ignore[arg-type]
         return [self._refresh_bound_document_activity(session) for session in sessions]
@@ -588,6 +613,8 @@ class SessionService:
             interview_language=updates.get("interview_language", session.interview_language),
             programming_required=updates.get("programming_required", session.programming_required),
             programming_language=updates.get("programming_language", session.programming_language),
+            auto_answer_enabled=updates.get("auto_answer_enabled", session.auto_answer_enabled),
+            auto_answer_enabled_at_ms=updates.get("auto_answer_enabled_at_ms", session.auto_answer_enabled_at_ms),
             status=updates.get("status", session.status),
             continue_target=updates.get("continue_target", self._derive_continue_target(updates.get("status", session.status))),
             material_binding=updates.get("material_binding", session.material_binding),

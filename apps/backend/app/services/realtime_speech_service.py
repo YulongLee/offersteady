@@ -213,6 +213,8 @@ class RealtimeSpeechService:
         self._session_language_cache: dict[str, InterviewLanguage] = {}
         self._publisher_status_cache: dict[str, str] = {}
         self._stable_question_state: dict[tuple[str, str], dict[str, object]] = {}
+        self._auto_answer_claim_lock = threading.Lock()
+        self._auto_answer_active_candidates: dict[str, str] = {}
         self._trace_lock = threading.Lock()
         self._trace_records: dict[str, dict[str, object]] = {}
         self._trace_order: deque[str] = deque(maxlen=4096)
@@ -3180,6 +3182,99 @@ class RealtimeSpeechService:
             payload={"candidateId": dismissed.candidate_id, "state": dismissed.state, "text": dismissed.text},
         )
         return dismissed
+
+    def claim_auto_answer_candidate(
+        self, *, user_id: str, session_id: str, candidate_id: str
+    ) -> QuestionCandidateRecord:
+        """Claim one stable interviewer question before any billable work starts."""
+        with self._auto_answer_claim_lock:
+            session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+            if session.status != "live" or not session.auto_answer_enabled or session.auto_answer_enabled_at_ms is None:
+                raise DomainRequestError(
+                    "live-answer", "auto-claim", "自动回答当前未开启。", 409,
+                    error_code="auto_answer_disabled",
+                )
+            candidate = self._require_candidate(user_id=user_id, candidate_id=candidate_id)
+            if candidate.session_id != session_id:
+                raise DomainRequestError(
+                    "live-answer", "auto-claim", "问题不属于当前面试。", 409,
+                    error_code="auto_answer_candidate_session_mismatch",
+                )
+            if (
+                candidate.state != "confirmed"
+                or candidate.reason != "auto-confirmed"
+                or candidate.created_at_ms < session.auto_answer_enabled_at_ms
+            ):
+                raise DomainRequestError(
+                    "live-answer", "auto-claim", "该问题不满足自动回答条件。", 409,
+                    error_code="auto_answer_candidate_ineligible",
+                )
+            if candidate.answer_task_id is not None:
+                raise DomainRequestError(
+                    "live-answer", "auto-claim", "该问题已经触发过回答。", 409,
+                    error_code="auto_answer_candidate_claimed",
+                )
+            active_candidate_id = self._auto_answer_active_candidates.get(session_id)
+            if active_candidate_id is not None and active_candidate_id != candidate_id:
+                raise DomainRequestError(
+                    "live-answer", "auto-claim", "上一条自动回答仍在生成。", 409,
+                    error_code="auto_answer_task_in_progress",
+                )
+            claimed = self.repository.save_candidate(replace(
+                candidate,
+                answer_task_id=f"claim:{uuid4().hex}",
+                updated_at_ms=_now_ms(),
+            ))
+            self._auto_answer_active_candidates[session_id] = candidate_id
+            self._publish_candidate_state(claimed)
+            return claimed
+
+    def bind_auto_answer_candidate(
+        self, *, user_id: str, candidate_id: str, claim_id: str, task_id: str
+    ) -> QuestionCandidateRecord:
+        with self._auto_answer_claim_lock:
+            candidate = self._require_candidate(user_id=user_id, candidate_id=candidate_id)
+            if candidate.answer_task_id != claim_id:
+                return candidate
+            bound = self.repository.save_candidate(replace(
+                candidate, answer_task_id=task_id, updated_at_ms=_now_ms()
+            ))
+            self._publish_candidate_state(bound)
+            return bound
+
+    def release_auto_answer_candidate(
+        self, *, user_id: str, candidate_id: str, claim_id: str
+    ) -> None:
+        with self._auto_answer_claim_lock:
+            candidate = self._require_candidate(user_id=user_id, candidate_id=candidate_id)
+            if candidate.answer_task_id != claim_id:
+                return
+            released = self.repository.save_candidate(replace(
+                candidate, answer_task_id=None, updated_at_ms=_now_ms()
+            ))
+            self._publish_candidate_state(released)
+            if self._auto_answer_active_candidates.get(candidate.session_id) == candidate_id:
+                self._auto_answer_active_candidates.pop(candidate.session_id, None)
+
+    def finish_auto_answer_candidate(self, *, user_id: str, candidate_id: str) -> None:
+        with self._auto_answer_claim_lock:
+            candidate = self._require_candidate(user_id=user_id, candidate_id=candidate_id)
+            if self._auto_answer_active_candidates.get(candidate.session_id) == candidate_id:
+                self._auto_answer_active_candidates.pop(candidate.session_id, None)
+
+    def _publish_candidate_state(self, candidate: QuestionCandidateRecord) -> None:
+        self._save_event(
+            session_id=candidate.session_id,
+            owner_user_id=candidate.owner_user_id,
+            kind="question-confirmed",
+            payload={
+                "candidateId": candidate.candidate_id,
+                "state": candidate.state,
+                "text": candidate.text,
+                "confidence": candidate.confidence,
+                "candidate": self._candidate_response(candidate).model_dump(by_alias=True),
+            },
+        )
 
     def get_runtime(self, *, user_id: str, session_id: str) -> RealtimeSessionRuntimeResponse:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)

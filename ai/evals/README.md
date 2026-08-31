@@ -5,3 +5,5 @@
 提示词发布必须比较生产基线与候选版本。编造、来源隔离、隐私和完整代码答案是零回归门槛；所有夹具必须合成或脱敏。
 
 英文面试语言路由使用 `interview-language-routing-en-v1.jsonl`，并与现有中文用例一起运行。发布门槛记录在 `baselines/interview-language-routing-en-v1.json`：语言路由、面试官优先、标题格式和 grounding 安全必须 100% 通过，中文基线允许的回归数为 0。日志验收只允许记录标准化语言、阶段、模板 ID/版本及内容哈希/长度，禁止保留转录、截图或个人材料正文。
+
+会话级自动回答使用 `session-auto-answer-control-v1.jsonl`。必须验证默认关闭、只消费开启后的面试官确认问题、候选人声道不触发、同一 candidate 单任务单扣费，以及自动与手动触发复用同一语言、编程语言和 grounding 行为。
