@@ -22,4 +22,4 @@
 - [x] 4.1 Add synthetic AI evaluation cases proving auto and manual triggers share language, programming and grounded-answer behavior.
 - [x] 4.2 Update durable product/privacy documentation for the explicit opt-in behavior and data boundary.
 - [x] 4.3 Run strict OpenSpec validation, backend tests, Web tests/typecheck/build and production-compatible smoke tests.
-- [ ] 4.4 Deploy Backend and Web without restarting PostgreSQL, Redis or the companion, then verify health and default-off production behavior.
+- [x] 4.4 Deploy Backend and Web without restarting PostgreSQL, Redis or the companion, then verify health and default-off production behavior.
