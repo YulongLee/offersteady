@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from time import monotonic, sleep
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -21,6 +22,16 @@ ALLOWED_EVENT_KEYS = frozenset({
     "claim_key",
 })
 FORBIDDEN_KEY_MARKERS = ("phone", "token", "password", "authorization", "transcript", "audio", "screenshot", "answer", "raw_ip", "user_agent")
+
+
+def _stream_has_messages(response: object) -> bool:
+    return bool(response) and any(bool(messages) for _, messages in response)  # type: ignore[union-attr]
+
+
+def _json_metric_default(value: object) -> float:
+    if isinstance(value, Decimal):
+        return float(value)
+    raise TypeError(f"unsupported promotion metric type: {type(value).__name__}")
 
 
 def sanitize_event(payload: object) -> dict[str, object]:
@@ -56,7 +67,7 @@ class PromotionAnalyticsJob:
                 raise
         accepted = rejected = deferred = 0
         response = client.xreadgroup(group, consumer, {self.settings.promotion_redis_stream: "0"}, count=limit)
-        if not response:
+        if not _stream_has_messages(response):
             response = client.xreadgroup(group, consumer, {self.settings.promotion_redis_stream: ">"}, count=limit, block=50)
         for _, messages in response:
             for stream_id, fields in messages:
@@ -206,7 +217,8 @@ class PromotionAnalyticsJob:
                        VALUES (%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s)
                        ON CONFLICT (bucket_date,attribution_model,model_version,dimension_type,dimension_id)
                        DO UPDATE SET metrics_json=EXCLUDED.metrics_json,coverage_json=EXCLUDED.coverage_json,computed_at_ms=EXCLUDED.computed_at_ms""",
-                    (start.date(), model, self.settings.promotion_model_version, dimension_type, dimension_id, json.dumps(metrics), json.dumps(coverage), now_ms()),
+                    (start.date(), model, self.settings.promotion_model_version, dimension_type, dimension_id,
+                     json.dumps(metrics, default=_json_metric_default), json.dumps(coverage, default=_json_metric_default), now_ms()),
                 )
                 count += 1
             connection.commit()

@@ -15,7 +15,7 @@ from app.api.promotion import _admit, _read_click, _sign_click, redirect_promoti
 from app.core.config import REPO_ROOT, Settings, get_settings
 from app.main import create_app
 from app.services.admin_service import HIGH_RISK_PERMISSIONS, PERMISSIONS_BY_ROLE
-from app.services.promotion_analytics_job import PromotionAnalyticsJob, sanitize_event
+from app.services.promotion_analytics_job import PromotionAnalyticsJob, _json_metric_default, _stream_has_messages, sanitize_event
 from app.services.promotion_repository import PromotionEventQueue, classify_client, cost_metrics, safe_destination
 from app.services.promotion_repository import PromotionRepository, validate_promotion_runtime
 
@@ -171,6 +171,20 @@ def test_authoritative_conversion_queries_skip_orphaned_legacy_users() -> None:
     source = inspect.getsource(PromotionAnalyticsJob.derive_authoritative_conversions)
     assert "JOIN auth_users u ON u.user_id=i.owner_user_id" in source
     assert source.count("JOIN auth_users u ON u.user_id=o.user_id") == 2
+
+
+def test_stream_empty_group_response_falls_through_to_new_events() -> None:
+    assert _stream_has_messages([]) is False
+    assert _stream_has_messages([("offersteady:promotion:events", [])]) is False
+    assert _stream_has_messages([("offersteady:promotion:events", [("1-0", {"payload": "{}"})])]) is True
+
+
+def test_snapshot_metric_json_converts_postgres_decimal_values() -> None:
+    from decimal import Decimal
+
+    assert _json_metric_default(Decimal("1.25")) == 1.25
+    with pytest.raises(TypeError, match="unsupported promotion metric type"):
+        _json_metric_default(object())
 
 
 def test_promotion_migration_contains_required_exactly_once_and_bounded_indexes() -> None:
