@@ -282,7 +282,7 @@ class PromotionRepository:
                FROM promotion_links l JOIN promotion_channels ch ON ch.channel_id=l.channel_id
                LEFT JOIN promotion_campaigns c ON c.campaign_id=l.campaign_id
                LEFT JOIN promotion_touchpoints t ON t.link_id=l.link_id
-               WHERE (%s IS NULL OR l.status=%s)
+               WHERE (%s::text IS NULL OR l.status=%s::text)
                GROUP BY l.link_id,ch.code,ch.name,c.name ORDER BY l.created_at_ms DESC LIMIT %s OFFSET %s""",
             (status, status, limit, offset),
         )

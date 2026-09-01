@@ -92,6 +92,8 @@ def test_repository_idempotency_immutability_cost_reversal_and_concurrent_claims
             {"content_name": f"{prefix}_content", "channel_id": first_channel["channel_id"], "campaign_id": campaign["campaign_id"], "destination_path": "/", "starts_at_ms": None, "ends_at_ms": None},
             actor_user_id=user_id,
         )
+        assert any(item["link_id"] == link["link_id"] for item in repository.list_links(limit=100, offset=0))
+        assert any(item["link_id"] == link["link_id"] for item in repository.list_links(limit=100, offset=0, status="active"))
         event = {
             "event_id": f"{prefix}_touch", "event_type": "qualified_visit", "link_id": link["link_id"],
             "visitor_hmac": f"{prefix}_visitor", "click_hmac": f"{prefix}_click", "occurred_at_ms": current - 1_000,
