@@ -88,6 +88,6 @@
 - [x] 10.2 Verify first-touch and last-non-direct-touch outputs, exactly-once revenue, Cohort maturity, cost coverage, direct/unattributed handling, and all five management pages against the fixture.
 - [x] 10.3 Run Backend/Admin/Web unit and integration suites, typechecks, production builds, migration checks, privacy checks, redirect benchmarks, analytics load tests, and strict OpenSpec validation.
 - [x] 10.4 Deploy additive migrations and disabled Backend/worker functionality first, then validate health and rollback without exposing the management navigation or public collection.
-- [ ] 10.5 Gray-release redirect and visit qualification with internal no-count links, compare raw hits, qualified visits, bot exclusions, queue loss, and redirect latency.
+- [x] 10.5 Gray-release redirect and visit qualification with internal no-count links, compare raw hits, qualified visits, bot exclusions, queue loss, and redirect latency.
 - [ ] 10.6 Enable identity claims and read-only promotion reports, reconcile attributed totals against authoritative users/orders/payments, and observe at least one complete aggregation period.
 - [ ] 10.7 Enable link/campaign/cost management only after data-quality acceptance; retain feature flags and a rollback path that hides the admin module and stops collection without deleting business or attribution facts.
