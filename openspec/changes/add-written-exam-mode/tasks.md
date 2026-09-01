@@ -28,6 +28,7 @@
 - [x] 4.5 Replace the creation-level mode selector with separate 面试模式 and 笔试模式 sidebar destinations and creation routes.
 - [x] 4.6 Restore the interview creation page to the pre-feature UI and isolate interview/written current and recent lists.
 - [x] 4.7 Replace the written preparation two-column explainer with one compact companion setup surface and only the mandatory entry-fee disclosure.
+- [x] 4.8 Add a written-exam result page, mode-correct return/delete navigation and reliable end-state updates without changing interview review.
 
 ## 5. Companion behavior
 
@@ -46,4 +47,5 @@
 - [x] 6.7 Add regression tests for separate navigation, route-owned creation mode and unchanged interview creation behavior.
 - [x] 6.8 Run Web tests/build and strict OpenSpec validation, then deploy only the corrected Web service and verify both entry routes.
 - [x] 6.9 Repair PostgreSQL billing constraints for `written_exam_entry` and add a migration contract regression test.
-- [ ] 6.10 Run focused/full verification, deploy the minimal affected services and verify a real written session can enter exactly once.
+- [x] 6.10 Run focused/full verification, deploy the minimal affected services and verify a real written session can enter exactly once.
+- [ ] 6.11 Add Web regressions for written end/result/history behavior, validate the change and deploy only Web.

@@ -1484,7 +1484,11 @@ function LivePage() {
   useEffect(() => {
     if (latestInterviewerText && notice === QUICK_ANSWER_MISSING_QUESTION_NOTICE) setNotice("");
   }, [latestInterviewerText, notice]);
-  const setCapture = (captureState: CaptureState, status: SessionStatus) => setState(current => current.captureState === captureState ? current : ({ ...current, captureState, interviews: current.interviews.map(item => item.id === id ? { ...item, status } : item) }));
+  const setCapture = (captureState: CaptureState, status: SessionStatus) => setState(current => ({
+    ...current,
+    captureState,
+    interviews: current.interviews.map(item => item.id === id ? { ...item, status } : item),
+  }));
   const controlCapture = async (action: "pause" | "resume") => {
     if (captureControlPending || pageLeaseStatus === "replaced") return;
     setCaptureControlPending(action);
@@ -1509,20 +1513,15 @@ function LivePage() {
     }
   };
   const finishInterview = async () => {
-    if (!window.confirm("确认结束本场面试？结束后将停止采集并进入复盘。")) return;
+    if (!window.confirm(isWritten ? "确认结束本场笔试？结束后仍可查看本场答题记录。" : "确认结束本场面试？结束后将停止采集并进入复盘。")) return;
     try {
       await runAdapterOperation(signal => interviewAppAdapter.endInterviewSession(id, signal));
     } catch (error) {
-      // The local prototype journey has no authenticated backend session. Ending
-      // must still be safe and must never leave an unhandled event rejection.
-      if ((error as { code?: string } | null)?.code !== "validation") {
-        setNotice(error instanceof Error ? error.message : "结束面试失败，请稍后重试。");
-        return;
-      }
-    } finally {
-      setCapture("ready", "ended");
-      navigate(routes.review(id));
+      setNotice(error instanceof Error ? error.message : isWritten ? "结束笔试失败，请稍后重试。" : "结束面试失败，请稍后重试。");
+      return;
     }
+    setCapture("ready", "ended");
+    navigate(routes.review(id));
   };
   const updateQuestionStatus = (questionId: string, status: QuestionStatus) => {
     const question = state.questions.find(item => item.id === questionId);
@@ -1805,7 +1804,7 @@ function LivePage() {
   const conversationPanel = <ConversationMonitor state={state} onConfirmQuestion={pageLeaseStatus === "replaced" ? dismissPending : confirmPending} onDismissQuestion={dismissPending} />;
   const answerPanel = <AnswerWorkspace answers={state.questions} viewingAnswerId={view.viewingAnswerId} newAnswerAvailable={view.newAnswerAvailable} activeTask={state.activeAnswerTask} cancelling={cancellingAnswer} cancelError={cancelAnswerError} interviewLanguage={liveInterview?.interviewLanguage ?? "zh-CN"} onStop={() => void stopAnswer()} onView={answerId => setView(current => ({ ...current, viewingAnswerId: answerId, newAnswerAvailable: answerId ? current.newAnswerAvailable : false }))} onRetry={updateQuestionStatus} />;
 
-  if (isWritten) return <main className={`live-page focused-live-page${desktopLayout ? " desktop-live-page" : " mobile-live-page"}`}><header className="live-top"><Link to={routes.writtenExams} aria-label="返回笔试模式"><Logo /></Link><div className="live-session-heading"><strong>{interviewTitle}</strong><span><i className="online-dot" /> 桌面助手已连接 · 截屏回答可用</span><small className="live-language-badge">笔试模式</small></div><div className="live-top-actions"><Link className="live-balance" to={routes.billing}>积分与会员</Link><AccountMenu compact /><button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束笔试</button></div></header>{pageLeaseStatus === "replaced" ? <div className="global-live-alert replaced-page-alert" role="status"><strong>本场笔试已在其他页面继续</strong><Link className="button primary" to={routes.writtenExams}>返回笔试模式</Link></div> : null}<div className="written-exam-workspace"><section className="answer-column">{answerPanel}<AnswerActionBar manualDraft="" screenshotTask={actionState.screenshotTask} screenshotOnly screenshotAnswerStatus={actionState.screenshotAnswerStatus ?? "idle"} disabled={pageLeaseStatus === "replaced"} onQuickAnswer={() => undefined} onScreenshot={beginInstantScreenshot} /></section></div>{screenshot && pageLeaseStatus !== "replaced" ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="screenshot-dialog-title"><section className="sheet"><h2 id="screenshot-dialog-title">{screenshotStageTitle(screenshot)}</h2>{screenshotStageDetail(screenshot) ? <p>{screenshotStageDetail(screenshot)}</p> : null}{screenshot.stage === "failed" ? <div className="sheet-actions split-actions"><button className="button ghost full" onClick={dismissScreenshotFailure}>删除本次失败</button><button className="button primary full" onClick={beginInstantScreenshot}>重新截屏</button></div> : <button className="button primary full" onClick={() => void cancelScreenshot()}>取消</button>}</section></div> : null}<footer className="session-bar"><div><i className="online-dot" /><strong>笔试进行中</strong></div><div><small>仅在你主动发起时截屏并生成回答</small></div></footer></main>;
+  if (isWritten) return <main className={`live-page focused-live-page${desktopLayout ? " desktop-live-page" : " mobile-live-page"}`}><header className="live-top"><Link to={routes.writtenExams} aria-label="返回笔试模式"><Logo /></Link><div className="live-session-heading"><strong>{interviewTitle}</strong><span><i className="online-dot" /> 桌面助手已连接 · 截屏回答可用</span><small className="live-language-badge">笔试模式</small></div><div className="live-top-actions"><Link className="live-balance" to={routes.billing}>积分与会员</Link><AccountMenu compact /><button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束笔试</button></div></header>{notice ? <div className="global-live-alert" role="alert"><strong>{notice}</strong><button type="button" onClick={() => setNotice("")}>关闭</button></div> : null}{pageLeaseStatus === "replaced" ? <div className="global-live-alert replaced-page-alert" role="status"><strong>本场笔试已在其他页面继续</strong><Link className="button primary" to={routes.writtenExams}>返回笔试模式</Link></div> : null}<div className="written-exam-workspace"><section className="answer-column">{answerPanel}<AnswerActionBar manualDraft="" screenshotTask={actionState.screenshotTask} screenshotOnly screenshotAnswerStatus={actionState.screenshotAnswerStatus ?? "idle"} disabled={pageLeaseStatus === "replaced"} onQuickAnswer={() => undefined} onScreenshot={beginInstantScreenshot} /></section></div>{screenshot && pageLeaseStatus !== "replaced" ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="screenshot-dialog-title"><section className="sheet"><h2 id="screenshot-dialog-title">{screenshotStageTitle(screenshot)}</h2>{screenshotStageDetail(screenshot) ? <p>{screenshotStageDetail(screenshot)}</p> : null}{screenshot.stage === "failed" ? <div className="sheet-actions split-actions"><button className="button ghost full" onClick={dismissScreenshotFailure}>删除本次失败</button><button className="button primary full" onClick={beginInstantScreenshot}>重新截屏</button></div> : <button className="button primary full" onClick={() => void cancelScreenshot()}>取消</button>}</section></div> : null}<footer className="session-bar"><div><i className="online-dot" /><strong>笔试进行中</strong></div><div><small>仅在你主动发起时截屏并生成回答</small></div></footer></main>;
 
   return <main className={`live-page focused-live-page${desktopLayout ? " desktop-live-page" : " mobile-live-page"}`}>
     <header className="live-top">
@@ -1835,6 +1834,7 @@ function ReviewPage() {
   const [reviewLoadError, setReviewLoadError] = useState("");
   const [wordExportState, setWordExportState] = useState<"idle" | "generating" | "success" | "error">("idle");
   const interview = state.interviews.find(item => item.id === id);
+  const isWritten = interview?.sessionMode === "written";
   useEffect(() => {
     const controller = new AbortController();
     setReviewLoading(true);
@@ -1877,7 +1877,23 @@ function ReviewPage() {
     }
   };
   const deleteShot = async (shotId: string) => { setDeleteError(""); setDeletingShotId(shotId); try { await runAdapterOperation(signal => interviewAppAdapter.deleteScreenshot(shotId, signal)); setState(current => ({ ...current, review: { ...current.review, screenshots: current.review.screenshots.filter(item => item.id !== shotId) } })); } catch { setDeleteError("截图删除失败，记录仍然保留，请重试。"); } finally { setDeletingShotId(null); } };
-  const deleteInterview = async () => { if (!window.confirm("删除整场面试及其问题、回答和会话附件？可复用简历与知识库仍会保留。")) return; setDeleteError(""); setDeletingInterview(true); try { await runAdapterOperation(signal => interviewAppAdapter.deleteInterview(id, signal)); setState(current => ({ ...current, interviews: current.interviews.filter(item => item.id !== id), questions: [] })); navigate(routes.app); } catch { setDeleteError("整场面试删除失败，现有记录未改变，请重试。"); } finally { setDeletingInterview(false); } };
+  const deleteInterview = async () => { if (!window.confirm(isWritten ? "删除整场笔试及其截图题和回答记录？" : "删除整场面试及其问题、回答和会话附件？可复用简历与知识库仍会保留。")) return; setDeleteError(""); setDeletingInterview(true); try { await runAdapterOperation(signal => interviewAppAdapter.deleteInterview(id, signal)); setState(current => ({ ...current, interviews: current.interviews.filter(item => item.id !== id), questions: [] })); navigate(sessionHomeRoute(interview?.sessionMode)); } catch { setDeleteError(isWritten ? "整场笔试删除失败，现有记录未改变，请重试。" : "整场面试删除失败，现有记录未改变，请重试。"); } finally { setDeletingInterview(false); } };
+  if (isWritten) {
+    const writtenQuestions = state.questions.filter(question => question.input === "screenshot");
+    return <main className="app-page narrow written-result-page">
+      <Link className="back-link" to={routes.writtenExams}>← 返回笔试模式</Link>
+      <PageHeader eyebrow="WRITTEN EXAM RESULT" title={interview.title} detail="本场答题记录已保留，可随时从最近笔试重新查看。" action={<Link className="button primary" to={routes.writtenExams}>完成</Link>} />
+      {reviewLoadError ? <div className="inline-error" role="status">{reviewLoadError}</div> : null}
+      <section className="panel written-result-card">
+        <div className="panel-heading"><h2>本场答题记录</h2><span>{writtenQuestions.length} 题</span></div>
+        {reviewLoading ? <p className="review-loading">正在加载答题记录…</p> : writtenQuestions.length ? <div className="written-result-list">{[...writtenQuestions].reverse().map((question, index) => <article key={question.id}><header><span>第 {index + 1} 题</span><small>{question.askedAt}</small></header><h3>{question.text}</h3><div><strong>回答</strong><p>{question.advice.detail}</p></div></article>)}</div> : <EmptyState title="本场暂无答题记录" detail="本场笔试已经结束，没有保存成功的截屏回答。" />}
+      </section>
+      <div className="written-result-actions">
+        {deleteError ? <div className="inline-error" role="alert">{deleteError}</div> : null}
+        <button className="button danger" disabled={deletingInterview} onClick={() => void deleteInterview()}>{deletingInterview ? "正在删除…" : "删除本场笔试"}</button>
+      </div>
+    </main>;
+  }
   return <main className="app-page"><Link className="back-link" to={routes.app}>← 返回面试首页</Link><PageHeader eyebrow="INTERVIEW REVIEW" title="本场面试复盘" detail="整理语音转写与 AI 回答建议，不对你的能力作自动评分。" action={<div className="review-header-actions"><button type="button" className="button primary" onClick={() => void downloadReview()} disabled={reviewLoading || wordExportState === "generating"}>{wordExportState === "generating" ? "正在生成 Word…" : "下载 Word"}</button><div className="review-meta"><strong>{state.review.duration}</strong><span>{state.review.transcripts.length} 条对话 · {state.questions.length} 个问题</span></div></div>} />
     <p className={`review-download-note${wordExportState === "error" ? " error-text" : ""}`} role={wordExportState === "error" ? "alert" : undefined}>{wordExportState === "error" ? "Word 生成失败，请重试。当前复盘内容不会丢失。" : wordExportState === "success" ? "Word 已生成并开始下载，请妥善保管本场面试对话。" : "Word 文件包含本场面试对话，仅在你的浏览器本地生成，请妥善保管。"}</p>{reviewLoadError ? <div className="inline-error" role="status">{reviewLoadError}</div> : null}
     <div className="review-grid"><div className="review-main"><section className="panel"><div className="panel-heading"><h2>真实对话记录</h2><span>语音转写</span></div>{reviewLoading ? <p className="review-loading">正在加载本场对话…</p> : state.review.transcripts.length ? <div className="review-transcript-list">{state.review.transcripts.map(item => <article key={item.id} className={`review-transcript ${item.role}`}><header><strong>{item.speakerLabel}</strong><time dateTime={new Date(item.occurredAtMs).toISOString()}>{new Date(item.occurredAtMs).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}</time></header><p>{item.text}</p></article>)}</div> : <EmptyState title="没有可用的对话转写" detail="旧场次或未成功收音的场次可能没有持久语音转写，已有问题与 AI 建议仍可查看。" />}</section><section className="panel"><div className="panel-heading"><h2>问题与 AI 回答建议</h2><span>生成建议，不代表实际作答</span></div>{state.questions.length ? <div className="review-timeline">{[...state.questions].reverse().map((question, index) => <article key={question.id}><i>{index + 1}</i><div><small>{question.askedAt} · {question.input === "screenshot" ? "截图题" : question.input === "manual" ? "手动输入" : "音频转写"}</small><h3>{question.text}</h3><p>{question.advice.outline.join("；")}</p><div className="source-pills"><small>资料 v{question.advice.provenance.selectionRevision}</small>{question.advice.provenance.usedSources.map(source => <span key={source.sourceId}>{source.displayName}</span>)}</div></div></article>)}</div> : <EmptyState title="没有可复盘的问题" detail="本场面试没有已确认的问题记录。" />}</section></div>

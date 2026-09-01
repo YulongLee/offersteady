@@ -816,6 +816,21 @@ h1, h2, h3, p { margin-top: 0; }
 .review-summary .complete { color: var(--brand); }
 .review-summary .failed { color: var(--danger); }
 .data-panel .button { margin-top: 16px; }
+.written-result-page .page-header { min-height: auto; }
+.written-result-card { padding: 26px; }
+.written-result-list { display: grid; }
+.written-result-list article { display: grid; gap: 12px; border-top: 1px solid var(--line); padding: 22px 0; }
+.written-result-list article:first-child { border-top: 0; padding-top: 4px; }
+.written-result-list article:last-child { padding-bottom: 4px; }
+.written-result-list header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.written-result-list header span { color: var(--brand); font-size: 9px; font-weight: 800; }
+.written-result-list header small { color: var(--muted); font-size: 8px; }
+.written-result-list h3 { margin: 0; font-size: 14px; line-height: 1.6; }
+.written-result-list article > div { display: grid; gap: 7px; border-radius: 11px; background: rgba(255,255,255,.018); padding: 14px; }
+.written-result-list article > div strong { color: var(--brand); font-size: 9px; }
+.written-result-list article > div p { margin: 0; color: var(--text); font-size: 11px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
+.written-result-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
+.written-result-actions .inline-error { flex: 1; margin-right: 12px; }
 .referral-landing-card { width: min(100%, 520px); border: 1px solid var(--line); border-radius: 20px; background: var(--panel-bg); padding: 34px; box-shadow: var(--shadow); text-align: center; }
 .referral-landing-card .logo-lockup { justify-content: center; margin-bottom: 24px; }.referral-landing-card h1 { margin: 10px 0 12px; font-size: 30px; }.referral-landing-card > p { color: var(--muted); font-size: 11px; line-height: 1.75; }.referral-landing-card > small { display: block; color: var(--muted); margin-top: 16px; font-size: 8px; line-height: 1.6; }
 .referral-reward-preview { display: grid; gap: 4px; border: 1px solid rgba(110,231,189,.22); border-radius: 14px; background: rgba(110,231,189,.06); margin: 18px 0; padding: 18px; }.referral-reward-preview strong { color: var(--brand); font-size: 32px; }.referral-reward-preview span { color: var(--muted); font-size: 9px; }

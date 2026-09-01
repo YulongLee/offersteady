@@ -96,6 +96,18 @@ The product SHALL preserve mode-aware navigation, screenshot history and lifecyc
 - **WHEN** the user clicks 结束笔试
 - **THEN** the session becomes ended, pending screenshot work follows the existing terminal policy, and no further answer or capture command is accepted
 
+#### Scenario: Ended written exam remains discoverable
+- **WHEN** a written exam has ended
+- **THEN** it remains in 最近笔试 and opens a written-exam result page instead of disappearing from the written journey
+
+#### Scenario: User reviews an ended written exam
+- **WHEN** the user opens an ended written session
+- **THEN** the result page shows its persisted screenshot questions and answers, returns to 笔试模式, and does not show interview transcript, interview summary or interview-material sections
+
+#### Scenario: End request fails
+- **WHEN** the backend rejects or fails an end command
+- **THEN** the Web keeps the written workspace visible and does not falsely mark or navigate the session as ended
+
 ### Requirement: Mode rollout remains backward compatible and reversible
 The database and API SHALL default missing mode values to `interview`, and the release MUST preserve a documented source and image baseline that restores the prior production behavior without data loss.
 

@@ -46,6 +46,7 @@ describe("OfferSteady web application", () => {
     }));
     vi.spyOn(interviewAppAdapter, "getActiveInterviewConflict").mockImplementation(async id => ({ currentInterviewId: id, activeInterview: null }));
     vi.spyOn(interviewAppAdapter, "supersedeActiveInterview").mockResolvedValue([]);
+    vi.spyOn(interviewAppAdapter, "endInterviewSession").mockResolvedValue(undefined);
     vi.spyOn(interviewAppAdapter, "controlInterviewCapture").mockImplementation(async (_id, action) => action === "pause" ? "paused" : "capturing");
     vi.spyOn(interviewAppAdapter, "getDesktopDeviceBinding").mockResolvedValue(null);
     vi.spyOn(interviewAppAdapter, "getPreparationAudioReadiness").mockImplementation(async () => {
@@ -373,6 +374,66 @@ describe("OfferSteady web application", () => {
     expect(screen.queryByText(/每次截屏回答/)).not.toBeInTheDocument();
     expect(screen.queryByText(/笔试模式不收音/)).not.toBeInTheDocument();
     expect(screen.queryByText("0/1")).not.toBeInTheDocument();
+  });
+
+  it("keeps an ended written exam visible and opens a written result page", async () => {
+    const state = clonedState();
+    const screenshotQuestion = {
+      ...state.questions[0]!,
+      id: "written-question",
+      input: "screenshot" as const,
+      text: "实现一个线程安全的 LRU 缓存",
+      advice: { ...state.questions[0]!.advice, detail: "可以使用哈希表配合双向链表实现。" },
+    };
+    state.interviews = [{
+      id: "written-ended",
+      title: "算法笔试",
+      role: "算法工程师",
+      sessionMode: "written",
+      status: "ended",
+      updatedAt: "刚刚",
+      readiness: 100,
+    }];
+    state.questions = [screenshotQuestion];
+    vi.spyOn(interviewAppAdapter, "loadInterviewWorkspace").mockResolvedValueOnce({
+      questions: [screenshotQuestion],
+      activeAnswerTask: null,
+    });
+
+    const view = openAtWithState("/app/written-exams", state, true);
+    expect(screen.getByText("算法笔试")).toBeInTheDocument();
+    expect(screen.getByText(/已结束/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: /算法笔试/ }));
+
+    expect(await screen.findByRole("heading", { name: "本场答题记录" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "← 返回笔试模式" })).toHaveAttribute("href", "/app/written-exams");
+    expect(screen.getByText("实现一个线程安全的 LRU 缓存")).toBeInTheDocument();
+    expect(screen.getByText("可以使用哈希表配合双向链表实现。")).toBeInTheDocument();
+    expect(screen.queryByText("真实对话记录")).not.toBeInTheDocument();
+    expect(screen.queryByText("AI 整理摘要")).not.toBeInTheDocument();
+    view.unmount();
+  });
+
+  it("does not leave the written workspace when ending fails", async () => {
+    const state = clonedState();
+    state.interviews = [{
+      id: "written-live",
+      title: "在线笔试",
+      role: "后端工程师",
+      sessionMode: "written",
+      status: "active",
+      updatedAt: "刚刚",
+      readiness: 100,
+    }];
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.mocked(interviewAppAdapter.endInterviewSession).mockRejectedValueOnce(new Error("结束笔试失败，请重试。"));
+
+    openAtWithState("/app/interviews/written-live/live", state, true);
+    fireEvent.click(await screen.findByRole("button", { name: "结束笔试" }));
+
+    expect(await screen.findByText("结束笔试失败，请重试。")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "结束笔试" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "本场答题记录" })).not.toBeInTheDocument();
   });
 
   it("shows the backend reason when creating an interview draft fails", async () => {
