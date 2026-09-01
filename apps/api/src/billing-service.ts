@@ -1,7 +1,7 @@
 import type { BillableOperationKind, BillingOrder, BillingProduct, BillingSupportConfig, LedgerEntryKind, PaymentChannel, PointsLedgerEntry, TimePassEntitlement, UsageCharge, UsageRates } from "@offersteady/protocol";
 
 const DAY_MS = 86_400_000;
-export const defaultUsageRates: UsageRates = { catalogVersion: 3, answerPoints: 5, screenshotAnswerPoints: 15, realtimeMinutePoints: 5, knowledgeIndexMinimumPoints: 200, knowledgeIndexPointsPer1000Tokens: 20, tokenizerVersion: "synthetic-v1" };
+export const defaultUsageRates: UsageRates = { catalogVersion: 3, answerPoints: 5, screenshotAnswerPoints: 15, writtenExamPoints: 30, realtimeMinutePoints: 5, knowledgeIndexMinimumPoints: 200, knowledgeIndexPointsPer1000Tokens: 20, tokenizerVersion: "synthetic-v1" };
 export const defaultBillingProducts: readonly BillingProduct[] = [
   { id: "pass-3", catalogVersion: 3, kind: "time_pass", displayName: "3 天会员", priceCents: 6990, durationDays: 3, knowledgeIndexAllowance: 0, published: true },
   { id: "pass-7", catalogVersion: 3, kind: "time_pass", displayName: "7 天会员", priceCents: 12990, durationDays: 7, knowledgeIndexAllowance: 0, published: true },

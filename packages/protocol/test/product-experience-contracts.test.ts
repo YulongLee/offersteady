@@ -10,7 +10,7 @@ describe("product experience contracts", () => {
 
   it("preserves document version and knowledge pricing", () => {
     const document: KnowledgeDocumentVersion = { id: "d1", collectionId: "c1", ownerUserId: "u1", displayName: "notes.md", fileKind: "md", sizeBytes: 100, contentFingerprint: "hash", version: 2, status: "pending", createdAtMs: 1 };
-    const rates: UsageRates = { catalogVersion: 4, answerPoints: 5, screenshotAnswerPoints: 15, realtimeMinutePoints: 5, knowledgeIndexMinimumPoints: 20, knowledgeIndexPointsPer1000Tokens: 4, tokenizerVersion: "synthetic-v1" };
+    const rates: UsageRates = { catalogVersion: 4, answerPoints: 5, screenshotAnswerPoints: 15, writtenExamPoints: 30, realtimeMinutePoints: 5, knowledgeIndexMinimumPoints: 20, knowledgeIndexPointsPer1000Tokens: 4, tokenizerVersion: "synthetic-v1" };
     expect(JSON.parse(JSON.stringify(document)).version).toBe(2); expect(rates.knowledgeIndexMinimumPoints).toBe(20);
   });
 
