@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
 
 from app.core.config import get_settings
@@ -32,6 +32,7 @@ from app.services.screenshot_answer_service import ScreenshotAnswerService
 from app.services.session_service import SessionService
 from app.services.payment_channel_service import PaymentChannelService
 from app.ports.storage import FileStoragePort
+from app.api.promotion import VISITOR_COOKIE, record_desktop_download_completion
 
 
 router = APIRouter(prefix="/web", tags=["web"])
@@ -87,6 +88,8 @@ def _is_public_desktop_entry(entry: dict[str, object] | None) -> bool:
 @router.get("/downloads/desktop/{filename}")
 async def download_desktop_artifact(
     filename: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
     storage: FileStoragePort = Depends(storage_port),
 ) -> Response:
     if "/" in filename or "\\" in filename or not filename.startswith("OfferSteady-Companion-") or not filename.endswith((".zip", ".dmg", ".exe")):
@@ -97,6 +100,12 @@ async def download_desktop_artifact(
     release_dir = _desktop_release_dir().resolve()
     artifact = (release_dir / filename).resolve()
     if artifact.is_file() and artifact.is_relative_to(release_dir):
+        background_tasks.add_task(
+            record_desktop_download_completion,
+            visitor_cookie=request.cookies.get(VISITOR_COOKIE),
+            user_id=None,
+            artifact=filename,
+        )
         return FileResponse(
             path=str(artifact),
             filename=artifact.name,
@@ -111,6 +120,12 @@ async def download_desktop_artifact(
     )
     if not signed_url:
         raise HTTPException(status_code=503, detail="Desktop artifact storage is unavailable")
+    background_tasks.add_task(
+        record_desktop_download_completion,
+        visitor_cookie=request.cookies.get(VISITOR_COOKIE),
+        user_id=None,
+        artifact=filename,
+    )
     return RedirectResponse(url=signed_url, status_code=307)
 
 

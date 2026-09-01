@@ -1,10 +1,11 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { routes } from "./routes";
 
 type LegalKind = "terms" | "privacy";
 
-const updatedAt = "2026 年 8 月 12 日";
+const updatedAt = "2026 年 9 月 1 日";
 
 const termsSections = [
   ["一、服务说明", [
@@ -44,6 +45,7 @@ const privacySections = [
     "面试处理数据：手动问题、实时转录、生成建议、经你触发的截图及截图识别结果。原始音频默认不保存，音频帧仅用于当前转写链路。",
     "设备与运行信息：桌面助手设备标识、连接码、系统与版本、权限和采集健康状态、错误码及必要的性能指标。诊断不应保存原始音频或截图内容。",
     "交易信息：商品、金额、订单状态、支付渠道标识和权益到账记录。银行卡、支付密码等由支付机构处理，面试稳不保存支付密码。",
+    "推广归因信息：当你通过面试稳生成的推广链接访问时，我们可能使用第一方随机匿名标识记录推广渠道、活动、内容链接、访问时间、站内目标、来源网站域名、设备大类和过滤状态。我们不为推广归因采集设备指纹、原始 IP、完整浏览器标识或面试内容。",
   ]],
   ["二、处理目的", [
     "我们处理上述信息，用于完成账号登录、资料管理、文档解析与检索、面试辅助、截图回答、积分和会员结算、故障排查、安全防护及履行法定义务。",
@@ -56,10 +58,12 @@ const privacySections = [
   ["四、保存与安全", [
     "原始音频默认不保存。资料、转录、截图、回答和订单记录按照当前产品功能、账号管理和法定义务保留；目前没有向你承诺统一的自动删除期限。",
     "我们采用访问控制、传输加密、凭证隔离和最小化日志等措施保护信息，但任何网络系统都无法保证绝对安全。",
+    "推广匿名标识计划保留 90 天，原始推广触点计划保留 180 天，获客归因窗口为注册前 30 天；不识别个人的渠道聚合结果可为经营分析长期保留。",
   ]],
   ["五、你的控制", [
     "你可以在资料库和面试复盘等现有入口查看、管理或删除相应资料、截图和会话记录。服务端未确认删除成功时，页面不会宣称已删除。",
     "如果现有入口无法完成你的请求，可通过客服提交访问、更正、删除或账号相关问题。为保护账号安全，我们可能需要核验必要身份信息。",
+    "你可以退出非必要的推广归因。退出后推广链接、注册、下载、面试和支付仍可正常使用；系统会删除本浏览器的推广标识，后续最多保留不可跨会话关联的聚合访问计数。",
   ]],
   ["六、未成年人和规则边界", [
     "本服务主要面向具有相应民事行为能力的求职者。未成年人应在监护人指导下使用，并避免提交非必要的敏感个人信息。",
@@ -71,6 +75,22 @@ const privacySections = [
   ]],
 ] as const;
 
+function PromotionPrivacyControl() {
+  const [status, setStatus] = useState("");
+  const optOut = async () => {
+    setStatus("正在保存设置…");
+    try {
+      const response = await fetch("/api/v1/promotion/opt-out", { method: "POST", credentials: "include" });
+      if (!response.ok) throw new Error("request failed");
+      window.sessionStorage?.removeItem("offersteady.promotion.qualification_event");
+      setStatus("已退出非必要推广归因。本设备上的推广标识已清除，不影响产品功能。");
+    } catch {
+      setStatus("暂时无法保存设置，请稍后重试或联系客服。");
+    }
+  };
+  return <aside className="legal-review-note"><strong>推广归因控制</strong><p>如不希望本浏览器使用第一方匿名标识关联推广效果，可随时退出。</p><button type="button" className="button secondary" onClick={() => void optOut()}>退出推广归因</button>{status ? <p role="status">{status}</p> : null}</aside>;
+}
+
 export function LegalPage({ kind }: { readonly kind: LegalKind }) {
   const terms = kind === "terms";
   const title = terms ? "用户协议" : "隐私政策";
@@ -81,6 +101,7 @@ export function LegalPage({ kind }: { readonly kind: LegalKind }) {
       <header className="legal-hero"><span className="kicker">LEGAL & TRUST</span><h1>{title}</h1><p>更新时间：{updatedAt}</p><p>{terms ? "请在注册、购买或使用面试稳AI助手前阅读本协议。" : "本政策说明面试稳AI助手当前如何处理和保护与你有关的信息。"}</p></header>
       <article className="legal-document">
         {sections.map(([heading, paragraphs]) => <section key={heading}><h2>{heading}</h2>{paragraphs.map(paragraph => <p key={paragraph}>{paragraph}</p>)}</section>)}
+        {!terms ? <PromotionPrivacyControl /> : null}
         <aside className="legal-review-note"><strong>相关文件</strong><p>{terms ? <>个人信息处理详情请查看<Link to={routes.privacy}>隐私政策</Link>。</> : <>服务使用规则请查看<Link to={routes.terms}>用户协议</Link>。</>}</p></aside>
       </article>
       <nav className="legal-actions" aria-label="法律文件导航"><Link to={routes.landing}>返回首页</Link><Link to={routes.login}>登录或注册</Link></nav>

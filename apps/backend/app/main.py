@@ -8,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import api_router
 from app.api.admin import admin_router, admin_service
+from app.api.admin_promotion import admin_promotion_router
+from app.api.promotion import public_promotion_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging, utc_now_iso
 from app.core.responses import ApiEnvelope, success_response
@@ -91,6 +93,8 @@ def create_app() -> FastAPI:
 
     application.include_router(api_router, prefix=settings.api_prefix)
     application.include_router(admin_router, prefix=settings.api_prefix)
+    application.include_router(admin_promotion_router, prefix=settings.api_prefix)
+    application.include_router(public_promotion_router)
     return application
 
 

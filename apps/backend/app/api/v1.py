@@ -9,6 +9,7 @@ from app.core.responses import success_response
 from app.deps import settings_dependency
 from app.modules import authentication, billing, document_processing, document_service, job_description, knowledge, knowledge_retrieval, live_answer, realtime_speech, resume, screenshot_answer, session, system, web
 from app.schemas.foundation import ApiEnvelope, FoundationIndexResponse
+from app.api.promotion import promotion_router
 
 
 module_descriptors = [
@@ -42,6 +43,7 @@ api_router.include_router(realtime_speech.router)
 api_router.include_router(screenshot_answer.router)
 api_router.include_router(billing.router)
 api_router.include_router(web.router)
+api_router.include_router(promotion_router)
 
 
 @api_router.get("", response_model=ApiEnvelope[FoundationIndexResponse])

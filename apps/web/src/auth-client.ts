@@ -10,6 +10,7 @@ const client = createJsonClient({ baseUrl: runtimeConfig.apiBaseUrl });
 const accessTokenKey = "offersteady.auth.access_token";
 const refreshTokenKey = "offersteady.auth.refresh_token";
 const accountKey = "offersteady.auth.account";
+const promotionClaimKey = "offersteady.promotion.claim_key";
 
 export const adminPrototypeAccount: SafeAccountSummary = {
   id: "admin",
@@ -128,10 +129,26 @@ const storeSession = (result: AuthResultResponse): StoredAuthSession => {
   writeStorageItem(refreshTokenKey, session.refreshToken);
   writeStorageItem(accountKey, JSON.stringify(session.account));
   writeStorageItem("offersteady.prototype.auth", "true");
+  queuePromotionClaim(session.accessToken);
   return session;
 };
 
 const authorizationHeaders = (accessToken: string) => ({ Authorization: `Bearer ${accessToken}` });
+
+const queuePromotionClaim = (accessToken: string) => {
+  let claimKey = readStorageItem(promotionClaimKey);
+  if (!claimKey) {
+    claimKey = typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : `claim-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    writeStorageItem(promotionClaimKey, claimKey);
+  }
+  // Attribution is deliberately fire-and-forget: registration/login succeeds even
+  // when collection is disabled or the isolated analytics service is unavailable.
+  void client.request<{ accepted: boolean; pending?: boolean }>("/api/v1/promotion/claim", {
+    method: "POST",
+    headers: authorizationHeaders(accessToken),
+    body: JSON.stringify({ claimKey }),
+  }).catch(() => undefined);
+};
 
 export const authClient = {
   readStoredAccount(): SafeAccountSummary | null {

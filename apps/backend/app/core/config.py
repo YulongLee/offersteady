@@ -237,6 +237,26 @@ class Settings(BaseSettings):
     admin_capacity_error_rate_warning_percent: float = 2.0
     admin_capacity_error_rate_critical_percent: float = 5.0
 
+    # Promotion analytics is an isolated, opt-in side path. Keeping collection
+    # disabled by default prevents unfinished/local builds from changing live traffic.
+    promotion_enabled: bool = False
+    promotion_public_base_url: str = "http://127.0.0.1:5173"
+    promotion_safe_fallback_path: str = "/"
+    promotion_allowed_destination_prefixes: list[str] = Field(default_factory=lambda: ["/", "/app", "/guide", "/login"])
+    promotion_attribution_window_days: int = 30
+    promotion_visitor_cookie_days: int = 90
+    promotion_touchpoint_retention_days: int = 180
+    promotion_reporting_timezone: str = "Asia/Shanghai"
+    promotion_model_version: int = 1
+    promotion_qualification_min_visible_ms: int = 800
+    promotion_redis_stream: str = "offersteady:promotion:events"
+    promotion_redis_stream_maxlen: int = 100_000
+    promotion_queue_timeout_ms: int = 35
+    promotion_visitor_hmac_secret: str = "offersteady-local-promotion-hmac"
+    promotion_redirect_rate_limit_per_minute: int = 120
+    promotion_qualification_rate_limit_per_minute: int = 30
+    promotion_claim_rate_limit_per_minute: int = 20
+
     public_web_base_url: str = "http://127.0.0.1:5173"
     checkout_provider: str = ""
     mzfpay_base_url: str = "https://pay.mzfpay.com"

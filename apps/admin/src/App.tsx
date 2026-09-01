@@ -7,6 +7,7 @@ import { paymentAcceptanceOutcomeLabel, paymentChannelStatus } from "./payment-c
 import { diagnosticLabel, formatCny, type PaymentRevenueSummary } from "./payment-monitoring";
 import { formatUptime, type ServerHealthResponse } from "./server-health";
 import { validateGrowthSettings } from "./growth-settings";
+import { PromotionCenter } from "./PromotionCenter";
 import {
   clearRememberedAdminPhone,
   isValidAdminPhone,
@@ -15,12 +16,13 @@ import {
   saveRememberedAdminPhone,
 } from "./login-preferences";
 
-type View = "dashboard" | "server" | "users" | "orders" | "payments" | "growth" | "pricing" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
+type View = "dashboard" | "server" | "promotion" | "users" | "orders" | "payments" | "growth" | "pricing" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
 type Row = Record<string, unknown>;
 
 const views: { id: View; label: string; eyebrow: string; permission: string }[] = [
   { id: "dashboard", label: "运营总览", eyebrow: "OVERVIEW", permission: "observability.read" },
   { id: "server", label: "服务器监控", eyebrow: "SERVER", permission: "observability.read" },
+  { id: "promotion", label: "推广中心", eyebrow: "ACQUISITION", permission: "promotion.read" },
   { id: "users", label: "用户与权益", eyebrow: "CUSTOMERS", permission: "users.read" },
   { id: "orders", label: "订单与支付", eyebrow: "BILLING", permission: "billing.read" },
   { id: "payments", label: "支付设置", eyebrow: "PAYMENTS", permission: "payments.manage" },
@@ -828,7 +830,7 @@ export function App() {
       } else if (target === "growth") {
         const settings = await adminApi.growthReferralSettings();
         if (sequence === loadSequence.current) setRows([settings]);
-      } else if (target !== "server") {
+      } else if (target !== "server" && target !== "promotion") {
         const resource = target === "redemptions" ? "redemption-batches" : target === "pricing" ? "catalog-products" : target === "payments" ? "payment-channels" : target;
         const nextRows = (await adminApi.list(resource, offset)).items;
         if (sequence === loadSequence.current) setRows(Array.isArray(nextRows) ? nextRows : []);
@@ -861,7 +863,7 @@ export function App() {
       <main className="workspace">
         <header><div><p className="eyebrow">{current.eyebrow}</p><h1>{current.label}</h1></div><div className="header-actions"><span>{new Date().toLocaleDateString("zh-CN")}</span><button onClick={() => void load(view)}>刷新</button><button onClick={() => adminApi.logout().then(() => { sessionRequest.current = null; setAuthenticated(false); })}>退出</button></div></header>
         {error && <div className="alert">{error}</div>}
-        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} onAuthenticationExpired={requireNewAdminLogin} /> : view === "server" ? <ServerMonitor onAuthenticationExpired={requireNewAdminLogin} /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "pricing" ? <PricingPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "payments" ? <PaymentPanel rows={rows} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "growth" ? <GrowthPanel row={rows[0]} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "orders" ? <OrdersPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : <>
+        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} onAuthenticationExpired={requireNewAdminLogin} /> : view === "server" ? <ServerMonitor onAuthenticationExpired={requireNewAdminLogin} /> : view === "promotion" ? <PromotionCenter permissions={permissions} onAuthenticationExpired={requireNewAdminLogin} /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "pricing" ? <PricingPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "payments" ? <PaymentPanel rows={rows} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "growth" ? <GrowthPanel row={rows[0]} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "orders" ? <OrdersPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : <>
           <Table rows={rows} />
           <div className="pagination"><button disabled={offset === 0} onClick={() => setOffset(value => Math.max(0, value - 50))}>上一页</button><span>第 {offset / 50 + 1} 页</span><button disabled={rows.length < 50} onClick={() => setOffset(value => value + 50)}>下一页</button></div>
           <ActionPanel view={view} rows={rows} permissions={permissions} onChanged={() => void load(view, true)} />

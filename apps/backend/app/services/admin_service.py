@@ -27,16 +27,18 @@ PERMISSIONS_BY_ROLE: dict[str, frozenset[str]] = {
         "sessions.read", "sessions.terminate", "observability.read",
         "audit.read", "admins.manage",
         "growth.manage",
+        "promotion.read", "promotion.manage", "promotion.cost.manage",
     }),
     "operations": frozenset({
         "users.read", "billing.read", "materials.read", "materials.retry",
         "sessions.read", "sessions.terminate", "observability.read",
         "growth.manage",
+        "promotion.read", "promotion.manage", "promotion.cost.manage",
     }),
     "support": frozenset({"users.read", "billing.read", "materials.read", "sessions.read"}),
     "finance": frozenset({
         "users.read", "billing.read", "billing.adjust", "catalog.manage", "redemptions.generate",
-        "payments.reconcile", "payments.manage", "audit.read",
+        "payments.reconcile", "payments.manage", "audit.read", "promotion.read", "promotion.cost.manage",
     }),
     "technical_auditor": frozenset({"materials.read", "sessions.read", "observability.read", "audit.read"}),
 }
@@ -48,9 +50,10 @@ SAFE_DETAIL_KEYS = frozenset({
     "expires_at_ms", "campaign", "product_id", "display_name", "price_cents",
     "published", "catalog_version",
     "enabled", "reward_points", "invitee_reward_points", "config_version",
+    "channel_id", "campaign_id", "link_id", "scope_type", "amount_cents", "status",
 })
 HIGH_RISK_PERMISSIONS = frozenset({
-    "users.suspend", "billing.adjust", "catalog.manage", "redemptions.generate", "payments.manage", "payments.reconcile", "growth.manage", "admins.manage",
+    "users.suspend", "billing.adjust", "catalog.manage", "redemptions.generate", "payments.manage", "payments.reconcile", "growth.manage", "admins.manage", "promotion.manage", "promotion.cost.manage",
 })
 
 
@@ -92,7 +95,10 @@ class AdminService:
         if not authorization or authorization["status"] != "active":
             raise PermissionError("admin_authorization_required")
         role = str(authorization["role"])
-        permissions = sorted(PERMISSIONS_BY_ROLE.get(role, frozenset()))
+        permissions = sorted(
+            permission for permission in PERMISSIONS_BY_ROLE.get(role, frozenset())
+            if self.settings.promotion_enabled or not permission.startswith("promotion.")
+        )
         token = secrets.token_urlsafe(48)
         current = now_ms()
         session_id = f"admin-session-{uuid4().hex}"
@@ -136,11 +142,15 @@ class AdminService:
         permissions = row["permissions_json"]
         if isinstance(permissions, str):
             permissions = json.loads(permissions)
+        effective_permissions = frozenset(
+            str(item) for item in permissions
+            if self.settings.promotion_enabled or not str(item).startswith("promotion.")
+        )
         return AdminPrincipal(
             admin_session_id=str(row["admin_session_id"]),
             user_id=str(row["user_id"]),
             role=str(row["role"]),
-            permissions=frozenset(str(item) for item in permissions),
+            permissions=effective_permissions,
             recent_mfa_at_ms=int(row["recent_mfa_at_ms"]),
         )
 

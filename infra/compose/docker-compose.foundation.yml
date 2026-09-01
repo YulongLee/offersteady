@@ -90,6 +90,35 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  promotion-analytics:
+    build:
+      context: ../..
+      dockerfile: infra/docker/backend.Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}
+        PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-mirrors.aliyun.com}
+    command:
+      - sh
+      - -c
+      - >-
+        if [ "$${OFFERSTEADY_PROMOTION_ENABLED:-false}" = "true" ]; then
+          cd /app/apps/backend && exec python -m app.services.promotion_analytics_job --interval-seconds 300;
+        else
+          exec python -c 'import time; time.sleep(31536000)';
+        fi
+    env_file:
+      - ../../${OFFERSTEADY_ENV_FILE:-.env.production}
+    environment:
+      OFFERSTEADY_ENV: ${OFFERSTEADY_ENV:-development}
+      OFFERSTEADY_DATABASE_URL: ${OFFERSTEADY_DATABASE_URL:-postgresql://offersteady:offersteady@postgres:5432/offersteady}
+      OFFERSTEADY_REDIS_URL: ${OFFERSTEADY_REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   web:
     build:
       context: ../..

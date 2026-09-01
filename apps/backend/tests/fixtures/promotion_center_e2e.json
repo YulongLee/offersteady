@@ -1,0 +1,40 @@
+{
+  "timezone": "Asia/Shanghai",
+  "attributionWindowDays": 30,
+  "channels": [
+    {"id": "channel-nowcoder", "code": "nowcoder", "name": "牛客"},
+    {"id": "channel-xiaohongshu", "code": "xiaohongshu", "name": "小红书"}
+  ],
+  "campaigns": [
+    {"id": "campaign-autumn-2026", "name": "2026秋招推广", "channelIds": ["channel-nowcoder", "channel-xiaohongshu"]}
+  ],
+  "links": [
+    {"id": "link-nowcoder-article", "channelId": "channel-nowcoder", "campaignId": "campaign-autumn-2026", "slug": "NcArticle001"},
+    {"id": "link-rednote-one", "channelId": "channel-xiaohongshu", "campaignId": "campaign-autumn-2026", "slug": "RedNote0001"},
+    {"id": "link-rednote-two", "channelId": "channel-xiaohongshu", "campaignId": "campaign-autumn-2026", "slug": "RedNote0002"}
+  ],
+  "touchpoints": [
+    {"eventId": "bot-preview-0001", "visitor": null, "linkId": "link-rednote-one", "state": "excluded", "reason": "known_bot_or_preview", "occurredAtMs": 1788220800000},
+    {"eventId": "visitor-a-first", "visitor": "visitor-a-hmac", "linkId": "link-nowcoder-article", "state": "qualified", "occurredAtMs": 1788220900000},
+    {"eventId": "visitor-a-last", "visitor": "visitor-a-hmac", "linkId": "link-rednote-one", "state": "qualified", "occurredAtMs": 1788307200000},
+    {"eventId": "visitor-a-repeat", "visitor": "visitor-a-hmac", "linkId": "link-rednote-one", "state": "qualified", "occurredAtMs": 1788307300000},
+    {"eventId": "visitor-b", "visitor": "visitor-b-hmac", "linkId": "link-rednote-two", "state": "qualified", "occurredAtMs": 1788393600000}
+  ],
+  "users": [
+    {"id": "synthetic-user-a", "visitor": "visitor-a-hmac", "registeredAtMs": 1788307400000, "deleted": false},
+    {"id": "synthetic-user-b", "visitor": "visitor-b-hmac", "registeredAtMs": 1788393700000, "deleted": true},
+    {"id": "synthetic-direct-user", "visitor": null, "registeredAtMs": 1788393800000, "deleted": false}
+  ],
+  "conversions": [
+    {"type": "download", "sourceId": "download-user-a-mac-arm", "userId": "synthetic-user-a", "occurredAtMs": 1788307500000},
+    {"type": "use", "sourceId": "interview-user-a-first", "userId": "synthetic-user-a", "occurredAtMs": 1788307600000},
+    {"type": "order", "sourceId": "order-user-a-unpaid", "userId": "synthetic-user-a", "status": "payment_pending", "amountCents": 9900, "occurredAtMs": 1788307700000},
+    {"type": "order", "sourceId": "order-user-a-paid", "userId": "synthetic-user-a", "status": "paid", "amountCents": 19900, "occurredAtMs": 1788307800000},
+    {"type": "payment", "sourceId": "order-user-a-paid", "userId": "synthetic-user-a", "status": "paid", "amountCents": 19900, "occurredAtMs": 1788307900000}
+  ],
+  "costs": [
+    {"id": "cost-campaign-1", "scope": "campaign-autumn-2026", "amountCents": 100000},
+    {"id": "cost-campaign-1-reversal", "scope": "campaign-autumn-2026", "amountCents": -100000, "reversalOf": "cost-campaign-1"},
+    {"id": "cost-campaign-2", "scope": "campaign-autumn-2026", "amountCents": 80000}
+  ]
+}
