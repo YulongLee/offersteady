@@ -45,9 +45,9 @@ Use billable kind `written_exam_entry`, rate key `writtenExamPoints=30`, and usa
 
 The 30-point entry fee always uses wallet points and is not waived by a time pass. Existing screenshot answers retain their current pass/points behavior and fee. Folding the fee into the first screenshot was rejected because users could enter without being charged, retries would be ambiguous, and session activation could not enforce balance.
 
-### 6. Render a dedicated constrained workspace from shared primitives
+### 6. Use separate top-level mode entries and a dedicated constrained workspace
 
-The Web uses the same header, answer renderer, screenshot action and end-session behavior, but a written-mode branch does not mount transcript consumers, manual/quick/auto controls or audio lifecycle effects. This keeps the UI simple while avoiding condition-heavy mutations inside the stable interview workspace.
+The Web exposes 面试模式 and 笔试模式 as separate sidebar destinations. Each destination owns its list and creation page, and the route fixes the session mode; the interview creation page therefore remains identical to the pre-feature flow and contains no mode selector. The written workspace still reuses the same header, answer renderer, screenshot action and end-session behavior, but does not mount transcript consumers, manual/quick/auto controls or audio lifecycle effects. This keeps the two product journeys explicit while avoiding condition-heavy mutations inside the stable interview workspace.
 
 ### 7. Deploy additively with explicit rollback assets
 

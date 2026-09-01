@@ -205,6 +205,27 @@ describe("OfferSteady web application", () => {
     expect(screen.getByRole("navigation", { name: "移动端应用导航" })).toBeInTheDocument();
   });
 
+  it("exposes separate interview and written exam navigation and session lists", () => {
+    const state = clonedState();
+    state.interviews = [
+      { id: "interview-only", title: "面试独立场次", role: "前端工程师", sessionMode: "interview", status: "preparing", updatedAt: "刚刚", readiness: 50 },
+      { id: "written-only", title: "笔试独立场次", role: "算法工程师", sessionMode: "written", status: "preparing", updatedAt: "刚刚", readiness: 100 },
+    ];
+    const view = openAtWithState("/app", state, true);
+
+    const desktopNavigation = screen.getByRole("navigation", { name: "应用导航" });
+    expect(within(desktopNavigation).getByRole("link", { name: "面试模式" })).toHaveAttribute("href", "/app");
+    expect(within(desktopNavigation).getByRole("link", { name: "笔试模式" })).toHaveAttribute("href", "/app/written-exams");
+    expect(screen.getAllByText("面试独立场次").length).toBeGreaterThan(0);
+    expect(screen.queryByText("笔试独立场次")).not.toBeInTheDocument();
+
+    view.unmount();
+    openAtWithState("/app/written-exams", state, true);
+    expect(screen.getAllByText("笔试独立场次").length).toBeGreaterThan(0);
+    expect(screen.queryByText("面试独立场次")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /新建笔试/ })).toHaveAttribute("href", "/app/written-exams/new");
+  });
+
   it("links both workbench navigation surfaces to the maintained user manual", async () => {
     await login();
     const expectedUrl = "https://pwksrh0z1i6.feishu.cn/drive/folder/KFlcfWorslX2hmdyyByc2fLvngp?from=from_copylink";
@@ -301,11 +322,11 @@ describe("OfferSteady web application", () => {
       title: "算法工程师终面",
       role: "算法工程师",
       company: "新公司",
-      sessionMode: "interview",
     }, expect.any(AbortSignal)));
+    expect(screen.queryByRole("radio", { name: /笔试模式/ })).not.toBeInTheDocument();
   });
 
-  it("creates a written exam draft with the explicit mode", async () => {
+  it("creates a written exam draft from the dedicated route", async () => {
     const createDraft = vi.spyOn(interviewAppAdapter, "createDraft").mockResolvedValue({
       id: "written-draft",
       title: "算法笔试",
@@ -317,9 +338,8 @@ describe("OfferSteady web application", () => {
     });
     const state = clonedState();
     state.interviews = [];
-    openAtWithState("/app/interviews/new", state, true);
+    openAtWithState("/app/written-exams/new", state, true);
 
-    fireEvent.click(screen.getByRole("radio", { name: /笔试模式/ }));
     fireEvent.change(screen.getByLabelText("笔试名称"), { target: { value: "算法笔试" } });
     fireEvent.change(screen.getByLabelText("目标岗位"), { target: { value: "算法工程师" } });
     fireEvent.click(screen.getByRole("button", { name: /保存并准备/ }));
@@ -329,6 +349,7 @@ describe("OfferSteady web application", () => {
       role: "算法工程师",
       sessionMode: "written",
     }), expect.any(AbortSignal)));
+    expect(screen.queryByRole("radio", { name: /面试模式/ })).not.toBeInTheDocument();
   });
 
   it("shows the backend reason when creating an interview draft fails", async () => {

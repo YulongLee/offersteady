@@ -6,7 +6,9 @@ export const routes = {
   publicGuide: "/guide",
   invite: (code = ":code") => `/invite/${code}`,
   app: "/app",
+  writtenExams: "/app/written-exams",
   newInterview: "/app/interviews/new",
+  newWrittenExam: "/app/written-exams/new",
   prepare: (id = ":id") => `/app/interviews/${id}/prepare`,
   live: (id = ":id") => `/app/interviews/${id}/live`,
   review: (id = ":id") => `/app/interviews/${id}/review`,
@@ -19,7 +21,9 @@ export const routes = {
 
 export type ProtectedRoute =
   | typeof routes.app
+  | typeof routes.writtenExams
   | typeof routes.newInterview
+  | typeof routes.newWrittenExam
   | typeof routes.library
   | typeof routes.billing
   | typeof routes.guide

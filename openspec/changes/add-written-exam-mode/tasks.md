@@ -21,10 +21,12 @@
 
 ## 4. Web experience
 
-- [x] 4.1 Add mode selection to session creation with 面试模式 as the default and clear 笔试模式 pricing/capability copy.
+- [x] 4.1 Add initial mode-aware session creation and clear 笔试模式 pricing/capability copy.
 - [x] 4.2 Render a lightweight written preparation page whose only readiness gate is companion binding plus conflict resolution.
 - [x] 4.3 Render a screenshot-only written workspace without transcript, quick/manual/auto-answer or audio controls/effects.
 - [x] 4.4 Make home, continue, preparation, active and ended navigation labels mode-aware without changing existing interview layout.
+- [x] 4.5 Replace the creation-level mode selector with separate 面试模式 and 笔试模式 sidebar destinations and creation routes.
+- [x] 4.6 Restore the interview creation page to the pre-feature UI and isolate interview/written current and recent lists.
 
 ## 5. Companion behavior
 
@@ -40,3 +42,5 @@
 - [x] 6.4 Run focused and full backend/Web/companion tests, type checks, builds and strict OpenSpec validation using synthetic data only.
 - [x] 6.5 Commit and push the isolated change, deploy the additive migration and compatible services, and verify health, charge idempotency, screenshot flow and zero written-mode audio/ASR activity.
 - [x] 6.6 Confirm the recorded Git tag and retained production images can restore the pre-feature baseline.
+- [x] 6.7 Add regression tests for separate navigation, route-owned creation mode and unchanged interview creation behavior.
+- [ ] 6.8 Run Web tests/build and strict OpenSpec validation, then deploy only the corrected Web service and verify both entry routes.

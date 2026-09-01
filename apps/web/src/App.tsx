@@ -334,7 +334,8 @@ function ProtectedRoute() {
 const USER_MANUAL_URL = "https://pwksrh0z1i6.feishu.cn/drive/folder/KFlcfWorslX2hmdyyByc2fLvngp?from=from_copylink";
 
 const navItems = [
-  { to: routes.app, label: "面试", icon: "◫", end: true },
+  { to: routes.app, label: "面试模式", icon: "◫", end: true },
+  { to: routes.writtenExams, label: "笔试模式", icon: "◇" },
   { to: routes.library, label: "资料", icon: "◇" },
   { to: routes.billing, label: "积分与会员", icon: "点" },
   { to: routes.guide, label: "使用说明", icon: "?" },
@@ -346,7 +347,7 @@ const navItems = [
 function WorkbenchNavigationItems({ mobile = false }: { readonly mobile?: boolean }) {
   return <>{navItems.map(item => "href" in item
     ? <a key={item.href} href={item.href} target="_blank" rel="noopener noreferrer" aria-label={item.label}><span aria-hidden="true">{item.icon}</span>{mobile ? <small>{item.label}</small> : item.label}</a>
-    : <NavLink key={item.to} to={item.to} {...(item.end ? { end: true } : {})}><span>{item.icon}</span>{mobile ? <small>{item.label}</small> : item.label}</NavLink>)}</>;
+    : <NavLink key={item.to} to={item.to} {...(item.end ? { end: true } : {})}><span aria-hidden="true">{item.icon}</span>{mobile ? <small>{item.label}</small> : item.label}</NavLink>)}</>;
 }
 
 function AccountMenu({ compact = false, dropUp = false }: { readonly compact?: boolean; readonly dropUp?: boolean }) {
@@ -394,6 +395,8 @@ export const interviewContinuationRoute = (interview: Pick<WebAppState["intervie
     ? routes.live(interview.id)
     : routes.prepare(interview.id);
 
+const sessionHomeRoute = (mode?: SessionMode) => mode === "written" ? routes.writtenExams : routes.app;
+
 const sessionStatusLabel: Record<SessionStatus, string> = { preparing: "准备中", ready: "待开始", active: "进行中", paused: "已暂停", ended: "已结束", error: "待恢复" };
 
 const emptyLiveQuestion: InterviewQuestion = {
@@ -432,7 +435,7 @@ function HomePage() {
   const { state, setState } = usePrototype();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState("");
-  const recentInterviews = state.interviews.slice(0, 5);
+  const recentInterviews = state.interviews.filter(item => item.sessionMode !== "written").slice(0, 5);
   const materialSources = state.librarySources.filter(source => source.status !== "deleted" && source.status !== "disabled");
   const readyMaterials = materialSources.filter(source => source.status === "ready" && source.syncStatus !== "missing_artifacts");
   const processingMaterials = materialSources.filter(source => source.status === "processing");
@@ -460,8 +463,37 @@ function HomePage() {
     }
   };
   return <main className="app-page"><PageHeader eyebrow={`${greeting} · INTERVIEW HOME`} title={title} detail={active ? "资料、设备和面试状态都在这里，接着上次的进度继续。" : "创建面试并选择对应资料，让每个回答更贴近目标岗位。"} action={<Link className="button primary" to={routes.newInterview}>＋ 新建面试</Link>} />
-    {active ? <section className="continue-card"><div><span className="live-chip"><i /> {active.sessionMode === "written" ? "笔试模式" : sessionStatusLabel[active.status]}</span><h2>{active.title}</h2><p>{active.company} · {active.role}</p><div className="progress-line"><i style={{ width: `${active.readiness}%` }} /></div><small>{active.sessionMode === "written" ? "仅使用截屏回答" : `准备完成 ${active.readiness}% · 简历、JD 与知识库按本场选择`}</small></div><div className="continue-actions"><Link className="button primary" to={interviewContinuationRoute(active)}>继续{active.sessionMode === "written" ? "笔试" : "面试"}</Link></div></section> : <EmptyState title="创建第一场面试" detail="用合成资料走完准备、现场和复盘流程。" action={<Link className="button primary" to={routes.newInterview}>开始创建</Link>} />}
+    {active ? <section className="continue-card"><div><span className="live-chip"><i /> {sessionStatusLabel[active.status]}</span><h2>{active.title}</h2><p>{active.company} · {active.role}</p><div className="progress-line"><i style={{ width: `${active.readiness}%` }} /></div><small>准备完成 {active.readiness}% · 简历、JD 与知识库按本场选择</small></div><div className="continue-actions"><Link className="button primary" to={interviewContinuationRoute(active)}>继续面试</Link></div></section> : <EmptyState title="创建第一场面试" detail="用合成资料走完准备、现场和复盘流程。" action={<Link className="button primary" to={routes.newInterview}>开始创建</Link>} />}
     <section className="dashboard-grid"><div className="panel"><div className="panel-heading"><h2>最近面试</h2><span>{recentInterviews.length} / 5 场</span></div>{deleteError ? <div className="inline-error" role="alert">{deleteError}</div> : null}<div className="interview-list">{recentInterviews.map(item => <article key={item.id} className="recent-interview-row"><Link to={interviewContinuationRoute(item)}><span className={`status-icon ${item.status}`}>{item.status === "ended" ? "✓" : "↗"}</span><div><strong>{item.title}</strong><small>{item.updatedAt} · {sessionStatusLabel[item.status]}</small></div><span>→</span></Link><button type="button" disabled={deletingId === item.id} onClick={() => void deleteRecentInterview(item.id)}>{deletingId === item.id ? "删除中…" : "删除"}</button></article>)}</div></div><div className="panel readiness-panel"><div className="panel-heading"><h2>通用资料</h2><Link to={routes.library}>管理</Link></div><div className="readiness-ring"><strong>{readyMaterials.length}</strong><span>份已就绪</span></div><ul className="compact-list"><li><span>简历</span><b>{readyMaterialCount("resume")} / {materialCount("resume")} 份可用</b></li><li><span>职位 JD</span><b>{readyMaterialCount("jd")} / {materialCount("jd")} 份可用</b></li><li><span>知识材料</span><b>{readyMaterialCount("knowledge")} / {materialCount("knowledge")} 份可用</b></li></ul>{processingMaterials.length ? <small>{processingMaterials.length} 份资料正在后台处理中</small> : null}</div></section>
+  </main>;
+}
+
+function WrittenExamHomePage() {
+  const { state, setState } = usePrototype();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState("");
+  const recentExams = state.interviews.filter(item => item.sessionMode === "written").slice(0, 5);
+  const active = recentExams.find(item => item.status !== "ended");
+  const deleteRecentExam = async (sessionId: string) => {
+    if (!window.confirm("确认删除这场笔试？对应截图和回答记录会一起删除。")) return;
+    setDeleteError("");
+    setDeletingId(sessionId);
+    try {
+      await runAdapterOperation(signal => interviewAppAdapter.deleteInterview(sessionId, signal));
+      try {
+        setState(await runAdapterOperation(signal => interviewAppAdapter.loadState(signal)));
+      } catch {
+        setState(current => ({ ...current, interviews: current.interviews.filter(item => item.id !== sessionId) }));
+      }
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "删除失败，请稍后重试。");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+  return <main className="app-page"><PageHeader eyebrow="WRITTEN EXAM MODE" title={active ? "继续这场笔试" : "准备好下一场笔试了吗？"} detail="笔试模式仅使用截屏回答，不启用收音、实时转写或快答。" action={<Link className="button primary" to={routes.newWrittenExam}>＋ 新建笔试</Link>} />
+    {active ? <section className="continue-card"><div><span className="live-chip"><i /> {sessionStatusLabel[active.status]}</span><h2>{active.title}</h2><p>{active.company} · {active.role}</p><div className="progress-line"><i style={{ width: `${active.readiness}%` }} /></div><small>仅使用截屏回答 · 不启用音频</small></div><div className="continue-actions"><Link className="button primary" to={interviewContinuationRoute(active)}>继续笔试</Link></div></section> : <EmptyState title="创建第一场笔试" detail="连接伴随助手后，通过截屏识别题目并生成回答。" action={<Link className="button primary" to={routes.newWrittenExam}>开始创建</Link>} />}
+    <section className="dashboard-grid"><div className="panel"><div className="panel-heading"><h2>最近笔试</h2><span>{recentExams.length} / 5 场</span></div>{deleteError ? <div className="inline-error" role="alert">{deleteError}</div> : null}<div className="interview-list">{recentExams.map(item => <article key={item.id} className="recent-interview-row"><Link to={interviewContinuationRoute(item)}><span className={`status-icon ${item.status}`}>{item.status === "ended" ? "✓" : "↗"}</span><div><strong>{item.title}</strong><small>{item.updatedAt} · {sessionStatusLabel[item.status]}</small></div><span>→</span></Link><button type="button" disabled={deletingId === item.id} onClick={() => void deleteRecentExam(item.id)}>{deletingId === item.id ? "删除中…" : "删除"}</button></article>)}</div></div><div className="panel readiness-panel"><div className="panel-heading"><h2>笔试说明</h2><Link to={routes.billing}>收费说明</Link></div><ul className="compact-list"><li><span>进入笔试</span><b>30 积分 / 次</b></li><li><span>答题方式</span><b>仅截屏回答</b></li><li><span>音频采集</span><b>不启用</b></li></ul></div></section>
   </main>;
 }
 
@@ -470,11 +502,11 @@ function EmptyState({ title, detail, action }: { readonly title: string; readonl
 function NewInterviewPage() {
   const navigate = useNavigate();
   const { state, setState } = usePrototype();
-  const [form, setForm] = useState<{ title: string; role: string; company: string; sessionMode: SessionMode }>(() => {
-    const latest = state.interviews[0];
+  const [form, setForm] = useState(() => {
+    const latest = state.interviews.find(item => item.sessionMode !== "written");
     return latest
-      ? { title: latest.title, role: latest.role, company: latest.company ?? "", sessionMode: "interview" }
-      : { title: "", role: "", company: "", sessionMode: "interview" };
+      ? { title: latest.title, role: latest.role, company: latest.company ?? "" }
+      : { title: "", role: "", company: "" };
   });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -500,7 +532,39 @@ function NewInterviewPage() {
       setSaving(false);
     }
   };
-  return <main className="app-page narrow"><Link className="back-link" to={routes.app}>← 返回面试首页</Link><PageHeader eyebrow="NEW SESSION" title="创建一场面试" detail="选择面试模式，或选择仅使用截屏回答的笔试模式。" /><form className="form-panel" onSubmit={submit}><fieldset className="interview-language-picker"><legend>练习模式</legend><div><label className={form.sessionMode === "interview" ? "selected" : ""}><input type="radio" name="session-mode" checked={form.sessionMode === "interview"} onChange={() => setForm({ ...form, sessionMode: "interview" })} /><span><strong>面试模式</strong><small>实时收音、快答与截屏回答</small></span></label><label className={form.sessionMode === "written" ? "selected" : ""}><input type="radio" name="session-mode" checked={form.sessionMode === "written"} onChange={() => setForm({ ...form, sessionMode: "written" })} /><span><strong>笔试模式</strong><small>仅截屏回答；进入扣 30 积分</small></span></label></div></fieldset><label>{form.sessionMode === "written" ? "笔试名称" : "面试名称"}<input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder={form.sessionMode === "written" ? "例如：算法笔试" : "例如：高级前端工程师一面"} /></label><label>目标岗位<input value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} placeholder="例如：高级前端工程师" /></label><label>公司（可选）<input value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} placeholder="例如：示例科技" /></label>{error ? <div className="inline-error" role="alert">{error}</div> : null}<div className="form-actions"><Link className="button ghost" to={routes.app}>取消</Link><button className="button primary" type="submit" disabled={saving}>{saving ? "创建中…" : "保存并准备 →"}</button></div><small className="saved-note">笔试入场固定 30 积分，截屏回答仍按现有规则计费。</small></form></main>;
+  return <main className="app-page narrow"><Link className="back-link" to={routes.app}>← 返回面试首页</Link><PageHeader eyebrow="NEW INTERVIEW" title="创建一场面试" detail="先给这场面试一个清晰目标，资料可以在下一步补充。" /><form className="form-panel" onSubmit={submit}><label>面试名称<input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="例如：高级前端工程师一面" /></label><label>目标岗位<input value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} placeholder="例如：高级前端工程师" /></label><label>公司（可选）<input value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} placeholder="例如：示例科技" /></label>{error ? <div className="inline-error" role="alert">{error}</div> : null}<div className="form-actions"><Link className="button ghost" to={routes.app}>取消</Link><button className="button primary" type="submit" disabled={saving}>{saving ? "创建中…" : "保存并准备 →"}</button></div><small className="saved-note">草稿只在你确认提交后保存。</small></form></main>;
+}
+
+function NewWrittenExamPage() {
+  const navigate = useNavigate();
+  const { state, setState } = usePrototype();
+  const latest = state.interviews.find(item => item.sessionMode === "written");
+  const [form, setForm] = useState(() => latest ? { title: latest.title, role: latest.role, company: latest.company ?? "" } : { title: "", role: "", company: "" });
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!form.title.trim() || !form.role.trim()) { setError("请填写笔试名称和目标岗位"); return; }
+    setError("");
+    setSaving(true);
+    try {
+      const draft = await runAdapterOperation(signal => interviewAppAdapter.createDraft({ ...form, sessionMode: "written" }, signal));
+      setState(current => {
+        const reset = resetTransientInterviewState(current);
+        return {
+          ...reset,
+          interviews: [draft, ...current.interviews.filter(item => item.id !== draft.id)].slice(0, 5),
+          contextSelections: { ...current.contextSelections, [draft.id]: { sessionId: draft.id, resumeSourceId: null, jobDescriptionSourceId: null, knowledgeSourceIds: [], revision: 0, confirmedAtMs: Date.now() } },
+        };
+      });
+      navigate(routes.prepare(draft.id), { state: { newlyCreatedInterview: true } });
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "创建笔试失败，请稍后重试。");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return <main className="app-page narrow"><Link className="back-link" to={routes.writtenExams}>← 返回笔试模式</Link><PageHeader eyebrow="NEW WRITTEN EXAM" title="创建一场笔试" detail="笔试模式只使用截屏回答，不启用收音和实时转写。" /><form className="form-panel" onSubmit={submit}><label>笔试名称<input value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} placeholder="例如：算法笔试" /></label><label>目标岗位<input value={form.role} onChange={event => setForm({ ...form, role: event.target.value })} placeholder="例如：算法工程师" /></label><label>公司（可选）<input value={form.company} onChange={event => setForm({ ...form, company: event.target.value })} placeholder="例如：示例科技" /></label>{error ? <div className="inline-error" role="alert">{error}</div> : null}<div className="form-actions"><Link className="button ghost" to={routes.writtenExams}>取消</Link><button className="button primary" type="submit" disabled={saving}>{saving ? "创建中…" : "保存并准备 →"}</button></div><small className="saved-note">成功进入笔试固定扣除 30 积分，每次截屏回答按现有规则计费。</small></form></main>;
 }
 
 function PreparationPage() {
@@ -703,7 +767,7 @@ function PreparationPage() {
       setStarting(false);
     }
   };
-  if (isWritten) return <main className="app-page"><Link className="back-link" to={routes.app}>← 返回面试首页</Link><PageHeader eyebrow="WRITTEN EXAM PREPARATION" title={interviewTitle} detail="连接桌面助手后即可进入；笔试中不会启用麦克风、电脑音频或实时转写。" action={<div className="completion"><strong>{complete}/1</strong><span>{canStart ? "可进入" : "准备中"}</span></div>} /><div className="prepare-grid"><section className="panel"><div className="empty-state"><span>▣</span><h2>笔试模式</h2><p>进入后只保留截屏回答，无需简历、JD、资料库、面试语言或编程设置。</p><strong>进入笔试固定扣除 30 积分</strong><small>每次截屏回答仍按现有 15 积分规则结算。</small></div></section><aside className="panel check-panel"><div className="panel-heading"><h2>开始前检查</h2><span>{canStart ? "可进入" : "待连接助手"}</span></div><ul className="check-list"><li className={machineReady ? "done" : ""}><i>{machineReady ? "✓" : "1"}</i><div><strong>桌面助手</strong><span>{deviceBinding ? `${deviceBinding.displayName} 已连接，可接收截屏指令` : "输入桌面助手显示的 6 位机器码"}</span></div></li></ul>{activeConflict ? <div className="inline-error" role="alert">上一场面试仍在进行，请先结束上一场。<button className="button ghost" disabled={resolvingConflict} onClick={() => void supersedePreviousInterview()}>{resolvingConflict ? "正在切换…" : "结束上一场"}</button></div> : null}<div className="machine-code-panel"><strong className="connection-choice-title">连接桌面助手</strong><label><span>输入机器码连接本场</span><input inputMode="numeric" maxLength={6} value={machineCode} onChange={event => setMachineCode(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="输入 6 位机器码" /></label><button className="button ghost" disabled={!conflictResolved || binding || machineReady && machineCode === deviceBinding?.manualCode} onClick={() => void connectDesktopDevice(false)}>{binding ? "连接中…" : "验证并连接"}</button>{lastDevice ? <button className="button primary" disabled={!conflictResolved || binding || !lastDevice.online || deviceBinding?.deviceId === lastDevice.deviceId} onClick={() => void connectDesktopDevice(true)}>{deviceBinding?.deviceId === lastDevice.deviceId ? "已连接上次设备" : "一键连接上次设备"}</button> : null}{bindingError ? <div className="inline-error" role="alert">{bindingError}</div> : null}</div><div className="privacy-confirm preparation-disclosure"><span><strong>本场数据说明</strong><small>笔试模式不收音；截屏只在你主动发起回答时处理。</small></span></div><div className="points-mini"><strong>{state.billing.balance} 点</strong><span>笔试入场 30 点 · 截图 15 点</span><Link to={routes.billing}>查看收费说明</Link></div>{startError ? <div className="inline-error" role="alert">{startError}</div> : null}<button className="button primary full" disabled={!canStart || starting} onClick={() => void startInterview()}>{starting ? "正在进入笔试…" : "开始笔试 →"}</button></aside></div></main>;
+  if (isWritten) return <main className="app-page"><Link className="back-link" to={routes.writtenExams}>← 返回笔试模式</Link><PageHeader eyebrow="WRITTEN EXAM PREPARATION" title={interviewTitle} detail="连接桌面助手后即可进入；笔试中不会启用麦克风、电脑音频或实时转写。" action={<div className="completion"><strong>{complete}/1</strong><span>{canStart ? "可进入" : "准备中"}</span></div>} /><div className="prepare-grid"><section className="panel"><div className="empty-state"><span>▣</span><h2>笔试模式</h2><p>进入后只保留截屏回答，无需简历、JD、资料库、面试语言或编程设置。</p><strong>进入笔试固定扣除 30 积分</strong><small>每次截屏回答仍按现有 15 积分规则结算。</small></div></section><aside className="panel check-panel"><div className="panel-heading"><h2>开始前检查</h2><span>{canStart ? "可进入" : "待连接助手"}</span></div><ul className="check-list"><li className={machineReady ? "done" : ""}><i>{machineReady ? "✓" : "1"}</i><div><strong>桌面助手</strong><span>{deviceBinding ? `${deviceBinding.displayName} 已连接，可接收截屏指令` : "输入桌面助手显示的 6 位机器码"}</span></div></li></ul>{activeConflict ? <div className="inline-error" role="alert">上一场会话仍在进行，请先结束上一场。<button className="button ghost" disabled={resolvingConflict} onClick={() => void supersedePreviousInterview()}>{resolvingConflict ? "正在切换…" : "结束上一场"}</button></div> : null}<div className="machine-code-panel"><strong className="connection-choice-title">连接桌面助手</strong><label><span>输入机器码连接本场</span><input inputMode="numeric" maxLength={6} value={machineCode} onChange={event => setMachineCode(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="输入 6 位机器码" /></label><button className="button ghost" disabled={!conflictResolved || binding || machineReady && machineCode === deviceBinding?.manualCode} onClick={() => void connectDesktopDevice(false)}>{binding ? "连接中…" : "验证并连接"}</button>{lastDevice ? <button className="button primary" disabled={!conflictResolved || binding || !lastDevice.online || deviceBinding?.deviceId === lastDevice.deviceId} onClick={() => void connectDesktopDevice(true)}>{deviceBinding?.deviceId === lastDevice.deviceId ? "已连接上次设备" : "一键连接上次设备"}</button> : null}{bindingError ? <div className="inline-error" role="alert">{bindingError}</div> : null}</div><div className="privacy-confirm preparation-disclosure"><span><strong>本场数据说明</strong><small>笔试模式不收音；截屏只在你主动发起回答时处理。</small></span></div><div className="points-mini"><strong>{state.billing.balance} 点</strong><span>笔试入场 30 点 · 截图 15 点</span><Link to={routes.billing}>查看收费说明</Link></div>{startError ? <div className="inline-error" role="alert">{startError}</div> : null}<button className="button primary full" disabled={!canStart || starting} onClick={() => void startInterview()}>{starting ? "正在进入笔试…" : "开始笔试 →"}</button></aside></div></main>;
   return <main className="app-page"><Link className="back-link" to={routes.app}>← 返回面试首页</Link><PageHeader eyebrow="PREPARATION" title={interviewTitle} detail="资料与“面试资料”页面保持一致，为本场按需选择。" action={<div className="completion"><strong>{complete}/2</strong><span>{canStart ? "可进入" : "准备中"}</span></div>} />
     <div className="prepare-grid"><section className="panel"><fieldset className="interview-language-picker" disabled={savingLanguage}><legend>面试语言</legend><p>用于本场实时识别、问题判断和 AI 回答；开始面试后将锁定。</p><div><label className={interviewLanguage === "zh-CN" ? "selected" : ""}><input type="radio" name="interview-language" value="zh-CN" checked={interviewLanguage === "zh-CN"} onChange={() => void saveInterviewLanguage("zh-CN")} /><span><strong>中文面试</strong><small>沿用当前中文识别与回答链路</small></span></label><label className={interviewLanguage === "en-US" ? "selected" : ""}><input type="radio" name="interview-language" value="en-US" checked={interviewLanguage === "en-US"} onChange={() => void saveInterviewLanguage("en-US")} /><span><strong>English Interview</strong><small>English transcription and AI answers</small></span></label></div>{savingLanguage ? <small role="status">正在保存面试语言…</small> : null}{languageError ? <div className="inline-error" role="alert">{languageError}</div> : null}</fieldset><fieldset className="programming-preference" disabled={savingProgramming}><legend>编程设置</legend><div className="programming-toggle-row"><span><strong>需要编程</strong><small>开启后，代码题会统一使用你选择的编程语言</small></span><label className="switch-control"><input type="checkbox" role="switch" checked={programmingRequired} onChange={event => void saveInterviewProgramming(event.target.checked, event.target.checked ? programmingLanguage : null)} /><span aria-hidden="true" /></label></div>{programmingRequired ? <div className="programming-language-options" role="radiogroup" aria-label="编程语言">{([['python', 'Python'], ['java', 'Java'], ['cpp', 'C++'], ['javascript', 'JavaScript'], ['typescript', 'TypeScript'], ['go', 'Go']] as const).map(([value, label]) => <label key={value} className={programmingLanguage === value ? "selected" : ""}><input type="radio" name="programming-language" value={value} checked={programmingLanguage === value} onChange={() => void saveInterviewProgramming(true, value)} /><span>{label}</span></label>)}</div> : null}{savingProgramming ? <small role="status">正在保存编程设置…</small> : null}{programmingError ? <div className="inline-error" role="alert">{programmingError}</div> : null}</fieldset><ContextPicker sources={managedSources} selection={selection} onSave={saveSelection} onDownload={downloadMaterial} />{confirmingMaterials ? <div className="context-warning" role="status">正在提交后端校验并保存本场资料…</div> : null}{materialConfirmError ? <div className="context-warning" role="alert">{materialConfirmError}</div> : null}</section>
       <aside className="panel check-panel"><div className="panel-heading"><h2>开始前检查</h2><span>{canStart ? "可进入" : !selectionReady ? "待确认资料" : "待绑定机器"}</span></div><ul className="check-list"><li className={selectionReady ? "done" : ""}><i>{selectionReady ? "✓" : "1"}</i><div><strong>本场资料</strong><span>{validity === "unconfirmed" ? "请选择资料或确认不使用资料" : validity === "attention-required" ? "所选资料已失效，请处理" : level === "none" ? "已确认不使用个人资料" : level === "personalized" ? "简历与 JD 已选择" : "已确认使用部分资料"}</span></div></li><li className={machineReady ? "done" : ""}><i>{machineReady ? "✓" : "2"}</i><div><strong>收音机器</strong><span>{deviceBinding ? `${deviceBinding.displayName} 已连接，后台正在预热实时链路` : inputDiagnostic}</span></div></li></ul>
@@ -1095,7 +1159,7 @@ function LivePage() {
           if (status === 409 || status === 410) pauseReplacedPage();
           else {
             setNotice("当前面试会话已失效，请从面试首页重新进入。");
-            navigate(routes.app, { replace: true });
+            navigate(sessionHomeRoute(liveInterview?.sessionMode), { replace: true });
           }
           return;
         }
@@ -1719,7 +1783,7 @@ function LivePage() {
   const conversationPanel = <ConversationMonitor state={state} onConfirmQuestion={pageLeaseStatus === "replaced" ? dismissPending : confirmPending} onDismissQuestion={dismissPending} />;
   const answerPanel = <AnswerWorkspace answers={state.questions} viewingAnswerId={view.viewingAnswerId} newAnswerAvailable={view.newAnswerAvailable} activeTask={state.activeAnswerTask} cancelling={cancellingAnswer} cancelError={cancelAnswerError} interviewLanguage={liveInterview?.interviewLanguage ?? "zh-CN"} onStop={() => void stopAnswer()} onView={answerId => setView(current => ({ ...current, viewingAnswerId: answerId, newAnswerAvailable: answerId ? current.newAnswerAvailable : false }))} onRetry={updateQuestionStatus} />;
 
-  if (isWritten) return <main className={`live-page focused-live-page${desktopLayout ? " desktop-live-page" : " mobile-live-page"}`}><header className="live-top"><Link to={routes.app} aria-label="返回面试首页"><Logo /></Link><div className="live-session-heading"><strong>{interviewTitle}</strong><span><i className="online-dot" /> 桌面助手已连接 · 截屏回答可用</span><small className="live-language-badge">笔试模式</small></div><div className="live-top-actions"><Link className="live-balance" to={routes.billing}>积分与会员</Link><AccountMenu compact /><button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束笔试</button></div></header>{pageLeaseStatus === "replaced" ? <div className="global-live-alert replaced-page-alert" role="status"><strong>本场笔试已在其他页面继续</strong><Link className="button primary" to={routes.app}>返回首页</Link></div> : null}<div className="written-exam-workspace"><section className="answer-column">{answerPanel}<AnswerActionBar manualDraft="" screenshotTask={actionState.screenshotTask} screenshotOnly screenshotAnswerStatus={actionState.screenshotAnswerStatus ?? "idle"} disabled={pageLeaseStatus === "replaced"} onQuickAnswer={() => undefined} onScreenshot={beginInstantScreenshot} /></section></div>{screenshot && pageLeaseStatus !== "replaced" ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="screenshot-dialog-title"><section className="sheet"><h2 id="screenshot-dialog-title">{screenshotStageTitle(screenshot)}</h2>{screenshotStageDetail(screenshot) ? <p>{screenshotStageDetail(screenshot)}</p> : null}{screenshot.stage === "failed" ? <div className="sheet-actions split-actions"><button className="button ghost full" onClick={dismissScreenshotFailure}>删除本次失败</button><button className="button primary full" onClick={beginInstantScreenshot}>重新截屏</button></div> : <button className="button primary full" onClick={() => void cancelScreenshot()}>取消</button>}</section></div> : null}<footer className="session-bar"><div><i className="online-dot" /><strong>笔试进行中</strong></div><div><small>仅在你主动发起时截屏并生成回答</small></div></footer></main>;
+  if (isWritten) return <main className={`live-page focused-live-page${desktopLayout ? " desktop-live-page" : " mobile-live-page"}`}><header className="live-top"><Link to={routes.writtenExams} aria-label="返回笔试模式"><Logo /></Link><div className="live-session-heading"><strong>{interviewTitle}</strong><span><i className="online-dot" /> 桌面助手已连接 · 截屏回答可用</span><small className="live-language-badge">笔试模式</small></div><div className="live-top-actions"><Link className="live-balance" to={routes.billing}>积分与会员</Link><AccountMenu compact /><button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束笔试</button></div></header>{pageLeaseStatus === "replaced" ? <div className="global-live-alert replaced-page-alert" role="status"><strong>本场笔试已在其他页面继续</strong><Link className="button primary" to={routes.writtenExams}>返回笔试模式</Link></div> : null}<div className="written-exam-workspace"><section className="answer-column">{answerPanel}<AnswerActionBar manualDraft="" screenshotTask={actionState.screenshotTask} screenshotOnly screenshotAnswerStatus={actionState.screenshotAnswerStatus ?? "idle"} disabled={pageLeaseStatus === "replaced"} onQuickAnswer={() => undefined} onScreenshot={beginInstantScreenshot} /></section></div>{screenshot && pageLeaseStatus !== "replaced" ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="screenshot-dialog-title"><section className="sheet"><h2 id="screenshot-dialog-title">{screenshotStageTitle(screenshot)}</h2>{screenshotStageDetail(screenshot) ? <p>{screenshotStageDetail(screenshot)}</p> : null}{screenshot.stage === "failed" ? <div className="sheet-actions split-actions"><button className="button ghost full" onClick={dismissScreenshotFailure}>删除本次失败</button><button className="button primary full" onClick={beginInstantScreenshot}>重新截屏</button></div> : <button className="button primary full" onClick={() => void cancelScreenshot()}>取消</button>}</section></div> : null}<footer className="session-bar"><div><i className="online-dot" /><strong>笔试进行中</strong></div><div><small>仅在你主动发起时截屏并生成回答</small></div></footer></main>;
 
   return <main className={`live-page focused-live-page${desktopLayout ? " desktop-live-page" : " mobile-live-page"}`}>
     <header className="live-top">
@@ -1826,7 +1890,7 @@ function NotFoundPage() { return <main className="center-page"><EmptyState title
 function RouteLoadingPage() { return <main className="route-loading-page" role="status" aria-label="页面加载中" />; }
 
 export function AppRoutes() {
-  return <Routes><Route element={<PublicLayout />}><Route path={routes.landing} element={<LandingPage />} /><Route path={routes.login} element={<LoginPage />} /><Route path={routes.publicGuide} element={<GuideRoutePage />} /><Route path={routes.invite()} element={<ReferralLandingPage />} /><Route path={routes.terms} element={<LegalPage kind="terms" />} /><Route path={routes.privacy} element={<LegalPage kind="privacy" />} /></Route><Route element={<ProtectedRoute />}><Route path="/app" element={<AppLayout />}><Route index element={<HomePage />} /><Route path="interviews/new" element={<NewInterviewPage />} /><Route path="interviews/:id/prepare" element={<PreparationPage />} /><Route path="interviews/:id/review" element={<ReviewPage />} /><Route path="library" element={<LibraryPage />} /><Route path="billing" element={<BillingRoutePage />} /><Route path="guide" element={<GuideRoutePage />} /><Route path="devices" element={<DevicesPage />} /><Route path="settings" element={<SettingsPage />} /></Route><Route path="/app/interviews/:id/live" element={<LivePage />} /></Route><Route path="/error" element={<RouteErrorPage />} /><Route path="*" element={<NotFoundPage />} /></Routes>;
+  return <Routes><Route element={<PublicLayout />}><Route path={routes.landing} element={<LandingPage />} /><Route path={routes.login} element={<LoginPage />} /><Route path={routes.publicGuide} element={<GuideRoutePage />} /><Route path={routes.invite()} element={<ReferralLandingPage />} /><Route path={routes.terms} element={<LegalPage kind="terms" />} /><Route path={routes.privacy} element={<LegalPage kind="privacy" />} /></Route><Route element={<ProtectedRoute />}><Route path="/app" element={<AppLayout />}><Route index element={<HomePage />} /><Route path="written-exams" element={<WrittenExamHomePage />} /><Route path="interviews/new" element={<NewInterviewPage />} /><Route path="written-exams/new" element={<NewWrittenExamPage />} /><Route path="interviews/:id/prepare" element={<PreparationPage />} /><Route path="interviews/:id/review" element={<ReviewPage />} /><Route path="library" element={<LibraryPage />} /><Route path="billing" element={<BillingRoutePage />} /><Route path="guide" element={<GuideRoutePage />} /><Route path="devices" element={<DevicesPage />} /><Route path="settings" element={<SettingsPage />} /></Route><Route path="/app/interviews/:id/live" element={<LivePage />} /></Route><Route path="/error" element={<RouteErrorPage />} /><Route path="*" element={<NotFoundPage />} /></Routes>;
 }
 
 function DocumentTitleManager() {

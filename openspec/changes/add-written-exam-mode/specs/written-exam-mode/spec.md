@@ -1,11 +1,19 @@
 ## ADDED Requirements
 
-### Requirement: Users can create an explicit written exam session
-The system SHALL let an authenticated user choose `interview` or `written` when creating a session. Existing sessions and clients that omit the field MUST remain `interview` sessions.
+### Requirement: Interview and written exam modes have separate workbench entries
+The system SHALL expose 面试模式 and 笔试模式 as separate top-level workbench navigation entries. Each entry SHALL show and create only its own session mode. Existing sessions and clients that omit the field MUST remain `interview` sessions.
 
-#### Scenario: User creates a written exam
-- **WHEN** the user selects 笔试模式 and submits a valid title and role
+#### Scenario: User creates a written exam from its dedicated entry
+- **WHEN** the user opens 笔试模式, chooses to create a written exam and submits a valid title and role
 - **THEN** the backend creates one preparing session with mode `written` and returns that mode to every session client
+
+#### Scenario: User creates an interview from the existing flow
+- **WHEN** the user opens 面试模式 and creates an interview
+- **THEN** the original interview creation form contains no mode selector and preserves the prior preparation, audio and answer journey
+
+#### Scenario: User views a mode home
+- **WHEN** the user opens either top-level mode entry
+- **THEN** its current and recent session list excludes sessions belonging to the other mode
 
 #### Scenario: Existing client creates a session
 - **WHEN** a client omits the session mode
