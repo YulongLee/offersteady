@@ -890,6 +890,8 @@ class ChatService:
         self, *, user_id: str, session_id: str, question: str, stream: bool, usage_id: str | None = None
     ) -> tuple[ChatAnswerTaskRecord, RetrievalResponse]:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        if session.session_mode == "written":
+            raise DomainRequestError("live-answer", "start", "笔试模式仅支持截屏回答。", 409, error_code="written_exam_mode_mismatch")
         if session.status != "live":
             raise DomainRequestError("live-answer", "start", "只有进行中的面试会话才能发起实时回答。", 400)
         self.session_service.touch_activity(user_id=user_id, session_id=session_id, force=True)
@@ -1043,6 +1045,8 @@ class ChatService:
     ) -> Iterator[dict]:
         answer_accepted_at_ms = _now_ms()
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        if session.session_mode == "written":
+            raise DomainRequestError("live-answer", "start-stream", "笔试模式仅支持截屏回答。", 409, error_code="written_exam_mode_mismatch")
         if session.status != "live":
             raise DomainRequestError("live-answer", "start-stream", "只有进行中的面试会话才能发起实时回答。", 400)
         self.session_service.touch_activity(user_id=user_id, session_id=session_id, force=True)

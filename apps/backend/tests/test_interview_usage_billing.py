@@ -87,6 +87,119 @@ def test_realtime_minute_uses_active_pass_without_deducting_points() -> None:
     assert service.state_for_user(user_id=user_id).balance == 200
 
 
+def test_written_exam_entry_costs_30_points_even_with_active_pass() -> None:
+    service = BillingService()
+    user_id = "synthetic-written-exam-user"
+    now_ms = service.now_ms_provider()
+    service.pass_entitlements_by_user[user_id] = [TimePassEntitlementRecord(
+        id="written-pass-entitlement",
+        user_id=user_id,
+        product_id="pass-1",
+        starts_at_ms=now_ms - 1_000,
+        ends_at_ms=now_ms + 60_000,
+        order_id="written-order",
+        knowledge_allowance_granted=0,
+    )]
+
+    first = service.reserve_usage(
+        user_id=user_id,
+        usage_id="written-exam-entry:session-written",
+        usage_kind="written_exam_entry",
+        wallet_only=True,
+    )
+    replay = service.reserve_usage(
+        user_id=user_id,
+        usage_id="written-exam-entry:session-written",
+        usage_kind="written_exam_entry",
+        wallet_only=True,
+    )
+
+    assert first.reservation_id == replay.reservation_id
+    assert first.billing_source == "points"
+    assert first.points_reserved == 30
+    service.settle_usage(usage_id=first.usage_id)
+    service.settle_usage(usage_id=first.usage_id)
+    assert service.state_for_user(user_id=user_id).balance == 170
+
+
+def test_written_exam_draft_has_mode_and_confirmed_empty_materials() -> None:
+    user_id = "synthetic-written-draft-user"
+    response = client.post(
+        "/api/v1/sessions",
+        json={"userId": user_id, "title": "算法笔试", "sessionMode": "written"},
+    )
+
+    response.raise_for_status()
+    session = response.json()["data"]
+    assert session["sessionMode"] == "written"
+    assert session["materialBinding"]["confirmedAtMs"] is not None
+    assert session["materialBinding"]["boundDocuments"] == []
+
+    material_response = client.post(
+        f"/api/v1/sessions/{session['sessionId']}/materials/confirm",
+        json={"userId": user_id, "knowledgeDocumentIds": []},
+    )
+    assert material_response.status_code == 409
+    assert material_response.json()["error"]["details"]["errorCode"] == "written_exam_materials_disabled"
+
+
+def test_written_exam_start_charges_once_and_rejects_audio_and_quick_answer() -> None:
+    user_id = "synthetic-written-live-user"
+    manual_code = "731942"
+    client.post("/api/v1/realtime-speech/desktop-devices/register", json={
+        "deviceId": "device-written-live",
+        "manualCode": manual_code,
+        "displayName": "合成笔试助手",
+        "capabilities": {"screenCapture": True},
+    }).raise_for_status()
+    session = client.post("/api/v1/sessions", json={
+        "userId": user_id,
+        "title": "计费隔离笔试",
+        "sessionMode": "written",
+    }).json()["data"]
+    binding = client.post(
+        f"/api/v1/realtime-speech/sessions/{session['sessionId']}/desktop-binding",
+        json={"userId": user_id, "manualCode": manual_code},
+    )
+    binding.raise_for_status()
+    binding_id = binding.json()["data"]["bindingId"]
+    client.post(
+        f"/api/v1/realtime-speech/sessions/{session['sessionId']}/web-heartbeat",
+        json={"userId": user_id, "bindingId": binding_id, "page": "live"},
+    ).raise_for_status()
+
+    first = client.post(f"/api/v1/sessions/{session['sessionId']}/start", json={"userId": user_id})
+    replay = client.post(f"/api/v1/sessions/{session['sessionId']}/start", json={"userId": user_id})
+    first.raise_for_status()
+    replay.raise_for_status()
+    assert billing_service().state_for_user(user_id=user_id).balance == 170
+
+    publisher = client.post("/api/v1/realtime-speech/publishers", json={
+        "userId": user_id,
+        "sessionId": session["sessionId"],
+        "sourceKind": "microphone",
+        "clientName": "synthetic-written-client",
+    })
+    assert publisher.status_code == 409
+    assert publisher.json()["error"]["details"]["errorCode"] == "written_exam_audio_disabled"
+
+    quick_answer = client.post("/api/v1/live-answer/questions", json={
+        "userId": user_id,
+        "sessionId": session["sessionId"],
+        "question": "不应在笔试模式启动",
+        "stream": False,
+    })
+    assert quick_answer.status_code == 409
+    assert billing_service().state_for_user(user_id=user_id).balance == 170
+
+    screenshot = client.post(
+        f"/api/v1/screenshot-answer/sessions/{session['sessionId']}/remote-capture-requests",
+        json={"userId": user_id, "instruction": "回答当前笔试题"},
+    )
+    screenshot.raise_for_status()
+    assert screenshot.json()["data"]["status"] == "requested"
+
+
 def test_abandoned_usage_reservation_expires_without_late_charge(monkeypatch) -> None:
     current_ms = 1_000_000
     monkeypatch.setattr("app.services.billing_service._now_ms", lambda: current_ms)

@@ -2,7 +2,7 @@ import type { CaptureState, FoundationIndexResponse } from "@offersteady/protoco
 
 import type { AnswerProvenance, AnswerSourceReference, AnswerTaskSnapshot, CancelAnswerResult, OfficialCheckoutOrder, PointsRedemptionResult } from "@offersteady/protocol";
 import { AppError } from "./domain";
-import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, DesktopDeviceBinding, DesktopShortcutScreenshotUpdate, IdleInterviewStatus, InterviewAppAdapter, InterviewLanguage, InterviewQuestion, InterviewReview, InterviewSummary, InterviewWorkspaceSnapshot, PreparationAudioReadiness, ProgrammingLanguage, ReferralActivationResult, ReferralStatus, ScreenshotTask, SubmitManualAnswerResult, WebAppState } from "./domain";
+import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, DesktopDeviceBinding, DesktopShortcutScreenshotUpdate, IdleInterviewStatus, InterviewAppAdapter, InterviewLanguage, InterviewQuestion, InterviewReview, InterviewSummary, InterviewWorkspaceSnapshot, PreparationAudioReadiness, ProgrammingLanguage, ReferralActivationResult, ReferralStatus, ScreenshotTask, SessionMode, SubmitManualAnswerResult, WebAppState } from "./domain";
 import { createJsonClient, withBaseUrl } from "./api-client";
 import { authClient } from "./auth-client";
 import { createSseParser, type LiveAnswerStreamEvent, type ManualAnswerStreamUpdate } from "./live-answer-stream";
@@ -17,6 +17,7 @@ import {
 interface BackendSessionResponse {
   readonly sessionId: string;
   readonly title: string;
+  readonly sessionMode?: SessionMode;
   readonly interviewLanguage?: InterviewLanguage;
   readonly programmingRequired?: boolean;
   readonly programmingLanguage?: ProgrammingLanguage | null;
@@ -575,6 +576,7 @@ const requireUserId = () => {
 const toInterviewSummary = (session: BackendSessionResponse, fallback?: { title?: string; role?: string; company?: string }): InterviewSummary => ({
   id: session.sessionId,
   title: session.title || fallback?.title || "新的面试",
+  sessionMode: session.sessionMode ?? "interview",
   interviewLanguage: session.interviewLanguage ?? "zh-CN",
   programmingRequired: session.programmingRequired ?? false,
   programmingLanguage: session.programmingRequired ? session.programmingLanguage ?? "python" : null,
@@ -1279,12 +1281,12 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     }, signal);
   }
 
-  async createDraft(input: { title: string; role: string; company?: string }, signal?: AbortSignal) {
+  async createDraft(input: { title: string; role: string; company?: string; sessionMode?: SessionMode }, signal?: AbortSignal) {
     const persistedTitle = deriveInterviewTitle(input);
     const created = await this.client.request<BackendSessionResponse>("/api/v1/sessions", {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ userId: requireUserId(), title: persistedTitle }),
+      body: JSON.stringify({ userId: requireUserId(), title: persistedTitle, sessionMode: input.sessionMode ?? "interview" }),
     }, signal);
     return toInterviewSummary(created, { ...input, title: persistedTitle });
   }

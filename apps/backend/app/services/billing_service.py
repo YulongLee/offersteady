@@ -763,6 +763,7 @@ class BillingService:
             "catalogVersion": max((item.catalog_version for item in catalog), default=5),
             "answerPoints": 5,
             "screenshotAnswerPoints": 15,
+            "writtenExamPoints": 30,
             "realtimeMinutePoints": max(
                 1,
                 int(self.settings.realtime_asr_points_per_minute) if self.settings is not None else 5,
@@ -963,8 +964,8 @@ class BillingService:
             return None
         return self.release_knowledge_index(quote_id=reservation.quote_id)
 
-    def reserve_usage(self, *, user_id: str, usage_id: str, usage_kind: str) -> UsageReservationRecord:
-        if usage_kind not in {"answer", "screenshot_answer", "realtime_minute"}:
+    def reserve_usage(self, *, user_id: str, usage_id: str, usage_kind: str, wallet_only: bool = False) -> UsageReservationRecord:
+        if usage_kind not in {"answer", "screenshot_answer", "realtime_minute", "written_exam_entry"}:
             raise ValueError(f"Unsupported billable usage kind: {usage_kind}")
         self._release_stale_usage_reservations(user_id=user_id)
         self._ensure_welcome_grant(user_id=user_id)
@@ -972,6 +973,7 @@ class BillingService:
             "answer": "answerPoints",
             "screenshot_answer": "screenshotAnswerPoints",
             "realtime_minute": "realtimeMinutePoints",
+            "written_exam_entry": "writtenExamPoints",
         }[usage_kind]
         points = int(self.rates()[rate_key])
         created_at_ms = _now_ms()
@@ -983,13 +985,13 @@ class BillingService:
             "points_reserved": points,
         }
         if self.billing_repository is not None:
-            return UsageReservationRecord(**self.billing_repository.reserve_usage(usage=usage, created_at_ms=created_at_ms))
+            return UsageReservationRecord(**self.billing_repository.reserve_usage(usage={**usage, "wallet_only": wallet_only}, created_at_ms=created_at_ms))
         existing = self.usage_reservations_by_id.get(usage_id)
         if existing is not None:
             if existing.user_id != user_id or existing.usage_kind != usage_kind:
                 raise PermissionError("Billing usage id belongs to a different operation.")
             return existing
-        active_pass = self._active_pass_payload(user_id=user_id)
+        active_pass = None if wallet_only else self._active_pass_payload(user_id=user_id)
         points_reserved = 0 if active_pass is not None else points
         reserved_points = sum(
             item.points_reserved
@@ -1043,6 +1045,8 @@ class BillingService:
                         if reservation.usage_kind == "realtime_minute"
                         else "截图回答积分结算"
                         if reservation.usage_kind == "screenshot_answer"
+                        else "笔试模式入场积分结算"
+                        if reservation.usage_kind == "written_exam_entry"
                         else "面试回答积分结算"
                     ),
                 )

@@ -301,7 +301,34 @@ describe("OfferSteady web application", () => {
       title: "算法工程师终面",
       role: "算法工程师",
       company: "新公司",
+      sessionMode: "interview",
     }, expect.any(AbortSignal)));
+  });
+
+  it("creates a written exam draft with the explicit mode", async () => {
+    const createDraft = vi.spyOn(interviewAppAdapter, "createDraft").mockResolvedValue({
+      id: "written-draft",
+      title: "算法笔试",
+      role: "算法工程师",
+      sessionMode: "written",
+      status: "preparing",
+      updatedAt: "刚刚",
+      readiness: 100,
+    });
+    const state = clonedState();
+    state.interviews = [];
+    openAtWithState("/app/interviews/new", state, true);
+
+    fireEvent.click(screen.getByRole("radio", { name: /笔试模式/ }));
+    fireEvent.change(screen.getByLabelText("笔试名称"), { target: { value: "算法笔试" } });
+    fireEvent.change(screen.getByLabelText("目标岗位"), { target: { value: "算法工程师" } });
+    fireEvent.click(screen.getByRole("button", { name: /保存并准备/ }));
+
+    await waitFor(() => expect(createDraft).toHaveBeenCalledWith(expect.objectContaining({
+      title: "算法笔试",
+      role: "算法工程师",
+      sessionMode: "written",
+    }), expect.any(AbortSignal)));
   });
 
   it("shows the backend reason when creating an interview draft fails", async () => {

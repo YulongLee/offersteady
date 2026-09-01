@@ -141,7 +141,7 @@ export const syntheticState: WebAppState = {
   billing: {
     availablePaymentChannels: ["wechat", "alipay"],
     catalog: billingProducts,
-    rates: { catalogVersion: 5, answerPoints: 5, screenshotAnswerPoints: 15, realtimeMinutePoints: 5, knowledgeIndexMinimumPoints: 20, knowledgeIndexPointsPer1000Tokens: 4, tokenizerVersion: "synthetic-v1" },
+    rates: { catalogVersion: 5, answerPoints: 5, screenshotAnswerPoints: 15, writtenExamPoints: 30, realtimeMinutePoints: 5, knowledgeIndexMinimumPoints: 20, knowledgeIndexPointsPer1000Tokens: 4, tokenizerVersion: "synthetic-v1" },
     balance: 200,
     ledger: [{ id: "ledger-welcome", userId: "admin", kind: "welcome_grant", points: 200, createdAtMs: 1_719_734_400_000, referenceId: "welcome:admin", description: "新用户赠送积分" }],
     activePass: null,
@@ -203,11 +203,12 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
       : { outcome: "invalid-code" as const };
   }
 
-  async createDraft(input: { title: string; role: string; company?: string }, signal?: AbortSignal) {
+  async createDraft(input: { title: string; role: string; company?: string; sessionMode?: "interview" | "written" }, signal?: AbortSignal) {
     await delay(signal);
     const draft: InterviewSummary = {
       id: "draft",
       title: input.title.trim(),
+      sessionMode: input.sessionMode ?? "interview",
       interviewLanguage: "zh-CN",
       programmingRequired: false,
       programmingLanguage: null,

@@ -4,6 +4,7 @@ import type { LiveAnswerStreamEvent, ManualAnswerStreamUpdate } from "./live-ans
 export type ResourceStatus = "missing" | "processing" | "ready" | "error" | "deleted";
 export type SessionStatus = "preparing" | "ready" | "active" | "paused" | "ended" | "error";
 export type InterviewLanguage = "zh-CN" | "en-US";
+export type SessionMode = "interview" | "written";
 export type ProgrammingLanguage = "python" | "java" | "cpp" | "javascript" | "typescript" | "go";
 export type QuestionStatus = "listening" | "transcribing" | "confirmed" | "generating" | "streaming" | "uncertain" | "failed" | "offline" | "cancelled";
 export type ReviewStatus = "waiting" | "generating" | "complete" | "failed";
@@ -20,6 +21,7 @@ export interface PreparedResource {
 export interface InterviewSummary {
   readonly id: string;
   readonly title: string;
+  readonly sessionMode?: SessionMode;
   readonly interviewLanguage?: InterviewLanguage;
   readonly programmingRequired?: boolean;
   readonly programmingLanguage?: ProgrammingLanguage | null;
@@ -279,7 +281,7 @@ export interface InterviewAppAdapter {
   getReferralStatus(signal?: AbortSignal): Promise<ReferralStatus>;
   resolveReferral(code: string, signal?: AbortSignal): Promise<{ valid: boolean; enabled: boolean; rewardPoints?: number; inviterRewardPoints?: number; inviteeRewardPoints?: number; activationWindowDays?: number }>;
   activateReferral(code: string, signal?: AbortSignal): Promise<ReferralActivationResult>;
-  createDraft(input: { title: string; role: string; company?: string }, signal?: AbortSignal): Promise<InterviewSummary>;
+  createDraft(input: { title: string; role: string; company?: string; sessionMode?: SessionMode }, signal?: AbortSignal): Promise<InterviewSummary>;
   updateInterviewLanguage(id: string, interviewLanguage: InterviewLanguage, signal?: AbortSignal): Promise<InterviewSummary>;
   updateInterviewProgramming(id: string, programmingRequired: boolean, programmingLanguage: ProgrammingLanguage | null, signal?: AbortSignal): Promise<InterviewSummary>;
   updateInterviewAutoAnswer(id: string, enabled: boolean, signal?: AbortSignal): Promise<InterviewSummary>;

@@ -239,6 +239,32 @@ class RealtimeSpeechService:
 
     def start_live_session(self, *, user_id: str, session_id: str) -> InterviewSessionRecord:
         """Start one commercial interview, charge its first minute and prewarm ASR."""
+        current = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        if current.status == "live":
+            return current
+        if current.session_mode == "written":
+            binding = self.repository.get_session_desktop_binding(user_id=user_id, session_id=session_id)
+            device = self.repository.get_desktop_device_by_code(binding.manual_code) if binding is not None else None
+            if binding is None or not self._binding_is_active(binding=binding, device=device):
+                raise DomainRequestError("realtime-speech", "start-written-exam", "请先连接在线的桌面助手后再进入笔试。", 409, error_code="written_exam_desktop_required")
+            reservation = None if self.billing_service is None else self.billing_service.reserve_usage(
+                user_id=user_id,
+                usage_id=f"written-exam-entry:{session_id}",
+                usage_kind="written_exam_entry",
+                wallet_only=True,
+            )
+            if reservation is not None and reservation.status == "insufficient_balance":
+                raise DomainRequestError("billing", "written-exam-entry", "积分不足，进入笔试模式需要 30 积分。", 402, error_code="written_exam_entry_insufficient_balance")
+            try:
+                session = self.session_service.start_session(user_id=user_id, session_id=session_id)
+            except Exception:
+                if reservation is not None and reservation.status == "reserved":
+                    self.billing_service.release_usage(usage_id=reservation.usage_id)  # type: ignore[union-attr]
+                raise
+            if reservation is not None and reservation.status == "reserved":
+                self.billing_service.settle_usage(usage_id=reservation.usage_id)  # type: ignore[union-attr]
+            self._capture_control_cache[session_id] = "paused"
+            return session
         reservation = self._reserve_realtime_minute(
             user_id=user_id,
             session_id=session_id,
@@ -1351,7 +1377,7 @@ class RealtimeSpeechService:
         ))
         current_binding = self.repository.get_session_desktop_binding(user_id=user_id, session_id=session_id)
         if current_binding is not None and current_binding.device_id == device.device_id and self._binding_is_active(binding=current_binding, device=device):
-            if session.status == "preparing":
+            if session.status == "preparing" and session.session_mode == "interview":
                 self._prewarm_asr_session(session_id=session_id, interview_language=session.interview_language)
             return current_binding
         previous_bindings = {
@@ -1407,7 +1433,7 @@ class RealtimeSpeechService:
             payload={"deviceId": binding.device_id, "status": "bound", "displayName": binding.display_name},
         )
         self._log(logging.INFO, "realtime_speech.desktop_device_bound", session_id=session_id, publisher_id=binding.device_id, state=binding.status)
-        if session.status == "preparing":
+        if session.status == "preparing" and session.session_mode == "interview":
             self._session_language_cache[session_id] = session.interview_language
             self._prewarm_asr_session(session_id=session_id, interview_language=session.interview_language)
         return binding
@@ -1696,8 +1722,11 @@ class RealtimeSpeechService:
             binding = self.repository.get_latest_session_desktop_binding_by_code(manual_code=code)
         if binding is not None:
             session_status = "unknown"
+            session_mode = "interview"
             try:
-                session_status = self.session_service.get_session(user_id=binding.owner_user_id, session_id=binding.session_id).status
+                bound_session = self.session_service.get_session(user_id=binding.owner_user_id, session_id=binding.session_id)
+                session_status = bound_session.status
+                session_mode = bound_session.session_mode
             except DomainRequestError:
                 session_status = "missing"
             active = device is not None and self._binding_is_active(binding=binding, device=device)
@@ -1714,6 +1743,7 @@ class RealtimeSpeechService:
                     "permissionStatus": permission_status,
                     "sessionConnection": "disconnected",
                     "sessionStatus": session_status,
+                    "sessionMode": session_mode,
                     "staleReason": stale_reason,
                     "bindingLockState": binding_lock_state,
                     "message": self._stale_binding_message(stale_reason),
@@ -1730,7 +1760,8 @@ class RealtimeSpeechService:
                 "permissionStatus": permission_status,
                 "sessionConnection": "connected",
                 "sessionStatus": session_status,
-                "captureState": self.capture_control_state(session_id=binding.session_id) if session_status == "live" else "ready",
+                "sessionMode": session_mode,
+                "captureState": ("paused" if session_mode == "written" else self.capture_control_state(session_id=binding.session_id)) if session_status == "live" else "ready",
                 "bindingLockState": binding_lock_state,
                 "message": "网页端已绑定本机。",
                 "binding": self.desktop_binding_response(binding).model_dump(by_alias=True),
@@ -1780,6 +1811,8 @@ class RealtimeSpeechService:
 
     def control_capture(self, *, user_id: str, session_id: str, action: str) -> dict[str, object]:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        if session.session_mode == "written":
+            raise DomainRequestError("realtime-speech", "capture-control", "笔试模式不启用实时收音。", 409, "written_exam_audio_disabled")
         if session.status != "live":
             raise DomainRequestError("realtime-speech", "capture-control", "只有进行中的面试可以暂停或恢复收音。", 409, "session_not_live")
         if action not in {"pause", "resume"}:
@@ -1937,6 +1970,8 @@ class RealtimeSpeechService:
 
     def create_publisher(self, *, user_id: str, session_id: str, source_kind: RealtimeSourceKind, client_name: str) -> RealtimePublisherRecord:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        if session.session_mode == "written":
+            raise DomainRequestError("realtime-speech", "create-publisher", "笔试模式不启用实时收音。", 409, "written_exam_audio_disabled")
         if session.status != "live":
             raise DomainRequestError("realtime-speech", "create-publisher", "只有进行中的面试会话才能创建实时语音发布者。", 400)
         if self.capture_control_state(session_id=session_id) == "paused":

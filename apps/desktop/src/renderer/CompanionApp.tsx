@@ -94,6 +94,7 @@ interface DesktopPairingStatus {
   readonly registeredDeviceId?: string | null;
   readonly bound: boolean;
   readonly sessionStatus?: "preparing" | "live" | "ended" | "missing" | "unknown" | string;
+  readonly sessionMode?: "interview" | "written" | string;
   readonly captureState?: "capturing" | "paused" | "ready" | string;
   readonly message: string;
   readonly staleReason?: string | null;
@@ -928,7 +929,8 @@ export function CompanionApp() {
         const runtimeStatus = null as DesktopRuntimeStatus | null;
         const sessionStatus = runtimeStatus?.sessionStatus ?? pairingStatus.sessionStatus ?? "unknown";
         const live = sessionStatus === "live";
-        const captureState = pairingStatus.captureState === "paused" ? "paused" : live ? "capturing" : "ready";
+        const writtenExam = pairingStatus.sessionMode === "written";
+        const captureState = writtenExam || pairingStatus.captureState === "paused" ? "paused" : live ? "capturing" : "ready";
         nextDelayMs = desktopPollDelayMs(live ? "live" : "idle", 0, "binding");
         if (stopped) return;
         activeBindingRef.current = binding;
@@ -939,7 +941,7 @@ export function CompanionApp() {
         setBindingCaptureState(captureState);
         if (lastBindingSessionIdRef.current !== binding.sessionId) {
           lastBindingSessionIdRef.current = binding.sessionId;
-          setDesktopNotice("网页面试已绑定这台电脑。");
+          setDesktopNotice(writtenExam ? "网页笔试已绑定这台电脑，仅启用截屏回答。" : "网页面试已绑定这台电脑。");
         }
         if (live && lastLiveSessionIdRef.current !== binding.sessionId) {
           lastLiveSessionIdRef.current = binding.sessionId;

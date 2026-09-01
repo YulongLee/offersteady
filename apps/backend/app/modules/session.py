@@ -47,6 +47,7 @@ def _to_session_response(session) -> InterviewSessionResponse:
         sessionId=session.session_id,
         ownerUserId=session.owner_user_id,
         title=session.title,
+        sessionMode=getattr(session, "session_mode", "interview"),
         interviewLanguage=session.interview_language,
         programmingRequired=getattr(session, "programming_required", False),
         programmingLanguage=getattr(session, "programming_language", None),
@@ -126,6 +127,7 @@ async def create_session(
     session = service.create_session(
         user_id=resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context),
         title=request.title,
+        session_mode=request.session_mode,
         interview_language=request.interview_language,
         programming_required=request.programming_required,
         programming_language=request.programming_language,
@@ -173,6 +175,7 @@ async def get_interview_review(
         data=InterviewReviewSnapshotResponse(
             sessionId=session.session_id,
             title=session.title,
+            sessionMode=getattr(session, "session_mode", "interview"),
             status=session.status,
             startedAtMs=session.started_at_ms,
             endedAtMs=session.ended_at_ms,

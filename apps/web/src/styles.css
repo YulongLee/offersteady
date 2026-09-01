@@ -667,6 +667,8 @@ h1, h2, h3, p { margin-top: 0; }
 .sheet-actions.split-actions { display: grid; grid-template-columns: 1fr 1fr; }
 /* Focused live workspace */
 .focused-live-grid { min-height: 0; gap: 0; overflow: hidden; padding: 14px; }
+.written-exam-workspace { min-height: 0; flex: 1; padding: 14px; display: grid; }
+.written-exam-workspace .answer-column { min-height: 0; }
 .conversation-column, .answer-column { min-width: 0; min-height: 0; overflow: hidden; }
 .conversation-column { display: flex; flex-direction: column; gap: 10px; padding-right: 10px; }
 .answer-column { display: flex; flex-direction: column; gap: 10px; padding-left: 10px; }

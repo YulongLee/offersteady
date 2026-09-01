@@ -10,6 +10,7 @@ from app.ports.interview_session import (
     ConversationContextEntry,
     IntegrationReference,
     InterviewLanguage,
+    InterviewSessionMode,
     InterviewSessionRecord,
     InterviewSessionRepository,
     ProgrammingLanguage,
@@ -48,6 +49,7 @@ class SessionService:
         user_id: str,
         title: str,
         interview_language: InterviewLanguage = "zh-CN",
+        session_mode: InterviewSessionMode = "interview",
         programming_required: bool = False,
         programming_language: ProgrammingLanguage | None = None,
         restart_of_session_id: str | None = None,
@@ -58,18 +60,19 @@ class SessionService:
         material_binding = SessionMaterialBinding(
             session_id=session_id,
             owner_user_id=user_id,
-            revision=0,
+            revision=1 if session_mode == "written" else 0,
             resume_document_id=None,
             job_description_document_id=None,
             knowledge_document_ids=[],
             bound_documents=[],
-            confirmed_at_ms=None,
+            confirmed_at_ms=now_ms if session_mode == "written" else None,
         )
         session = InterviewSessionRecord(
             session_id=session_id,
             owner_user_id=user_id,
             title=title.strip(),
             interview_language=interview_language,
+            session_mode=session_mode,
             programming_required=programming_required,
             programming_language=(programming_language or "python") if programming_required else None,
             status="preparing",
@@ -154,6 +157,8 @@ class SessionService:
         self, *, user_id: str, session_id: str, enabled: bool
     ) -> InterviewSessionRecord:
         session = self.get_session(user_id=user_id, session_id=session_id)
+        if session.session_mode == "written":
+            raise DomainRequestError("session", "update-auto-answer", "笔试模式仅支持截屏回答。", 409, error_code="written_exam_mode_mismatch")
         if session.status != "live":
             raise DomainRequestError(
                 "session", "update-auto-answer", "自动回答只能在进行中的面试里设置。", 409,
@@ -258,6 +263,8 @@ class SessionService:
         knowledge_document_ids: list[str],
     ) -> InterviewSessionRecord:
         session = self.get_session(user_id=user_id, session_id=session_id)
+        if session.session_mode == "written":
+            raise DomainRequestError("session", "confirm-materials", "笔试模式不使用面试资料。", 409, error_code="written_exam_materials_disabled")
         if session.status == "ended":
             raise DomainRequestError("session", "confirm-materials", "已结束的会话不能再修改本场资料。", 400)
         bound_documents: list[SessionBoundDocument] = []
@@ -346,11 +353,12 @@ class SessionService:
             user_id=user_id,
             title=f"{session.title} · 重新开始",
             interview_language=session.interview_language,
+            session_mode=session.session_mode,
             programming_required=session.programming_required,
             programming_language=session.programming_language,
             restart_of_session_id=session.session_id,
         )
-        if session.material_binding.confirmed_at_ms is not None:
+        if session.session_mode == "interview" and session.material_binding.confirmed_at_ms is not None:
             restarted = self.confirm_materials(
                 user_id=user_id,
                 session_id=restarted.session_id,
@@ -611,6 +619,7 @@ class SessionService:
             owner_user_id=updates.get("owner_user_id", session.owner_user_id),
             title=updates.get("title", session.title),
             interview_language=updates.get("interview_language", session.interview_language),
+            session_mode=updates.get("session_mode", session.session_mode),
             programming_required=updates.get("programming_required", session.programming_required),
             programming_language=updates.get("programming_language", session.programming_language),
             auto_answer_enabled=updates.get("auto_answer_enabled", session.auto_answer_enabled),

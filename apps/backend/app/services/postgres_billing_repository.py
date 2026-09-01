@@ -722,7 +722,7 @@ class PostgresBillingRepository:
                 """,
                 (user_id, created_at_ms, created_at_ms),
             )
-            has_active_pass = cursor.fetchone() is not None
+            has_active_pass = cursor.fetchone() is not None and not bool(usage.get("wallet_only", False))
             points_reserved = 0 if has_active_pass else int(usage["points_reserved"])
             if points_reserved:
                 cursor.execute("SELECT COALESCE(SUM(points), 0) AS balance FROM points_redemption_ledger WHERE user_id = %s", (user_id,))
@@ -776,6 +776,8 @@ class PostgresBillingRepository:
                 if row["usage_kind"] == "realtime_minute"
                 else "截图回答积分结算"
                 if row["usage_kind"] == "screenshot_answer"
+                else "笔试模式入场积分结算"
+                if row["usage_kind"] == "written_exam_entry"
                 else "面试回答积分结算"
             )
             cursor.execute(

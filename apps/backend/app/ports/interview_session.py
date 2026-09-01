@@ -7,6 +7,7 @@ from app.material_formats import MaterialKind
 
 
 InterviewSessionState = Literal["preparing", "live", "ended"]
+InterviewSessionMode = Literal["interview", "written"]
 InterviewLanguage = Literal["zh-CN", "en-US"]
 ProgrammingLanguage = Literal["python", "java", "cpp", "javascript", "typescript", "go"]
 SessionContinueTarget = Literal["preparing", "live", "history"]
@@ -106,6 +107,7 @@ class InterviewSessionRecord:
     material_binding: SessionMaterialBinding
     config_snapshot: SessionConfigSnapshot
     usage_totals: SessionUsageTotals
+    session_mode: InterviewSessionMode = "interview"
     programming_required: bool = False
     programming_language: ProgrammingLanguage | None = None
     auto_answer_enabled: bool = False

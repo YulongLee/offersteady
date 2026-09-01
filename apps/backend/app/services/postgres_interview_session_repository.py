@@ -43,17 +43,18 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
                 cursor.execute(
                     """
                     INSERT INTO interview_sessions (
-                      session_id, owner_user_id, title, status, continue_target,
+                      session_id, owner_user_id, title, session_mode, status, continue_target,
                       interview_language, programming_required, programming_language,
                       auto_answer_enabled, auto_answer_enabled_at_ms,
                       material_binding_json, config_snapshot_json, usage_totals_json,
                       integration_references_json, restart_of_session_id, started_at_ms,
                       ended_at_ms, created_at_ms, updated_at_ms, last_activity_at_ms, deleted_at_ms
                     )
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL)
                     ON CONFLICT (session_id) DO UPDATE SET
                       owner_user_id = EXCLUDED.owner_user_id,
                       title = EXCLUDED.title,
+                      session_mode = EXCLUDED.session_mode,
                       status = EXCLUDED.status,
                       continue_target = EXCLUDED.continue_target,
                       interview_language = EXCLUDED.interview_language,
@@ -76,6 +77,7 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
                         session.session_id,
                         session.owner_user_id,
                         session.title,
+                        session.session_mode,
                         session.status,
                         session.continue_target,
                         session.interview_language,
@@ -317,6 +319,7 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
                       session_id TEXT PRIMARY KEY,
                       owner_user_id TEXT NOT NULL,
                       title TEXT NOT NULL,
+                      session_mode TEXT NOT NULL DEFAULT 'interview',
                       interview_language TEXT NOT NULL DEFAULT 'zh-CN',
                       status TEXT NOT NULL,
                       continue_target TEXT NOT NULL,
@@ -368,6 +371,7 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
                     REPO_ROOT / "apps/backend/migrations/versions/0033_interview_language.sql",
                     REPO_ROOT / "apps/backend/migrations/versions/0034_interview_programming_preference.sql",
                     REPO_ROOT / "apps/backend/migrations/versions/0035_session_auto_answer.sql",
+                    REPO_ROOT / "apps/backend/migrations/versions/0036_written_exam_mode.sql",
                 ])
             connection.commit()
 
@@ -380,6 +384,7 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
             session_id=row["session_id"],
             owner_user_id=row["owner_user_id"],
             title=row["title"],
+            session_mode=row.get("session_mode") or "interview",
             interview_language=row.get("interview_language") or "zh-CN",
             programming_required=bool(row.get("programming_required", False)),
             programming_language=row.get("programming_language"),

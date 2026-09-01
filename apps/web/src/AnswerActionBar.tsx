@@ -10,14 +10,15 @@ interface Props {
   readonly quickAnswerStatus?: "idle" | "processing" | "success" | "failed" | "cancelled";
   readonly quickAnswerMessage?: string;
   readonly screenshotAnswerStatus?: "idle" | "processing" | "success" | "failed" | "cancelled";
+  readonly screenshotOnly?: boolean;
 }
 
-export function AnswerActionBar({ manualDraft, latestInterviewerQuestion = "", screenshotTask, onQuickAnswer, onScreenshot, disabled = false, quickAnswerStatus = "idle", screenshotAnswerStatus = "idle" }: Props) {
+export function AnswerActionBar({ manualDraft, latestInterviewerQuestion = "", screenshotTask, onQuickAnswer, onScreenshot, disabled = false, quickAnswerStatus = "idle", screenshotAnswerStatus = "idle", screenshotOnly = false }: Props) {
   const quickBusy = quickAnswerStatus === "processing";
   const screenshotBusy = screenshotAnswerStatus === "processing" || Boolean(screenshotTask && !["completed", "failed", "cancelled"].includes(screenshotTask.stage));
   return <section className="answer-action-bar" aria-label="面试操作">
     <div className="answer-action-buttons">
-      <button
+      {!screenshotOnly ? <button
         className="button primary action-tile"
         aria-label="快答"
         disabled={disabled || quickBusy}
@@ -26,7 +27,7 @@ export function AnswerActionBar({ manualDraft, latestInterviewerQuestion = "", s
       >
         <strong>快答</strong>
         <small>{manualDraft.trim() ? "根据左侧问题直接生成回答" : "根据最近面试官问题回答"}</small>
-      </button>
+      </button> : null}
       <button
         className="button ghost action-tile"
         aria-label="截屏回答"
