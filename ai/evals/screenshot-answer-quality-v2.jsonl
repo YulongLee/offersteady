@@ -6,3 +6,6 @@
 {"id":"unreadable-schema","problem_type":"sql","must_not_invent_schema":true,"must_request_recapture":true,"synthetic":true}
 {"id":"no-personal-material","session_materials":["resume","jd","knowledge"],"must_report_no_personal_material":true,"synthetic":true}
 {"id":"screenshot-only-no-conversation","screen_question":"合并两个有序数组","recent_interviewer_question":"请评价候选人的项目经历","session_title":"高级前端工程师面试","must_answer_screen_question":true,"must_not_use":["recent_interviewer_question","conversation_history","session_title","resume","jd","knowledge"],"synthetic":true}
+{"id":"multiple-choice-direct-option","problem_type":"multiple-choice","visible_options_complete":true,"expected_quick_first_line":"答案：选项编号（选项原文）","must_list_all_selected_options":true,"must_not_restate_question":true,"synthetic":true}
+{"id":"coding-judge-ready","problem_type":"algorithm","programming_language":"java","must_preserve":["visible_function_signature","visible_input_output_contract"],"must_include":["核心算法","复杂度","完整可运行代码"],"must_not_include":["伪代码","TODO","无关框架","DTO","吞掉错误的try/catch"],"synthetic":true}
+{"id":"debugging-minimal-fix-first","problem_type":"debugging","expected_quick_answer":["最可能根因","最小修复"],"must_not_invent_hidden_logs":true,"synthetic":true}
