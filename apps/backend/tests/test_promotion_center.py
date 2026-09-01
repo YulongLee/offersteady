@@ -48,6 +48,13 @@ def test_promotion_public_origin_defaults_to_canonical_web_origin_and_allows_ove
     assert dedicated.resolved_promotion_public_base_url == "https://go.mianshiwen.cn"
 
 
+def test_public_nginx_forwards_promotion_short_links_to_backend() -> None:
+    config = (REPO_ROOT / "infra/nginx/default.conf").read_text()
+    assert "location /r/" in config
+    promotion_location = config.split("location /r/", 1)[1].split("}", 1)[0]
+    assert "proxy_pass http://backend:8000;" in promotion_location
+
+
 def test_enabled_production_promotion_requires_private_hmac_secret_and_redis() -> None:
     with pytest.raises(RuntimeError, match="OFFERSTEADY_REDIS_URL"):
         validate_promotion_runtime(promotion_settings(promotion_enabled=True, environment="production", database_url="postgresql://synthetic.invalid/db"))
