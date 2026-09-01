@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from app.deps import billing_service
@@ -7,6 +9,18 @@ from app.core.config import Settings
 
 
 client = TestClient(app)
+
+
+def test_written_exam_billing_migration_accepts_reservation_and_settlement_kinds() -> None:
+    sql = Path("apps/backend/migrations/versions/0037_written_exam_billing_constraints.sql").read_text(encoding="utf8")
+    repository = Path("apps/backend/app/services/postgres_billing_repository.py").read_text(encoding="utf8")
+
+    assert "'written_exam_entry'" in sql
+    assert "'written_exam_entry_settlement'" in sql
+    assert "billing_usage_reservations_usage_kind_check" in sql
+    assert "points_redemption_ledger_kind_check" in sql
+    assert "points_redemption_ledger_points_check" in sql
+    assert "0037_written_exam_billing_constraints.sql" in repository
 
 
 def test_answer_usage_settles_once_and_changes_balance() -> None:

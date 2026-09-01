@@ -1049,6 +1049,7 @@ class PostgresBillingRepository:
             Path(REPO_ROOT / "apps/backend/migrations/versions/0027_knowledge_index_billing_sources.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0029_early_referral_mutual_rewards.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0032_realtime_minute_billing.sql"),
+            Path(REPO_ROOT / "apps/backend/migrations/versions/0037_written_exam_billing_constraints.sql"),
         )
         with self._connect() as connection, connection.cursor() as cursor:
             apply_sql_migrations(cursor, migrations)

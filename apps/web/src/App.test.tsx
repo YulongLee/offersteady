@@ -352,6 +352,29 @@ describe("OfferSteady web application", () => {
     expect(screen.queryByRole("radio", { name: /面试模式/ })).not.toBeInTheDocument();
   });
 
+  it("keeps written exam preparation focused on companion connection and entry", async () => {
+    const state = clonedState();
+    state.interviews = [{
+      id: "written-prepare",
+      title: "算法笔试",
+      role: "算法工程师",
+      sessionMode: "written",
+      status: "preparing",
+      updatedAt: "刚刚",
+      readiness: 100,
+    }];
+
+    openAtWithState("/app/interviews/written-prepare/prepare", state, true);
+
+    expect(await screen.findByRole("heading", { name: "连接伴随助手" })).toBeInTheDocument();
+    expect(screen.getByText("开始时扣除 30 积分")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /开始笔试/ })).toBeDisabled();
+    expect(screen.queryByText("本场数据说明")).not.toBeInTheDocument();
+    expect(screen.queryByText(/每次截屏回答/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/笔试模式不收音/)).not.toBeInTheDocument();
+    expect(screen.queryByText("0/1")).not.toBeInTheDocument();
+  });
+
   it("shows the backend reason when creating an interview draft fails", async () => {
     vi.spyOn(interviewAppAdapter, "createDraft").mockRejectedValueOnce(new Error("面试创建失败，请稍后重试"));
     await login();

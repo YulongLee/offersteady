@@ -22,6 +22,8 @@ The system SHALL expose 面试模式 and 笔试模式 as separate top-level work
 ### Requirement: Written exam preparation requires only a connected companion
 The written exam preparation page SHALL require an active desktop companion binding and resolved active-session conflict. It MUST NOT require Resume, JD, Knowledge, microphone, system audio or ASR readiness.
 
+The page SHALL use one focused, single-column setup surface. It SHALL show only the companion connection controls, connection/start errors, the mandatory 30-point entry disclosure and the entry action. It MUST NOT render a second explanatory column, a completion counter, repeated capability explanations, a data-processing explanation card or the user's full balance and per-screenshot rate.
+
 #### Scenario: Companion is connected
 - **WHEN** a written session has a valid desktop binding and no unresolved active-session conflict
 - **THEN** the page enables “进入笔试” without asking the user to select or confirm personal materials
@@ -29,6 +31,10 @@ The written exam preparation page SHALL require an active desktop companion bind
 #### Scenario: Companion is not connected
 - **WHEN** a written session has no valid desktop binding
 - **THEN** the page keeps “进入笔试” disabled and provides the existing secure machine-code or recent-device connection flow
+
+#### Scenario: User views written exam preparation
+- **WHEN** a user opens a preparing written session
+- **THEN** the page presents one compact companion setup card without duplicated mode, privacy, audio or pricing content
 
 ### Requirement: Written exams are isolated from personal materials
 The system MUST persist an explicitly empty material scope for a written session and MUST NOT load Resume, JD or Knowledge context for its screenshot answers.
@@ -58,6 +64,10 @@ The system SHALL reserve and settle exactly 30 wallet points once when a written
 #### Scenario: Written exam starts successfully
 - **WHEN** a preparing written session with at least 30 available points and a valid companion binding starts successfully
 - **THEN** the system settles one 30-point `written_exam_entry` usage and exposes the updated balance and auditable ledger entry
+
+#### Scenario: Production billing constraints accept written exam entry
+- **WHEN** PostgreSQL reserves and settles a `written_exam_entry` usage
+- **THEN** the usage reservation and points-ledger constraints accept the usage kind and its negative settlement entry
 
 #### Scenario: Balance is insufficient
 - **WHEN** the user has fewer than 30 available points after existing reservations
