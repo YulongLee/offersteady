@@ -43,4 +43,4 @@
 - [x] 6.5 Commit and push the isolated change, deploy the additive migration and compatible services, and verify health, charge idempotency, screenshot flow and zero written-mode audio/ASR activity.
 - [x] 6.6 Confirm the recorded Git tag and retained production images can restore the pre-feature baseline.
 - [x] 6.7 Add regression tests for separate navigation, route-owned creation mode and unchanged interview creation behavior.
-- [ ] 6.8 Run Web tests/build and strict OpenSpec validation, then deploy only the corrected Web service and verify both entry routes.
+- [x] 6.8 Run Web tests/build and strict OpenSpec validation, then deploy only the corrected Web service and verify both entry routes.
