@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from datetime import datetime, timedelta, timezone
-from time import sleep
+from time import monotonic, sleep
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -112,8 +112,9 @@ class PromotionAnalyticsJob:
                    (conversion_event_id,event_id,conversion_type,source_record_id,visitor_hmac,user_id,occurred_at_ms,created_at_ms)
                    SELECT 'promotion-conversion-' || md5('use:' || first_use.user_id),
                           'authority-use-' || first_use.user_id,'use',first_use.session_id,b.visitor_hmac,first_use.user_id,first_use.started_at_ms,%s
-                   FROM (SELECT DISTINCT ON (owner_user_id) owner_user_id AS user_id,session_id,started_at_ms
-                         FROM interview_sessions WHERE started_at_ms IS NOT NULL ORDER BY owner_user_id,started_at_ms) first_use
+                   FROM (SELECT DISTINCT ON (i.owner_user_id) i.owner_user_id AS user_id,i.session_id,i.started_at_ms
+                         FROM interview_sessions i JOIN auth_users u ON u.user_id=i.owner_user_id
+                         WHERE i.started_at_ms IS NOT NULL ORDER BY i.owner_user_id,i.started_at_ms) first_use
                    LEFT JOIN promotion_identity_bindings b ON b.user_id=first_use.user_id AND b.deleted_at_ms IS NULL
                    WHERE first_use.started_at_ms >= %s AND first_use.started_at_ms < %s
                    ON CONFLICT (conversion_type,source_record_id) DO NOTHING""",
@@ -125,7 +126,8 @@ class PromotionAnalyticsJob:
                    (conversion_event_id,event_id,conversion_type,source_record_id,visitor_hmac,user_id,amount_cents,currency,occurred_at_ms,created_at_ms)
                    SELECT 'promotion-conversion-' || md5('order:' || o.order_id),
                           'authority-order-' || o.order_id,'order',o.order_id,b.visitor_hmac,o.user_id,o.amount_cents,o.currency,o.created_at_ms,%s
-                   FROM billing_checkout_orders o LEFT JOIN promotion_identity_bindings b ON b.user_id=o.user_id AND b.deleted_at_ms IS NULL
+                   FROM billing_checkout_orders o JOIN auth_users u ON u.user_id=o.user_id
+                   LEFT JOIN promotion_identity_bindings b ON b.user_id=o.user_id AND b.deleted_at_ms IS NULL
                    WHERE o.created_at_ms >= %s AND o.created_at_ms < %s
                    ON CONFLICT (conversion_type,source_record_id) DO NOTHING""",
                 (current, start_ms, end_ms),
@@ -136,7 +138,8 @@ class PromotionAnalyticsJob:
                    (conversion_event_id,event_id,conversion_type,source_record_id,visitor_hmac,user_id,amount_cents,currency,occurred_at_ms,created_at_ms)
                    SELECT 'promotion-conversion-' || md5('payment:' || o.order_id),
                           'authority-payment-' || o.order_id,'payment',o.order_id,b.visitor_hmac,o.user_id,o.amount_cents,o.currency,o.paid_at_ms,%s
-                   FROM billing_checkout_orders o LEFT JOIN promotion_identity_bindings b ON b.user_id=o.user_id AND b.deleted_at_ms IS NULL
+                   FROM billing_checkout_orders o JOIN auth_users u ON u.user_id=o.user_id
+                   LEFT JOIN promotion_identity_bindings b ON b.user_id=o.user_id AND b.deleted_at_ms IS NULL
                    WHERE o.status='paid' AND o.paid_at_ms >= %s AND o.paid_at_ms < %s
                    ON CONFLICT (conversion_type,source_record_id) DO NOTHING""",
                 (current, start_ms, end_ms),
@@ -307,20 +310,34 @@ class PromotionAnalyticsJob:
 
 
 def main() -> None:
+    settings = get_settings()
     parser = argparse.ArgumentParser(description="Run isolated promotion analytics aggregation")
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--interval-seconds", type=int, default=300)
+    parser.add_argument("--ingest-interval-seconds", type=int, default=settings.promotion_ingest_interval_seconds)
     args = parser.parse_args()
-    settings = get_settings()
     if not settings.promotion_enabled:
         raise SystemExit("promotion analytics is disabled")
     job = PromotionAnalyticsJob(PromotionRepository(settings))
     if args.once:
         print(json.dumps(job.run_once(), ensure_ascii=False))
         return
+    aggregate_interval = max(30, args.interval_seconds)
+    ingest_interval = max(1, min(args.ingest_interval_seconds, aggregate_interval))
+    next_aggregation_at = 0.0
     while True:
-        job.run_once()
-        sleep(max(30, args.interval_seconds))
+        current = monotonic()
+        if current >= next_aggregation_at:
+            job.run_once()
+            next_aggregation_at = monotonic() + aggregate_interval
+        else:
+            try:
+                job.consume()
+            except Exception:
+                # Ingestion is isolated from product traffic and will retry on the
+                # next bounded cycle. The scheduled run records aggregate health.
+                pass
+        sleep(min(ingest_interval, max(1.0, next_aggregation_at - monotonic())))
 
 
 if __name__ == "__main__":

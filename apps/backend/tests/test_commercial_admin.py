@@ -143,6 +143,41 @@ def test_expired_admin_session_is_revoked_when_rejected() -> None:
     assert repository.revoked == ["admin-session-expired"]
 
 
+def test_active_admin_session_slides_idle_expiry_without_refreshing_recent_mfa() -> None:
+    class RepositoryStub:
+        touched: list[tuple[str, int]] = []
+
+        def session_by_fingerprint(self, fingerprint: str):
+            return {
+                "admin_session_id": "admin-session-active",
+                "user_id": "synthetic-admin",
+                "status": "active",
+                "authorization_status": "active",
+                "authorization_version": 1,
+                "current_authorization_version": 1,
+                "expires_at_ms": 9_999_999_999_999,
+                "permissions_json": ["users.read"],
+                "role": "support",
+                "recent_mfa_at_ms": 123,
+            }
+
+        def touch_session(self, admin_session_id: str, *, expires_at_ms: int) -> None:
+            self.touched.append((admin_session_id, expires_at_ms))
+
+    settings = Settings(
+        admin_enabled=True,
+        admin_session_ttl_seconds=28_800,
+        admin_session_signing_secret="synthetic-signing-secret",
+        admin_encryption_key="synthetic-encryption-key",
+        database_url="postgresql://synthetic.invalid/offersteady",
+    )
+    repository = RepositoryStub()
+    principal = AdminService(settings, repository).authenticate("active-token")  # type: ignore[arg-type]
+    assert principal.recent_mfa_at_ms == 123
+    assert repository.touched[0][0] == "admin-session-active"
+    assert repository.touched[0][1] > 28_000_000
+
+
 def test_browser_admin_provisioning_requires_existing_bootstrap_and_registered_user() -> None:
     class RepositoryStub:
         active_count = 0

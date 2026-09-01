@@ -27,7 +27,7 @@ KNOWN_BOT_MARKERS = (
     "bytespider", "baiduspider", "wechat", "micromessenger", "curl/", "wget/",
 )
 _queue_counter_lock = Lock()
-_queue_counters = {"accepted": 0, "dropped": 0}
+_queue_counters: dict[str, int | str | None] = {"accepted": 0, "dropped": 0, "lastErrorCode": None}
 
 
 def validate_promotion_runtime(settings: Settings) -> None:
@@ -790,33 +790,39 @@ class PromotionEventQueue:
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-
-    def publish(self, payload: dict[str, Any]) -> bool:
-        if not self.settings.redis_url:
-            with _queue_counter_lock:
-                _queue_counters["dropped"] += 1
-            return False
-        try:
+        self._client = None
+        if self.settings.redis_url:
             import redis
 
-            client = redis.Redis.from_url(
+            self._client = redis.Redis.from_url(
                 self.settings.redis_url,
                 socket_timeout=max(0.005, self.settings.promotion_queue_timeout_ms / 1000),
                 socket_connect_timeout=max(0.005, self.settings.promotion_queue_timeout_ms / 1000),
                 decode_responses=True,
             )
-            client.xadd(
+
+    def publish(self, payload: dict[str, Any]) -> bool:
+        if not self.settings.redis_url:
+            with _queue_counter_lock:
+                _queue_counters["dropped"] = int(_queue_counters["dropped"] or 0) + 1
+                _queue_counters["lastErrorCode"] = "redis_not_configured"
+            return False
+        try:
+            assert self._client is not None
+            self._client.xadd(
                 self.settings.promotion_redis_stream,
                 {"payload": json.dumps(payload, separators=(",", ":"), ensure_ascii=True)},
                 maxlen=self.settings.promotion_redis_stream_maxlen,
                 approximate=True,
             )
             with _queue_counter_lock:
-                _queue_counters["accepted"] += 1
+                _queue_counters["accepted"] = int(_queue_counters["accepted"] or 0) + 1
+                _queue_counters["lastErrorCode"] = None
             return True
-        except Exception:
+        except Exception as exc:
             with _queue_counter_lock:
-                _queue_counters["dropped"] += 1
+                _queue_counters["dropped"] = int(_queue_counters["dropped"] or 0) + 1
+                _queue_counters["lastErrorCode"] = type(exc).__name__[:80]
             return False
 
     def health(self) -> dict[str, Any]:
@@ -825,19 +831,11 @@ class PromotionEventQueue:
         depth: int | None = None
         pending: int | None = None
         state = "disabled" if not self.settings.redis_url else "unavailable"
-        if self.settings.redis_url:
+        if self._client is not None:
             try:
-                import redis
-
-                client = redis.Redis.from_url(
-                    self.settings.redis_url,
-                    socket_timeout=max(0.005, self.settings.promotion_queue_timeout_ms / 1000),
-                    socket_connect_timeout=max(0.005, self.settings.promotion_queue_timeout_ms / 1000),
-                    decode_responses=True,
-                )
-                depth = int(client.xlen(self.settings.promotion_redis_stream))
+                depth = int(self._client.xlen(self.settings.promotion_redis_stream))
                 try:
-                    pending_info = client.xpending(self.settings.promotion_redis_stream, "offersteady-promotion-analytics")
+                    pending_info = self._client.xpending(self.settings.promotion_redis_stream, "offersteady-promotion-analytics")
                     pending = int(pending_info.get("pending", 0)) if isinstance(pending_info, dict) else None
                 except Exception:
                     pending = 0

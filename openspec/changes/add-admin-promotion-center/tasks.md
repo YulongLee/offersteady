@@ -30,6 +30,7 @@
 - [x] 4.4 Implement known-bot/platform-preview classification, administrator preview exclusion, internal-test exclusion, and aggregate exclusion reasons without retaining raw IP or full UA.
 - [x] 4.5 Add public redirect security tests for unknown, disabled, expired, malformed, enumerated, external-target, CRLF, and open-redirect attempts.
 - [x] 4.6 Add latency and failure-injection tests proving redirect p95 and product access remain bounded when Redis, PostgreSQL, or the analytics worker is unavailable.
+- [x] 4.7 Reuse the bounded Redis producer connection, expose safe delivery failures, and add a successful redirect-to-queue regression test.
 
 ## 5. Identity Claim and Conversion Facts
 
@@ -38,6 +39,7 @@
 - [x] 5.3 Record actual desktop package response-start events separately from download-button clicks and deduplicate them by visitor/user and artifact.
 - [x] 5.4 Derive registration, first live interview, order, payment, payer, and revenue facts from `auth_users`, `interview_sessions`, and `billing_checkout_orders` rather than client declarations.
 - [x] 5.5 Implement account-deletion cleanup that removes or irreversibly detaches promotion identity bindings and user-linked conversion facts while retaining non-identifying aggregates.
+- [x] 5.6 Ignore orphaned legacy user references while deriving authoritative conversions so one invalid historical row cannot stop the analytics worker.
 
 ## 6. Attribution and Aggregation
 
@@ -70,6 +72,7 @@
 - [x] 8.6 Build the conversion funnel with counts, stage and cumulative rates, drop-off, observing/mature state, metric help, and empty/partial/delayed states.
 - [x] 8.7 Build cost-entry and reversal interactions restricted by permission and requiring an explicit reason.
 - [x] 8.8 Add responsive, keyboard, screen-reader, loading, error, retry, stale-data, and no-data tests while reusing the existing admin visual system.
+- [x] 8.9 Localize promotion table headers, metadata, statuses, and metric labels in the Chinese administration console.
 
 ## 9. Privacy, Security, and Operational Isolation
 

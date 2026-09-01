@@ -250,11 +250,13 @@ class AdminRepository:
             (fingerprint,),
         )
 
-    def touch_session(self, admin_session_id: str) -> None:
+    def touch_session(self, admin_session_id: str, *, expires_at_ms: int) -> None:
         with self.connect() as connection, connection.cursor() as cursor:
             cursor.execute(
-                "UPDATE admin_sessions SET last_used_at_ms = %s WHERE admin_session_id = %s",
-                (now_ms(), admin_session_id),
+                """UPDATE admin_sessions
+                   SET last_used_at_ms = %s, expires_at_ms = %s
+                   WHERE admin_session_id = %s AND status = 'active'""",
+                (now_ms(), expires_at_ms, admin_session_id),
             )
             connection.commit()
 

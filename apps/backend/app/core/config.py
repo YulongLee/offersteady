@@ -251,7 +251,8 @@ class Settings(BaseSettings):
     promotion_qualification_min_visible_ms: int = 800
     promotion_redis_stream: str = "offersteady:promotion:events"
     promotion_redis_stream_maxlen: int = 100_000
-    promotion_queue_timeout_ms: int = 35
+    promotion_queue_timeout_ms: int = 200
+    promotion_ingest_interval_seconds: int = 10
     promotion_visitor_hmac_secret: str = "offersteady-local-promotion-hmac"
     promotion_redirect_rate_limit_per_minute: int = 120
     promotion_qualification_rate_limit_per_minute: int = 30

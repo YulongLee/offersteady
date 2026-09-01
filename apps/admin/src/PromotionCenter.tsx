@@ -16,23 +16,53 @@ const tabs: { id: Tab; label: string }[] = [
 ];
 
 const metricLabels: Record<string, string> = {
-  uniqueVisitors: "有效 UV", registrations: "注册用户", activatedUsers: "首次使用",
+  uniqueVisitors: "有效访客", registrations: "注册用户", activatedUsers: "首次使用",
   payingUsers: "付费用户", paidOrders: "支付订单", revenueCents: "推广贡献实收",
-  costCents: "推广成本", cacCents: "CAC", roas: "ROAS", roi: "ROI",
+  costCents: "推广成本", cacCents: "获客成本（CAC）", roas: "广告投入产出（ROAS）", roi: "投资回报率（ROI）",
+};
+
+const fieldLabels: Record<string, string> = {
+  dimensionName: "名称", code: "渠道编码", name: "名称", contentName: "内容名称", channelName: "渠道",
+  campaignName: "营销活动", destinationPath: "目标页面", publicUrl: "推广链接", status: "状态",
+  isSystem: "系统渠道", sortOrder: "排序", objective: "推广目标", budgetCents: "计划预算",
+  actualCostCents: "实际成本", channelCount: "渠道数", linkCount: "链接数", startsAtMs: "开始时间",
+  endsAtMs: "结束时间", createdAtMs: "创建时间", updatedAtMs: "更新时间", costCoverage: "成本覆盖",
+  qualifiedVisits: "有效访问次数", downloads: "实际下载", orders: "下单数",
+  registrationRate: "注册转化率", activationRate: "首次使用转化率", paymentRate: "付费转化率",
+  ...metricLabels,
+};
+
+const stateLabels: Record<string, string> = {
+  active: "已启用", inactive: "已停用", draft: "草稿", paused: "已暂停", ended: "已结束",
+  current: "数据已更新", delayed: "数据延迟", partial: "数据不完整", observing: "观察中", mature: "观察完成",
+  healthy: "正常", unavailable: "暂不可用", disabled: "未启用", completed: "已完成", failed: "失败",
+  missing: "成本未录入", complete: "完整", true: "是", false: "否",
+  first_touch: "首次触点", last_non_direct_touch: "末次非直接触点",
 };
 
 const formatValue = (key: string, value: unknown) => {
-  if (value === null || value === undefined) return "成本未录入";
+  if (value === null || value === undefined) return ["costCents", "cacCents", "roas", "roi"].includes(key) ? "成本未录入" : "—";
   if (key.endsWith("Cents")) return `¥${(Number(value) / 100).toLocaleString("zh-CN", { minimumFractionDigits: 2 })}`;
   if (key === "roas") return `${Number(value).toFixed(2)}×`;
   if (key === "roi") return `${(Number(value) * 100).toFixed(1)}%`;
   return Number(value).toLocaleString("zh-CN");
 };
 
+const formatTableValue = (key: string, value: unknown) => {
+  if (value === null || value === undefined || value === "") return "—";
+  if (key.endsWith("AtMs")) return new Date(Number(value)).toLocaleString("zh-CN");
+  if (key.endsWith("Cents") || ["roas", "roi"].includes(key)) return formatValue(key, value);
+  if (key.endsWith("Rate")) return `${(Number(value) * 100).toFixed(1)}%`;
+  const localized = stateLabels[String(value)];
+  if (localized) return localized;
+  if (typeof value === "number") return value.toLocaleString("zh-CN");
+  return String(value);
+};
+
 const Table = ({ rows, empty }: { rows: Row[]; empty: string }) => {
   if (!rows.length) return <div className="promotion-empty">{empty}</div>;
-  const keys = Object.keys(rows[0]!).filter(key => !/Id$/.test(key) || key === "dimensionId").slice(0, 10);
-  return <div className="table-wrap"><table><thead><tr>{keys.map(key => <th key={key}>{key}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={String(row.linkId ?? row.campaignId ?? row.channelId ?? row.dimensionId ?? index)}>{keys.map(key => <td key={key}>{String(row[key] ?? "—")}</td>)}</tr>)}</tbody></table></div>;
+  const keys = Object.keys(rows[0]!).filter(key => !/Id$/.test(key) && !key.endsWith("ByUserId")).slice(0, 10);
+  return <div className="table-wrap"><table><thead><tr>{keys.map(key => <th key={key}>{fieldLabels[key] ?? "指标"}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={String(row.linkId ?? row.campaignId ?? row.channelId ?? row.dimensionId ?? index)}>{keys.map(key => <td key={key}>{formatTableValue(key, row[key])}</td>)}</tr>)}</tbody></table></div>;
 };
 
 export function PromotionCenter({ permissions, onAuthenticationExpired }: { permissions: string[]; onAuthenticationExpired: (message: string) => void }) {
@@ -200,8 +230,8 @@ export function PromotionCenter({ permissions, onAuthenticationExpired }: { perm
     {loading ? <div className="loading">正在读取推广数据…</div> : null}
     {!loading && tab === "overview" ? <>
       <div className="promotion-kpis">{Object.keys(metricLabels).map(key => <article key={key}><small>{metricLabels[key]}</small><strong>{formatValue(key, overview[key])}</strong></article>)}</div>
-      <div className="promotion-coverage"><span>数据时区：{String(metadata.timezone ?? "Asia/Shanghai")}</span><span>归因模型：{String(metadata.attributionModel ?? model)}</span><span>数据状态：{String(metadata.freshness ?? "—")}</span><span>Cohort：{String(metadata.cohortState ?? "—")}</span></div>
-      {data.health ? <div className="promotion-health">{(() => { const health = data.health as Row; const queue = (health.queue ?? {}) as Row; const run = (health.latestRun ?? {}) as Row; return <><span>分析任务：{String(run.status ?? "尚未运行")}</span><span>队列：{String(queue.state ?? "—")} / 待处理 {String(queue.pending ?? 0)}</span><span>丢弃事件：{String(queue.dropped ?? 0)}</span><span>快照：{health.snapshotFreshAtMs ? new Date(Number(health.snapshotFreshAtMs)).toLocaleString("zh-CN") : "尚未生成"}</span><span>未匹配身份：{String(health.unmatchedIdentities ?? 0)}</span><span>核对异常：{String(run.mismatchCount ?? 0)}</span></>; })()}</div> : null}
+      <div className="promotion-coverage"><span>数据时区：{String(metadata.timezone ?? "Asia/Shanghai")}</span><span>归因模型：{stateLabels[String(metadata.attributionModel ?? model)] ?? "—"}</span><span>数据状态：{stateLabels[String(metadata.freshness ?? "")] ?? "—"}</span><span>人群观察：{stateLabels[String(metadata.cohortState ?? "")] ?? "—"}</span></div>
+      {data.health ? <div className="promotion-health">{(() => { const health = data.health as Row; const queue = (health.queue ?? {}) as Row; const run = (health.latestRun ?? {}) as Row; return <><span>分析任务：{stateLabels[String(run.status ?? "")] ?? "尚未运行"}</span><span>事件队列：{stateLabels[String(queue.state ?? "")] ?? "—"} / 待处理 {String(queue.pending ?? 0)}</span><span>未送达事件：{String(queue.dropped ?? 0)}</span><span>快照：{health.snapshotFreshAtMs ? new Date(Number(health.snapshotFreshAtMs)).toLocaleString("zh-CN") : "尚未生成"}</span><span>未匹配身份：{String(health.unmatchedIdentities ?? 0)}</span><span>核对异常：{String(run.mismatchCount ?? 0)}</span></>; })()}</div> : null}
       <div className="promotion-overview-grid"><article><h3>转化趋势</h3>{trendRows.length ? trendRows.map(row => { const metrics = (row.metricsJson ?? {}) as Row; return <div className="promotion-trend-row" key={String(row.bucketDate)}><span>{String(row.bucketDate)}</span><i style={{ width: `${Math.min(100, Number(metrics.uniqueVisitors ?? 0) * 4)}%` }} /><b>{Number(metrics.uniqueVisitors ?? 0)} UV</b></div>; }) : <p>日快照尚未生成；今天的数据已在上方实时展示。</p>}</article><article><h3>紧凑漏斗</h3>{((overviewFunnel.stages ?? []) as Row[]).map(stage => <div className="promotion-mini-funnel" key={String(stage.key)}><span>{String(stage.label)}</span><b>{Number(stage.count ?? 0).toLocaleString("zh-CN")}</b><small>{stage.cumulativeRate == null ? "—" : `${(Number(stage.cumulativeRate) * 100).toFixed(1)}%`}</small></div>)}</article></div>
       <div className="promotion-top-grid"><article><h3>Top 渠道</h3><Table rows={(data.topChannels ?? []) as Row[]} empty="暂无渠道数据" /></article><article><h3>Top 活动</h3><Table rows={(data.topCampaigns ?? []) as Row[]} empty="暂无活动数据" /></article><article><h3>Top 链接</h3><Table rows={(data.topLinks ?? []) as Row[]} empty="暂无链接数据" /></article></div>
       {canManageCost ? <form className="promotion-form cost" onSubmit={addCost}><h3>追加推广成本</h3><select value={costDraft.scopeType} onChange={event => setCostDraft(current => ({ ...current, scopeType: event.target.value, scopeId: "" }))}><option value="campaign">活动</option><option value="channel">渠道</option><option value="link">链接</option></select><select required value={costDraft.scopeId} onChange={event => setCostDraft(current => ({ ...current, scopeId: event.target.value }))}><option value="">选择归属</option>{costScopes.map(row => <option key={String(row.channelId ?? row.campaignId ?? row.linkId)} value={String(row.channelId ?? row.campaignId ?? row.linkId)}>{String(row.name ?? row.contentName)}</option>)}</select><input type="date" value={costDraft.costDate} onChange={event => setCostDraft(current => ({ ...current, costDate: event.target.value }))} /><input required type="number" min="0.01" step="0.01" placeholder="成本（元）" value={costDraft.amountYuan} onChange={event => setCostDraft(current => ({ ...current, amountYuan: event.target.value }))} /><input required minLength={3} placeholder="录入原因" value={costDraft.reason} onChange={event => setCostDraft(current => ({ ...current, reason: event.target.value }))} /><button className="primary">追加成本</button></form> : null}

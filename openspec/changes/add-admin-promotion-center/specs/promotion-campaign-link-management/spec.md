@@ -40,6 +40,10 @@ The public redirect endpoint MUST accept only stored active slugs and MUST redir
 - **WHEN** a visitor opens an active promotion URL
 - **THEN** the system assigns first-party anonymous identifiers, queues a minimal redirect event, and redirects to the configured internal destination
 
+#### Scenario: Real visitor event is accepted by the queue
+- **WHEN** an active promotion URL is opened by a non-excluded browser and Redis is healthy
+- **THEN** the redirect-hit and qualified-visit events are durably accepted using a reusable bounded connection and become visible in the report within the documented freshness interval
+
 #### Scenario: Analytics queue is unavailable
 - **WHEN** the event queue cannot accept a redirect event
 - **THEN** the visitor is still redirected and the system records only a safe operational failure counter

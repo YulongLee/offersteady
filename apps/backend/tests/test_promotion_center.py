@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from pathlib import Path
 import json
 from time import perf_counter
@@ -14,8 +15,8 @@ from app.api.promotion import _admit, _read_click, _sign_click, redirect_promoti
 from app.core.config import REPO_ROOT, Settings, get_settings
 from app.main import create_app
 from app.services.admin_service import HIGH_RISK_PERMISSIONS, PERMISSIONS_BY_ROLE
-from app.services.promotion_analytics_job import sanitize_event
-from app.services.promotion_repository import classify_client, cost_metrics, safe_destination
+from app.services.promotion_analytics_job import PromotionAnalyticsJob, sanitize_event
+from app.services.promotion_repository import PromotionEventQueue, classify_client, cost_metrics, safe_destination
 from app.services.promotion_repository import PromotionRepository, validate_promotion_runtime
 
 
@@ -138,6 +139,38 @@ def test_event_schema_rejects_sensitive_and_oversized_payloads() -> None:
         sanitize_event({**valid, "access_token": "secret"})
     with pytest.raises(ValueError, match="too_large"):
         sanitize_event({**valid, "referrer_host": "x" * 513})
+
+
+def test_promotion_queue_reuses_one_bounded_redis_client(monkeypatch) -> None:
+    import redis
+
+    class RedisStub:
+        calls = 0
+
+        def xadd(self, *args, **kwargs):
+            self.calls += 1
+            return f"{self.calls}-0"
+
+    client = RedisStub()
+    factory_calls: list[dict[str, object]] = []
+
+    def from_url(*args, **kwargs):
+        factory_calls.append(kwargs)
+        return client
+
+    monkeypatch.setattr(redis.Redis, "from_url", from_url)
+    queue = PromotionEventQueue(promotion_settings(redis_url="redis://synthetic.invalid/0", promotion_queue_timeout_ms=200))
+    assert queue.publish({"event_id": "one"}) is True
+    assert queue.publish({"event_id": "two"}) is True
+    assert len(factory_calls) == 1
+    assert factory_calls[0]["socket_timeout"] == 0.2
+    assert client.calls == 2
+
+
+def test_authoritative_conversion_queries_skip_orphaned_legacy_users() -> None:
+    source = inspect.getsource(PromotionAnalyticsJob.derive_authoritative_conversions)
+    assert "JOIN auth_users u ON u.user_id=i.owner_user_id" in source
+    assert source.count("JOIN auth_users u ON u.user_id=o.user_id") == 2
 
 
 def test_promotion_migration_contains_required_exactly_once_and_bounded_indexes() -> None:

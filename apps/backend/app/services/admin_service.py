@@ -138,7 +138,10 @@ class AdminService:
             or int(row["authorization_version"]) != int(row["current_authorization_version"])
         ):
             raise PermissionError("admin_session_invalid")
-        self.repository.touch_session(str(row["admin_session_id"]))
+        self.repository.touch_session(
+            str(row["admin_session_id"]),
+            expires_at_ms=current + self.settings.admin_session_ttl_seconds * 1000,
+        )
         permissions = row["permissions_json"]
         if isinstance(permissions, str):
             permissions = json.loads(permissions)

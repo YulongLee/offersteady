@@ -43,8 +43,8 @@ describe("promotion center shell", () => {
     render(<PromotionCenter permissions={["promotion.read"]} onAuthenticationExpired={() => undefined} />);
     expect(screen.getByText("正在读取推广数据…")).toBeTruthy();
     await waitFor(() => expect(screen.getByText(/日快照尚未生成/)).toBeTruthy());
-    expect(screen.getByText("数据状态：current")).toBeTruthy();
-    expect(screen.getByText("Cohort：observing")).toBeTruthy();
+    expect(screen.getByText("数据状态：数据已更新")).toBeTruthy();
+    expect(screen.getByText("人群观察：观察中")).toBeTruthy();
   });
 
   it("offers a keyboard-focusable retry after a report error", async () => {
@@ -61,8 +61,24 @@ describe("promotion center shell", () => {
     stubOverviewRequests();
     vi.mocked(adminApi.promotionOverview).mockResolvedValueOnce({ metrics: { costCents: null }, metadata: { freshness: "delayed", cohortState: "observing" } });
     render(<PromotionCenter permissions={["promotion.read"]} onAuthenticationExpired={() => undefined} />);
-    await waitFor(() => expect(screen.getByText("数据状态：delayed")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("数据状态：数据延迟")).toBeTruthy());
     expect(screen.getAllByText("成本未录入").length).toBeGreaterThan(0);
+  });
+
+  it("renders promotion indicators and states in Chinese instead of raw API keys", async () => {
+    stubOverviewRequests();
+    vi.spyOn(adminApi, "promotionChannels").mockResolvedValue({ items: [{ channelId: "channel-one", code: "nowcoder", name: "牛客", status: "active", isSystem: false }] });
+    vi.spyOn(adminApi, "promotionCampaigns").mockResolvedValue({ items: [] });
+    vi.spyOn(adminApi, "promotionLinks").mockResolvedValue({ items: [] });
+    render(<PromotionCenter permissions={["promotion.read"]} onAuthenticationExpired={() => undefined} />);
+    await waitFor(() => expect(screen.getByText(/日快照尚未生成/)).toBeTruthy());
+    vi.mocked(adminApi.promotionReport).mockResolvedValueOnce({ items: [{ dimensionId: "channel-one", dimensionName: "牛客", uniqueVisitors: 3, registrationRate: 0.5, revenueCents: 9900 }], metadata: {} });
+    fireEvent.click(screen.getByRole("tab", { name: "渠道分析" }));
+    await waitFor(() => expect(screen.getByText("有效访客")).toBeTruthy());
+    expect(screen.getByText("系统渠道")).toBeTruthy();
+    expect(screen.getByText("已启用")).toBeTruthy();
+    expect(screen.queryByText("uniqueVisitors")).toBeNull();
+    expect(screen.queryByText("registrationRate")).toBeNull();
   });
 
   it("keeps empty link management truthful and keyboard reachable", async () => {

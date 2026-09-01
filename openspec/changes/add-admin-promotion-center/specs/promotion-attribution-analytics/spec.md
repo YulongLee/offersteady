@@ -69,6 +69,8 @@ The system MUST materialize attribution facts with a uniqueness boundary coverin
 ### Requirement: Promotion overview exposes decision-ready metrics
 The promotion overview SHALL provide qualified visits, unique visitors, registrations, activated users, paying users, paid orders, attributed paid revenue, entered cost, registration rate, activation rate, payment rate, CAC, ROAS, and ROI for the selected time range and attribution model. The report MUST state timezone, generation time, data freshness, attribution coverage, excluded traffic, and metric definitions.
 
+All operator-facing metric names, states, table headers, and funnel labels in the Chinese administration console SHALL be rendered in Chinese; stable API field names MAY remain language-neutral and MUST NOT be exposed directly as user-facing labels.
+
 #### Scenario: Administrator views today's promotion result
 - **WHEN** an administrator selects today
 - **THEN** the overview shows bounded near-real-time totals with a freshness timestamp and keeps historical daily snapshots separate from incomplete current-day values
@@ -76,6 +78,10 @@ The promotion overview SHALL provide qualified visits, unique visitors, registra
 #### Scenario: Revenue is available but cost coverage is partial
 - **WHEN** some links in the selected range have no cost records
 - **THEN** the overview marks cost-derived metrics as partial and does not imply complete profitability
+
+#### Scenario: Administrator reads promotion detail tables
+- **WHEN** the Chinese administration console renders channel, campaign, link, health, or attribution metadata
+- **THEN** it displays Chinese labels and readable localized states instead of raw API keys or English enum values
 
 ### Requirement: Reports compare campaigns, channels, and links consistently
 The system SHALL support the same date range, attribution model, timezone, bot filter, and metric definitions across campaign, channel, and link reports. Aggregating mutually exclusive rows under the same model MUST reconcile to the overview totals except for explicitly labeled direct, organic, or unattributed buckets.
