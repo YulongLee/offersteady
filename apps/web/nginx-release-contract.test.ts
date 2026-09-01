@@ -35,4 +35,16 @@ describe("production nginx release contract", () => {
     expect(sseLocation).toContain("proxy_read_timeout 3600s;");
     expect(sseLocation).not.toContain("proxy_set_header Upgrade");
   });
+
+  it("serves both written exam workbench routes through the authenticated SPA", () => {
+    const nginxConfig = readFileSync(
+      resolve(process.cwd(), "../../infra/nginx/default.conf"),
+      "utf8",
+    );
+
+    expect(nginxConfig).toContain("/written-exams(?:/new)?");
+    expect(nginxConfig).toMatch(
+      /location ~ \^\/\(\?:login[\s\S]*?try_files \/index\.html =404;/,
+    );
+  });
 });
