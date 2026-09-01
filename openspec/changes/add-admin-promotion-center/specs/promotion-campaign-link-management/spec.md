@@ -80,3 +80,7 @@ The system MUST enforce `promotion.read`, `promotion.manage`, and `promotion.cos
 #### Scenario: Read-only operator opens promotion center
 - **WHEN** an administrator has `promotion.read` but not management permissions
 - **THEN** the administrator can view aggregate reports but cannot modify channels, campaigns, links, or costs
+
+#### Scenario: Operator manages ordinary promotion content during an active session
+- **WHEN** an authorized administrator with a valid active session creates, edits, clones, activates, or deactivates a channel, campaign, or link
+- **THEN** the operation uses `promotion.manage` without forcing repeated recent-MFA login, while cost changes continue to require `promotion.cost.manage` and recent verification

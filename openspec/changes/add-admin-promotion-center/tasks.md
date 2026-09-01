@@ -21,6 +21,7 @@
 - [x] 3.4 Enforce channel/campaign immutability after a link receives its first qualified touchpoint and return a clone-based correction response.
 - [x] 3.5 Implement append-only cost entry and explicit cost reversal APIs with reason, actor, date, scope, and currency validation.
 - [x] 3.6 Add independent `promotion.read`, `promotion.manage`, and `promotion.cost.manage` permissions, recent-MFA rules where applicable, rate limits, pagination, and query timeouts.
+- [x] 3.7 Treat ordinary channel/campaign/link management as an active-session operation while retaining recent verification for promotion cost changes.
 
 ## 4. Public Redirect and Visit Qualification
 

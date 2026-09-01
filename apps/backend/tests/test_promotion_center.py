@@ -217,7 +217,7 @@ def test_permissions_are_independent_and_mutations_require_recent_mfa() -> None:
     assert "promotion.manage" in PERMISSIONS_BY_ROLE["operations"]
     assert "promotion.cost.manage" in PERMISSIONS_BY_ROLE["finance"]
     assert "promotion.manage" not in PERMISSIONS_BY_ROLE["finance"]
-    assert "promotion.manage" in HIGH_RISK_PERMISSIONS
+    assert "promotion.manage" not in HIGH_RISK_PERMISSIONS
     assert "promotion.cost.manage" in HIGH_RISK_PERMISSIONS
 
 

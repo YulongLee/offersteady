@@ -53,7 +53,7 @@ SAFE_DETAIL_KEYS = frozenset({
     "channel_id", "campaign_id", "link_id", "scope_type", "amount_cents", "status",
 })
 HIGH_RISK_PERMISSIONS = frozenset({
-    "users.suspend", "billing.adjust", "catalog.manage", "redemptions.generate", "payments.manage", "payments.reconcile", "growth.manage", "admins.manage", "promotion.manage", "promotion.cost.manage",
+    "users.suspend", "billing.adjust", "catalog.manage", "redemptions.generate", "payments.manage", "payments.reconcile", "growth.manage", "admins.manage", "promotion.cost.manage",
 })
 
 
