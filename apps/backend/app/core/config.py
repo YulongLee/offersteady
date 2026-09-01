@@ -240,7 +240,7 @@ class Settings(BaseSettings):
     # Promotion analytics is an isolated, opt-in side path. Keeping collection
     # disabled by default prevents unfinished/local builds from changing live traffic.
     promotion_enabled: bool = False
-    promotion_public_base_url: str = "http://127.0.0.1:5173"
+    promotion_public_base_url: str | None = None
     promotion_safe_fallback_path: str = "/"
     promotion_allowed_destination_prefixes: list[str] = Field(default_factory=lambda: ["/", "/app", "/guide", "/login"])
     promotion_attribution_window_days: int = 30
@@ -331,7 +331,11 @@ class Settings(BaseSettings):
     realtime_asr_turn_detection_threshold: float = 0.2
     realtime_asr_turn_detection_silence_duration_ms: int = 800
     realtime_asr_connect_timeout_seconds: float = 8.0
-    
+
+    @property
+    def resolved_promotion_public_base_url(self) -> str:
+        """Use the canonical Web origin unless a dedicated promotion origin is configured."""
+        return (self.promotion_public_base_url or self.public_web_base_url).rstrip("/")
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

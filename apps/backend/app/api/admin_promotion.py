@@ -205,7 +205,7 @@ def update_campaign(campaign_id: str, payload: PromotionCampaignUpdate, request:
 def list_links(principal: Annotated[AdminPrincipal, Depends(permission("promotion.read"))], limit: int = 50, offset: int = 0, status: str | None = Query(default=None, pattern="^(active|inactive)$")):
     limit, offset = _page(limit, offset)
     items = _call(lambda: repository().list_links(limit=limit, offset=offset, status=status))
-    base_url = get_settings().promotion_public_base_url.rstrip("/")
+    base_url = get_settings().resolved_promotion_public_base_url
     return {"data": {"items": [{**_serialize(item), "publicUrl": f"{base_url}/r/{item['slug']}"} for item in items], "limit": limit, "offset": offset}}
 
 
@@ -213,7 +213,7 @@ def list_links(principal: Annotated[AdminPrincipal, Depends(permission("promotio
 def create_link(payload: PromotionLinkCreate, request: Request, principal: Annotated[AdminPrincipal, Depends(permission("promotion.manage"))]):
     row = _call(lambda: repository().create_link(payload.model_dump(), actor_user_id=principal.user_id))
     _audit(request, principal, action="promotion.link.create", resource_type="promotion_link", resource_id=row["link_id"], reason="create promotion link", details={"link_id": row["link_id"], "channel_id": row["channel_id"], "campaign_id": row["campaign_id"]})
-    return {"data": {**_serialize(row), "publicUrl": f"{get_settings().promotion_public_base_url.rstrip('/')}/r/{row['slug']}"}}
+    return {"data": {**_serialize(row), "publicUrl": f"{get_settings().resolved_promotion_public_base_url}/r/{row['slug']}"}}
 
 
 @admin_promotion_router.put("/links/{link_id}")

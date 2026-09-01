@@ -35,6 +35,17 @@ def test_promotion_defaults_are_safe_and_disabled() -> None:
     assert settings.promotion_visitor_cookie_days == 90
     assert settings.promotion_touchpoint_retention_days == 180
     assert settings.promotion_reporting_timezone == "Asia/Shanghai"
+    assert settings.resolved_promotion_public_base_url == settings.public_web_base_url
+
+
+def test_promotion_public_origin_defaults_to_canonical_web_origin_and_allows_override() -> None:
+    canonical = promotion_settings(public_web_base_url="https://mianshiwen.cn/")
+    dedicated = promotion_settings(
+        public_web_base_url="https://mianshiwen.cn",
+        promotion_public_base_url="https://go.mianshiwen.cn/",
+    )
+    assert canonical.resolved_promotion_public_base_url == "https://mianshiwen.cn"
+    assert dedicated.resolved_promotion_public_base_url == "https://go.mianshiwen.cn"
 
 
 def test_enabled_production_promotion_requires_private_hmac_secret_and_redis() -> None:

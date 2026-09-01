@@ -49,6 +49,8 @@
 - 普通 Web 访问不发起有效访问请求；注册后的归因认领失败被静默忽略。
 - 下载、注册、面试、ASR、快答、截图、下单和支付能力不依赖推广数据库、Redis Stream 或分析任务。
 
+推广链接默认使用 `OFFERSTEADY_PUBLIC_WEB_BASE_URL` 作为公开域名；只有迁移到独立推广域名时才需要设置 `OFFERSTEADY_PROMOTION_PUBLIC_BASE_URL`。
+
 开启后，跳转事件进入有界 Redis Stream，由独立 `offersteady-promotion-analytics` 任务写入推广表、派生权威转化和生成聚合快照。队列或任务失败只把报表标记为延迟/不完整，不回滚用户操作。
 
 ## 隐私字段边界
