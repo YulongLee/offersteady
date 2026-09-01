@@ -3,7 +3,7 @@
 - [x] 1.1 Confirm the 30-day attribution window, 90-day visitor-cookie lifetime, 180-day raw-touchpoint retention, and `Asia/Shanghai` reporting timezone.
 - [x] 1.2 Confirm that the main “使用” funnel stage means the first successfully started live interview and document desktop binding as a secondary diagnostic metric.
 - [x] 1.3 Define and version the formulas and denominators for qualified UV, registration rate, activation rate, payment rate, CAC, ROAS, ROI, attributed paid revenue, direct, organic, and unattributed.
-- [ ] 1.4 Review the first-party analytics identifier, consent, retention, opt-out, and account-deletion behavior against the production privacy policy before enabling collection.
+- [x] 1.4 Review the first-party analytics identifier, consent, retention, opt-out, and account-deletion behavior against the production privacy policy before enabling collection.
 
 ## 2. Persistence and Migration
 
@@ -11,7 +11,7 @@
 - [x] 2.2 Add uniqueness constraints for channel code, link slug, touchpoint event ID, identity claim, cost correction reference, and conversion source/model attribution.
 - [x] 2.3 Add bounded query indexes for slug lookup, event time, visitor binding, user binding, paid-order attribution, campaign/channel/link dimensions, and daily snapshots.
 - [x] 2.4 Add system buckets for direct, organic, and unattributed data without assigning historical records to a fabricated promotion source.
-- [ ] 2.5 Add repository tests for migration compatibility, idempotent upserts, immutable used-link attribution, cost reversal, concurrent identity claims, and duplicate paid-order aggregation.
+- [x] 2.5 Add repository tests for migration compatibility, idempotent upserts, immutable used-link attribution, cost reversal, concurrent identity claims, and duplicate paid-order aggregation.
 
 ## 3. Promotion Domain and Administrative APIs
 
@@ -58,7 +58,7 @@
 - [x] 7.4 Implement channel comparison APIs using identical filters, denominators, model version, bot rules, and timezone.
 - [x] 7.5 Implement Cohort funnel APIs returning counts, stage/cumulative rates, drop-off, maturity, direct/organic/unattributed buckets, and freshness.
 - [x] 7.6 Add reconciliation tests proving mutually exclusive link/channel/campaign rows sum to overview totals for the same model and range.
-- [ ] 7.7 Add query-plan and load tests proving reporting queries respect existing admin timeout/concurrency budgets and do not degrade user APIs.
+- [x] 7.7 Add query-plan and load tests proving reporting queries respect existing admin timeout/concurrency budgets and do not degrade user APIs.
 
 ## 8. Administrative User Interface
 
@@ -83,7 +83,7 @@
 
 - [x] 10.1 Create a fully synthetic end-to-end fixture covering two channels, one cross-channel campaign, multiple links, bots, direct traffic, repeated visits, registration, download, live use, unpaid order, paid order, costs, and account deletion.
 - [x] 10.2 Verify first-touch and last-non-direct-touch outputs, exactly-once revenue, Cohort maturity, cost coverage, direct/unattributed handling, and all five management pages against the fixture.
-- [ ] 10.3 Run Backend/Admin/Web unit and integration suites, typechecks, production builds, migration checks, privacy checks, redirect benchmarks, analytics load tests, and strict OpenSpec validation.
+- [x] 10.3 Run Backend/Admin/Web unit and integration suites, typechecks, production builds, migration checks, privacy checks, redirect benchmarks, analytics load tests, and strict OpenSpec validation.
 - [ ] 10.4 Deploy additive migrations and disabled Backend/worker functionality first, then validate health and rollback without exposing the management navigation or public collection.
 - [ ] 10.5 Gray-release redirect and visit qualification with internal no-count links, compare raw hits, qualified visits, bot exclusions, queue loss, and redirect latency.
 - [ ] 10.6 Enable identity claims and read-only promotion reports, reconcile attributed totals against authoritative users/orders/payments, and observe at least one complete aggregation period.

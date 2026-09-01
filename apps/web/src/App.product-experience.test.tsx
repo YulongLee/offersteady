@@ -185,6 +185,10 @@ describe("optimized product experience", () => {
     expect(screen.getByRole("heading", { name: "隐私政策", level: 1 })).toBeInTheDocument();
     expect(screen.getAllByText(/原始音频默认不保存/).length).toBeGreaterThan(0);
     expect(screen.getByText(/目前没有向你承诺统一的自动删除期限/)).toBeInTheDocument();
+    expect(screen.getByText(/推广匿名标识计划保留 90 天/)).toBeInTheDocument();
+    expect(screen.getByText(/原始推广触点计划保留 180 天/)).toBeInTheDocument();
+    expect(screen.getByText(/获客归因窗口为注册前 30 天/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "退出推广归因" })).toBeInTheDocument();
     expect(screen.queryByText(/正式商业化前/)).not.toBeInTheDocument();
     privacy.unmount();
 

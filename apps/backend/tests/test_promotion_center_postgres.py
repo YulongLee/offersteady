@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from statistics import quantiles
 from time import perf_counter
 from uuid import uuid4
@@ -10,8 +9,7 @@ from uuid import uuid4
 import psycopg
 import pytest
 
-from app.core.config import REPO_ROOT, Settings
-from app.services.postgres_migrations import apply_sql_migrations
+from app.core.config import Settings
 from app.services.promotion_repository import PromotionRepository, now_ms
 
 
@@ -32,10 +30,26 @@ def repository() -> PromotionRepository:
         admin_query_timeout_ms=1500,
         admin_max_concurrent_queries=2,
     )
-    migrations = sorted((Path(REPO_ROOT) / "apps/backend/migrations/versions").glob("[0-9][0-9][0-9][0-9]_*.sql"))
     with psycopg.connect(DATABASE_URL) as connection, connection.cursor() as cursor:
         cursor.execute("CREATE EXTENSION IF NOT EXISTS vector")
-        apply_sql_migrations(cursor, migrations)
+        # Promotion is additive to these already-authoritative production tables.
+        # Keep the fixture minimal so historical repository-specific migrations
+        # are not incorrectly replayed in filename order.
+        cursor.execute(
+            """CREATE TABLE IF NOT EXISTS auth_users (
+                 user_id TEXT PRIMARY KEY, login_id TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL,
+                 display_name TEXT NOT NULL, avatar_url TEXT NULL, last_login_provider TEXT NOT NULL,
+                 last_login_at_ms BIGINT NOT NULL, created_at_ms BIGINT NOT NULL, updated_at_ms BIGINT NOT NULL,
+                 membership_anchor_ref TEXT NULL
+               );
+               CREATE TABLE IF NOT EXISTS interview_sessions (
+                 session_id TEXT PRIMARY KEY, owner_user_id TEXT NOT NULL, started_at_ms BIGINT NULL
+               );
+               CREATE TABLE IF NOT EXISTS billing_checkout_orders (
+                 order_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, amount_cents INTEGER NOT NULL,
+                 currency TEXT NOT NULL, status TEXT NOT NULL, created_at_ms BIGINT NOT NULL, paid_at_ms BIGINT NULL
+               );"""
+        )
         connection.commit()
     first = PromotionRepository(settings)
     # Applying the same additive migration twice must remain compatible.
@@ -55,17 +69,11 @@ def _insert_user(repository: PromotionRepository, user_id: str, created_at_ms: i
 
 
 def _cleanup(repository: PromotionRepository, prefix: str, user_id: str) -> None:
-    with repository.connect() as connection, connection.cursor() as cursor:
-        cursor.execute("DELETE FROM promotion_attribution_facts WHERE source_record_id LIKE %s", (f"{prefix}%",))
-        cursor.execute("DELETE FROM promotion_conversion_events WHERE source_record_id LIKE %s OR user_id=%s", (f"{prefix}%", user_id))
-        cursor.execute("DELETE FROM promotion_identity_bindings WHERE user_id=%s OR claim_key LIKE %s", (user_id, f"{prefix}%"))
-        cursor.execute("DELETE FROM promotion_touchpoints WHERE event_id LIKE %s", (f"{prefix}%",))
-        cursor.execute("DELETE FROM promotion_cost_entries WHERE reason LIKE %s", (f"{prefix}%",))
-        cursor.execute("DELETE FROM promotion_links WHERE content_name LIKE %s", (f"{prefix}%",))
-        cursor.execute("DELETE FROM promotion_campaigns WHERE name LIKE %s", (f"{prefix}%",))
-        cursor.execute("DELETE FROM promotion_channels WHERE code LIKE %s", (f"{prefix}%",))
-        cursor.execute("DELETE FROM auth_users WHERE user_id=%s", (user_id,))
-        connection.commit()
+    # This suite requires a disposable test database. Promotion costs are
+    # intentionally protected from UPDATE/DELETE even for test actors, so the
+    # enclosing ephemeral PostgreSQL container owns cleanup instead of weakening
+    # the append-only invariant here.
+    del repository, prefix, user_id
 
 
 def test_repository_idempotency_immutability_cost_reversal_and_concurrent_claims(repository: PromotionRepository) -> None:
