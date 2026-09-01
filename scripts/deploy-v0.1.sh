@@ -46,7 +46,7 @@ declare -a BUILD_SERVICES=()
 if [ -n "$LAST_DEPLOYED_COMMIT" ] && git cat-file -e "${LAST_DEPLOYED_COMMIT}^{commit}" 2>/dev/null; then
   CHANGED_FILES="$(git diff --name-only "$LAST_DEPLOYED_COMMIT" "$CURRENT_COMMIT")"
   if printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(apps/backend/|ai/|infra/docker/backend\.Dockerfile$|infra/compose/docker-compose\.foundation\.yml$)'; then
-    BUILD_SERVICES+=(backend)
+    BUILD_SERVICES+=(backend promotion-analytics)
   fi
   if printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(apps/web/|packages/config/|packages/protocol/|infra/docker/web\.Dockerfile$|infra/nginx/|infra/compose/docker-compose\.foundation\.yml$|package(-lock)?\.json$|tsconfig\.base\.json$)'; then
     BUILD_SERVICES+=(web)
@@ -55,7 +55,7 @@ if [ -n "$LAST_DEPLOYED_COMMIT" ] && git cat-file -e "${LAST_DEPLOYED_COMMIT}^{c
     BUILD_SERVICES+=(admin)
   fi
 else
-  BUILD_SERVICES=(backend web admin)
+  BUILD_SERVICES=(backend promotion-analytics web admin)
 fi
 
 if [ "${#BUILD_SERVICES[@]}" -gt 0 ]; then
