@@ -38,5 +38,5 @@
 - [x] 6.2 Add backend integration tests proving written mode rejects speech/chat operations and accepts screenshot operations.
 - [x] 6.3 Add Web tests for mode selection, lightweight preparation, screenshot-only workspace, continuation and unchanged interview flow.
 - [x] 6.4 Run focused and full backend/Web/companion tests, type checks, builds and strict OpenSpec validation using synthetic data only.
-- [ ] 6.5 Commit and push the isolated change, deploy the additive migration and compatible services, and verify health, charge idempotency, screenshot flow and zero written-mode audio/ASR activity.
-- [ ] 6.6 Confirm the recorded Git tag and retained production images can restore the pre-feature baseline.
+- [x] 6.5 Commit and push the isolated change, deploy the additive migration and compatible services, and verify health, charge idempotency, screenshot flow and zero written-mode audio/ASR activity.
+- [x] 6.6 Confirm the recorded Git tag and retained production images can restore the pre-feature baseline.
