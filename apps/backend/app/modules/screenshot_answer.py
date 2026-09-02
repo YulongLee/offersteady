@@ -31,6 +31,7 @@ from app.schemas.screenshot_answer import (
 )
 from app.services.screenshot_answer_service import ScreenshotAnswerService
 from app.services.realtime_event_wait import run_realtime_event_wait
+from app.services.realtime_control_executor import run_realtime_control
 
 
 router = APIRouter(prefix="/screenshot-answer", tags=["screenshot-answer"])
@@ -430,7 +431,12 @@ async def get_next_remote_capture_request(
     service: ScreenshotAnswerService = Depends(screenshot_answer_service),
     realtime: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[RemoteScreenshotCaptureRequestResponse | None]:
-    pairing_status = realtime.get_desktop_pairing_status(manual_code=manual_code, device_id=device_id)
+    pairing_status = await run_realtime_control(
+        request,
+        realtime.get_desktop_pairing_status,
+        manual_code=manual_code,
+        device_id=device_id,
+    )
     if pairing_status.get("bound") is not True or pairing_status.get("sessionStatus") != "live":
         return success_response(request=request, data=None, timestamp=utc_now_iso())
     capture_request = service.get_next_remote_capture_request(device_id=device_id, manual_code=manual_code)
@@ -446,7 +452,12 @@ async def stream_desktop_capture_requests(
     service: ScreenshotAnswerService = Depends(screenshot_answer_service),
     realtime: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> StreamingResponse:
-    binding = realtime.get_desktop_capture_binding(device_id=device_id, manual_code=manual_code)
+    binding = await run_realtime_control(
+        request,
+        realtime.get_desktop_capture_binding,
+        device_id=device_id,
+        manual_code=manual_code,
+    )
     session = realtime.session_service.get_session(user_id=binding.owner_user_id, session_id=binding.session_id)
     if session.status != "live":
         from app.core.errors import DomainRequestError
@@ -479,7 +490,8 @@ async def stream_desktop_capture_requests(
                 break
             binding_check_ticks += 1
             if binding_check_ticks >= 50:
-                pairing_status = await asyncio.to_thread(
+                pairing_status = await run_realtime_control(
+                    request,
                     realtime.get_desktop_pairing_status,
                     manual_code=manual_code,
                     device_id=device_id,

@@ -53,6 +53,13 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         self._publisher_token_key = f"{self._snapshot_key}:publisher-tokens"
         self._transcript_key = f"{self._snapshot_key}:transcripts"
         self._activity_key = f"{self._snapshot_key}:activity"
+        self._device_entity_key = f"{self._snapshot_key}:entities:devices:v1"
+        self._device_code_index_key = f"{self._snapshot_key}:indexes:device-codes:v1"
+        self._web_heartbeat_entity_key = f"{self._snapshot_key}:entities:web-heartbeats:v1"
+        self._active_web_user_key = f"{self._snapshot_key}:indexes:active-web-users:v1"
+        self._binding_entity_key = f"{self._snapshot_key}:entities:bindings:v1"
+        self._latest_binding_device_key = f"{self._snapshot_key}:indexes:binding-devices:v1"
+        self._latest_binding_code_key = f"{self._snapshot_key}:indexes:binding-codes:v1"
         self._runtime_lock = threading.RLock()
         self._event_retention = max(100, settings.realtime_event_retention)
         self._runtime_ttl_seconds = max(300, settings.realtime_runtime_ttl_seconds)
@@ -70,6 +77,10 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
             "pendingEvents": 0,
             "pendingApplicable": False,
             "consumerMode": "xread-no-group",
+            "globalSnapshotWriteCount": 0,
+            "globalSnapshotLatestBytes": 0,
+            "entityWriteCount": 0,
+            "entitySeedCount": 0,
         }
         self._redis.ping()
         self._reload()
@@ -106,13 +117,35 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
             "pendingEvents": 0,
             "pendingApplicable": False,
             "consumerMode": "xread-no-group",
+            "globalSnapshotWriteCount": 0,
+            "globalSnapshotLatestBytes": 0,
+            "entityWriteCount": 0,
+            "entitySeedCount": 0,
         }
+
+    @staticmethod
+    def _web_heartbeat_field(*, user_id: str, session_id: str) -> str:
+        return f"{user_id}|{session_id}"
+
+    @staticmethod
+    def _binding_field(*, user_id: str, session_id: str) -> str:
+        return f"{user_id}|{session_id}"
+
+    @staticmethod
+    def _binding_device_field(*, device_id: str, manual_code: str) -> str:
+        return f"{device_id}|{manual_code}"
+
+    def _record_storage_diagnostic(self, key: str, *, value: int = 1) -> None:
+        self._ensure_event_diagnostics()
+        with self._event_diagnostic_lock:
+            if key == "globalSnapshotLatestBytes":
+                self._event_diagnostics[key] = value
+            else:
+                self._event_diagnostics[key] = int(self._event_diagnostics.get(key, 0)) + value
 
     def _reload(self) -> None:
         raw = self._redis.get(self._snapshot_key)
-        if not raw:
-            return
-        payload = json.loads(raw)
+        payload = json.loads(raw) if raw else {}
         self.publishers_by_id = {}
         self.publishers_by_token = {}
         legacy_publishers = payload.get("publishers", [])
@@ -193,6 +226,172 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         for item in payload.get("heartbeats", []):
             record = WebSessionHeartbeatRecord(**item)
             self.web_session_heartbeats[(record.owner_user_id, record.session_id)] = record
+        self._overlay_entity_state()
+
+    def _overlay_entity_state(self) -> None:
+        raw_devices = self._redis.hgetall(self._device_entity_key)
+        if raw_devices:
+            device_code_mapping: dict[str, str] = {}
+            for raw in raw_devices.values():
+                record = DesktopDeviceRecord(**json.loads(raw))
+                current = self.desktop_devices_by_id.get(record.device_id)
+                if current is None or (record.generation, record.last_seen_at_ms) >= (
+                    current.generation,
+                    current.last_seen_at_ms,
+                ):
+                    self.desktop_devices_by_id[record.device_id] = record
+                    self.desktop_devices_by_code[record.manual_code] = record.device_id
+                device_code_mapping[record.manual_code] = record.device_id
+            if device_code_mapping:
+                self._redis.hset(self._device_code_index_key, mapping=device_code_mapping)
+                self._redis.expire(self._device_code_index_key, self._runtime_ttl_seconds)
+        elif self.desktop_devices_by_id:
+            pipeline = self._redis.pipeline()
+            for record in self.desktop_devices_by_id.values():
+                pipeline.hset(
+                    self._device_entity_key,
+                    record.device_id,
+                    json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":")),
+                )
+                pipeline.hset(self._device_code_index_key, record.manual_code, record.device_id)
+            pipeline.expire(self._device_entity_key, self._runtime_ttl_seconds)
+            pipeline.expire(self._device_code_index_key, self._runtime_ttl_seconds)
+            pipeline.execute()
+            self._record_storage_diagnostic("entitySeedCount", value=len(self.desktop_devices_by_id))
+
+        raw_bindings = self._redis.hgetall(self._binding_entity_key)
+        if raw_bindings:
+            newest_by_device: dict[str, SessionDesktopBindingRecord] = {}
+            newest_by_code: dict[str, SessionDesktopBindingRecord] = {}
+            for raw in raw_bindings.values():
+                record = SessionDesktopBindingRecord(**json.loads(raw))
+                key = (record.owner_user_id, record.session_id)
+                current = self.session_bindings.get(key)
+                if current is None or (record.binding_generation, record.bound_at_ms) >= (
+                    current.binding_generation,
+                    current.bound_at_ms,
+                ):
+                    self.session_bindings[key] = record
+                device_field = self._binding_device_field(
+                    device_id=record.device_id,
+                    manual_code=record.manual_code,
+                )
+                current_device = newest_by_device.get(device_field)
+                if current_device is None or (record.binding_generation, record.bound_at_ms) >= (
+                    current_device.binding_generation,
+                    current_device.bound_at_ms,
+                ):
+                    newest_by_device[device_field] = record
+                current_code = newest_by_code.get(record.manual_code)
+                if current_code is None or (record.binding_generation, record.bound_at_ms) >= (
+                    current_code.binding_generation,
+                    current_code.bound_at_ms,
+                ):
+                    newest_by_code[record.manual_code] = record
+            pipeline = self._redis.pipeline()
+            for field, record in newest_by_device.items():
+                pipeline.hset(
+                    self._latest_binding_device_key,
+                    field,
+                    json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":")),
+                )
+            for code, record in newest_by_code.items():
+                pipeline.hset(
+                    self._latest_binding_code_key,
+                    code,
+                    json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":")),
+                )
+            pipeline.expire(self._binding_entity_key, self._runtime_ttl_seconds)
+            pipeline.expire(self._latest_binding_device_key, self._runtime_ttl_seconds)
+            pipeline.expire(self._latest_binding_code_key, self._runtime_ttl_seconds)
+            pipeline.execute()
+        elif self.session_bindings:
+            pipeline = self._redis.pipeline()
+            newest_by_device: dict[str, SessionDesktopBindingRecord] = {}
+            newest_by_code: dict[str, SessionDesktopBindingRecord] = {}
+            for record in self.session_bindings.values():
+                encoded = json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":"))
+                pipeline.hset(
+                    self._binding_entity_key,
+                    self._binding_field(user_id=record.owner_user_id, session_id=record.session_id),
+                    encoded,
+                )
+                device_field = self._binding_device_field(
+                    device_id=record.device_id,
+                    manual_code=record.manual_code,
+                )
+                current_device = newest_by_device.get(device_field)
+                if current_device is None or (record.binding_generation, record.bound_at_ms) >= (
+                    current_device.binding_generation,
+                    current_device.bound_at_ms,
+                ):
+                    newest_by_device[device_field] = record
+                current_code = newest_by_code.get(record.manual_code)
+                if current_code is None or (record.binding_generation, record.bound_at_ms) >= (
+                    current_code.binding_generation,
+                    current_code.bound_at_ms,
+                ):
+                    newest_by_code[record.manual_code] = record
+            for field, record in newest_by_device.items():
+                pipeline.hset(
+                    self._latest_binding_device_key,
+                    field,
+                    json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":")),
+                )
+            for code, record in newest_by_code.items():
+                pipeline.hset(
+                    self._latest_binding_code_key,
+                    code,
+                    json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":")),
+                )
+            for key in (self._binding_entity_key, self._latest_binding_device_key, self._latest_binding_code_key):
+                pipeline.expire(key, self._runtime_ttl_seconds)
+            pipeline.execute()
+            self._record_storage_diagnostic("entitySeedCount", value=len(self.session_bindings))
+
+        raw_heartbeats = self._redis.hgetall(self._web_heartbeat_entity_key)
+        if raw_heartbeats:
+            active_by_user: dict[str, WebSessionHeartbeatRecord] = {}
+            for raw in raw_heartbeats.values():
+                record = WebSessionHeartbeatRecord(**json.loads(raw))
+                key = (record.owner_user_id, record.session_id)
+                current = self.web_session_heartbeats.get(key)
+                if current is None or (record.lease_generation, record.seen_at_ms) >= (
+                    current.lease_generation,
+                    current.seen_at_ms,
+                ):
+                    self.web_session_heartbeats[key] = record
+                current_active = active_by_user.get(record.owner_user_id)
+                if record.page == "live" and record.page_instance_id and (
+                    current_active is None
+                    or (record.lease_generation, record.seen_at_ms)
+                    >= (current_active.lease_generation, current_active.seen_at_ms)
+                ):
+                    active_by_user[record.owner_user_id] = record
+            if active_by_user:
+                self._redis.hset(
+                    self._active_web_user_key,
+                    mapping={
+                        user_id: json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":"))
+                        for user_id, record in active_by_user.items()
+                    },
+                )
+                self._redis.expire(self._active_web_user_key, self._runtime_ttl_seconds)
+        elif self.web_session_heartbeats:
+            pipeline = self._redis.pipeline()
+            for record in self.web_session_heartbeats.values():
+                encoded = json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":"))
+                pipeline.hset(
+                    self._web_heartbeat_entity_key,
+                    self._web_heartbeat_field(user_id=record.owner_user_id, session_id=record.session_id),
+                    encoded,
+                )
+                if record.page == "live" and record.page_instance_id:
+                    pipeline.hset(self._active_web_user_key, record.owner_user_id, encoded)
+            pipeline.expire(self._web_heartbeat_entity_key, self._runtime_ttl_seconds)
+            pipeline.expire(self._active_web_user_key, self._runtime_ttl_seconds)
+            pipeline.execute()
+            self._record_storage_diagnostic("entitySeedCount", value=len(self.web_session_heartbeats))
 
     def _read(self, operation: Callable[[], T]) -> T:
         with self._runtime_lock:
@@ -206,29 +405,138 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
                 if self._settings.realtime_redis_snapshot_reload_on_access:
                     self._reload()
                 result = operation()
-                self._redis.set(self._snapshot_key, json.dumps(self._snapshot(), ensure_ascii=True, separators=(",", ":")))
+                encoded = json.dumps(self._snapshot(), ensure_ascii=True, separators=(",", ":"))
+                self._redis.set(self._snapshot_key, encoded)
                 self._redis.expire(self._snapshot_key, self._runtime_ttl_seconds)
                 if self.session_activity_versions:
                     self._redis.hset(self._activity_key, mapping=self.session_activity_versions)
                     self._redis.expire(self._activity_key, self._runtime_ttl_seconds)
+                self._record_storage_diagnostic("globalSnapshotWriteCount")
+                self._record_storage_diagnostic("globalSnapshotLatestBytes", value=len(encoded.encode("utf-8")))
                 return result
 
-    def save_desktop_device(self, device): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_desktop_device(device))
-    def get_desktop_device_by_code(self, manual_code): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_desktop_device_by_code(manual_code))
+    def _persist_desktop_device_entity(self, record: DesktopDeviceRecord) -> None:
+        pipeline = self._redis.pipeline()
+        pipeline.hset(
+            self._device_entity_key,
+            record.device_id,
+            json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":")),
+        )
+        pipeline.hset(self._device_code_index_key, record.manual_code, record.device_id)
+        pipeline.expire(self._device_entity_key, self._runtime_ttl_seconds)
+        pipeline.expire(self._device_code_index_key, self._runtime_ttl_seconds)
+        pipeline.execute()
+        self._record_storage_diagnostic("entityWriteCount")
+
+    def save_desktop_device(self, device):
+        with self._runtime_lock:
+            stored = super().save_desktop_device(device)
+        self._persist_desktop_device_entity(stored)
+        return stored
+    def get_desktop_device_by_code(self, manual_code):
+        device_id = self._redis.hget(self._device_code_index_key, manual_code)
+        raw = self._redis.hget(self._device_entity_key, device_id) if device_id else None
+        if raw:
+            record = DesktopDeviceRecord(**json.loads(raw))
+            with self._runtime_lock:
+                self.desktop_devices_by_id[record.device_id] = record
+                self.desktop_devices_by_code[record.manual_code] = record.device_id
+            return replace(record)
+        return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_desktop_device_by_code(manual_code))
     def save_account_desktop_device(self, association): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_account_desktop_device(association))
     def get_account_desktop_device(self, *, user_id, device_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_account_desktop_device(user_id=user_id, device_id=device_id))
     def get_last_account_desktop_device(self, *, user_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_last_account_desktop_device(user_id=user_id))
     def list_account_desktop_devices(self, *, user_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_account_desktop_devices(user_id=user_id))
-    def save_session_desktop_binding(self, binding): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_session_desktop_binding(binding))
-    def get_session_desktop_binding(self, *, user_id, session_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_session_desktop_binding(user_id=user_id, session_id=session_id))
-    def get_latest_session_desktop_binding_for_device(self, *, device_id, manual_code): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_latest_session_desktop_binding_for_device(device_id=device_id, manual_code=manual_code))
-    def get_latest_session_desktop_binding_by_code(self, *, manual_code): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_latest_session_desktop_binding_by_code(manual_code=manual_code))
+    def save_session_desktop_binding(self, binding):
+        stored = self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_session_desktop_binding(binding))
+        encoded = json.dumps(asdict(stored), ensure_ascii=True, separators=(",", ":"))
+        pipeline = self._redis.pipeline()
+        pipeline.hset(
+            self._binding_entity_key,
+            self._binding_field(user_id=stored.owner_user_id, session_id=stored.session_id),
+            encoded,
+        )
+        pipeline.hset(
+            self._latest_binding_device_key,
+            self._binding_device_field(device_id=stored.device_id, manual_code=stored.manual_code),
+            encoded,
+        )
+        pipeline.hset(self._latest_binding_code_key, stored.manual_code, encoded)
+        for key in (self._binding_entity_key, self._latest_binding_device_key, self._latest_binding_code_key):
+            pipeline.expire(key, self._runtime_ttl_seconds)
+        pipeline.execute()
+        self._record_storage_diagnostic("entityWriteCount")
+        return stored
+
+    def get_session_desktop_binding(self, *, user_id, session_id):
+        raw = self._redis.hget(
+            self._binding_entity_key,
+            self._binding_field(user_id=user_id, session_id=session_id),
+        )
+        return SessionDesktopBindingRecord(**json.loads(raw)) if raw else self._read(
+            lambda: super(RedisRealtimeSpeechRepository, self).get_session_desktop_binding(user_id=user_id, session_id=session_id)
+        )
+
+    def get_latest_session_desktop_binding_for_device(self, *, device_id, manual_code):
+        raw = self._redis.hget(
+            self._latest_binding_device_key,
+            self._binding_device_field(device_id=device_id, manual_code=manual_code),
+        )
+        return SessionDesktopBindingRecord(**json.loads(raw)) if raw else self._read(
+            lambda: super(RedisRealtimeSpeechRepository, self).get_latest_session_desktop_binding_for_device(device_id=device_id, manual_code=manual_code)
+        )
+
+    def get_latest_session_desktop_binding_by_code(self, *, manual_code):
+        raw = self._redis.hget(self._latest_binding_code_key, manual_code)
+        return SessionDesktopBindingRecord(**json.loads(raw)) if raw else self._read(
+            lambda: super(RedisRealtimeSpeechRepository, self).get_latest_session_desktop_binding_by_code(manual_code=manual_code)
+        )
     def list_session_desktop_bindings_for_device(self, *, device_id, manual_code): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_session_desktop_bindings_for_device(device_id=device_id, manual_code=manual_code))
     def list_session_desktop_bindings_for_user(self, *, user_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_session_desktop_bindings_for_user(user_id=user_id))
-    def save_web_session_heartbeat(self, heartbeat): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_web_session_heartbeat(heartbeat))
-    def get_web_session_heartbeat(self, *, user_id, session_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_web_session_heartbeat(user_id=user_id, session_id=session_id))
-    def claim_live_web_session(self, heartbeat): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).claim_live_web_session(heartbeat))
-    def get_active_live_web_session(self, *, user_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_active_live_web_session(user_id=user_id))
+    def _persist_web_heartbeat_entity(self, record: WebSessionHeartbeatRecord) -> None:
+        encoded = json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":"))
+        pipeline = self._redis.pipeline()
+        pipeline.hset(
+            self._web_heartbeat_entity_key,
+            self._web_heartbeat_field(user_id=record.owner_user_id, session_id=record.session_id),
+            encoded,
+        )
+        if record.page == "live" and record.page_instance_id:
+            pipeline.hset(self._active_web_user_key, record.owner_user_id, encoded)
+        pipeline.expire(self._web_heartbeat_entity_key, self._runtime_ttl_seconds)
+        pipeline.expire(self._active_web_user_key, self._runtime_ttl_seconds)
+        pipeline.execute()
+        self._record_storage_diagnostic("entityWriteCount")
+
+    def save_web_session_heartbeat(self, heartbeat):
+        with self._runtime_lock:
+            stored = super().save_web_session_heartbeat(heartbeat)
+        self._persist_web_heartbeat_entity(stored)
+        return stored
+    def get_web_session_heartbeat(self, *, user_id, session_id):
+        raw = self._redis.hget(
+            self._web_heartbeat_entity_key,
+            self._web_heartbeat_field(user_id=user_id, session_id=session_id),
+        )
+        return WebSessionHeartbeatRecord(**json.loads(raw)) if raw else self._read(
+            lambda: super(RedisRealtimeSpeechRepository, self).get_web_session_heartbeat(user_id=user_id, session_id=session_id)
+        )
+    def claim_live_web_session(self, heartbeat):
+        user_lock_key = f"{self._lock_key}:live-user:{heartbeat.owner_user_id}"
+        with self._redis.lock(user_lock_key, timeout=5, blocking_timeout=2):
+            with self._runtime_lock:
+                raw_active = self._redis.hget(self._active_web_user_key, heartbeat.owner_user_id)
+                if raw_active:
+                    active = WebSessionHeartbeatRecord(**json.loads(raw_active))
+                    self.web_session_heartbeats[(active.owner_user_id, active.session_id)] = active
+                stored = super().claim_live_web_session(heartbeat)
+            self._persist_web_heartbeat_entity(stored)
+            return stored
+    def get_active_live_web_session(self, *, user_id):
+        raw = self._redis.hget(self._active_web_user_key, user_id)
+        return WebSessionHeartbeatRecord(**json.loads(raw)) if raw else self._read(
+            lambda: super(RedisRealtimeSpeechRepository, self).get_active_live_web_session(user_id=user_id)
+        )
     def save_publisher(self, publisher):
         with self._runtime_lock:
             stored = super().save_publisher(publisher)
@@ -315,6 +623,7 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         self._redis.expire(self._transcript_key, self._runtime_ttl_seconds)
         self._redis.hset(self._activity_key, stored.session_id, activity_version)
         self._redis.expire(self._activity_key, self._runtime_ttl_seconds)
+        self._record_storage_diagnostic("entityWriteCount")
         return stored
 
     def persist_transcript(self, stored):
@@ -387,10 +696,13 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
             json.dumps(asdict(stored), ensure_ascii=True),
         )
         pipeline.zremrangebyrank(cursor_index_key, 0, -(self._event_retention + 1))
+        pipeline.hset(self._activity_key, stored.session_id, cursor)
         pipeline.expire(cursor_index_key, self._runtime_ttl_seconds)
         pipeline.expire(self._latest_event_key(stored.session_id), self._runtime_ttl_seconds)
         pipeline.expire(stream_key, self._runtime_ttl_seconds)
+        pipeline.expire(self._activity_key, self._runtime_ttl_seconds)
         pipeline.execute()
+        self._record_storage_diagnostic("entityWriteCount")
         performance = stored.payload.get("performance")
         if not isinstance(performance, dict):
             return stored

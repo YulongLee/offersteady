@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import concurrent.futures
+from copy import deepcopy
 import logging
 import math
 import queue
@@ -210,6 +211,13 @@ class RealtimeSpeechService:
         self._segment_audio_lock = threading.Lock()
         self._segment_audio_buffers: dict[tuple[str, RealtimeSourceKind, str], dict[str, object]] = {}
         self._capture_control_cache: dict[str, str] = {}
+        self._control_query_cache_lock = threading.Lock()
+        self._control_query_cache: dict[tuple[str, ...], tuple[int, dict[str, object]]] = {}
+        self._control_query_inflight: dict[tuple[str, ...], threading.Event] = {}
+        self._control_query_cache_generation = 0
+        self._control_query_cache_hits = 0
+        self._control_query_cache_misses = 0
+        self._control_query_singleflight_waits = 0
         self._session_language_cache: dict[str, InterviewLanguage] = {}
         self._publisher_status_cache: dict[str, str] = {}
         self._stable_question_state: dict[tuple[str, str], dict[str, object]] = {}
@@ -932,8 +940,24 @@ class RealtimeSpeechService:
                 "latestDurationMs": dict(self._delivery_metric_latest_ms),
             },
             "eventStore": repository_diagnostics() if callable(repository_diagnostics) else {},
+            "controlPlane": self._control_query_diagnostics(),
             "traceSummary": self.performance_summary(),
         }
+
+    def _control_query_diagnostics(self) -> dict[str, int]:
+        with self._control_query_cache_lock:
+            return {
+                "cacheHits": self._control_query_cache_hits,
+                "cacheMisses": self._control_query_cache_misses,
+                "cacheEntries": len(self._control_query_cache),
+                "singleflightWaits": self._control_query_singleflight_waits,
+                "inflight": len(self._control_query_inflight),
+            }
+
+    def _invalidate_control_query_cache(self) -> None:
+        with self._control_query_cache_lock:
+            self._control_query_cache.clear()
+            self._control_query_cache_generation += 1
 
     @staticmethod
     def _percentile(values: list[int], fraction: float) -> int | None:
@@ -1257,6 +1281,7 @@ class RealtimeSpeechService:
             status="online",
             generation=generation,
         ))
+        self._invalidate_control_query_cache()
         self._log(logging.INFO, "realtime_speech.desktop_device_registered", session_id="desktop-registration", publisher_id=stored.device_id, state=stored.status)
         return stored
 
@@ -1426,6 +1451,7 @@ class RealtimeSpeechService:
             status="bound",
             binding_generation=device.generation,
         ))
+        self._invalidate_control_query_cache()
         self._save_event(
             session_id=session_id,
             owner_user_id=user_id,
@@ -1610,13 +1636,15 @@ class RealtimeSpeechService:
                 capabilities=capabilities,
             )
         now_ms = _now_ms()
-        return self.repository.save_desktop_device(replace(
+        stored = self.repository.save_desktop_device(replace(
             device,
             display_name=(display_name.strip() if display_name else device.display_name),
             capabilities={**device.capabilities, **dict(capabilities)},
             last_seen_at_ms=now_ms,
             status="online",
         ))
+        self._invalidate_control_query_cache()
+        return stored
 
     def get_desktop_binding(self, *, user_id: str, session_id: str) -> SessionDesktopBindingRecord:
         self.session_service.get_session(user_id=user_id, session_id=session_id)
@@ -1682,6 +1710,70 @@ class RealtimeSpeechService:
         return binding
 
     def get_desktop_pairing_status(
+        self,
+        *,
+        manual_code: str,
+        device_id: str | None = None,
+        pinned_session_id: str | None = None,
+        pinned_binding_id: str | None = None,
+    ) -> dict[str, object]:
+        key = (
+            manual_code.strip(),
+            device_id or "",
+            pinned_session_id or "",
+            pinned_binding_id or "",
+        )
+        now_ms = _now_ms()
+        while True:
+            with self._control_query_cache_lock:
+                cached = self._control_query_cache.get(key)
+                if cached is not None and cached[0] >= now_ms:
+                    self._control_query_cache_hits += 1
+                    return deepcopy(cached[1])
+                inflight = self._control_query_inflight.get(key)
+                if inflight is None:
+                    inflight = threading.Event()
+                    self._control_query_inflight[key] = inflight
+                    self._control_query_cache_misses += 1
+                    cache_generation = self._control_query_cache_generation
+                    leader = True
+                else:
+                    self._control_query_singleflight_waits += 1
+                    leader = False
+            if leader:
+                break
+            inflight.wait()
+            now_ms = _now_ms()
+
+        try:
+            result = self._compute_desktop_pairing_status(
+                manual_code=manual_code,
+                device_id=device_id,
+                pinned_session_id=pinned_session_id,
+                pinned_binding_id=pinned_binding_id,
+            )
+            expires_at_ms = _now_ms() + max(50, min(900, self.settings.realtime_control_cache_ms))
+            with self._control_query_cache_lock:
+                if (
+                    cache_generation == self._control_query_cache_generation
+                    and len(self._control_query_cache) >= 2048
+                ):
+                    current_ms = _now_ms()
+                    self._control_query_cache = {
+                        item_key: item
+                        for item_key, item in self._control_query_cache.items()
+                        if item[0] >= current_ms
+                    }
+                if cache_generation == self._control_query_cache_generation:
+                    self._control_query_cache[key] = (expires_at_ms, deepcopy(result))
+            return result
+        finally:
+            with self._control_query_cache_lock:
+                completed = self._control_query_inflight.pop(key, None)
+                if completed is not None:
+                    completed.set()
+
+    def _compute_desktop_pairing_status(
         self,
         *,
         manual_code: str,

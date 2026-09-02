@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from time import monotonic
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -9,6 +10,26 @@ from fastapi.responses import JSONResponse
 from app.core.config import Settings
 from app.core.logging import log_event, utc_now_iso
 from app.core.responses import error_response
+
+
+_CONTROL_ERROR_LOG_WINDOW_SECONDS = 5.0
+_control_error_log_state: dict[tuple[str, str, int], tuple[float, int]] = {}
+
+
+def _control_error_log_sample(exc: "DomainRequestError") -> tuple[bool, int]:
+    if exc.feature != "realtime-speech" or exc.action not in {
+        "desktop-active-binding",
+        "desktop-capture-binding",
+    }:
+        return True, 0
+    key = (exc.feature, exc.action, exc.status_code)
+    current = monotonic()
+    previous_at, suppressed = _control_error_log_state.get(key, (0.0, 0))
+    if current - previous_at < _CONTROL_ERROR_LOG_WINDOW_SECONDS:
+        _control_error_log_state[key] = (previous_at, suppressed + 1)
+        return False, suppressed + 1
+    _control_error_log_state[key] = (current, 0)
+    return True, suppressed
 
 
 class PlaceholderNotImplementedError(Exception):
@@ -55,23 +76,36 @@ def install_exception_handlers(app: FastAPI, *, settings: Settings, logger: logg
 
     @app.exception_handler(DomainRequestError)
     async def handle_domain_error(request: Request, exc: DomainRequestError) -> JSONResponse:
-        log_event(
-            logger,
-            logging.WARNING,
-            settings=settings,
-            event="request.domain_error",
-            request_id=getattr(getattr(request.state, "request_context", None), "request_id", None),
-            feature=exc.feature,
-            action=exc.action,
-            error_code="domain_request_error",
-        )
+        should_log, suppressed_count = _control_error_log_sample(exc)
+        if should_log:
+            log_event(
+                logger,
+                logging.WARNING,
+                settings=settings,
+                event="request.domain_error",
+                request_id=getattr(getattr(request.state, "request_context", None), "request_id", None),
+                feature=exc.feature,
+                action=exc.action,
+                error_code="domain_request_error",
+                suppressed_count=suppressed_count,
+            )
+        retry_after_ms = 2_000 if exc.feature == "realtime-speech" and exc.action in {
+            "desktop-active-binding",
+            "desktop-capture-binding",
+        } else None
         return JSONResponse(
             status_code=exc.status_code,
+            headers={"Retry-After": "2"} if retry_after_ms is not None else None,
             content=error_response(
                 request=request,
                 code="domain_request_error",
                 message=exc.message,
-                details={"feature": exc.feature, "action": exc.action, "errorCode": exc.error_code},
+                details={
+                    "feature": exc.feature,
+                    "action": exc.action,
+                    "errorCode": exc.error_code,
+                    **({"retryAfterMs": retry_after_ms} if retry_after_ms is not None else {}),
+                },
                 timestamp=utc_now_iso(),
             ).model_dump(by_alias=True),
         )

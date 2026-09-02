@@ -40,6 +40,7 @@ from app.schemas.realtime_speech import (
 )
 from app.services.realtime_speech_service import RealtimeSpeechService
 from app.services.realtime_event_wait import run_realtime_event_wait
+from app.services.realtime_control_executor import run_realtime_control
 
 
 router = APIRouter(prefix="/realtime-speech", tags=["realtime-speech"])
@@ -119,12 +120,15 @@ async def status(request: Request, service: RealtimeSpeechService = Depends(real
 
 @router.get("/metrics", response_model=ApiEnvelope[dict[str, object]])
 async def realtime_metrics(request: Request, service: RealtimeSpeechService = Depends(realtime_speech_service)) -> ApiEnvelope[dict[str, object]]:
+    control_executor = getattr(request.app.state, "realtime_control_executor", None)
+    control_diagnostics = control_executor.diagnostics() if control_executor is not None else {}
     return success_response(
         request=request,
         data={
             **service.operational_metrics(),
             "activeDesktopTransports": len(_active_ingest_tokens),
             "protocolVersion": service.settings.realtime_protocol_version,
+            "controlExecutor": control_diagnostics,
         },
         timestamp=utc_now_iso(),
     )
@@ -267,7 +271,9 @@ async def register_desktop_device(
     request: RegisterDesktopDeviceRequest,
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[dict[str, object]]:
-    device = service.register_desktop_device(
+    device = await run_realtime_control(
+        request_context,
+        service.register_desktop_device,
         device_id=request.device_id,
         manual_code=request.manual_code,
         display_name=request.display_name or "本地桌面伴随程序",
@@ -294,7 +300,9 @@ async def desktop_device_heartbeat(
     request: DesktopDeviceHeartbeatRequest,
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[dict[str, object]]:
-    device = service.record_desktop_device_heartbeat(
+    device = await run_realtime_control(
+        request_context,
+        service.record_desktop_device_heartbeat,
         device_id=device_id,
         manual_code=request.manual_code,
         display_name=request.display_name,
@@ -322,7 +330,9 @@ async def bind_desktop_device(
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[DesktopDeviceBindingResponse]:
-    binding = service.bind_desktop_device(
+    binding = await run_realtime_control(
+        request_context,
+        service.bind_desktop_device,
         user_id=resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context),
         session_id=session_id,
         manual_code=request.manual_code,
@@ -363,7 +373,9 @@ async def web_session_heartbeat(
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[dict[str, object]]:
     user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
-    heartbeat = service.record_web_session_heartbeat(
+    heartbeat = await run_realtime_control(
+        request_context,
+        service.record_web_session_heartbeat,
         user_id=user_id,
         session_id=session_id,
         binding_id=request.binding_id,
@@ -395,7 +407,12 @@ async def get_desktop_binding(
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[DesktopDeviceBindingResponse]:
     resolved_user_id = resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context)
-    binding = service.get_desktop_binding(user_id=resolved_user_id, session_id=session_id)
+    binding = await run_realtime_control(
+        request,
+        service.get_desktop_binding,
+        user_id=resolved_user_id,
+        session_id=session_id,
+    )
     return success_response(request=request, data=service.desktop_binding_response(binding), timestamp=utc_now_iso())
 
 
@@ -406,7 +423,12 @@ async def get_desktop_active_binding(
     manual_code: str = Query(alias="manualCode"),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[DesktopDeviceBindingResponse]:
-    binding = service.get_desktop_active_binding(device_id=device_id, manual_code=manual_code)
+    binding = await run_realtime_control(
+        request,
+        service.get_desktop_active_binding,
+        device_id=device_id,
+        manual_code=manual_code,
+    )
     return success_response(request=request, data=service.desktop_binding_response(binding), timestamp=utc_now_iso())
 
 
@@ -416,7 +438,11 @@ async def get_desktop_active_binding_by_code(
     request: Request,
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[DesktopDeviceBindingResponse]:
-    binding = service.get_desktop_active_binding_by_code(manual_code=manual_code)
+    binding = await run_realtime_control(
+        request,
+        service.get_desktop_active_binding_by_code,
+        manual_code=manual_code,
+    )
     return success_response(request=request, data=service.desktop_binding_response(binding), timestamp=utc_now_iso())
 
 
@@ -427,7 +453,12 @@ async def get_desktop_pairing_status(
     device_id: str | None = Query(default=None, alias="deviceId"),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[dict[str, object]]:
-    status = service.get_desktop_pairing_status(manual_code=manual_code, device_id=device_id)
+    status = await run_realtime_control(
+        request,
+        service.get_desktop_pairing_status,
+        manual_code=manual_code,
+        device_id=device_id,
+    )
     return success_response(request=request, data=status, timestamp=utc_now_iso())
 
 
@@ -440,7 +471,9 @@ async def get_desktop_active_connection(
     pinned_binding_id: str | None = Query(default=None, alias="pinnedBindingId"),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[dict[str, object]]:
-    connection = service.get_desktop_active_connection(
+    connection = await run_realtime_control(
+        request,
+        service.get_desktop_active_connection,
         device_id=device_id,
         manual_code=manual_code,
         pinned_session_id=pinned_session_id,

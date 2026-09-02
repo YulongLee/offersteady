@@ -147,6 +147,9 @@ class Settings(BaseSettings):
     realtime_event_retention: int = 1000
     realtime_event_block_ms: int = 1000
     realtime_event_wait_workers: int = 32
+    realtime_control_worker_count: int = 8
+    realtime_control_queue_max: int = 64
+    realtime_control_cache_ms: int = 750
     realtime_runtime_ttl_seconds: int = 7200
     live_task_runtime_ttl_seconds: int = 7200
     live_task_stale_seconds: int = 180

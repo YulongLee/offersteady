@@ -18,6 +18,7 @@ from app.middleware.request_context import RequestContextMiddleware
 from app.schemas.foundation import HealthResponse
 from app.services.admin_capacity import AdminCapacityMonitor
 from app.services.realtime_event_wait import RealtimeEventWaitExecutor
+from app.services.realtime_control_executor import RealtimeControlExecutor
 
 
 def create_app() -> FastAPI:
@@ -30,7 +31,12 @@ def create_app() -> FastAPI:
         realtime_event_wait_executor = RealtimeEventWaitExecutor(
             max_workers=settings.realtime_event_wait_workers,
         )
+        realtime_control_executor = RealtimeControlExecutor(
+            max_workers=settings.realtime_control_worker_count,
+            queue_max=settings.realtime_control_queue_max,
+        )
         application.state.realtime_event_wait_executor = realtime_event_wait_executor
+        application.state.realtime_control_executor = realtime_control_executor
         if settings.admin_enabled and settings.database_url:
             try:
                 monitor = AdminCapacityMonitor(settings, admin_service().repository)
@@ -55,6 +61,7 @@ def create_app() -> FastAPI:
                 with suppress(asyncio.CancelledError):
                     await task
             realtime_event_wait_executor.shutdown()
+            realtime_control_executor.shutdown()
             from app.deps import llm_gateway_port
 
             if llm_gateway_port.cache_info().currsize:
