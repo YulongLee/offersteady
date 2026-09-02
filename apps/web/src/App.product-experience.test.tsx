@@ -41,6 +41,11 @@ describe("optimized product experience", () => {
     expect(within(footer!).getByText("configured-wechat")).toBeInTheDocument();
     expect(within(footer!).getByRole("link", { name: "help@example.test" })).toHaveAttribute("href", "mailto:help@example.test");
     expect(footer).toHaveTextContent("每天 09:00–21:00");
+    const contacts = within(footer!).getByRole("heading", { name: "联系我们" }).closest("section");
+    expect(contacts).not.toBeNull();
+    expect(within(contacts!).getByText("抖音号")).toBeInTheDocument();
+    expect(within(contacts!).getByText("小红书号")).toBeInTheDocument();
+    expect(within(contacts!).getAllByText("面试稳AI助手")).toHaveLength(2);
     expect(within(footer!).getByRole("link", { name: "使用手册" })).toHaveAttribute("href", "/guide");
     expect(within(footer!).getByRole("link", { name: "下载安装说明" })).toHaveAttribute("href", "/guide#desktop");
     expect(within(footer!).getByRole("link", { name: "产品功能" })).toHaveAttribute("href", "/features");

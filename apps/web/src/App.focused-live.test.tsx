@@ -98,6 +98,21 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 beforeEach(() => Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 }));
 
 describe("focused live interview workspace", () => {
+  it("exposes the official social accounts without replacing desktop interview controls", () => {
+    openLive();
+
+    const contactMenu = screen.getByText("联系我们").closest("details");
+    expect(contactMenu).not.toBeNull();
+    expect(contactMenu).not.toHaveAttribute("open");
+    fireEvent.click(within(contactMenu!).getByText("联系我们"));
+    expect(contactMenu).toHaveAttribute("open");
+    expect(within(contactMenu!).getByText("抖音号")).toBeInTheDocument();
+    expect(within(contactMenu!).getByText("小红书号")).toBeInTheDocument();
+    expect(within(contactMenu!).getAllByText("面试稳AI助手")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "开始面试" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "结束面试" })).toBeInTheDocument();
+  });
+
   it("keeps automatic answer off by default and persists an explicit toggle", async () => {
     const update = vi.spyOn(interviewAppAdapter, "updateInterviewAutoAnswer").mockImplementation(async (id, enabled) => ({
       ...syntheticState.interviews[0]!,
@@ -366,6 +381,11 @@ describe("focused live interview workspace", () => {
     expect(more).toHaveAttribute("open");
     expect(screen.getByRole("link", { name: "积分与会员" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "用户设置" })).toBeInTheDocument();
+    const socialContacts = document.querySelector<HTMLElement>(".mobile-live-contact-list");
+    expect(socialContacts).not.toBeNull();
+    expect(within(socialContacts!).getByText("抖音号")).toBeInTheDocument();
+    expect(within(socialContacts!).getByText("小红书号")).toBeInTheDocument();
+    expect(within(socialContacts!).getAllByText("面试稳AI助手")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "结束面试" })).toBeInTheDocument();
   });
 
