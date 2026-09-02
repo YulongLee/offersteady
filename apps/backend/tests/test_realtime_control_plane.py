@@ -5,7 +5,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 import logging
-from types import MethodType
+from types import MethodType, SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -17,6 +17,7 @@ from app.core.errors import (
     _control_error_log_state,
     install_exception_handlers,
 )
+from app.ports.realtime_speech import DesktopDeviceRecord
 from app.services.realtime_control_executor import RealtimeControlExecutor
 from app.services.realtime_speech_service import RealtimeSpeechService
 
@@ -112,6 +113,47 @@ def test_device_heartbeat_invalidation_preserves_other_device_cache() -> None:
     assert refreshed["revision"] == 2
     assert unaffected["revision"] == 1
     assert calls == {"123456": 2, "654321": 1}
+
+
+def test_ordinary_device_heartbeat_does_not_discard_safe_short_cache() -> None:
+    service = _control_cache_service()
+    calls = 0
+    device = DesktopDeviceRecord(
+        device_id="device-a",
+        manual_code="123456",
+        display_name="Synthetic device",
+        capabilities={},
+        registered_at_ms=1,
+        last_seen_at_ms=1,
+    )
+    service.repository = SimpleNamespace(
+        get_desktop_device_by_code=lambda _code: device,
+        save_desktop_device=lambda stored: stored,
+    )
+
+    def compute(self, **_kwargs: object) -> dict[str, object]:
+        nonlocal calls
+        calls += 1
+        return {"revision": calls}
+
+    service._compute_desktop_pairing_status = MethodType(compute, service)
+    first = service.get_desktop_pairing_status(
+        manual_code=device.manual_code,
+        device_id=device.device_id,
+    )
+    service.record_desktop_device_heartbeat(
+        device_id=device.device_id,
+        manual_code=device.manual_code,
+        display_name=device.display_name,
+        capabilities={},
+    )
+    after_heartbeat = service.get_desktop_pairing_status(
+        manual_code=device.manual_code,
+        device_id=device.device_id,
+    )
+
+    assert first == after_heartbeat == {"revision": 1}
+    assert calls == 1
 
 
 def test_control_executor_is_bounded_and_keeps_event_loop_responsive() -> None:

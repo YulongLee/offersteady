@@ -1670,10 +1670,6 @@ class RealtimeSpeechService:
             last_seen_at_ms=now_ms,
             status="online",
         ))
-        self._invalidate_control_query_cache(
-            manual_code=stored.manual_code,
-            device_id=stored.device_id,
-        )
         return stored
 
     def get_desktop_binding(self, *, user_id: str, session_id: str) -> SessionDesktopBindingRecord:
