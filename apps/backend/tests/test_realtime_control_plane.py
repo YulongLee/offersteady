@@ -17,7 +17,7 @@ from app.core.errors import (
     _control_error_log_state,
     install_exception_handlers,
 )
-from app.ports.realtime_speech import DesktopDeviceRecord
+from app.ports.realtime_speech import DesktopDeviceRecord, SessionDesktopBindingRecord
 from app.services.realtime_control_executor import RealtimeControlExecutor
 from app.services.realtime_speech_service import RealtimeSpeechService
 
@@ -154,6 +154,51 @@ def test_ordinary_device_heartbeat_does_not_discard_safe_short_cache() -> None:
 
     assert first == after_heartbeat == {"revision": 1}
     assert calls == 1
+
+
+def test_pairing_status_reads_bound_session_only_once_per_cache_miss() -> None:
+    service = _control_cache_service()
+    now_ms = int(time.time() * 1000)
+    device = DesktopDeviceRecord(
+        device_id="device-a",
+        manual_code="123456",
+        display_name="Synthetic device",
+        capabilities={},
+        registered_at_ms=now_ms,
+        last_seen_at_ms=now_ms,
+    )
+    binding = SessionDesktopBindingRecord(
+        binding_id="binding-a",
+        session_id="session-a",
+        owner_user_id="synthetic-user",
+        device_id=device.device_id,
+        manual_code=device.manual_code,
+        display_name=device.display_name,
+        capabilities={},
+        bound_at_ms=now_ms,
+        last_seen_at_ms=now_ms,
+    )
+    service.repository = SimpleNamespace(
+        get_desktop_device_by_code=lambda _code: device,
+        get_latest_session_desktop_binding_by_code=lambda **_kwargs: binding,
+    )
+    session_reads = 0
+
+    def get_session(**_kwargs: object) -> SimpleNamespace:
+        nonlocal session_reads
+        session_reads += 1
+        return SimpleNamespace(status="ended", session_mode="interview")
+
+    service.session_service = SimpleNamespace(get_session=get_session)
+
+    status = service._compute_desktop_pairing_status(
+        manual_code=device.manual_code,
+        device_id=device.device_id,
+    )
+
+    assert status["state"] == "stale-bound"
+    assert status["staleReason"] == "session-not-active"
+    assert session_reads == 1
 
 
 def test_control_executor_is_bounded_and_keeps_event_loop_responsive() -> None:

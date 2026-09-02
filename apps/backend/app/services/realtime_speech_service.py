@@ -1820,6 +1820,54 @@ class RealtimeSpeechService:
         device = self.repository.get_desktop_device_by_code(code)
         device_presence = "online" if device is not None and self._desktop_device_fresh(device) else "offline"
         permission_status = self._permission_status(device)
+        session_states: dict[tuple[str, str], tuple[str, str]] = {}
+
+        def session_state(candidate: SessionDesktopBindingRecord) -> tuple[str, str]:
+            state_key = (candidate.owner_user_id, candidate.session_id)
+            cached_state = session_states.get(state_key)
+            if cached_state is not None:
+                return cached_state
+            try:
+                bound_session = self.session_service.get_session(
+                    user_id=candidate.owner_user_id,
+                    session_id=candidate.session_id,
+                )
+                resolved = (bound_session.status, bound_session.session_mode)
+            except DomainRequestError:
+                resolved = ("missing", "interview")
+            session_states[state_key] = resolved
+            return resolved
+
+        def binding_active(
+            candidate: SessionDesktopBindingRecord,
+            *,
+            session_status: str,
+        ) -> bool:
+            return bool(
+                device is not None
+                and candidate.status == "bound"
+                and candidate.binding_generation == device.generation
+                and self._desktop_device_fresh(device)
+                and session_status in {"preparing", "live"}
+            )
+
+        def stale_reason(
+            candidate: SessionDesktopBindingRecord,
+            *,
+            session_status: str,
+        ) -> str:
+            if device is None:
+                return "desktop-not-registered"
+            if candidate.binding_generation != device.generation:
+                return "desktop-generation-changed"
+            if not self._desktop_device_fresh(device):
+                return "desktop-heartbeat-stale"
+            if session_status == "missing":
+                return "session-missing"
+            if session_status not in {"preparing", "live"}:
+                return "session-not-active"
+            return "unknown"
+
         binding_lock_state = "unlocked"
         binding = None
         if pinned_session_id is not None or pinned_binding_id is not None:
@@ -1833,23 +1881,21 @@ class RealtimeSpeechService:
                     )
                     if item.session_id == pinned_session_id and item.binding_id == pinned_binding_id
                 ), None)
-                if pinned_binding is not None and self._binding_is_active(binding=pinned_binding, device=device):
-                    binding = pinned_binding
-                    binding_lock_state = "held"
+                if pinned_binding is not None:
+                    pinned_status, _pinned_mode = session_state(pinned_binding)
+                    if binding_active(pinned_binding, session_status=pinned_status):
+                        binding = pinned_binding
+                        binding_lock_state = "held"
         if binding is None:
             binding = self.repository.get_latest_session_desktop_binding_by_code(manual_code=code)
         if binding is not None:
-            session_status = "unknown"
-            session_mode = "interview"
-            try:
-                bound_session = self.session_service.get_session(user_id=binding.owner_user_id, session_id=binding.session_id)
-                session_status = bound_session.status
-                session_mode = bound_session.session_mode
-            except DomainRequestError:
-                session_status = "missing"
-            active = device is not None and self._binding_is_active(binding=binding, device=device)
+            session_status, session_mode = session_state(binding)
+            active = binding_active(binding, session_status=session_status)
             if not active:
-                stale_reason = self._binding_stale_reason(binding=binding, device=device)
+                resolved_stale_reason = stale_reason(
+                    binding,
+                    session_status=session_status,
+                )
                 return {
                     "state": "stale-bound",
                     "manualCode": code,
@@ -1862,9 +1908,9 @@ class RealtimeSpeechService:
                     "sessionConnection": "disconnected",
                     "sessionStatus": session_status,
                     "sessionMode": session_mode,
-                    "staleReason": stale_reason,
+                    "staleReason": resolved_stale_reason,
                     "bindingLockState": binding_lock_state,
-                    "message": self._stale_binding_message(stale_reason),
+                    "message": self._stale_binding_message(resolved_stale_reason),
                     "binding": self.desktop_binding_response(replace(binding, status="stale")).model_dump(by_alias=True),
                 }
             return {
