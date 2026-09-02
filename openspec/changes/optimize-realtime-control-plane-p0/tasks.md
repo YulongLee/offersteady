@@ -26,7 +26,7 @@
 
 ## 5. Production rollout and rollback readiness
 
-- [ ] 5.1 Build a candidate backend image and preserve the baseline image without replacing Web, Admin, Desktop, PostgreSQL or Redis
-- [ ] 5.2 Confirm active interviews and audio streams are zero before switching production traffic
-- [ ] 5.3 Deploy the candidate, verify health and core APIs, and observe API P95/P99, CPU, Redis traffic, 5xx and realtime errors
-- [ ] 5.4 Keep the baseline image and legacy Redis state available; roll back immediately if any correctness or performance gate fails
+- [x] 5.1 Build a candidate backend image and preserve the baseline image without replacing Web, Admin, Desktop, PostgreSQL or Redis
+- [x] 5.2 Confirm active interviews and audio streams are zero before switching production traffic
+- [x] 5.3 Deploy the candidate, verify health and core APIs, and observe API P95/P99, CPU, Redis traffic, 5xx and realtime errors
+- [x] 5.4 Keep the baseline image and legacy Redis state available; roll back immediately if any correctness or performance gate fails
