@@ -272,6 +272,7 @@ class RealtimeSpeechService:
             if reservation is not None and reservation.status == "reserved":
                 self.billing_service.settle_usage(usage_id=reservation.usage_id)  # type: ignore[union-attr]
             self._capture_control_cache[session_id] = "paused"
+            self._invalidate_control_query_cache()
             return session
         reservation = self._reserve_realtime_minute(
             user_id=user_id,
@@ -303,6 +304,7 @@ class RealtimeSpeechService:
             session_id=session_id,
             interview_language=session.interview_language,
         )
+        self._invalidate_control_query_cache()
         return session
 
     def _realtime_minute_usage_id(self, *, session_id: str, minute_index: int) -> str:
@@ -954,9 +956,26 @@ class RealtimeSpeechService:
                 "inflight": len(self._control_query_inflight),
             }
 
-    def _invalidate_control_query_cache(self) -> None:
+    def _invalidate_control_query_cache(
+        self,
+        *,
+        manual_code: str | None = None,
+        device_id: str | None = None,
+    ) -> None:
         with self._control_query_cache_lock:
-            self._control_query_cache.clear()
+            if manual_code is None and device_id is None:
+                self._control_query_cache.clear()
+            else:
+                safe_code = (manual_code or "").strip()
+                safe_device_id = (device_id or "").strip()
+                self._control_query_cache = {
+                    key: value
+                    for key, value in self._control_query_cache.items()
+                    if not (
+                        (safe_code and key[0] == safe_code)
+                        or (safe_device_id and key[1] == safe_device_id)
+                    )
+                }
             self._control_query_cache_generation += 1
 
     @staticmethod
@@ -1281,7 +1300,10 @@ class RealtimeSpeechService:
             status="online",
             generation=generation,
         ))
-        self._invalidate_control_query_cache()
+        self._invalidate_control_query_cache(
+            manual_code=stored.manual_code,
+            device_id=stored.device_id,
+        )
         self._log(logging.INFO, "realtime_speech.desktop_device_registered", session_id="desktop-registration", publisher_id=stored.device_id, state=stored.status)
         return stored
 
@@ -1451,7 +1473,10 @@ class RealtimeSpeechService:
             status="bound",
             binding_generation=device.generation,
         ))
-        self._invalidate_control_query_cache()
+        self._invalidate_control_query_cache(
+            manual_code=binding.manual_code,
+            device_id=binding.device_id,
+        )
         self._save_event(
             session_id=session_id,
             owner_user_id=user_id,
@@ -1516,6 +1541,7 @@ class RealtimeSpeechService:
                 kind="connection-state",
                 payload={"status": "superseded", "replacementSessionId": session_id},
             )
+        self._invalidate_control_query_cache()
         return sorted(conflict_ids)
 
     def terminate_session_for_admin(self, *, user_id: str, session_id: str) -> dict[str, object]:
@@ -1544,6 +1570,7 @@ class RealtimeSpeechService:
             kind="connection-state",
             payload={"status": "terminated-by-admin"},
         )
+        self._invalidate_control_query_cache()
         return {
             "session_id": session_id,
             "status": session.status,
@@ -1643,7 +1670,10 @@ class RealtimeSpeechService:
             last_seen_at_ms=now_ms,
             status="online",
         ))
-        self._invalidate_control_query_cache()
+        self._invalidate_control_query_cache(
+            manual_code=stored.manual_code,
+            device_id=stored.device_id,
+        )
         return stored
 
     def get_desktop_binding(self, *, user_id: str, session_id: str) -> SessionDesktopBindingRecord:

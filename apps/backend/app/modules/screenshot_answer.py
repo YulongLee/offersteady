@@ -439,7 +439,12 @@ async def get_next_remote_capture_request(
     )
     if pairing_status.get("bound") is not True or pairing_status.get("sessionStatus") != "live":
         return success_response(request=request, data=None, timestamp=utc_now_iso())
-    capture_request = service.get_next_remote_capture_request(device_id=device_id, manual_code=manual_code)
+    capture_request = await run_realtime_control(
+        request,
+        service.get_next_remote_capture_request,
+        device_id=device_id,
+        manual_code=manual_code,
+    )
     return success_response(request=request, data=_to_remote_capture_request_response(capture_request) if capture_request is not None else None, timestamp=utc_now_iso())
 
 

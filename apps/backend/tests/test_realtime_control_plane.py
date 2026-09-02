@@ -83,6 +83,37 @@ def test_pairing_cache_invalidation_forces_authoritative_recompute() -> None:
     assert refreshed == {"revision": 2}
 
 
+def test_device_heartbeat_invalidation_preserves_other_device_cache() -> None:
+    service = _control_cache_service()
+    calls: dict[str, int] = {}
+
+    def compute(self, **kwargs: object) -> dict[str, object]:
+        code = str(kwargs["manual_code"])
+        calls[code] = calls.get(code, 0) + 1
+        return {"manualCode": code, "revision": calls[code]}
+
+    service._compute_desktop_pairing_status = MethodType(compute, service)
+    service.get_desktop_pairing_status(manual_code="123456", device_id="device-a")
+    service.get_desktop_pairing_status(manual_code="654321", device_id="device-b")
+    service._invalidate_control_query_cache(
+        manual_code="123456",
+        device_id="device-a",
+    )
+
+    refreshed = service.get_desktop_pairing_status(
+        manual_code="123456",
+        device_id="device-a",
+    )
+    unaffected = service.get_desktop_pairing_status(
+        manual_code="654321",
+        device_id="device-b",
+    )
+
+    assert refreshed["revision"] == 2
+    assert unaffected["revision"] == 1
+    assert calls == {"123456": 2, "654321": 1}
+
+
 def test_control_executor_is_bounded_and_keeps_event_loop_responsive() -> None:
     async def scenario() -> tuple[dict[str, int], int]:
         executor = RealtimeControlExecutor(max_workers=2, queue_max=2)
