@@ -27,6 +27,7 @@ import { applyAppearancePreferences, persistAppearancePreferences, readAppearanc
 import { isFreshShortcutScreenshotAcceptance, SHORTCUT_SCREENSHOT_RECOVERY_POLL_INTERVAL_MS } from "./screenshot-shortcut-feedback";
 import type { LiveAnswerStreamEvent } from "./live-answer-stream";
 import { officialSocialContacts } from "./social-contacts";
+import { companionUpdate, type CompanionUpdate } from "./platform";
 import "./styles.css";
 
 
@@ -568,6 +569,14 @@ function NewWrittenExamPage() {
   return <main className="app-page narrow"><Link className="back-link" to={routes.writtenExams}>← 返回笔试模式</Link><PageHeader eyebrow="NEW WRITTEN EXAM" title="创建一场笔试" detail="笔试模式只使用截屏回答，不启用收音和实时转写。" /><form className="form-panel" onSubmit={submit}><label>笔试名称<input value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} placeholder="例如：算法笔试" /></label><label>目标岗位<input value={form.role} onChange={event => setForm({ ...form, role: event.target.value })} placeholder="例如：算法工程师" /></label><label>公司（可选）<input value={form.company} onChange={event => setForm({ ...form, company: event.target.value })} placeholder="例如：示例科技" /></label>{error ? <div className="inline-error" role="alert">{error}</div> : null}<div className="form-actions"><Link className="button ghost" to={routes.writtenExams}>取消</Link><button className="button primary" type="submit" disabled={saving}>{saving ? "创建中…" : "保存并准备 →"}</button></div><small className="saved-note">成功进入笔试固定扣除 30 积分，每次截屏回答按现有规则计费。</small></form></main>;
 }
 
+function CompanionUpdateReminder({ update, onContinue }: { readonly update: CompanionUpdate; readonly onContinue: () => void }) {
+  return <section className="companion-update-reminder" aria-label="伴随程序更新提醒">
+    <span aria-hidden="true">↑</span>
+    <div><strong>发现新版伴随程序 {update.release.version}</strong><small>当前版本 {update.currentVersion}，建议更新到与你设备匹配的最新版；本次也可以继续使用。</small></div>
+    <div className="companion-update-actions"><a className="button primary" href={update.release.downloadUrl} download>立即下载</a><button className="button ghost" type="button" onClick={onContinue}>继续使用</button></div>
+  </section>;
+}
+
 function PreparationPage() {
   const { id = "demo" } = useParams();
   const { state, setState } = usePrototype();
@@ -583,6 +592,7 @@ function PreparationPage() {
   const [lastDevice, setLastDevice] = useState<Awaited<ReturnType<NonNullable<typeof interviewAppAdapter.getLastDesktopDevice>>> | null>(null);
   const [binding, setBinding] = useState(false);
   const [bindingError, setBindingError] = useState("");
+  const [dismissedUpdateKey, setDismissedUpdateKey] = useState("");
   const [activeConflict, setActiveConflict] = useState<Awaited<ReturnType<typeof interviewAppAdapter.getActiveInterviewConflict>>["activeInterview"] | undefined>(undefined);
   const [conflictError, setConflictError] = useState("");
   const [resolvingConflict, setResolvingConflict] = useState(false);
@@ -604,6 +614,12 @@ function PreparationPage() {
   const machineReady = Boolean(deviceBinding);
   const conflictResolved = activeConflict === null;
   const canStart = selectionReady && machineReady && conflictResolved;
+  const availableUpdate = useMemo(
+    () => deviceBinding ? companionUpdate(deviceBinding.capabilities, state.releaseManifest) : null,
+    [deviceBinding, state.releaseManifest],
+  );
+  const updateKey = availableUpdate && deviceBinding ? `${deviceBinding.bindingId}:${availableUpdate.release.id}` : "";
+  const visibleUpdate = availableUpdate && updateKey !== dismissedUpdateKey ? availableUpdate : null;
   const complete = isWritten ? Number(machineReady) : Number(selectionReady) + Number(machineReady);
   const inputDiagnostic = machineReady
       ? "伴随程序已连接，正在后台准备音频与实时识别"
@@ -784,6 +800,7 @@ function PreparationPage() {
         {lastDevice ? <button className="button primary" disabled={!conflictResolved || binding || !lastDevice.online || deviceBinding?.deviceId === lastDevice.deviceId} onClick={() => void connectDesktopDevice(true)}>{deviceBinding?.deviceId === lastDevice.deviceId ? "上次设备已连接" : "连接上次设备"}</button> : null}
         {bindingError ? <div className="inline-error" role="alert">{bindingError}</div> : null}
       </div>
+      {visibleUpdate ? <CompanionUpdateReminder update={visibleUpdate} onContinue={() => setDismissedUpdateKey(updateKey)} /> : null}
       {startError ? <div className="inline-error written-start-error" role="alert">{startError}</div> : null}
       <div className="written-start-row">
         <small>开始时扣除 30 积分</small>
@@ -802,6 +819,7 @@ function PreparationPage() {
           {bindingError ? <div className="inline-error" role="alert">{bindingError}</div> : null}
           {lastDevice ? <><div className="connection-divider"><span>或使用上次设备</span></div><div className={`last-device-choice ${lastDevice.online ? "online" : "offline"}`}><span><b>{lastDevice.displayName}</b><small>{lastDevice.online ? `设备在线 · ${lastDevice.maskedManualCode}` : "设备离线，请先打开助手"}</small></span><button className="button primary" disabled={!conflictResolved || binding || !lastDevice.online || deviceBinding?.deviceId === lastDevice.deviceId} onClick={() => void connectDesktopDevice(true)}>{deviceBinding?.deviceId === lastDevice.deviceId ? "已连接本场" : "一键连接上次设备"}</button></div></> : null}
         </div>
+        {visibleUpdate ? <CompanionUpdateReminder update={visibleUpdate} onContinue={() => setDismissedUpdateKey(updateKey)} /> : null}
         <div className="device-mini"><span className="device-glyph">⌘</span><div><strong>{deviceBinding?.displayName ?? state.preparation.device?.displayName ?? "电脑伴随程序"}</strong><small>{deviceBinding ? "本场设备已连接；系统权限沿用助手首次授权结果" : "当前仅缺少本场设备连接，不代表助手系统权限失效"}</small></div><Link to={routes.devices}>管理</Link></div>
         <div className="privacy-confirm preparation-disclosure"><span><strong>本场数据说明</strong><small>已选资料和转录仅用于生成回答建议；原始音频默认不保存，会话记录可在复盘中删除。麦克风和屏幕权限只由桌面助手首次申请，网页不会再次申请。</small></span></div>
         <div className="points-mini"><strong>{state.billing.balance} 点</strong><span>回答 5 点 · 截图 15 点</span><Link to={routes.billing}>查看收费说明</Link><Link to={`${routes.guide}#quick-start`}>准备流程说明</Link></div>

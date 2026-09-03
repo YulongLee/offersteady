@@ -483,6 +483,13 @@ h1, h2, h3, p { margin-top: 0; }
 .machine-code-panel input { width: 100%; border: 1px solid var(--line-strong); border-radius: 10px; outline: 0; background: var(--field-bg); color: var(--brand); padding: 11px 12px; font-size: 18px; font-weight: 800; letter-spacing: .18em; }
 .machine-code-panel small { grid-column: 1 / -1; color: var(--muted); font-size: 9px; line-height: 1.5; }
 .machine-code-panel .inline-error { grid-column: 1 / -1; }
+.companion-update-reminder { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px; border: 1px solid rgba(110,231,189,.28); border-radius: 11px; background: rgba(110,231,189,.055); margin: 0 0 12px; padding: 11px 12px; }
+.companion-update-reminder > span { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; color: var(--brand-ink); background: var(--brand); font-size: 12px; font-weight: 900; }
+.companion-update-reminder > div:not(.companion-update-actions) { display: grid; gap: 3px; }
+.companion-update-reminder strong { font-size: 9px; }
+.companion-update-reminder small { color: var(--muted); font-size: 8px; line-height: 1.45; }
+.companion-update-actions { display: flex; align-items: center; gap: 7px; }
+.companion-update-actions .button { min-height: 31px; padding: 7px 10px; white-space: nowrap; font-size: 8px; }
 .active-interview-conflict-sheet { max-width: 470px; }
 .conflict-kicker { color: var(--brand); font-size: 8px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
 .active-interview-card { display: grid; gap: 7px; border: 1px solid rgba(110,231,189,.24); border-radius: 13px; background: rgba(110,231,189,.06); margin: 18px 0; padding: 15px; }
@@ -1164,6 +1171,9 @@ h1, h2, h3, p { margin-top: 0; }
   .page-header { min-height: 0; flex-direction: column; margin-bottom: 24px; }
   .page-header .button { width: 100%; }
   .page-header h1 { font-size: 30px; }
+  .companion-update-reminder { grid-template-columns: auto minmax(0, 1fr); }
+  .companion-update-actions { grid-column: 1 / -1; }
+  .companion-update-actions .button { flex: 1; }
   .continue-card { align-items: stretch; flex-direction: column; }
   .continue-actions { flex-direction: column; }
   .resource-card, .library-row { grid-template-columns: auto 1fr; }

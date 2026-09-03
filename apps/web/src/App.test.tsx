@@ -376,6 +376,98 @@ describe("OfferSteady web application", () => {
     expect(screen.queryByText("0/1")).not.toBeInTheDocument();
   });
 
+  it("shows and dismisses a non-blocking update reminder for an already connected interview companion", async () => {
+    const state = clonedState();
+    state.releaseManifest = {
+      ...state.releaseManifest,
+      entries: state.releaseManifest.entries.map(entry => entry.id === "mac-arm64-010"
+        ? { ...entry, id: "mac-arm64-1213", version: "1.2.13", downloadUrl: "/api/v1/web/downloads/desktop/mac-arm64-1213" }
+        : entry),
+    };
+    vi.mocked(interviewAppAdapter.getDesktopDeviceBinding).mockResolvedValueOnce({
+      bindingId: "existing-old-binding",
+      sessionId: "demo",
+      deviceId: "existing-old-device",
+      manualCode: "123456",
+      displayName: "面试稳伴随程序 · Mac",
+      capabilities: { appVersion: "1.2.10a", platform: "macos", architecture: "arm64" },
+      status: "bound",
+      boundAtMs: Date.now(),
+      lastSeenAtMs: Date.now(),
+    });
+
+    openAtWithState("/app/interviews/demo/prepare", state, true);
+
+    const reminder = await screen.findByRole("region", { name: "伴随程序更新提醒" });
+    expect(within(reminder).getByText("发现新版伴随程序 1.2.13")).toBeInTheDocument();
+    expect(within(reminder).getByText(/当前版本 1.2.10a/)).toBeInTheDocument();
+    expect(within(reminder).getByRole("link", { name: "立即下载" })).toHaveAttribute("href", "/api/v1/web/downloads/desktop/mac-arm64-1213");
+    expect(await screen.findByRole("button", { name: /开始面试/ })).toBeEnabled();
+    expect(interviewAppAdapter.bindDesktopDevice).not.toHaveBeenCalled();
+
+    fireEvent.click(within(reminder).getByRole("button", { name: "继续使用" }));
+    expect(screen.queryByRole("region", { name: "伴随程序更新提醒" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /开始面试/ })).toBeEnabled();
+    expect(interviewAppAdapter.bindDesktopDevice).not.toHaveBeenCalled();
+  });
+
+  it("offers the matching update after written-exam binding without adding a version request", async () => {
+    const state = clonedState();
+    state.interviews = [{
+      id: "written-update",
+      title: "算法笔试",
+      role: "算法工程师",
+      sessionMode: "written",
+      status: "preparing",
+      updatedAt: "刚刚",
+      readiness: 100,
+    }];
+    state.releaseManifest = {
+      ...state.releaseManifest,
+      entries: state.releaseManifest.entries.map(entry => entry.id === "mac-arm64-010"
+        ? { ...entry, version: "1.2.13" }
+        : entry),
+    };
+    vi.mocked(interviewAppAdapter.bindDesktopDevice).mockResolvedValueOnce({
+      bindingId: "written-old-binding",
+      sessionId: "written-update",
+      deviceId: "written-old-device",
+      manualCode: "123456",
+      displayName: "面试稳伴随程序 · Mac",
+      capabilities: { appVersion: "1.2.9", platform: "darwin", architecture: "aarch64" },
+      status: "bound",
+      boundAtMs: Date.now(),
+      lastSeenAtMs: Date.now(),
+    });
+
+    openAtWithState("/app/interviews/written-update/prepare", state, true);
+    fireEvent.click(await screen.findByRole("button", { name: "连接上次设备" }));
+
+    expect(await screen.findByRole("region", { name: "伴随程序更新提醒" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /开始笔试/ })).toBeEnabled();
+    expect(interviewAppAdapter.bindDesktopDevice).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps preparation unchanged when connected device version metadata is unavailable", async () => {
+    vi.mocked(interviewAppAdapter.getDesktopDeviceBinding).mockResolvedValueOnce({
+      bindingId: "legacy-binding",
+      sessionId: "demo",
+      deviceId: "legacy-device",
+      manualCode: "123456",
+      displayName: "旧版伴随程序",
+      capabilities: { microphone: true, systemAudio: true },
+      status: "bound",
+      boundAtMs: Date.now(),
+      lastSeenAtMs: Date.now(),
+    });
+
+    openAtWithState("/app/interviews/demo/prepare", clonedState(), true);
+
+    expect(await screen.findByRole("button", { name: /开始面试/ })).toBeEnabled();
+    expect(screen.queryByRole("region", { name: "伴随程序更新提醒" })).not.toBeInTheDocument();
+    expect(interviewAppAdapter.bindDesktopDevice).not.toHaveBeenCalled();
+  });
+
   it("keeps an ended written exam visible and opens a written result page", async () => {
     const state = clonedState();
     const screenshotQuestion = {
