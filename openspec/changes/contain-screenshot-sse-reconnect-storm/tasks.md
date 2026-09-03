@@ -26,7 +26,7 @@
 
 ## 5. Safe production rollout
 
-- [ ] 5.1 Build a candidate Backend image and retain the recorded baseline image and runtime data
-- [ ] 5.2 Poll production until active interviews and active audio publishers are both zero without changing live traffic
-- [ ] 5.3 Replace only Backend, run health/Web-state/binding/screenshot/realtime smoke tests, and verify other containers remain unchanged
-- [ ] 5.4 Observe production metrics for at least 30 minutes and roll back immediately on correctness or performance regression
+- [x] 5.1 Build a candidate Backend image and retain the recorded baseline image and runtime data
+- [x] 5.2 Poll production until active interviews and active audio publishers are both zero without changing live traffic
+- [x] 5.3 Replace only Backend, run health/Web-state/binding/screenshot/realtime smoke tests, and verify other containers remain unchanged
+- [x] 5.4 Observe production metrics for at least 30 minutes and roll back immediately on correctness or performance regression

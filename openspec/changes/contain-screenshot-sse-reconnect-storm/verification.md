@@ -25,4 +25,12 @@ The running container image, not the mutable local `compose-backend:latest` tag,
 
 ## Production rollout
 
-Pending zero-active-interview and zero-active-audio gate.
+- Gate before build and switch: `0` active interviews in the recent twenty-minute window and `0` active desktop audio transports. Three stale database rows still had `live` status but were older than the inactivity window and had no active transport.
+- Candidate source: `1f979580d4dc4bc051f9d796c06741723b4b47b6`.
+- Candidate Backend image: `sha256:77b56674126a79502a5961d10faa520d283d89af36571c68083e94a9d8501085`.
+- Rollback image retained as `offersteady-backend:rollback-7bcc480-pre-screenshot-sse-guard`, image `sha256:98334bef1f96cdb09b2f93de99dcc56580201b701e0614d20e378739258f2cec`.
+- Only Backend was replaced. Web, Admin, PostgreSQL, and Redis retained their pre-rollout container IDs and each finished with restart count `0`.
+- Internal health, billing, screenshot status, public health, and public Web state all returned HTTP 200 after the switch.
+- More than thirty minutes of production observation completed with `0` Backend errors. Across sixty interval samples, public health latency was P50 `27.3 ms`, P95 `56.5 ms`, P99 `64.2 ms`; public Web-state latency was P50 `362.6 ms`, P95 `438.0 ms`, P99 `492.1 ms`.
+- Final admission diagnostics: accepted `917`, released `917`, maximum active `1`, duplicate denied `370`, reconnect-rate denied `216`, global-capacity denied `0`. The dedicated screenshot wait executor remained at active `0`, pending `0`; active desktop audio transports remained `0` throughout observation.
+- No rollback was required.
