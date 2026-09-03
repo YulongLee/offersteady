@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from math import ceil
 from time import monotonic
 
 from fastapi import FastAPI, Request
@@ -17,10 +18,14 @@ _control_error_log_state: dict[tuple[str, str, int], tuple[float, int]] = {}
 
 
 def _control_error_log_sample(exc: "DomainRequestError") -> tuple[bool, int]:
-    if exc.feature != "realtime-speech" or exc.action not in {
-        "desktop-active-binding",
-        "desktop-capture-binding",
-    }:
+    sampled_action = (
+        exc.feature == "realtime-speech"
+        and exc.action in {"desktop-active-binding", "desktop-capture-binding"}
+    ) or (
+        exc.feature == "screenshot-answer"
+        and exc.action == "desktop-stream-admission"
+    )
+    if not sampled_action:
         return True, 0
     key = (exc.feature, exc.action, exc.status_code)
     current = monotonic()
@@ -41,12 +46,21 @@ class PlaceholderNotImplementedError(Exception):
 
 
 class DomainRequestError(Exception):
-    def __init__(self, feature: str, action: str, message: str, status_code: int = 400, error_code: str | None = None):
+    def __init__(
+        self,
+        feature: str,
+        action: str,
+        message: str,
+        status_code: int = 400,
+        error_code: str | None = None,
+        retry_after_ms: int | None = None,
+    ):
         self.feature = feature
         self.action = action
         self.message = message
         self.status_code = status_code
         self.error_code = error_code
+        self.retry_after_ms = retry_after_ms
         super().__init__(message)
 
 
@@ -89,13 +103,19 @@ def install_exception_handlers(app: FastAPI, *, settings: Settings, logger: logg
                 error_code="domain_request_error",
                 suppressed_count=suppressed_count,
             )
-        retry_after_ms = 2_000 if exc.feature == "realtime-speech" and exc.action in {
+        retry_after_ms = exc.retry_after_ms
+        retry_after_seconds = None
+        if retry_after_ms is not None:
+            retry_after_seconds = max(1, ceil(retry_after_ms / 1_000))
+        elif exc.feature == "realtime-speech" and exc.action in {
             "desktop-active-binding",
             "desktop-capture-binding",
-        } else None
+        }:
+            retry_after_ms = 2_000
+            retry_after_seconds = 2
         return JSONResponse(
             status_code=exc.status_code,
-            headers={"Retry-After": "2"} if retry_after_ms is not None else None,
+            headers={"Retry-After": str(retry_after_seconds)} if retry_after_seconds is not None else None,
             content=error_response(
                 request=request,
                 code="domain_request_error",

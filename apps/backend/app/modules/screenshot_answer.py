@@ -5,6 +5,7 @@ import json
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
+from starlette.background import BackgroundTask
 
 from app.core.logging import utc_now_iso
 from app.core.responses import success_response
@@ -30,8 +31,9 @@ from app.schemas.screenshot_answer import (
     FailRemoteScreenshotCaptureRequest,
 )
 from app.services.screenshot_answer_service import ScreenshotAnswerService
-from app.services.realtime_event_wait import run_realtime_event_wait
+from app.services.realtime_event_wait import run_screenshot_event_wait
 from app.services.realtime_control_executor import run_realtime_control
+from app.services.screenshot_stream_admission import ScreenshotStreamAdmissionCoordinator
 
 
 router = APIRouter(prefix="/screenshot-answer", tags=["screenshot-answer"])
@@ -457,98 +459,133 @@ async def stream_desktop_capture_requests(
     service: ScreenshotAnswerService = Depends(screenshot_answer_service),
     realtime: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> StreamingResponse:
-    binding = await run_realtime_control(
-        request,
-        realtime.get_desktop_capture_binding,
-        device_id=device_id,
-        manual_code=manual_code,
-    )
-    session = realtime.session_service.get_session(user_id=binding.owner_user_id, session_id=binding.session_id)
-    if session.status != "live":
-        from app.core.errors import DomainRequestError
-        raise DomainRequestError("screenshot-answer", "desktop-stream", "当前设备没有连接正在进行的面试。", 409)
+    admission = getattr(request.app.state, "screenshot_stream_admission", None)
+    lease = None
+    if isinstance(admission, ScreenshotStreamAdmissionCoordinator):
+        decision = admission.acquire(device_id)
+        if not decision.admitted:
+            from app.core.errors import DomainRequestError
 
-    async def event_stream():
-        last_cursor = cursor
-        pending = await asyncio.to_thread(
-            service.get_next_remote_capture_request,
+            error_codes = {
+                "duplicate": "screenshot_stream_duplicate",
+                "reconnect-rate": "screenshot_stream_reconnect_rate",
+                "global-capacity": "screenshot_stream_capacity",
+            }
+            raise DomainRequestError(
+                "screenshot-answer",
+                "desktop-stream-admission",
+                "截图连接正在恢复，请稍后重试。",
+                409,
+                error_codes.get(decision.reason, "screenshot_stream_capacity"),
+                retry_after_ms=decision.retry_after_ms,
+            )
+        lease = decision.lease
+
+    try:
+        binding = await run_realtime_control(
+            request,
+            realtime.get_desktop_capture_binding,
             device_id=device_id,
             manual_code=manual_code,
         )
-        current_cursor, _events, _resumable = await asyncio.to_thread(
-            realtime.list_session_events_after,
-            user_id=binding.owner_user_id,
-            session_id=binding.session_id,
-            cursor=last_cursor,
-        )
-        if pending is not None:
-            yield _sse_frame("capture-request", {
-                "requestId": pending.request_id,
-                "status": pending.status,
-                "stage": pending.stage,
-            }, cursor=current_cursor)
-        last_cursor = current_cursor
-        idle_ticks = 0
-        binding_check_ticks = 0
-        while True:
-            if await request.is_disconnected():
-                break
-            binding_check_ticks += 1
-            if binding_check_ticks >= 50:
-                pairing_status = await run_realtime_control(
-                    request,
-                    realtime.get_desktop_pairing_status,
-                    manual_code=manual_code,
-                    device_id=device_id,
-                )
-                if pairing_status.get("bound") is not True or pairing_status.get("sessionStatus") != "live":
-                    break
-                binding_check_ticks = 0
-            current_cursor, events, resumable = await run_realtime_event_wait(
-                request,
-                realtime.wait_for_session_events_after,
+        session = realtime.session_service.get_session(user_id=binding.owner_user_id, session_id=binding.session_id)
+        if session.status != "live":
+            from app.core.errors import DomainRequestError
+            raise DomainRequestError("screenshot-answer", "desktop-stream", "当前设备没有连接正在进行的面试。", 409)
+    except BaseException:
+        if isinstance(admission, ScreenshotStreamAdmissionCoordinator):
+            admission.release(lease)
+        raise
+
+    async def event_stream():
+        try:
+            last_cursor = cursor
+            pending = await asyncio.to_thread(
+                service.get_next_remote_capture_request,
+                device_id=device_id,
+                manual_code=manual_code,
+            )
+            current_cursor, _events, _resumable = await asyncio.to_thread(
+                realtime.list_session_events_after,
                 user_id=binding.owner_user_id,
                 session_id=binding.session_id,
                 cursor=last_cursor,
-                timeout_ms=max(100, realtime.settings.realtime_event_block_ms),
             )
-            if not resumable:
-                pending = await asyncio.to_thread(
-                    service.get_next_remote_capture_request,
-                    device_id=device_id,
-                    manual_code=manual_code,
-                )
-                if pending is not None:
-                    yield _sse_frame("capture-request", {
-                        "requestId": pending.request_id,
-                        "status": pending.status,
-                        "stage": pending.stage,
-                    }, cursor=current_cursor)
-            for event in events:
-                if event.kind != "screenshot-capture-updated":
-                    continue
-                if event.payload.get("deviceId") != device_id or event.payload.get("status") != "requested":
-                    continue
+            if pending is not None:
                 yield _sse_frame("capture-request", {
-                    "requestId": str(event.payload.get("requestId") or ""),
-                    "status": "requested",
-                    "stage": str(event.payload.get("stage") or "waiting-desktop"),
-                    "eventId": event.event_id,
+                    "requestId": pending.request_id,
+                    "status": pending.status,
+                    "stage": pending.stage,
                 }, cursor=current_cursor)
-            if current_cursor > last_cursor:
-                last_cursor = current_cursor
-                idle_ticks = 0
-            else:
-                idle_ticks += 1
-                keepalive_ticks = max(1, 15_000 // max(100, realtime.settings.realtime_event_block_ms))
-                if idle_ticks >= keepalive_ticks:
-                    yield ": keepalive\n\n"
+            last_cursor = current_cursor
+            idle_ticks = 0
+            binding_check_ticks = 0
+            while True:
+                if await request.is_disconnected():
+                    break
+                binding_check_ticks += 1
+                if binding_check_ticks >= 50:
+                    pairing_status = await run_realtime_control(
+                        request,
+                        realtime.get_desktop_pairing_status,
+                        manual_code=manual_code,
+                        device_id=device_id,
+                    )
+                    if pairing_status.get("bound") is not True or pairing_status.get("sessionStatus") != "live":
+                        break
+                    binding_check_ticks = 0
+                current_cursor, events, resumable = await run_screenshot_event_wait(
+                    request,
+                    realtime.wait_for_session_events_after,
+                    user_id=binding.owner_user_id,
+                    session_id=binding.session_id,
+                    cursor=last_cursor,
+                    timeout_ms=max(100, realtime.settings.realtime_event_block_ms),
+                )
+                if not resumable:
+                    pending = await asyncio.to_thread(
+                        service.get_next_remote_capture_request,
+                        device_id=device_id,
+                        manual_code=manual_code,
+                    )
+                    if pending is not None:
+                        yield _sse_frame("capture-request", {
+                            "requestId": pending.request_id,
+                            "status": pending.status,
+                            "stage": pending.stage,
+                        }, cursor=current_cursor)
+                for event in events:
+                    if event.kind != "screenshot-capture-updated":
+                        continue
+                    if event.payload.get("deviceId") != device_id or event.payload.get("status") != "requested":
+                        continue
+                    yield _sse_frame("capture-request", {
+                        "requestId": str(event.payload.get("requestId") or ""),
+                        "status": "requested",
+                        "stage": str(event.payload.get("stage") or "waiting-desktop"),
+                        "eventId": event.event_id,
+                    }, cursor=current_cursor)
+                if current_cursor > last_cursor:
+                    last_cursor = current_cursor
                     idle_ticks = 0
+                else:
+                    idle_ticks += 1
+                    keepalive_ticks = max(1, 15_000 // max(100, realtime.settings.realtime_event_block_ms))
+                    if idle_ticks >= keepalive_ticks:
+                        yield ": keepalive\n\n"
+                        idle_ticks = 0
+        finally:
+            if isinstance(admission, ScreenshotStreamAdmissionCoordinator):
+                admission.release(lease)
 
+    release_task = None
+    if isinstance(admission, ScreenshotStreamAdmissionCoordinator):
+        release_task = BackgroundTask(admission.release, lease)
     return StreamingResponse(
         event_stream(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+        background=release_task,
     )
 
 

@@ -122,6 +122,12 @@ async def status(request: Request, service: RealtimeSpeechService = Depends(real
 async def realtime_metrics(request: Request, service: RealtimeSpeechService = Depends(realtime_speech_service)) -> ApiEnvelope[dict[str, object]]:
     control_executor = getattr(request.app.state, "realtime_control_executor", None)
     control_diagnostics = control_executor.diagnostics() if control_executor is not None else {}
+    event_wait_executor = getattr(request.app.state, "realtime_event_wait_executor", None)
+    event_wait_diagnostics = event_wait_executor.diagnostics() if event_wait_executor is not None else {}
+    screenshot_event_wait_executor = getattr(request.app.state, "screenshot_event_wait_executor", None)
+    screenshot_event_wait_diagnostics = screenshot_event_wait_executor.diagnostics() if screenshot_event_wait_executor is not None else {}
+    screenshot_stream_admission = getattr(request.app.state, "screenshot_stream_admission", None)
+    screenshot_stream_diagnostics = screenshot_stream_admission.diagnostics() if screenshot_stream_admission is not None else {}
     return success_response(
         request=request,
         data={
@@ -129,6 +135,9 @@ async def realtime_metrics(request: Request, service: RealtimeSpeechService = De
             "activeDesktopTransports": len(_active_ingest_tokens),
             "protocolVersion": service.settings.realtime_protocol_version,
             "controlExecutor": control_diagnostics,
+            "realtimeEventWaitExecutor": event_wait_diagnostics,
+            "screenshotEventWaitExecutor": screenshot_event_wait_diagnostics,
+            "screenshotStreamAdmission": screenshot_stream_diagnostics,
         },
         timestamp=utc_now_iso(),
     )

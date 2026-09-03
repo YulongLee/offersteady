@@ -19,6 +19,7 @@ from app.schemas.foundation import HealthResponse
 from app.services.admin_capacity import AdminCapacityMonitor
 from app.services.realtime_event_wait import RealtimeEventWaitExecutor
 from app.services.realtime_control_executor import RealtimeControlExecutor
+from app.services.screenshot_stream_admission import ScreenshotStreamAdmissionCoordinator
 
 
 def create_app() -> FastAPI:
@@ -31,11 +32,23 @@ def create_app() -> FastAPI:
         realtime_event_wait_executor = RealtimeEventWaitExecutor(
             max_workers=settings.realtime_event_wait_workers,
         )
+        screenshot_event_wait_executor = RealtimeEventWaitExecutor(
+            max_workers=settings.screenshot_event_wait_workers,
+            thread_name_prefix="screenshot-event-wait",
+        )
+        screenshot_stream_admission = ScreenshotStreamAdmissionCoordinator(
+            max_active=settings.screenshot_stream_max_active,
+            reconnect_window_seconds=settings.screenshot_stream_reconnect_window_seconds,
+            reconnect_max_accepts=settings.screenshot_stream_reconnect_max_accepts,
+            retry_after_seconds=settings.screenshot_stream_retry_after_seconds,
+        )
         realtime_control_executor = RealtimeControlExecutor(
             max_workers=settings.realtime_control_worker_count,
             queue_max=settings.realtime_control_queue_max,
         )
         application.state.realtime_event_wait_executor = realtime_event_wait_executor
+        application.state.screenshot_event_wait_executor = screenshot_event_wait_executor
+        application.state.screenshot_stream_admission = screenshot_stream_admission
         application.state.realtime_control_executor = realtime_control_executor
         if settings.admin_enabled and settings.database_url:
             try:
@@ -61,6 +74,8 @@ def create_app() -> FastAPI:
                 with suppress(asyncio.CancelledError):
                     await task
             realtime_event_wait_executor.shutdown()
+            screenshot_event_wait_executor.shutdown()
+            screenshot_stream_admission.shutdown()
             realtime_control_executor.shutdown()
             from app.deps import llm_gateway_port
 
