@@ -7,6 +7,11 @@
 - **WHEN** 百度验证服务请求公开首页 HTML
 - **THEN** 响应的 `<head>` 包含且仅包含一个名称为 `baidu-site-verification`、内容为已批准验证码的 meta 标记
 
+#### Scenario: Baidu fetches the registered www site property
+- **WHEN** 百度验证服务请求 `https://www.mianshiwen.cn/`
+- **THEN** 服务直接返回 200 首页 HTML 且不跨域跳转到非 `www` 主域
+- **AND** 首页继续声明 `https://mianshiwen.cn/` 为 canonical URL
+
 #### Scenario: Web production bundle is built
 - **WHEN** Web 应用执行生产构建
 - **THEN** 构建产物首页继续包含准确的百度验证标记

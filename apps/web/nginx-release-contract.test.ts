@@ -4,6 +4,17 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("production nginx release contract", () => {
+  it("serves the www host directly so Baidu can verify that exact site property", () => {
+    const nginxConfig = readFileSync(
+      resolve(process.cwd(), "../../infra/nginx/default.conf"),
+      "utf8",
+    );
+
+    expect(nginxConfig).not.toMatch(
+      /if \(\$host = www\.mianshiwen\.cn\)[\s\S]*?return 30[18] https:\/\/mianshiwen\.cn/,
+    );
+  });
+
   it("publishes the deployment build manifest without SPA fallback", () => {
     const nginxConfig = readFileSync(
       resolve(process.cwd(), "../../infra/nginx/default.conf"),

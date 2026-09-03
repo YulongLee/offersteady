@@ -5,6 +5,7 @@
 ## What Changes
 
 - 在 Web 首页 HTML `<head>` 中加入百度提供的 `baidu-site-verification` meta 标记。
+- 让 `https://www.mianshiwen.cn/` 直接返回带验证标记的首页，避免验证站点跨域跳转到非 `www` 主域。
 - 增加回归检查，确保生产构建保留正确标记且后续版本不会误删。
 - 仅发布 Web 静态内容，不修改 Backend、桌面伴随程序、实时面试、计费或用户界面。
 
@@ -21,5 +22,5 @@
 ## Impact
 
 - Web：`apps/web/index.html` 及对应静态 HTML 回归测试。
-- Deployment：仅重新构建和切换 Web 静态容器。
+- Deployment：仅重新构建和切换 Web 静态容器；主域 canonical 保持 `https://mianshiwen.cn/`。
 - API、数据、隐私、AI 行为与桌面客户端均不受影响。
