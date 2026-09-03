@@ -12,4 +12,4 @@
 ## 3. Verification and Release
 
 - [x] 3.1 Run focused Web tests, the full Web test suite, type/build checks and strict OpenSpec validation.
-- [ ] 3.2 Record the production deployment gate, rollback reference and post-deployment verification evidence.
+- [x] 3.2 Record the production deployment gate, rollback reference and post-deployment verification evidence.
