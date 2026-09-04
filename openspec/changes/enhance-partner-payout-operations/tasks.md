@@ -32,4 +32,4 @@
 - [x] 5.3 Add Web/Admin responsive navigation, form, reconciliation-state and read-only permission tests
 - [x] 5.4 Run backend suites, frontend tests/typechecks/builds, secret scans and strict OpenSpec validation
 - [x] 5.5 Document payout-data access, manual reconciliation, retention, key rotation, rollout and rollback procedures
-- [ ] 5.6 Deploy with payout-profile collection disabled, configure the dedicated production key, verify a synthetic end-to-end flow, then enable without restarting interview data services
+- [x] 5.6 Deploy with payout-profile collection disabled, configure the dedicated production key, verify a synthetic end-to-end flow, then enable without restarting interview data services
