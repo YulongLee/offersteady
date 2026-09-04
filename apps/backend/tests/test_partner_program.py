@@ -17,6 +17,7 @@ from app.services.partner_program import (
     PartnerPayoutCipher,
     PartnerProgramRepository,
     commission_cents,
+    dashboard_balance_parameters,
     mask_account_identifier,
     mask_account_name,
     refund_adjustment,
@@ -37,6 +38,16 @@ def test_partner_defaults_are_safe_and_commercial_rules_are_explicit() -> None:
     assert settings.partner_minimum_payout_cents == 10_000
     assert commission_cents(10_000, settings.partner_commission_rate_bps) == 2_000
     assert settings.partner_payout_profile_enabled is False
+
+
+def test_partner_dashboard_binds_every_balance_query_placeholder() -> None:
+    assert dashboard_balance_parameters(current_ms=1_234, user_id="partner-user") == (
+        1_234,
+        1_234,
+        1_234,
+        1_234,
+        "partner-user",
+    )
 
 
 def test_partner_payout_profile_cipher_is_dedicated_masked_and_fail_closed() -> None:

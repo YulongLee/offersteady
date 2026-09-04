@@ -15,6 +15,10 @@ The public homepage SHALL show a visually distinct, keyboard-accessible partner-
 - **WHEN** the server reports that the partner program is disabled
 - **THEN** the public homepage does not claim that commission can currently be earned and all interview functions remain unchanged
 
+#### Scenario: Existing partner opens the activity dashboard
+- **WHEN** an enrolled partner opens the protected partner-program page while the activity is enabled
+- **THEN** the service returns the partner metrics and balances without exposing internal settlement terminology on the homepage
+
 ### Requirement: Administrators can enable or pause partner recruitment
 The administrator partner view SHALL expose the current partner-program activity state. An administrator with `promotion.manage` SHALL be able to enable or disable public discovery and new enrollment with explicit confirmation and a recorded reason. Disabling MUST preserve existing links, attribution, commission, payout profiles, payout requests and reconciliation access.
 

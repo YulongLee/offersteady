@@ -30,6 +30,11 @@ def commission_cents(gross_cents: int, rate_bps: int) -> int:
     return gross_cents * rate_bps // 10_000
 
 
+def dashboard_balance_parameters(*, current_ms: int, user_id: str) -> tuple[int, int, int, int, str]:
+    """Keep every dashboard balance time filter bound independently."""
+    return (current_ms, current_ms, current_ms, current_ms, user_id)
+
+
 def mask_account_name(value: str) -> str:
     value = value.strip()
     if not value:
@@ -329,7 +334,7 @@ class PartnerProgramRepository:
                      COALESCE(SUM(amount_cents) FILTER (WHERE entry_type='payout_paid'),0) AS settled_cents,
                      MAX(created_at_ms) AS refreshed_at_ms
                    FROM partner_commission_ledger WHERE partner_user_id=%s""",
-                (current, current, user_id),
+                dashboard_balance_parameters(current_ms=current, user_id=user_id),
             )
             balances = dict(cursor.fetchone())
             cursor.execute(

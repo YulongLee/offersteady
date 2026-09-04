@@ -17,6 +17,8 @@ describe("partner program", () => {
     vi.spyOn(interviewAppAdapter, "getPartnerProgramConfig").mockResolvedValue({ enabled: true, configVersion: 1, commissionRateBps: 2000, eligibleOrderDays: 90, refundHoldDays: 7, minimumPayoutCents: 10000, agreementVersion: "2026-09-v1", settlementMode: "manual-monthly" });
     render(<App initialAuthenticated={false} initialState={syntheticState} />);
     expect(await screen.findByRole("link", { name: /了解合作伙伴计划/ })).toHaveAttribute("href", "/app/partner-program");
+    expect(screen.getByText("分享面试稳，获得 20% 推广佣金。")).toBeInTheDocument();
+    expect(screen.queryByText(/净实收/)).toBeNull();
     expect(join).not.toHaveBeenCalled();
   });
 

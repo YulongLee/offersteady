@@ -42,3 +42,9 @@
 - [x] 6.4 Add Web, Admin and Backend regression tests for entry scope, permissions, toggle behavior and historical-data preservation
 - [x] 6.5 Run focused and full relevant test/typecheck/build suites plus strict OpenSpec validation
 - [x] 6.6 Deploy during a zero-active-interview window and verify the homepage, workbench, admin switch and existing settlement data
+
+## 7. Homepage copy and enrolled-partner availability regression
+
+- [x] 7.1 Simplify the public homepage partner copy while keeping detailed accounting rules on the activity page
+- [x] 7.2 Fix the enrolled-partner dashboard balance query parameter mismatch and add regression coverage
+- [ ] 7.3 Run focused verification, deploy during a zero-active-interview window and verify the production partner page
