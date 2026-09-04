@@ -38,4 +38,18 @@ describe("partner program", () => {
     render(<App initialAuthenticated initialState={syntheticState} />);
     expect(await screen.findByText("-¥1.00")).toBeInTheDocument();
   });
+
+  it("collects only manual payout details and keeps them masked after saving", async () => {
+    window.history.replaceState({}, "", "/app/partner-program");
+    const base = { joined: true, shareUrl: "https://example.test/r/safePartnerSlug", config: { enabled: true, commissionRateBps: 2000, eligibleOrderDays: 90, refundHoldDays: 7, minimumPayoutCents: 10000, agreementVersion: "2026-09-v1", settlementMode: "manual-monthly" as const, payoutProfileEnabled: true }, profile: { status: "active" as const, joinedAtMs: 1, agreementVersion: "2026-09-v1" }, metrics: { validVisitors: 0, registrations: 0, payingUsers: 0, attributedReceiptsCents: 0 }, balances: { pendingCents: 0, availableCents: 0, reservedCents: 0, settledCents: 0, refreshedAtMs: 1 }, payouts: [] };
+    vi.spyOn(interviewAppAdapter, "getPartnerProgram").mockResolvedValue(base);
+    const save = vi.spyOn(interviewAppAdapter, "savePartnerPayoutProfile").mockResolvedValue({ payoutProfileId: "profile-1", version: 1, payoutMethod: "alipay", maskedAccountName: "测*", maskedAccountIdentifier: "****1234", updatedAtMs: 1 });
+    render(<App initialAuthenticated initialState={syntheticState} />);
+    await screen.findByText("人工结算收款信息");
+    fireEvent.change(screen.getByLabelText("实名姓名"), { target: { value: "测试用户" } });
+    fireEvent.change(screen.getByLabelText("收款账号"), { target: { value: "test-account-1234" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存收款信息" }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith({ payoutMethod: "alipay", accountName: "测试用户", accountIdentifier: "test-account-1234" }));
+    expect(screen.getByText(/不会自动发起支付宝或微信转账/)).toBeInTheDocument();
+  });
 });

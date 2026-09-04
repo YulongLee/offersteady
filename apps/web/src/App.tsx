@@ -340,6 +340,7 @@ const navItems = [
   { to: routes.writtenExams, label: "笔试模式", icon: "◇" },
   { to: routes.library, label: "资料", icon: "◇" },
   { to: routes.billing, label: "积分与会员", icon: "点" },
+  { to: routes.partnerProgram, label: "合作伙伴计划", detail: "推广赚取 20%", icon: "合", featured: true },
   { to: routes.guide, label: "使用说明", icon: "?" },
   { href: USER_MANUAL_URL, label: "用户手册", icon: "册" },
   { to: routes.devices, label: "设备", icon: "⌘" },
@@ -349,7 +350,7 @@ const navItems = [
 function WorkbenchNavigationItems({ mobile = false }: { readonly mobile?: boolean }) {
   return <>{navItems.map(item => "href" in item
     ? <a key={item.href} href={item.href} target="_blank" rel="noopener noreferrer" aria-label={item.label}><span aria-hidden="true">{item.icon}</span>{mobile ? <small>{item.label}</small> : item.label}</a>
-    : <NavLink key={item.to} to={item.to} {...(item.end ? { end: true } : {})}><span aria-hidden="true">{item.icon}</span>{mobile ? <small>{item.label}</small> : item.label}</NavLink>)}</>;
+    : <NavLink key={item.to} to={item.to} className={({ isActive }) => `${isActive ? "active" : ""}${"featured" in item && item.featured ? " partner-nav-link" : ""}`.trim()} {...(item.end ? { end: true } : {})}><span aria-hidden="true">{item.icon}</span>{mobile ? <small>{item.label}</small> : <>{item.label}{"detail" in item ? <small>{item.detail}</small> : null}</>}</NavLink>)}</>;
 }
 
 function AccountMenu({ compact = false, dropUp = false }: { readonly compact?: boolean; readonly dropUp?: boolean }) {
@@ -1929,8 +1930,9 @@ function PartnerProgramPage() {
   const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState<"join" | "payout" | "">("");
   const [message, setMessage] = useState("");
-  const load = async () => {
-    try { setPartner(await interviewAppAdapter.getPartnerProgram()); setMessage(""); }
+  const [payoutDraft, setPayoutDraft] = useState({ payoutMethod: "alipay" as "alipay" | "wechat", accountName: "", accountIdentifier: "" });
+  const load = async (clearMessage = true) => {
+    try { setPartner(await interviewAppAdapter.getPartnerProgram()); if (clearMessage) setMessage(""); }
     catch (error) { setMessage(error instanceof Error ? error.message : "合作伙伴数据暂时无法读取"); }
   };
   useEffect(() => { void load(); }, []);
@@ -1942,9 +1944,16 @@ function PartnerProgramPage() {
     finally { setBusy(""); }
   };
   const payout = async () => {
+    if (partner?.config.payoutProfileEnabled && !partner.payoutProfile) { setMessage("请先保存收款信息，再申请结算。"); return; }
     setBusy("payout");
-    try { await interviewAppAdapter.requestPartnerPayout(); setMessage("本月结算申请已提交，我们会在审核后联系你。"); await load(); }
+    try { await interviewAppAdapter.requestPartnerPayout(); setMessage("本月结算申请已提交，我们会在审核后联系你。"); await load(false); }
     catch (error) { setMessage(error instanceof Error ? error.message : "暂时无法提交结算申请"); }
+    finally { setBusy(""); }
+  };
+  const savePayoutProfile = async (event: FormEvent) => {
+    event.preventDefault(); setBusy("payout");
+    try { await interviewAppAdapter.savePartnerPayoutProfile(payoutDraft); setMessage("收款信息已加密保存。后续修改不会影响已提交的结算申请。"); setPayoutDraft(current => ({ ...current, accountName: "", accountIdentifier: "" })); await load(false); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "暂时无法保存收款信息"); }
     finally { setBusy(""); }
   };
   const copy = async () => {
@@ -1959,6 +1968,7 @@ function PartnerProgramPage() {
     {!partner.joined ? <section className="partner-intro panel"><div><span className="kicker">SHARE & EARN</span><h2>把真正有用的工具分享给更多求职者</h2><p>访客通过你的专属链接注册后，90 天内产生的合格订单会按退款后的净实收计算佣金。佣金经过 {partner.config.refundHoldDays} 天观察期后可申请结算。</p></div><dl><div><dt>佣金比例</dt><dd>{partner.config.commissionRateBps / 100}%</dd></div><div><dt>归因窗口</dt><dd>点击后 30 天内注册</dd></div><div><dt>订单周期</dt><dd>注册后 {partner.config.eligibleOrderDays} 天</dd></div><div><dt>最低结算</dt><dd>{money(partner.config.minimumPayoutCents)}</dd></div></dl><label className="partner-agreement"><input type="checkbox" checked={accepted} onChange={event => setAccepted(event.target.checked)} /><span>我已阅读并同意：仅进行真实推广，不进行自推、刷量或多级分销；佣金按退款后的净实收核算，结算时依法处理相关税务。</span></label><button className="button primary" disabled={!accepted || Boolean(busy)} onClick={() => void join()}>{busy === "join" ? "正在开通…" : "加入合作伙伴计划"}</button></section> : <>
       <section className="partner-share panel"><div><span className="kicker">YOUR PARTNER LINK</span><h2>你的专属推广链接</h2><p>同一个链接长期有效。请勿将链接用于自购、刷量或误导性推广。</p></div><div><code>{partner.shareUrl}</code><button className="button primary" onClick={() => void copy()}>复制链接</button></div></section>
       <section className="partner-metrics" aria-label="合作伙伴数据看板"><article><span>有效访客</span><strong>{partner.metrics?.validVisitors ?? 0}</strong></article><article><span>注册用户</span><strong>{partner.metrics?.registrations ?? 0}</strong></article><article><span>付费用户</span><strong>{partner.metrics?.payingUsers ?? 0}</strong></article><article><span>归因实收</span><strong>{money(partner.metrics?.attributedReceiptsCents)}</strong></article><article><span>待确认佣金</span><strong>{money(partner.balances?.pendingCents)}</strong></article><article><span>可提现佣金</span><strong>{money(partner.balances?.availableCents)}</strong></article><article><span>审核中</span><strong>{money(partner.balances?.reservedCents)}</strong></article><article><span>已结算</span><strong>{money(partner.balances?.settledCents)}</strong></article></section>
+      {partner.config.payoutProfileEnabled ? <form className="partner-payout-profile panel" onSubmit={savePayoutProfile}><div><h2>人工结算收款信息</h2><p>仅用于管理员审核后人工打款。页面只显示脱敏信息，不会自动发起支付宝或微信转账。</p>{partner.payoutProfile ? <small>当前：{partner.payoutProfile.payoutMethod === "alipay" ? "支付宝" : "微信"} · {partner.payoutProfile.maskedAccountName} · {partner.payoutProfile.maskedAccountIdentifier}</small> : null}</div><label>收款方式<select value={payoutDraft.payoutMethod} onChange={event => setPayoutDraft(current => ({ ...current, payoutMethod: event.target.value as "alipay" | "wechat" }))}><option value="alipay">支付宝</option><option value="wechat">微信</option></select></label><label>实名姓名<input required minLength={2} maxLength={80} autoComplete="name" value={payoutDraft.accountName} onChange={event => setPayoutDraft(current => ({ ...current, accountName: event.target.value }))} /></label><label>收款账号<input required minLength={4} maxLength={160} autoComplete="off" value={payoutDraft.accountIdentifier} onChange={event => setPayoutDraft(current => ({ ...current, accountIdentifier: event.target.value }))} /></label><button className="button secondary" disabled={Boolean(busy)}>保存收款信息</button></form> : null}
       <section className="partner-settlement panel"><div><h2>月度结算</h2><p>可提现达到 {money(partner.config.minimumPayoutCents)} 后，每个自然月可以申请一次。退款或拒付会以冲正记录调整。</p></div><button className="button primary" disabled={Boolean(busy) || (partner.balances?.availableCents ?? 0) < partner.config.minimumPayoutCents} onClick={() => void payout()}>{busy === "payout" ? "正在提交…" : "申请结算"}</button>{partner.payouts?.length ? <div className="partner-payout-list">{partner.payouts.map(item => <p key={item.payoutRequestId}><span>{item.periodKey}</span><strong>{money(item.amountCents)}</strong><em>{item.status === "requested" ? "待审核" : item.status === "approved" ? "已批准" : item.status === "paid" ? "已结算" : "已驳回"}</em></p>)}</div> : <small>暂时没有结算记录。</small>}</section>
     </>}
     {message ? <p className="partner-message" role="status">{message}</p> : null}

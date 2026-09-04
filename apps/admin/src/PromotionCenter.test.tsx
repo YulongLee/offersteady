@@ -18,6 +18,11 @@ const stubOverviewRequests = () => {
   vi.spyOn(adminApi, "promotionHealth").mockResolvedValue({ queue: { state: "healthy", pending: 0, dropped: 0 } });
 };
 
+const stubPartnerRequests = () => {
+  vi.spyOn(adminApi, "partnerReconciliation").mockResolvedValue({ pendingCents: 100, availableCents: 200, reservedCents: 300, paidCents: 400, reversedCents: 50, negativeCarryCents: 0 });
+  vi.spyOn(adminApi, "partnerCommissionOrders").mockResolvedValue({ items: [] });
+};
+
 describe("promotion center shell", () => {
   it("exposes all operator tasks and accessible report filters", () => {
     const html = renderToStaticMarkup(<PromotionCenter permissions={["promotion.read"]} onAuthenticationExpired={() => undefined} />);
@@ -126,6 +131,7 @@ describe("promotion center shell", () => {
 
   it("shows aggregate partners and permission-gated payout actions", async () => {
     stubOverviewRequests();
+    stubPartnerRequests();
     vi.spyOn(adminApi, "promotionPartners").mockResolvedValue({ items: [{ profileId: "partner-safe", status: "active", joinedAtMs: 1, totalCommissionCents: 2000 }] });
     vi.spyOn(adminApi, "partnerPayouts").mockResolvedValue({ items: [{ payoutRequestId: "payout-safe", periodKey: "2026-09", amountCents: 12000, status: "requested", requestedAtMs: 1 }] });
     render(<PromotionCenter permissions={["promotion.read", "promotion.payout.manage"]} onAuthenticationExpired={() => undefined} />);
@@ -138,6 +144,7 @@ describe("promotion center shell", () => {
 
   it("records a partner refund with an integer-cent channel reference", async () => {
     stubOverviewRequests();
+    stubPartnerRequests();
     vi.spyOn(adminApi, "promotionPartners").mockResolvedValue({ items: [] });
     vi.spyOn(adminApi, "partnerPayouts").mockResolvedValue({ items: [] });
     const record = vi.spyOn(adminApi, "recordPartnerRefund").mockResolvedValue({});
@@ -152,5 +159,20 @@ describe("promotion center shell", () => {
     await waitFor(() => expect(record).toHaveBeenCalledWith({
       orderId: "order-001", refundReference: "refund-001", refundedCents: 1234, reason: "渠道退款已确认",
     }));
+  });
+
+
+  it("reveals one masked payout only to payout managers after explicit confirmation", async () => {
+    stubOverviewRequests(); stubPartnerRequests();
+    vi.spyOn(adminApi, "promotionPartners").mockResolvedValue({ items: [] });
+    vi.spyOn(adminApi, "partnerPayouts").mockResolvedValue({ items: [{ payoutRequestId: "payout-safe", periodKey: "2026-09", amountCents: 12000, status: "approved", payoutMethod: "alipay", maskedAccountName: "测*", maskedAccountIdentifier: "****1234" }] });
+    const reveal = vi.spyOn(adminApi, "revealPartnerPayout").mockResolvedValue({ payoutMethod: "alipay", accountName: "测试用户", accountIdentifier: "account-1234" });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<PromotionCenter permissions={["promotion.read", "promotion.payout.manage"]} onAuthenticationExpired={() => undefined} />);
+    fireEvent.click(screen.getByRole("tab", { name: "合作伙伴" }));
+    const button = await screen.findByRole("button", { name: "查看本单收款信息" });
+    fireEvent.click(button);
+    await waitFor(() => expect(reveal).toHaveBeenCalledWith("payout-safe"));
+    expect(await screen.findByText("账号：account-1234")).toBeTruthy();
   });
 });

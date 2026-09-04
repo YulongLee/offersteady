@@ -11,7 +11,7 @@ from app.core.responses import success_response
 from app.deps import require_authenticated_context
 from app.ports.authentication import AuthenticatedRequestContext
 from app.schemas.foundation import ModuleDescriptor
-from app.schemas.promotion import PartnerJoinRequest
+from app.schemas.promotion import PartnerJoinRequest, PartnerPayoutProfileUpsert
 from app.services.partner_program import PartnerProgramRepository
 
 
@@ -58,6 +58,7 @@ def _settings_payload() -> dict[str, object]:
         "minimumPayoutCents": settings.partner_minimum_payout_cents,
         "agreementVersion": settings.partner_agreement_version,
         "settlementMode": "manual-monthly",
+        "payoutProfileEnabled": settings.partner_payout_profile_enabled,
     }
 
 
@@ -73,8 +74,10 @@ def _call(callback):
     except TimeoutError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except RuntimeError as exc:
-        if str(exc) in {"partner_program_disabled", "partner_program_requires_promotion"}:
+        if str(exc) in {"partner_program_disabled", "partner_program_requires_promotion", "partner_payout_profile_disabled"}:
             raise HTTPException(status_code=404, detail="Not found") from exc
+        if str(exc) in {"partner_payout_encryption_key_missing", "partner_payout_profile_decryption_failed"}:
+            raise HTTPException(status_code=503, detail="partner_payout_profile_unavailable") from exc
         raise
 
 
@@ -93,7 +96,11 @@ def partner_status(request: Request, auth: AuthenticatedRequestContext = Depends
     }
     if profile:
         data["shareUrl"] = f"{settings.resolved_promotion_public_base_url}/r/{profile['slug']}"
-    return success_response(request=request, data=data, timestamp=utc_now_iso())
+    response = success_response(request=request, data=data, timestamp=utc_now_iso())
+    if settings.partner_payout_profile_enabled:
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
+    return response
 
 
 @router.post("/join")
@@ -115,3 +122,18 @@ def join_partner(payload: PartnerJoinRequest, request: Request, auth: Authentica
 def request_payout(request: Request, auth: AuthenticatedRequestContext = Depends(require_authenticated_context)):
     payout = _call(lambda: repository().request_payout(user_id=auth.user_id))
     return success_response(request=request, data=_serialize(payout), timestamp=utc_now_iso())
+
+
+@router.put("/payout-profile")
+def save_payout_profile(payload: PartnerPayoutProfileUpsert, request: Request,
+                        auth: AuthenticatedRequestContext = Depends(require_authenticated_context)):
+    row = _call(lambda: repository().save_payout_profile(
+        user_id=auth.user_id,
+        payout_method=payload.payout_method,
+        account_name=payload.account_name,
+        account_identifier=payload.account_identifier,
+    ))
+    response = success_response(request=request, data=_serialize(row), timestamp=utc_now_iso())
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    return response

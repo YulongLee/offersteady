@@ -114,6 +114,20 @@ class PartnerJoinRequest(PromotionModel):
     agreement_accepted: bool
 
 
+class PartnerPayoutProfileUpsert(PromotionModel):
+    payout_method: Literal["alipay", "wechat"]
+    account_name: str = Field(min_length=2, max_length=80)
+    account_identifier: str = Field(min_length=4, max_length=160)
+
+    @field_validator("account_name", "account_identifier")
+    @classmethod
+    def strip_sensitive_value(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("value must not be blank")
+        return value
+
+
 class PartnerRefundRequest(PromotionModel):
     order_id: str = Field(min_length=3, max_length=120)
     refund_reference: str = Field(min_length=3, max_length=160)

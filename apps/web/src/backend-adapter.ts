@@ -1297,6 +1297,12 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     }, signal);
   }
 
+  async savePartnerPayoutProfile(input: { payoutMethod: "alipay" | "wechat"; accountName: string; accountIdentifier: string }, signal?: AbortSignal) {
+    return this.client.request<NonNullable<PartnerProgramState["payoutProfile"]>>("/api/v1/partner-program/payout-profile", {
+      method: "PUT", headers: authHeaders(), body: JSON.stringify(input),
+    }, signal);
+  }
+
   async createDraft(input: { title: string; role: string; company?: string; sessionMode?: SessionMode }, signal?: AbortSignal) {
     const persistedTitle = deriveInterviewTitle(input);
     const created = await this.client.request<BackendSessionResponse>("/api/v1/sessions", {

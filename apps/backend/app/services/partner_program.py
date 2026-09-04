@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import secrets
 from contextlib import contextmanager
 from datetime import datetime
@@ -11,6 +13,7 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import psycopg
+from cryptography.fernet import Fernet, InvalidToken
 from psycopg.rows import dict_row
 
 from app.core.config import REPO_ROOT, Settings
@@ -25,6 +28,40 @@ def commission_cents(gross_cents: int, rate_bps: int) -> int:
     if gross_cents < 0 or not 0 < rate_bps <= 10_000:
         raise ValueError("invalid_commission_basis")
     return gross_cents * rate_bps // 10_000
+
+
+def mask_account_name(value: str) -> str:
+    value = value.strip()
+    if not value:
+        raise ValueError("payout_account_name_required")
+    return value[0] + "*" * max(1, len(value) - 1)
+
+
+def mask_account_identifier(value: str) -> str:
+    value = value.strip()
+    if len(value) < 4:
+        return "*" * len(value)
+    return f"{'*' * min(8, len(value) - 4)}{value[-4:]}"
+
+
+class PartnerPayoutCipher:
+    """Dedicated envelope for payout PII; never reuse the admin-session secret."""
+
+    def __init__(self, settings: Settings) -> None:
+        raw = (settings.partner_payout_encryption_key or "").encode()
+        if len(raw) < 32:
+            raise RuntimeError("partner_payout_encryption_key_missing")
+        key = base64.urlsafe_b64encode(hashlib.sha256(raw).digest())
+        self._fernet = Fernet(key)
+
+    def encrypt(self, value: str) -> str:
+        return self._fernet.encrypt(value.strip().encode()).decode()
+
+    def decrypt(self, value: str) -> str:
+        try:
+            return self._fernet.decrypt(value.encode()).decode()
+        except InvalidToken as exc:
+            raise RuntimeError("partner_payout_profile_decryption_failed") from exc
 
 
 def refund_adjustment(
@@ -58,6 +95,8 @@ class PartnerProgramRepository:
         self.settings = settings
         if not settings.database_url:
             raise RuntimeError("partner_database_required")
+        if settings.partner_payout_profile_enabled:
+            PartnerPayoutCipher(settings)
         self._query_budget = BoundedSemaphore(max(1, settings.admin_max_concurrent_queries))
         if migrate:
             self.ensure_schema()
@@ -86,10 +125,81 @@ class PartnerProgramRepository:
         migrations = [
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0038_promotion_center.sql",
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0039_partner_program.sql",
+            Path(REPO_ROOT) / "apps/backend/migrations/versions/0040_partner_payout_operations.sql",
         ]
         with self.connect() as connection, connection.cursor() as cursor:
             apply_sql_migrations(cursor, migrations)
             connection.commit()
+
+    def payout_profile(self, *, user_id: str) -> dict[str, Any] | None:
+        with self.connect(readonly=True) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT payout_profile_id,version,payout_method,masked_account_name,masked_account_identifier,
+                          key_version,status,created_at_ms,updated_at_ms
+                   FROM partner_payout_profiles WHERE partner_user_id=%s AND status='current'""",
+                (user_id,),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def save_payout_profile(self, *, user_id: str, payout_method: str, account_name: str,
+                            account_identifier: str, saved_at_ms: int | None = None) -> dict[str, Any]:
+        if not self.settings.partner_payout_profile_enabled:
+            raise RuntimeError("partner_payout_profile_disabled")
+        if payout_method not in {"alipay", "wechat"}:
+            raise ValueError("invalid_payout_method")
+        name = account_name.strip()
+        identifier = account_identifier.strip()
+        if not 2 <= len(name) <= 80 or not 4 <= len(identifier) <= 160:
+            raise ValueError("invalid_payout_profile")
+        cipher = PartnerPayoutCipher(self.settings)
+        current = saved_at_ms or now_ms()
+        retention_until = current + self.settings.partner_payout_retention_days * 86_400_000
+        with self.connect() as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (f"partner-payout-profile:{user_id}",))
+            cursor.execute("SELECT status FROM partner_profiles WHERE user_id=%s FOR SHARE", (user_id,))
+            partner = cursor.fetchone()
+            if not partner or partner["status"] != "active":
+                raise PermissionError("partner_not_active")
+            cursor.execute("SELECT COALESCE(MAX(version),0)+1 AS version FROM partner_payout_profiles WHERE partner_user_id=%s", (user_id,))
+            version = int(cursor.fetchone()["version"])
+            cursor.execute("UPDATE partner_payout_profiles SET status='superseded',updated_at_ms=%s WHERE partner_user_id=%s AND status='current'", (current, user_id))
+            profile_id = f"partner-payout-profile-{uuid4().hex}"
+            cursor.execute(
+                """INSERT INTO partner_payout_profiles
+                   (payout_profile_id,partner_user_id,version,payout_method,account_name_ciphertext,
+                    account_identifier_ciphertext,masked_account_name,masked_account_identifier,key_version,status,
+                    retention_until_ms,created_at_ms,updated_at_ms)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'current',%s,%s,%s)
+                   RETURNING payout_profile_id,version,payout_method,masked_account_name,masked_account_identifier,
+                             key_version,status,created_at_ms,updated_at_ms""",
+                (profile_id, user_id, version, payout_method, cipher.encrypt(name), cipher.encrypt(identifier),
+                 mask_account_name(name), mask_account_identifier(identifier), self.settings.partner_payout_key_version,
+                 retention_until, current, current),
+            )
+            row = dict(cursor.fetchone())
+            connection.commit()
+            return row
+
+    def reveal_payout_profile(self, *, payout_request_id: str) -> dict[str, Any]:
+        cipher = PartnerPayoutCipher(self.settings)
+        with self.connect(readonly=True) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT r.payout_request_id,r.status,p.payout_method,p.account_name_ciphertext,
+                          p.account_identifier_ciphertext,p.version,p.key_version
+                   FROM partner_payout_requests r JOIN partner_payout_profiles p ON p.payout_profile_id=r.payout_profile_id
+                   WHERE r.payout_request_id=%s""",
+                (payout_request_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise LookupError("partner_payout_profile_not_found")
+            return {
+                "payout_request_id": row["payout_request_id"], "status": row["status"],
+                "payout_method": row["payout_method"], "account_name": cipher.decrypt(row["account_name_ciphertext"]),
+                "account_identifier": cipher.decrypt(row["account_identifier_ciphertext"]),
+                "profile_version": row["version"], "key_version": row["key_version"],
+            }
 
     def _slug(self) -> str:
         return secrets.token_urlsafe(12).replace("-", "").replace("_", "")[:16]
@@ -170,6 +280,8 @@ class PartnerProgramRepository:
             metrics = dict(cursor.fetchone())
             cursor.execute(
                 """SELECT
+                     COUNT(*) FILTER (WHERE entry_type='earning' AND eligible_at_ms<=%s) AS eligible_order_count,
+                     COUNT(*) FILTER (WHERE entry_type='earning' AND eligible_at_ms>%s) AS pending_order_count,
                      COALESCE(SUM(amount_cents) FILTER (WHERE entry_type IN ('earning','refund_reversal') AND eligible_at_ms>%s),0) AS pending_cents,
                      COALESCE(SUM(amount_cents) FILTER (WHERE entry_type IN ('earning','refund_reversal') AND eligible_at_ms<=%s),0)
                        + COALESCE(SUM(amount_cents) FILTER (WHERE entry_type IN ('payout_reserve','payout_release')),0) AS available_cents,
@@ -188,7 +300,13 @@ class PartnerProgramRepository:
                 (user_id,),
             )
             payouts = [dict(row) for row in cursor.fetchall()]
-        return {"profile": profile, "metrics": metrics, "balances": balances, "payouts": payouts}
+        return {
+            "profile": profile,
+            "payout_profile": self.payout_profile(user_id=user_id) if self.settings.partner_payout_profile_enabled else None,
+            "metrics": metrics,
+            "balances": balances,
+            "payouts": payouts,
+        }
 
     def project_paid_orders(self, *, limit: int | None = None, projected_at_ms: int | None = None) -> dict[str, int]:
         current = projected_at_ms or now_ms()
@@ -318,6 +436,16 @@ class PartnerProgramRepository:
             profile = cursor.fetchone()
             if not profile or profile["status"] != "active":
                 raise PermissionError("partner_not_active")
+            payout_profile_id = None
+            if self.settings.partner_payout_profile_enabled:
+                cursor.execute(
+                    "SELECT payout_profile_id FROM partner_payout_profiles WHERE partner_user_id=%s AND status='current' FOR SHARE",
+                    (user_id,),
+                )
+                payout_profile = cursor.fetchone()
+                if not payout_profile:
+                    raise ValueError("partner_payout_profile_required")
+                payout_profile_id = payout_profile["payout_profile_id"]
             cursor.execute("SELECT 1 FROM partner_payout_requests WHERE partner_user_id=%s AND period_key=%s", (user_id, period))
             if cursor.fetchone():
                 raise ValueError("partner_monthly_payout_already_requested")
@@ -333,9 +461,9 @@ class PartnerProgramRepository:
             payout_id = f"partner-payout-{uuid4().hex}"
             cursor.execute(
                 """INSERT INTO partner_payout_requests
-                   (payout_request_id,partner_user_id,period_key,amount_cents,status,requested_at_ms,updated_at_ms)
-                   VALUES (%s,%s,%s,%s,'requested',%s,%s) RETURNING *""",
-                (payout_id, user_id, period, available, current, current),
+                   (payout_request_id,partner_user_id,period_key,amount_cents,status,payout_profile_id,requested_at_ms,updated_at_ms)
+                   VALUES (%s,%s,%s,%s,'requested',%s,%s,%s) RETURNING *""",
+                (payout_id, user_id, period, available, payout_profile_id, current, current),
             )
             payout = dict(cursor.fetchone())
             cursor.execute(
@@ -364,13 +492,76 @@ class PartnerProgramRepository:
         with self.connect(readonly=True) as connection, connection.cursor() as cursor:
             cursor.execute(
                 """SELECT r.payout_request_id,p.profile_id,l.slug,r.period_key,r.amount_cents,r.status,r.requested_at_ms,
-                          r.reviewed_at_ms,r.paid_at_ms,r.payment_reference,r.decision_reason,r.updated_at_ms
+                          r.reviewed_at_ms,r.paid_at_ms,r.payment_reference,r.decision_reason,r.updated_at_ms,
+                          pp.payout_method,pp.masked_account_name,pp.masked_account_identifier,pp.version AS payout_profile_version,
+                          COALESCE((SELECT -SUM(e.amount_cents) FROM partner_commission_ledger e
+                                    WHERE e.source_type='payout' AND e.source_id=r.payout_request_id
+                                      AND e.entry_type='payout_reserve'),0) AS reserved_ledger_cents,
+                          COALESCE((SELECT SUM(e.amount_cents) FROM partner_commission_ledger e
+                                    WHERE e.source_type='payout' AND e.source_id=r.payout_request_id
+                                      AND e.entry_type='payout_paid'),0) AS paid_ledger_cents
                    FROM partner_payout_requests r
                    LEFT JOIN partner_profiles p ON p.user_id=r.partner_user_id
                    LEFT JOIN promotion_links l ON l.link_id=p.promotion_link_id
+                   LEFT JOIN partner_payout_profiles pp ON pp.payout_profile_id=r.payout_profile_id
                    WHERE (%s::text IS NULL OR r.status=%s::text)
                    ORDER BY r.requested_at_ms DESC LIMIT %s""",
                 (status, status, min(max(1, limit), 500)),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def reconciliation_summary(self) -> dict[str, int]:
+        current = now_ms()
+        with self.connect(readonly=True) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT
+                     COALESCE(SUM(amount_cents) FILTER (WHERE entry_type IN ('earning','refund_reversal') AND eligible_at_ms>%s),0) AS pending_cents,
+                     COALESCE(SUM(amount_cents) FILTER (WHERE entry_type IN ('earning','refund_reversal') AND eligible_at_ms<=%s),0) AS eligible_cents,
+                     COALESCE(-SUM(amount_cents) FILTER (WHERE entry_type='payout_reserve'),0)
+                       - COALESCE(SUM(amount_cents) FILTER (WHERE entry_type IN ('payout_release','payout_paid')),0) AS reserved_cents,
+                     COALESCE(SUM(amount_cents) FILTER (WHERE entry_type='payout_paid'),0) AS paid_cents,
+                     COALESCE(-SUM(amount_cents) FILTER (WHERE entry_type='refund_reversal'),0) AS reversed_cents
+                   FROM partner_commission_ledger""",
+                (current, current, current, current),
+            )
+            result = dict(cursor.fetchone())
+            result["available_cents"] = max(0, int(result["eligible_cents"]) - int(result["reserved_cents"]) - int(result["paid_cents"]))
+            result["negative_carry_cents"] = max(0, -(int(result["eligible_cents"]) - int(result["reserved_cents"]) - int(result["paid_cents"])))
+            return result
+
+    def list_commission_orders(self, *, state: str | None = None, start_ms: int | None = None,
+                               end_ms: int | None = None, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
+        current = now_ms()
+        bounded_limit = min(max(1, limit), 200)
+        bounded_offset = min(max(0, offset), 10_000)
+        if state not in {None, "pending", "eligible", "reversed"}:
+            raise ValueError("invalid_partner_commission_state")
+        with self.connect(readonly=True) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT e.ledger_entry_id,e.source_id AS order_id,l.slug AS partner_slug,e.gross_amount_cents,
+                          e.gross_amount_cents-COALESCE((SELECT SUM(r.gross_amount_cents) FROM partner_commission_ledger r
+                                    WHERE r.entry_type='refund_reversal' AND r.metadata_json->>'orderId'=e.source_id),0) AS net_receipt_cents,
+                          e.amount_cents,e.amount_cents-COALESCE((SELECT -SUM(r.amount_cents) FROM partner_commission_ledger r
+                                    WHERE r.entry_type='refund_reversal' AND r.metadata_json->>'orderId'=e.source_id),0) AS net_commission_cents,
+                          e.commission_rate_bps,e.hold_days,e.eligible_at_ms,e.occurred_at_ms,
+                          COALESCE((SELECT -SUM(r.amount_cents) FROM partner_commission_ledger r
+                                    WHERE r.entry_type='refund_reversal' AND r.metadata_json->>'orderId'=e.source_id),0) AS reversed_cents,
+                          CASE WHEN EXISTS (SELECT 1 FROM partner_commission_ledger r WHERE r.entry_type='refund_reversal'
+                                             AND r.metadata_json->>'orderId'=e.source_id) THEN 'reversed'
+                               WHEN e.eligible_at_ms>%s THEN 'pending' ELSE 'eligible' END AS state
+                   FROM partner_commission_ledger e
+                   LEFT JOIN partner_profiles p ON p.user_id=e.partner_user_id
+                   LEFT JOIN promotion_links l ON l.link_id=p.promotion_link_id
+                   WHERE e.entry_type='earning' AND e.source_type='paid_order'
+                     AND (%s::bigint IS NULL OR e.occurred_at_ms >= %s::bigint)
+                     AND (%s::bigint IS NULL OR e.occurred_at_ms < %s::bigint)
+                     AND (%s::text IS NULL OR (%s='pending' AND e.eligible_at_ms>%s)
+                          OR (%s='eligible' AND e.eligible_at_ms<=%s)
+                          OR (%s='reversed' AND EXISTS (SELECT 1 FROM partner_commission_ledger r
+                              WHERE r.entry_type='refund_reversal' AND r.metadata_json->>'orderId'=e.source_id)))
+                   ORDER BY e.occurred_at_ms DESC LIMIT %s OFFSET %s""",
+                (current, start_ms, start_ms, end_ms, end_ms, state, state, current, state, current, state,
+                 bounded_limit, bounded_offset),
             )
             return [dict(row) for row in cursor.fetchall()]
 

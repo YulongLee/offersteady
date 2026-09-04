@@ -183,6 +183,48 @@ def list_partner_payouts(
     return {"data": {"items": _serialize(rows)}}
 
 
+@admin_promotion_router.get("/partner-reconciliation")
+def partner_reconciliation(principal: Annotated[AdminPrincipal, Depends(permission("promotion.read"))]):
+    return {"data": _serialize(_call(lambda: partner_repository().reconciliation_summary()))}
+
+
+@admin_promotion_router.get("/partner-commission-orders")
+def partner_commission_orders(
+    principal: Annotated[AdminPrincipal, Depends(permission("promotion.read"))],
+    state: str | None = None,
+    start_ms: int | None = None,
+    end_ms: int | None = None,
+    limit: int = 100,
+    offset: int = 0,
+):
+    rows = _call(lambda: partner_repository().list_commission_orders(
+        state=state, start_ms=start_ms, end_ms=end_ms, limit=limit, offset=offset,
+    ))
+    return {"data": {"items": _serialize(rows), "limit": min(max(1, limit), 200), "offset": min(max(0, offset), 10_000)}}
+
+
+@admin_promotion_router.post("/partner-payouts/{payout_request_id}/reveal")
+def reveal_partner_payout_profile(
+    payout_request_id: str,
+    request: Request,
+    principal: Annotated[AdminPrincipal, Depends(permission("promotion.payout.manage"))],
+):
+    try:
+        row = _call(lambda: partner_repository().reveal_payout_profile(payout_request_id=payout_request_id))
+    except Exception:
+        ip_hash, user_agent_hash = _client_hashes(request)
+        admin_service().audit(
+            principal=principal, action="promotion.partner.payout.reveal", resource_type="partner_payout",
+            resource_id=payout_request_id, reason="manual payout processing", request_id=_request_id(request),
+            result="failure", details={"status": "failed"}, ip_hash=ip_hash, user_agent_hash=user_agent_hash,
+        )
+        raise
+    _audit(request, principal, action="promotion.partner.payout.reveal", resource_type="partner_payout",
+           resource_id=payout_request_id, reason="manual payout processing", details={"status": "revealed"})
+    from fastapi.responses import JSONResponse
+    return JSONResponse(content={"data": _serialize(row)}, headers={"Cache-Control": "no-store", "Pragma": "no-cache"})
+
+
 @admin_promotion_router.post("/partners/project")
 def project_partner_commissions(
     request: Request,

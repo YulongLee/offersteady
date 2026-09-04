@@ -13,7 +13,14 @@ from fastapi.testclient import TestClient
 from app.core.config import REPO_ROOT, Settings
 from app.main import create_app
 from app.services.admin_service import HIGH_RISK_PERMISSIONS, PERMISSIONS_BY_ROLE
-from app.services.partner_program import PartnerProgramRepository, commission_cents, refund_adjustment
+from app.services.partner_program import (
+    PartnerPayoutCipher,
+    PartnerProgramRepository,
+    commission_cents,
+    mask_account_identifier,
+    mask_account_name,
+    refund_adjustment,
+)
 from app.services import promotion_analytics_job
 from app.services.promotion_repository import PromotionRepository, now_ms
 
@@ -29,6 +36,29 @@ def test_partner_defaults_are_safe_and_commercial_rules_are_explicit() -> None:
     assert settings.partner_refund_hold_days == 7
     assert settings.partner_minimum_payout_cents == 10_000
     assert commission_cents(10_000, settings.partner_commission_rate_bps) == 2_000
+    assert settings.partner_payout_profile_enabled is False
+
+
+def test_partner_payout_profile_cipher_is_dedicated_masked_and_fail_closed() -> None:
+    secret = "synthetic-dedicated-partner-payout-key-32-bytes"
+    cipher = PartnerPayoutCipher(Settings(_env_file=None, partner_payout_encryption_key=secret))
+    encrypted = cipher.encrypt("account@example.invalid")
+    assert "account@example.invalid" not in encrypted
+    assert cipher.decrypt(encrypted) == "account@example.invalid"
+    assert mask_account_name("测试用户") == "测***"
+    assert mask_account_identifier("account@example.invalid").endswith("alid")
+    with pytest.raises(RuntimeError, match="partner_payout_encryption_key_missing"):
+        PartnerPayoutCipher(Settings(_env_file=None, partner_payout_encryption_key="short"))
+
+
+def test_payout_profile_migration_is_additive_versioned_and_keeps_plaintext_out() -> None:
+    sql = (Path(REPO_ROOT) / "apps/backend/migrations/versions/0040_partner_payout_operations.sql").read_text()
+    assert "CREATE TABLE IF NOT EXISTS partner_payout_profiles" in sql
+    assert "UNIQUE(partner_user_id, version)" in sql
+    assert "payout_profile_id" in sql
+    assert "trg_partner_payout_profile_immutable" in sql
+    assert "\n  account_name TEXT" not in sql
+    assert "\n  account_identifier TEXT" not in sql
 
 
 def test_refund_adjustment_caps_over_refunds_and_reverses_rounding_residue() -> None:
@@ -115,6 +145,25 @@ def test_partner_payout_transition_returns_previous_state_for_admin_audit() -> N
     route_source = (Path(REPO_ROOT) / "apps/backend/app/api/admin_promotion.py").read_text()
     assert 'updated["previous_status"]' in source
     assert '"previous_status": row["previous_status"]' in route_source
+
+
+def test_payout_requests_bind_profile_version_and_sensitive_reveal_is_guarded() -> None:
+    payout_source = inspect.getsource(PartnerProgramRepository.request_payout)
+    route_source = (Path(REPO_ROOT) / "apps/backend/app/api/admin_promotion.py").read_text()
+    assert "payout_profile_id" in payout_source
+    assert "partner_payout_profile_required" in payout_source
+    assert 'permission("promotion.payout.manage")' in route_source
+    assert '"Cache-Control": "no-store"' in route_source
+    assert 'action="promotion.partner.payout.reveal"' in route_source
+
+
+def test_partner_reconciliation_remains_outside_payment_and_interview_hot_paths() -> None:
+    billing_module = (Path(REPO_ROOT) / "apps/backend/app/modules/billing.py").read_text()
+    realtime_module = (Path(REPO_ROOT) / "apps/backend/app/modules/realtime_speech.py").read_text()
+    assert "reconciliation_summary" not in billing_module
+    assert "list_commission_orders" not in billing_module
+    assert "reconciliation_summary" not in realtime_module
+    assert "list_commission_orders" not in realtime_module
 
 
 def test_disabled_partner_status_does_not_require_partner_database() -> None:

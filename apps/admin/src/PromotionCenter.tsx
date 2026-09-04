@@ -28,7 +28,7 @@ const fieldLabels: Record<string, string> = {
   isSystem: "系统渠道", sortOrder: "排序", objective: "推广目标", budgetCents: "计划预算",
   actualCostCents: "实际成本", channelCount: "渠道数", linkCount: "链接数", startsAtMs: "开始时间",
   endsAtMs: "结束时间", createdAtMs: "创建时间", updatedAtMs: "更新时间", costCoverage: "成本覆盖",
-  slug: "推广码", agreementVersion: "协议版本", joinedAtMs: "加入时间", totalCommissionCents: "累计佣金",
+  slug: "推广码", agreementVersion: "协议版本", joinedAtMs: "加入时间", totalCommissionCents: "累计佣金", orderId: "订单号",
   qualifiedVisits: "有效访问次数", downloads: "实际下载", orders: "下单数",
   registrationRate: "注册转化率", activationRate: "首次使用转化率", paymentRate: "付费转化率",
   ...metricLabels,
@@ -64,7 +64,7 @@ const formatTableValue = (key: string, value: unknown) => {
 
 const Table = ({ rows, empty }: { rows: Row[]; empty: string }) => {
   if (!rows.length) return <div className="promotion-empty">{empty}</div>;
-  const keys = Object.keys(rows[0]!).filter(key => !/Id$/.test(key) && !key.endsWith("ByUserId")).slice(0, 10);
+  const keys = Object.keys(rows[0]!).filter(key => (key === "orderId" || !/Id$/.test(key)) && !key.endsWith("ByUserId")).slice(0, 10);
   return <div className="table-wrap"><table><thead><tr>{keys.map(key => <th key={key}>{fieldLabels[key] ?? "指标"}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={String(row.linkId ?? row.campaignId ?? row.channelId ?? row.dimensionId ?? index)}>{keys.map(key => <td key={key}>{formatTableValue(key, row[key])}</td>)}</tr>)}</tbody></table></div>;
 };
 
@@ -81,6 +81,10 @@ export function PromotionCenter({ permissions, onAuthenticationExpired }: { perm
   const [costs, setCosts] = useState<Row[]>([]);
   const [partners, setPartners] = useState<Row[]>([]);
   const [partnerPayouts, setPartnerPayouts] = useState<Row[]>([]);
+  const [partnerReconciliation, setPartnerReconciliation] = useState<Row>({});
+  const [partnerCommissionOrders, setPartnerCommissionOrders] = useState<Row[]>([]);
+  const [commissionState, setCommissionState] = useState("");
+  const [revealedPayout, setRevealedPayout] = useState<Row | null>(null);
   const [campaignReport, setCampaignReport] = useState<Row | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -152,14 +156,16 @@ export function PromotionCenter({ permissions, onAuthenticationExpired }: { perm
       }
       if (tab === "campaigns" || tab === "links") await loadDimensions();
       if (tab === "partners") {
-        const [nextPartners, nextPayouts] = await Promise.all([adminApi.promotionPartners(), adminApi.partnerPayouts()]);
-        setPartners(nextPartners.items); setPartnerPayouts(nextPayouts.items);
+        const [nextPartners, nextPayouts, reconciliation, commissionOrders] = await Promise.all([
+          adminApi.promotionPartners(), adminApi.partnerPayouts(), adminApi.partnerReconciliation(), adminApi.partnerCommissionOrders(commissionState),
+        ]);
+        setPartners(nextPartners.items); setPartnerPayouts(nextPayouts.items); setPartnerReconciliation(reconciliation); setPartnerCommissionOrders(commissionOrders.items);
       }
     } catch (error) { handleError(error); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { void load(); }, [tab, range, model]);
+  useEffect(() => { void load(); }, [tab, range, model, commissionState]);
 
   const createChannel = async (event: FormEvent) => {
     event.preventDefault();
@@ -240,6 +246,11 @@ export function PromotionCenter({ permissions, onAuthenticationExpired }: { perm
     try { await adminApi.transitionPartnerPayout(String(row.payoutRequestId), { status, reason, ...(paymentReference ? { paymentReference } : {}) }); setMessage("结算状态已更新并写入审计记录。"); await load(); }
     catch (error) { handleError(error); }
   };
+  const revealPayout = async (row: Row) => {
+    if (!window.confirm("仅在执行本次人工打款时查看完整收款信息。该操作会写入审计日志，是否继续？")) return;
+    try { setRevealedPayout(await adminApi.revealPartnerPayout(String(row.payoutRequestId))); }
+    catch (error) { handleError(error); }
+  };
 
   const overview = (data.metrics ?? {}) as Row;
   const metadata = (data.metadata ?? {}) as Row;
@@ -266,6 +277,13 @@ export function PromotionCenter({ permissions, onAuthenticationExpired }: { perm
     </div>
     {message ? <div className={`promotion-message${failed ? " error" : ""}`} role={failed ? "alert" : "status"}><span>{message}</span>{failed ? <button type="button" onClick={() => void load()}>重试</button> : null}</div> : null}
     {loading ? <div className="loading">正在读取推广数据…</div> : null}
+    {!loading && tab === "partners" ? <>
+      <div className="promotion-kpis" aria-label="合作伙伴结算总览">{([ ["eligibleOrderCount","可结算订单"], ["pendingOrderCount","观察中订单"], ["pendingCents","待确认佣金"], ["availableCents","可结算佣金"], ["reservedCents","已申请待打款"], ["paidCents","已结算"], ["reversedCents","退款冲正"], ["negativeCarryCents","负向结转"] ] as const).map(([key,label]) => <article key={key}><small>{label}</small><strong>{key.endsWith("Count") ? Number(partnerReconciliation[key] ?? 0).toLocaleString("zh-CN") : formatValue(key, partnerReconciliation[key])}</strong></article>)}</div>
+      <div className="promotion-sort"><label>佣金订单状态<select value={commissionState} onChange={event => setCommissionState(event.target.value)}><option value="">全部</option><option value="pending">观察期内</option><option value="eligible">可结算</option><option value="reversed">存在退款冲正</option></select></label></div>
+      <h3 className="promotion-subtitle">佣金订单明细</h3><Table rows={partnerCommissionOrders} empty="当前没有佣金订单记录。" />
+      {canManagePayout && partnerPayouts.some(row => row.payoutMethod) ? <section className="promotion-sensitive-panel"><h3>人工打款资料</h3><p>完整账号仅在执行对应打款时按单查看；查看行为会写入审计日志。</p>{partnerPayouts.map(row => row.payoutMethod ? <div key={String(row.payoutRequestId)}><span>{String(row.periodKey)} · {String(row.payoutMethod) === "alipay" ? "支付宝" : "微信"} · {String(row.maskedAccountName)} · {String(row.maskedAccountIdentifier)}</span><button type="button" onClick={() => void revealPayout(row)}>查看本单收款信息</button></div> : null)}</section> : null}
+      {revealedPayout ? <div className="promotion-sensitive-reveal" role="dialog" aria-label="本次人工打款收款信息"><strong>{String(revealedPayout.payoutMethod) === "alipay" ? "支付宝" : "微信"}</strong><span>姓名：{String(revealedPayout.accountName)}</span><span>账号：{String(revealedPayout.accountIdentifier)}</span><button type="button" onClick={() => setRevealedPayout(null)}>阅后关闭</button></div> : null}
+    </> : null}
     {!loading && tab === "overview" ? <>
       <div className="promotion-kpis">{Object.keys(metricLabels).map(key => <article key={key}><small>{metricLabels[key]}</small><strong>{formatValue(key, overview[key])}</strong></article>)}</div>
       <div className="promotion-coverage"><span>数据时区：{String(metadata.timezone ?? "Asia/Shanghai")}</span><span>归因模型：{stateLabels[String(metadata.attributionModel ?? model)] ?? "—"}</span><span>数据状态：{stateLabels[String(metadata.freshness ?? "")] ?? "—"}</span><span>人群观察：{stateLabels[String(metadata.cohortState ?? "")] ?? "—"}</span></div>

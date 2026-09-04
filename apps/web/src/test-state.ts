@@ -217,6 +217,10 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
     await delay(signal);
     return { payoutRequestId: "synthetic-payout", amountCents: 10000, status: "requested" };
   }
+  async savePartnerPayoutProfile(input: { payoutMethod: "alipay" | "wechat"; accountName: string; accountIdentifier: string }, signal?: AbortSignal) {
+    void input; void signal;
+    return { payoutProfileId: "synthetic-payout-profile", version: 1, payoutMethod: "alipay" as const, maskedAccountName: "测*", maskedAccountIdentifier: "****1234", updatedAtMs: Date.now() };
+  }
 
   async createDraft(input: { title: string; role: string; company?: string; sessionMode?: "interview" | "written" }, signal?: AbortSignal) {
     await delay(signal);

@@ -273,6 +273,10 @@ class Settings(BaseSettings):
     partner_minimum_payout_cents: int = Field(default=10_000, ge=1)
     partner_agreement_version: str = "2026-09-v1"
     partner_projection_batch_size: int = Field(default=200, ge=1, le=1000)
+    partner_payout_profile_enabled: bool = False
+    partner_payout_encryption_key: str | None = None
+    partner_payout_key_version: int = Field(default=1, ge=1)
+    partner_payout_retention_days: int = Field(default=730, ge=30, le=3650)
 
     public_web_base_url: str = "http://127.0.0.1:5173"
     checkout_provider: str = ""

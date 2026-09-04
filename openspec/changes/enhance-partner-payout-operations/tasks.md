@@ -1,0 +1,35 @@
+## 1. Data protection and migration
+
+- [x] 1.1 Add additive payout-profile version storage, settlement-profile references, constraints and reconciliation indexes
+- [x] 1.2 Add dedicated payout encryption configuration, production fail-closed validation and masked-value helpers
+- [x] 1.3 Add key-version and retention-ready metadata without logging or exporting plaintext payout data
+
+## 2. Backend payout profile capability
+
+- [x] 2.1 Implement active-partner payout-profile create/update and masked read operations
+- [x] 2.2 Bind new settlement requests atomically to the selected immutable payout-profile version
+- [x] 2.3 Add user payout-profile APIs with strict validation, no-store responses and feature isolation
+- [x] 2.4 Add single-request administrator reveal with payout permission, recent MFA, no-store response and success/failure audit
+
+## 3. Reconciliation capability
+
+- [x] 3.1 Implement bounded aggregate order, commission, reversal, reserved and settled KPI queries
+- [x] 3.2 Implement paginated commission-order reconciliation with state/date filters and no referred-user PII
+- [x] 3.3 Extend settlement-list responses with masked payout target, timestamps, payment reference and linked ledger totals
+- [x] 3.4 Add administrator reconciliation APIs while preserving separate read and payout-management permissions
+
+## 4. User and administrator experience
+
+- [x] 4.1 Add the emphasized responsive partner-program card to authenticated side navigation without changing interview navigation behavior
+- [x] 4.2 Add the partner payout-profile form, masked saved state and manual-settlement explanation
+- [x] 4.3 Add partner KPI cards, commission-order filters/table and richer settlement lifecycle to the admin promotion center
+- [x] 4.4 Keep reveal and mutation controls hidden from read-only administrators and require explicit confirmation for sensitive actions
+
+## 5. Verification and rollout
+
+- [x] 5.1 Add migration and repository tests for encryption, masking, version history and immutable settlement binding
+- [x] 5.2 Add API permission, recent-MFA, no-store, audit and plaintext-leak regression tests
+- [x] 5.3 Add Web/Admin responsive navigation, form, reconciliation-state and read-only permission tests
+- [x] 5.4 Run backend suites, frontend tests/typechecks/builds, secret scans and strict OpenSpec validation
+- [x] 5.5 Document payout-data access, manual reconciliation, retention, key rotation, rollout and rollback procedures
+- [ ] 5.6 Deploy with payout-profile collection disabled, configure the dedicated production key, verify a synthetic end-to-end flow, then enable without restarting interview data services

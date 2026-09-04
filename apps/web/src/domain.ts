@@ -203,11 +203,13 @@ export interface PartnerProgramState {
     readonly minimumPayoutCents: number;
     readonly agreementVersion: string;
     readonly settlementMode: "manual-monthly";
+    readonly payoutProfileEnabled?: boolean;
   };
   readonly profile?: { readonly status: "active" | "suspended" | "closed"; readonly joinedAtMs: number; readonly agreementVersion: string };
   readonly metrics?: { readonly validVisitors: number; readonly registrations: number; readonly payingUsers: number; readonly attributedReceiptsCents: number };
   readonly balances?: { readonly pendingCents: number; readonly availableCents: number; readonly reservedCents: number; readonly settledCents: number; readonly refreshedAtMs: number | null };
   readonly payouts?: readonly { readonly payoutRequestId: string; readonly periodKey: string; readonly amountCents: number; readonly status: "requested" | "approved" | "rejected" | "paid"; readonly requestedAtMs: number; readonly paidAtMs: number | null }[];
+  readonly payoutProfile?: { readonly payoutProfileId: string; readonly version: number; readonly payoutMethod: "alipay" | "wechat"; readonly maskedAccountName: string; readonly maskedAccountIdentifier: string; readonly updatedAtMs: number } | null;
 }
 
 export interface SpeakerPresentationState {
@@ -302,6 +304,7 @@ export interface InterviewAppAdapter {
   getPartnerProgram(signal?: AbortSignal): Promise<PartnerProgramState>;
   joinPartnerProgram(agreementVersion: string, signal?: AbortSignal): Promise<PartnerProgramState>;
   requestPartnerPayout(signal?: AbortSignal): Promise<{ readonly payoutRequestId: string; readonly amountCents: number; readonly status: string }>;
+  savePartnerPayoutProfile(input: { readonly payoutMethod: "alipay" | "wechat"; readonly accountName: string; readonly accountIdentifier: string }, signal?: AbortSignal): Promise<NonNullable<PartnerProgramState["payoutProfile"]>>;
   createDraft(input: { title: string; role: string; company?: string; sessionMode?: SessionMode }, signal?: AbortSignal): Promise<InterviewSummary>;
   updateInterviewLanguage(id: string, interviewLanguage: InterviewLanguage, signal?: AbortSignal): Promise<InterviewSummary>;
   updateInterviewProgramming(id: string, programmingRequired: boolean, programmingLanguage: ProgrammingLanguage | null, signal?: AbortSignal): Promise<InterviewSummary>;
