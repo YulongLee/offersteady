@@ -283,6 +283,29 @@ h1, h2, h3, p { margin-top: 0; }
 .public-footer-filings { min-width: 0; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px 18px; }
 .public-footer-legal a { color: var(--muted); text-decoration: none; }
 .public-footer-legal a:hover { color: var(--brand); }
+.partner-program-page { max-width: 1180px; }
+.partner-intro { display: grid; grid-template-columns: 1.5fr 1fr; gap: 30px; align-items: start; }
+.partner-intro h2, .partner-share h2, .partner-settlement h2 { margin: 8px 0; }
+.partner-intro p, .partner-share p, .partner-settlement p { color: var(--muted); line-height: 1.8; }
+.partner-intro dl { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.partner-intro dl div { padding: 14px; border: 1px solid var(--line); border-radius: 12px; }
+.partner-intro dt { color: var(--muted); font-size: 9px; }.partner-intro dd { margin: 5px 0 0; font-weight: 800; }
+.partner-agreement { grid-column: 1 / -1; display: flex; gap: 10px; color: var(--muted); line-height: 1.7; }
+.partner-intro > button { grid-column: 1 / -1; justify-self: start; }
+.partner-share, .partner-settlement { display: flex; justify-content: space-between; align-items: center; gap: 24px; }
+.partner-share > div:last-child { display: flex; align-items: center; gap: 10px; min-width: 44%; }
+.partner-share code { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.partner-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.partner-metrics article { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-bg); padding: 18px; }
+.partner-metrics span { display: block; color: var(--muted); font-size: 9px; }.partner-metrics strong { display: block; margin-top: 8px; font-size: 20px; }
+.partner-settlement { flex-wrap: wrap; }.partner-payout-list { width: 100%; border-top: 1px solid var(--line); }
+.partner-payout-list p { display: grid; grid-template-columns: 1fr 1fr 1fr; margin: 0; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.partner-payout-list em { color: var(--muted); font-style: normal; text-align: right; }.partner-message { color: var(--brand); }
+@media (max-width: 760px) {
+  .partner-intro { grid-template-columns: 1fr; }.partner-agreement, .partner-intro > button { grid-column: 1; }
+  .partner-share, .partner-settlement { align-items: stretch; flex-direction: column; }.partner-share > div:last-child { min-width: 0; }
+  .partner-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .login-legal-copy a { color: var(--brand); margin: 0 3px; text-decoration: none; }
 .login-legal-copy a:hover { text-decoration: underline; }
 

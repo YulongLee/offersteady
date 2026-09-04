@@ -7,7 +7,7 @@ from app.core.config import Settings
 from app.core.logging import utc_now_iso
 from app.core.responses import success_response
 from app.deps import settings_dependency
-from app.modules import authentication, billing, document_processing, document_service, job_description, knowledge, knowledge_retrieval, live_answer, realtime_speech, resume, screenshot_answer, session, system, web
+from app.modules import authentication, billing, document_processing, document_service, job_description, knowledge, knowledge_retrieval, live_answer, partner_program, realtime_speech, resume, screenshot_answer, session, system, web
 from app.schemas.foundation import ApiEnvelope, FoundationIndexResponse
 from app.api.promotion import promotion_router
 
@@ -25,6 +25,7 @@ module_descriptors = [
     realtime_speech.descriptor,
     screenshot_answer.descriptor,
     billing.descriptor,
+    partner_program.descriptor,
     web.descriptor,
 ]
 
@@ -42,6 +43,7 @@ api_router.include_router(live_answer.router)
 api_router.include_router(realtime_speech.router)
 api_router.include_router(screenshot_answer.router)
 api_router.include_router(billing.router)
+api_router.include_router(partner_program.router)
 api_router.include_router(web.router)
 api_router.include_router(promotion_router)
 

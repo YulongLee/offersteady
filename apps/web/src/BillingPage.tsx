@@ -601,6 +601,8 @@ export function BillingPage({ state, setState }: Props) {
                   ? "邀请链接仅限新用户注册后 3 天内激活，你的激活期限已过。"
                   : activation.outcome === "registration-time-unavailable"
                     ? "暂时无法确认账号注册时间，请联系客服处理。"
+                    : activation.outcome === "reward-program-conflict"
+                      ? "该账号已归属合作伙伴现金计划，不能重复领取邀请积分。"
                     : "邀请链接无效或已撤销。";
       setReferralActivationResult(message);
       if (activation.outcome === "activated") {

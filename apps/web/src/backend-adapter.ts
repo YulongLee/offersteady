@@ -2,7 +2,7 @@ import type { CaptureState, FoundationIndexResponse } from "@offersteady/protoco
 
 import type { AnswerProvenance, AnswerSourceReference, AnswerTaskSnapshot, CancelAnswerResult, OfficialCheckoutOrder, PointsRedemptionResult } from "@offersteady/protocol";
 import { AppError } from "./domain";
-import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, DesktopDeviceBinding, DesktopShortcutScreenshotUpdate, IdleInterviewStatus, InterviewAppAdapter, InterviewLanguage, InterviewQuestion, InterviewReview, InterviewSummary, InterviewWorkspaceSnapshot, PreparationAudioReadiness, ProgrammingLanguage, ReferralActivationResult, ReferralStatus, ScreenshotTask, SessionMode, SubmitManualAnswerResult, WebAppState } from "./domain";
+import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, DesktopDeviceBinding, DesktopShortcutScreenshotUpdate, IdleInterviewStatus, InterviewAppAdapter, InterviewLanguage, InterviewQuestion, InterviewReview, InterviewSummary, InterviewWorkspaceSnapshot, PartnerProgramState, PreparationAudioReadiness, ProgrammingLanguage, ReferralActivationResult, ReferralStatus, ScreenshotTask, SessionMode, SubmitManualAnswerResult, WebAppState } from "./domain";
 import { createJsonClient, withBaseUrl } from "./api-client";
 import { authClient } from "./auth-client";
 import { createSseParser, type LiveAnswerStreamEvent, type ManualAnswerStreamUpdate } from "./live-answer-stream";
@@ -1278,6 +1278,22 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({ referralCode: code }),
+    }, signal);
+  }
+
+  async getPartnerProgram(signal?: AbortSignal): Promise<PartnerProgramState> {
+    return this.client.request<PartnerProgramState>("/api/v1/partner-program/me", { headers: authHeaders() }, signal);
+  }
+
+  async joinPartnerProgram(agreementVersion: string, signal?: AbortSignal): Promise<PartnerProgramState> {
+    return this.client.request<PartnerProgramState>("/api/v1/partner-program/join", {
+      method: "POST", headers: authHeaders(), body: JSON.stringify({ agreementVersion, agreementAccepted: true }),
+    }, signal);
+  }
+
+  async requestPartnerPayout(signal?: AbortSignal) {
+    return this.client.request<{ payoutRequestId: string; amountCents: number; status: string }>("/api/v1/partner-program/payout-requests", {
+      method: "POST", headers: authHeaders(),
     }, signal);
   }
 

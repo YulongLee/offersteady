@@ -3,7 +3,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { adminApi, isAdminAuthenticationError } from "./api";
 
 type Row = Record<string, unknown>;
-type Tab = "overview" | "links" | "campaigns" | "channels" | "funnel";
+type Tab = "overview" | "links" | "campaigns" | "channels" | "funnel" | "partners";
 type Range = "today" | "yesterday" | "7d" | "30d" | "90d";
 type Model = "first_touch" | "last_non_direct_touch";
 
@@ -13,6 +13,7 @@ const tabs: { id: Tab; label: string }[] = [
   { id: "campaigns", label: "营销活动" },
   { id: "channels", label: "渠道分析" },
   { id: "funnel", label: "转化漏斗" },
+  { id: "partners", label: "合作伙伴" },
 ];
 
 const metricLabels: Record<string, string> = {
@@ -27,6 +28,7 @@ const fieldLabels: Record<string, string> = {
   isSystem: "系统渠道", sortOrder: "排序", objective: "推广目标", budgetCents: "计划预算",
   actualCostCents: "实际成本", channelCount: "渠道数", linkCount: "链接数", startsAtMs: "开始时间",
   endsAtMs: "结束时间", createdAtMs: "创建时间", updatedAtMs: "更新时间", costCoverage: "成本覆盖",
+  slug: "推广码", agreementVersion: "协议版本", joinedAtMs: "加入时间", totalCommissionCents: "累计佣金",
   qualifiedVisits: "有效访问次数", downloads: "实际下载", orders: "下单数",
   registrationRate: "注册转化率", activationRate: "首次使用转化率", paymentRate: "付费转化率",
   ...metricLabels,
@@ -38,6 +40,7 @@ const stateLabels: Record<string, string> = {
   healthy: "正常", unavailable: "暂不可用", disabled: "未启用", completed: "已完成", failed: "失败",
   missing: "成本未录入", complete: "完整", true: "是", false: "否",
   first_touch: "首次触点", last_non_direct_touch: "末次非直接触点",
+  requested: "待审核", approved: "已批准", rejected: "已驳回", paid: "已结算", suspended: "已暂停", closed: "已关闭",
 };
 
 const formatValue = (key: string, value: unknown) => {
@@ -76,6 +79,8 @@ export function PromotionCenter({ permissions, onAuthenticationExpired }: { perm
   const [campaigns, setCampaigns] = useState<Row[]>([]);
   const [links, setLinks] = useState<Row[]>([]);
   const [costs, setCosts] = useState<Row[]>([]);
+  const [partners, setPartners] = useState<Row[]>([]);
+  const [partnerPayouts, setPartnerPayouts] = useState<Row[]>([]);
   const [campaignReport, setCampaignReport] = useState<Row | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -85,8 +90,25 @@ export function PromotionCenter({ permissions, onAuthenticationExpired }: { perm
   const [linkDraft, setLinkDraft] = useState({ contentName: "", channelId: "", campaignId: "", destinationPath: "/" });
   const [costDraft, setCostDraft] = useState({ scopeType: "campaign", scopeId: "", costDate: new Date().toISOString().slice(0, 10), amountYuan: "", reason: "" });
   const [reversalDraft, setReversalDraft] = useState({ costEntryId: "", reason: "" });
+  const [partnerRefundDraft, setPartnerRefundDraft] = useState({ orderId: "", refundReference: "", refundedYuan: "", reason: "" });
   const canManage = permissions.includes("promotion.manage");
   const canManageCost = permissions.includes("promotion.cost.manage");
+  const canManagePayout = permissions.includes("promotion.payout.manage");
+
+  const recordPartnerRefund = async (event: FormEvent) => {
+    event.preventDefault();
+    try {
+      await adminApi.recordPartnerRefund({
+        orderId: partnerRefundDraft.orderId.trim(),
+        refundReference: partnerRefundDraft.refundReference.trim(),
+        refundedCents: Math.round(Number(partnerRefundDraft.refundedYuan) * 100),
+        reason: partnerRefundDraft.reason.trim(),
+      });
+      setPartnerRefundDraft({ orderId: "", refundReference: "", refundedYuan: "", reason: "" });
+      setMessage("退款佣金冲正已按渠道凭证记录。");
+      await load();
+    } catch (error) { handleError(error); }
+  };
 
   const handleError = (error: unknown) => {
     const text = error instanceof Error ? error.message : "推广数据暂时不可用";
@@ -129,6 +151,10 @@ export function PromotionCenter({ permissions, onAuthenticationExpired }: { perm
         await loadDimensions();
       }
       if (tab === "campaigns" || tab === "links") await loadDimensions();
+      if (tab === "partners") {
+        const [nextPartners, nextPayouts] = await Promise.all([adminApi.promotionPartners(), adminApi.partnerPayouts()]);
+        setPartners(nextPartners.items); setPartnerPayouts(nextPayouts.items);
+      }
     } catch (error) { handleError(error); }
     finally { setLoading(false); }
   };
@@ -202,6 +228,18 @@ export function PromotionCenter({ permissions, onAuthenticationExpired }: { perm
     try { setCampaignReport(await adminApi.promotionCampaignReport(String(row.campaignId), range, model)); }
     catch (error) { handleError(error); }
   };
+  const projectPartners = async () => {
+    try { const result = await adminApi.projectPartnerCommissions(); setMessage(`佣金投影完成：新增 ${String(result.inserted ?? 0)} 条。`); await load(); }
+    catch (error) { handleError(error); }
+  };
+  const transitionPayout = async (row: Row, status: "approved" | "rejected" | "paid") => {
+    const reason = window.prompt(status === "approved" ? "请输入批准原因" : status === "rejected" ? "请输入驳回原因" : "请输入支付说明");
+    if (!reason || reason.trim().length < 3) return;
+    const paymentReference = status === "paid" ? window.prompt("请输入不含敏感信息的支付参考号") ?? "" : "";
+    if (status === "paid" && paymentReference.trim().length < 3) return;
+    try { await adminApi.transitionPartnerPayout(String(row.payoutRequestId), { status, reason, ...(paymentReference ? { paymentReference } : {}) }); setMessage("结算状态已更新并写入审计记录。"); await load(); }
+    catch (error) { handleError(error); }
+  };
 
   const overview = (data.metrics ?? {}) as Row;
   const metadata = (data.metadata ?? {}) as Row;
@@ -241,5 +279,6 @@ export function PromotionCenter({ permissions, onAuthenticationExpired }: { perm
     {!loading && tab === "campaigns" ? <><div className="promotion-campaign-grid">{campaigns.length ? campaigns.map(row => <article key={String(row.campaignId)}><div><small>{String(row.status)}</small><strong>{String(row.name)}</strong><p>{String(row.objective || "未填写推广目标")}</p></div><dl><div><dt>周期</dt><dd>{row.startsAtMs ? new Date(Number(row.startsAtMs)).toLocaleDateString("zh-CN") : "不限"} — {row.endsAtMs ? new Date(Number(row.endsAtMs)).toLocaleDateString("zh-CN") : "不限"}</dd></div><div><dt>预算</dt><dd>{row.budgetCents == null ? "未录入" : formatValue("budgetCents", row.budgetCents)}</dd></div><div><dt>实际成本</dt><dd>{formatValue("actualCostCents", row.actualCostCents)}</dd></div><div><dt>渠道 / 链接</dt><dd>{String(row.channelCount)} / {String(row.linkCount)}</dd></div></dl><div className="promotion-row-actions"><button onClick={() => void openCampaignReport(row)}>查看效果</button>{canManage ? <button onClick={() => void changeCampaignStatus(row)}>{row.status === "active" ? "暂停" : "启用"}</button> : null}</div></article>) : <div className="promotion-empty">还没有营销活动。</div>}</div>{campaignReport ? <section className="promotion-campaign-detail"><button aria-label="关闭活动详情" onClick={() => setCampaignReport(null)}>×</button><h3>{String(((campaignReport.campaign ?? {}) as Row).name)} · 效果详情</h3><div className="promotion-kpis">{["uniqueVisitors","registrations","activatedUsers","payingUsers","revenueCents","costCents","roas","roi"].map(key => <article key={key}><small>{metricLabels[key] ?? key}</small><strong>{formatValue(key, ((campaignReport.metrics ?? {}) as Row)?.[key])}</strong></article>)}</div><h4>渠道与链接构成</h4><Table rows={((((campaignReport.campaign ?? {}) as Row).links ?? []) as Row[])} empty="活动下还没有推广链接" /><h4>活动漏斗</h4><div className="promotion-funnel">{((campaignReport.funnel ?? []) as Row[]).map((stage, index) => <article key={String(stage.key)}><div><small>{index + 1}</small><strong>{String(stage.label)}</strong></div><b>{String(stage.count)}</b><span>阶段 {stage.stageRate == null ? "—" : `${(Number(stage.stageRate) * 100).toFixed(1)}%`}</span><span>累计 {stage.cumulativeRate == null ? "—" : `${(Number(stage.cumulativeRate) * 100).toFixed(1)}%`}</span><em>流失 {String(stage.dropOff)}</em></article>)}</div></section> : null}{canManage ? <form className="promotion-form" onSubmit={createCampaign}><h3>新建营销活动</h3><input required placeholder="活动名称" value={campaignDraft.name} onChange={event => setCampaignDraft(current => ({ ...current, name: event.target.value }))} /><input placeholder="推广目标" value={campaignDraft.objective} onChange={event => setCampaignDraft(current => ({ ...current, objective: event.target.value }))} /><input type="date" aria-label="活动开始日期" value={campaignDraft.startsOn} onChange={event => setCampaignDraft(current => ({ ...current, startsOn: event.target.value }))} /><input type="date" aria-label="活动结束日期" value={campaignDraft.endsOn} onChange={event => setCampaignDraft(current => ({ ...current, endsOn: event.target.value }))} /><input type="number" min="0" step="0.01" placeholder="计划预算（元，可选）" value={campaignDraft.budgetYuan} onChange={event => setCampaignDraft(current => ({ ...current, budgetYuan: event.target.value }))} /><button className="primary">保存为草稿</button></form> : null}</> : null}
     {!loading && tab === "channels" ? <><div className="promotion-sort"><label>排序指标<select value={channelSort} onChange={event => setChannelSort(event.target.value)}><option value="uniqueVisitors">有效 UV</option><option value="registrations">注册</option><option value="payingUsers">付费用户</option><option value="revenueCents">实收</option><option value="roas">ROAS</option></select></label></div><Table rows={channelRows} empty="当前周期没有有效推广访问。" /><h3 className="promotion-subtitle">渠道配置</h3><Table rows={channels} empty="还没有渠道。" />{canManage ? <form className="promotion-form" onSubmit={createChannel}><h3>新建渠道</h3><input required pattern="[a-z][a-z0-9_-]+" placeholder="渠道编码，例如 nowcoder" value={channelDraft.code} onChange={event => setChannelDraft(current => ({ ...current, code: event.target.value }))} /><input required placeholder="渠道名称，例如 牛客" value={channelDraft.name} onChange={event => setChannelDraft(current => ({ ...current, name: event.target.value }))} /><button className="primary">创建渠道</button></form> : null}</> : null}
     {!loading && tab === "funnel" ? <><div className="promotion-funnel-note"><strong>{data.cohortState === "mature" ? "观察窗口已成熟" : "观察中"}</strong><p>以所选期间首次有效推广访问的人群为 Cohort；每个阶段按人去重，阶段转化以上一阶段为分母，累计转化以有效 UV 为分母。最近人群仍在 30 天观察窗口内时，不把当前流失视为最终结果。</p></div>{stages.length ? <div className="promotion-funnel">{stages.map((stage, index) => <article key={String(stage.key)}><div><small>{index + 1}</small><strong>{String(stage.label)}</strong></div><b>{Number(stage.count ?? 0).toLocaleString("zh-CN")}</b><span>阶段转化 {stage.stageRate == null ? "—" : `${(Number(stage.stageRate) * 100).toFixed(1)}%`}</span><span>累计转化 {stage.cumulativeRate == null ? "—" : `${(Number(stage.cumulativeRate) * 100).toFixed(1)}%`}</span><em>流失 {Number(stage.dropOff ?? 0).toLocaleString("zh-CN")}</em></article>)}</div> : <div className="promotion-empty">当前范围还没有有效推广访问，漏斗不会把缺失数据绘制成 0。</div>}</> : null}
+    {!loading && tab === "partners" ? <><div className="promotion-health"><span>合作伙伴：{partners.length}</span><span>待审核结算：{partnerPayouts.filter(item => item.status === "requested").length}</span><span>退款同步：人工录入渠道凭证</span>{canManagePayout ? <button type="button" onClick={() => void projectPartners()}>同步已支付订单佣金</button> : null}</div><h3 className="promotion-subtitle">合作伙伴</h3><Table rows={partners} empty="还没有用户加入合作伙伴计划。" />{canManagePayout ? <form className="promotion-form" onSubmit={recordPartnerRefund}><h3>退款佣金冲正</h3><input required minLength={3} placeholder="原支付订单号" value={partnerRefundDraft.orderId} onChange={event => setPartnerRefundDraft(current => ({ ...current, orderId: event.target.value }))} /><input required minLength={3} placeholder="渠道退款单号（幂等凭证）" value={partnerRefundDraft.refundReference} onChange={event => setPartnerRefundDraft(current => ({ ...current, refundReference: event.target.value }))} /><input required type="number" min="0.01" step="0.01" placeholder="退款金额（元）" value={partnerRefundDraft.refundedYuan} onChange={event => setPartnerRefundDraft(current => ({ ...current, refundedYuan: event.target.value }))} /><input required minLength={3} placeholder="冲正原因" value={partnerRefundDraft.reason} onChange={event => setPartnerRefundDraft(current => ({ ...current, reason: event.target.value }))} /><button className="secondary">记录退款冲正</button></form> : null}<h3 className="promotion-subtitle">月度结算</h3>{partnerPayouts.length ? <div className="promotion-link-list">{partnerPayouts.map(row => <article key={String(row.payoutRequestId)}><div><strong>{String(row.periodKey)} · {formatValue("amountCents", row.amountCents)}</strong><small>合作伙伴 {String(row.slug ?? "已注销")} · 申请时间 {formatTableValue("requestedAtMs", row.requestedAtMs)} · {stateLabels[String(row.status)] ?? String(row.status)}</small>{row.paymentReference ? <code>{String(row.paymentReference)}</code> : null}</div><span className={`status-badge ${row.status === "paid" ? "active" : "inactive"}`}>{stateLabels[String(row.status)] ?? String(row.status)}</span>{canManagePayout ? <div className="promotion-row-actions">{row.status === "requested" ? <><button onClick={() => void transitionPayout(row, "approved")}>批准</button><button onClick={() => void transitionPayout(row, "rejected")}>驳回</button></> : null}{row.status === "approved" ? <><button onClick={() => void transitionPayout(row, "paid")}>标记已支付</button><button onClick={() => void transitionPayout(row, "rejected")}>驳回并释放</button></> : null}</div> : null}</article>)}</div> : <div className="promotion-empty">当前没有结算申请。</div>}</> : null}
   </section>;
 }

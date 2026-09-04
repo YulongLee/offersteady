@@ -3,7 +3,7 @@ import { BrowserRouter, Link, NavLink, Navigate, Outlet, Route, Routes, useLocat
 import type { AnswerTaskSnapshot, CaptureState, ContextLibrarySource } from "@offersteady/protocol";
 import { BriefcaseIcon, CaretDownIcon, ChartLineUpIcon, ChatCircleTextIcon, ClipboardTextIcon, CodeIcon, DatabaseIcon, DevicesIcon, GraduationCapIcon, IdentificationCardIcon, PaletteIcon, ScanIcon, UserFocusIcon } from "@phosphor-icons/react";
 
-import type { IdleInterviewStatus, InterviewQuestion, LiveActionState, ProgrammingLanguage, QuestionStatus, RealtimeSessionUpdate, ScreenshotTask, SessionMode, SessionStatus, WebAppState } from "./domain";
+import type { IdleInterviewStatus, InterviewQuestion, LiveActionState, PartnerProgramState, ProgrammingLanguage, QuestionStatus, RealtimeSessionUpdate, ScreenshotTask, SessionMode, SessionStatus, WebAppState } from "./domain";
 import { runAdapterOperation } from "./api-client";
 import { interviewAppAdapter } from "./app-adapter";
 import { routes } from "./routes";
@@ -213,7 +213,7 @@ function LandingPage() {
       <footer className="public-footer">
         <div className="public-footer-main">
           <section className="footer-brand"><Logo /><p>面向求职者的 AI 面试辅助工具，从资料准备、现场表达建议到面试复盘，让每一次面试更有条理。</p><span>AI 输出仅供参考，请始终以真实经历作答。</span></section>
-          <nav className="footer-column footer-primary-links" aria-label="页脚常用导航"><h2>常用入口</h2><a href="/features">产品功能</a><a href="/interview-questions">面试题与专题</a><a href="/guides">面试指南</a><Link to={routes.publicGuide}>使用手册</Link></nav>
+          <nav className="footer-column footer-primary-links" aria-label="页脚常用导航"><h2>常用入口</h2><a href="/features">产品功能</a><a href="/interview-questions">面试题与专题</a><a href="/guides">面试指南</a><Link to={routes.publicGuide}>使用手册</Link><Link to={routes.partnerProgram}>合作伙伴计划</Link></nav>
           <section className="footer-contact"><h2>联系我们</h2><dl><div><dt>客服微信</dt><dd>{state.billing.support.wechatId || "暂未配置"}</dd></div><div><dt>联系邮箱</dt><dd>{state.billing.support.email ? <a href={`mailto:${state.billing.support.email}`}>{state.billing.support.email}</a> : "暂未配置"}</dd></div>{officialSocialContacts.map(contact => <div key={contact.id}><dt>{contact.label}</dt><dd>{contact.account}</dd></div>)}<div><dt>服务时间</dt><dd>{state.billing.support.serviceHours || "请通过邮箱留言"}</dd></div></dl><p>咨询订单时请提供订单号，请勿发送密码、验证码或完整身份资料。</p></section>
         </div>
         <details className="footer-more">
@@ -1922,6 +1922,49 @@ function ReviewPage() {
 
 function LibraryPage() { const { state, setState } = usePrototype(); return <LibraryManager state={state} setState={setState} />; }
 
+const money = (cents = 0) => new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2 }).format(cents / 100);
+
+function PartnerProgramPage() {
+  const [partner, setPartner] = useState<PartnerProgramState | null>(null);
+  const [accepted, setAccepted] = useState(false);
+  const [busy, setBusy] = useState<"join" | "payout" | "">("");
+  const [message, setMessage] = useState("");
+  const load = async () => {
+    try { setPartner(await interviewAppAdapter.getPartnerProgram()); setMessage(""); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "合作伙伴数据暂时无法读取"); }
+  };
+  useEffect(() => { void load(); }, []);
+  const join = async () => {
+    if (!partner || !accepted) return;
+    setBusy("join");
+    try { setPartner(await interviewAppAdapter.joinPartnerProgram(partner.config.agreementVersion)); setMessage("合作伙伴计划已开通。专属链接可立即分享。"); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "暂时无法加入，请稍后重试"); }
+    finally { setBusy(""); }
+  };
+  const payout = async () => {
+    setBusy("payout");
+    try { await interviewAppAdapter.requestPartnerPayout(); setMessage("本月结算申请已提交，我们会在审核后联系你。"); await load(); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "暂时无法提交结算申请"); }
+    finally { setBusy(""); }
+  };
+  const copy = async () => {
+    if (!partner?.shareUrl) return;
+    await navigator.clipboard?.writeText(partner.shareUrl);
+    setMessage("专属推广链接已复制。");
+  };
+  if (!partner) return <main className="app-page"><PageHeader eyebrow="PARTNER PROGRAM" title="合作伙伴计划" detail="分享面试稳，获得长期、透明、可核对的推广佣金。" /><div className="panel">{message || "正在读取合作伙伴信息…"}</div></main>;
+  if (!partner.config.enabled) return <main className="app-page"><PageHeader eyebrow="PARTNER PROGRAM" title="合作伙伴计划" detail="分享面试稳，获得长期、透明、可核对的推广佣金。" /><EmptyState title="活动正在筹备" detail="开放后你可以主动加入并获得专属链接；这不会影响现有面试和积分权益。" /></main>;
+  return <main className="app-page partner-program-page">
+    <PageHeader eyebrow="PARTNER PROGRAM" title="合作伙伴计划" detail="一级推广，按净实收的 20% 计佣；每月可申请一次人工结算。" />
+    {!partner.joined ? <section className="partner-intro panel"><div><span className="kicker">SHARE & EARN</span><h2>把真正有用的工具分享给更多求职者</h2><p>访客通过你的专属链接注册后，90 天内产生的合格订单会按退款后的净实收计算佣金。佣金经过 {partner.config.refundHoldDays} 天观察期后可申请结算。</p></div><dl><div><dt>佣金比例</dt><dd>{partner.config.commissionRateBps / 100}%</dd></div><div><dt>归因窗口</dt><dd>点击后 30 天内注册</dd></div><div><dt>订单周期</dt><dd>注册后 {partner.config.eligibleOrderDays} 天</dd></div><div><dt>最低结算</dt><dd>{money(partner.config.minimumPayoutCents)}</dd></div></dl><label className="partner-agreement"><input type="checkbox" checked={accepted} onChange={event => setAccepted(event.target.checked)} /><span>我已阅读并同意：仅进行真实推广，不进行自推、刷量或多级分销；佣金按退款后的净实收核算，结算时依法处理相关税务。</span></label><button className="button primary" disabled={!accepted || Boolean(busy)} onClick={() => void join()}>{busy === "join" ? "正在开通…" : "加入合作伙伴计划"}</button></section> : <>
+      <section className="partner-share panel"><div><span className="kicker">YOUR PARTNER LINK</span><h2>你的专属推广链接</h2><p>同一个链接长期有效。请勿将链接用于自购、刷量或误导性推广。</p></div><div><code>{partner.shareUrl}</code><button className="button primary" onClick={() => void copy()}>复制链接</button></div></section>
+      <section className="partner-metrics" aria-label="合作伙伴数据看板"><article><span>有效访客</span><strong>{partner.metrics?.validVisitors ?? 0}</strong></article><article><span>注册用户</span><strong>{partner.metrics?.registrations ?? 0}</strong></article><article><span>付费用户</span><strong>{partner.metrics?.payingUsers ?? 0}</strong></article><article><span>归因实收</span><strong>{money(partner.metrics?.attributedReceiptsCents)}</strong></article><article><span>待确认佣金</span><strong>{money(partner.balances?.pendingCents)}</strong></article><article><span>可提现佣金</span><strong>{money(partner.balances?.availableCents)}</strong></article><article><span>审核中</span><strong>{money(partner.balances?.reservedCents)}</strong></article><article><span>已结算</span><strong>{money(partner.balances?.settledCents)}</strong></article></section>
+      <section className="partner-settlement panel"><div><h2>月度结算</h2><p>可提现达到 {money(partner.config.minimumPayoutCents)} 后，每个自然月可以申请一次。退款或拒付会以冲正记录调整。</p></div><button className="button primary" disabled={Boolean(busy) || (partner.balances?.availableCents ?? 0) < partner.config.minimumPayoutCents} onClick={() => void payout()}>{busy === "payout" ? "正在提交…" : "申请结算"}</button>{partner.payouts?.length ? <div className="partner-payout-list">{partner.payouts.map(item => <p key={item.payoutRequestId}><span>{item.periodKey}</span><strong>{money(item.amountCents)}</strong><em>{item.status === "requested" ? "待审核" : item.status === "approved" ? "已批准" : item.status === "paid" ? "已结算" : "已驳回"}</em></p>)}</div> : <small>暂时没有结算记录。</small>}</section>
+    </>}
+    {message ? <p className="partner-message" role="status">{message}</p> : null}
+  </main>;
+}
+
 function BillingRoutePage() { const { state, setState } = usePrototype(); return <BillingPage state={state} setState={setState} />; }
 function GuideRoutePage() { const { state } = usePrototype(); return <GuidePage support={state.billing.support} />; }
 
@@ -1947,7 +1990,7 @@ function NotFoundPage() { return <main className="center-page"><EmptyState title
 function RouteLoadingPage() { return <main className="route-loading-page" role="status" aria-label="页面加载中" />; }
 
 export function AppRoutes() {
-  return <Routes><Route element={<PublicLayout />}><Route path={routes.landing} element={<LandingPage />} /><Route path={routes.login} element={<LoginPage />} /><Route path={routes.publicGuide} element={<GuideRoutePage />} /><Route path={routes.invite()} element={<ReferralLandingPage />} /><Route path={routes.terms} element={<LegalPage kind="terms" />} /><Route path={routes.privacy} element={<LegalPage kind="privacy" />} /></Route><Route element={<ProtectedRoute />}><Route path="/app" element={<AppLayout />}><Route index element={<HomePage />} /><Route path="written-exams" element={<WrittenExamHomePage />} /><Route path="interviews/new" element={<NewInterviewPage />} /><Route path="written-exams/new" element={<NewWrittenExamPage />} /><Route path="interviews/:id/prepare" element={<PreparationPage />} /><Route path="interviews/:id/review" element={<ReviewPage />} /><Route path="library" element={<LibraryPage />} /><Route path="billing" element={<BillingRoutePage />} /><Route path="guide" element={<GuideRoutePage />} /><Route path="devices" element={<DevicesPage />} /><Route path="settings" element={<SettingsPage />} /></Route><Route path="/app/interviews/:id/live" element={<LivePage />} /></Route><Route path="/error" element={<RouteErrorPage />} /><Route path="*" element={<NotFoundPage />} /></Routes>;
+  return <Routes><Route element={<PublicLayout />}><Route path={routes.landing} element={<LandingPage />} /><Route path={routes.login} element={<LoginPage />} /><Route path={routes.publicGuide} element={<GuideRoutePage />} /><Route path={routes.invite()} element={<ReferralLandingPage />} /><Route path={routes.terms} element={<LegalPage kind="terms" />} /><Route path={routes.privacy} element={<LegalPage kind="privacy" />} /></Route><Route element={<ProtectedRoute />}><Route path="/app" element={<AppLayout />}><Route index element={<HomePage />} /><Route path="written-exams" element={<WrittenExamHomePage />} /><Route path="interviews/new" element={<NewInterviewPage />} /><Route path="written-exams/new" element={<NewWrittenExamPage />} /><Route path="interviews/:id/prepare" element={<PreparationPage />} /><Route path="interviews/:id/review" element={<ReviewPage />} /><Route path="library" element={<LibraryPage />} /><Route path="billing" element={<BillingRoutePage />} /><Route path="partner-program" element={<PartnerProgramPage />} /><Route path="guide" element={<GuideRoutePage />} /><Route path="devices" element={<DevicesPage />} /><Route path="settings" element={<SettingsPage />} /></Route><Route path="/app/interviews/:id/live" element={<LivePage />} /></Route><Route path="/error" element={<RouteErrorPage />} /><Route path="*" element={<NotFoundPage />} /></Routes>;
 }
 
 function DocumentTitleManager() {
@@ -1961,6 +2004,8 @@ function DocumentTitleManager() {
       document.title = "用户协议 - 面试稳AI助手";
     } else if (pathname === routes.privacy) {
       document.title = "隐私政策 - 面试稳AI助手";
+    } else if (pathname === routes.partnerProgram) {
+      document.title = "合作伙伴计划 - 面试稳AI助手";
     } else {
       document.title = "面试稳AI助手";
     }

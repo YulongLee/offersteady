@@ -177,6 +177,21 @@ class PostgresBillingRepository:
             invitee_ledger_reference_id = f"referral:{activation_id}:invitee"
             reward_points = int(settings["reward_points"])
             invitee_reward_points = int(settings["invitee_reward_points"])
+            if self.settings.partner_program_enabled:
+                cursor.execute(
+                    """INSERT INTO growth_acquisition_reward_claims
+                       (acquired_user_id,reward_program,referral_activation_id,claimed_at_ms)
+                       VALUES (%s,'points_referral',%s,%s)
+                       ON CONFLICT (acquired_user_id) DO NOTHING""",
+                    (invitee_user_id, activation_id, activated_at_ms),
+                )
+                cursor.execute(
+                    "SELECT reward_program,referral_activation_id FROM growth_acquisition_reward_claims WHERE acquired_user_id=%s FOR UPDATE",
+                    (invitee_user_id,),
+                )
+                reward_claim = cursor.fetchone()
+                if not reward_claim or reward_claim["reward_program"] != "points_referral":
+                    return {"outcome": "reward-program-conflict"}
             cursor.execute(
                 """
                 INSERT INTO growth_referral_activations (
@@ -1033,7 +1048,7 @@ class PostgresBillingRepository:
         )
 
     def _ensure_tables(self) -> None:
-        migrations = (
+        migrations = [
             Path(REPO_ROOT / "apps/backend/migrations/versions/0008_persistent_points_redemption.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0009_commercial_billing_persistence.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0010_payment_recovery_reconciliation.sql"),
@@ -1050,7 +1065,12 @@ class PostgresBillingRepository:
             Path(REPO_ROOT / "apps/backend/migrations/versions/0029_early_referral_mutual_rewards.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0032_realtime_minute_billing.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0037_written_exam_billing_constraints.sql"),
-        )
+        ]
+        if self.settings.partner_program_enabled:
+            migrations.extend((
+                Path(REPO_ROOT / "apps/backend/migrations/versions/0038_promotion_center.sql"),
+                Path(REPO_ROOT / "apps/backend/migrations/versions/0039_partner_program.sql"),
+            ))
         with self._connect() as connection, connection.cursor() as cursor:
             apply_sql_migrations(cursor, migrations)
             connection.commit()

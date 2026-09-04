@@ -183,13 +183,31 @@ export interface ReferralStatus {
 }
 
 export interface ReferralActivationResult {
-  readonly outcome: "activated" | "already-activated" | "invalid-code" | "self-referral" | "disabled" | "activation-window-expired" | "registration-time-unavailable";
+  readonly outcome: "activated" | "already-activated" | "invalid-code" | "self-referral" | "disabled" | "activation-window-expired" | "registration-time-unavailable" | "reward-program-conflict";
   readonly replayed?: boolean;
   readonly rewardPoints?: number;
   readonly inviterRewardPoints?: number;
   readonly inviteeRewardPoints?: number;
   readonly activationDeadlineMs?: number;
   readonly activatedAtMs?: number;
+}
+
+export interface PartnerProgramState {
+  readonly joined: boolean;
+  readonly shareUrl?: string;
+  readonly config: {
+    readonly enabled: boolean;
+    readonly commissionRateBps: number;
+    readonly eligibleOrderDays: number;
+    readonly refundHoldDays: number;
+    readonly minimumPayoutCents: number;
+    readonly agreementVersion: string;
+    readonly settlementMode: "manual-monthly";
+  };
+  readonly profile?: { readonly status: "active" | "suspended" | "closed"; readonly joinedAtMs: number; readonly agreementVersion: string };
+  readonly metrics?: { readonly validVisitors: number; readonly registrations: number; readonly payingUsers: number; readonly attributedReceiptsCents: number };
+  readonly balances?: { readonly pendingCents: number; readonly availableCents: number; readonly reservedCents: number; readonly settledCents: number; readonly refreshedAtMs: number | null };
+  readonly payouts?: readonly { readonly payoutRequestId: string; readonly periodKey: string; readonly amountCents: number; readonly status: "requested" | "approved" | "rejected" | "paid"; readonly requestedAtMs: number; readonly paidAtMs: number | null }[];
 }
 
 export interface SpeakerPresentationState {
@@ -281,6 +299,9 @@ export interface InterviewAppAdapter {
   getReferralStatus(signal?: AbortSignal): Promise<ReferralStatus>;
   resolveReferral(code: string, signal?: AbortSignal): Promise<{ valid: boolean; enabled: boolean; rewardPoints?: number; inviterRewardPoints?: number; inviteeRewardPoints?: number; activationWindowDays?: number }>;
   activateReferral(code: string, signal?: AbortSignal): Promise<ReferralActivationResult>;
+  getPartnerProgram(signal?: AbortSignal): Promise<PartnerProgramState>;
+  joinPartnerProgram(agreementVersion: string, signal?: AbortSignal): Promise<PartnerProgramState>;
+  requestPartnerPayout(signal?: AbortSignal): Promise<{ readonly payoutRequestId: string; readonly amountCents: number; readonly status: string }>;
   createDraft(input: { title: string; role: string; company?: string; sessionMode?: SessionMode }, signal?: AbortSignal): Promise<InterviewSummary>;
   updateInterviewLanguage(id: string, interviewLanguage: InterviewLanguage, signal?: AbortSignal): Promise<InterviewSummary>;
   updateInterviewProgramming(id: string, programmingRequired: boolean, programmingLanguage: ProgrammingLanguage | null, signal?: AbortSignal): Promise<InterviewSummary>;

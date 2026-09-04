@@ -126,9 +126,11 @@ class PromotionRepository:
             self._query_budget.release()
 
     def ensure_schema(self) -> None:
-        migration = Path(REPO_ROOT) / "apps/backend/migrations/versions/0038_promotion_center.sql"
+        migrations = [Path(REPO_ROOT) / "apps/backend/migrations/versions/0038_promotion_center.sql"]
+        if self.settings.partner_program_enabled:
+            migrations.append(Path(REPO_ROOT) / "apps/backend/migrations/versions/0039_partner_program.sql")
         with self.connect() as connection, connection.cursor() as cursor:
-            apply_sql_migrations(cursor, [migration])
+            apply_sql_migrations(cursor, migrations)
             connection.commit()
 
     def _one(self, query: str, params: tuple[object, ...]) -> dict[str, Any] | None:
@@ -412,6 +414,19 @@ class PromotionRepository:
                  current, current, current),
             )
             row = dict(cursor.fetchone())
+            if self.settings.partner_program_enabled and last:
+                cursor.execute(
+                    "SELECT owner_user_id FROM promotion_links WHERE link_id=%s AND link_kind='partner' AND status='active'",
+                    (last["link_id"],),
+                )
+                partner_link = cursor.fetchone()
+                if partner_link and partner_link["owner_user_id"] and partner_link["owner_user_id"] != user_id:
+                    cursor.execute(
+                        """INSERT INTO growth_acquisition_reward_claims
+                           (acquired_user_id,reward_program,partner_user_id,source_link_id,claimed_at_ms)
+                           VALUES (%s,'cash_partner',%s,%s,%s) ON CONFLICT (acquired_user_id) DO NOTHING""",
+                        (user_id, partner_link["owner_user_id"], last["link_id"], current),
+                    )
             connection.commit()
         return {**row, "idempotent_replay": False}
 

@@ -27,18 +27,18 @@ PERMISSIONS_BY_ROLE: dict[str, frozenset[str]] = {
         "sessions.read", "sessions.terminate", "observability.read",
         "audit.read", "admins.manage",
         "growth.manage",
-        "promotion.read", "promotion.manage", "promotion.cost.manage",
+        "promotion.read", "promotion.manage", "promotion.cost.manage", "promotion.payout.manage",
     }),
     "operations": frozenset({
         "users.read", "billing.read", "materials.read", "materials.retry",
         "sessions.read", "sessions.terminate", "observability.read",
         "growth.manage",
-        "promotion.read", "promotion.manage", "promotion.cost.manage",
+        "promotion.read", "promotion.manage", "promotion.cost.manage", "promotion.payout.manage",
     }),
     "support": frozenset({"users.read", "billing.read", "materials.read", "sessions.read"}),
     "finance": frozenset({
         "users.read", "billing.read", "billing.adjust", "catalog.manage", "redemptions.generate",
-        "payments.reconcile", "payments.manage", "audit.read", "promotion.read", "promotion.cost.manage",
+        "payments.reconcile", "payments.manage", "audit.read", "promotion.read", "promotion.cost.manage", "promotion.payout.manage",
     }),
     "technical_auditor": frozenset({"materials.read", "sessions.read", "observability.read", "audit.read"}),
 }
@@ -53,7 +53,7 @@ SAFE_DETAIL_KEYS = frozenset({
     "channel_id", "campaign_id", "link_id", "scope_type", "amount_cents", "status",
 })
 HIGH_RISK_PERMISSIONS = frozenset({
-    "users.suspend", "billing.adjust", "catalog.manage", "redemptions.generate", "payments.manage", "payments.reconcile", "growth.manage", "admins.manage", "promotion.cost.manage",
+    "users.suspend", "billing.adjust", "catalog.manage", "redemptions.generate", "payments.manage", "payments.reconcile", "growth.manage", "admins.manage", "promotion.cost.manage", "promotion.payout.manage",
 })
 
 

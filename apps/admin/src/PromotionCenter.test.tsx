@@ -19,13 +19,14 @@ const stubOverviewRequests = () => {
 };
 
 describe("promotion center shell", () => {
-  it("exposes all five operator tasks and accessible report filters", () => {
+  it("exposes all operator tasks and accessible report filters", () => {
     const html = renderToStaticMarkup(<PromotionCenter permissions={["promotion.read"]} onAuthenticationExpired={() => undefined} />);
     expect(html).toContain("推广总览");
     expect(html).toContain("推广链接");
     expect(html).toContain("营销活动");
     expect(html).toContain("渠道分析");
     expect(html).toContain("转化漏斗");
+    expect(html).toContain("合作伙伴");
     expect(html).toContain('aria-label="统计周期"');
     expect(html).toContain('aria-label="归因模型"');
     expect(html).toContain('role="tab"');
@@ -121,5 +122,35 @@ describe("promotion center shell", () => {
     await waitFor(() => expect(screen.getAllByText("牛客").length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole("tab", { name: "转化漏斗" }));
     await waitFor(() => expect(screen.getByText("有效访问")).toBeTruthy());
+  });
+
+  it("shows aggregate partners and permission-gated payout actions", async () => {
+    stubOverviewRequests();
+    vi.spyOn(adminApi, "promotionPartners").mockResolvedValue({ items: [{ profileId: "partner-safe", status: "active", joinedAtMs: 1, totalCommissionCents: 2000 }] });
+    vi.spyOn(adminApi, "partnerPayouts").mockResolvedValue({ items: [{ payoutRequestId: "payout-safe", periodKey: "2026-09", amountCents: 12000, status: "requested", requestedAtMs: 1 }] });
+    render(<PromotionCenter permissions={["promotion.read", "promotion.payout.manage"]} onAuthenticationExpired={() => undefined} />);
+    fireEvent.click(screen.getByRole("tab", { name: "合作伙伴" }));
+    await waitFor(() => expect(screen.getByText("待审核结算：1")).toBeTruthy());
+    expect(screen.getByRole("button", { name: "同步已支付订单佣金" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "批准" })).toBeTruthy();
+    expect(document.body.textContent).not.toContain("phone");
+  });
+
+  it("records a partner refund with an integer-cent channel reference", async () => {
+    stubOverviewRequests();
+    vi.spyOn(adminApi, "promotionPartners").mockResolvedValue({ items: [] });
+    vi.spyOn(adminApi, "partnerPayouts").mockResolvedValue({ items: [] });
+    const record = vi.spyOn(adminApi, "recordPartnerRefund").mockResolvedValue({});
+    render(<PromotionCenter permissions={["promotion.read", "promotion.payout.manage"]} onAuthenticationExpired={() => undefined} />);
+    fireEvent.click(screen.getByRole("tab", { name: "合作伙伴" }));
+    await screen.findByText("退款佣金冲正");
+    fireEvent.change(screen.getByPlaceholderText("原支付订单号"), { target: { value: "order-001" } });
+    fireEvent.change(screen.getByPlaceholderText("渠道退款单号（幂等凭证）"), { target: { value: "refund-001" } });
+    fireEvent.change(screen.getByPlaceholderText("退款金额（元）"), { target: { value: "12.34" } });
+    fireEvent.change(screen.getByPlaceholderText("冲正原因"), { target: { value: "渠道退款已确认" } });
+    fireEvent.click(screen.getByRole("button", { name: "记录退款冲正" }));
+    await waitFor(() => expect(record).toHaveBeenCalledWith({
+      orderId: "order-001", refundReference: "refund-001", refundedCents: 1234, reason: "渠道退款已确认",
+    }));
   });
 });

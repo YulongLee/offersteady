@@ -13,6 +13,7 @@ from psycopg.rows import dict_row
 
 from app.core.config import get_settings
 from app.services.promotion_repository import ATTRIBUTION_MODELS, PromotionRepository, now_ms
+from app.services.partner_program import PartnerProgramRepository
 
 
 ALLOWED_EVENT_KEYS = frozenset({
@@ -298,12 +299,17 @@ class PromotionAnalyticsJob:
                 consumed = self.consume()
                 conversions = self.derive_authoritative_conversions(start_ms=start_ms, end_ms=end_ms)
                 facts = self.materialize_attribution(start_ms=start_ms, end_ms=end_ms)
+                partner_entries = 0
+                if self.settings.partner_program_enabled:
+                    # PromotionRepository already applied the partner migration at
+                    # worker startup; recurring projection must not rerun DDL.
+                    partner_entries = PartnerProgramRepository(self.settings, migrate=False).project_paid_orders()["inserted"]
                 timezone_info = ZoneInfo(self.settings.promotion_reporting_timezone)
                 local_today = datetime.now(timezone_info)
                 snapshots = sum(self.snapshot_day(local_today - timedelta(days=offset)) for offset in range(0, 8))
                 removed = self.cleanup_retention()
                 mismatches = self.reconcile(start_ms=start_ms, end_ms=end_ms)
-                processed = int(consumed["accepted"]) + conversions + facts
+                processed = int(consumed["accepted"]) + conversions + facts + partner_entries
                 status = "completed"
                 error = None
             except Exception as exc:

@@ -110,6 +110,11 @@ export const adminApi = {
   addPromotionCost: (payload: Record<string, unknown>) => request<Record<string, unknown>>("/api/v1/admin/promotion/costs", { method: "POST", body: JSON.stringify(payload) }),
   promotionCosts: () => request<{ items: Record<string, unknown>[] }>("/api/v1/admin/promotion/costs?limit=100&offset=0"),
   reversePromotionCost: (costEntryId: string, reason: string) => request<Record<string, unknown>>(`/api/v1/admin/promotion/costs/${encodeURIComponent(costEntryId)}/reverse`, { method: "POST", body: JSON.stringify({ reason }) }),
+  promotionPartners: () => request<{ items: Record<string, unknown>[] }>("/api/v1/admin/promotion/partners?limit=100"),
+  partnerPayouts: () => request<{ items: Record<string, unknown>[] }>("/api/v1/admin/promotion/partner-payouts?limit=100"),
+  projectPartnerCommissions: () => request<Record<string, unknown>>("/api/v1/admin/promotion/partners/project?limit=200", { method: "POST" }),
+  recordPartnerRefund: (payload: { orderId: string; refundReference: string; refundedCents: number; reason: string }) => request<Record<string, unknown>>("/api/v1/admin/promotion/partner-refunds", { method: "POST", body: JSON.stringify(payload) }),
+  transitionPartnerPayout: (payoutId: string, payload: { status: "approved" | "rejected" | "paid"; reason: string; paymentReference?: string }) => request<Record<string, unknown>>(`/api/v1/admin/promotion/partner-payouts/${encodeURIComponent(payoutId)}`, { method: "PATCH", body: JSON.stringify(payload) }),
   list: (resource: "users" | "orders" | "catalog-products" | "redemption-batches" | "payment-channels" | "materials" | "interviews" | "audit" | "admins", offset = 0) =>
     request<{ items: Record<string, unknown>[] }>(`/api/v1/admin/${resource}?limit=50&offset=${offset}`),
   listOrders: (offset = 0, status?: string) => request<{ items: Record<string, unknown>[] }>(

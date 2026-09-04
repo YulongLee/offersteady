@@ -5,6 +5,7 @@ export const routes = {
   privacy: "/privacy",
   publicGuide: "/guide",
   invite: (code = ":code") => `/invite/${code}`,
+  partnerProgram: "/app/partner-program",
   app: "/app",
   writtenExams: "/app/written-exams",
   newInterview: "/app/interviews/new",
@@ -24,6 +25,7 @@ export type ProtectedRoute =
   | typeof routes.writtenExams
   | typeof routes.newInterview
   | typeof routes.newWrittenExam
+  | typeof routes.partnerProgram
   | typeof routes.library
   | typeof routes.billing
   | typeof routes.guide

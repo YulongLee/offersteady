@@ -265,6 +265,14 @@ class Settings(BaseSettings):
     promotion_redirect_rate_limit_per_minute: int = 120
     promotion_qualification_rate_limit_per_minute: int = 30
     promotion_claim_rate_limit_per_minute: int = 20
+    partner_program_enabled: bool = False
+    partner_commission_rate_bps: int = Field(default=2000, ge=1, le=10_000)
+    partner_commission_rule_version: int = Field(default=1, ge=1)
+    partner_eligible_order_days: int = Field(default=90, ge=1, le=365)
+    partner_refund_hold_days: int = Field(default=7, ge=0, le=365)
+    partner_minimum_payout_cents: int = Field(default=10_000, ge=1)
+    partner_agreement_version: str = "2026-09-v1"
+    partner_projection_batch_size: int = Field(default=200, ge=1, le=1000)
 
     public_web_base_url: str = "http://127.0.0.1:5173"
     checkout_provider: str = ""
