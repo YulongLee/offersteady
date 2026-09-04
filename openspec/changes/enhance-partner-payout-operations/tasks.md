@@ -41,4 +41,4 @@
 - [x] 6.3 Make the homepage bottom entry and new enrollment follow the runtime activity setting without changing historical partner accounting
 - [x] 6.4 Add Web, Admin and Backend regression tests for entry scope, permissions, toggle behavior and historical-data preservation
 - [x] 6.5 Run focused and full relevant test/typecheck/build suites plus strict OpenSpec validation
-- [ ] 6.6 Deploy during a zero-active-interview window and verify the homepage, workbench, admin switch and existing settlement data
+- [x] 6.6 Deploy during a zero-active-interview window and verify the homepage, workbench, admin switch and existing settlement data
