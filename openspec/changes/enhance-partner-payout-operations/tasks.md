@@ -47,4 +47,4 @@
 
 - [x] 7.1 Simplify the public homepage partner copy while keeping detailed accounting rules on the activity page
 - [x] 7.2 Fix the enrolled-partner dashboard balance query parameter mismatch and add regression coverage
-- [ ] 7.3 Run focused verification, deploy during a zero-active-interview window and verify the production partner page
+- [x] 7.3 Run focused verification, deploy during a zero-active-interview window and verify the production partner page
