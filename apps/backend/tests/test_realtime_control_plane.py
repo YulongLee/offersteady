@@ -84,6 +84,56 @@ def test_pairing_cache_invalidation_forces_authoritative_recompute() -> None:
     assert refreshed == {"revision": 2}
 
 
+def test_pinned_binding_identity_never_reuses_another_binding_cache_entry() -> None:
+    service = _control_cache_service()
+    calls = 0
+
+    def compute(self, **kwargs: object) -> dict[str, object]:
+        nonlocal calls
+        calls += 1
+        return {
+            "sessionId": kwargs.get("pinned_session_id"),
+            "bindingId": kwargs.get("pinned_binding_id"),
+            "revision": calls,
+        }
+
+    service._compute_desktop_pairing_status = MethodType(compute, service)
+    first = service.get_desktop_pairing_status(
+        manual_code="123456", device_id="device-a", pinned_session_id="session-a", pinned_binding_id="binding-a",
+    )
+    cached = service.get_desktop_pairing_status(
+        manual_code="123456", device_id="device-a", pinned_session_id="session-a", pinned_binding_id="binding-a",
+    )
+    next_binding = service.get_desktop_pairing_status(
+        manual_code="123456", device_id="device-a", pinned_session_id="session-b", pinned_binding_id="binding-b",
+    )
+
+    assert first == cached
+    assert first["revision"] == 1
+    assert next_binding == {"sessionId": "session-b", "bindingId": "binding-b", "revision": 2}
+    assert calls == 2
+
+
+def test_pairing_cache_expires_below_live_binding_poll_interval() -> None:
+    service = _control_cache_service()
+    service.settings = Settings(realtime_control_cache_ms=50)
+    calls = 0
+
+    def compute(self, **_kwargs: object) -> dict[str, object]:
+        nonlocal calls
+        calls += 1
+        return {"revision": calls}
+
+    service._compute_desktop_pairing_status = MethodType(compute, service)
+    first = service.get_desktop_pairing_status(manual_code="123456", device_id="device-a")
+    time.sleep(0.06)
+    refreshed = service.get_desktop_pairing_status(manual_code="123456", device_id="device-a")
+
+    assert first == {"revision": 1}
+    assert refreshed == {"revision": 2}
+    assert calls == 2
+
+
 def test_device_heartbeat_invalidation_preserves_other_device_cache() -> None:
     service = _control_cache_service()
     calls: dict[str, int] = {}

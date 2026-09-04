@@ -51,4 +51,13 @@ describe("desktop idle polling policy", () => {
     expect(desktopPollDelayMs("idle", 0, "binding", 2_500)).toBe(2_500);
     expect(desktopPollDelayMs("idle", 0, "binding", 20_000)).toBe(BINDING_WAITING_MAX_POLL_MS);
   });
+
+  it("keeps the renderer binding poll single-flight and coalesces concurrent wakeups", () => {
+    const rendererSource = readFileSync(new URL("../src/renderer/CompanionApp.tsx", import.meta.url), "utf8");
+
+    expect(rendererSource).toContain("if (bindingPollInFlight)");
+    expect(rendererSource).toContain("pollAgainWhenSettled = true");
+    expect(rendererSource).toContain("const delayMs = pollAgainWhenSettled ? 0 : nextDelayMs");
+    expect(rendererSource).toContain("if (bindingPollTimer !== null) window.clearTimeout(bindingPollTimer)");
+  });
 });

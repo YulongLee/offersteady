@@ -7,7 +7,12 @@ import { DeviceCredentialVault } from "./credential-vault";
 import { DevicePairingIdentityStore } from "./device-pairing";
 import { DEFAULT_SCREENSHOT_SHORTCUT, SCREENSHOT_SHORTCUT_OPTIONS, ScreenshotShortcutStore, isSupportedScreenshotShortcut } from "./screenshot-shortcut";
 import { desktopPollDelayMs } from "./polling-policy";
-import { screenshotStreamEligible, screenshotStreamTransition } from "./screenshot-stream-policy";
+import {
+  screenshotStreamAdmissionAction,
+  screenshotStreamEligible,
+  screenshotStreamSuspensionTransition,
+  screenshotStreamTransition,
+} from "./screenshot-stream-policy";
 import { ScreenshotCaptureLock } from "./screenshot-capture-lock";
 import { DesktopCaptureEventParser } from "./capture-event-stream";
 import { decideRendererRecovery } from "./renderer-recovery-policy";
@@ -73,6 +78,7 @@ let remoteScreenshotPollInFlight = false;
 let remoteScreenshotPollFailureCount = 0;
 let remoteScreenshotStreamController: AbortController | null = null;
 let remoteScreenshotLoopGeneration = 0;
+let remoteScreenshotSuspended = false;
 let displayMediaFailureBackoffUntil = 0;
 let rendererRecoveryAttempts: readonly number[] = [];
 let rendererRecoveryResetTimer: NodeJS.Timeout | null = null;
@@ -874,7 +880,7 @@ const pollRemoteScreenshotRequest = async (lockAlreadyHeld = false) => {
   if (screenshotCaptureLock.state().locked && !lockAlreadyHeld) return true;
   const identity = pollingState.identity;
   const response = await fetchWithTimeout(desktopApiUrl(`/screenshot-answer/desktop-devices/${encodeURIComponent(identity.deviceId)}/capture-requests/next?manualCode=${encodeURIComponent(identity.manualCode)}`));
-  if (!response.ok) throw new Error(`remote_screenshot_poll_${response.status}`);
+  if (!response.ok) throw new RemoteScreenshotAdmissionError("poll", response.status);
   const envelope = await response.json() as { data?: { requestId: string; status: string } | null };
   const request = envelope.data;
   if (!request || request.status !== "requested") {
@@ -883,6 +889,13 @@ const pollRemoteScreenshotRequest = async (lockAlreadyHeld = false) => {
   }
   return processRemoteScreenshotRequest(identity, request.requestId, lockAlreadyHeld);
 };
+
+class RemoteScreenshotAdmissionError extends Error {
+  constructor(readonly channel: "stream" | "poll", readonly status: number) {
+    super(`remote_screenshot_${channel}_${status}`);
+    this.name = "RemoteScreenshotAdmissionError";
+  }
+}
 
 const shortcutNotice = (message: string) => {
   mainWindow?.webContents.send("desktop:screenshot-shortcut-notice", message);
@@ -972,7 +985,7 @@ const consumeRemoteScreenshotEventStream = async (
 ) => {
   const url = desktopApiUrl(`/screenshot-answer/desktop-devices/${encodeURIComponent(identity.deviceId)}/capture-requests/stream?manualCode=${encodeURIComponent(identity.manualCode)}`);
   const response = await fetch(url, { headers: { Accept: "text/event-stream" }, signal });
-  if (!response.ok) throw new Error(`remote_screenshot_stream_${response.status}`);
+  if (!response.ok) throw new RemoteScreenshotAdmissionError("stream", response.status);
   if (!response.body) throw new Error("remote_screenshot_stream_body_missing");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -993,6 +1006,7 @@ const startRemoteScreenshotRequestLoop = () => {
   remoteScreenshotStreamController?.abort();
   remoteScreenshotStreamController = null;
   remoteScreenshotPollFailureCount = 0;
+  remoteScreenshotSuspended = false;
   const schedule = (delayMs: number) => {
     if (generation !== remoteScreenshotLoopGeneration || isQuitting) return;
     screenshotRequestTimer = setTimeout(() => void run(), delayMs);
@@ -1022,11 +1036,25 @@ const startRemoteScreenshotRequestLoop = () => {
         schedule(0);
         return;
       }
+      if (screenshotStreamAdmissionAction(error instanceof RemoteScreenshotAdmissionError ? error.status : null) === "suspend") {
+        remoteScreenshotSuspended = true;
+        console.info("[remote-screenshot] suspended until binding eligibility changes", {
+          status: error instanceof RemoteScreenshotAdmissionError ? error.status : null,
+        });
+        return;
+      }
       console.warn("[remote-screenshot] poll failed", error);
       remoteScreenshotPollFailureCount += 1;
       try {
         await pollRemoteScreenshotRequest();
       } catch (fallbackError) {
+        if (screenshotStreamAdmissionAction(fallbackError instanceof RemoteScreenshotAdmissionError ? fallbackError.status : null) === "suspend") {
+          remoteScreenshotSuspended = true;
+          console.info("[remote-screenshot] fallback suspended until binding eligibility changes", {
+            status: fallbackError instanceof RemoteScreenshotAdmissionError ? fallbackError.status : null,
+          });
+          return;
+        }
         console.warn("[remote-screenshot] fallback poll failed", fallbackError);
       }
       schedule(desktopPollDelayMs("failure", remoteScreenshotPollFailureCount));
@@ -1047,6 +1075,7 @@ const stopRemoteScreenshotRequestLoop = () => {
   remoteScreenshotStreamController?.abort();
   remoteScreenshotStreamController = null;
   remoteScreenshotPollFailureCount = 0;
+  remoteScreenshotSuspended = false;
 };
 
 const createWindow = () => {
@@ -1132,7 +1161,21 @@ const createWindow = () => {
   });
 };
 
-app.whenReady().then(async () => {
+const ownsCompanionInstance = app.requestSingleInstanceLock({
+  productEdition: "domestic",
+  userDataDirectory: stableCompanionUserDataDirectory,
+});
+
+if (!ownsCompanionInstance) app.quit();
+else {
+  app.on("second-instance", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+
+  void app.whenReady().then(async () => {
   try {
     const migration = await migrateLegacyCompanionState({
       stableDirectory: stableCompanionUserDataDirectory,
@@ -1218,15 +1261,20 @@ app.whenReady().then(async () => {
   app.on("activate", () => {
     if (!mainWindow) createWindow();
     else mainWindow.show();
+    if (remoteScreenshotSuspended && screenshotStreamEligible(captureState)) startRemoteScreenshotRequestLoop();
   });
-});
+  });
+}
 
 ipcMain.on("capture:set-state", (_event, state: CaptureState) => {
   const previousState = captureState;
   captureState = state;
   updateTray();
   const transition = screenshotStreamTransition(previousState, state);
-  if (transition === "start") startRemoteScreenshotRequestLoop();
+  const suspendedTransition = remoteScreenshotSuspended
+    ? screenshotStreamSuspensionTransition(previousState, state)
+    : "preserve";
+  if (transition === "start" || suspendedTransition === "resume") startRemoteScreenshotRequestLoop();
   else if (transition === "stop") stopRemoteScreenshotRequestLoop();
 });
 
