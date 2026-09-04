@@ -58,4 +58,16 @@ describe("production nginx release contract", () => {
       /location ~ \^\/\(\?:login[\s\S]*?try_files \/index\.html =404;/,
     );
   });
+
+  it("serves the partner program route through the authenticated SPA", () => {
+    const nginxConfig = readFileSync(
+      resolve(process.cwd(), "../../infra/nginx/default.conf"),
+      "utf8",
+    );
+
+    expect(nginxConfig).toContain("/partner-program");
+    expect(nginxConfig).toMatch(
+      /location ~ \^\/\(\?:login[\s\S]*?try_files \/index\.html =404;/,
+    );
+  });
 });
