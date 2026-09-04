@@ -21,6 +21,7 @@
 - [x] 4.1 Add the homepage Footer entry, partner route and responsive join/dashboard experience
 - [x] 4.2 Add partner and settlement management to the existing admin promotion center
 - [x] 4.3 Keep disabled and unavailable states explicit without exposing referred-user personal information
+- [x] 4.4 Make aggregate partner reconciliation visible to every active administrator while preserving finance action permissions
 
 ## 5. Verification and documentation
 
@@ -28,3 +29,4 @@
 - [x] 5.2 Add Web and Admin tests for entry, aggregate metrics, disabled state and settlement actions
 - [x] 5.3 Run backend tests, frontend tests/typechecks/builds and strict OpenSpec validation
 - [x] 5.4 Document operational defaults, manual refund/settlement SOP, rollout and rollback boundaries
+- [x] 5.5 Add regression coverage for newly created and pre-existing read-only administrator sessions

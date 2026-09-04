@@ -30,6 +30,8 @@ def test_admin_role_permissions_are_deny_by_default() -> None:
     assert "growth.manage" in PERMISSIONS_BY_ROLE["super_admin"]
     assert "growth.manage" in PERMISSIONS_BY_ROLE["operations"]
     assert "growth.manage" not in PERMISSIONS_BY_ROLE["support"]
+    assert all("promotion.read" in permissions for permissions in PERMISSIONS_BY_ROLE.values())
+    assert "promotion.payout.manage" not in PERMISSIONS_BY_ROLE["support"]
     assert "appPrivateKey" not in SAFE_DETAIL_KEYS
     assert "apiV3Key" not in SAFE_DETAIL_KEYS
     assert "resume_text" not in SAFE_DETAIL_KEYS
@@ -176,6 +178,38 @@ def test_active_admin_session_slides_idle_expiry_without_refreshing_recent_mfa()
     assert principal.recent_mfa_at_ms == 123
     assert repository.touched[0][0] == "admin-session-active"
     assert repository.touched[0][1] > 28_000_000
+
+
+def test_existing_read_only_admin_session_gains_partner_reconciliation_read_access() -> None:
+    class RepositoryStub:
+        def session_by_fingerprint(self, fingerprint: str):
+            return {
+                "admin_session_id": "admin-session-before-partner-rollout",
+                "user_id": "synthetic-support-admin",
+                "status": "active",
+                "authorization_status": "active",
+                "authorization_version": 1,
+                "current_authorization_version": 1,
+                "expires_at_ms": 9_999_999_999_999,
+                "permissions_json": ["users.read"],
+                "role": "support",
+                "recent_mfa_at_ms": 123,
+            }
+
+        def touch_session(self, admin_session_id: str, *, expires_at_ms: int) -> None:
+            return None
+
+    settings = Settings(
+        admin_enabled=True,
+        promotion_enabled=True,
+        admin_session_signing_secret="synthetic-signing-secret",
+        admin_encryption_key="synthetic-encryption-key",
+        database_url="postgresql://synthetic.invalid/offersteady",
+    )
+    principal = AdminService(settings, RepositoryStub()).authenticate("active-token")  # type: ignore[arg-type]
+
+    assert "promotion.read" in principal.permissions
+    assert "promotion.payout.manage" not in principal.permissions
 
 
 def test_browser_admin_provisioning_requires_existing_bootstrap_and_registered_user() -> None:

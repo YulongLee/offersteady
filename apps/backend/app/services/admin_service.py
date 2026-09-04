@@ -35,12 +35,12 @@ PERMISSIONS_BY_ROLE: dict[str, frozenset[str]] = {
         "growth.manage",
         "promotion.read", "promotion.manage", "promotion.cost.manage", "promotion.payout.manage",
     }),
-    "support": frozenset({"users.read", "billing.read", "materials.read", "sessions.read"}),
+    "support": frozenset({"users.read", "billing.read", "materials.read", "sessions.read", "promotion.read"}),
     "finance": frozenset({
         "users.read", "billing.read", "billing.adjust", "catalog.manage", "redemptions.generate",
         "payments.reconcile", "payments.manage", "audit.read", "promotion.read", "promotion.cost.manage", "promotion.payout.manage",
     }),
-    "technical_auditor": frozenset({"materials.read", "sessions.read", "observability.read", "audit.read"}),
+    "technical_auditor": frozenset({"materials.read", "sessions.read", "observability.read", "audit.read", "promotion.read"}),
 }
 
 SAFE_DETAIL_KEYS = frozenset({
@@ -145,15 +145,22 @@ class AdminService:
         permissions = row["permissions_json"]
         if isinstance(permissions, str):
             permissions = json.loads(permissions)
-        effective_permissions = frozenset(
+        effective_permissions = {
             str(item) for item in permissions
             if self.settings.promotion_enabled or not str(item).startswith("promotion.")
-        )
+        }
+        # Aggregate acquisition and partner reconciliation data contains no
+        # referred-user PII and is visible to every active administrator.
+        # Add this dynamically so sessions created before the feature rollout
+        # gain read access without re-authentication. Mutation permissions stay
+        # snapshotted and continue to require their dedicated role grants.
+        if self.settings.promotion_enabled:
+            effective_permissions.add("promotion.read")
         return AdminPrincipal(
             admin_session_id=str(row["admin_session_id"]),
             user_id=str(row["user_id"]),
             role=str(row["role"]),
-            permissions=effective_permissions,
+            permissions=frozenset(effective_permissions),
             recent_mfa_at_ms=int(row["recent_mfa_at_ms"]),
         )
 

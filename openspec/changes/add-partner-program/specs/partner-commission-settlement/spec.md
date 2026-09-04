@@ -39,6 +39,16 @@ An active partner SHALL be able to request settlement only when available commis
 ### Requirement: Administrators audit settlement decisions
 Only an administrator with the required promotion finance permission SHALL approve, reject or mark a settlement paid. Each transition MUST record the actor, timestamp, reason, previous state and a non-sensitive payment reference; invalid state transitions MUST be rejected.
 
+All active administrators SHALL be able to discover and read the aggregate partner reconciliation view when promotion analytics is enabled. Read access MUST NOT grant permission to project commissions, record refund reversals, approve or reject requests, or mark a request paid.
+
+#### Scenario: Existing administrator opens partner reconciliation
+- **WHEN** an active administrator whose existing session predates the partner feature opens the admin platform while promotion analytics is enabled
+- **THEN** the promotion center and partner reconciliation tab are visible with aggregate read-only data without requiring a new login
+
+#### Scenario: Read-only administrator sees settlement actions
+- **WHEN** an administrator has partner reconciliation read access but lacks the promotion finance permission
+- **THEN** partner and payout aggregates remain visible while projection, refund and payout-transition actions are hidden and rejected by the API
+
 #### Scenario: Administrator marks an approved request paid
 - **WHEN** an authorized administrator records a payment reference for an approved request
 - **THEN** the request becomes paid, the reserved commission becomes settled, and the audit record retains the transition
