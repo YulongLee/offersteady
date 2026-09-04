@@ -9,7 +9,7 @@
 
 - [x] 2.1 Bump Companion to 1.2.15 and verify package metadata.
 - [x] 2.2 Run focused regression tests, full desktop tests, type checks and builds.
-- [ ] 2.3 Build and verify macOS arm64, macOS x64 and Windows x64 artifacts.
+- [x] 2.3 Build and verify macOS arm64, macOS x64 and Windows x64 artifacts.
 - [x] 2.4 Validate the OpenSpec change in strict mode.
 
 ## 3. Safe production rollout
