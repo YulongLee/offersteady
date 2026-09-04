@@ -35,6 +35,10 @@ def dashboard_balance_parameters(*, current_ms: int, user_id: str) -> tuple[int,
     return (current_ms, current_ms, current_ms, current_ms, user_id)
 
 
+def reconciliation_summary_parameters(*, current_ms: int) -> tuple[int, int]:
+    return (current_ms, current_ms)
+
+
 def mask_account_name(value: str) -> str:
     value = value.strip()
     if not value:
@@ -565,7 +569,7 @@ class PartnerProgramRepository:
                      COALESCE(SUM(amount_cents) FILTER (WHERE entry_type='payout_paid'),0) AS paid_cents,
                      COALESCE(-SUM(amount_cents) FILTER (WHERE entry_type='refund_reversal'),0) AS reversed_cents
                    FROM partner_commission_ledger""",
-                (current, current, current, current),
+                reconciliation_summary_parameters(current_ms=current),
             )
             result = dict(cursor.fetchone())
             result["available_cents"] = max(0, int(result["eligible_cents"]) - int(result["reserved_cents"]) - int(result["paid_cents"]))

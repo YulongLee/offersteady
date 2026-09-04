@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from app.core.config import get_settings
 from app.core.logging import utc_now_iso
@@ -97,7 +97,8 @@ def partner_config(request: Request):
 
 
 @router.get("/me")
-def partner_status(request: Request, auth: AuthenticatedRequestContext = Depends(require_authenticated_context)):
+def partner_status(request: Request, response: Response,
+                   auth: AuthenticatedRequestContext = Depends(require_authenticated_context)):
     settings = get_settings()
     activity = _activity_settings()
     config = _settings_payload(activity)
@@ -112,11 +113,10 @@ def partner_status(request: Request, auth: AuthenticatedRequestContext = Depends
     }
     if profile:
         data["shareUrl"] = f"{settings.resolved_promotion_public_base_url}/r/{profile['slug']}"
-    response = success_response(request=request, data=data, timestamp=utc_now_iso())
     if settings.partner_payout_profile_enabled:
         response.headers["Cache-Control"] = "no-store"
         response.headers["Pragma"] = "no-cache"
-    return response
+    return success_response(request=request, data=data, timestamp=utc_now_iso())
 
 
 @router.post("/join")
@@ -143,7 +143,7 @@ def request_payout(request: Request, auth: AuthenticatedRequestContext = Depends
 
 
 @router.put("/payout-profile")
-def save_payout_profile(payload: PartnerPayoutProfileUpsert, request: Request,
+def save_payout_profile(payload: PartnerPayoutProfileUpsert, request: Request, response: Response,
                         auth: AuthenticatedRequestContext = Depends(require_authenticated_context)):
     row = _call(lambda: repository().save_payout_profile(
         user_id=auth.user_id,
@@ -151,7 +151,6 @@ def save_payout_profile(payload: PartnerPayoutProfileUpsert, request: Request,
         account_name=payload.account_name,
         account_identifier=payload.account_identifier,
     ))
-    response = success_response(request=request, data=_serialize(row), timestamp=utc_now_iso())
     response.headers["Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
-    return response
+    return success_response(request=request, data=_serialize(row), timestamp=utc_now_iso())

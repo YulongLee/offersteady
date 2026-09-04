@@ -12,6 +12,8 @@ from fastapi.testclient import TestClient
 
 from app.core.config import REPO_ROOT, Settings
 from app.main import create_app
+from app.modules import partner_program as partner_program_module
+from app.ports.authentication import AuthenticatedRequestContext
 from app.services.admin_service import HIGH_RISK_PERMISSIONS, PERMISSIONS_BY_ROLE
 from app.services.partner_program import (
     PartnerPayoutCipher,
@@ -20,6 +22,7 @@ from app.services.partner_program import (
     dashboard_balance_parameters,
     mask_account_identifier,
     mask_account_name,
+    reconciliation_summary_parameters,
     refund_adjustment,
 )
 from app.services import promotion_analytics_job
@@ -48,6 +51,44 @@ def test_partner_dashboard_binds_every_balance_query_placeholder() -> None:
         1_234,
         "partner-user",
     )
+    assert reconciliation_summary_parameters(current_ms=1_234) == (1_234, 1_234)
+
+
+def test_partner_status_uses_fastapi_response_for_no_store_headers(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeRepository:
+        @staticmethod
+        def profile(*, user_id: str) -> dict[str, object]:
+            return {"slug": "synthetic", "promotion_link_id": "link-1", "status": "active"}
+
+        @staticmethod
+        def dashboard(*, user_id: str) -> dict[str, object]:
+            return {
+                "profile": {"status": "active", "joined_at_ms": 1, "agreement_version": "test-v1"},
+                "payout_profile": None,
+                "metrics": {"valid_visitors": 0, "registrations": 0, "paying_users": 0, "attributed_receipts_cents": 0},
+                "balances": {"pending_cents": 0, "available_cents": 0, "reserved_cents": 0, "settled_cents": 0, "refreshed_at_ms": None},
+                "payouts": [],
+            }
+
+    settings = Settings(
+        _env_file=None,
+        partner_program_enabled=True,
+        promotion_enabled=True,
+        partner_payout_profile_enabled=True,
+        partner_payout_encryption_key="synthetic-dedicated-partner-payout-key-32-bytes",
+    )
+    monkeypatch.setattr(partner_program_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(partner_program_module, "_activity_settings", lambda: {"enabled": True, "config_version": 1, "updated_at_ms": 0})
+    monkeypatch.setattr(partner_program_module, "repository", lambda: FakeRepository())
+    app = create_app()
+    app.dependency_overrides[partner_program_module.require_authenticated_context] = lambda: AuthenticatedRequestContext(
+        user_id="synthetic-user", login_id="synthetic@example.test", auth_session_id="synthetic-session"
+    )
+    response = TestClient(app).get("/api/v1/partner-program/me")
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.headers["Pragma"] == "no-cache"
+    assert response.json()["data"]["joined"] is True
 
 
 def test_partner_payout_profile_cipher_is_dedicated_masked_and_fail_closed() -> None:
