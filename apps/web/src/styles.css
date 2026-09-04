@@ -258,6 +258,8 @@ h1, h2, h3, p { margin-top: 0; }
 .value-trust p { margin: 0; }
 .value-trust details { max-width: 430px; }
 .value-trust summary { color: var(--brand); cursor: pointer; }
+.partner-home-entry { display: flex; align-items: center; justify-content: space-between; gap: 32px; margin: 0 0 54px; border: 1px solid rgba(110,231,189,.34); border-radius: 20px; background: linear-gradient(120deg, rgba(110,231,189,.12), rgba(110,231,189,.025)); padding: clamp(24px, 4vw, 42px); }
+.partner-home-entry h2 { margin: 9px 0 8px; font-size: clamp(26px, 3vw, 38px); }.partner-home-entry p { max-width: 700px; margin: 0; color: #aeb9c8; line-height: 1.8; }.partner-home-entry .button { flex: 0 0 auto; }
 .public-footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; padding-top: 42px; }
 .public-footer-main { display: grid; grid-template-columns: minmax(260px, 1.35fr) minmax(160px, .65fr) minmax(280px, 1fr); gap: 54px; padding-bottom: 28px; }
 .footer-brand .logo-lockup { color: var(--text); }
@@ -370,8 +372,6 @@ h1, h2, h3, p { margin-top: 0; }
 .app-sidebar nav a { display: flex; min-height: 44px; align-items: center; gap: 11px; border-radius: 10px; color: var(--muted); padding: 10px 12px; font-size: 12px; }
 .app-sidebar nav a span { width: 20px; text-align: center; }
 .app-sidebar nav a.active { color: var(--text); background: var(--surface-2); }
-.app-sidebar nav a.partner-nav-link { min-height: 58px; display: grid; grid-template-columns: 20px 1fr; border: 1px solid rgba(110,231,189,.38); background: linear-gradient(135deg, rgba(110,231,189,.13), rgba(110,231,189,.035)); color: var(--text); font-size: 13px; font-weight: 800; }
-.app-sidebar nav a.partner-nav-link small { grid-column: 2; margin-top: -8px; color: var(--brand); font-size: 8px; font-weight: 700; }
 .sidebar-foot { display: grid; gap: 13px; margin-top: auto; }
 .privacy-note { color: #738196; border-bottom: 1px solid var(--line); padding: 12px 4px; font-size: 9px; text-align: center; }
 .account-menu { position: relative; min-width: 0; }
@@ -1155,6 +1155,8 @@ h1, h2, h3, p { margin-top: 0; }
 
 @media (max-width: 720px) {
   .public-shell { width: min(100% - 28px, 1240px); }
+  .partner-home-entry { align-items: stretch; flex-direction: column; margin-bottom: 38px; }
+  .partner-home-entry .button { width: 100%; }
   .public-nav { height: 64px; }
   .public-nav nav > a:not(.button) { display: none; }
   .referral-card { grid-template-columns: 1fr; gap: 18px; }

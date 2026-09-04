@@ -20,6 +20,7 @@ from app.schemas.promotion import (
     PromotionLinkCreate,
     PromotionLinkUpdate,
     PartnerPayoutTransition,
+    PartnerProgramSettingsUpdate,
     PartnerRefundRequest,
 )
 from app.services.admin_service import AdminPrincipal
@@ -163,6 +164,35 @@ def _compact_funnel(metrics: dict[str, Any] | None) -> list[dict[str, Any]]:
         })
         previous = count
     return result
+
+
+@admin_promotion_router.get("/partner-settings")
+def partner_settings(principal: Annotated[AdminPrincipal, Depends(permission("promotion.read"))]):
+    return {"data": _serialize(_call(lambda: partner_repository().activity_settings()))}
+
+
+@admin_promotion_router.put("/partner-settings")
+def update_partner_settings(
+    payload: PartnerProgramSettingsUpdate,
+    request: Request,
+    principal: Annotated[AdminPrincipal, Depends(permission("promotion.manage"))],
+):
+    if not payload.confirmed:
+        raise HTTPException(status_code=422, detail="Confirmation is required")
+    row = _call(lambda: partner_repository().update_activity_settings(
+        enabled=payload.enabled,
+        updated_by_user_id=principal.user_id,
+    ))
+    _audit(
+        request,
+        principal,
+        action="promotion.partner.settings.update",
+        resource_type="partner_program_settings",
+        resource_id="default",
+        reason=payload.reason,
+        details={"enabled": payload.enabled, "config_version": row["config_version"]},
+    )
+    return {"data": _serialize(row)}
 
 
 @admin_promotion_router.get("/partners")

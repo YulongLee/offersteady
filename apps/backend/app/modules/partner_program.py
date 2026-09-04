@@ -48,10 +48,20 @@ def _serialize(value: Any) -> Any:
     return value
 
 
-def _settings_payload() -> dict[str, object]:
+def _activity_settings() -> dict[str, object]:
     settings = get_settings()
+    if not settings.partner_program_enabled or not settings.promotion_enabled:
+        return {"enabled": False, "config_version": 0, "updated_at_ms": 0}
+    return _call(lambda: repository().activity_settings())
+
+
+def _settings_payload(activity: dict[str, object] | None = None) -> dict[str, object]:
+    settings = get_settings()
+    runtime = activity or _activity_settings()
     return {
-        "enabled": settings.partner_program_enabled,
+        "enabled": bool(runtime.get("enabled")),
+        "configVersion": int(runtime.get("config_version") or 0),
+        "updatedAtMs": int(runtime.get("updated_at_ms") or 0),
         "commissionRateBps": settings.partner_commission_rate_bps,
         "eligibleOrderDays": settings.partner_eligible_order_days,
         "refundHoldDays": settings.partner_refund_hold_days,
@@ -81,11 +91,17 @@ def _call(callback):
         raise
 
 
+@router.get("/config")
+def partner_config(request: Request):
+    return success_response(request=request, data=_settings_payload(), timestamp=utc_now_iso())
+
+
 @router.get("/me")
 def partner_status(request: Request, auth: AuthenticatedRequestContext = Depends(require_authenticated_context)):
     settings = get_settings()
-    config = _settings_payload()
-    if not settings.partner_program_enabled:
+    activity = _activity_settings()
+    config = _settings_payload(activity)
+    if not settings.partner_program_enabled or not bool(activity.get("enabled")):
         return success_response(request=request, data={"joined": False, "config": config}, timestamp=utc_now_iso())
     repo = _call(repository)
     profile = _call(lambda: repo.profile(user_id=auth.user_id))
@@ -106,6 +122,8 @@ def partner_status(request: Request, auth: AuthenticatedRequestContext = Depends
 @router.post("/join")
 def join_partner(payload: PartnerJoinRequest, request: Request, auth: AuthenticatedRequestContext = Depends(require_authenticated_context)):
     settings = get_settings()
+    if not bool(_activity_settings().get("enabled")):
+        raise HTTPException(status_code=404, detail="Not found")
     if not payload.agreement_accepted or payload.agreement_version != settings.partner_agreement_version:
         raise HTTPException(status_code=422, detail="current_partner_agreement_must_be_accepted")
     profile = _call(lambda: repository().join(user_id=auth.user_id, agreement_version=payload.agreement_version))

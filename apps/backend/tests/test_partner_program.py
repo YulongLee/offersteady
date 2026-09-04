@@ -110,6 +110,27 @@ def test_partner_migration_has_idempotency_privacy_and_audit_boundaries() -> Non
     assert "phone" not in sql.lower()
 
 
+def test_partner_activity_settings_are_additive_versioned_and_do_not_mutate_finance() -> None:
+    sql = (Path(REPO_ROOT) / "apps/backend/migrations/versions/0042_partner_program_activity_settings.sql").read_text()
+    assert "CREATE TABLE IF NOT EXISTS partner_program_settings" in sql
+    assert "config_version" in sql
+    assert "partner_commission_ledger" not in sql
+    assert "partner_payout_requests" not in sql
+    source = inspect.getsource(PartnerProgramRepository.update_activity_settings)
+    assert "config_version=config_version+1" in source
+    assert "partner_program_settings" in source
+    join_source = inspect.getsource(PartnerProgramRepository.join)
+    assert "partner_program_settings" in join_source
+    assert "partner_program_disabled" in join_source
+
+
+def test_public_partner_config_is_disabled_without_deployment_master_switch() -> None:
+    client = TestClient(create_app())
+    response = client.get("/api/v1/partner-program/config")
+    response.raise_for_status()
+    assert response.json()["data"]["enabled"] is False
+
+
 def test_partner_projection_is_not_on_payment_or_interview_hot_paths() -> None:
     projection_source = inspect.getsource(PartnerProgramRepository.project_paid_orders)
     analytics_source = inspect.getsource(promotion_analytics_job.PromotionAnalyticsJob.run_once)

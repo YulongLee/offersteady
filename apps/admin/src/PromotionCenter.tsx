@@ -83,6 +83,8 @@ export function PromotionCenter({ permissions, onAuthenticationExpired }: { perm
   const [partnerPayouts, setPartnerPayouts] = useState<Row[]>([]);
   const [partnerReconciliation, setPartnerReconciliation] = useState<Row>({});
   const [partnerCommissionOrders, setPartnerCommissionOrders] = useState<Row[]>([]);
+  const [partnerSettings, setPartnerSettings] = useState<Row>({ enabled: false, configVersion: 0, updatedAtMs: 0 });
+  const [partnerSettingsReason, setPartnerSettingsReason] = useState("");
   const [commissionState, setCommissionState] = useState("");
   const [revealedPayout, setRevealedPayout] = useState<Row | null>(null);
   const [campaignReport, setCampaignReport] = useState<Row | null>(null);
@@ -156,10 +158,10 @@ export function PromotionCenter({ permissions, onAuthenticationExpired }: { perm
       }
       if (tab === "campaigns" || tab === "links") await loadDimensions();
       if (tab === "partners") {
-        const [nextPartners, nextPayouts, reconciliation, commissionOrders] = await Promise.all([
-          adminApi.promotionPartners(), adminApi.partnerPayouts(), adminApi.partnerReconciliation(), adminApi.partnerCommissionOrders(commissionState),
+        const [nextPartners, nextPayouts, reconciliation, commissionOrders, settings] = await Promise.all([
+          adminApi.promotionPartners(), adminApi.partnerPayouts(), adminApi.partnerReconciliation(), adminApi.partnerCommissionOrders(commissionState), adminApi.partnerProgramSettings(),
         ]);
-        setPartners(nextPartners.items); setPartnerPayouts(nextPayouts.items); setPartnerReconciliation(reconciliation); setPartnerCommissionOrders(commissionOrders.items);
+        setPartners(nextPartners.items); setPartnerPayouts(nextPayouts.items); setPartnerReconciliation(reconciliation); setPartnerCommissionOrders(commissionOrders.items); setPartnerSettings(settings);
       }
     } catch (error) { handleError(error); }
     finally { setLoading(false); }
@@ -238,6 +240,18 @@ export function PromotionCenter({ permissions, onAuthenticationExpired }: { perm
     try { const result = await adminApi.projectPartnerCommissions(); setMessage(`佣金投影完成：新增 ${String(result.inserted ?? 0)} 条。`); await load(); }
     catch (error) { handleError(error); }
   };
+  const savePartnerActivity = async () => {
+    const nextEnabled = !Boolean(partnerSettings.enabled);
+    const reason = partnerSettingsReason.trim();
+    if (reason.length < 3) { setMessage("请填写至少 3 个字的活动变更原因。"); return; }
+    if (!window.confirm(`确认${nextEnabled ? "开启" : "关闭"}合作伙伴计划？`)) return;
+    try {
+      const settings = await adminApi.savePartnerProgramSettings({ enabled: nextEnabled, confirmed: true, reason });
+      setPartnerSettings(settings);
+      setPartnerSettingsReason("");
+      setMessage(nextEnabled ? "合作伙伴计划已开启，首页入口和新加入立即恢复。" : "合作伙伴计划已关闭；首页入口和新加入已暂停，历史佣金与结算数据不受影响。");
+    } catch (error) { handleError(error); }
+  };
   const transitionPayout = async (row: Row, status: "approved" | "rejected" | "paid") => {
     const reason = window.prompt(status === "approved" ? "请输入批准原因" : status === "rejected" ? "请输入驳回原因" : "请输入支付说明");
     if (!reason || reason.trim().length < 3) return;
@@ -278,6 +292,7 @@ export function PromotionCenter({ permissions, onAuthenticationExpired }: { perm
     {message ? <div className={`promotion-message${failed ? " error" : ""}`} role={failed ? "alert" : "status"}><span>{message}</span>{failed ? <button type="button" onClick={() => void load()}>重试</button> : null}</div> : null}
     {loading ? <div className="loading">正在读取推广数据…</div> : null}
     {!loading && tab === "partners" ? <>
+      <section className="partner-activity-control" aria-label="合作伙伴计划活动开关"><div><span className={`status-badge ${partnerSettings.enabled ? "active" : "inactive"}`}>{partnerSettings.enabled ? "活动已开启" : "活动已关闭"}</span><h3>合作伙伴计划活动开关</h3><p>关闭后仅隐藏官网首页入口并停止新用户加入；历史推广链接、佣金、收款资料和人工结算记录全部保留。</p><small>配置版本 v{String(partnerSettings.configVersion ?? 0)}{partnerSettings.updatedAtMs ? ` · ${new Date(Number(partnerSettings.updatedAtMs)).toLocaleString("zh-CN")}` : ""}</small></div>{canManage ? <div><label>变更原因<input value={partnerSettingsReason} onChange={event => setPartnerSettingsReason(event.target.value)} placeholder="例如：活动阶段性暂停" /></label><button type="button" className={partnerSettings.enabled ? "secondary" : "primary"} onClick={() => void savePartnerActivity()}>{partnerSettings.enabled ? "关闭活动" : "开启活动"}</button></div> : null}</section>
       <div className="promotion-kpis" aria-label="合作伙伴结算总览">{([ ["eligibleOrderCount","可结算订单"], ["pendingOrderCount","观察中订单"], ["pendingCents","待确认佣金"], ["availableCents","可结算佣金"], ["reservedCents","已申请待打款"], ["paidCents","已结算"], ["reversedCents","退款冲正"], ["negativeCarryCents","负向结转"] ] as const).map(([key,label]) => <article key={key}><small>{label}</small><strong>{key.endsWith("Count") ? Number(partnerReconciliation[key] ?? 0).toLocaleString("zh-CN") : formatValue(key, partnerReconciliation[key])}</strong></article>)}</div>
       <div className="promotion-sort"><label>佣金订单状态<select value={commissionState} onChange={event => setCommissionState(event.target.value)}><option value="">全部</option><option value="pending">观察期内</option><option value="eligible">可结算</option><option value="reversed">存在退款冲正</option></select></label></div>
       <h3 className="promotion-subtitle">佣金订单明细</h3><Table rows={partnerCommissionOrders} empty="当前没有佣金订单记录。" />

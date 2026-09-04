@@ -19,6 +19,7 @@ const stubOverviewRequests = () => {
 };
 
 const stubPartnerRequests = () => {
+  vi.spyOn(adminApi, "partnerProgramSettings").mockResolvedValue({ enabled: true, configVersion: 1, updatedAtMs: 1 });
   vi.spyOn(adminApi, "partnerReconciliation").mockResolvedValue({ pendingCents: 100, availableCents: 200, reservedCents: 300, paidCents: 400, reversedCents: 50, negativeCarryCents: 0 });
   vi.spyOn(adminApi, "partnerCommissionOrders").mockResolvedValue({ items: [] });
 };
@@ -36,6 +37,22 @@ describe("promotion center shell", () => {
     expect(html).toContain('aria-label="归因模型"');
     expect(html).toContain('role="tab"');
     expect(html).toContain('aria-selected="true"');
+  });
+
+  it("lets promotion managers pause recruitment while explaining that finance history remains", async () => {
+    stubOverviewRequests(); stubPartnerRequests();
+    vi.spyOn(adminApi, "promotionPartners").mockResolvedValue({ items: [] });
+    vi.spyOn(adminApi, "partnerPayouts").mockResolvedValue({ items: [] });
+    const save = vi.spyOn(adminApi, "savePartnerProgramSettings").mockResolvedValue({ enabled: false, configVersion: 2, updatedAtMs: 2 });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<PromotionCenter permissions={["promotion.read", "promotion.manage"]} onAuthenticationExpired={() => undefined} />);
+    fireEvent.click(screen.getByRole("tab", { name: "合作伙伴" }));
+    await screen.findByText("活动已开启");
+    expect(screen.getByText(/历史推广链接、佣金、收款资料和人工结算记录全部保留/)).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText("例如：活动阶段性暂停"), { target: { value: "阶段活动结束" } });
+    fireEvent.click(screen.getByRole("button", { name: "关闭活动" }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith({ enabled: false, confirmed: true, reason: "阶段活动结束" }));
+    expect(await screen.findByText("活动已关闭")).toBeTruthy();
   });
 
   it("does not expose mutation forms to a read-only operator", () => {

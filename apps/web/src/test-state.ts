@@ -208,6 +208,11 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
     return { joined: false, config: { enabled: true, commissionRateBps: 2000, eligibleOrderDays: 90, refundHoldDays: 7, minimumPayoutCents: 10000, agreementVersion: "2026-09-v1", settlementMode: "manual-monthly" as const } };
   }
 
+  async getPartnerProgramConfig(signal?: AbortSignal) {
+    await delay(signal);
+    return { enabled: true, configVersion: 1, updatedAtMs: 0, commissionRateBps: 2000, eligibleOrderDays: 90, refundHoldDays: 7, minimumPayoutCents: 10000, agreementVersion: "2026-09-v1", settlementMode: "manual-monthly" as const, payoutProfileEnabled: false };
+  }
+
   async joinPartnerProgram(_agreementVersion: string, signal?: AbortSignal) {
     await delay(signal);
     return { joined: true, shareUrl: "https://example.test/r/syntheticPartner", config: { enabled: true, commissionRateBps: 2000, eligibleOrderDays: 90, refundHoldDays: 7, minimumPayoutCents: 10000, agreementVersion: "2026-09-v1", settlementMode: "manual-monthly" as const }, profile: { status: "active" as const, joinedAtMs: Date.now(), agreementVersion: "2026-09-v1" }, metrics: { validVisitors: 0, registrations: 0, payingUsers: 0, attributedReceiptsCents: 0 }, balances: { pendingCents: 0, availableCents: 0, reservedCents: 0, settledCents: 0, refreshedAtMs: null }, payouts: [] };
@@ -396,7 +401,7 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
           inference: "该建议来自测试适配器，用于模拟后端 Chat Service 返回。",
           uncertain: false,
           provenance: { selectionRevision: 0, usedSources: [] },
-  },
+        },
       },
       task: {
         id: taskId,

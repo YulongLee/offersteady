@@ -111,6 +111,8 @@ export const adminApi = {
   promotionCosts: () => request<{ items: Record<string, unknown>[] }>("/api/v1/admin/promotion/costs?limit=100&offset=0"),
   reversePromotionCost: (costEntryId: string, reason: string) => request<Record<string, unknown>>(`/api/v1/admin/promotion/costs/${encodeURIComponent(costEntryId)}/reverse`, { method: "POST", body: JSON.stringify({ reason }) }),
   promotionPartners: () => request<{ items: Record<string, unknown>[] }>("/api/v1/admin/promotion/partners?limit=100"),
+  partnerProgramSettings: () => request<{ enabled: boolean; configVersion: number; updatedAtMs: number }>("/api/v1/admin/promotion/partner-settings"),
+  savePartnerProgramSettings: (payload: { enabled: boolean; confirmed: boolean; reason: string }) => request<{ enabled: boolean; configVersion: number; updatedAtMs: number }>("/api/v1/admin/promotion/partner-settings", { method: "PUT", body: JSON.stringify(payload) }),
   partnerPayouts: () => request<{ items: Record<string, unknown>[] }>("/api/v1/admin/promotion/partner-payouts?limit=100"),
   partnerReconciliation: () => request<Record<string, number>>("/api/v1/admin/promotion/partner-reconciliation"),
   partnerCommissionOrders: (state = "") => request<{ items: Record<string, unknown>[] }>(`/api/v1/admin/promotion/partner-commission-orders?limit=100&offset=0${state ? `&state=${encodeURIComponent(state)}` : ""}`),

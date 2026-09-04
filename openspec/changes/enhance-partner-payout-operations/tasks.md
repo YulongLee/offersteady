@@ -33,3 +33,12 @@
 - [x] 5.4 Run backend suites, frontend tests/typechecks/builds, secret scans and strict OpenSpec validation
 - [x] 5.5 Document payout-data access, manual reconciliation, retention, key rotation, rollout and rollback procedures
 - [x] 5.6 Deploy with payout-profile collection disabled, configure the dedicated production key, verify a synthetic end-to-end flow, then enable without restarting interview data services
+
+## 6. Correct partner discovery and activity control
+
+- [x] 6.1 Remove the partner-program entry and styling from desktop and mobile authenticated workbench navigation
+- [x] 6.2 Add an additive versioned runtime activity setting with public read and audited administrator update APIs
+- [x] 6.3 Make the homepage bottom entry and new enrollment follow the runtime activity setting without changing historical partner accounting
+- [x] 6.4 Add Web, Admin and Backend regression tests for entry scope, permissions, toggle behavior and historical-data preservation
+- [x] 6.5 Run focused and full relevant test/typecheck/build suites plus strict OpenSpec validation
+- [ ] 6.6 Deploy during a zero-active-interview window and verify the homepage, workbench, admin switch and existing settlement data

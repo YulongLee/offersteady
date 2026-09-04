@@ -126,10 +126,44 @@ class PartnerProgramRepository:
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0038_promotion_center.sql",
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0039_partner_program.sql",
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0040_partner_payout_operations.sql",
+            Path(REPO_ROOT) / "apps/backend/migrations/versions/0042_partner_program_activity_settings.sql",
         ]
         with self.connect() as connection, connection.cursor() as cursor:
             apply_sql_migrations(cursor, migrations)
             connection.commit()
+
+    def activity_settings(self) -> dict[str, Any]:
+        with self.connect(readonly=True) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT enabled,config_version,updated_by_user_id,updated_at_ms
+                   FROM partner_program_settings WHERE settings_id='default'"""
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise RuntimeError("partner_program_settings_missing")
+            return dict(row)
+
+    def update_activity_settings(
+        self,
+        *,
+        enabled: bool,
+        updated_by_user_id: str,
+        updated_at_ms: int | None = None,
+    ) -> dict[str, Any]:
+        current = updated_at_ms or now_ms()
+        with self.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """UPDATE partner_program_settings
+                   SET enabled=%s,config_version=config_version+1,updated_by_user_id=%s,updated_at_ms=%s
+                   WHERE settings_id='default'
+                   RETURNING enabled,config_version,updated_by_user_id,updated_at_ms""",
+                (enabled, updated_by_user_id, current),
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise RuntimeError("partner_program_settings_missing")
+            connection.commit()
+            return dict(row)
 
     def payout_profile(self, *, user_id: str) -> dict[str, Any] | None:
         with self.connect(readonly=True) as connection, connection.cursor() as cursor:
@@ -207,6 +241,10 @@ class PartnerProgramRepository:
     def join(self, *, user_id: str, agreement_version: str, joined_at_ms: int | None = None) -> dict[str, Any]:
         current = joined_at_ms or now_ms()
         with self.connect() as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT enabled FROM partner_program_settings WHERE settings_id='default' FOR SHARE")
+            activity = cursor.fetchone()
+            if not activity or not bool(activity["enabled"]):
+                raise RuntimeError("partner_program_disabled")
             cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (f"partner:{user_id}",))
             cursor.execute(
                 """SELECT p.*,l.slug FROM partner_profiles p JOIN promotion_links l ON l.link_id=p.promotion_link_id

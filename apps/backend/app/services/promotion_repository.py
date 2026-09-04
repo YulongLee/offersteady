@@ -129,6 +129,7 @@ class PromotionRepository:
         migrations = [Path(REPO_ROOT) / "apps/backend/migrations/versions/0038_promotion_center.sql"]
         if self.settings.partner_program_enabled:
             migrations.append(Path(REPO_ROOT) / "apps/backend/migrations/versions/0039_partner_program.sql")
+            migrations.append(Path(REPO_ROOT) / "apps/backend/migrations/versions/0042_partner_program_activity_settings.sql")
         with self.connect() as connection, connection.cursor() as cursor:
             apply_sql_migrations(cursor, migrations)
             connection.commit()

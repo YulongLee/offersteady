@@ -192,19 +192,23 @@ export interface ReferralActivationResult {
   readonly activatedAtMs?: number;
 }
 
+export interface PartnerProgramConfig {
+  readonly enabled: boolean;
+  readonly configVersion?: number;
+  readonly updatedAtMs?: number;
+  readonly commissionRateBps: number;
+  readonly eligibleOrderDays: number;
+  readonly refundHoldDays: number;
+  readonly minimumPayoutCents: number;
+  readonly agreementVersion: string;
+  readonly settlementMode: "manual-monthly";
+  readonly payoutProfileEnabled?: boolean;
+}
+
 export interface PartnerProgramState {
   readonly joined: boolean;
   readonly shareUrl?: string;
-  readonly config: {
-    readonly enabled: boolean;
-    readonly commissionRateBps: number;
-    readonly eligibleOrderDays: number;
-    readonly refundHoldDays: number;
-    readonly minimumPayoutCents: number;
-    readonly agreementVersion: string;
-    readonly settlementMode: "manual-monthly";
-    readonly payoutProfileEnabled?: boolean;
-  };
+  readonly config: PartnerProgramConfig;
   readonly profile?: { readonly status: "active" | "suspended" | "closed"; readonly joinedAtMs: number; readonly agreementVersion: string };
   readonly metrics?: { readonly validVisitors: number; readonly registrations: number; readonly payingUsers: number; readonly attributedReceiptsCents: number };
   readonly balances?: { readonly pendingCents: number; readonly availableCents: number; readonly reservedCents: number; readonly settledCents: number; readonly refreshedAtMs: number | null };
@@ -301,6 +305,7 @@ export interface InterviewAppAdapter {
   getReferralStatus(signal?: AbortSignal): Promise<ReferralStatus>;
   resolveReferral(code: string, signal?: AbortSignal): Promise<{ valid: boolean; enabled: boolean; rewardPoints?: number; inviterRewardPoints?: number; inviteeRewardPoints?: number; activationWindowDays?: number }>;
   activateReferral(code: string, signal?: AbortSignal): Promise<ReferralActivationResult>;
+  getPartnerProgramConfig(signal?: AbortSignal): Promise<PartnerProgramConfig>;
   getPartnerProgram(signal?: AbortSignal): Promise<PartnerProgramState>;
   joinPartnerProgram(agreementVersion: string, signal?: AbortSignal): Promise<PartnerProgramState>;
   requestPartnerPayout(signal?: AbortSignal): Promise<{ readonly payoutRequestId: string; readonly amountCents: number; readonly status: string }>;

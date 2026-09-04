@@ -14,9 +14,24 @@ describe("partner program", () => {
 
   it("exposes the homepage entry without enrolling the visitor", async () => {
     const join = vi.spyOn(interviewAppAdapter, "joinPartnerProgram");
+    vi.spyOn(interviewAppAdapter, "getPartnerProgramConfig").mockResolvedValue({ enabled: true, configVersion: 1, commissionRateBps: 2000, eligibleOrderDays: 90, refundHoldDays: 7, minimumPayoutCents: 10000, agreementVersion: "2026-09-v1", settlementMode: "manual-monthly" });
     render(<App initialAuthenticated={false} initialState={syntheticState} />);
-    expect(await screen.findByRole("link", { name: "合作伙伴计划" })).toHaveAttribute("href", "/app/partner-program");
+    expect(await screen.findByRole("link", { name: /了解合作伙伴计划/ })).toHaveAttribute("href", "/app/partner-program");
     expect(join).not.toHaveBeenCalled();
+  });
+
+  it("hides the homepage entry when the operator pauses the activity", async () => {
+    vi.spyOn(interviewAppAdapter, "getPartnerProgramConfig").mockResolvedValue({ enabled: false, configVersion: 2, commissionRateBps: 2000, eligibleOrderDays: 90, refundHoldDays: 7, minimumPayoutCents: 10000, agreementVersion: "2026-09-v1", settlementMode: "manual-monthly" });
+    render(<App initialAuthenticated={false} initialState={syntheticState} />);
+    await waitFor(() => expect(interviewAppAdapter.getPartnerProgramConfig).toHaveBeenCalled());
+    expect(screen.queryByRole("link", { name: /合作伙伴计划/ })).toBeNull();
+  });
+
+  it("does not add the partner program to authenticated workbench navigation", async () => {
+    window.history.replaceState({}, "", "/app");
+    render(<App initialAuthenticated initialState={syntheticState} />);
+    expect(await screen.findByRole("heading", { name: "继续这场面试" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "合作伙伴计划" })).toBeNull();
   });
 
   it("requires explicit agreement before joining", async () => {

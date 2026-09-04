@@ -1070,6 +1070,7 @@ class PostgresBillingRepository:
             migrations.extend((
                 Path(REPO_ROOT / "apps/backend/migrations/versions/0038_promotion_center.sql"),
                 Path(REPO_ROOT / "apps/backend/migrations/versions/0039_partner_program.sql"),
+                Path(REPO_ROOT / "apps/backend/migrations/versions/0042_partner_program_activity_settings.sql"),
             ))
         with self._connect() as connection, connection.cursor() as cursor:
             apply_sql_migrations(cursor, migrations)

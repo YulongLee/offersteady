@@ -1285,6 +1285,10 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     return this.client.request<PartnerProgramState>("/api/v1/partner-program/me", { headers: authHeaders() }, signal);
   }
 
+  async getPartnerProgramConfig(signal?: AbortSignal): Promise<PartnerProgramState["config"]> {
+    return this.client.request<PartnerProgramState["config"]>("/api/v1/partner-program/config", undefined, signal);
+  }
+
   async joinPartnerProgram(agreementVersion: string, signal?: AbortSignal): Promise<PartnerProgramState> {
     return this.client.request<PartnerProgramState>("/api/v1/partner-program/join", {
       method: "POST", headers: authHeaders(), body: JSON.stringify({ agreementVersion, agreementAccepted: true }),

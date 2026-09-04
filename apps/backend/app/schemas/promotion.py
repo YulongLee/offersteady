@@ -114,6 +114,12 @@ class PartnerJoinRequest(PromotionModel):
     agreement_accepted: bool
 
 
+class PartnerProgramSettingsUpdate(PromotionModel):
+    enabled: bool
+    confirmed: bool
+    reason: str = Field(min_length=3, max_length=500)
+
+
 class PartnerPayoutProfileUpsert(PromotionModel):
     payout_method: Literal["alipay", "wechat"]
     account_name: str = Field(min_length=2, max_length=80)
