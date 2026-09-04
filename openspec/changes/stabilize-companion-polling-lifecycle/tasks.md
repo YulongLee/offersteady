@@ -20,6 +20,6 @@
 - [x] 4.1 Run focused Desktop and Backend regression tests
 - [x] 4.2 Run full Desktop and Backend tests, typechecks and production builds without including unrelated Global changes in the domestic artifact
 - [x] 4.3 Run strict OpenSpec validation and record the executed verification
-- [ ] 4.4 Capture the current production rollback baseline and confirm active interviews are zero
-- [ ] 4.5 Package and publish domestic Companion 1.2.14 for supported platforms, deploy only required domestic services, and run public health/download/core smoke tests
-- [ ] 4.6 Compare privacy-safe request rate, ordinary API P95 and errors after rollout
+- [x] 4.4 Capture the current production rollback baseline and confirm active interviews are zero
+- [x] 4.5 Package and publish domestic Companion 1.2.14 for supported platforms, deploy only required domestic services, and run public health/download/core smoke tests
+- [x] 4.6 Compare privacy-safe request rate, ordinary API P95 and errors after rollout

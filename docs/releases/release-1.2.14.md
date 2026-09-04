@@ -28,3 +28,12 @@ Release 1.2.14 reduces stale Companion control-plane traffic without changing au
 ## Rollout boundary
 
 Publish all immutable versioned artifacts before switching the backend release manifest. Immediately before replacing the domestic backend, confirm no realtime-active interview from recent database activity and runtime transport state. Preserve the prior backend image and 1.2.13 manifest for rollback; do not restart Web, Admin, PostgreSQL, Redis or Analytics.
+
+## Production deployment
+
+- Deployment completed from source/manifest commit `b8b7972ab5b6a31f7301c402b400a8677af37b6b` after the final zero-active-interview gate passed.
+- Previous Backend image retained as `offersteady-backend:rollback-b8b7972-pre-1.2.14`.
+- Only Backend was recreated; Web, Admin, PostgreSQL, Redis, Analytics and Promotion Analytics were not restarted.
+- Public health, application, Web state and build-manifest routes returned HTTP 200.
+- The public manifest reports all three targets at 1.2.14, and all three download routes returned HTTP 206 byte-range responses.
+- The first five-minute aggregate sample recorded 245.4 ordinary requests/minute, API P50 3.62 ms, P95 18.41 ms, P99 70.49 ms, max 607.04 ms and zero observed server errors.
