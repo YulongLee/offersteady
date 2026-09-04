@@ -3,6 +3,7 @@ import type { CaptureState } from "@offersteady/protocol" with { "resolution-mod
 
 contextBridge.exposeInMainWorld("offersteady", {
   publishCaptureState: (state: CaptureState) => ipcRenderer.send("capture:set-state", state),
+  publishScreenshotBinding: (binding: { sessionId: string; bindingId: string } | null) => ipcRenderer.send("desktop:screenshot-binding", binding),
   publishRendererReliabilityHeartbeat: (heartbeat: Record<string, unknown>) => ipcRenderer.send("desktop:renderer-reliability-heartbeat", heartbeat),
   publishRealtimeTransportDiagnostics: (snapshot: Record<string, unknown>) => ipcRenderer.send("desktop:realtime-transport-diagnostics", snapshot),
   getRendererRecoveryContext: () => ipcRenderer.invoke("desktop:get-renderer-recovery-context"),

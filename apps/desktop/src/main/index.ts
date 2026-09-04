@@ -8,6 +8,8 @@ import { DevicePairingIdentityStore } from "./device-pairing";
 import { DEFAULT_SCREENSHOT_SHORTCUT, SCREENSHOT_SHORTCUT_OPTIONS, ScreenshotShortcutStore, isSupportedScreenshotShortcut } from "./screenshot-shortcut";
 import { desktopPollDelayMs } from "./polling-policy";
 import {
+  screenshotBindingKey,
+  screenshotBindingTransition,
   screenshotStreamAdmissionAction,
   screenshotStreamEligible,
   screenshotStreamSuspensionTransition,
@@ -79,6 +81,7 @@ let remoteScreenshotPollFailureCount = 0;
 let remoteScreenshotStreamController: AbortController | null = null;
 let remoteScreenshotLoopGeneration = 0;
 let remoteScreenshotSuspended = false;
+let remoteScreenshotBindingKey: string | null = null;
 let displayMediaFailureBackoffUntil = 0;
 let rendererRecoveryAttempts: readonly number[] = [];
 let rendererRecoveryResetTimer: NodeJS.Timeout | null = null;
@@ -1276,6 +1279,19 @@ ipcMain.on("capture:set-state", (_event, state: CaptureState) => {
     : "preserve";
   if (transition === "start" || suspendedTransition === "resume") startRemoteScreenshotRequestLoop();
   else if (transition === "stop") stopRemoteScreenshotRequestLoop();
+});
+
+ipcMain.on("desktop:screenshot-binding", (_event, binding: { sessionId?: unknown; bindingId?: unknown } | null) => {
+  const normalizedBinding = binding
+    && typeof binding.sessionId === "string"
+    && typeof binding.bindingId === "string"
+    ? { sessionId: binding.sessionId, bindingId: binding.bindingId }
+    : null;
+  const nextBindingKey = screenshotBindingKey(normalizedBinding);
+  const transition = screenshotBindingTransition(remoteScreenshotBindingKey, nextBindingKey, remoteScreenshotSuspended);
+  remoteScreenshotBindingKey = nextBindingKey;
+  if (transition === "stop") stopRemoteScreenshotRequestLoop();
+  else if (transition === "restart" && screenshotStreamEligible(captureState)) startRemoteScreenshotRequestLoop();
 });
 
 ipcMain.on("desktop:renderer-reliability-heartbeat", (event, heartbeat: RendererReliabilityHeartbeat) => {

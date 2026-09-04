@@ -17,3 +17,21 @@ export const screenshotStreamSuspensionTransition = (previous: CaptureState, nex
   previous !== next && next !== "reconnecting" && screenshotStreamEligible(next)
     ? "resume" as const
     : "preserve" as const;
+
+export interface ScreenshotBindingIdentity {
+  readonly sessionId: string;
+  readonly bindingId: string;
+}
+
+export const screenshotBindingKey = (binding: ScreenshotBindingIdentity | null) =>
+  binding?.sessionId && binding.bindingId ? `${binding.sessionId}:${binding.bindingId}` : null;
+
+export const screenshotBindingTransition = (
+  previousKey: string | null,
+  nextKey: string | null,
+  suspended: boolean,
+) => {
+  if (!nextKey) return previousKey ? "stop" as const : "preserve" as const;
+  if (suspended || nextKey !== previousKey) return "restart" as const;
+  return "preserve" as const;
+};

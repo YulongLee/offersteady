@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  screenshotBindingKey,
+  screenshotBindingTransition,
   screenshotStreamAdmissionAction,
   screenshotStreamEligible,
   screenshotStreamSuspensionTransition,
@@ -36,5 +38,24 @@ describe("screenshot stream lifecycle policy", () => {
     expect(screenshotStreamSuspensionTransition("capturing", "capturing")).toBe("preserve");
     expect(screenshotStreamSuspensionTransition("ready", "reconnecting")).toBe("preserve");
     expect(screenshotStreamSuspensionTransition("reconnecting", "ready")).toBe("preserve");
+  });
+
+  it("restarts a suspended stream when the same authoritative binding is republished", () => {
+    const key = screenshotBindingKey({ sessionId: "session-1", bindingId: "binding-1" });
+    expect(screenshotBindingTransition(key, key, true)).toBe("restart");
+  });
+
+  it("replaces a changed binding without duplicating a healthy owner", () => {
+    const first = screenshotBindingKey({ sessionId: "session-1", bindingId: "binding-1" });
+    const second = screenshotBindingKey({ sessionId: "session-2", bindingId: "binding-2" });
+    expect(screenshotBindingTransition(first, first, false)).toBe("preserve");
+    expect(screenshotBindingTransition(first, second, false)).toBe("restart");
+  });
+
+  it("stops when authoritative pairing state no longer has a valid binding", () => {
+    const key = screenshotBindingKey({ sessionId: "session-1", bindingId: "binding-1" });
+    expect(screenshotBindingKey({ sessionId: "", bindingId: "binding-1" })).toBeNull();
+    expect(screenshotBindingTransition(key, null, false)).toBe("stop");
+    expect(screenshotBindingTransition(null, null, true)).toBe("preserve");
   });
 });
