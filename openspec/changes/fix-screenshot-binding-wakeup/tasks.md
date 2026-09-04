@@ -14,6 +14,6 @@
 
 ## 3. Safe production rollout
 
-- [ ] 3.1 Publish immutable 1.2.15 artifacts and update only the domestic release manifest.
+- [x] 3.1 Publish immutable 1.2.15 artifacts and update only the domestic release manifest.
 - [ ] 3.2 Confirm zero active interviews immediately before deployment.
 - [ ] 3.3 Deploy the domestic backend manifest update and verify health, downloads and initial error/latency metrics.
