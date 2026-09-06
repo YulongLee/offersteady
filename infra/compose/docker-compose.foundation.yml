@@ -54,6 +54,7 @@ services:
       OFFERSTEADY_REALTIME_ASR_MAX_SENTENCE_SILENCE_MS: ${OFFERSTEADY_REALTIME_ASR_MAX_SENTENCE_SILENCE_MS:-300}
       OFFERSTEADY_REALTIME_ASR_FINALIZE_TIMEOUT_SECONDS: ${OFFERSTEADY_REALTIME_ASR_FINALIZE_TIMEOUT_SECONDS:-2.0}
       OFFERSTEADY_REALTIME_ASR_COMMIT_SILENCE_MS: ${OFFERSTEADY_REALTIME_ASR_COMMIT_SILENCE_MS:-0}
+      OFFERSTEADY_DOCUMENT_PROCESSING_INLINE_WORKER_ENABLED: "false"
       OFFERSTEADY_OSS_BUCKET: ${OFFERSTEADY_OSS_BUCKET:-local-materials}
       OFFERSTEADY_OSS_ENDPOINT: ${OFFERSTEADY_OSS_ENDPOINT:-https://oss-cn-hangzhou.aliyuncs.com}
       OFFERSTEADY_OSS_REGION: ${OFFERSTEADY_OSS_REGION:-cn-hangzhou}
@@ -71,6 +72,31 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+
+  material-worker:
+    build:
+      context: ../..
+      dockerfile: infra/docker/backend.Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}
+        PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-mirrors.aliyun.com}
+    command: ["python", "-m", "app.worker", "--interval-seconds", "2"]
+    working_dir: /app/apps/backend
+    env_file:
+      - ../../${OFFERSTEADY_ENV_FILE:-.env.production}
+    environment:
+      OFFERSTEADY_ENV: ${OFFERSTEADY_ENV:-development}
+      OFFERSTEADY_DATABASE_URL: ${OFFERSTEADY_DATABASE_URL:-postgresql://offersteady:offersteady@postgres:5432/offersteady}
+      OFFERSTEADY_REDIS_URL: ${OFFERSTEADY_REDIS_URL:-redis://redis:6379/0}
+      OFFERSTEADY_DOCUMENT_PROCESSING_INLINE_WORKER_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    cpus: "0.75"
+    mem_limit: 768m
+    restart: unless-stopped
 
   analytics:
     build:

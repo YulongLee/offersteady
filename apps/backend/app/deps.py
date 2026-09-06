@@ -41,7 +41,8 @@ from .services.document_processing_adapters import (
 )
 from .services.embedding_pipeline import EmbeddingPipelineService, ProcessingTaskEmbeddingStatusReporter
 from .services.document_parser import DocumentParserService, ProcessingTaskParserStatusReporter
-from .services.document_processing_repository import InMemoryProcessingTaskRepository
+from .services.document_processing_repository import InMemoryProcessingTaskRepository, PostgresProcessingTaskRepository
+from .services.upload_intent_repository import InMemoryUploadIntentRepository, PostgresUploadIntentRepository
 from .services.chat_repository import InMemoryChatRepository
 from .services.chat_service import ChatService, FilePromptTemplateAdapter, InterviewPromptBuilder, QwenCompatibleGateway
 from .services.authentication_repository import InMemoryAuthenticationRepository
@@ -106,7 +107,19 @@ def logger():
 
 @lru_cache(maxsize=1)
 def storage_port() -> FileStoragePort:
-    return AliyunOssStorageAdapter(get_settings())
+    settings = get_settings()
+    if settings.environment == "production" and not settings.database_url:
+        raise RuntimeError("OFFERSTEADY_DATABASE_URL is required for production upload intent persistence")
+    if settings.database_url and not os.environ.get("PYTEST_CURRENT_TEST"):
+        intent_repository = _fallback_to_memory_repository(
+            logger_key="upload_intent_repository",
+            environment=settings.environment,
+            build_postgres=lambda: PostgresUploadIntentRepository(settings),
+            fallback=lambda: InMemoryUploadIntentRepository(),
+        )
+    else:
+        intent_repository = InMemoryUploadIntentRepository()
+    return AliyunOssStorageAdapter(settings, intent_repository=intent_repository)
 
 
 T = TypeVar("T")
@@ -498,6 +511,16 @@ def realtime_speech_service() -> RealtimeSpeechService:
 
 @lru_cache(maxsize=1)
 def processing_task_repository() -> ProcessingTaskRepository:
+    settings = get_settings()
+    if settings.environment == "production" and not settings.database_url:
+        raise RuntimeError("OFFERSTEADY_DATABASE_URL is required for production processing task persistence")
+    if settings.database_url and not os.environ.get("PYTEST_CURRENT_TEST"):
+        return _fallback_to_memory_repository(
+            logger_key="processing_task_repository",
+            environment=settings.environment,
+            build_postgres=lambda: PostgresProcessingTaskRepository(settings),
+            fallback=lambda: InMemoryProcessingTaskRepository(),
+        )
     return InMemoryProcessingTaskRepository()
 
 

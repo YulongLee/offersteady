@@ -46,8 +46,23 @@ class MineruDocumentParserAdapter(DocumentParserPort):
         if should_use_remote_mineru:
             try:
                 return self._parse_with_mineru(context=context, payload=payload)
+            except httpx.TimeoutException as exc:
+                raise RuntimeError("MinerU parsing failed: provider_timeout") from exc
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                if status == 429:
+                    safe_code = "provider_rate_limited"
+                elif status >= 500:
+                    safe_code = "provider_unavailable"
+                else:
+                    safe_code = "provider_rejected_document"
+                raise RuntimeError(f"MinerU parsing failed: {safe_code}") from exc
+            except httpx.HTTPError as exc:
+                raise RuntimeError("MinerU parsing failed: provider_network_error") from exc
+            except ValueError as exc:
+                raise RuntimeError("MinerU parsing failed: provider_invalid_result") from exc
             except Exception as exc:
-                raise RuntimeError(f"MinerU parsing failed with {exc.__class__.__name__}") from exc
+                raise RuntimeError("MinerU parsing failed: provider_unexpected_error") from exc
         return self._parse_placeholder(context=context, payload=payload)
 
     def _parse_with_mineru(self, *, context: DocumentParserContext, payload: bytes) -> ParsedDocument:

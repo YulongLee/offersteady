@@ -106,3 +106,7 @@ The system SHOULD persist processing, deletion and reconciliation jobs with retr
 The system SHOULD keep model responsibilities separated through adapters: MinerU for parsing, qwen3-vl for screenshot/photo recognition, text-embedding-v3 for embeddings, qwen3-rerank for reranking and deepseek-v4-flash for final answer generation. These adapters must remain backend-only and configurable without exposing provider credentials to the frontend.
 
 The system SHOULD record safe AI usage and RAG retrieval traces for billing, cost control and debugging. These records must not store raw resume text, JD text, screenshot images, full prompts, embeddings or provider payloads.
+
+Production execution uses PostgreSQL as the durable queue source for material processing. Upload intents, processing tasks, task events and commercial processing jobs survive API and Worker replacement. The API writes the task/job and returns; a separately deployed single-concurrency Worker claims jobs with `FOR UPDATE SKIP LOCKED`. A bounded lease recovers abandoned `running` jobs, while deterministic task/job IDs and existing billing settlement idempotency prevent duplicate processing charges.
+
+The API keeps the existing request and response contracts. Synchronous OSS fallback writes and Knowledge quote parsing are dispatched outside the async event loop so provider latency does not stall unrelated realtime control requests. This is an isolation step; a later product change may introduce a fully asynchronous quote-status flow if user-visible quote waiting remains material.

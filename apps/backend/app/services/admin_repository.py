@@ -1013,7 +1013,7 @@ class AdminRepository:
         return self._one(
             """
             SELECT task_id, owner_user_id, document_id, current_stage
-            FROM processing_tasks WHERE task_id = %s
+            FROM material_processing_tasks WHERE task_id = %s
             """,
             (task_id,),
         )

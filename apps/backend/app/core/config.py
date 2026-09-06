@@ -87,6 +87,8 @@ class Settings(BaseSettings):
     embedding_pipeline_knowledge_chunk_overlap: int = 180
     document_processing_max_retries: int = 2
     document_processing_retry_backoff_ms: int = 200
+    document_processing_inline_worker_enabled: bool = True
+    document_processing_job_lease_seconds: int = 900
     retrieval_query_embedding_provider: str = "synthetic-query-embedding"
     retrieval_candidate_top_k: int = 6
     retrieval_final_top_k: int = 3

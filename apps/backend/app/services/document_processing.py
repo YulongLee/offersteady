@@ -21,7 +21,6 @@ from app.ports.document_repository import DocumentRecord, DocumentRepository
 from app.services.embedding_pipeline import EmbeddingExecutionError, EmbeddingPipelineService
 from app.services.document_parser import DocumentParserService, ParserExecutionError
 from app.services.material_availability import MaterialAvailabilityValidator
-from app.services.commercial_hardening import job_id
 from app.services.billing_service import BillingService
 from app.services.knowledge_index_quote import estimate_normalized_markdown_tokens
 
@@ -72,7 +71,7 @@ class DocumentProcessingService:
         self._require_supported_document_kind(document.document_kind)
         now_ms = _now_ms()
         uploaded = ProcessingTaskRecord(
-            task_id=f"task-{uuid4().hex}",
+            task_id=f"task-{document.document_version_id or document.document_id}",
             document_id=document.document_id,
             owner_user_id=document.owner_user_id,
             document_kind=document.document_kind,
@@ -91,8 +90,9 @@ class DocumentProcessingService:
         queued = self.task_repository.save_task(queued)
         self._record_event(queued, event_name="task_queued")
         self._enqueue_durable_processing_job(document=document, task=queued, now_ms=now_ms)
-        self._ensure_worker()
-        self.queue.put(queued.task_id)
+        if self._inline_worker_enabled():
+            self._ensure_worker()
+            self.queue.put(queued.task_id)
         return queued
 
     def retry_task(self, *, task_id: str, user_id: str) -> ProcessingTaskRecord:
@@ -136,13 +136,66 @@ class DocumentProcessingService:
         saved = self.task_repository.save_task(reset)
         self._record_event(saved, event_name="task_requeued_manual")
         self._save_document(document, status="processing_requested", summary="文档已重新进入处理队列，等待后台处理。")
-        self._ensure_worker()
-        self.queue.put(saved.task_id)
+        self._enqueue_durable_processing_job(document=document, task=saved, now_ms=_now_ms())
+        if self._inline_worker_enabled():
+            self._ensure_worker()
+            self.queue.put(saved.task_id)
         return saved
 
     def parse_document_for_quote(self, *, document: DocumentRecord) -> str:
         self._require_supported_document_kind(document.document_kind)
         return self.parser_service.parse_for_quote(document=document).markdown
+
+    def recover_task_for_job(self, job: CommercialJobRecord) -> ProcessingTaskRecord | None:
+        if not job.related_task_id or not job.document_id:
+            return None
+        existing = self.task_repository.get_task(job.related_task_id)
+        if existing is not None:
+            if existing.current_stage == "COMPLETED":
+                self._complete_durable_processing_job(task_id=existing.task_id, now_ms=_now_ms(), stage="COMPLETED")
+            return existing
+        document = self.document_repository.get_by_id(job.document_id)
+        if document is None or document.owner_user_id != job.owner_user_id:
+            return None
+        now_ms = _now_ms()
+        if document.status == "ready":
+            stage = "COMPLETED"
+        elif document.status == "deleted":
+            stage = "FAILED"
+        else:
+            stage = "QUEUED"
+        recovered = ProcessingTaskRecord(
+            task_id=job.related_task_id,
+            document_id=document.document_id,
+            owner_user_id=document.owner_user_id,
+            document_kind=document.document_kind,
+            current_stage=stage,
+            retry_count=job.retry_count,
+            max_retries=job.max_retries,
+            parser_provider=str(job.payload.get("parserProvider") or self.settings.document_processing_parser_provider),
+            embedding_provider=str(job.payload.get("embeddingProvider") or self.settings.document_processing_embedding_provider),
+            error_code="document_deleted" if stage == "FAILED" else None,
+            error_message="资料已删除，处理任务已停止。" if stage == "FAILED" else None,
+            created_at_ms=job.created_at_ms or now_ms,
+            updated_at_ms=now_ms,
+            queued_at_ms=now_ms if stage == "QUEUED" else None,
+            completed_at_ms=now_ms if stage in {"COMPLETED", "FAILED"} else None,
+            billing_quote_id=str(job.payload.get("billingQuoteId")) if job.payload.get("billingQuoteId") else None,
+        )
+        saved = self.task_repository.save_task(recovered)
+        self._record_event(saved, event_name="task_recovered_from_durable_job", error_code=saved.error_code)
+        if saved.current_stage == "COMPLETED":
+            self._complete_durable_processing_job(task_id=saved.task_id, now_ms=now_ms, stage="COMPLETED")
+        elif saved.current_stage == "FAILED":
+            self._fail_durable_processing_job(
+                task_id=saved.task_id,
+                now_ms=now_ms,
+                safe_error_code=saved.error_code or "processing_task_recovery_failed",
+                retryable=False,
+            )
+        else:
+            self._save_document(document, status="processing_requested", summary="资料处理任务已自动恢复，等待后台继续处理。")
+        return saved
 
     def get_task(self, *, task_id: str, user_id: str) -> ProcessingTaskRecord:
         task = self.task_repository.get_task(task_id)
@@ -163,15 +216,19 @@ class DocumentProcessingService:
         tasks = self.task_repository.list_tasks_for_user(user_id=user_id, document_id=document_id)
         return tasks[0] if tasks else None
 
-    def process_task(self, task_id: str) -> None:
+    def process_task(self, task_id: str) -> ProcessingTaskRecord | None:
         task = self.task_repository.get_task(task_id)
         if task is None:
-            return
+            return None
+        if task.current_stage == "COMPLETED":
+            self._complete_durable_processing_job(task_id=task.task_id, now_ms=_now_ms(), stage="COMPLETED")
+            return task
         document = self.document_repository.get_by_id(task.document_id)
         if document is None:
             failed = self._fail_task(task, "document_missing", "关联文档不存在。", retryable=False)
             self._record_event(failed, event_name="task_failed", error_code=failed.error_code)
-            return
+            self._fail_durable_processing_job(task_id=failed.task_id, now_ms=_now_ms(), safe_error_code="document_missing", retryable=False)
+            return failed
         started_at = _now_ms()
         current_task = task
         try:
@@ -192,7 +249,9 @@ class DocumentProcessingService:
             latest_document = self.document_repository.get_by_id(document.document_id)
             if latest_document is None or latest_document.status == "deleted":
                 self._release_index_reservation(current_task)
-                return
+                cancelled = self._fail_task(current_task, "document_deleted", "资料已删除，处理任务已停止。", retryable=False)
+                self._fail_durable_processing_job(task_id=cancelled.task_id, now_ms=_now_ms(), safe_error_code="document_deleted", retryable=False)
+                return cancelled
             if document.document_kind == "knowledge":
                 if not document.document_version_id or self.billing_service is None:
                     raise RuntimeError("knowledge_index_billing_unavailable")
@@ -224,8 +283,7 @@ class DocumentProcessingService:
             self._record_event(failed, event_name="task_failed", error_code=failed.error_code)
             if failed.current_stage == "QUEUED":
                 self._fail_durable_processing_job(task_id=failed.task_id, now_ms=_now_ms(), safe_error_code=failed.error_code or "parser_failed", retryable=True)
-                sleep(self.settings.document_processing_retry_backoff_ms / 1000)
-                self.queue.put(failed.task_id)
+                self._schedule_inline_retry(failed.task_id)
             else:
                 self._fail_durable_processing_job(task_id=failed.task_id, now_ms=_now_ms(), safe_error_code=failed.error_code or "parser_failed", retryable=False)
                 self._save_document(document, status="failed", summary="文档解析失败，可稍后重试。")
@@ -241,8 +299,7 @@ class DocumentProcessingService:
             self._record_event(failed, event_name="task_failed", error_code=failed.error_code)
             if failed.current_stage == "QUEUED":
                 self._fail_durable_processing_job(task_id=failed.task_id, now_ms=_now_ms(), safe_error_code=failed.error_code or "embedding_failed", retryable=True)
-                sleep(self.settings.document_processing_retry_backoff_ms / 1000)
-                self.queue.put(failed.task_id)
+                self._schedule_inline_retry(failed.task_id)
             else:
                 self._fail_durable_processing_job(task_id=failed.task_id, now_ms=_now_ms(), safe_error_code=failed.error_code or "embedding_failed", retryable=False)
                 self._save_document(document, status="failed", summary="文档向量化失败，可稍后重试。")
@@ -252,12 +309,12 @@ class DocumentProcessingService:
             self._record_event(failed, event_name="task_failed", error_code=failed.error_code)
             if failed.current_stage == "QUEUED":
                 self._fail_durable_processing_job(task_id=failed.task_id, now_ms=_now_ms(), safe_error_code=failed.error_code or "processing_failed", retryable=True)
-                sleep(self.settings.document_processing_retry_backoff_ms / 1000)
-                self.queue.put(failed.task_id)
+                self._schedule_inline_retry(failed.task_id)
             else:
                 self._fail_durable_processing_job(task_id=failed.task_id, now_ms=_now_ms(), safe_error_code=failed.error_code or "processing_failed", retryable=False)
                 self._save_document(document, status="failed", summary="文档处理失败，可稍后重试。")
                 self._release_index_reservation(failed)
+        return self.task_repository.get_task(task_id)
 
     def _release_index_reservation(self, task: ProcessingTaskRecord) -> None:
         if task.document_kind != "knowledge" or self.billing_service is None:
@@ -347,7 +404,7 @@ class DocumentProcessingService:
             return
         self.commercial_repository.enqueue_processing_job(
             CommercialJobRecord(
-                job_id=job_id("processing"),
+                job_id=f"processing-{task.task_id}",
                 owner_user_id=document.owner_user_id,
                 job_kind="processing",
                 status="queued",
@@ -362,6 +419,7 @@ class DocumentProcessingService:
                     "fileKind": document.file_kind,
                     "parserProvider": task.parser_provider,
                     "embeddingProvider": task.embedding_provider,
+                    "billingQuoteId": task.billing_quote_id or "",
                 },
                 created_at_ms=now_ms,
                 updated_at_ms=now_ms,
@@ -381,6 +439,15 @@ class DocumentProcessingService:
                 safe_error_code=safe_error_code,
                 retryable=retryable,
             )
+
+    def _inline_worker_enabled(self) -> bool:
+        return self.settings.environment != "production" and self.settings.document_processing_inline_worker_enabled
+
+    def _schedule_inline_retry(self, task_id: str) -> None:
+        if not self._inline_worker_enabled():
+            return
+        sleep(self.settings.document_processing_retry_backoff_ms / 1000)
+        self.queue.put(task_id)
 
     def _save_document(self, document: DocumentRecord, *, status: str, summary: str) -> DocumentRecord:
         index_state = document.index_state

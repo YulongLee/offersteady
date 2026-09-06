@@ -15,7 +15,7 @@ from uuid import uuid4
 from app.core.config import Settings
 from app.core.errors import DomainRequestError
 from app.material_formats import MaterialFormatId, MaterialKind
-from app.ports.storage import ConfirmedUploadObject, FileStoragePort, UploadIntentReservation
+from app.ports.storage import ConfirmedUploadObject, FileStoragePort, UploadIntentRepository, UploadIntentReservation
 from app.services.material_object_keys import MaterialObjectKeyFactory
 
 
@@ -26,6 +26,7 @@ def _now_ms() -> int:
 @dataclass
 class AliyunOssStorageAdapter(FileStoragePort):
     settings: Settings
+    intent_repository: UploadIntentRepository | None = None
     issued_intents: dict[str, UploadIntentReservation] = field(default_factory=dict)
     deleted_objects: set[str] = field(default_factory=set)
     uploaded_objects: dict[str, bytes] = field(default_factory=dict)
@@ -196,6 +197,8 @@ class AliyunOssStorageAdapter(FileStoragePort):
             document_version_id=document_version_id,
         )
         self.issued_intents[reservation.intent_id] = reservation
+        if self.intent_repository is not None:
+            self.intent_repository.save(reservation)
         return reservation
 
     def _validate_upload_intent(
@@ -209,6 +212,10 @@ class AliyunOssStorageAdapter(FileStoragePort):
         content_sha256: str | None = None,
     ) -> tuple[UploadIntentReservation, int, str | None]:
         reservation = self.issued_intents.get(intent_id)
+        if reservation is None and self.intent_repository is not None:
+            reservation = self.intent_repository.get(intent_id)
+            if reservation is not None:
+                self.issued_intents[intent_id] = reservation
         if reservation is None:
             raise DomainRequestError("material-upload", "confirm-upload", "上传意图不存在或已失效，请重新上传。", 404)
         now_ms = _now_ms()
