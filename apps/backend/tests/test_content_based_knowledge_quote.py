@@ -7,6 +7,7 @@ from app.main import create_app
 from app.ports.document_repository import DocumentRecord
 from app.ports.document_processing import ProcessingTaskRecord
 from app.services.knowledge_index_quote import estimate_normalized_markdown_tokens
+from app.modules.web import _knowledge_document_payload
 
 
 client = TestClient(create_app())
@@ -82,6 +83,33 @@ def test_pdf_quote_ignores_large_binary_container_and_confirm_binds_quote() -> N
         json={**request, "confirmIndexCharge": True, "quoteId": quote["quoteId"]},
     ))
     assert completed["documentVersionId"] == quote["documentVersionId"]
+
+
+def test_unconfirmed_knowledge_quote_is_pending_and_not_indexing() -> None:
+    user_id = "content-quote-pending-user"
+    collection = _unwrap(client.post("/api/v1/knowledge/collections", json={"userId": user_id, "name": "待确认报价"}))
+    _intent, _request, quote = _prepare_quote(
+        user_id=user_id,
+        collection_id=collection["collectionId"],
+        filename="pending.md",
+        content_type="text/markdown",
+        payload=b"# pending\n\nsynthetic material for an unconfirmed quote",
+    )
+    service = document_processing_service()
+    document = next(item for item in service.document_repository.list_for_user(user_id=user_id) if item.document_version_id == quote["documentVersionId"])
+    payload = _knowledge_document_payload(document)
+
+    assert document.status == "uploaded"
+    assert payload["status"] == "pending"
+    assert payload["syncStatus"] == "synced"
+    assert payload["selectable"] is False
+    assert payload["indexState"] == "not_indexed"
+    assert "尚未确认" in payload["unavailableReason"]
+    assert service.task_repository.list_tasks_for_user(user_id=user_id, document_id=document.document_id) == []
+    assert service.billing_service.reserved_knowledge_index_for_document(
+        user_id=user_id,
+        document_version_id=quote["documentVersionId"],
+    ) is None
 
 
 def test_quote_from_another_document_version_is_rejected() -> None:

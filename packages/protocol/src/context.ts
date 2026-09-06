@@ -2,7 +2,7 @@ import type { DocumentIndexState, DocumentKind, MaterialArtifactSyncReference, M
 import type { MaterialProcessingState } from "./material-upload.js";
 
 export type ContextSourceKind = "resume" | "jd" | "knowledge";
-export type ContextSourceStatus = "processing" | "ready" | "failed" | "disabled" | "deleted";
+export type ContextSourceStatus = "pending" | "processing" | "ready" | "failed" | "disabled" | "deleted";
 export type SelectionIntegrity = "unconfirmed" | "valid" | "attention-required";
 export type ContextLevel = "none" | "resume-only" | "jd-only" | "knowledge-only" | "partial" | "personalized";
 

@@ -2,7 +2,7 @@ import type { ContextLevel, ContextLibrarySource, SelectionIntegrity, SessionCon
 
 export type ContextSelectionValidity = SelectionIntegrity;
 
-export const contextSourceStatusLabel: Record<ContextLibrarySource["status"], string> = { processing: "解析中", ready: "可用于面试", failed: "解析失败", disabled: "已停用", deleted: "已删除" };
+export const contextSourceStatusLabel: Record<ContextLibrarySource["status"], string> = { pending: "等待确认报价", processing: "解析中", ready: "可用于面试", failed: "解析失败", disabled: "已停用", deleted: "已删除" };
 
 export const managedLibrarySources = (sources: readonly ContextLibrarySource[], ownerUserId: string) => sources.filter(source => source.ownerUserId === ownerUserId && source.status !== "deleted");
 

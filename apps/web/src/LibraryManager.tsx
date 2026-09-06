@@ -43,7 +43,7 @@ type LibraryOperation =
 
 const supportedFormatsLabel = `支持上传 ${materialUploadFormatLabel}`;
 const documentStatus: Record<KnowledgeDocumentVersion["status"], string> = {
-  pending: "待确认",
+  pending: "等待确认报价",
   processing: "建立索引中",
   ready: "可用于面试",
   failed: "处理失败",
@@ -967,7 +967,9 @@ export function LibraryManager({ state, setState }: Props) {
                             {syncStatusLabel[document.syncStatus ?? "unknown"]}
                           </small>
                           <p>
-                            {document.safeSummary ??
+                            {document.status === "pending"
+                              ? "索引报价尚未确认，本次未扣积分；请删除后重新上传并确认报价。"
+                              : document.safeSummary ??
                               document.unavailableReason ??
                               "正在构建中，完成前不能用于面试。"}
                           </p>
@@ -980,7 +982,9 @@ export function LibraryManager({ state, setState }: Props) {
                               ? "OSS缺失"
                               : documentStatus[document.status]}
                           </span>
-                          {document.status === "failed" ||
+                          {document.status === "pending" ? (
+                            <small>未开始索引</small>
+                          ) : document.status === "failed" ||
                           document.syncStatus === "missing_artifacts" ? (
                             <button
                               disabled={operation !== null}

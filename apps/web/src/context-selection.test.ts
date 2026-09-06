@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { syntheticLibrarySources, syntheticState } from "./test-state";
-import { contextLevel, reviseSelection, selectionSources, selectionValidity } from "./context-selection";
+import { contextLevel, contextSourceStatusLabel, reviseSelection, selectionSources, selectionValidity } from "./context-selection";
 
 describe("per-interview context selection", () => {
   it("validates one ready resume, one ready JD and multiple knowledge items", () => {
@@ -34,6 +34,10 @@ describe("per-interview context selection", () => {
     const current = syntheticState.contextSelections.demo!;
     const revised = reviseSelection(current, { resumeSourceId: current.resumeSourceId, jobDescriptionSourceId: current.jobDescriptionSourceId, knowledgeSourceIds: ["kb-performance", "kb-performance"] }, 10);
     expect(revised.revision).toBe(current.revision + 1); expect(revised.knowledgeSourceIds).toEqual(["kb-performance"]); expect(revised.confirmedAtMs).toBe(10);
+  });
+
+  it("labels an unconfirmed quote as pending instead of processing", () => {
+    expect(contextSourceStatusLabel.pending).toBe("等待确认报价");
   });
 
   it("keeps independently confirmed empty and partial drafts isolated", () => {

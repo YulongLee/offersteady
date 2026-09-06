@@ -301,6 +301,7 @@ def _document_ui_status(document) -> str:
     if document.status == "ready" and document.index_state == "disabled":
         return "disabled"
     return {
+        "uploaded": "pending",
         "processing_requested": "processing",
         "processing": "processing",
         "ready": "ready",
@@ -331,6 +332,9 @@ def _artifact_manifest(document, storage: FileStoragePort | None = None, commerc
                 for item in persisted_artifacts
             ]
             required = [item for item in persisted_artifacts if item.required]
+            if document.status == "uploaded":
+                original = [item for item in persisted_artifacts if item.artifact_kind == "original"]
+                return ("synced" if original and all(item.sync_status == "synced" for item in original) else "unknown"), artifacts
             if document.status not in {"ready", "failed"}:
                 return "processing", artifacts
             if required and not all(item.sync_status == "synced" for item in required):
@@ -344,8 +348,12 @@ def _artifact_manifest(document, storage: FileStoragePort | None = None, commerc
 
     if str(document.object_key).startswith("inline://"):
         artifacts.append({"artifactKind": "inline_source", "objectKey": document.object_key, "exists": True, "required": True})
+    elif document.status == "uploaded":
+        artifacts.append({"artifactKind": "original", "objectKey": document.object_key, "exists": True, "required": True, "syncStatus": "synced"})
     else:
         add("original", document.object_key, required=True)
+    if document.status == "uploaded":
+        return "synced", artifacts
     if document.document_version_id:
         add(
             "normalized_markdown",
@@ -395,7 +403,7 @@ def _document_source_payload(document, storage: FileStoragePort | None = None, c
         "displayName": document.display_name,
         "version": f"v{document.version or 1}",
         "status": status,
-        "processingState": "uploaded" if document.status == "ready" else "processing",
+        "processingState": "uploaded" if document.status in {"uploaded", "ready"} else "processing",
         "updatedAtMs": document.updated_at_ms,
         "summary": safe_summary,
         "documentId": document.document_id,
@@ -404,7 +412,7 @@ def _document_source_payload(document, storage: FileStoragePort | None = None, c
         "selectable": selectable,
         "syncStatus": sync_status,
         "artifactManifest": artifacts,
-        "unavailableReason": None if selectable else "资料处理产物未同步或尚不可用",
+        "unavailableReason": None if selectable else ("索引报价尚未确认，未扣积分；请重新选择文件并确认报价。" if document.status == "uploaded" else "资料处理产物未同步或尚不可用"),
         "deletedAtMs": document.deleted_at_ms,
     }
 
@@ -546,7 +554,7 @@ def _knowledge_document_payload(document, storage: FileStoragePort | None = None
         "selectable": selectable,
         "syncStatus": sync_status,
         "artifactManifest": artifacts,
-        "unavailableReason": None if selectable else "资料处理产物未同步或尚不可用",
+        "unavailableReason": None if selectable else ("索引报价尚未确认，未扣积分；请重新选择文件并确认报价。" if document.status == "uploaded" else "资料处理产物未同步或尚不可用"),
         "createdAtMs": document.created_at_ms,
         "deletedAtMs": document.deleted_at_ms,
         "safeSummary": document.summary,
