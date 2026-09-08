@@ -1,0 +1,19 @@
+{
+  "pipeline": "Remotion 4.0.484 / 60fps / AAC 48kHz / MP4 / Chrome Headless Shell",
+  "date": "2026-09-07",
+  "probes": [
+    {
+      "source": "click-camera.mp3",
+      "scheduledFrame": 30,
+      "actualStartFrame": 32.559999999999995,
+      "offsetFrames": 2.559999999999995
+    },
+    {
+      "source": "impact-deep-whoosh.mp3",
+      "scheduledFrame": 120,
+      "actualStartFrame": 122.56000000000002,
+      "offsetFrames": 2.5600000000000165
+    }
+  ],
+  "offsetFrames": 2.560000000000006
+}

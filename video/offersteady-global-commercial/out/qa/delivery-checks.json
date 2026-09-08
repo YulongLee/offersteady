@@ -1,0 +1,210 @@
+{
+  "offersteady-global-commercial.mp4": {
+    "bytes": 10357149,
+    "sha256": "7564f89639608a5b40ffd26a88841ad2c31127315ea9eee0bdf109e6f7789393",
+    "faststart": true,
+    "streams": [
+      {
+        "codec_type": "video",
+        "codec_name": "h264",
+        "width": 1920,
+        "height": 1080,
+        "r_frame_rate": "60/1",
+        "duration": "36.000000",
+        "nb_frames": "2160",
+        "pix_fmt": "yuvj420p"
+      },
+      {
+        "codec_type": "audio",
+        "codec_name": "aac",
+        "r_frame_rate": "0/0",
+        "duration": "36.053333",
+        "nb_frames": "1690",
+        "sample_rate": "48000"
+      }
+    ],
+    "decodeExit": 0,
+    "decodeErrors": ""
+  },
+  "offersteady-global-commercial-nobgm.mp4": {
+    "bytes": 10348794,
+    "sha256": "16e2f75fe050ec9b783875461abf0a307ff5277c67dd12750bc7b8eca01d66e6",
+    "faststart": true,
+    "streams": [
+      {
+        "codec_type": "video",
+        "codec_name": "h264",
+        "width": 1920,
+        "height": 1080,
+        "r_frame_rate": "60/1",
+        "duration": "36.000000",
+        "nb_frames": "2160",
+        "pix_fmt": "yuvj420p"
+      },
+      {
+        "codec_type": "audio",
+        "codec_name": "aac",
+        "r_frame_rate": "0/0",
+        "duration": "36.053333",
+        "nb_frames": "1690",
+        "sample_rate": "48000"
+      }
+    ],
+    "decodeExit": 0,
+    "decodeErrors": ""
+  },
+  "web/offersteady-global-web.mp4": {
+    "bytes": 4605529,
+    "sha256": "42cb09a287ad460ee0f165320e30b69a28fb8d408afcc23f4d067ebea06d656d",
+    "faststart": true,
+    "streams": [
+      {
+        "codec_type": "video",
+        "codec_name": "h264",
+        "width": 1920,
+        "height": 1080,
+        "r_frame_rate": "30/1",
+        "duration": "36.000000",
+        "nb_frames": "1080",
+        "pix_fmt": "yuvj420p"
+      },
+      {
+        "codec_type": "audio",
+        "codec_name": "aac",
+        "r_frame_rate": "0/0",
+        "duration": "36.053333",
+        "nb_frames": "1691",
+        "sample_rate": "48000"
+      }
+    ],
+    "decodeExit": 0,
+    "decodeErrors": ""
+  },
+  "web/offersteady-global-web-720.mp4": {
+    "bytes": 2294295,
+    "sha256": "8d81fa9b6bce95f79e8b8bdf90151b793329ef6613195090da7db6cf9eebef0b",
+    "faststart": true,
+    "streams": [
+      {
+        "codec_type": "video",
+        "codec_name": "h264",
+        "width": 1280,
+        "height": 720,
+        "r_frame_rate": "30/1",
+        "duration": "36.000000",
+        "nb_frames": "1080",
+        "pix_fmt": "yuvj420p"
+      },
+      {
+        "codec_type": "audio",
+        "codec_name": "aac",
+        "r_frame_rate": "0/0",
+        "duration": "36.053333",
+        "nb_frames": "1691",
+        "sample_rate": "48000"
+      }
+    ],
+    "decodeExit": 0,
+    "decodeErrors": ""
+  },
+  "sfxSync": [
+    {
+      "targetFrame": 55,
+      "source": "transition-soft.mp3",
+      "scheduledStart": 25,
+      "matchedStart": 27.54,
+      "matchedPeak": 54.54,
+      "peakErrorFrames": -0.46
+    },
+    {
+      "targetFrame": 165,
+      "source": "whoosh-fast.mp3",
+      "scheduledStart": 119,
+      "matchedStart": 121.56,
+      "matchedPeak": 164.76,
+      "peakErrorFrames": -0.24
+    },
+    {
+      "targetFrame": 311,
+      "source": "transition-soft.mp3",
+      "scheduledStart": 281,
+      "matchedStart": 283.56,
+      "matchedPeak": 310.56,
+      "peakErrorFrames": -0.44
+    },
+    {
+      "targetFrame": 379,
+      "source": "whoosh-fast.mp3",
+      "scheduledStart": 333,
+      "matchedStart": 335.58,
+      "matchedPeak": 378.78,
+      "peakErrorFrames": -0.22
+    },
+    {
+      "targetFrame": 831,
+      "source": "click-camera.mp3",
+      "scheduledStart": 817,
+      "matchedStart": 819.54,
+      "matchedPeak": 830.94,
+      "peakErrorFrames": -0.06
+    },
+    {
+      "targetFrame": 963,
+      "source": "transition-soft.mp3",
+      "scheduledStart": 933,
+      "matchedStart": 935.58,
+      "matchedPeak": 962.58,
+      "peakErrorFrames": -0.42
+    },
+    {
+      "targetFrame": 1273,
+      "source": "whoosh-fast.mp3",
+      "scheduledStart": 1227,
+      "matchedStart": 1229.58,
+      "matchedPeak": 1272.78,
+      "peakErrorFrames": -0.22
+    },
+    {
+      "targetFrame": 1459,
+      "source": "click-camera.mp3",
+      "scheduledStart": 1445,
+      "matchedStart": 1447.56,
+      "matchedPeak": 1458.96,
+      "peakErrorFrames": -0.04
+    },
+    {
+      "targetFrame": 1534,
+      "source": "transition-soft.mp3",
+      "scheduledStart": 1504,
+      "matchedStart": 1506.54,
+      "matchedPeak": 1533.54,
+      "peakErrorFrames": -0.46
+    },
+    {
+      "targetFrame": 1899,
+      "source": "riser-rise.mp3",
+      "scheduledStart": 1834,
+      "matchedStart": 1836.54,
+      "matchedPeak": 1898.64,
+      "peakErrorFrames": -0.36
+    },
+    {
+      "targetFrame": 1944,
+      "source": "impact-deep-whoosh.mp3",
+      "scheduledStart": 1908,
+      "matchedStart": 1910.58,
+      "matchedPeak": 1943.58,
+      "peakErrorFrames": -0.42
+    },
+    {
+      "targetFrame": 2020,
+      "source": "shimmer-sparkle-sweep.mp3",
+      "scheduledStart": 1963,
+      "matchedStart": 1965.54,
+      "matchedPeak": 2020.14,
+      "peakErrorFrames": 0.14
+    }
+  ],
+  "monoAnalysisSignalPeakDbFS": -1.3752105236053467,
+  "monoAnalysisSamplesAtOrOverFullScale": 0
+}

@@ -1,5 +1,9 @@
 # 面试稳 SEO 全站审计
 
+最新修复与生产验收：[2026-09-08 百度零索引第二轮排查](docs/audits/mianshiwen-cn-20260908-indexing/FULL-AUDIT-REPORT.md)。
+
+最新只读复核：[2026-09-07 国服 SEO/GEO 审计](docs/audits/mianshiwen-cn-20260907/FULL-AUDIT-REPORT.md)。下文保留 2026-08-19 历史记录，不代表最新生产验收。
+
 审计日期：2026-08-19
 
 审计对象：`https://mianshiwen.cn/`

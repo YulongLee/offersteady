@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>面试稳｜共同创作视觉方向</title>
+  <style>
+    :root {
+      --ink: #070b12;
+      --panel: #0d141f;
+      --panel-2: #121c29;
+      --mint: #56e6b1;
+      --mint-soft: #a8f5d9;
+      --white: #f5f8fb;
+      --muted: #a9b5c4;
+      --line: rgba(168, 245, 217, .18);
+      --shadow: 0 38px 100px rgba(0, 0, 0, .48);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: #030508; color: var(--white); font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    body { width: 2040px; padding: 60px; }
+
+    .sheet-title {
+      height: 120px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      color: #dce5ee;
+      letter-spacing: .03em;
+    }
+    .sheet-title strong { font-size: 32px; }
+    .sheet-title span { font-size: 24px; color: #778595; }
+
+    .frame {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.09);
+      border-radius: 34px;
+      background: var(--ink);
+      box-shadow: var(--shadow);
+      isolation: isolate;
+    }
+    .frame + .frame { margin-top: 48px; }
+    .label {
+      position: absolute;
+      z-index: 20;
+      top: 38px;
+      left: 46px;
+      padding: 12px 18px;
+      border: 1px solid rgba(255,255,255,.13);
+      border-radius: 999px;
+      background: rgba(5, 9, 14, .64);
+      backdrop-filter: blur(16px);
+      color: #bdc8d4;
+      font-size: 20px;
+      letter-spacing: .12em;
+    }
+    .grid {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background-image:
+        linear-gradient(rgba(122, 255, 205, .045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(122, 255, 205, .045) 1px, transparent 1px);
+      background-size: 72px 72px;
+      mask-image: linear-gradient(to bottom, black, transparent 88%);
+    }
+    .glow {
+      position: absolute;
+      z-index: -1;
+      width: 980px;
+      height: 980px;
+      border-radius: 50%;
+      filter: blur(28px);
+      background: radial-gradient(circle, rgba(59, 231, 167, .23), rgba(30, 94, 75, .06) 46%, transparent 70%);
+    }
+    .brand { display: flex; align-items: center; gap: 18px; }
+    .brand img { width: 62px; height: 62px; border-radius: 16px; box-shadow: 0 18px 44px rgba(61, 225, 164, .2); }
+    .brand b { font-size: 34px; letter-spacing: -.03em; }
+    .eyebrow { color: var(--mint); font-size: 24px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+    .accent { color: var(--mint-soft); }
+
+    /* 01 — brand opening */
+    .opening { padding: 158px 140px 100px; }
+    .opening .glow { right: -100px; top: -310px; }
+    .opening .brand { position: absolute; top: 60px; right: 70px; }
+    .opening h1 {
+      margin: 42px 0 34px;
+      max-width: 1400px;
+      font-size: 142px;
+      line-height: 1.04;
+      letter-spacing: -.075em;
+      font-weight: 780;
+    }
+    .opening h1 span { display: block; color: var(--mint); }
+    .opening .promise {
+      max-width: 1050px;
+      font-size: 42px;
+      line-height: 1.5;
+      color: #c5d0dc;
+      letter-spacing: -.02em;
+    }
+    .opening .status {
+      position: absolute;
+      left: 140px;
+      bottom: 84px;
+      display: flex;
+      gap: 20px;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 17px 24px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(15, 26, 35, .76);
+      color: #d8e3ec;
+      font-size: 25px;
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 18px var(--mint); }
+    .opening .rail {
+      position: absolute;
+      right: 90px;
+      bottom: 90px;
+      width: 520px;
+      height: 250px;
+      border: 1px solid rgba(168,245,217,.13);
+      border-radius: 30px;
+      background: linear-gradient(145deg, rgba(24,39,49,.8), rgba(8,13,19,.5));
+      overflow: hidden;
+    }
+    .wave { position: absolute; inset: 0; opacity: .7; }
+    .wave i { position: absolute; bottom: 50%; width: 4px; border-radius: 5px; background: var(--mint); transform-origin: bottom; }
+
+    /* 02 — real product */
+    .assist { background: #05080d; }
+    .assist .backplate { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .28; filter: saturate(.75) contrast(1.08); }
+    .assist .veil { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(5,8,13,.98) 0%, rgba(5,8,13,.88) 39%, rgba(5,8,13,.3) 76%, rgba(5,8,13,.7) 100%); }
+    .assist .copy { position: absolute; z-index: 5; left: 112px; top: 182px; width: 650px; }
+    .assist h2 { margin: 24px 0 28px; font-size: 86px; line-height: 1.08; letter-spacing: -.06em; }
+    .assist p { margin: 0; color: #c1ccd8; font-size: 34px; line-height: 1.55; }
+    .assist .chips { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 46px; }
+    .assist .product-stack { position: absolute; z-index: 4; right: 58px; top: 112px; width: 1040px; height: 820px; }
+    .shot {
+      position: absolute;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 24px;
+      background: #fff;
+      box-shadow: 0 38px 90px rgba(0,0,0,.56);
+    }
+    .shot img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .shot.monitor { width: 820px; height: 420px; top: 0; right: 0; transform: perspective(1600px) rotateY(-4deg) rotateX(2deg); }
+    .shot.answer { width: 870px; height: 470px; bottom: 0; left: 0; transform: perspective(1600px) rotateY(4deg) rotateX(-1deg); }
+    .shot.answer img { object-position: top center; }
+    .verified {
+      position: absolute;
+      z-index: 8;
+      right: 80px;
+      bottom: 56px;
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      padding: 16px 22px;
+      border-radius: 16px;
+      background: rgba(7, 14, 19, .9);
+      border: 1px solid rgba(86,230,177,.34);
+      font-size: 23px;
+      color: #daf9ec;
+    }
+
+    /* 03 — triple steady */
+    .triple { padding: 126px 105px 84px; }
+    .triple .glow { left: 470px; bottom: -690px; width: 1100px; height: 1100px; }
+    .triple .topline { display: flex; justify-content: space-between; align-items: center; }
+    .triple h2 { margin: 58px 0 46px; font-size: 76px; letter-spacing: -.055em; }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .card {
+      position: relative;
+      height: 395px;
+      padding: 38px 36px;
+      border-radius: 28px;
+      border: 1px solid rgba(255,255,255,.1);
+      background: linear-gradient(145deg, rgba(24,35,47,.94), rgba(10,16,23,.78));
+      overflow: hidden;
+    }
+    .card:after { content: ""; position: absolute; inset: auto -100px -130px auto; width: 310px; height: 310px; border-radius: 50%; background: radial-gradient(circle, rgba(86,230,177,.16), transparent 68%); }
+    .num { color: var(--mint); font: 700 20px/1 Inter, sans-serif; letter-spacing: .15em; }
+    .card h3 { margin: 54px 0 20px; font-size: 58px; letter-spacing: -.05em; }
+    .card p { margin: 0; color: #b9c5d2; font-size: 27px; line-height: 1.55; }
+    .final-line {
+      margin-top: 48px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+    }
+    .final-line .slogan { font-size: 48px; font-weight: 720; letter-spacing: -.045em; }
+    .final-line .slogan strong { color: var(--mint); }
+    .final-line .note { color: #788694; font-size: 23px; }
+  </style>
+</head>
+<body>
+  <div class="sheet-title"><strong>面试稳 · 官网产品宣传片 / 视觉方向确认</strong><span>A 稳态控制台 × C 三重稳</span></div>
+
+  <section class="frame opening">
+    <div class="label">STYLEFRAME 01 · 品牌开场</div>
+    <div class="grid"></div><div class="glow"></div>
+    <div class="brand"><img src="public/brand/app-icon.png" alt=""><b>面试稳</b></div>
+    <div class="eyebrow">Live interview copilot</div>
+    <h1>面试就选<span>面试稳。</span></h1>
+    <div class="promise">现场听懂问题，回答基于你的真实经历。<br>关键时刻，把节奏握在自己手里。</div>
+    <div class="status">
+      <div class="chip"><i class="dot"></i>实时聆听</div>
+      <div class="chip"><i class="dot"></i>用户触发</div>
+      <div class="chip"><i class="dot"></i>来源可核对</div>
+    </div>
+    <div class="rail"><div class="wave" id="wave"></div></div>
+  </section>
+
+  <section class="frame assist">
+    <img class="backplate" src="public/textures/live-full.png" alt="">
+    <div class="veil"></div><div class="label">STYLEFRAME 02 · 现场辅助核心</div>
+    <div class="copy">
+      <div class="eyebrow">回答稳</div>
+      <h2>听懂问题，<br><span class="accent">不替你虚构答案。</span></h2>
+      <p>从简历、职位描述和个人知识库中，<br>快速组织真正属于你的回答。</p>
+      <div class="chips">
+        <div class="chip">简历经历</div><div class="chip">目标 JD</div><div class="chip">个人知识库</div>
+      </div>
+    </div>
+    <div class="product-stack">
+      <div class="shot monitor"><img src="public/textures/live-conversation-monitor.png" alt="实时对话监测界面"></div>
+      <div class="shot answer"><img src="public/textures/live-answer-workspace.png" alt="回答工作区界面"></div>
+      <div class="verified"><i class="dot"></i>由你触发 · 内容来源可核对</div>
+    </div>
+  </section>
+
+  <section class="frame triple">
+    <div class="grid"></div><div class="glow"></div><div class="label">STYLEFRAME 03 · 三重稳收尾</div>
+    <div class="topline">
+      <div class="eyebrow">One steady system</div>
+      <div class="brand"><img src="public/brand/app-icon.png" alt=""><b>面试稳</b></div>
+    </div>
+    <h2>从选择，到回答，再到整场面试。</h2>
+    <div class="cards">
+      <article class="card"><div class="num">01 / PRICE</div><h3>价格稳</h3><p>成本价使用<br>按次 / 按天，灵活选择</p></article>
+      <article class="card"><div class="num">02 / ANSWER</div><h3>回答稳</h3><p>基于简历、JD 与知识库<br>回答更真实、更贴合</p></article>
+      <article class="card"><div class="num">03 / INTERVIEW</div><h3>面试更稳</h3><p>实时辅助、截图题与复盘<br>关键环节全程有底</p></article>
+    </div>
+    <div class="final-line">
+      <div class="slogan">面试就选面试稳。<strong>价格稳，回答稳，面试更稳。</strong></div>
+      <div class="note">静音优先 · 信息可独立读懂</div>
+    </div>
+  </section>
+
+  <script>
+    const wave = document.getElementById('wave');
+    const heights = [42,70,28,92,55,118,78,36,84,132,60,104,48,78,116,66,96,44,126,72,38,88,110,54,96,64,120,46,74,102,58,88,36,78,112,52,92,68,128,44,80,104,62,90,48,118,70,98,56,82,40,108,64,88,52,124,74,94,46,84,60,114,68,90,42,100,54,80,62,106,48,92,70,116,58,86,44,102,66,78];
+    heights.forEach((h, i) => {
+      const bar = document.createElement('i');
+      bar.style.left = `${18 + i * 6.2}px`;
+      bar.style.height = `${h}px`;
+      bar.style.opacity = `${0.35 + (i % 5) * 0.12}`;
+      wave.appendChild(bar);
+    });
+  </script>
+</body>
+</html>

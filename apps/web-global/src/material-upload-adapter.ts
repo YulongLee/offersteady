@@ -1,0 +1,273 @@
+import type {
+  CompleteMaterialUploadRequest,
+  CreateKnowledgeCollectionRequest,
+  CreateMaterialUploadIntentRequest,
+  CreatePastedJobDescriptionRequest,
+  CreatedKnowledgeCollection,
+  MaterialUploadCompletionResult,
+  MaterialUploadIntent,
+  KnowledgeIndexQuote,
+} from "@offersteady/protocol";
+import {
+  detectMaterialUploadFormat,
+} from "@offersteady/protocol";
+
+import { createJsonClient, withBaseUrl } from "./api-client";
+import { AppError } from "./domain";
+import { readRuntimeConfig } from "./runtime-config";
+import { authClient } from "./auth-client";
+
+export interface MaterialUploadAdapter {
+  createKnowledgeCollection(request: CreateKnowledgeCollectionRequest, signal?: AbortSignal): Promise<CreatedKnowledgeCollection>;
+  renameKnowledgeCollection(userId: string, collectionId: string, name: string, signal?: AbortSignal): Promise<CreatedKnowledgeCollection>;
+  deleteKnowledgeCollection(userId: string, collectionId: string, signal?: AbortSignal): Promise<void>;
+  uploadResume(userId: string, file: File, signal?: AbortSignal): Promise<MaterialUploadCompletionResult>;
+  uploadJobDescriptionFile(userId: string, file: File, signal?: AbortSignal): Promise<MaterialUploadCompletionResult>;
+  uploadKnowledgeFile(userId: string, collectionId: string, file: File, signal?: AbortSignal): Promise<MaterialUploadCompletionResult>;
+  prepareKnowledgeFile(userId: string, collectionId: string, file: File, signal?: AbortSignal): Promise<PreparedKnowledgeUpload>;
+  confirmKnowledgeFile(userId: string, collectionId: string, file: File, prepared: PreparedKnowledgeUpload, signal?: AbortSignal): Promise<MaterialUploadCompletionResult>;
+  createPastedJobDescription(request: CreatePastedJobDescriptionRequest, signal?: AbortSignal): Promise<MaterialUploadCompletionResult>;
+  deleteDocument(userId: string, documentId: string, signal?: AbortSignal): Promise<void>;
+  retryDocument(userId: string, documentId: string, signal?: AbortSignal): Promise<void>;
+  setDocumentEnabled(userId: string, documentId: string, enabled: boolean, signal?: AbortSignal): Promise<void>;
+  renameDocument(userId: string, documentId: string, displayName: string, signal?: AbortSignal): Promise<void>;
+  downloadDocument(userId: string, documentId: string, signal?: AbortSignal): Promise<MaterialDownload>;
+}
+
+export interface MaterialDownload {
+  readonly blob: Blob;
+  readonly filename: string;
+}
+
+export interface PreparedKnowledgeUpload {
+  readonly intent: MaterialUploadIntent;
+  readonly quote: KnowledgeIndexQuote;
+}
+
+interface DocumentProcessingStatus {
+  readonly latestTask: { readonly taskId: string } | null;
+}
+
+const runtimeConfig = readRuntimeConfig(import.meta.env);
+
+const authHeaders = () => {
+  const session = authClient.readStoredSession();
+  return session ? { Authorization: `Bearer ${session.accessToken}` } : {};
+};
+
+const downloadFilename = (header: string | null) => {
+  const encoded = header?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encoded) {
+    try { return decodeURIComponent(encoded); } catch { /* fall through */ }
+  }
+  return header?.match(/filename="?([^";]+)"?/i)?.[1] ?? "面试资料";
+};
+
+export const saveMaterialDownload = ({ blob, filename }: MaterialDownload) => {
+  const href = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = href;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(href);
+};
+
+const buildIntentPayload = (userId: string, materialKind: CreateMaterialUploadIntentRequest["materialKind"], file: File): CreateMaterialUploadIntentRequest => ({
+  userId,
+  documentKind: materialKind,
+  materialKind,
+  filename: file.name,
+  contentType: file.type || "application/octet-stream",
+  sizeBytes: file.size || 1,
+});
+
+const buildCompletePayload = (userId: string, intent: MaterialUploadIntent, file: File, confirmIndexCharge = false, quoteId?: string): CompleteMaterialUploadRequest => ({
+  userId,
+  intentId: intent.intentId,
+  objectKey: intent.objectKey,
+  contentType: intent.contentType,
+  sizeBytes: file.size || 1,
+  etag: `${file.name}:${file.size}`,
+  ...(confirmIndexCharge ? { confirmIndexCharge: true } : {}),
+  ...(quoteId ? { quoteId } : {}),
+});
+
+export class BackendMaterialUploadAdapter implements MaterialUploadAdapter {
+  private readonly client;
+
+  constructor(private readonly baseUrl: string, private readonly fetchImpl: typeof fetch = (input, init) => globalThis.fetch(input, init)) {
+    this.client = createJsonClient({ baseUrl, fetchImpl });
+  }
+
+  async createKnowledgeCollection(request: CreateKnowledgeCollectionRequest, signal?: AbortSignal) {
+    return this.client.request<CreatedKnowledgeCollection>("/api/v1/knowledge/collections", { method: "POST", headers: authHeaders(), body: JSON.stringify(request) }, signal);
+  }
+
+  async renameKnowledgeCollection(userId: string, collectionId: string, name: string, signal?: AbortSignal) {
+    return this.client.request<CreatedKnowledgeCollection>(
+      `/api/v1/knowledge/collections/${encodeURIComponent(collectionId)}`,
+      { method: "PATCH", headers: authHeaders(), body: JSON.stringify({ userId, name }) },
+      signal,
+    );
+  }
+
+  async deleteKnowledgeCollection(userId: string, collectionId: string, signal?: AbortSignal) {
+    await this.client.request(
+      `/api/v1/knowledge/collections/${encodeURIComponent(collectionId)}?userId=${encodeURIComponent(userId)}`,
+      { method: "DELETE", headers: authHeaders() },
+      signal,
+    );
+  }
+
+  async uploadResume(userId: string, file: File, signal?: AbortSignal) {
+    return this.uploadFile(userId, "resume", "/api/v1/resume/upload-intents", "/api/v1/resume/uploads/complete", file, signal);
+  }
+
+  async uploadJobDescriptionFile(userId: string, file: File, signal?: AbortSignal) {
+    return this.uploadFile(userId, "job_description", "/api/v1/job-descriptions/upload-intents", "/api/v1/job-descriptions/uploads/complete", file, signal);
+  }
+
+  async uploadKnowledgeFile(userId: string, collectionId: string, file: File, signal?: AbortSignal) {
+    const prepared = await this.prepareKnowledgeFile(userId, collectionId, file, signal);
+    return this.confirmKnowledgeFile(userId, collectionId, file, prepared, signal);
+  }
+
+  async prepareKnowledgeFile(userId: string, collectionId: string, file: File, signal?: AbortSignal): Promise<PreparedKnowledgeUpload> {
+    const fileKind = detectMaterialUploadFormat(file.name);
+    if (!fileKind) throw new AppError("validation", "当前仅支持 PDF、DOCX、DOC、TXT、MD");
+    const intentPath = `/api/v1/knowledge/collections/${encodeURIComponent(collectionId)}/upload-intents`;
+    const completionPath = `/api/v1/knowledge/collections/${encodeURIComponent(collectionId)}/uploads/complete`;
+    const intent = await this.client.request<MaterialUploadIntent>(
+      intentPath,
+      { method: "POST", headers: authHeaders(), body: JSON.stringify(buildIntentPayload(userId, "knowledge", file)) },
+      signal,
+    );
+    await this.uploadToOss(intent, file, completionPath, userId, signal);
+    const quote = await this.client.request<KnowledgeIndexQuote>(
+      `/api/v1/knowledge/collections/${encodeURIComponent(collectionId)}/uploads/quote`,
+      { method: "POST", headers: authHeaders(), body: JSON.stringify(buildCompletePayload(userId, intent, file)) },
+      signal,
+    );
+    return { intent, quote };
+  }
+
+  async confirmKnowledgeFile(
+    userId: string,
+    collectionId: string,
+    file: File,
+    prepared: PreparedKnowledgeUpload,
+    signal?: AbortSignal,
+  ) {
+    return this.client.request<MaterialUploadCompletionResult>(
+      `/api/v1/knowledge/collections/${encodeURIComponent(collectionId)}/uploads/complete`,
+      {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify(buildCompletePayload(userId, prepared.intent, file, true, prepared.quote.quoteId)),
+      },
+      signal,
+    );
+  }
+
+  async createPastedJobDescription(request: CreatePastedJobDescriptionRequest, signal?: AbortSignal) {
+    return this.client.request<MaterialUploadCompletionResult>("/api/v1/job-descriptions/text", { method: "POST", headers: authHeaders(), body: JSON.stringify(request) }, signal);
+  }
+
+  async deleteDocument(userId: string, documentId: string, signal?: AbortSignal) {
+    await this.client.request(`/api/v1/documents/${documentId}?userId=${encodeURIComponent(userId)}`, { method: "DELETE", headers: authHeaders() }, signal);
+  }
+
+  async retryDocument(userId: string, documentId: string, signal?: AbortSignal) {
+    const status = await this.client.request<DocumentProcessingStatus>(
+      `/api/v1/document-processing/documents/${encodeURIComponent(documentId)}?userId=${encodeURIComponent(userId)}`,
+      { headers: authHeaders() },
+      signal,
+    );
+    if (!status.latestTask?.taskId) throw new AppError("validation", "当前资料没有可重试的处理任务，请重新上传文件");
+    await this.client.request(
+      `/api/v1/document-processing/tasks/${encodeURIComponent(status.latestTask.taskId)}/retry`,
+      { method: "POST", headers: authHeaders(), body: JSON.stringify({ userId }) },
+      signal,
+    );
+  }
+
+  async setDocumentEnabled(userId: string, documentId: string, enabled: boolean, signal?: AbortSignal) {
+    await this.client.request(
+      `/api/v1/documents/${encodeURIComponent(documentId)}/availability`,
+      { method: "PATCH", headers: authHeaders(), body: JSON.stringify({ userId, enabled }) },
+      signal,
+    );
+  }
+
+  async renameDocument(userId: string, documentId: string, displayName: string, signal?: AbortSignal) {
+    await this.client.request(
+      `/api/v1/documents/${encodeURIComponent(documentId)}/display-name`,
+      { method: "PATCH", headers: authHeaders(), body: JSON.stringify({ userId, displayName }) },
+      signal,
+    );
+  }
+
+  async downloadDocument(userId: string, documentId: string, signal?: AbortSignal): Promise<MaterialDownload> {
+    const response = await this.fetchImpl(
+      withBaseUrl(this.baseUrl, `/api/v1/documents/${encodeURIComponent(documentId)}/download?userId=${encodeURIComponent(userId)}`),
+      { headers: authHeaders(), ...(signal ? { signal } : {}) },
+    );
+    if (!response.ok) throw new AppError("network", "资料下载失败，请稍后重试");
+    return { blob: await response.blob(), filename: downloadFilename(response.headers.get("Content-Disposition")) };
+  }
+
+  private async uploadFile(
+    userId: string,
+    materialKind: CreateMaterialUploadIntentRequest["materialKind"],
+    intentPath: string,
+    completionPath: string,
+    file: File,
+    signal?: AbortSignal,
+  ) {
+    const fileKind = detectMaterialUploadFormat(file.name);
+    if (!fileKind) throw new AppError("validation", "当前仅支持 PDF、DOCX、DOC、TXT、MD");
+    const intent = await this.client.request<MaterialUploadIntent>(intentPath, { method: "POST", headers: authHeaders(), body: JSON.stringify(buildIntentPayload(userId, materialKind, file)) }, signal);
+    await this.uploadToOss(intent, file, completionPath, userId, signal);
+    return this.client.request<MaterialUploadCompletionResult>(completionPath, { method: "POST", headers: authHeaders(), body: JSON.stringify(buildCompletePayload(userId, intent, file, materialKind === "knowledge")) }, signal);
+  }
+
+  private async uploadToOss(intent: MaterialUploadIntent, file: File, completionPath: string, userId: string, signal?: AbortSignal) {
+    const body = new FormData();
+    Object.entries(intent.uploadFields).forEach(([key, value]) => body.append(key, value));
+    body.append("file", file);
+    try {
+      const response = await this.fetchImpl(intent.uploadUrl, { method: intent.uploadMethod, body, ...(signal ? { signal } : {}) });
+      if (response.ok || response.status === 204) return;
+    } catch {
+      // Browsers can fail direct-to-OSS uploads before an HTTP response when CORS or endpoint settings are not ready.
+    }
+    await this.uploadViaBackendProxy(intent, file, completionPath, userId, signal);
+  }
+
+  private async uploadViaBackendProxy(intent: MaterialUploadIntent, file: File, completionPath: string, userId: string, signal?: AbortSignal) {
+    const proxyBody = new FormData();
+    proxyBody.append("userId", userId);
+    proxyBody.append("intentId", intent.intentId);
+    proxyBody.append("objectKey", intent.objectKey);
+    proxyBody.append("contentType", intent.contentType);
+    proxyBody.append("file", file);
+    const proxyPath = completionPath.replace(/\/uploads\/complete$/, "/uploads/proxy");
+    const response = await this.fetchImpl(withBaseUrl(this.baseUrl, proxyPath), {
+      method: "POST",
+      headers: authHeaders(),
+      body: proxyBody,
+      ...(signal ? { signal } : {}),
+    });
+    if (response.status === 413) {
+      throw new AppError(
+        "validation",
+        "This file exceeds the upload limit. Choose a file no larger than 20 MB.",
+      );
+    }
+    if (!response.ok) {
+      throw new AppError("network", "The file could not be uploaded. Please try again.");
+    }
+  }
+}
+
+export const materialUploadAdapter: MaterialUploadAdapter = new BackendMaterialUploadAdapter(runtimeConfig.apiBaseUrl);

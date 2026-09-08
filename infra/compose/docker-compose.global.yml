@@ -1,0 +1,154 @@
+name: offersteady-global
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${GLOBAL_POSTGRES_DB:-offersteady_global}
+      POSTGRES_USER: ${GLOBAL_POSTGRES_USER:-offersteady_global}
+      POSTGRES_PASSWORD: ${GLOBAL_POSTGRES_PASSWORD:?GLOBAL_POSTGRES_PASSWORD is required}
+    volumes:
+      - global-postgres-data:/var/lib/postgresql/data
+      - ../postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${GLOBAL_POSTGRES_USER:-offersteady_global} -d ${GLOBAL_POSTGRES_DB:-offersteady_global}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "384mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - global-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: infra/docker/backend.Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    env_file:
+      - ../../${OFFERSTEADY_GLOBAL_ENV_FILE:-.env.global.production}
+    environment:
+      OFFERSTEADY_ENVIRONMENT: production
+      OFFERSTEADY_PRODUCT_EDITION: global
+      OFFERSTEADY_APP_VERSION: ${GLOBAL_RELEASE_VERSION:?GLOBAL_RELEASE_VERSION is required}
+      OFFERSTEADY_DATABASE_URL: postgresql://${GLOBAL_POSTGRES_USER:-offersteady_global}:${GLOBAL_POSTGRES_PASSWORD}@postgres:5432/${GLOBAL_POSTGRES_DB:-offersteady_global}
+      OFFERSTEADY_REDIS_URL: redis://redis:6379/0
+      OFFERSTEADY_REDIS_REALTIME_REQUIRED: "true"
+      OFFERSTEADY_PUBLIC_WEB_BASE_URL: https://offersteady.com
+      OFFERSTEADY_CORS_ALLOWED_ORIGINS: '["https://offersteady.com","https://www.offersteady.com"]'
+      OFFERSTEADY_PROMOTION_PUBLIC_BASE_URL: https://offersteady.com
+      OFFERSTEADY_CHECKOUT_PROVIDER: ""
+      OFFERSTEADY_REALTIME_TRANSCRIPT_PERSISTENCE_ENABLED: "false"
+      OFFERSTEADY_DOCUMENT_PROCESSING_INLINE_WORKER_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${GLOBAL_BACKEND_PORT:-18000}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  material-worker:
+    build:
+      context: ../..
+      dockerfile: infra/docker/backend.Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    command: ["python", "-m", "app.worker", "--interval-seconds", "2"]
+    working_dir: /app/apps/backend
+    env_file:
+      - ../../${OFFERSTEADY_GLOBAL_ENV_FILE:-.env.global.production}
+    environment:
+      OFFERSTEADY_ENVIRONMENT: production
+      OFFERSTEADY_PRODUCT_EDITION: global
+      OFFERSTEADY_APP_VERSION: ${GLOBAL_RELEASE_VERSION:?GLOBAL_RELEASE_VERSION is required}
+      OFFERSTEADY_DATABASE_URL: postgresql://${GLOBAL_POSTGRES_USER:-offersteady_global}:${GLOBAL_POSTGRES_PASSWORD}@postgres:5432/${GLOBAL_POSTGRES_DB:-offersteady_global}
+      OFFERSTEADY_REDIS_URL: redis://redis:6379/0
+      OFFERSTEADY_DOCUMENT_PROCESSING_INLINE_WORKER_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    cpus: "0.75"
+    mem_limit: 768m
+    restart: unless-stopped
+
+  analytics:
+    build:
+      context: ../..
+      dockerfile: infra/docker/backend.Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    command: ["sh", "-c", "cd /app/apps/backend && while true; do python -m app.services.admin_analytics_job --scheduled || true; sleep 3600; done"]
+    env_file:
+      - ../../${OFFERSTEADY_GLOBAL_ENV_FILE:-.env.global.production}
+    environment:
+      OFFERSTEADY_ENVIRONMENT: production
+      OFFERSTEADY_PRODUCT_EDITION: global
+      OFFERSTEADY_APP_VERSION: ${GLOBAL_RELEASE_VERSION:?GLOBAL_RELEASE_VERSION is required}
+      OFFERSTEADY_DATABASE_URL: postgresql://${GLOBAL_POSTGRES_USER:-offersteady_global}:${GLOBAL_POSTGRES_PASSWORD}@postgres:5432/${GLOBAL_POSTGRES_DB:-offersteady_global}
+      OFFERSTEADY_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web-global.Dockerfile
+      args:
+        VITE_APP_ENV: production
+        VITE_API_BASE_URL: /
+        VITE_PUBLIC_APP_VERSION: ${GLOBAL_RELEASE_VERSION:?GLOBAL_RELEASE_VERSION is required}
+        VITE_GLOBAL_LOCALE: ${GLOBAL_LOCALE:-en-US}
+        VITE_GLOBAL_COMMERCE_ENABLED: ${GLOBAL_COMMERCE_ENABLED:-false}
+        VITE_GLOBAL_COMMERCE_PROVIDER: ${GLOBAL_COMMERCE_PROVIDER:-none}
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${GLOBAL_WEB_PORT:-18880}:80"
+    restart: unless-stopped
+
+  admin:
+    profiles: ["admin"]
+    build:
+      context: ../..
+      dockerfile: infra/docker/admin-global.Dockerfile
+      args:
+        VITE_ADMIN_API_BASE_URL: /
+        VITE_PRODUCT_EDITION: global
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${GLOBAL_ADMIN_PORT:-18881}:80"
+    restart: unless-stopped
+
+volumes:
+  global-postgres-data:
+    name: offersteady-global-postgres-data
+  global-redis-data:
+    name: offersteady-global-redis-data

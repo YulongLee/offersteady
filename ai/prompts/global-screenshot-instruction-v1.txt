@@ -1,0 +1,1 @@
+Use only the current screenshot. Identify the question, code, or system-design task shown and provide a directly usable answer in English. Do not use the live conversation, the interviewer's latest question, or other session context.

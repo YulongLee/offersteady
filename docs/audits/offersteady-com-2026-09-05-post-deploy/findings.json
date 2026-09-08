@@ -1,0 +1,82 @@
+[
+  {
+    "area": "Performance",
+    "severity": "Warning",
+    "confidence": "Likely",
+    "finding": "Public delivery is still slow and variable outside the origin server.",
+    "evidence": "Twenty-five external requests from the audit location produced time-to-first-byte values from about 1.09 to 4.47 seconds, while the same routes took about 1.5 to 2 milliseconds on server loopback. DNS points directly to the Singapore origin at 47.84.65.103, and a compressed main-JavaScript download timed out after 20 seconds in this audit location.",
+    "impact": "A slow first visit can reduce conversion, crawling efficiency, and perceived product quality. Target-market impact remains unconfirmed without US, UK, Canada, and Australia field data.",
+    "fix": "Put only public HTML and fingerprinted assets behind a CDN, keep API/SSE/WebSocket paths uncached, and add regional synthetic plus real-user Core Web Vitals monitoring.",
+    "source": "curl timing, server loopback timing, DNS"
+  },
+  {
+    "area": "Content quality",
+    "severity": "Warning",
+    "confidence": "Confirmed",
+    "finding": "Most indexable pages remain too shallow to compete for non-brand search intent.",
+    "evidence": "Fourteen of 16 sitemap pages contain fewer than 400 parsed words. The four detailed feature pages contain 328 to 399 words, and the current site exposes only guide and interview-question hubs rather than deep editorial pages.",
+    "impact": "The pages can now be indexed, but they provide limited topical depth and limited passage-level evidence for search engines and AI answer systems.",
+    "fix": "Publish a small set of substantial, reviewed English feature and guide pages with distinct intent, real examples, update dates, and contextual internal links.",
+    "source": "16-page HTML crawl"
+  },
+  {
+    "area": "Trust and E-E-A-T",
+    "severity": "Warning",
+    "confidence": "Confirmed",
+    "finding": "The public site has policy pages but little firsthand product evidence or identifiable editorial authority.",
+    "evidence": "All 16 initial HTML documents contain zero visible content images. No product screenshots, demo video, case study, verified testimonial, named author/reviewer, official social profile, or external source citation was found in the reviewed public surface.",
+    "impact": "Visitors and AI/search systems have limited evidence that the product works as described or that informational guidance is maintained by identifiable experts.",
+    "fix": "Add real product screenshots and a permission-safe demo, then publish named author/reviewer information and only verified user evidence or official profiles.",
+    "source": "16-page HTML crawl and public navigation review"
+  },
+  {
+    "area": "Conversion",
+    "severity": "Warning",
+    "confidence": "Confirmed",
+    "finding": "The Download page does not offer a download or a next-step action.",
+    "evidence": "The `/download` page contains only navigation, policy, and email links; it has no installer link and no sign-in/start CTA despite explaining which installer a user should choose.",
+    "impact": "High-intent visitors reach a dead end and cannot complete the expected download journey from the public page.",
+    "fix": "Add verified macOS Apple-silicon, macOS Intel, and Windows installer actions when those artifacts are approved, or clearly route users to sign in to access the current release.",
+    "source": "download-page link extraction"
+  },
+  {
+    "area": "On-page SEO",
+    "severity": "Warning",
+    "confidence": "Confirmed",
+    "finding": "Several commercial and policy metadata fields are shorter than the current quality targets.",
+    "evidence": "Pricing, Privacy, Refund Policy, and Security titles are under 30 characters; Pricing and Contact meta descriptions are under 120 characters. No title exceeds 60 characters and all values remain unique.",
+    "impact": "This is not an indexing blocker, but weak snippets can reduce query clarity and click-through rate.",
+    "fix": "Rewrite only the short title and description fields with specific, accurate intent language while preserving the current canonicals and visible promises.",
+    "source": "16-page metadata crawl"
+  },
+  {
+    "area": "Attribution",
+    "severity": "Warning",
+    "confidence": "Confirmed",
+    "finding": "Trailing-slash canonical redirects discard campaign query parameters.",
+    "evidence": "`/features/?utm_source=test` redirects to `/features` and `/pricing/?x=1` redirects to `/pricing`, dropping the query string; canonical `www` and HTTP redirects preserve it.",
+    "impact": "Marketing links that contain both a trailing slash and UTM parameters can lose attribution data before the landing page loads.",
+    "fix": "Preserve `$is_args$args` on trailing-slash redirects or normalise campaign URLs before distribution, then regression-test UTM retention.",
+    "source": "redirect header checks"
+  },
+  {
+    "area": "Asset optimisation",
+    "severity": "Warning",
+    "confidence": "Confirmed",
+    "finding": "The social share image is unnecessarily large.",
+    "evidence": "`/assets/brand/share-card.png` is 772,542 bytes for a 1200 by 630 social-preview image.",
+    "impact": "This can delay link-preview fetches and wastes bandwidth, although it does not block page rendering.",
+    "fix": "Compress the share asset to an appropriately optimised PNG or supported social-preview format while retaining 1200 by 630 dimensions.",
+    "source": "HTTP asset measurement"
+  },
+  {
+    "area": "Measurement",
+    "severity": "Info",
+    "confidence": "Likely",
+    "finding": "Search and conversion performance cannot yet be evaluated from available data.",
+    "evidence": "No Google Analytics, Search Console HTML verification, Bing verification, or equivalent public tag was detected. DNS-based verification and private analytics configuration were not available to this audit.",
+    "impact": "The team cannot distinguish indexing delay, ranking weakness, acquisition quality, and conversion loss using the evidence currently available.",
+    "fix": "Connect Search Console, Bing Webmaster Tools, and privacy-reviewed analytics or confirm existing DNS-based ownership and server-side measurement.",
+    "source": "homepage source scan and access limitation"
+  }
+]

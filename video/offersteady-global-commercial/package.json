@@ -1,0 +1,22 @@
+{
+  "name": "offersteady-global-commercial",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "remotion studio src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "render": "remotion render src/index.ts OfferSteadyGlobalCommercial out/offersteady-global-commercial.mp4 --crf=18",
+    "render:nobgm": "remotion render src/index.ts OfferSteadyGlobalCommercial out/offersteady-global-commercial-nobgm.mp4 --props=props-nobgm.json --crf=18",
+    "qa": "node qa.mjs"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.484",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "remotion": "4.0.484"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.17",
+    "typescript": "6.0.3"
+  }
+}

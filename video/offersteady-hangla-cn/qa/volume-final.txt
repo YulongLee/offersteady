@@ -1,0 +1,43 @@
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'out/offersteady-hangla-price-cn.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf61.7.100
+    comment         : Made with Remotion 4.0.484
+  Duration: 00:00:45.06, start: 0.000000, bitrate: 595 kb/s
+  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuvj420p(pc, bt470bg/unknown/unknown, progressive), 1080x1920 [SAR 1:1 DAR 9:16], 269 kb/s, 30 fps, 30 tbr, 90k tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      encoder         : Lavc61.19.100 libx264
+    Side data:
+      ICC Profile: (456 bytes)
+  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 317 kb/s (default)
+    Metadata:
+      handler_name    : SoundHandler
+[Parsed_volumedetect_0 @ 0x12c623710] n_samples: 0
+Stream mapping:
+  Stream #0:1 -> #0:0 (aac (native) -> pcm_s16le (native))
+Press [q] to stop, [?] for help
+Output #0, null, to '/dev/null':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    comment         : Made with Remotion 4.0.484
+    encoder         : Lavf63.1.101
+  Stream #0:0(und): Audio: pcm_s16le, 48000 Hz, stereo, s16, 1536 kb/s (default)
+    Metadata:
+      encoder         : Lavc63.1.101 pcm_s16le
+      handler_name    : SoundHandler
+[Parsed_volumedetect_0 @ 0x12d004500] n_samples: 4325376
+[Parsed_volumedetect_0 @ 0x12d004500] mean_volume: -19.1 dB
+[Parsed_volumedetect_0 @ 0x12d004500] max_volume: -0.7 dB
+[Parsed_volumedetect_0 @ 0x12d004500] histogram_0db: 8
+[Parsed_volumedetect_0 @ 0x12d004500] histogram_1db: 35
+[Parsed_volumedetect_0 @ 0x12d004500] histogram_2db: 141
+[Parsed_volumedetect_0 @ 0x12d004500] histogram_3db: 591
+[Parsed_volumedetect_0 @ 0x12d004500] histogram_4db: 1662
+[Parsed_volumedetect_0 @ 0x12d004500] histogram_5db: 4430
+[out#0/null @ 0x12c615c80] video:0KiB audio:8448KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown
+size=N/A time=00:00:45.05 bitrate=N/A speed=1.45e+03x elapsed=0:00:00.03    

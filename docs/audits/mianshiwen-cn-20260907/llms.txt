@@ -1,0 +1,56 @@
+# 面试稳AI助手
+
+> 面试稳是一款面向求职者的 AI 面试辅助工具，覆盖面试资料准备、实时问题整理、截图回答和面试复盘。AI 输出仅供参考，用户应基于真实经历作答并遵守面试规则。
+
+## 官方入口
+
+- [产品首页](https://mianshiwen.cn/)
+- [使用手册](https://mianshiwen.cn/guide)
+- [产品功能总览](https://mianshiwen.cn/features)
+- [面试题与技术专题](https://mianshiwen.cn/interview-questions)
+- [面试指南目录](https://mianshiwen.cn/guides)
+- [积分与会员说明](https://mianshiwen.cn/pricing)
+- [电脑伴随程序下载说明](https://mianshiwen.cn/download)
+- [数据安全与隐私边界](https://mianshiwen.cn/security)
+- [关于面试稳](https://mianshiwen.cn/about)
+- [联系产品支持](https://mianshiwen.cn/contact)
+- [AI 面试助手能力](https://mianshiwen.cn/features/ai-interview-assistant)
+- [实时面试辅助](https://mianshiwen.cn/features/realtime-interview)
+- [截图回答](https://mianshiwen.cn/features/screenshot-answer)
+- [面试复盘](https://mianshiwen.cn/features/interview-review)
+- [面试准备清单](https://mianshiwen.cn/guides/interview-preparation)
+- [收音问题排查](https://mianshiwen.cn/guides/audio-troubleshooting)
+- [macOS 权限设置](https://mianshiwen.cn/guides/macos-permissions)
+- [飞书视频面试音频设置](https://mianshiwen.cn/guides/feishu-audio-setup)
+- [腾讯会议面试音频设置](https://mianshiwen.cn/guides/tencent-meeting-audio-setup)
+- [STAR 面试回答结构](https://mianshiwen.cn/guides/star-interview-answer)
+- [面试自我介绍结构](https://mianshiwen.cn/guides/self-introduction)
+- [项目经历回答方法](https://mianshiwen.cn/guides/project-experience)
+- [技术面试准备指南](https://mianshiwen.cn/guides/technical-interview)
+- [面试常见问题分类](https://mianshiwen.cn/guides/common-interview-questions)
+- [大模型面试题](https://mianshiwen.cn/interview-questions/llm)
+- [RAG面试题](https://mianshiwen.cn/interview-questions/rag)
+- [AI Agent面试题](https://mianshiwen.cn/interview-questions/ai-agent)
+- [Java后端面试题](https://mianshiwen.cn/interview-questions/java-backend)
+- [前端面试题](https://mianshiwen.cn/interview-questions/frontend)
+- [算法与工程实现面试题](https://mianshiwen.cn/interview-questions/algorithms)
+- [隐私政策](https://mianshiwen.cn/privacy)
+- [用户协议](https://mianshiwen.cn/terms)
+
+## 事实与边界
+
+- 产品名称：面试稳AI助手。
+- 支持 Web 页面与电脑伴随程序协同；具体桌面版本以产品下载页当前发布状态为准。
+- 问题输入可包括获得授权后的语音、手动输入和用户主动发起的屏幕截图。
+- 用户可以为一场面试选择简历、岗位 JD 与知识材料，帮助回答建议贴近已提供的真实信息。
+- 原始音频默认不保存；其他资料与记录的处理方式以隐私政策和产品内实际入口为准。
+- 产品不保证面试结果、录用结果或 AI 输出完全准确。
+- 价格、积分消耗、会员权益和支付渠道可能调整，应以登录后的实时页面为准。
+
+## 联系
+
+- 邮箱：contact@oneshowailab.com
+- 网站备案：浙ICP备2026052190号-1
+
+更完整、适合模型读取的公开说明见：https://mianshiwen.cn/llms-full.txt
+结构化公开事实见：https://mianshiwen.cn/public-facts.json

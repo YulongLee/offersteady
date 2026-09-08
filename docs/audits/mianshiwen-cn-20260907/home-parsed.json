@@ -1,0 +1,261 @@
+{
+  "title": "AI\u9762\u8bd5\u52a9\u624b\uff5c\u5b9e\u65f6\u8bed\u97f3\u8bc6\u522b\u3001\u622a\u56fe\u89e3\u9898\u4e0e\u4e2a\u6027\u5316\u56de\u7b54 - \u9762\u8bd5\u7a33",
+  "meta_description": "\u9762\u8bd5\u7a33\u662f\u4e00\u6b3e AI \u9762\u8bd5\u52a9\u624b\uff0c\u53ef\u7ed3\u5408\u7b80\u5386\u3001\u76ee\u6807\u5c97\u4f4d\u548c\u77e5\u8bc6\u8d44\u6599\uff0c\u6574\u7406\u5b9e\u65f6\u9762\u8bd5\u95ee\u9898\u3001\u622a\u56fe\u9898\u4e0e\u6280\u672f\u9898\u7684\u56de\u7b54\u601d\u8def\u3002",
+  "meta_robots": null,
+  "x_robots_tag": null,
+  "canonical": "https://mianshiwen.cn/",
+  "lang": "zh-CN",
+  "charset": "UTF-8",
+  "viewport": "width=device-width, initial-scale=1.0",
+  "favicon": "https://mianshiwen.cn/assets/brand/favicon.png",
+  "h1": [
+    "AI \u9762\u8bd5\u52a9\u624b\uff0c\u8ba9\u4f60\u7684\u7ecf\u5386\u66f4\u597d\u8868\u8fbe\u3002"
+  ],
+  "h2": [
+    "\u4ece\u542c\u6e05\u95ee\u9898\uff0c\u5230\u8bb2\u6e05\u81ea\u5df1",
+    "\u5076\u5c14\u4e00\u573a\uff0c\u6216\u5bc6\u96c6\u51c6\u5907\uff0c\u90fd\u6709\u9009\u62e9",
+    "\u4ece\u51c6\u5907\u5230\u8fde\u63a5\uff0c\u4e09\u6b65\u8fdb\u5165\u72b6\u6001",
+    "\u5e38\u89c1\u95ee\u9898",
+    "\u6e05\u695a\u7684\u6570\u636e\u4e0e\u9690\u79c1\u8fb9\u754c"
+  ],
+  "h3": [
+    "\u8ddf\u4e0a\u6bcf\u4e00\u4e2a\u95ee\u9898",
+    "\u56de\u7b54\u66f4\u8d34\u5408\u4f60\u7684\u7ecf\u5386",
+    "\u622a\u56fe\u9898\uff0c\u4e5f\u6709\u601d\u8def",
+    "\u8ba9\u4e0b\u4e00\u573a\u51c6\u5907\u66f4\u5145\u5206",
+    "\u4e00\u6bb5\u89c6\u9891\uff0c\u4e86\u89e3\u9762\u8bd5\u7a33",
+    "\u4ece\u8fde\u63a5\u5230\u4f7f\u7528\uff0c\u770b\u4e00\u904d\u5c31\u660e\u767d"
+  ],
+  "h4": [],
+  "h5": [],
+  "h6": [],
+  "images": [],
+  "links": {
+    "internal": [
+      {
+        "href": "https://mianshiwen.cn/features",
+        "text": "\u4ea7\u54c1\u529f\u80fd",
+        "rel": []
+      },
+      {
+        "href": "https://mianshiwen.cn/interview-questions",
+        "text": "\u9762\u8bd5\u9898\u4e0e\u4e13\u9898",
+        "rel": []
+      },
+      {
+        "href": "https://mianshiwen.cn/guides",
+        "text": "\u9762\u8bd5\u6307\u5357",
+        "rel": []
+      },
+      {
+        "href": "https://mianshiwen.cn/pricing",
+        "text": "\u4ef7\u683c",
+        "rel": []
+      },
+      {
+        "href": "https://mianshiwen.cn/download",
+        "text": "\u4e0b\u8f7d",
+        "rel": []
+      },
+      {
+        "href": "https://mianshiwen.cn/login",
+        "text": "\u514d\u8d39\u4f7f\u7528",
+        "rel": []
+      },
+      {
+        "href": "https://mianshiwen.cn/app/partner-program",
+        "text": "\u5408\u4f5c\u4f19\u4f34\u8ba1\u5212",
+        "rel": []
+      },
+      {
+        "href": "https://mianshiwen.cn/app/billing",
+        "text": "\u67e5\u770b\u79ef\u5206\u4e0e\u4f1a\u5458",
+        "rel": []
+      },
+      {
+        "href": "https://mianshiwen.cn/login",
+        "text": "\u514d\u8d39\u4f7f\u7528",
+        "rel": []
+      },
+      {
+        "href": "https://mianshiwen.cn/features",
+        "text": "\u4ea7\u54c1\u529f\u80fd",
+        "rel": []
+      },
+      {
+        "href": "https://mianshiwen.cn/interview-questions",
+        "text": "\u9762\u8bd5\u9898\u4e0e\u4e13\u9898",
+        "rel": []
+      },
+      {
+        "href": "https://mianshiwen.cn/guides",
+        "text": "\u9762\u8bd5\u6307\u5357",
+        "rel": []
+      },
+      {
+        "href": "https://mianshiwen.cn/guide",
+        "text": "\u4f7f\u7528\u624b\u518c",
+        "rel": []
+      },
+      {
+        "href": "https://mianshiwen.cn/pricing",
+        "text": "\u79ef\u5206\u4e0e\u4f1a\u5458",
+        "rel": []
+      },
+      {
+        "href": "https://mianshiwen.cn/download",
+        "text": "\u4e0b\u8f7d\u52a9\u624b",
+        "rel": []
+      },
+      {
+        "href": "https://mianshiwen.cn/security",
+        "text": "\u5b89\u5168\u8bf4\u660e",
+        "rel": []
+      },
+      {
+        "href": "https://mianshiwen.cn/about",
+        "text": "\u5173\u4e8e\u4ea7\u54c1",
+        "rel": []
+      },
+      {
+        "href": "https://mianshiwen.cn/contact",
+        "text": "\u8054\u7cfb\u6211\u4eec",
+        "rel": []
+      },
+      {
+        "href": "https://mianshiwen.cn/terms",
+        "text": "\u7528\u6237\u534f\u8bae",
+        "rel": []
+      },
+      {
+        "href": "https://mianshiwen.cn/privacy",
+        "text": "\u9690\u79c1\u653f\u7b56",
+        "rel": []
+      }
+    ],
+    "external": [
+      {
+        "href": "https://beian.miit.gov.cn",
+        "text": "\u6d59ICP\u59072026052190\u53f7-1",
+        "rel": [
+          "noreferrer"
+        ]
+      },
+      {
+        "href": "https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=33010602014812",
+        "text": "\u6d59\u516c\u7f51\u5b89\u590733010602014812\u53f7",
+        "rel": [
+          "noreferrer"
+        ]
+      }
+    ]
+  },
+  "pagination": {
+    "prev": null,
+    "next": null
+  },
+  "resource_hints": {
+    "preload": [],
+    "preconnect": [],
+    "dns-prefetch": [],
+    "prefetch": [],
+    "prerender": []
+  },
+  "schema": [
+    {
+      "@type": "Organization",
+      "@types": [
+        "Organization"
+      ],
+      "@id": "https://mianshiwen.cn/#organization",
+      "@context": "https://schema.org",
+      "status": "active",
+      "note": "",
+      "has_context": true,
+      "has_type": true,
+      "from_graph": false,
+      "raw": {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "@id": "https://mianshiwen.cn/#organization",
+        "name": "OneShow AI Lab",
+        "alternateName": "\u9762\u8bd5\u7a33",
+        "url": "https://mianshiwen.cn/",
+        "logo": "https://mianshiwen.cn/assets/brand/logo.svg",
+        "email": "contact@oneshowailab.com"
+      }
+    },
+    {
+      "@type": "WebSite",
+      "@types": [
+        "WebSite"
+      ],
+      "@id": "https://mianshiwen.cn/#website",
+      "@context": "https://schema.org",
+      "status": "active",
+      "note": "",
+      "has_context": true,
+      "has_type": true,
+      "from_graph": false,
+      "raw": {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": "https://mianshiwen.cn/#website",
+        "url": "https://mianshiwen.cn/",
+        "name": "\u9762\u8bd5\u7a33AI\u52a9\u624b",
+        "inLanguage": "zh-CN",
+        "publisher": {
+          "@id": "https://mianshiwen.cn/#organization"
+        }
+      }
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@types": [
+        "SoftwareApplication"
+      ],
+      "@id": "https://mianshiwen.cn/#software",
+      "@context": "https://schema.org",
+      "status": "active",
+      "note": "",
+      "has_context": true,
+      "has_type": true,
+      "from_graph": false,
+      "raw": {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "@id": "https://mianshiwen.cn/#software",
+        "name": "\u9762\u8bd5\u7a33AI\u52a9\u624b",
+        "url": "https://mianshiwen.cn/",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web, macOS, Windows",
+        "description": "\u7ed3\u5408\u7b80\u5386\u3001\u76ee\u6807\u5c97\u4f4d\u548c\u77e5\u8bc6\u8d44\u6599\uff0c\u6574\u7406\u5b9e\u65f6\u9762\u8bd5\u95ee\u9898\u3001\u622a\u56fe\u9898\u4e0e\u6280\u672f\u9898\u7684\u56de\u7b54\u601d\u8def\u3002",
+        "publisher": {
+          "@id": "https://mianshiwen.cn/#organization"
+        }
+      }
+    }
+  ],
+  "open_graph": {
+    "og:type": "website",
+    "og:site_name": "\u9762\u8bd5\u7a33AI\u52a9\u624b",
+    "og:locale": "zh_CN",
+    "og:url": "https://mianshiwen.cn/",
+    "og:title": "AI\u9762\u8bd5\u52a9\u624b\uff5c\u5b9e\u65f6\u8bed\u97f3\u4e0e\u622a\u56fe\u56de\u7b54 - \u9762\u8bd5\u7a33",
+    "og:description": "\u7ed3\u5408\u7b80\u5386\u3001\u76ee\u6807\u5c97\u4f4d\u548c\u77e5\u8bc6\u8d44\u6599\uff0c\u6574\u7406\u5b9e\u65f6\u9762\u8bd5\u95ee\u9898\u3001\u622a\u56fe\u9898\u4e0e\u6280\u672f\u9898\u7684\u56de\u7b54\u601d\u8def\u3002",
+    "og:image": "https://mianshiwen.cn/assets/brand/share-card.png",
+    "og:image:type": "image/png",
+    "og:image:width": "1200",
+    "og:image:height": "630",
+    "og:image:alt": "\u9762\u8bd5\u7a33 AI \u9762\u8bd5\u52a9\u624b\uff0c\u52a9\u4f60\u66f4\u4ece\u5bb9\u5730\u51b2\u523a Offer"
+  },
+  "twitter_card": {
+    "twitter:card": "summary_large_image",
+    "twitter:title": "AI\u9762\u8bd5\u52a9\u624b\uff5c\u5b9e\u65f6\u8bed\u97f3\u4e0e\u622a\u56fe\u56de\u7b54 - \u9762\u8bd5\u7a33",
+    "twitter:description": "\u7ed3\u5408\u7b80\u5386\u3001\u76ee\u6807\u5c97\u4f4d\u548c\u77e5\u8bc6\u8d44\u6599\uff0c\u6574\u7406\u5b9e\u65f6\u9762\u8bd5\u95ee\u9898\u3001\u622a\u56fe\u9898\u4e0e\u6280\u672f\u9898\u7684\u56de\u7b54\u601d\u8def\u3002",
+    "twitter:image": "https://mianshiwen.cn/assets/brand/share-card.png",
+    "twitter:image:alt": "\u9762\u8bd5\u7a33 AI \u9762\u8bd5\u52a9\u624b\uff0c\u52a9\u4f60\u66f4\u4ece\u5bb9\u5730\u51b2\u523a Offer"
+  },
+  "word_count": 90,
+  "hreflang": []
+}

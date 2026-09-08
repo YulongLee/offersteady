@@ -1,0 +1,46 @@
+appId: com.offersteady.companion.global
+productName: OfferSteady Companion Global
+directories:
+  output: release/global
+files:
+  - dist/**/*
+  - "!dist/native/**/*"
+asar: true
+extraResources:
+  - from: build/generated/global-runtime-config.json
+    to: global-runtime-config.json
+mac:
+  icon: resources/app-icon.png
+  category: public.app-category.productivity
+  minimumSystemVersion: 14.2.0
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    NSMicrophoneUsageDescription: OfferSteady uses your microphone only when you explicitly start audio capture for interview transcription.
+    NSAudioCaptureUsageDescription: OfferSteady captures system audio only when you explicitly start interview transcription.
+    NSScreenCaptureUsageDescription: OfferSteady uses screen access for the screen source you select and does not record screen video.
+  extraResources:
+    - from: dist/native/macos-capture/OfferSteadyCaptureRuntime
+      to: app/native/macos-capture/OfferSteadyCaptureRuntime
+  target:
+    - target: dmg
+    - target: zip
+  artifactName: OfferSteady-Companion-Global-${version}-macOS-${arch}.${ext}
+win:
+  icon: resources/app-icon.png
+  executableName: OfferSteadyGlobal
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: OfferSteady-Companion-Global-Setup-${version}-Windows-${arch}.${ext}
+  verifyUpdateCodeSignature: true
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: OfferSteady Companion Global
+  uninstallDisplayName: OfferSteady Companion Global
+  deleteAppDataOnUninstall: false

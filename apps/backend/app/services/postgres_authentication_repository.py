@@ -10,6 +10,7 @@ from app.core.config import Settings
 from app.ports.authentication import (
     AuthSessionRecord,
     AuthenticationRepository,
+    EmailChallengeRecord,
     ExternalIdentityBindingRecord,
     IdentityProviderKind,
     SmsChallengeRecord,
@@ -31,6 +32,30 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
         self.settings = settings
         self.transient = InMemoryAuthenticationRepository()
         self._ensure_tables()
+
+    def create_user(self, user: UserRecord) -> UserRecord | None:
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                INSERT INTO auth_users (
+                  user_id, login_id, password_hash, display_name, avatar_url,
+                  last_login_provider, last_login_at_ms, created_at_ms, updated_at_ms,
+                  membership_anchor_ref
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (login_id) DO NOTHING
+                RETURNING user_id
+                """,
+                (
+                    user.user_id, user.login_id, user.password_hash, user.display_name,
+                    user.avatar_url, user.last_login_provider, user.last_login_at_ms,
+                    user.created_at_ms, user.updated_at_ms, user.membership_anchor_ref,
+                ),
+            )
+            row = cursor.fetchone()
+            connection.commit()
+        if row is None:
+            return None
+        return self.get_user(str(row["user_id"]))
 
     def save_user(self, user: UserRecord) -> UserRecord:
         with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
@@ -246,6 +271,55 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
             rows = cursor.fetchall()
         return [self._sms_challenge_from_row(row) for row in rows]
 
+    def save_email_challenge(self, challenge: EmailChallengeRecord) -> EmailChallengeRecord:
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO auth_email_challenges (
+                      challenge_id, email_hash, masked_email, provider, status, purpose,
+                      provider_message_id, provider_request_id, attempt_count, max_attempts,
+                      expires_at_ms, created_at_ms, updated_at_ms, last_error_code,
+                      verified_at_ms, code_digest
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT (challenge_id) DO UPDATE SET
+                      status = EXCLUDED.status,
+                      provider_message_id = EXCLUDED.provider_message_id,
+                      provider_request_id = EXCLUDED.provider_request_id,
+                      attempt_count = EXCLUDED.attempt_count,
+                      updated_at_ms = EXCLUDED.updated_at_ms,
+                      last_error_code = EXCLUDED.last_error_code,
+                      verified_at_ms = EXCLUDED.verified_at_ms,
+                      code_digest = EXCLUDED.code_digest
+                    """,
+                    (
+                        challenge.challenge_id, challenge.email_hash, challenge.masked_email,
+                        challenge.provider, challenge.status, challenge.purpose, challenge.provider_message_id,
+                        challenge.provider_request_id, challenge.attempt_count, challenge.max_attempts,
+                        challenge.expires_at_ms, challenge.created_at_ms, challenge.updated_at_ms,
+                        challenge.last_error_code, challenge.verified_at_ms, challenge.code_digest,
+                    ),
+                )
+            connection.commit()
+        return replace(challenge)
+
+    def get_email_challenge(self, challenge_id: str) -> EmailChallengeRecord | None:
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute("SELECT * FROM auth_email_challenges WHERE challenge_id = %s", (challenge_id,))
+            row = cursor.fetchone()
+        return self._email_challenge_from_row(row) if row else None
+
+    def list_email_challenges(self, *, email_hash: str, since_ms: int | None = None) -> list[EmailChallengeRecord]:
+        params: list[object] = [email_hash]
+        where = "email_hash = %s"
+        if since_ms is not None:
+            where += " AND created_at_ms >= %s"
+            params.append(since_ms)
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(f"SELECT * FROM auth_email_challenges WHERE {where} ORDER BY created_at_ms DESC", params)
+            rows = cursor.fetchall()
+        return [self._email_challenge_from_row(row) for row in rows]
+
     def _get_user(self, where: str, params: tuple[object, ...]) -> UserRecord | None:
         with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
             try:
@@ -337,6 +411,28 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
             last_error_code=row["last_error_code"],
             verified_at_ms=int(row["verified_at_ms"]) if row["verified_at_ms"] is not None else None,
             code_digest=row.get("code_digest"),
+            purpose=row.get("purpose", "login"),
+        )
+
+    @staticmethod
+    def _email_challenge_from_row(row: dict[str, Any]) -> EmailChallengeRecord:
+        return EmailChallengeRecord(
+            challenge_id=str(row["challenge_id"]),
+            email_hash=str(row["email_hash"]),
+            masked_email=str(row["masked_email"]),
+            provider=str(row["provider"]),
+            status=row["status"],
+            provider_message_id=row["provider_message_id"],
+            provider_request_id=row["provider_request_id"],
+            attempt_count=int(row["attempt_count"]),
+            max_attempts=int(row["max_attempts"]),
+            expires_at_ms=int(row["expires_at_ms"]),
+            created_at_ms=int(row["created_at_ms"]),
+            updated_at_ms=int(row["updated_at_ms"]),
+            last_error_code=row["last_error_code"],
+            verified_at_ms=int(row["verified_at_ms"]) if row["verified_at_ms"] is not None else None,
+            code_digest=row.get("code_digest"),
+            purpose=row.get("purpose", "login"),
         )
 
     def _connect(self):
@@ -353,7 +449,11 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
             with connection.cursor() as cursor:
                 cursor.execute(open(self._migration_path(), encoding="utf8").read())
                 from app.core.config import REPO_ROOT
-                apply_sql_migrations(cursor, [REPO_ROOT / "apps/backend/migrations/versions/0030_dysmsapi_code_digest.sql"])
+                apply_sql_migrations(cursor, [
+                    REPO_ROOT / "apps/backend/migrations/versions/0030_dysmsapi_code_digest.sql",
+                    REPO_ROOT / "apps/backend/migrations/versions/0039_global_email_authentication.sql",
+                    REPO_ROOT / "apps/backend/migrations/versions/0041_global_password_authentication.sql",
+                ])
             connection.commit()
 
     @staticmethod

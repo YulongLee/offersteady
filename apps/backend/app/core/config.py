@@ -9,6 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 AppEnvironment = Literal["development", "test", "staging", "production"]
+ProductEdition = Literal["cn", "global"]
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -25,6 +26,7 @@ class Settings(BaseSettings):
     app_name: str = "OfferSteady Backend"
     app_version: str = "0.1.0"
     environment: AppEnvironment = "development"
+    product_edition: ProductEdition = "cn"
     app_mode: str = "foundation"
     prototype_mode: str = "placeholder"
     development_user_id: str = "admin"
@@ -87,6 +89,8 @@ class Settings(BaseSettings):
     embedding_pipeline_knowledge_chunk_overlap: int = 180
     document_processing_max_retries: int = 2
     document_processing_retry_backoff_ms: int = 200
+    document_processing_inline_worker_enabled: bool = True
+    document_processing_job_lease_seconds: int = 900
     retrieval_query_embedding_provider: str = "synthetic-query-embedding"
     retrieval_candidate_top_k: int = 6
     retrieval_final_top_k: int = 3
@@ -110,6 +114,9 @@ class Settings(BaseSettings):
     chat_http_max_connections: int = 32
     chat_http_max_keepalive_connections: int = 16
     chat_http_keepalive_expiry_seconds: float = 30.0
+    live_answer_stream_worker_count: int = 8
+    live_answer_stream_queue_max: int = 8
+    live_answer_stream_event_queue_max: int = 16
     screenshot_prompt_template_path: str = "ai/prompts/screenshot-answer/system.md"
     screenshot_prompt_version: str = "v2"
     screenshot_max_history_entries: int = 4
@@ -201,6 +208,10 @@ class Settings(BaseSettings):
     auth_access_token_ttl_seconds: int = 900
     auth_refresh_token_ttl_seconds: int = 14 * 24 * 60 * 60
     auth_password_hash_iterations: int = 120000
+    auth_global_password_min_length: int = 15
+    auth_global_password_max_length: int = 128
+    auth_global_login_attempt_limit: int = 10
+    auth_global_login_window_seconds: int = 900
     auth_wechat_provider_mode: str = "compatible"
     auth_wechat_app_id: str = "offersteady-dev-wechat-app"
     auth_wechat_callback_url: str = "http://127.0.0.1:8000/api/v1/auth/wechat/callback"
@@ -220,6 +231,22 @@ class Settings(BaseSettings):
     auth_sms_verify_attempt_limit: int = 5
     auth_sms_fake_code: str = "123456"
     auth_sms_test_phone_number: str | None = None
+    auth_email_enabled: bool = False
+    auth_email_provider_mode: Literal["fake", "smtp"] = "fake"
+    auth_email_code_pepper: str | None = None
+    auth_email_ttl_seconds: int = 600
+    auth_email_send_interval_seconds: int = 60
+    auth_email_daily_limit: int = 20
+    auth_email_verify_attempt_limit: int = 5
+    auth_email_fake_code: str = "123456"
+    auth_email_smtp_host: str | None = None
+    auth_email_smtp_port: int = 587
+    auth_email_smtp_username: str | None = None
+    auth_email_smtp_password: str | None = None
+    auth_email_smtp_ssl: bool = False
+    auth_email_smtp_starttls: bool = True
+    auth_email_from_address: str | None = None
+    auth_email_from_name: str = "OfferSteady"
     admin_enabled: bool = False
     admin_allowed_origins: list[str] = Field(default_factory=list)
     admin_session_ttl_seconds: int = 8 * 60 * 60
@@ -268,6 +295,21 @@ class Settings(BaseSettings):
 
     public_web_base_url: str = "http://127.0.0.1:5173"
     checkout_provider: str = ""
+    global_commerce_enabled: bool = False
+    global_commerce_provider_mode: Literal["test", "live"] = "test"
+    creem_test_base_url: str = "https://test-api.creem.io"
+    creem_live_base_url: str = "https://api.creem.io"
+    creem_test_api_key: str | None = None
+    creem_live_api_key: str | None = None
+    creem_test_webhook_secret: str | None = None
+    creem_live_webhook_secret: str | None = None
+    creem_checkout_success_url: str | None = None
+    creem_http_timeout_seconds: float = 8.0
+    creem_http_retry_attempts: int = 2
+    global_terms_url: str | None = None
+    global_privacy_url: str | None = None
+    global_refund_policy_url: str | None = None
+    global_fair_use_policy_url: str | None = None
     mzfpay_base_url: str = "https://pay.mzfpay.com"
     mzfpay_pid: str | None = None
     mzfpay_key: str | None = None

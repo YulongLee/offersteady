@@ -1,0 +1,90 @@
+[
+  {
+    "id": 1,
+    "start": 0.35,
+    "end": 4.7,
+    "text": "电脑上的面试，手机上的思路。",
+    "sourceDuration": 2.7,
+    "file": "public/audio/voice/voice-01.mp3",
+    "trimDuration": 2.15475,
+    "tempo": 1,
+    "duration": 2.1499375
+  },
+  {
+    "id": 2,
+    "start": 5.3,
+    "end": 11.7,
+    "text": "先在电脑安装并打开面试稳助手，完成权限设置。",
+    "sourceDuration": 4.5,
+    "file": "public/audio/voice/voice-02.mp3",
+    "trimDuration": 3.900333,
+    "tempo": 1,
+    "duration": 3.8972083333333334
+  },
+  {
+    "id": 3,
+    "start": 12.3,
+    "end": 19.7,
+    "text": "手机登录同一账号，打开面试网页，输入电脑连接码。",
+    "sourceDuration": 4.9,
+    "file": "public/audio/voice/voice-03.mp3",
+    "trimDuration": 4.336625,
+    "tempo": 1,
+    "duration": 4.3339375
+  },
+  {
+    "id": 4,
+    "start": 20.3,
+    "end": 28.7,
+    "text": "开始面试，电脑接收声音，手机查看实时对话。需要回答时，点一下快答。",
+    "sourceDuration": 7.267846,
+    "file": "public/audio/voice/voice-04.mp3",
+    "trimDuration": 6.684354,
+    "tempo": 1,
+    "duration": 6.682854166666667
+  },
+  {
+    "id": 5,
+    "start": 29.3,
+    "end": 35.7,
+    "text": "结合本场资料，先看简短思路，再展开详细回答。",
+    "sourceDuration": 4.5,
+    "file": "public/audio/voice/voice-05.mp3",
+    "trimDuration": 3.924354,
+    "tempo": 1,
+    "duration": 3.9181458333333334
+  },
+  {
+    "id": 6,
+    "start": 36.2,
+    "end": 40.7,
+    "text": "也可以用平板，换一块大屏查看。",
+    "sourceDuration": 2.879274,
+    "file": "public/audio/voice/voice-06.mp3",
+    "trimDuration": 2.324042,
+    "tempo": 1,
+    "duration": 2.315166666666667
+  },
+  {
+    "id": 7,
+    "start": 41.15,
+    "end": 44.8,
+    "text": "习惯电脑操作，就直接在电脑上看。",
+    "sourceDuration": 3.2,
+    "file": "public/audio/voice/voice-07.mp3",
+    "trimDuration": 2.590292,
+    "tempo": 1,
+    "duration": 2.585166666666667
+  },
+  {
+    "id": 8,
+    "start": 45.2,
+    "end": 48.8,
+    "text": "面试稳。电脑运行，在哪看，由你选择。",
+    "sourceDuration": 4.3,
+    "file": "public/audio/voice/voice-08.mp3",
+    "trimDuration": 3.708958,
+    "tempo": 1.0536812500000017,
+    "duration": 3.5269375
+  }
+]

@@ -11,7 +11,7 @@ from .adapters.oss_storage import AliyunOssStorageAdapter
 from .core.config import REPO_ROOT, Settings, get_settings
 from .core.errors import DomainRequestError
 from .core.logging import configure_logging
-from .ports.authentication import AccessTokenCodecPort, AuthenticatedRequestContext, AuthenticationRepository, PasswordHasherPort, SmsVerificationProviderPort
+from .ports.authentication import AccessTokenCodecPort, AuthenticatedRequestContext, AuthenticationRepository, EmailVerificationProviderPort, PasswordHasherPort, SmsVerificationProviderPort
 from .ports.commercial_hardening import CommercialHardeningRepository
 from .ports.document_processing import ProcessingTaskRepository, VectorStorePort
 from .ports.chat import ChatRepository, LLMGatewayPort, PromptBuilderPort, PromptTemplatePort
@@ -41,14 +41,23 @@ from .services.document_processing_adapters import (
 )
 from .services.embedding_pipeline import EmbeddingPipelineService, ProcessingTaskEmbeddingStatusReporter
 from .services.document_parser import DocumentParserService, ProcessingTaskParserStatusReporter
-from .services.document_processing_repository import InMemoryProcessingTaskRepository
+from .services.document_processing_repository import InMemoryProcessingTaskRepository, PostgresProcessingTaskRepository
+from .services.upload_intent_repository import InMemoryUploadIntentRepository, PostgresUploadIntentRepository
 from .services.chat_repository import InMemoryChatRepository
 from .services.chat_service import ChatService, FilePromptTemplateAdapter, InterviewPromptBuilder, QwenCompatibleGateway
 from .services.authentication_repository import InMemoryAuthenticationRepository
 from .services.postgres_authentication_repository import PostgresAuthenticationRepository
 from .services.authentication_service import AuthenticationService, CompatibleWechatLoginProvider, JWTAccessTokenCodec, PBKDF2PasswordHasher
 from .services.sms_verification_provider import AliyunDypnsSmsVerificationProvider, AliyunDysmsSmsVerificationProvider, FakeSmsVerificationProvider
+from .services.email_verification_provider import FakeEmailVerificationProvider, SmtpEmailVerificationProvider
 from .services.billing_service import BillingService
+from .services.global_commerce_repository import InMemoryGlobalCommerceRepository
+from .services.global_commerce_service import GlobalCommerceService
+from .services.global_checkout_service import GlobalCheckoutService
+from .services.global_creem_configuration_service import GlobalCreemConfigurationService
+from .services.global_usage_billing_adapter import GlobalUsageBillingAdapter
+from .services.creem_provider import CreemProvider
+from .services.postgres_global_commerce_repository import PostgresGlobalCommerceRepository
 from .services.postgres_billing_repository import PostgresBillingRepository
 from .services.postgres_points_redemption_repository import PostgresPointsRedemptionRepository
 from .services.document_repository import InMemoryDocumentRepository
@@ -106,7 +115,19 @@ def logger():
 
 @lru_cache(maxsize=1)
 def storage_port() -> FileStoragePort:
-    return AliyunOssStorageAdapter(get_settings())
+    settings = get_settings()
+    if settings.environment == "production" and not settings.database_url:
+        raise RuntimeError("OFFERSTEADY_DATABASE_URL is required for production upload intent persistence")
+    if settings.database_url and not os.environ.get("PYTEST_CURRENT_TEST"):
+        intent_repository = _fallback_to_memory_repository(
+            logger_key="upload_intent_repository",
+            environment=settings.environment,
+            build_postgres=lambda: PostgresUploadIntentRepository(settings),
+            fallback=lambda: InMemoryUploadIntentRepository(),
+        )
+    else:
+        intent_repository = InMemoryUploadIntentRepository()
+    return AliyunOssStorageAdapter(settings, intent_repository=intent_repository)
 
 
 T = TypeVar("T")
@@ -203,7 +224,7 @@ def document_service() -> DocumentService:
         processing_service=document_processing_service(),
         deletion_scheduler=material_deletion_scheduler(),
         commercial_repository=commercial_hardening_repository(),
-        billing_service=billing_service(),
+        billing_service=usage_billing_service(),
     )
 
 
@@ -283,7 +304,7 @@ def chat_service() -> ChatService:
         prompt_template=prompt_template_port(),
         prompt_builder=prompt_builder_port(),
         llm_gateway=llm_gateway_port(),
-        billing_service=billing_service(),
+        billing_service=usage_billing_service(),
         commercial_repository=commercial_hardening_repository(),
     )
 
@@ -339,6 +360,25 @@ def sms_verification_provider() -> SmsVerificationProviderPort:
 
 
 @lru_cache(maxsize=1)
+def email_verification_provider() -> EmailVerificationProviderPort:
+    settings = get_settings()
+    if not settings.auth_email_enabled:
+        return FakeEmailVerificationProvider(settings)
+    if settings.auth_email_provider_mode == "smtp":
+        _require_production_provider(settings, "email", {
+            "OFFERSTEADY_AUTH_EMAIL_CODE_PEPPER": settings.auth_email_code_pepper,
+            "OFFERSTEADY_AUTH_EMAIL_SMTP_HOST": settings.auth_email_smtp_host,
+            "OFFERSTEADY_AUTH_EMAIL_SMTP_USERNAME": settings.auth_email_smtp_username,
+            "OFFERSTEADY_AUTH_EMAIL_SMTP_PASSWORD": settings.auth_email_smtp_password,
+            "OFFERSTEADY_AUTH_EMAIL_FROM_ADDRESS": settings.auth_email_from_address,
+        })
+        return SmtpEmailVerificationProvider(settings)
+    if settings.environment == "production":
+        raise RuntimeError("email production configuration requires SMTP provider mode")
+    return FakeEmailVerificationProvider(settings)
+
+
+@lru_cache(maxsize=1)
 def authentication_service() -> AuthenticationService:
     return AuthenticationService(
         settings=get_settings(),
@@ -348,6 +388,7 @@ def authentication_service() -> AuthenticationService:
         token_codec=access_token_codec_port(),
         wechat_provider=wechat_login_provider(),
         sms_provider=sms_verification_provider(),
+        email_provider=email_verification_provider(),
     )
 
 
@@ -378,6 +419,41 @@ def billing_service() -> BillingService:
         billing_repository=billing_repository,
         authentication_repository=authentication_repository(),
     )
+
+
+@lru_cache(maxsize=1)
+def global_commerce_repository():
+    settings = get_settings()
+    if settings.product_edition == "global" and settings.environment == "production" and not settings.database_url:
+        raise RuntimeError("OFFERSTEADY_DATABASE_URL is required for production Global commerce")
+    if settings.product_edition == "global" and settings.database_url and not os.environ.get("PYTEST_CURRENT_TEST"):
+        return PostgresGlobalCommerceRepository(settings)
+    return InMemoryGlobalCommerceRepository()
+
+
+@lru_cache(maxsize=1)
+def global_commerce_service() -> GlobalCommerceService:
+    return GlobalCommerceService(get_settings(), global_commerce_repository())
+
+
+@lru_cache(maxsize=1)
+def global_creem_configuration_service() -> GlobalCreemConfigurationService:
+    return GlobalCreemConfigurationService(get_settings(), global_commerce_repository())
+
+
+def creem_provider() -> CreemProvider:
+    settings = get_settings()
+    mode = settings.global_commerce_provider_mode
+    return CreemProvider(global_creem_configuration_service().configured_settings(mode), mode=mode)
+
+
+def global_checkout_service() -> GlobalCheckoutService:
+    return GlobalCheckoutService(settings=get_settings(), repository=global_commerce_repository(), provider=creem_provider(), entitlements=global_commerce_service())
+
+
+@lru_cache(maxsize=1)
+def usage_billing_service():
+    return GlobalUsageBillingAdapter(global_commerce_service()) if get_settings().product_edition == "global" else billing_service()
 
 
 @lru_cache(maxsize=1)
@@ -437,7 +513,7 @@ def screenshot_answer_service() -> ScreenshotAnswerService:
         prompt_template=screenshot_prompt_template_port(),
         prompt_builder=screenshot_prompt_builder_port(),
         llm_gateway=llm_gateway_port(),
-        billing_service=billing_service(),
+        billing_service=usage_billing_service(),
         commercial_repository=commercial_hardening_repository(),
     )
 
@@ -488,7 +564,7 @@ def realtime_speech_service() -> RealtimeSpeechService:
         repository=realtime_speech_repository(),
         session_service=session_service(),
         asr_gateway=realtime_asr_gateway(),
-        billing_service=billing_service(),
+        billing_service=usage_billing_service(),
         commercial_repository=commercial_hardening_repository(),
         # Resolve chat/retrieval lazily on a cold-path worker. Realtime audio
         # startup must not depend on Redis-backed chat task initialization.
@@ -498,6 +574,16 @@ def realtime_speech_service() -> RealtimeSpeechService:
 
 @lru_cache(maxsize=1)
 def processing_task_repository() -> ProcessingTaskRepository:
+    settings = get_settings()
+    if settings.environment == "production" and not settings.database_url:
+        raise RuntimeError("OFFERSTEADY_DATABASE_URL is required for production processing task persistence")
+    if settings.database_url and not os.environ.get("PYTEST_CURRENT_TEST"):
+        return _fallback_to_memory_repository(
+            logger_key="processing_task_repository",
+            environment=settings.environment,
+            build_postgres=lambda: PostgresProcessingTaskRepository(settings),
+            fallback=lambda: InMemoryProcessingTaskRepository(),
+        )
     return InMemoryProcessingTaskRepository()
 
 
@@ -635,7 +721,7 @@ def document_processing_service() -> DocumentProcessingService:
         embedding_pipeline=embedding_pipeline_service(),
         material_availability=material_availability_validator(),
         commercial_repository=commercial_hardening_repository(),
-        billing_service=billing_service(),
+        billing_service=usage_billing_service(),
     )
 
 
@@ -714,3 +800,26 @@ def resolve_owned_user_id(*, explicit_user_id: str | None, auth_context: Authent
     if explicit_user_id and explicit_user_id != auth_context.user_id:
         raise DomainRequestError("authentication", "resolve-owner", "请求中的用户身份与当前登录态不一致。", 403)
     return auth_context.user_id
+
+
+def authorize_global_feature(*, user_id: str, feature: str) -> None:
+    settings = get_settings()
+    if settings.product_edition != "global" or not settings.global_commerce_enabled:
+        return
+    state = global_commerce_service().state(user_id)
+    allowed = bool(state["features"].get(feature))
+    if not allowed:
+        raise DomainRequestError("global-commerce", f"feature-{feature}", "Your current plan does not include this feature.", 402, error_code="global_feature_not_in_plan")
+
+
+def authorize_global_interview_start(*, user_id: str, interview_already_active: bool) -> None:
+    settings = get_settings()
+    if settings.product_edition != "global" or not settings.global_commerce_enabled:
+        return
+    try:
+        global_commerce_service().authorize_interview(user_id=user_id, interview_already_active=interview_already_active)
+    except Exception as exc:
+        from .services.global_commerce_service import GlobalFairUseRestricted
+        if isinstance(exc, GlobalFairUseRestricted):
+            raise DomainRequestError("global-commerce", "fair-use", str(exc), 429, error_code="global_fair_use_restricted") from exc
+        raise

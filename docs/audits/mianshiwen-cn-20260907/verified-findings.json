@@ -1,0 +1,128 @@
+{
+  "findings": [
+    {
+      "finding": "F01 Homepage rendering waits for business state",
+      "severity": "Warning",
+      "confidence": "Confirmed",
+      "evidence": "PrototypeProvider returns RouteLoadingPage until loadState resolves; preceding same-session browser samples measured state duration 8.1 and 11.4 seconds, while isolated origin was approximately 0.33s. Not field CWV.",
+      "fix": "Render public hero/content independently; defer dynamic catalogue and account initialization; test delayed/failed state API.",
+      "source": "apps/web/src/App.tsx and preceding browser diagnostic",
+      "sources": [
+        "apps/web/src/App.tsx and preceding browser diagnostic"
+      ]
+    },
+    {
+      "finding": "F02 Previous hashed assets unavailable after release",
+      "severity": "Warning",
+      "confidence": "Confirmed",
+      "evidence": "Previous main-DLJpquzR.js and AnswerWorkspace-XxiamCl0.js returned 404 in preceding production probes. User incidence unknown.",
+      "fix": "Retain compatible immutable assets across releases and add old-tab navigation acceptance.",
+      "source": "preceding production diagnostic",
+      "sources": [
+        "preceding production diagnostic"
+      ]
+    },
+    {
+      "finding": "F03 Public legal URLs return homepage shell",
+      "severity": "Warning",
+      "confidence": "Confirmed",
+      "evidence": "/terms and /privacy HTTP 200 share homepage H1/body/canonical and return X-Robots-Tag noindex, follow; sitemap excludes them.",
+      "fix": "Serve standalone public legal HTML and self-canonical; keep login and private app routes noindex.",
+      "source": "pages.json rows 30-32",
+      "sources": [
+        "pages.json rows 30-32"
+      ]
+    },
+    {
+      "finding": "F04 WWW host serves duplicate content without redirect",
+      "severity": "Warning",
+      "confidence": "Confirmed",
+      "evidence": "https://www.mianshiwen.cn/ returns 200 with canonical to non-www; http://mianshiwen.cn/ correctly redirects 308 to HTTPS.",
+      "fix": "Plan tested permanent canonical-host redirects preserving path/query and existing authenticated/deep-link behavior.",
+      "source": "pages.json",
+      "sources": [
+        "pages.json"
+      ]
+    },
+    {
+      "finding": "F05 Pricing page omits actual public prices",
+      "severity": "Warning",
+      "confidence": "Confirmed",
+      "evidence": "/pricing is independent HTML but says current prices require login; homepage static HTML also omits amounts although rendered homepage shows current paid passes.",
+      "fix": "Generate public price HTML from a single validated catalogue snapshot with publication/update rules; never hardcode test prices.",
+      "source": "pages.json /pricing and production visual checks",
+      "sources": [
+        "pages.json /pricing and production visual checks"
+      ]
+    },
+    {
+      "finding": "F06 Operator information remains unresolved in About copy",
+      "severity": "Warning",
+      "confidence": "Confirmed",
+      "evidence": "/about states registered operator awaits verification, /contact supplies support channels but no operator identity. User previously supplied operator name; domestic contracting entity still needs confirmation.",
+      "fix": "Confirm domestic operating entity then align public about/contact/legal and Organization identity; keep contact@oneshowailab.com.",
+      "source": "pages.json /about /contact",
+      "sources": [
+        "pages.json /about /contact"
+      ]
+    },
+    {
+      "finding": "F07 Existing guides lack task-specific screenshots",
+      "severity": "Warning",
+      "confidence": "Confirmed",
+      "evidence": "Audited Tencent Meeting audio setup and macOS permission pages contain a logo only; Tencent guide references official help generally without exact source links.",
+      "fix": "Add versioned, redacted real setup screenshots, expected results, fallback steps and direct official references to existing guides.",
+      "source": "pages.json images/links/body",
+      "sources": [
+        "pages.json images/links/body"
+      ]
+    },
+    {
+      "finding": "F08 Sitemap homepage modification date is stale",
+      "severity": "Warning",
+      "confidence": "Confirmed",
+      "evidence": "All sitemap lastmod entries are 2026-08-19 although homepage changed on 2026-09-07. Other pages may genuinely be unchanged.",
+      "fix": "Update lastmod only for substantive changes from content source metadata; do not set all pages to today automatically.",
+      "source": "sitemap.xml and deployment history",
+      "sources": [
+        "sitemap.xml and deployment history"
+      ]
+    },
+    {
+      "finding": "F11 Ranking and real-user CWV evidence unavailable",
+      "severity": "Info",
+      "confidence": "Hypothesis",
+      "evidence": "No authenticated Baidu index/query/crawl reports, analytics or citation benchmark supplied; PSI API rate limited. No ranking penalty or numeric SEO score can be established.",
+      "fix": "Obtain read-only exports and measure branded/nonbranded landing-page cohorts before attributing ranking causes.",
+      "source": "pagespeed.txt and task context",
+      "sources": [
+        "pagespeed.txt and task context"
+      ]
+    },
+    {
+      "finding": "F09 Public sitemap routes have unique crawlable HTML",
+      "severity": "Pass",
+      "confidence": "Confirmed",
+      "evidence": "30/30 sitemap URLs HTTP 200; 30 unique titles and body hashes; all have description, one H1, self-canonical; sampled nonexistent URL returns 404.",
+      "fix": "Preserve these contracts with no-JS production smoke checks.",
+      "source": "pages.json",
+      "sources": [
+        "pages.json"
+      ]
+    },
+    {
+      "finding": "F10 Robots and AI text files already exist",
+      "severity": "Pass",
+      "confidence": "Confirmed",
+      "evidence": "robots allows public crawling via wildcard and explicit named bots; llms.txt and llms-full.txt return 200. Availability does not prove citation/indexing.",
+      "fix": "Maintain factual consistency; no need to recreate files or indiscriminately block unlisted bots.",
+      "source": "robots_checker.txt llms_txt_checker.txt",
+      "sources": [
+        "robots_checker.txt llms_txt_checker.txt"
+      ]
+    }
+  ],
+  "dropped": [],
+  "raw_count": 11,
+  "verified_count": 11
+}

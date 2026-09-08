@@ -1,0 +1,170 @@
+[
+  {
+    "id": "zhihu-1",
+    "platform": "知乎",
+    "title": "拿到岗位JD后，怎样准备一场有针对性的面试？",
+    "status": "已发布，公开正文已核对",
+    "url": "https://zhuanlan.zhihu.com/p/2080711123435773984"
+  },
+  {
+    "id": "zhihu-2",
+    "platform": "知乎",
+    "title": "远程面试使用AI辅助前，需要检查哪些环节？",
+    "status": "已发布，已修正剪贴板残留并核对公开全文；正文含AI声明",
+    "url": "https://zhuanlan.zhihu.com/p/2080711606539966347"
+  },
+  {
+    "id": "csdn-1",
+    "platform": "CSDN",
+    "title": "程序员面试准备：把JD映射成项目证据的六个步骤",
+    "status": "发布成功，平台审核中",
+    "url": "https://blog.csdn.net/qq_42013574/article/details/164628916"
+  },
+  {
+    "id": "csdn-2",
+    "platform": "CSDN",
+    "title": "实时面试辅助排查清单：音频来源、问题输入与上下文",
+    "status": "发布成功，平台审核中",
+    "url": "https://blog.csdn.net/qq_42013574/article/details/164628942"
+  },
+  {
+    "id": "bilibili-1",
+    "platform": "B站",
+    "title": "面试前别只背题：用一张卡对齐简历和JD",
+    "status": "已通过，公开全文已核对",
+    "url": "https://www.bilibili.com/opus/1245636418215084066"
+  },
+  {
+    "id": "bilibili-2",
+    "platform": "B站",
+    "title": "远程面试前的6项检查：声音、资料和问题输入",
+    "status": "已通过，公开全文已核对",
+    "url": "https://www.bilibili.com/opus/1245636826209714178"
+  },
+  {
+    "id": "nowcoder-1",
+    "platform": "牛客",
+    "title": "校招面试准备：如何把JD和自己的项目对应起来",
+    "status": "已发布，公开正文已核对",
+    "url": "https://www.nowcoder.com/discuss/926887806717169664"
+  },
+  {
+    "id": "nowcoder-2",
+    "platform": "牛客",
+    "title": "线上面试前先测什么？一份设备与资料检查清单",
+    "status": "已发布，公开正文已核对",
+    "url": "https://www.nowcoder.com/discuss/926888208099442688"
+  },
+  {
+    "id": "xiaohongshu-1",
+    "platform": "小红书",
+    "title": "面试前先做这张岗位准备卡",
+    "status": "待登录；本地稿件已完成",
+    "url": ""
+  },
+  {
+    "id": "xiaohongshu-2",
+    "platform": "小红书",
+    "title": "线上面试前的6项检查",
+    "status": "待登录；本地稿件已完成",
+    "url": ""
+  },
+  {
+    "id": "weixin-1",
+    "platform": "微信公众号",
+    "title": "面试准备从哪里开始：让简历、JD和项目经历对得上",
+    "status": "Computer Use 禁止访问该后台；本地稿件已完成",
+    "url": ""
+  },
+  {
+    "id": "weixin-2",
+    "platform": "微信公众号",
+    "title": "远程面试准备指南：从设备检查到回答建议",
+    "status": "Computer Use 禁止访问该后台；本地稿件已完成",
+    "url": ""
+  },
+  {
+    "id": "juejin-1",
+    "platform": "掘金",
+    "title": "技术面试准备的上下文整理：从岗位JD到项目证据",
+    "status": "发布成功，审核中，文章全文已核对",
+    "url": "https://juejin.cn/spost/7683000025934233619"
+  },
+  {
+    "id": "juejin-2",
+    "platform": "掘金",
+    "title": "AI面试辅助的输入检查：音频、题干与本场资料",
+    "status": "平台显示发布成功，待核对审核状态",
+    "url": "https://juejin.cn/spost/7682949323614568454"
+  },
+  {
+    "id": "baijiahao-1",
+    "platform": "百家号",
+    "title": "面试前如何整理简历和岗位要求？六步准备方法",
+    "status": "本地稿件已完成，待检查入口",
+    "url": ""
+  },
+  {
+    "id": "baijiahao-2",
+    "platform": "百家号",
+    "title": "线上面试前要检查什么？设备与资料准备指南",
+    "status": "本地稿件已完成，待检查入口",
+    "url": ""
+  },
+  {
+    "id": "toutiao-1",
+    "platform": "今日头条",
+    "title": "岗位要求写了一大页，面试前究竟先准备什么？",
+    "status": "本地稿件已完成，待检查入口",
+    "url": ""
+  },
+  {
+    "id": "toutiao-2",
+    "platform": "今日头条",
+    "title": "线上面试声音正常就够了吗？这六件事也要检查",
+    "status": "本地稿件已完成，待检查入口",
+    "url": ""
+  },
+  {
+    "id": "douyin-1",
+    "platform": "抖音",
+    "title": "面试前，把JD做成一张准备卡",
+    "status": "本地稿件已完成，待检查入口",
+    "url": ""
+  },
+  {
+    "id": "douyin-2",
+    "platform": "抖音",
+    "title": "线上面试前的设备检查卡",
+    "status": "本地稿件已完成，待检查入口",
+    "url": ""
+  },
+  {
+    "id": "channels-1",
+    "platform": "视频号",
+    "title": "简历和岗位要求如何对应？面试准备六步法",
+    "status": "本地稿件已完成，待检查入口",
+    "url": ""
+  },
+  {
+    "id": "channels-2",
+    "platform": "视频号",
+    "title": "远程面试开始前：设备与资料自查",
+    "status": "本地稿件已完成，待检查入口",
+    "url": ""
+  },
+  {
+    "id": "cnblogs-1",
+    "platform": "博客园",
+    "title": "技术面试资料整理：岗位要求与项目证据的映射",
+    "status": "账号已登录，但未开通博客，平台禁止使用博客后台",
+    "url": ""
+  },
+  {
+    "id": "cnblogs-2",
+    "platform": "博客园",
+    "title": "远程面试辅助的输入链路检查与降级准备",
+    "status": "账号已登录，但未开通博客，平台禁止使用博客后台",
+    "url": ""
+  }
+]

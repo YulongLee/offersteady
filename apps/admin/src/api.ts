@@ -71,6 +71,18 @@ export const adminApi = {
       body: JSON.stringify({ phoneNumber, challengeId, code, clientLabel: "commercial-admin" }),
     }, false);
   },
+  async sendEmailCode(email: string) {
+    return request<{ challengeId: string; cooldownSeconds: number; maskedEmail: string }>("/api/v1/auth/email/send-code", {
+      method: "POST",
+      body: JSON.stringify({ email, clientLabel: "global-commercial-admin" }),
+    }, false);
+  },
+  async verifyEmailLogin(email: string, challengeId: string, code: string) {
+    return request<{ tokens: { accessToken: string } }>("/api/v1/auth/email/verify-login", {
+      method: "POST",
+      body: JSON.stringify({ email, challengeId, code, clientLabel: "global-commercial-admin" }),
+    }, false);
+  },
   async login(accessToken: string) {
     const result = await request<{ token: string; role: string; permissions: string[]; expiresAtMs: number }>(
       "/api/v1/admin/session",
@@ -86,6 +98,17 @@ export const adminApi = {
     request<TrendResponse>(`/api/v1/admin/analytics/trends?range=${range}`),
   capacity: () => request<CapacityResponse>("/api/v1/admin/capacity"),
   paymentRevenue: () => request<PaymentRevenueSummary>("/api/v1/admin/payments/revenue-summary"),
+  globalCommerceOverview: (mode: "test" | "live" = "test") => request<Record<string, unknown>>(`/api/v1/admin/global-commerce/overview?mode=${mode}`),
+  globalCommerceOperations: (mode: "test" | "live" = "test") => request<Record<string, unknown>>(`/api/v1/admin/global-commerce/operations?mode=${mode}`),
+  saveGlobalCommerceCredentials: (mode: "test" | "live", apiKey: string, webhookSecret: string, reason: string) => request<Record<string, unknown>>(`/api/v1/admin/global-commerce/credentials?mode=${mode}`, { method: "PUT", body: JSON.stringify({ apiKey: apiKey || null, webhookSecret: webhookSecret || null, reason }) }),
+  globalCommerceProducts: (mode: "test" | "live") => request<{ mode: string; items: Record<string, unknown>[]; syncedAtMs: number }>(`/api/v1/admin/global-commerce/products?mode=${mode}`),
+  saveGlobalCommerceMapping: (mode: "test" | "live", offerCode: string, providerProductId: string, reason: string) => request<Record<string, unknown>>(`/api/v1/admin/global-commerce/mappings/${encodeURIComponent(offerCode)}?mode=${mode}`, { method: "PUT", body: JSON.stringify({ providerProductId, reason }) }),
+  activateGlobalCommerce: (mode: "test" | "live", enabled: boolean, reason: string) => request<Record<string, unknown>>(`/api/v1/admin/global-commerce/activation?mode=${mode}`, { method: "POST", body: JSON.stringify({ enabled, confirmed: true, reason }) }),
+  reconcileGlobalCommerceOrder: (orderId: string, reason: string) => request<Record<string, unknown>>(`/api/v1/admin/global-commerce/orders/${encodeURIComponent(orderId)}/reconcile`, { method: "POST", body: JSON.stringify({ confirmed: true, reason }) }),
+  globalMembers: (search = "", offset = 0) => request<{ items: Record<string, unknown>[]; limit: number; offset: number }>(`/api/v1/admin/global-commerce/members?search=${encodeURIComponent(search)}&limit=30&offset=${offset}`),
+  globalMember: (userId: string) => request<Record<string, unknown>>(`/api/v1/admin/global-commerce/members/${encodeURIComponent(userId)}`),
+  grantGlobalMemberPlan: (userId: string, offerCode: string, reason: string, idempotencyKey: string) => request<Record<string, unknown>>(`/api/v1/admin/global-commerce/members/${encodeURIComponent(userId)}/grants`, { method: "POST", body: JSON.stringify({ offerCode, reason, idempotencyKey, confirmed: true }) }),
+  revokeGlobalMemberEntitlement: (userId: string, entitlementId: string, reason: string, idempotencyKey: string) => request<Record<string, unknown>>(`/api/v1/admin/global-commerce/members/${encodeURIComponent(userId)}/entitlements/${encodeURIComponent(entitlementId)}/revoke`, { method: "POST", body: JSON.stringify({ reason, idempotencyKey, confirmed: true }) }),
   growthReferralSettings: () => request<{ enabled: boolean; rewardPoints: number; inviterRewardPoints: number; inviteeRewardPoints: number; activationWindowDays: number; configVersion: number; updatedAtMs: number }>("/api/v1/admin/growth/referrals"),
   saveGrowthReferralSettings: (payload: { enabled: boolean; rewardPoints: number; inviteeRewardPoints: number; confirmed: boolean; reason: string }) =>
     request<{ enabled: boolean; rewardPoints: number; inviterRewardPoints: number; inviteeRewardPoints: number; activationWindowDays: number; configVersion: number; updatedAtMs: number }>("/api/v1/admin/growth/referrals", { method: "PUT", body: JSON.stringify(payload) }),

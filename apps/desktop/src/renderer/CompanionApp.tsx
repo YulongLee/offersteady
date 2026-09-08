@@ -922,6 +922,7 @@ export function CompanionApp() {
                 : pairingStatus.message ?? waitingConnectionInfo(config);
             applyConnectionCopy(staleBinding ? "已绑定 | 等待网页实时连接" : "设备在线 | 等待面试连接", staleBinding ? staleCopy : "系统权限状态保持不变，请在网页输入固定连接码。");
             window.offersteady?.publishCaptureState(displayState);
+            window.offersteady?.publishScreenshotBinding?.(null);
           }
           return;
         }
@@ -981,6 +982,7 @@ export function CompanionApp() {
           setPublisherRetryNonce((value) => value + 1);
         }
         window.offersteady?.publishCaptureState(nextCaptureState);
+        window.offersteady?.publishScreenshotBinding?.({ sessionId: binding.sessionId, bindingId: binding.bindingId });
         const deviceStatusPayload = {
           userId: binding.ownerUserId,
           deviceId: pairingIdentity.deviceId,
@@ -1400,6 +1402,7 @@ export function CompanionApp() {
         <div className="brand-row">
           <img className="brand-icon" src={appIconUrl} alt="面试稳" />
           <h1>面试稳</h1>
+          <span className="brand-badge">电脑伴随助手</span>
         </div>
 
         <div className="terminal-rows">

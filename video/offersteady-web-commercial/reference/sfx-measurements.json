@@ -1,0 +1,38 @@
+{
+  "riser-rise.mp3": {
+    "duration": 1.7567291666666667,
+    "peakSec": 1.035,
+    "peakFrame": 62.099999999999994,
+    "maxDb": -3.649902820587158
+  },
+  "whoosh-fast.mp3": {
+    "duration": 1.7567291666666667,
+    "peakSec": 0.72,
+    "peakFrame": 43.199999999999996,
+    "maxDb": -3.053971290588379
+  },
+  "impact-deep-whoosh.mp3": {
+    "duration": 4.063125,
+    "peakSec": 0.55,
+    "peakFrame": 33.0,
+    "maxDb": 2.1434977054595947
+  },
+  "transition-soft.mp3": {
+    "duration": 1.27475,
+    "peakSec": 0.45,
+    "peakFrame": 27.0,
+    "maxDb": 2.0647430419921875
+  },
+  "shimmer-sparkle-sweep.mp3": {
+    "duration": 2.9981458333333335,
+    "peakSec": 0.91,
+    "peakFrame": 54.6,
+    "maxDb": 1.0365484952926636
+  },
+  "click-camera.mp3": {
+    "duration": 0.35054166666666664,
+    "peakSec": 0.19,
+    "peakFrame": 11.4,
+    "maxDb": -3.9412786960601807
+  }
+}

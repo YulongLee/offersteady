@@ -5,10 +5,13 @@ from typing import Literal, Protocol
 
 
 AuthSessionStatus = Literal["active", "revoked", "expired"]
-IdentityProviderKind = Literal["password", "wechat", "sms", "prototype", "other"]
+IdentityProviderKind = Literal["password", "wechat", "sms", "email", "prototype", "other"]
 WechatAuthorizationStatus = Literal["creating", "waiting", "scanned", "authorized", "expired", "failed"]
 SmsChallengeStatus = Literal["created", "sent", "verified", "failed", "expired", "locked"]
 SmsProviderOutcome = Literal["sent", "verified", "invalid", "expired", "rate_limited", "provider_unavailable", "failed"]
+EmailChallengeStatus = Literal["created", "sent", "verified", "failed", "expired", "locked"]
+EmailChallengePurpose = Literal["login", "registration", "password_setup", "password_reset"]
+EmailProviderOutcome = Literal["sent", "verified", "invalid", "expired", "rate_limited", "provider_unavailable", "failed"]
 
 
 @dataclass(frozen=True)
@@ -133,6 +136,46 @@ class SmsVerifyResult:
 
 
 @dataclass(frozen=True)
+class EmailChallengeRecord:
+    challenge_id: str
+    email_hash: str
+    masked_email: str
+    provider: str
+    status: EmailChallengeStatus
+    provider_message_id: str | None
+    provider_request_id: str | None
+    attempt_count: int
+    max_attempts: int
+    expires_at_ms: int
+    created_at_ms: int
+    updated_at_ms: int
+    last_error_code: str | None = None
+    verified_at_ms: int | None = None
+    code_digest: str | None = None
+    purpose: EmailChallengePurpose = "login"
+
+
+@dataclass(frozen=True)
+class EmailSendResult:
+    outcome: EmailProviderOutcome
+    provider_message_id: str | None = None
+    provider_request_id: str | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+    latency_ms: int = 0
+    verification_code_digest: str | None = None
+
+
+@dataclass(frozen=True)
+class EmailVerifyResult:
+    outcome: EmailProviderOutcome
+    provider_request_id: str | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+    latency_ms: int = 0
+
+
+@dataclass(frozen=True)
 class ProviderIdentityProfile:
     provider: IdentityProviderKind
     provider_subject: str
@@ -166,6 +209,8 @@ class PasswordHasherPort(Protocol):
 
     def verify_password(self, password: str, stored_hash: str) -> bool: ...
 
+    def needs_rehash(self, stored_hash: str) -> bool: ...
+
 
 class AccessTokenCodecPort(Protocol):
     def issue_access_token(self, *, payload: AccessTokenPayload) -> str: ...
@@ -197,7 +242,17 @@ class SmsVerificationProviderPort(Protocol):
     def verify_code(self, *, phone_e164: str, code: str, challenge: SmsChallengeRecord) -> SmsVerifyResult: ...
 
 
+class EmailVerificationProviderPort(Protocol):
+    def provider_name(self) -> str: ...
+
+    def send_code(self, *, email: str, challenge_id: str) -> EmailSendResult: ...
+
+    def verify_code(self, *, email: str, code: str, challenge: EmailChallengeRecord) -> EmailVerifyResult: ...
+
+
 class AuthenticationRepository(Protocol):
+    def create_user(self, user: UserRecord) -> UserRecord | None: ...
+
     def save_user(self, user: UserRecord) -> UserRecord: ...
 
     def get_user_by_login_id(self, login_id: str) -> UserRecord | None: ...
@@ -227,3 +282,9 @@ class AuthenticationRepository(Protocol):
     def get_sms_challenge(self, challenge_id: str) -> SmsChallengeRecord | None: ...
 
     def list_sms_challenges_for_phone(self, *, phone_hash: str, since_ms: int | None = None) -> list[SmsChallengeRecord]: ...
+
+    def save_email_challenge(self, challenge: EmailChallengeRecord) -> EmailChallengeRecord: ...
+
+    def get_email_challenge(self, challenge_id: str) -> EmailChallengeRecord | None: ...
+
+    def list_email_challenges(self, *, email_hash: str, since_ms: int | None = None) -> list[EmailChallengeRecord]: ...

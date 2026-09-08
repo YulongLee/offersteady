@@ -1,0 +1,29 @@
+Use case: ads-marketing / infographic-diagram.
+Create ONE polished final Chinese SaaS product price comparison image for the Chinese interview assistant brand 面试稳AI助手, intended to be placed on its official website. Large high-resolution landscape-ish canvas around 1800x1500, crisp impeccable simplified-Chinese typography. Pure flat graphic UI design, no device frame, no photographic objects. Visual reference: premium dark comparison section with one highlighted brand column; use dark midnight navy #080c13, panels #101721, mint green #6ee7bd, white text, muted gray. Generous spacing, premium restrained border glow only around our column. NO golden palette. Real legible Chinese not filler.
+
+Layout:
+Top tiny brand wordmark "面试稳AI助手" left, small label "国内产品 · 价格对比" right.
+Large impactful headline "面试有安排，预算更好安排。"
+Subheading "¥29.90 起按天用，按你的面试节奏购买。"
+Main comparison table below: left labels column, then larger highlighted mint-tinted 面试稳 column, then two neutral columns 快面AI and OfferStar AI. Equal baseline rows and balanced padded cells. Highlight our price in very large mint text; competitors prices smaller white. Each column must clearly name the selected offer, not imply all competitors' plans are summarized. Text-only competitor names, no invented logos. No crosses, no unverified feature superiority, no percent savings.
+
+Exact table contents (4 columns, each line one row):
+"对比项目" | "面试稳" with small pill "按天会员" | "快面AI" with small subtitle "单场面试辅助" | "OfferStar AI" with small subtitle "体验积分包"
+"本次对比方案" | "¥29.90 / 1天" | "¥39 / 场" | "¥45.99 / 500点"
+"计费方式" | "按天会员 / 积分可选" | "按场购买" | "按用量扣点"
+"语音识别" | "会员期内不扣积分" | "单场不限时" | "3 点 / 分钟"
+"面试回答" | "会员期内不扣积分" | "包含在单场服务内" | "10 点 / 题"
+"截图 / 笔试辅助" | "会员期内不扣积分" | "笔试 ¥1 / 题" | "笔试 10–40 点 / 题"
+
+Below table two elegant horizontal benefit cards, sufficient height and no crowding:
+Card1 large mint "约 ¥11 / 天", label "30 天会员 ¥329.90", support "回答与截图不限次 · 含 2 份知识材料"
+Card2 large mint "¥39.90 / 1000积分", label "偶尔使用，也能按量购买", support "普通回答约 ¥0.20 / 次，语音等另计"
+Then slim closing line "实时语音 · 简历与 JD 上下文 · 截图回答 · 面试复盘" and right mint CTA-looking badge "免费开始 →".
+
+Include legible small footer notes (not microscopic; fit within full canvas with ample bottom margin):
+"对比为所列方案，计费周期与权益不同；不代表所有套餐或最低使用成本。"
+"普通回答按 5 点及 1000 积分包折算；会员限本人合理使用，知识材料按套餐规则另计。"
+"价格核对：2026-09-07 · 来源：面试稳当前套餐、kuaimianai.com/pricing、docs.offerstar.cn/pricing"
+"实际价格及权益以各产品购买页为准。"
+
+All prices exactly as supplied. Do not use fake testimonials, invisibility/undetectability claims, superiority guarantees, or invented checkmarks. Strong commercial hierarchy, price advantage expressed through visible pricing flexibility and small daily cost. This is a complete final website image not a draft mockup.

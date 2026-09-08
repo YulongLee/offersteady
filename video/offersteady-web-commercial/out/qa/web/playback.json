@@ -1,0 +1,50 @@
+[
+  {
+    "viewport": 1280,
+    "documentWidth": 1280,
+    "duration": 36,
+    "videoWidth": 1920,
+    "videoHeight": 1080,
+    "currentTime": 0.992901,
+    "paused": false,
+    "muted": true,
+    "error": null
+  },
+  {
+    "seekTime": 20.4,
+    "readyState": 4,
+    "seeking": false,
+    "networkState": 1,
+    "decodedFrames": 199,
+    "buffered": [
+      [
+        0,
+        36
+      ]
+    ]
+  },
+  {
+    "viewport": 390,
+    "documentWidth": 390,
+    "duration": 36,
+    "videoWidth": 1920,
+    "videoHeight": 1080,
+    "currentTime": 0.993903,
+    "paused": false,
+    "muted": true,
+    "error": null
+  },
+  {
+    "seekTime": 20.4,
+    "readyState": 4,
+    "seeking": false,
+    "networkState": 1,
+    "decodedFrames": 199,
+    "buffered": [
+      [
+        0,
+        36
+      ]
+    ]
+  }
+]

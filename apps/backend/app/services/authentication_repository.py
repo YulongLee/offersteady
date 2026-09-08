@@ -6,6 +6,7 @@ from app.ports.authentication import (
     AuthSessionRecord,
     AuthenticationRepository,
     ExternalIdentityBindingRecord,
+    EmailChallengeRecord,
     IdentityProviderKind,
     SmsChallengeRecord,
     UserRecord,
@@ -24,6 +25,13 @@ class InMemoryAuthenticationRepository(AuthenticationRepository):
         self.wechat_authorization_sessions_by_state: dict[str, str] = {}
         self.sms_challenges_by_id: dict[str, SmsChallengeRecord] = {}
         self.sms_challenges_by_phone_hash: dict[str, list[str]] = {}
+        self.email_challenges_by_id: dict[str, EmailChallengeRecord] = {}
+        self.email_challenges_by_email_hash: dict[str, list[str]] = {}
+
+    def create_user(self, user: UserRecord) -> UserRecord | None:
+        if user.login_id.lower() in self.users_by_login_id:
+            return None
+        return self.save_user(user)
 
     def save_user(self, user: UserRecord) -> UserRecord:
         stored = replace(user)
@@ -113,6 +121,25 @@ class InMemoryAuthenticationRepository(AuthenticationRepository):
     def list_sms_challenges_for_phone(self, *, phone_hash: str, since_ms: int | None = None) -> list[SmsChallengeRecord]:
         ids = self.sms_challenges_by_phone_hash.get(phone_hash, [])
         records = [self.sms_challenges_by_id[item] for item in ids if item in self.sms_challenges_by_id]
+        if since_ms is not None:
+            records = [item for item in records if item.created_at_ms >= since_ms]
+        return [replace(item) for item in sorted(records, key=lambda item: item.created_at_ms, reverse=True)]
+
+    def save_email_challenge(self, challenge: EmailChallengeRecord) -> EmailChallengeRecord:
+        stored = replace(challenge)
+        self.email_challenges_by_id[stored.challenge_id] = stored
+        ids = self.email_challenges_by_email_hash.setdefault(stored.email_hash, [])
+        if stored.challenge_id not in ids:
+            ids.append(stored.challenge_id)
+        return replace(stored)
+
+    def get_email_challenge(self, challenge_id: str) -> EmailChallengeRecord | None:
+        record = self.email_challenges_by_id.get(challenge_id)
+        return replace(record) if record else None
+
+    def list_email_challenges(self, *, email_hash: str, since_ms: int | None = None) -> list[EmailChallengeRecord]:
+        ids = self.email_challenges_by_email_hash.get(email_hash, [])
+        records = [self.email_challenges_by_id[item] for item in ids if item in self.email_challenges_by_id]
         if since_ms is not None:
             records = [item for item in records if item.created_at_ms >= since_ms]
         return [replace(item) for item in sorted(records, key=lambda item: item.created_at_ms, reverse=True)]

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { BillingProduct, DesktopReleaseManifest, KnowledgeDocumentVersion, KnowledgeIndexQuote, SafeAccountSummary, TimePassEntitlement, UsageRates } from "../src/index";
+import type { BillingProduct, DesktopReleaseManifest, GlobalPlanVersion, KnowledgeDocumentVersion, KnowledgeIndexQuote, SafeAccountSummary, TimePassEntitlement, UsageRates } from "../src/index";
 
 describe("product experience contracts", () => {
   it("serializes safe identity without provider secrets", () => {
@@ -24,5 +24,25 @@ describe("product experience contracts", () => {
     const entitlement: TimePassEntitlement = { id: "e1", userId: "u1", productId: product.id, startsAtMs: 1, endsAtMs: 2, orderId: "o1", knowledgeAllowanceGranted: 2, knowledgeAllowanceUsed: 0, knowledgeAllowanceLocked: 0 };
     const quote: KnowledgeIndexQuote = { quoteId: "q1", documentVersionId: "d1", contentFingerprint: "synthetic", tokenCount: 10_001, billableUnits: 3, pointCost: 60, entitlementSource: "points", allowanceRemaining: 0, catalogVersion: 4, tokenizerVersion: "test-v1", createdAtMs: 1, expiresAtMs: 2, requiresConfirmation: true, projectedBalance: 80 };
     expect(JSON.parse(JSON.stringify({ product, entitlement, quote }))).toMatchObject({ product: { knowledgeIndexAllowance: 2 }, quote: { tokenCount: 10_001, pointCost: 60 } });
+  });
+
+  it("keeps Global commerce contracts independent from domestic billing", () => {
+    const plan: GlobalPlanVersion = {
+      offerCode: "global-interview-pass",
+      version: 2,
+      displayName: "Interview Day Pass",
+      description: "One-time access for an interview day.",
+      currency: "USD",
+      priceCents: 999,
+      billingMode: "one_time",
+      durationDays: 1,
+      benefits: { copilotMinutes: 180, screenAssistUses: null, resumeAndJobDescription: true, knowledgeBase: false, writtenExam: true, fullProduct: false },
+      published: true,
+      featured: false,
+      displayOrder: 1,
+      createdAtMs: 1,
+    };
+    expect(plan).toMatchObject({ currency: "USD", priceCents: 999, billingMode: "one_time" });
+    expect(JSON.stringify(plan)).not.toMatch(/wechat|alipay|points/i);
   });
 });

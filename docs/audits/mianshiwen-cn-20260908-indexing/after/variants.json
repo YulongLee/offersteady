@@ -1,0 +1,395 @@
+[
+  {
+    "url": "http://mianshiwen.cn/",
+    "status": 200,
+    "final": "https://mianshiwen.cn/",
+    "redirects": 1,
+    "ttfb": 0.247668,
+    "total": 0.283207,
+    "title": "AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳",
+    "description": [
+      "面试稳是一款 AI 面试助手，可结合简历、目标岗位和知识资料，整理实时面试问题、截图题与技术题的回答思路。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/"
+    ],
+    "robots": [],
+    "baiduspider_meta": [],
+    "xrobots": "",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=2592000",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'sha256-h2zt+LUCrVck7i1lC86GgaZqJVSDWqw6mjT5hzjg+i8=' 'sha256-CEy0yC/pHlXfLhNBOaA/UGMovhIUWL0ourEGerAgRu4=' 'sha256-zeVA7adHEjFgFdodyWgCoNTJ5iEmcyNCxpuOvot6xDQ=' 'sha256-Qznqq2GUGvk3wgbTH0sXVeVpeHhvenQuYOQddbtu5sg=' 'sha256-45wxGO3n/cPQcq0fers1m+axm/KYbdaWsvpY6oG8Ejc=' 'sha256-EuqMMd+5Ee1p6RngvvVBcFu7nUbWbxqymLGiMKZRE4k=' 'sha256-wGbS3hzFWe3AyrhKHQdIcablkO1pUiBs8XoKKmdpA9c=' 'sha256-kAA1jLkwuU7JgTtzszlb56pew+UC1AJJrwn94Ocby9I=' 'sha256-6FAgDEF9rjpPtkglSKYPEcbxBT2f2szM30KWS9ge/s0=' 'sha256-VYmb2j4M2GAdQdQuXOVJfoMildBUsIZBvM5OuDPsALw=' 'sha256-9hQ1yMLbvZb7zELw3wQN+5F2ag00udhsZkez/cQezGg=' 'sha256-vIsUdY/u1VQ8dg+g+v0StTKN2cMDOHpkqvG7C1ePf94=' 'sha256-KmyKJnViu6kxS1lTdI9w79T5RSwDVW8lqhutWmvhk24=' 'sha256-rQgc1y1hXo0KamWoayyTVlJ1kzANqDrois16AR/mEZk=' 'sha256-OjjKsIkwZcR8PCLmtq4uy58NyKtrnddSmm6TfjnC+iI=' 'sha256-8zozZaVC4VHr0iWH6sO54dZQentaAz8MZCJfviKMTbY=' 'sha256-vt0Wqw36UrEOJTbDnRoAZpSL5VVMk1rnkqFskkBWnmQ=' 'sha256-5l5Qx8e5PZO3Z7Y3inO5INEHTknJdRWKhZjKBTvc75k=' 'sha256-Db1tlMY9Ci4YLqiCWg7ezBhoY568QU/KL8TQwns3EgQ=' 'sha256-nlSWvxmiLARHjmEGByrt9b66w5gh3nkRBIPaf80m75Q=' 'sha256-Ysezpm4XtH2g/37ZUhGs45LwdlaVgz/eil4buhKLib4=' 'sha256-d2pWKFQM5WW10qUj2iMzaOlcYu5raT/gwfn658Fj6rk=' 'sha256-cNoPClAalygNSk2IcRkKGy0RD4TBfRWWFeZFAnqIujg=' 'sha256-xZ8pFwKTRYZWQfU8dS3RQ3NqKrtwmm0EokQQwObhDyM=' 'sha256-x88Et6X/lFXIPTowjRTLhdsmOiGhIQVt2pd9npI0J4Q=' 'sha256-wkAEv55iPQSr7l8N1k20d0eqh99l577VB70LycRAQ7Y=' 'sha256-CGxXmGqMMdBm/SLXHjKc7Bxo482zMXgkZQrBvEUV4jQ=' 'sha256-afA5XIb5RF8SYWr2N2LcD5/7u3S6PUzRj8y+zAhrJkk=' 'sha256-esbkUK0hQXBgFIQcL0H/KHfsEagYvEX9Q7dIBqBnSPU=' 'sha256-YRQk+uyJPU5rIOvHqD0zaB2heUd0Fp8Pykv2JVjQY9g=' 'sha256-Rw8XIRZmkkjruWJHVwsrTbOBL2Zo6bIMLznGBzBPB2Y=' 'sha256-f5ZC/h8tSxBkN/lgcsTc961tcrf+PnTgPMkmzZKFoe0=' 'sha256-vtDGl+XgcvTV9w+6zET3hlSJcoasabSndJmMmQvVfVw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; form-action 'self' https://pay.mzfpay.com",
+      "content-type": "text/html",
+      "date": "Mon, 07 Sep 2026 16:39:09 GMT",
+      "etag": "W/\"6a9ee7bf-24d8\"",
+      "last-modified": "Mon, 07 Sep 2026 16:35:11 GMT",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "server": "nginx/1.27.5",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY"
+    },
+    "h1": [
+      "AI 面试助手，让你的经历更好表达。"
+    ],
+    "links": [
+      "https://mianshiwen.cn/features",
+      "https://mianshiwen.cn/interview-questions",
+      "https://mianshiwen.cn/guides",
+      "https://mianshiwen.cn/pricing",
+      "https://mianshiwen.cn/download",
+      "https://mianshiwen.cn/login",
+      "https://mianshiwen.cn/app/partner-program",
+      "https://mianshiwen.cn/app/billing",
+      "https://mianshiwen.cn/login",
+      "https://mianshiwen.cn/features",
+      "https://mianshiwen.cn/interview-questions",
+      "https://mianshiwen.cn/guides",
+      "https://mianshiwen.cn/guide",
+      "https://mianshiwen.cn/pricing",
+      "https://mianshiwen.cn/download",
+      "https://mianshiwen.cn/security",
+      "https://mianshiwen.cn/about",
+      "https://mianshiwen.cn/contact",
+      "https://mianshiwen.cn/terms",
+      "https://mianshiwen.cn/privacy",
+      "https://beian.miit.gov.cn",
+      "https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=33010602014812"
+    ],
+    "sha256": "81dfdaccefa89177a9ae9045c227e63e44b59f8f5c845934eb66938d72fee50c",
+    "scripts": [
+      "/assets/rolldown-runtime-aKtaBQYM.js",
+      "/assets/jsx-runtime-2Zwg-L3c.js",
+      "/assets/preload-helper-NuCatGIt.js",
+      "/assets/app-adapter-2vR1d2yK.js",
+      "/assets/src-BWxMI1Ru.js",
+      "/assets/main-D8GtcuCK.js"
+    ],
+    "evidence": "variant-0",
+    "body": "面试稳AI助手 AI 面试助手，让你的经历更好表达。 跟上面试问题，结合你的简历与目标岗位，整理更贴合自己的回答思路。 从听清问题，到讲清自己 跟上每一个问题 实时转写面试官与自己的声音，把注意力留给交流。 回答更贴合你的经历 按场选择简历、JD 和知识材料，围绕自己的项目与目标岗位组织回答。 截图题，也有思路 通过电脑助手截取题目，查看识别与生成进度，无需手动重新输入。 让下一场准备更充分 回看问题、回答建议与资料来源，整理需要补充的经历和表达。 偶尔一场，或密集准备，都有选择 先了解产品，再按实际需要选择积分或按天会员。具体积分消耗、会员时长和当前价格以登录后的积分与会员页面为准。 查看积分与会员 · 免费使用 从准备到连接，三步进入状态 准备自己的资料：添加简历和岗位 JD，按需要整理知识材料。 连接电脑助手：选择适合系统的版本，检查连接、声音与采集权限。 选择本场上下文：确认这场面试使用的资料，通过语音、手动输入或截图获取建议。 一段视频，了解面试稳 从连接到使用，看一遍就明白 常见问题 面试稳可以免费使用吗？ 可以先免费使用，具体可用权益以登录后的积分与会员页面实时显示为准。 支持哪些设备和输入方式？ 下载中心提供当前可用电脑版本。支持授权后的语音输入、手动输入和截图题回答；手机端可同步查看回答和会话状态。 如何选择套餐和支付方式？ 按实际使用需要选择积分或按天会员，价格、额度及可用支付方式以实时配置和订单确认为准。 如何使用 AI 建议？ 请根据真实经历核对内容，遵守面试组织方的规则，不能保证面试或录用结果。 清楚的数据与隐私边界 原始音频默认不保存；简历、JD、截图和会话记录提供管理或删除入口。请遵守面试规则，并始终基于真实经历作答。 产品支持 Web、macOS 和 Windows 使用方式。遇到问题可通过微信 mianshiwen-cn 或邮箱 contact@oneshowailab.com 联系客服。",
+    "body_chars": 825,
+    "body_hash": "9a98b14c9b6c81db6c89914a596721f3dbabeb28d734c16ce44bf6c287cefc5b"
+  },
+  {
+    "url": "http://mianshiwen.cn/pricing",
+    "status": 200,
+    "final": "https://mianshiwen.cn/pricing",
+    "redirects": 1,
+    "ttfb": 0.197353,
+    "total": 0.208959,
+    "title": "积分与会员计费说明｜面试稳",
+    "description": [
+      "了解面试稳AI助手的免费使用、积分按次与按天会员逻辑，以及回答、截图、知识材料和支付到账的计费边界。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/pricing"
+    ],
+    "robots": [],
+    "baiduspider_meta": [],
+    "xrobots": "",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=2592000",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'sha256-h2zt+LUCrVck7i1lC86GgaZqJVSDWqw6mjT5hzjg+i8=' 'sha256-CEy0yC/pHlXfLhNBOaA/UGMovhIUWL0ourEGerAgRu4=' 'sha256-zeVA7adHEjFgFdodyWgCoNTJ5iEmcyNCxpuOvot6xDQ=' 'sha256-Qznqq2GUGvk3wgbTH0sXVeVpeHhvenQuYOQddbtu5sg=' 'sha256-45wxGO3n/cPQcq0fers1m+axm/KYbdaWsvpY6oG8Ejc=' 'sha256-EuqMMd+5Ee1p6RngvvVBcFu7nUbWbxqymLGiMKZRE4k=' 'sha256-wGbS3hzFWe3AyrhKHQdIcablkO1pUiBs8XoKKmdpA9c=' 'sha256-kAA1jLkwuU7JgTtzszlb56pew+UC1AJJrwn94Ocby9I=' 'sha256-6FAgDEF9rjpPtkglSKYPEcbxBT2f2szM30KWS9ge/s0=' 'sha256-VYmb2j4M2GAdQdQuXOVJfoMildBUsIZBvM5OuDPsALw=' 'sha256-9hQ1yMLbvZb7zELw3wQN+5F2ag00udhsZkez/cQezGg=' 'sha256-vIsUdY/u1VQ8dg+g+v0StTKN2cMDOHpkqvG7C1ePf94=' 'sha256-KmyKJnViu6kxS1lTdI9w79T5RSwDVW8lqhutWmvhk24=' 'sha256-rQgc1y1hXo0KamWoayyTVlJ1kzANqDrois16AR/mEZk=' 'sha256-OjjKsIkwZcR8PCLmtq4uy58NyKtrnddSmm6TfjnC+iI=' 'sha256-8zozZaVC4VHr0iWH6sO54dZQentaAz8MZCJfviKMTbY=' 'sha256-vt0Wqw36UrEOJTbDnRoAZpSL5VVMk1rnkqFskkBWnmQ=' 'sha256-5l5Qx8e5PZO3Z7Y3inO5INEHTknJdRWKhZjKBTvc75k=' 'sha256-Db1tlMY9Ci4YLqiCWg7ezBhoY568QU/KL8TQwns3EgQ=' 'sha256-nlSWvxmiLARHjmEGByrt9b66w5gh3nkRBIPaf80m75Q=' 'sha256-Ysezpm4XtH2g/37ZUhGs45LwdlaVgz/eil4buhKLib4=' 'sha256-d2pWKFQM5WW10qUj2iMzaOlcYu5raT/gwfn658Fj6rk=' 'sha256-cNoPClAalygNSk2IcRkKGy0RD4TBfRWWFeZFAnqIujg=' 'sha256-xZ8pFwKTRYZWQfU8dS3RQ3NqKrtwmm0EokQQwObhDyM=' 'sha256-x88Et6X/lFXIPTowjRTLhdsmOiGhIQVt2pd9npI0J4Q=' 'sha256-wkAEv55iPQSr7l8N1k20d0eqh99l577VB70LycRAQ7Y=' 'sha256-CGxXmGqMMdBm/SLXHjKc7Bxo482zMXgkZQrBvEUV4jQ=' 'sha256-afA5XIb5RF8SYWr2N2LcD5/7u3S6PUzRj8y+zAhrJkk=' 'sha256-esbkUK0hQXBgFIQcL0H/KHfsEagYvEX9Q7dIBqBnSPU=' 'sha256-YRQk+uyJPU5rIOvHqD0zaB2heUd0Fp8Pykv2JVjQY9g=' 'sha256-Rw8XIRZmkkjruWJHVwsrTbOBL2Zo6bIMLznGBzBPB2Y=' 'sha256-f5ZC/h8tSxBkN/lgcsTc961tcrf+PnTgPMkmzZKFoe0=' 'sha256-vtDGl+XgcvTV9w+6zET3hlSJcoasabSndJmMmQvVfVw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; form-action 'self' https://pay.mzfpay.com",
+      "content-type": "text/html",
+      "date": "Mon, 07 Sep 2026 16:39:09 GMT",
+      "etag": "W/\"6a9ed8a4-1767\"",
+      "last-modified": "Mon, 07 Sep 2026 15:30:44 GMT",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "server": "nginx/1.27.5",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY"
+    },
+    "h1": [
+      "先免费体验，再按面试节奏选择"
+    ],
+    "links": [
+      "https://mianshiwen.cn/",
+      "https://mianshiwen.cn/download",
+      "https://mianshiwen.cn/security",
+      "https://mianshiwen.cn/guide",
+      "https://mianshiwen.cn/login",
+      "https://mianshiwen.cn/login",
+      "https://mianshiwen.cn/guide",
+      "https://mianshiwen.cn/features/ai-interview-assistant",
+      "https://mianshiwen.cn/download",
+      "https://mianshiwen.cn/security",
+      "https://mianshiwen.cn/contact",
+      "https://mianshiwen.cn/terms",
+      "https://mianshiwen.cn/",
+      "https://mianshiwen.cn/guide",
+      "https://mianshiwen.cn/privacy",
+      "https://mianshiwen.cn/contact"
+    ],
+    "sha256": "4d15acfb0f28471cef950cbb6f12c64b5ffbef060a025a2f10cea1f65d2f4bc2",
+    "scripts": [],
+    "evidence": "variant-1",
+    "body": "面试稳AI助手 PRICING EXPLAINED 先免费体验，再按面试节奏选择 面试稳同时提供积分按次和按天会员。偶尔使用时可以按实际功能消耗积分；面试安排密集时可以选择短期会员。购买前先理解两种权益的边界，避免重复充值。 查看当前价格 阅读支付说明 积分和会员有什么区别？ 积分适合低频、按功能使用；会员适合短期内有多场面试的用户。 积分会按照回答、截图或知识材料等实际能力扣减；会员在有效期内免除约定范围内的回答积分消耗，但不自动等同于全部知识材料免费。 积分按次 余额长期保留，使用具体能力时按当前规则扣减。适合先体验或面试频率不固定的用户。 按天会员 权益按购买时长累加，适合短期密集准备。会员包含哪些知识材料额度，以购买页面展示为准。 哪些信息以产品页面为准？ 信息 权威入口 当前价格、商品和活动 登录后的“积分与会员”页面 积分余额与明细 账户对应的积分流水 会员到期时间 账户权益卡片显示的累计到期时间 支付是否到账 服务端支付通知与订单状态 动态信息边界： 公开页不复制可能调整的商品价格、支付渠道或活动额度。付款返回页不代表到账，权益以服务端确认结果为准。 购买前建议怎么选？ 第一次使用先完成免费体验，确认收音、问题识别和回答方式适合自己的设备。 只有少量问题或一场面试时，优先评估积分。 短期连续面试时，再比较会员天数和知识材料额度。 支付后不要重复下单，先等待订单确认或通过订单号联系客服。 继续了解 产品能力总览 电脑助手下载说明 数据与安全边界 联系支持 用户协议",
+    "body_chars": 648,
+    "body_hash": "91f38c33562fcf3e6993771ffb7089c536a6aad2d520cbb8d648e57064fcbc89"
+  },
+  {
+    "url": "http://www.mianshiwen.cn/",
+    "status": 200,
+    "final": "https://mianshiwen.cn/",
+    "redirects": 2,
+    "ttfb": 0.252654,
+    "total": 0.273934,
+    "title": "AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳",
+    "description": [
+      "面试稳是一款 AI 面试助手，可结合简历、目标岗位和知识资料，整理实时面试问题、截图题与技术题的回答思路。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/"
+    ],
+    "robots": [],
+    "baiduspider_meta": [],
+    "xrobots": "",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=2592000",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'sha256-h2zt+LUCrVck7i1lC86GgaZqJVSDWqw6mjT5hzjg+i8=' 'sha256-CEy0yC/pHlXfLhNBOaA/UGMovhIUWL0ourEGerAgRu4=' 'sha256-zeVA7adHEjFgFdodyWgCoNTJ5iEmcyNCxpuOvot6xDQ=' 'sha256-Qznqq2GUGvk3wgbTH0sXVeVpeHhvenQuYOQddbtu5sg=' 'sha256-45wxGO3n/cPQcq0fers1m+axm/KYbdaWsvpY6oG8Ejc=' 'sha256-EuqMMd+5Ee1p6RngvvVBcFu7nUbWbxqymLGiMKZRE4k=' 'sha256-wGbS3hzFWe3AyrhKHQdIcablkO1pUiBs8XoKKmdpA9c=' 'sha256-kAA1jLkwuU7JgTtzszlb56pew+UC1AJJrwn94Ocby9I=' 'sha256-6FAgDEF9rjpPtkglSKYPEcbxBT2f2szM30KWS9ge/s0=' 'sha256-VYmb2j4M2GAdQdQuXOVJfoMildBUsIZBvM5OuDPsALw=' 'sha256-9hQ1yMLbvZb7zELw3wQN+5F2ag00udhsZkez/cQezGg=' 'sha256-vIsUdY/u1VQ8dg+g+v0StTKN2cMDOHpkqvG7C1ePf94=' 'sha256-KmyKJnViu6kxS1lTdI9w79T5RSwDVW8lqhutWmvhk24=' 'sha256-rQgc1y1hXo0KamWoayyTVlJ1kzANqDrois16AR/mEZk=' 'sha256-OjjKsIkwZcR8PCLmtq4uy58NyKtrnddSmm6TfjnC+iI=' 'sha256-8zozZaVC4VHr0iWH6sO54dZQentaAz8MZCJfviKMTbY=' 'sha256-vt0Wqw36UrEOJTbDnRoAZpSL5VVMk1rnkqFskkBWnmQ=' 'sha256-5l5Qx8e5PZO3Z7Y3inO5INEHTknJdRWKhZjKBTvc75k=' 'sha256-Db1tlMY9Ci4YLqiCWg7ezBhoY568QU/KL8TQwns3EgQ=' 'sha256-nlSWvxmiLARHjmEGByrt9b66w5gh3nkRBIPaf80m75Q=' 'sha256-Ysezpm4XtH2g/37ZUhGs45LwdlaVgz/eil4buhKLib4=' 'sha256-d2pWKFQM5WW10qUj2iMzaOlcYu5raT/gwfn658Fj6rk=' 'sha256-cNoPClAalygNSk2IcRkKGy0RD4TBfRWWFeZFAnqIujg=' 'sha256-xZ8pFwKTRYZWQfU8dS3RQ3NqKrtwmm0EokQQwObhDyM=' 'sha256-x88Et6X/lFXIPTowjRTLhdsmOiGhIQVt2pd9npI0J4Q=' 'sha256-wkAEv55iPQSr7l8N1k20d0eqh99l577VB70LycRAQ7Y=' 'sha256-CGxXmGqMMdBm/SLXHjKc7Bxo482zMXgkZQrBvEUV4jQ=' 'sha256-afA5XIb5RF8SYWr2N2LcD5/7u3S6PUzRj8y+zAhrJkk=' 'sha256-esbkUK0hQXBgFIQcL0H/KHfsEagYvEX9Q7dIBqBnSPU=' 'sha256-YRQk+uyJPU5rIOvHqD0zaB2heUd0Fp8Pykv2JVjQY9g=' 'sha256-Rw8XIRZmkkjruWJHVwsrTbOBL2Zo6bIMLznGBzBPB2Y=' 'sha256-f5ZC/h8tSxBkN/lgcsTc961tcrf+PnTgPMkmzZKFoe0=' 'sha256-vtDGl+XgcvTV9w+6zET3hlSJcoasabSndJmMmQvVfVw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; form-action 'self' https://pay.mzfpay.com",
+      "content-type": "text/html",
+      "date": "Mon, 07 Sep 2026 16:39:10 GMT",
+      "etag": "W/\"6a9ee7bf-24d8\"",
+      "last-modified": "Mon, 07 Sep 2026 16:35:11 GMT",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "server": "nginx/1.27.5",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY"
+    },
+    "h1": [
+      "AI 面试助手，让你的经历更好表达。"
+    ],
+    "links": [
+      "https://mianshiwen.cn/features",
+      "https://mianshiwen.cn/interview-questions",
+      "https://mianshiwen.cn/guides",
+      "https://mianshiwen.cn/pricing",
+      "https://mianshiwen.cn/download",
+      "https://mianshiwen.cn/login",
+      "https://mianshiwen.cn/app/partner-program",
+      "https://mianshiwen.cn/app/billing",
+      "https://mianshiwen.cn/login",
+      "https://mianshiwen.cn/features",
+      "https://mianshiwen.cn/interview-questions",
+      "https://mianshiwen.cn/guides",
+      "https://mianshiwen.cn/guide",
+      "https://mianshiwen.cn/pricing",
+      "https://mianshiwen.cn/download",
+      "https://mianshiwen.cn/security",
+      "https://mianshiwen.cn/about",
+      "https://mianshiwen.cn/contact",
+      "https://mianshiwen.cn/terms",
+      "https://mianshiwen.cn/privacy",
+      "https://beian.miit.gov.cn",
+      "https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=33010602014812"
+    ],
+    "sha256": "81dfdaccefa89177a9ae9045c227e63e44b59f8f5c845934eb66938d72fee50c",
+    "scripts": [
+      "/assets/rolldown-runtime-aKtaBQYM.js",
+      "/assets/jsx-runtime-2Zwg-L3c.js",
+      "/assets/preload-helper-NuCatGIt.js",
+      "/assets/app-adapter-2vR1d2yK.js",
+      "/assets/src-BWxMI1Ru.js",
+      "/assets/main-D8GtcuCK.js"
+    ],
+    "evidence": "variant-2",
+    "body": "面试稳AI助手 AI 面试助手，让你的经历更好表达。 跟上面试问题，结合你的简历与目标岗位，整理更贴合自己的回答思路。 从听清问题，到讲清自己 跟上每一个问题 实时转写面试官与自己的声音，把注意力留给交流。 回答更贴合你的经历 按场选择简历、JD 和知识材料，围绕自己的项目与目标岗位组织回答。 截图题，也有思路 通过电脑助手截取题目，查看识别与生成进度，无需手动重新输入。 让下一场准备更充分 回看问题、回答建议与资料来源，整理需要补充的经历和表达。 偶尔一场，或密集准备，都有选择 先了解产品，再按实际需要选择积分或按天会员。具体积分消耗、会员时长和当前价格以登录后的积分与会员页面为准。 查看积分与会员 · 免费使用 从准备到连接，三步进入状态 准备自己的资料：添加简历和岗位 JD，按需要整理知识材料。 连接电脑助手：选择适合系统的版本，检查连接、声音与采集权限。 选择本场上下文：确认这场面试使用的资料，通过语音、手动输入或截图获取建议。 一段视频，了解面试稳 从连接到使用，看一遍就明白 常见问题 面试稳可以免费使用吗？ 可以先免费使用，具体可用权益以登录后的积分与会员页面实时显示为准。 支持哪些设备和输入方式？ 下载中心提供当前可用电脑版本。支持授权后的语音输入、手动输入和截图题回答；手机端可同步查看回答和会话状态。 如何选择套餐和支付方式？ 按实际使用需要选择积分或按天会员，价格、额度及可用支付方式以实时配置和订单确认为准。 如何使用 AI 建议？ 请根据真实经历核对内容，遵守面试组织方的规则，不能保证面试或录用结果。 清楚的数据与隐私边界 原始音频默认不保存；简历、JD、截图和会话记录提供管理或删除入口。请遵守面试规则，并始终基于真实经历作答。 产品支持 Web、macOS 和 Windows 使用方式。遇到问题可通过微信 mianshiwen-cn 或邮箱 contact@oneshowailab.com 联系客服。",
+    "body_chars": 825,
+    "body_hash": "9a98b14c9b6c81db6c89914a596721f3dbabeb28d734c16ce44bf6c287cefc5b"
+  },
+  {
+    "url": "http://www.mianshiwen.cn/pricing",
+    "status": 200,
+    "final": "https://mianshiwen.cn/pricing",
+    "redirects": 2,
+    "ttfb": 0.251989,
+    "total": 0.279907,
+    "title": "积分与会员计费说明｜面试稳",
+    "description": [
+      "了解面试稳AI助手的免费使用、积分按次与按天会员逻辑，以及回答、截图、知识材料和支付到账的计费边界。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/pricing"
+    ],
+    "robots": [],
+    "baiduspider_meta": [],
+    "xrobots": "",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=2592000",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'sha256-h2zt+LUCrVck7i1lC86GgaZqJVSDWqw6mjT5hzjg+i8=' 'sha256-CEy0yC/pHlXfLhNBOaA/UGMovhIUWL0ourEGerAgRu4=' 'sha256-zeVA7adHEjFgFdodyWgCoNTJ5iEmcyNCxpuOvot6xDQ=' 'sha256-Qznqq2GUGvk3wgbTH0sXVeVpeHhvenQuYOQddbtu5sg=' 'sha256-45wxGO3n/cPQcq0fers1m+axm/KYbdaWsvpY6oG8Ejc=' 'sha256-EuqMMd+5Ee1p6RngvvVBcFu7nUbWbxqymLGiMKZRE4k=' 'sha256-wGbS3hzFWe3AyrhKHQdIcablkO1pUiBs8XoKKmdpA9c=' 'sha256-kAA1jLkwuU7JgTtzszlb56pew+UC1AJJrwn94Ocby9I=' 'sha256-6FAgDEF9rjpPtkglSKYPEcbxBT2f2szM30KWS9ge/s0=' 'sha256-VYmb2j4M2GAdQdQuXOVJfoMildBUsIZBvM5OuDPsALw=' 'sha256-9hQ1yMLbvZb7zELw3wQN+5F2ag00udhsZkez/cQezGg=' 'sha256-vIsUdY/u1VQ8dg+g+v0StTKN2cMDOHpkqvG7C1ePf94=' 'sha256-KmyKJnViu6kxS1lTdI9w79T5RSwDVW8lqhutWmvhk24=' 'sha256-rQgc1y1hXo0KamWoayyTVlJ1kzANqDrois16AR/mEZk=' 'sha256-OjjKsIkwZcR8PCLmtq4uy58NyKtrnddSmm6TfjnC+iI=' 'sha256-8zozZaVC4VHr0iWH6sO54dZQentaAz8MZCJfviKMTbY=' 'sha256-vt0Wqw36UrEOJTbDnRoAZpSL5VVMk1rnkqFskkBWnmQ=' 'sha256-5l5Qx8e5PZO3Z7Y3inO5INEHTknJdRWKhZjKBTvc75k=' 'sha256-Db1tlMY9Ci4YLqiCWg7ezBhoY568QU/KL8TQwns3EgQ=' 'sha256-nlSWvxmiLARHjmEGByrt9b66w5gh3nkRBIPaf80m75Q=' 'sha256-Ysezpm4XtH2g/37ZUhGs45LwdlaVgz/eil4buhKLib4=' 'sha256-d2pWKFQM5WW10qUj2iMzaOlcYu5raT/gwfn658Fj6rk=' 'sha256-cNoPClAalygNSk2IcRkKGy0RD4TBfRWWFeZFAnqIujg=' 'sha256-xZ8pFwKTRYZWQfU8dS3RQ3NqKrtwmm0EokQQwObhDyM=' 'sha256-x88Et6X/lFXIPTowjRTLhdsmOiGhIQVt2pd9npI0J4Q=' 'sha256-wkAEv55iPQSr7l8N1k20d0eqh99l577VB70LycRAQ7Y=' 'sha256-CGxXmGqMMdBm/SLXHjKc7Bxo482zMXgkZQrBvEUV4jQ=' 'sha256-afA5XIb5RF8SYWr2N2LcD5/7u3S6PUzRj8y+zAhrJkk=' 'sha256-esbkUK0hQXBgFIQcL0H/KHfsEagYvEX9Q7dIBqBnSPU=' 'sha256-YRQk+uyJPU5rIOvHqD0zaB2heUd0Fp8Pykv2JVjQY9g=' 'sha256-Rw8XIRZmkkjruWJHVwsrTbOBL2Zo6bIMLznGBzBPB2Y=' 'sha256-f5ZC/h8tSxBkN/lgcsTc961tcrf+PnTgPMkmzZKFoe0=' 'sha256-vtDGl+XgcvTV9w+6zET3hlSJcoasabSndJmMmQvVfVw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; form-action 'self' https://pay.mzfpay.com",
+      "content-type": "text/html",
+      "date": "Mon, 07 Sep 2026 16:39:10 GMT",
+      "etag": "W/\"6a9ed8a4-1767\"",
+      "last-modified": "Mon, 07 Sep 2026 15:30:44 GMT",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "server": "nginx/1.27.5",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY"
+    },
+    "h1": [
+      "先免费体验，再按面试节奏选择"
+    ],
+    "links": [
+      "https://mianshiwen.cn/",
+      "https://mianshiwen.cn/download",
+      "https://mianshiwen.cn/security",
+      "https://mianshiwen.cn/guide",
+      "https://mianshiwen.cn/login",
+      "https://mianshiwen.cn/login",
+      "https://mianshiwen.cn/guide",
+      "https://mianshiwen.cn/features/ai-interview-assistant",
+      "https://mianshiwen.cn/download",
+      "https://mianshiwen.cn/security",
+      "https://mianshiwen.cn/contact",
+      "https://mianshiwen.cn/terms",
+      "https://mianshiwen.cn/",
+      "https://mianshiwen.cn/guide",
+      "https://mianshiwen.cn/privacy",
+      "https://mianshiwen.cn/contact"
+    ],
+    "sha256": "4d15acfb0f28471cef950cbb6f12c64b5ffbef060a025a2f10cea1f65d2f4bc2",
+    "scripts": [],
+    "evidence": "variant-3",
+    "body": "面试稳AI助手 PRICING EXPLAINED 先免费体验，再按面试节奏选择 面试稳同时提供积分按次和按天会员。偶尔使用时可以按实际功能消耗积分；面试安排密集时可以选择短期会员。购买前先理解两种权益的边界，避免重复充值。 查看当前价格 阅读支付说明 积分和会员有什么区别？ 积分适合低频、按功能使用；会员适合短期内有多场面试的用户。 积分会按照回答、截图或知识材料等实际能力扣减；会员在有效期内免除约定范围内的回答积分消耗，但不自动等同于全部知识材料免费。 积分按次 余额长期保留，使用具体能力时按当前规则扣减。适合先体验或面试频率不固定的用户。 按天会员 权益按购买时长累加，适合短期密集准备。会员包含哪些知识材料额度，以购买页面展示为准。 哪些信息以产品页面为准？ 信息 权威入口 当前价格、商品和活动 登录后的“积分与会员”页面 积分余额与明细 账户对应的积分流水 会员到期时间 账户权益卡片显示的累计到期时间 支付是否到账 服务端支付通知与订单状态 动态信息边界： 公开页不复制可能调整的商品价格、支付渠道或活动额度。付款返回页不代表到账，权益以服务端确认结果为准。 购买前建议怎么选？ 第一次使用先完成免费体验，确认收音、问题识别和回答方式适合自己的设备。 只有少量问题或一场面试时，优先评估积分。 短期连续面试时，再比较会员天数和知识材料额度。 支付后不要重复下单，先等待订单确认或通过订单号联系客服。 继续了解 产品能力总览 电脑助手下载说明 数据与安全边界 联系支持 用户协议",
+    "body_chars": 648,
+    "body_hash": "91f38c33562fcf3e6993771ffb7089c536a6aad2d520cbb8d648e57064fcbc89"
+  },
+  {
+    "url": "https://www.mianshiwen.cn/",
+    "status": 200,
+    "final": "https://mianshiwen.cn/",
+    "redirects": 1,
+    "ttfb": 0.188953,
+    "total": 0.208017,
+    "title": "AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳",
+    "description": [
+      "面试稳是一款 AI 面试助手，可结合简历、目标岗位和知识资料，整理实时面试问题、截图题与技术题的回答思路。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/"
+    ],
+    "robots": [],
+    "baiduspider_meta": [],
+    "xrobots": "",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=2592000",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'sha256-h2zt+LUCrVck7i1lC86GgaZqJVSDWqw6mjT5hzjg+i8=' 'sha256-CEy0yC/pHlXfLhNBOaA/UGMovhIUWL0ourEGerAgRu4=' 'sha256-zeVA7adHEjFgFdodyWgCoNTJ5iEmcyNCxpuOvot6xDQ=' 'sha256-Qznqq2GUGvk3wgbTH0sXVeVpeHhvenQuYOQddbtu5sg=' 'sha256-45wxGO3n/cPQcq0fers1m+axm/KYbdaWsvpY6oG8Ejc=' 'sha256-EuqMMd+5Ee1p6RngvvVBcFu7nUbWbxqymLGiMKZRE4k=' 'sha256-wGbS3hzFWe3AyrhKHQdIcablkO1pUiBs8XoKKmdpA9c=' 'sha256-kAA1jLkwuU7JgTtzszlb56pew+UC1AJJrwn94Ocby9I=' 'sha256-6FAgDEF9rjpPtkglSKYPEcbxBT2f2szM30KWS9ge/s0=' 'sha256-VYmb2j4M2GAdQdQuXOVJfoMildBUsIZBvM5OuDPsALw=' 'sha256-9hQ1yMLbvZb7zELw3wQN+5F2ag00udhsZkez/cQezGg=' 'sha256-vIsUdY/u1VQ8dg+g+v0StTKN2cMDOHpkqvG7C1ePf94=' 'sha256-KmyKJnViu6kxS1lTdI9w79T5RSwDVW8lqhutWmvhk24=' 'sha256-rQgc1y1hXo0KamWoayyTVlJ1kzANqDrois16AR/mEZk=' 'sha256-OjjKsIkwZcR8PCLmtq4uy58NyKtrnddSmm6TfjnC+iI=' 'sha256-8zozZaVC4VHr0iWH6sO54dZQentaAz8MZCJfviKMTbY=' 'sha256-vt0Wqw36UrEOJTbDnRoAZpSL5VVMk1rnkqFskkBWnmQ=' 'sha256-5l5Qx8e5PZO3Z7Y3inO5INEHTknJdRWKhZjKBTvc75k=' 'sha256-Db1tlMY9Ci4YLqiCWg7ezBhoY568QU/KL8TQwns3EgQ=' 'sha256-nlSWvxmiLARHjmEGByrt9b66w5gh3nkRBIPaf80m75Q=' 'sha256-Ysezpm4XtH2g/37ZUhGs45LwdlaVgz/eil4buhKLib4=' 'sha256-d2pWKFQM5WW10qUj2iMzaOlcYu5raT/gwfn658Fj6rk=' 'sha256-cNoPClAalygNSk2IcRkKGy0RD4TBfRWWFeZFAnqIujg=' 'sha256-xZ8pFwKTRYZWQfU8dS3RQ3NqKrtwmm0EokQQwObhDyM=' 'sha256-x88Et6X/lFXIPTowjRTLhdsmOiGhIQVt2pd9npI0J4Q=' 'sha256-wkAEv55iPQSr7l8N1k20d0eqh99l577VB70LycRAQ7Y=' 'sha256-CGxXmGqMMdBm/SLXHjKc7Bxo482zMXgkZQrBvEUV4jQ=' 'sha256-afA5XIb5RF8SYWr2N2LcD5/7u3S6PUzRj8y+zAhrJkk=' 'sha256-esbkUK0hQXBgFIQcL0H/KHfsEagYvEX9Q7dIBqBnSPU=' 'sha256-YRQk+uyJPU5rIOvHqD0zaB2heUd0Fp8Pykv2JVjQY9g=' 'sha256-Rw8XIRZmkkjruWJHVwsrTbOBL2Zo6bIMLznGBzBPB2Y=' 'sha256-f5ZC/h8tSxBkN/lgcsTc961tcrf+PnTgPMkmzZKFoe0=' 'sha256-vtDGl+XgcvTV9w+6zET3hlSJcoasabSndJmMmQvVfVw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; form-action 'self' https://pay.mzfpay.com",
+      "content-type": "text/html",
+      "date": "Mon, 07 Sep 2026 16:39:11 GMT",
+      "etag": "W/\"6a9ee7bf-24d8\"",
+      "last-modified": "Mon, 07 Sep 2026 16:35:11 GMT",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "server": "nginx/1.27.5",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY"
+    },
+    "h1": [
+      "AI 面试助手，让你的经历更好表达。"
+    ],
+    "links": [
+      "https://mianshiwen.cn/features",
+      "https://mianshiwen.cn/interview-questions",
+      "https://mianshiwen.cn/guides",
+      "https://mianshiwen.cn/pricing",
+      "https://mianshiwen.cn/download",
+      "https://mianshiwen.cn/login",
+      "https://mianshiwen.cn/app/partner-program",
+      "https://mianshiwen.cn/app/billing",
+      "https://mianshiwen.cn/login",
+      "https://mianshiwen.cn/features",
+      "https://mianshiwen.cn/interview-questions",
+      "https://mianshiwen.cn/guides",
+      "https://mianshiwen.cn/guide",
+      "https://mianshiwen.cn/pricing",
+      "https://mianshiwen.cn/download",
+      "https://mianshiwen.cn/security",
+      "https://mianshiwen.cn/about",
+      "https://mianshiwen.cn/contact",
+      "https://mianshiwen.cn/terms",
+      "https://mianshiwen.cn/privacy",
+      "https://beian.miit.gov.cn",
+      "https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=33010602014812"
+    ],
+    "sha256": "81dfdaccefa89177a9ae9045c227e63e44b59f8f5c845934eb66938d72fee50c",
+    "scripts": [
+      "/assets/rolldown-runtime-aKtaBQYM.js",
+      "/assets/jsx-runtime-2Zwg-L3c.js",
+      "/assets/preload-helper-NuCatGIt.js",
+      "/assets/app-adapter-2vR1d2yK.js",
+      "/assets/src-BWxMI1Ru.js",
+      "/assets/main-D8GtcuCK.js"
+    ],
+    "evidence": "variant-4",
+    "body": "面试稳AI助手 AI 面试助手，让你的经历更好表达。 跟上面试问题，结合你的简历与目标岗位，整理更贴合自己的回答思路。 从听清问题，到讲清自己 跟上每一个问题 实时转写面试官与自己的声音，把注意力留给交流。 回答更贴合你的经历 按场选择简历、JD 和知识材料，围绕自己的项目与目标岗位组织回答。 截图题，也有思路 通过电脑助手截取题目，查看识别与生成进度，无需手动重新输入。 让下一场准备更充分 回看问题、回答建议与资料来源，整理需要补充的经历和表达。 偶尔一场，或密集准备，都有选择 先了解产品，再按实际需要选择积分或按天会员。具体积分消耗、会员时长和当前价格以登录后的积分与会员页面为准。 查看积分与会员 · 免费使用 从准备到连接，三步进入状态 准备自己的资料：添加简历和岗位 JD，按需要整理知识材料。 连接电脑助手：选择适合系统的版本，检查连接、声音与采集权限。 选择本场上下文：确认这场面试使用的资料，通过语音、手动输入或截图获取建议。 一段视频，了解面试稳 从连接到使用，看一遍就明白 常见问题 面试稳可以免费使用吗？ 可以先免费使用，具体可用权益以登录后的积分与会员页面实时显示为准。 支持哪些设备和输入方式？ 下载中心提供当前可用电脑版本。支持授权后的语音输入、手动输入和截图题回答；手机端可同步查看回答和会话状态。 如何选择套餐和支付方式？ 按实际使用需要选择积分或按天会员，价格、额度及可用支付方式以实时配置和订单确认为准。 如何使用 AI 建议？ 请根据真实经历核对内容，遵守面试组织方的规则，不能保证面试或录用结果。 清楚的数据与隐私边界 原始音频默认不保存；简历、JD、截图和会话记录提供管理或删除入口。请遵守面试规则，并始终基于真实经历作答。 产品支持 Web、macOS 和 Windows 使用方式。遇到问题可通过微信 mianshiwen-cn 或邮箱 contact@oneshowailab.com 联系客服。",
+    "body_chars": 825,
+    "body_hash": "9a98b14c9b6c81db6c89914a596721f3dbabeb28d734c16ce44bf6c287cefc5b"
+  },
+  {
+    "url": "https://www.mianshiwen.cn/pricing",
+    "status": 200,
+    "final": "https://mianshiwen.cn/pricing",
+    "redirects": 1,
+    "ttfb": 0.192387,
+    "total": 0.193377,
+    "title": "积分与会员计费说明｜面试稳",
+    "description": [
+      "了解面试稳AI助手的免费使用、积分按次与按天会员逻辑，以及回答、截图、知识材料和支付到账的计费边界。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/pricing"
+    ],
+    "robots": [],
+    "baiduspider_meta": [],
+    "xrobots": "",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=2592000",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'sha256-h2zt+LUCrVck7i1lC86GgaZqJVSDWqw6mjT5hzjg+i8=' 'sha256-CEy0yC/pHlXfLhNBOaA/UGMovhIUWL0ourEGerAgRu4=' 'sha256-zeVA7adHEjFgFdodyWgCoNTJ5iEmcyNCxpuOvot6xDQ=' 'sha256-Qznqq2GUGvk3wgbTH0sXVeVpeHhvenQuYOQddbtu5sg=' 'sha256-45wxGO3n/cPQcq0fers1m+axm/KYbdaWsvpY6oG8Ejc=' 'sha256-EuqMMd+5Ee1p6RngvvVBcFu7nUbWbxqymLGiMKZRE4k=' 'sha256-wGbS3hzFWe3AyrhKHQdIcablkO1pUiBs8XoKKmdpA9c=' 'sha256-kAA1jLkwuU7JgTtzszlb56pew+UC1AJJrwn94Ocby9I=' 'sha256-6FAgDEF9rjpPtkglSKYPEcbxBT2f2szM30KWS9ge/s0=' 'sha256-VYmb2j4M2GAdQdQuXOVJfoMildBUsIZBvM5OuDPsALw=' 'sha256-9hQ1yMLbvZb7zELw3wQN+5F2ag00udhsZkez/cQezGg=' 'sha256-vIsUdY/u1VQ8dg+g+v0StTKN2cMDOHpkqvG7C1ePf94=' 'sha256-KmyKJnViu6kxS1lTdI9w79T5RSwDVW8lqhutWmvhk24=' 'sha256-rQgc1y1hXo0KamWoayyTVlJ1kzANqDrois16AR/mEZk=' 'sha256-OjjKsIkwZcR8PCLmtq4uy58NyKtrnddSmm6TfjnC+iI=' 'sha256-8zozZaVC4VHr0iWH6sO54dZQentaAz8MZCJfviKMTbY=' 'sha256-vt0Wqw36UrEOJTbDnRoAZpSL5VVMk1rnkqFskkBWnmQ=' 'sha256-5l5Qx8e5PZO3Z7Y3inO5INEHTknJdRWKhZjKBTvc75k=' 'sha256-Db1tlMY9Ci4YLqiCWg7ezBhoY568QU/KL8TQwns3EgQ=' 'sha256-nlSWvxmiLARHjmEGByrt9b66w5gh3nkRBIPaf80m75Q=' 'sha256-Ysezpm4XtH2g/37ZUhGs45LwdlaVgz/eil4buhKLib4=' 'sha256-d2pWKFQM5WW10qUj2iMzaOlcYu5raT/gwfn658Fj6rk=' 'sha256-cNoPClAalygNSk2IcRkKGy0RD4TBfRWWFeZFAnqIujg=' 'sha256-xZ8pFwKTRYZWQfU8dS3RQ3NqKrtwmm0EokQQwObhDyM=' 'sha256-x88Et6X/lFXIPTowjRTLhdsmOiGhIQVt2pd9npI0J4Q=' 'sha256-wkAEv55iPQSr7l8N1k20d0eqh99l577VB70LycRAQ7Y=' 'sha256-CGxXmGqMMdBm/SLXHjKc7Bxo482zMXgkZQrBvEUV4jQ=' 'sha256-afA5XIb5RF8SYWr2N2LcD5/7u3S6PUzRj8y+zAhrJkk=' 'sha256-esbkUK0hQXBgFIQcL0H/KHfsEagYvEX9Q7dIBqBnSPU=' 'sha256-YRQk+uyJPU5rIOvHqD0zaB2heUd0Fp8Pykv2JVjQY9g=' 'sha256-Rw8XIRZmkkjruWJHVwsrTbOBL2Zo6bIMLznGBzBPB2Y=' 'sha256-f5ZC/h8tSxBkN/lgcsTc961tcrf+PnTgPMkmzZKFoe0=' 'sha256-vtDGl+XgcvTV9w+6zET3hlSJcoasabSndJmMmQvVfVw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; form-action 'self' https://pay.mzfpay.com",
+      "content-type": "text/html",
+      "date": "Mon, 07 Sep 2026 16:39:11 GMT",
+      "etag": "W/\"6a9ed8a4-1767\"",
+      "last-modified": "Mon, 07 Sep 2026 15:30:44 GMT",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "server": "nginx/1.27.5",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY"
+    },
+    "h1": [
+      "先免费体验，再按面试节奏选择"
+    ],
+    "links": [
+      "https://mianshiwen.cn/",
+      "https://mianshiwen.cn/download",
+      "https://mianshiwen.cn/security",
+      "https://mianshiwen.cn/guide",
+      "https://mianshiwen.cn/login",
+      "https://mianshiwen.cn/login",
+      "https://mianshiwen.cn/guide",
+      "https://mianshiwen.cn/features/ai-interview-assistant",
+      "https://mianshiwen.cn/download",
+      "https://mianshiwen.cn/security",
+      "https://mianshiwen.cn/contact",
+      "https://mianshiwen.cn/terms",
+      "https://mianshiwen.cn/",
+      "https://mianshiwen.cn/guide",
+      "https://mianshiwen.cn/privacy",
+      "https://mianshiwen.cn/contact"
+    ],
+    "sha256": "4d15acfb0f28471cef950cbb6f12c64b5ffbef060a025a2f10cea1f65d2f4bc2",
+    "scripts": [],
+    "evidence": "variant-5",
+    "body": "面试稳AI助手 PRICING EXPLAINED 先免费体验，再按面试节奏选择 面试稳同时提供积分按次和按天会员。偶尔使用时可以按实际功能消耗积分；面试安排密集时可以选择短期会员。购买前先理解两种权益的边界，避免重复充值。 查看当前价格 阅读支付说明 积分和会员有什么区别？ 积分适合低频、按功能使用；会员适合短期内有多场面试的用户。 积分会按照回答、截图或知识材料等实际能力扣减；会员在有效期内免除约定范围内的回答积分消耗，但不自动等同于全部知识材料免费。 积分按次 余额长期保留，使用具体能力时按当前规则扣减。适合先体验或面试频率不固定的用户。 按天会员 权益按购买时长累加，适合短期密集准备。会员包含哪些知识材料额度，以购买页面展示为准。 哪些信息以产品页面为准？ 信息 权威入口 当前价格、商品和活动 登录后的“积分与会员”页面 积分余额与明细 账户对应的积分流水 会员到期时间 账户权益卡片显示的累计到期时间 支付是否到账 服务端支付通知与订单状态 动态信息边界： 公开页不复制可能调整的商品价格、支付渠道或活动额度。付款返回页不代表到账，权益以服务端确认结果为准。 购买前建议怎么选？ 第一次使用先完成免费体验，确认收音、问题识别和回答方式适合自己的设备。 只有少量问题或一场面试时，优先评估积分。 短期连续面试时，再比较会员天数和知识材料额度。 支付后不要重复下单，先等待订单确认或通过订单号联系客服。 继续了解 产品能力总览 电脑助手下载说明 数据与安全边界 联系支持 用户协议",
+    "body_chars": 648,
+    "body_hash": "91f38c33562fcf3e6993771ffb7089c536a6aad2d520cbb8d648e57064fcbc89"
+  }
+]

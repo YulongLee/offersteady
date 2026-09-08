@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#071512"/><stop offset="1" stop-color="#11231f"/></linearGradient><style>.title{font:700 44px -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;fill:#f3fff9}.sub{font:400 22px -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;fill:#9fc2b5}.axis{stroke:#46675c;stroke-width:2}.tick{font:500 18px -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;fill:#91afa4}.lab{font:600 21px -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;fill:#e9fff6}.note{font:500 20px -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;fill:#b5d5c9}.bar1{fill:#2dd4a3}.bar2{fill:#55a889}.bar3{fill:#2b6f5b}.bar4{fill:#d7a84c}.card{fill:#132d26;stroke:#2b5f50;stroke-width:2;rx:16}</style></defs>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <text x="80" y="82" class="title">用户感知延迟：从声音到页面像素</text>
+  <text x="80" y="122" class="sub">T0–T11 不是一个总数，而是一组可以逐段归因的时间边界</text>
+  <line x1="330" y1="190" x2="1510" y2="190" class="axis"/>
+  <g class="tick"><text x="330" y="175">0 ms</text><text x="590" y="175">采集与传输</text><text x="870" y="175">ASR</text><text x="1130" y="175">事件交付</text><text x="1390" y="175">浏览器绘制</text></g>
+  <g>
+    <text x="80" y="242" class="lab">T0 语音活动</text><rect x="330" y="215" width="110" height="38" rx="8" class="bar2"/>
+    <text x="80" y="312" class="lab">T1 桌面真正 send</text><rect x="440" y="285" width="170" height="38" rx="8" class="bar1"/>
+    <text x="80" y="382" class="lab">T2 后端 receive</text><rect x="610" y="355" width="105" height="38" rx="8" class="bar3"/>
+    <text x="80" y="452" class="lab">T3 ASR append</text><rect x="715" y="425" width="105" height="38" rx="8" class="bar3"/>
+    <text x="80" y="522" class="lab">T4 首个 Partial</text><rect x="820" y="495" width="300" height="38" rx="8" class="bar4"/>
+    <text x="80" y="592" class="lab">T5–T7 Redis / SSE</text><rect x="1120" y="565" width="145" height="38" rx="8" class="bar1"/>
+    <text x="80" y="662" class="lab">T8–T11 Browser</text><rect x="1265" y="635" width="220" height="38" rx="8" class="bar2"/>
+  </g>
+  <path d="M385 253 L525 285 M525 323 L662 355 M662 393 L767 425 M767 463 L970 495 M970 533 L1192 565 M1192 603 L1375 635" stroke="#6ee7b7" stroke-width="2" stroke-dasharray="6 6" fill="none"/>
+  <rect x="330" y="720" width="550" height="110" class="card"/><text x="360" y="762" class="lab">真实热路径样本</text><text x="360" y="798" class="note">Qwen append → Partial：P50 437ms / P95 447ms</text>
+  <rect x="920" y="720" width="590" height="110" class="card"/><text x="950" y="762" class="lab">测量原则</text><text x="950" y="798" class="note">局部模型指标不能冒充完整端到端延迟</text>
+</svg>

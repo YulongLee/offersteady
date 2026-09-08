@@ -1,0 +1,40 @@
+export const routes = {
+  landing: "/",
+  login: "/login",
+  terms: "/terms",
+  privacy: "/privacy",
+  refundPolicy: "/refund-policy",
+  pricing: "/pricing",
+  contact: "/contact",
+  about: "/about",
+  security: "/security",
+  features: "/features",
+  interviewQuestions: "/interview-questions",
+  guides: "/guides",
+  download: "/download",
+  publicGuide: "/guide",
+  invite: (code = ":code") => `/invite/${code}`,
+  app: "/app",
+  writtenExams: "/app/written-exams",
+  newInterview: "/app/interviews/new",
+  newWrittenExam: "/app/written-exams/new",
+  prepare: (id = ":id") => `/app/interviews/${id}/prepare`,
+  live: (id = ":id") => `/app/interviews/${id}/live`,
+  review: (id = ":id") => `/app/interviews/${id}/review`,
+  library: "/app/library",
+  billing: "/app/billing",
+  guide: "/app/guide",
+  devices: "/app/devices",
+  settings: "/app/settings",
+} as const;
+
+export type ProtectedRoute =
+  | typeof routes.app
+  | typeof routes.writtenExams
+  | typeof routes.newInterview
+  | typeof routes.newWrittenExam
+  | typeof routes.library
+  | typeof routes.billing
+  | typeof routes.guide
+  | typeof routes.devices
+  | typeof routes.settings;

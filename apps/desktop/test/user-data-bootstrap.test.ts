@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  globalStableUserDataDirectory,
   legacyUserDataDirectories,
   migrateLegacyCompanionState,
   stableUserDataDirectory,
@@ -15,6 +16,14 @@ describe("stable companion user data", () => {
     expect(stableUserDataDirectory(appData)).toBe(path.join(appData, "@offersteady", "desktop"));
     expect(legacyUserDataDirectories(appData, path.join(appData, "面试稳伴随程序")))
       .toEqual([path.join(appData, "面试稳伴随程序")]);
+  });
+
+  it("keeps Global identity and credentials outside the domestic data directory", () => {
+    const appData = path.join("tmp", "Application Support");
+    expect(globalStableUserDataDirectory(appData)).toBe(
+      path.join(appData, "@offersteady", "desktop", "global"),
+    );
+    expect(globalStableUserDataDirectory(appData)).not.toBe(stableUserDataDirectory(appData));
   });
 
   it("migrates only the allowlisted identity bundle and settings", async () => {

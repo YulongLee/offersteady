@@ -1,0 +1,160 @@
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import type { SpeakerTranscriptSegment } from "@offersteady/protocol";
+import type { WebAppState } from "./domain";
+import { projectConversationTurns } from "./conversation-turns";
+import { SubtitleDiagnosticsOverlay } from "./SubtitleDiagnosticsOverlay";
+import { recordSubtitleRevisionStage, subtitleRevisionDiagnosticsEnabled } from "./realtime-subtitle-diagnostics";
+
+interface Props {
+  readonly state: WebAppState;
+  readonly onConfirmQuestion: () => void;
+  readonly onDismissQuestion: () => void;
+}
+
+export const formatTranscriptTimestamp = (milliseconds: number) => {
+  if (milliseconds >= 1_000_000_000_000) {
+    const timestamp = new Date(milliseconds);
+    return `[${String(timestamp.getHours()).padStart(2, "0")}:${String(timestamp.getMinutes()).padStart(2, "0")}:${String(timestamp.getSeconds()).padStart(2, "0")}]`;
+  }
+  return `[${String(Math.floor(milliseconds / 60_000)).padStart(2, "0")}:${String(Math.floor(milliseconds / 1_000) % 60).padStart(2, "0")}]`;
+};
+
+const graphemes = (value: string) => Array.from(value);
+
+export const splitImmediateTranscriptRevision = (previous: string, current: string) => {
+  const previousUnits = graphemes(previous);
+  const currentUnits = graphemes(current);
+  let stableLength = 0;
+  while (
+    stableLength < previousUnits.length
+    && stableLength < currentUnits.length
+    && previousUnits[stableLength] === currentUnits[stableLength]
+  ) stableLength += 1;
+  return {
+    stablePrefix: currentUnits.slice(0, stableLength).join(""),
+    mutableTail: currentUnits.slice(stableLength).join(""),
+  };
+};
+
+export type TranscriptPresentationState = "final" | "transcribing" | "confirming" | "stale";
+export const transcriptPresentationState = (
+  segment: { readonly isFinal: boolean; readonly turnState?: "speaking" | "tail" | "committing"; readonly terminalState?: "final" | "incomplete" },
+): TranscriptPresentationState => {
+  if (segment.isFinal) return segment.terminalState === "incomplete" ? "stale" : "final";
+  if (segment.turnState === "committing") return "confirming";
+  return "transcribing";
+};
+export const transcriptPresentationLabel = (presentation: TranscriptPresentationState) =>
+  presentation === "final" ? "已确认"
+    : presentation === "stale" ? "识别未完成"
+      : presentation === "confirming" ? "已转写"
+        : "转写中";
+
+export function ImmediateTranscriptText({ segment, active }: { readonly segment: SpeakerTranscriptSegment; readonly active: boolean }) {
+  const text = segment.text;
+  const previousTextRef = useRef(text);
+  const lastPaintedEventId = useRef<string | null>(null);
+  const performance = segment.performance;
+  const renderStartedAtMs = useMemo(() => Date.now(), [performance?.eventId, text]);
+  const revisionParts = splitImmediateTranscriptRevision(previousTextRef.current, text);
+
+  useLayoutEffect(() => {
+    previousTextRef.current = text;
+  }, [text]);
+
+  useLayoutEffect(() => {
+    const eventId = performance?.eventId;
+    const traceId = performance?.traceId;
+    if (!eventId || !traceId || lastPaintedEventId.current === eventId) return;
+    const identity = {
+      sessionId: segment.sessionId,
+      channel: performance.channel ?? segment.sourceKind,
+      utteranceId: performance.utteranceId ?? performance.segmentId ?? segment.id,
+      segmentId: performance.segmentId ?? segment.id,
+      revision: segment.revision,
+      eventId,
+      traceId,
+      textLength: text.length,
+    };
+    if (subtitleRevisionDiagnosticsEnabled()) {
+      recordSubtitleRevisionStage(identity, "react-render", renderStartedAtMs, { renderedTextLength: text.length });
+    }
+    const reactCommitAtMs = Date.now();
+    if (subtitleRevisionDiagnosticsEnabled()) {
+      recordSubtitleRevisionStage(identity, "react-commit", reactCommitAtMs, { renderedTextLength: text.length });
+    }
+    const handle = window.requestAnimationFrame(() => {
+      const browserPaintAtMs = Date.now();
+      lastPaintedEventId.current = eventId;
+      if (subtitleRevisionDiagnosticsEnabled()) {
+        recordSubtitleRevisionStage(identity, "paint", browserPaintAtMs, { renderedTextLength: text.length });
+      }
+      window.dispatchEvent(new CustomEvent("offersteady:realtime-transcript-rendered", {
+        detail: {
+          sessionId: segment.sessionId,
+          traceId,
+          eventId,
+          browserStreamChunkReceivedAtMs: performance.browserStreamChunkReceivedAtMs,
+          browserEventParsedAtMs: performance.browserEventParsedAtMs,
+          transcriptStoreUpdateStartAtMs: performance.transcriptStoreUpdateStartAtMs,
+          transcriptStoreUpdateCompleteAtMs: performance.transcriptStoreUpdateCompleteAtMs,
+          browserEventReceiveAtMs: performance.browserEventReceiveAtMs,
+          browserStateUpdateAtMs: performance.browserStateUpdateAtMs,
+          reactRenderStartAtMs: renderStartedAtMs,
+          reactCommitAtMs,
+          browserPaintAtMs,
+          browserRenderAtMs: browserPaintAtMs,
+          renderedRevision: segment.revision,
+          renderedTextLength: text.length,
+          visibilityState: document.visibilityState,
+        },
+      }));
+    });
+    return () => window.cancelAnimationFrame(handle);
+  }, [performance, renderStartedAtMs, segment.id, segment.revision, segment.sessionId, text]);
+
+  return <p className={active ? "is-streaming" : "is-final"}>
+    <span>{revisionParts.stablePrefix}</span><span>{revisionParts.mutableTail}</span>
+    {active ? <span className="transcript-caret" aria-hidden="true" /> : null}
+  </p>;
+}
+
+export function ConversationMonitor({ state, onConfirmQuestion, onDismissQuestion }: Props) {
+  const viewport = useRef<HTMLDivElement>(null);
+  const followLatest = useRef(true);
+  const transcripts = useMemo(() => projectConversationTurns(state.speaker.transcripts), [state.speaker.transcripts]);
+  useEffect(() => { const node = viewport.current; if (node && followLatest.current) node.scrollTop = node.scrollHeight; }, [transcripts.length, transcripts.at(-1)?.revision]);
+  useEffect(() => {
+    const latest = transcripts.at(-1);
+    if (!latest) return;
+    const publishedAtMs = latest.publishedAtMs ?? latest.endedAtMs;
+    if (!publishedAtMs) return;
+    const frontendRenderMs = Math.max(0, Date.now() - publishedAtMs);
+    const runtime = ((globalThis as typeof globalThis & {
+      __offersteadyRealtimeMetrics?: {
+        latestFrontendRenderMs?: number;
+        latestSegmentId?: string;
+        renderedAtMs?: number;
+      };
+    }).__offersteadyRealtimeMetrics ??= {});
+    runtime.latestFrontendRenderMs = frontendRenderMs;
+    runtime.latestSegmentId = latest.id;
+    runtime.renderedAtMs = Date.now();
+  }, [transcripts]);
+  const pendingSegmentIds = new Set(state.speaker.pendingQuestion?.sourceSegmentIds ?? []);
+  return <section className={`conversation-monitor ${transcripts.length === 0 ? "is-empty" : "has-transcripts"}`} aria-labelledby="conversation-title">
+    <SubtitleDiagnosticsOverlay />
+    <header><div><span className="kicker">LIVE CONVERSATION</span><h2 id="conversation-title">实时对话</h2></div><span className="conversation-mode"><i className={state.speaker.mode === "dual-channel" ? "online-dot" : "recording-dot"} />{state.speaker.mode === "dual-channel" ? "双通道 · 两角色" : "仅手动提问"}</span></header>
+    {state.speaker.degradation ? <div className="source-degradation" role="status"><strong>音频来源无法区分</strong><span>面试官问题识别已暂停，请检查桌面程序或使用右侧手动提问。</span></div> : null}
+    {!state.speaker.degradation && state.speaker.runtimeNotice ? <div className="source-degradation" role="status"><strong>当前 session 尚未收到实时对话</strong><span>{state.speaker.runtimeNotice.message}</span></div> : null}
+    <div className="conversation-list" ref={viewport} onScroll={event => { const node = event.currentTarget; followLatest.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48; }}>
+      {transcripts.length === 0 ? <div className="conversation-empty"><strong>等待当前面试的实时对话</strong><span>{state.speaker.runtimeNotice?.message ?? "桌面伴随助手连上当前 session 后，这里会按“面试官 / 我”实时显示转录。"}</span></div> : null}
+      {transcripts.map(segment => {
+        const role = segment.role;
+        const hasPendingQuestion = segment.sourceSegmentIds.some(id => pendingSegmentIds.has(id));
+        const presentation = transcriptPresentationState(segment);
+        return <article key={segment.id} className={`conversation-turn ${role}`}><time>{formatTranscriptTimestamp(segment.startedAtMs)}</time><div><div className="conversation-turn-meta"><strong>{role === "candidate" ? "我" : "面试官"}</strong><small>{transcriptPresentationLabel(presentation)}{segment.overlap ? " · 声音重叠" : ""}</small></div><ImmediateTranscriptText segment={segment} active={presentation === "transcribing"} />{hasPendingQuestion && state.speaker.pendingQuestion ? <div className="inline-question-confirm"><span>问题内容不清晰</span><strong>{state.speaker.pendingQuestion.text}</strong><small>确认文本后可点击“快答”生成回答；确认本身不会开始回答或扣费。</small><div><button onClick={onDismissQuestion}>忽略</button><button className="confirm" onClick={onConfirmQuestion}>确认问题</button></div></div> : null}</div></article>;
+      })}
+    </div>
+  </section>;
+}

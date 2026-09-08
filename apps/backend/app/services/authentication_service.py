@@ -11,6 +11,9 @@ from dataclasses import replace
 from time import time
 from uuid import uuid4
 
+from argon2 import PasswordHasher as Argon2Hasher
+from argon2.exceptions import InvalidHash, VerifyMismatchError
+
 import jwt
 
 from app.core.config import Settings
@@ -23,6 +26,8 @@ from app.ports.authentication import (
     AuthenticatedRequestContext,
     AuthenticationRepository,
     ExternalIdentityBindingRecord,
+    EmailChallengeRecord,
+    EmailVerificationProviderPort,
     IdentityProviderKind,
     PasswordHasherPort,
     ProviderAuthorizationEntry,
@@ -52,8 +57,11 @@ def _safe_user_ref(user_id: str) -> str:
 class PBKDF2PasswordHasher(PasswordHasherPort):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        self.argon2 = Argon2Hasher(time_cost=2, memory_cost=19456, parallelism=1)
 
     def hash_password(self, password: str) -> str:
+        if self.settings.product_edition == "global":
+            return self.argon2.hash(password)
         salt = secrets.token_bytes(16)
         derived = hashlib.pbkdf2_hmac(
             "sha256",
@@ -68,6 +76,11 @@ class PBKDF2PasswordHasher(PasswordHasherPort):
         )
 
     def verify_password(self, password: str, stored_hash: str) -> bool:
+        if stored_hash.startswith("$argon2id$"):
+            try:
+                return self.argon2.verify(stored_hash, password)
+            except (InvalidHash, VerifyMismatchError):
+                return False
         try:
             algorithm, iterations_token, salt_token, digest_token = stored_hash.split("$", 3)
             if algorithm != "pbkdf2_sha256":
@@ -79,6 +92,16 @@ class PBKDF2PasswordHasher(PasswordHasherPort):
             return False
         derived = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
         return hmac.compare_digest(derived, expected)
+
+    def needs_rehash(self, stored_hash: str) -> bool:
+        if self.settings.product_edition != "global":
+            return False
+        if not stored_hash.startswith("$argon2id$"):
+            return True
+        try:
+            return self.argon2.check_needs_rehash(stored_hash)
+        except InvalidHash:
+            return True
 
 
 class JWTAccessTokenCodec(AccessTokenCodecPort):
@@ -169,6 +192,7 @@ class AuthenticationService:
         token_codec: AccessTokenCodecPort,
         wechat_provider: WechatLoginProviderPort,
         sms_provider: SmsVerificationProviderPort,
+        email_provider: EmailVerificationProviderPort | None = None,
     ) -> None:
         self.settings = settings
         self.logger = logger
@@ -177,8 +201,13 @@ class AuthenticationService:
         self.token_codec = token_codec
         self.wechat_provider = wechat_provider
         self.sms_provider = sms_provider
+        self.email_provider = email_provider
+        self._global_login_failures: dict[str, list[int]] = {}
+        self._global_dummy_password_hash = self.password_hasher.hash_password(secrets.token_urlsafe(24)) if settings.product_edition == "global" else "external-auth"
 
     def register_user(self, *, login_id: str, password: str, display_name: str | None, client_label: str) -> tuple[UserRecord, AuthSessionRecord, str, str]:
+        if self.settings.product_edition == "global":
+            raise DomainRequestError("authentication", "register", "Use verified Global registration.", 404, "legacy_password_route_disabled")
         normalized_login = login_id.strip().lower()
         if self.repository.get_user_by_login_id(normalized_login) is not None:
             raise DomainRequestError("authentication", "register", "该账号已存在。", 409)
@@ -214,6 +243,8 @@ class AuthenticationService:
         return user, auth_session, access_token, refresh_token
 
     def login(self, *, login_id: str, password: str, client_label: str) -> tuple[UserRecord, AuthSessionRecord, str, str]:
+        if self.settings.product_edition == "global":
+            raise DomainRequestError("authentication", "login", "Use Global password sign-in.", 404, "legacy_password_route_disabled")
         normalized_login = login_id.strip().lower()
         user = self.repository.get_user_by_login_id(normalized_login)
         if user is None or not self.password_hasher.verify_password(password, user.password_hash):
@@ -355,6 +386,189 @@ class AuthenticationService:
         auth_session, access_token, refresh_token = self._issue_auth_session(user=user, client_label=client_label)
         self._log(logging.INFO, "authentication.sms_logged_in", user_id=user.user_id, auth_session_id=auth_session.auth_session_id, outcome="success", login_id=phone_e164)
         return user, auth_session, access_token, refresh_token
+
+    def send_email_code(self, *, email: str, client_label: str, purpose: str = "login") -> EmailChallengeRecord:
+        del client_label
+        self._require_email_enabled()
+        if purpose not in {"login", "registration", "password_setup", "password_reset"}:
+            raise DomainRequestError("authentication", "email-send", "Unsupported verification purpose.", 422, "invalid_email_purpose")
+        normalized_email = self._normalize_email(email)
+        email_hash = self._email_hash(normalized_email)
+        now_ms = _now_ms()
+        recent = [
+            challenge
+            for challenge in self.repository.list_email_challenges(
+                email_hash=email_hash,
+                since_ms=now_ms - 24 * 60 * 60 * 1000,
+            )
+            if challenge.status != "failed"
+        ]
+        if recent and now_ms - recent[0].created_at_ms < self.settings.auth_email_send_interval_seconds * 1000:
+            raise DomainRequestError("authentication", "email-send", "Please wait before requesting another code.", 429, "email_rate_limited")
+        if len(recent) >= self.settings.auth_email_daily_limit:
+            raise DomainRequestError("authentication", "email-send", "The daily verification-code limit has been reached.", 429, "email_daily_limit_exceeded")
+        if self.email_provider is None:
+            raise DomainRequestError("authentication", "email-send", "Email sign-in is temporarily unavailable.", 503, "email_provider_unavailable")
+        challenge = EmailChallengeRecord(
+            challenge_id=f"email-challenge-{uuid4().hex}",
+            email_hash=email_hash,
+            masked_email=self._mask_email(normalized_email),
+            provider=self.email_provider.provider_name(),
+            status="created",
+            provider_message_id=None,
+            provider_request_id=None,
+            attempt_count=0,
+            max_attempts=self.settings.auth_email_verify_attempt_limit,
+            expires_at_ms=now_ms + self.settings.auth_email_ttl_seconds * 1000,
+            created_at_ms=now_ms,
+            updated_at_ms=now_ms,
+            purpose=purpose,  # type: ignore[arg-type]
+        )
+        challenge = self.repository.save_email_challenge(challenge)
+        result = self.email_provider.send_code(email=normalized_email, challenge_id=challenge.challenge_id)
+        status = "sent" if result.outcome == "sent" else "failed"
+        stored = self.repository.save_email_challenge(replace(
+            challenge,
+            status=status,
+            provider_message_id=result.provider_message_id,
+            provider_request_id=result.provider_request_id,
+            code_digest=result.verification_code_digest,
+            last_error_code=result.error_code,
+            updated_at_ms=_now_ms(),
+        ))
+        self._log(logging.INFO if status == "sent" else logging.WARNING, "authentication.email_code_sent", user_id=None, auth_session_id=stored.challenge_id, outcome=result.outcome, login_id=normalized_email)
+        if result.outcome != "sent":
+            status_code = 429 if result.outcome == "rate_limited" else 503
+            raise DomainRequestError("authentication", "email-send", "Email delivery is temporarily unavailable. Please try again.", status_code, result.error_code or "email_provider_unavailable")
+        return stored
+
+    def verify_email_login(self, *, challenge_id: str, email: str, code: str, client_label: str) -> tuple[UserRecord, AuthSessionRecord, str, str]:
+        self._require_email_enabled()
+        normalized_email, _ = self._verify_email_challenge(
+            challenge_id=challenge_id, email=email, code=code, expected_purpose="login"
+        )
+        if self.settings.product_edition == "global":
+            user = self.repository.get_user_by_login_id(normalized_email)
+            if user is None:
+                raise DomainRequestError("authentication", "email-verify", "Unable to sign in with this verification method.", 400, "global_legacy_email_login_unavailable")
+            user = self.repository.save_user(replace(user, last_login_provider="email", last_login_at_ms=_now_ms(), updated_at_ms=_now_ms()))
+        else:
+            user = self._get_or_create_email_user(email=normalized_email)
+        auth_session, access_token, refresh_token = self._issue_auth_session(user=user, client_label=client_label)
+        self._log(logging.INFO, "authentication.email_logged_in", user_id=user.user_id, auth_session_id=auth_session.auth_session_id, outcome="success", login_id=normalized_email)
+        return user, auth_session, access_token, refresh_token
+
+    def register_global_user(self, *, challenge_id: str, email: str, code: str, password: str, client_label: str) -> tuple[UserRecord, AuthSessionRecord, str, str]:
+        self._require_global_password_auth()
+        self._validate_global_password(password)
+        normalized_email = self._normalize_email(email)
+        normalized_email, _ = self._verify_email_challenge(
+            challenge_id=challenge_id, email=normalized_email, code=code, expected_purpose="registration"
+        )
+        if self.repository.get_user_by_login_id(normalized_email) is not None:
+            raise DomainRequestError("authentication", "global-register", "Unable to create this account. Sign in or recover access.", 409, "global_account_unavailable")
+        now_ms = _now_ms()
+        user = self.repository.create_user(UserRecord(
+            user_id=f"user-{uuid4().hex}", login_id=normalized_email,
+            password_hash=self.password_hasher.hash_password(password),
+            display_name=normalized_email.split("@", 1)[0][:80] or "OfferSteady user",
+            avatar_url=None, last_login_provider="password", last_login_at_ms=now_ms,
+            created_at_ms=now_ms, updated_at_ms=now_ms,
+        ))
+        if user is None:
+            raise DomainRequestError("authentication", "global-register", "Unable to create this account. Sign in or recover access.", 409, "global_account_unavailable")
+        self._ensure_email_binding(user=user, email=normalized_email, now_ms=now_ms)
+        user = self._require_user(user.user_id)
+        session, access_token, refresh_token = self._issue_auth_session(user=user, client_label=client_label)
+        self._log(logging.INFO, "authentication.global_registered", user_id=user.user_id, auth_session_id=session.auth_session_id, outcome="success")
+        return user, session, access_token, refresh_token
+
+    def setup_global_password(self, *, challenge_id: str, email: str, code: str, password: str, client_label: str) -> tuple[UserRecord, AuthSessionRecord, str, str]:
+        self._require_global_password_auth()
+        self._validate_global_password(password)
+        normalized_email = self._normalize_email(email)
+        self._verify_email_challenge(challenge_id=challenge_id, email=normalized_email, code=code, expected_purpose="password_setup")
+        user = self.repository.get_user_by_login_id(normalized_email)
+        if user is None or user.password_hash != "external-auth":
+            raise DomainRequestError("authentication", "global-password-setup", "Unable to set a password. Sign in or recover access.", 409, "global_password_setup_unavailable")
+        now_ms = _now_ms()
+        user = self.repository.save_user(replace(user, password_hash=self.password_hasher.hash_password(password), last_login_provider="password", last_login_at_ms=now_ms, updated_at_ms=now_ms))
+        session, access_token, refresh_token = self._issue_auth_session(user=user, client_label=client_label)
+        self._log(logging.INFO, "authentication.global_password_established", user_id=user.user_id, auth_session_id=session.auth_session_id, outcome="success")
+        return user, session, access_token, refresh_token
+
+    def login_global_user(self, *, email: str, password: str, client_label: str, request_origin: str | None = None) -> tuple[UserRecord, AuthSessionRecord, str, str]:
+        self._require_global_password_auth()
+        normalized_email = self._normalize_email(email)
+        self._enforce_global_login_throttle(normalized_email, request_origin=request_origin)
+        user = self.repository.get_user_by_login_id(normalized_email)
+        candidate_hash = user.password_hash if user is not None and user.password_hash != "external-auth" else self._global_dummy_password_hash
+        password_valid = self.password_hasher.verify_password(password, candidate_hash)
+        valid = user is not None and user.password_hash != "external-auth" and password_valid
+        if not valid:
+            self._record_global_login_failure(normalized_email, request_origin=request_origin)
+            raise DomainRequestError("authentication", "global-login", "Email or password is incorrect.", 401, "invalid_global_credentials")
+        self._global_login_failures.pop(f"email:{self._email_hash(normalized_email)}", None)
+        now_ms = _now_ms()
+        password_hash = self.password_hasher.hash_password(password) if self.password_hasher.needs_rehash(user.password_hash) else user.password_hash
+        user = self.repository.save_user(replace(user, password_hash=password_hash, last_login_provider="password", last_login_at_ms=now_ms, updated_at_ms=now_ms))
+        session, access_token, refresh_token = self._issue_auth_session(user=user, client_label=client_label)
+        self._log(logging.INFO, "authentication.global_logged_in", user_id=user.user_id, auth_session_id=session.auth_session_id, outcome="success")
+        return user, session, access_token, refresh_token
+
+    def reset_global_password(self, *, challenge_id: str, email: str, code: str, password: str, client_label: str) -> tuple[UserRecord, AuthSessionRecord, str, str]:
+        self._require_global_password_auth()
+        self._validate_global_password(password)
+        normalized_email = self._normalize_email(email)
+        self._verify_email_challenge(challenge_id=challenge_id, email=normalized_email, code=code, expected_purpose="password_reset")
+        user = self.repository.get_user_by_login_id(normalized_email)
+        if user is None:
+            raise DomainRequestError("authentication", "global-password-reset", "Unable to reset this account.", 400, "global_password_reset_unavailable")
+        now_ms = _now_ms()
+        user = self.repository.save_user(replace(user, password_hash=self.password_hasher.hash_password(password), last_login_provider="password", last_login_at_ms=now_ms, updated_at_ms=now_ms))
+        self._revoke_user_sessions(user_id=user.user_id)
+        session, access_token, refresh_token = self._issue_auth_session(user=user, client_label=client_label)
+        self._log(logging.INFO, "authentication.global_password_reset", user_id=user.user_id, auth_session_id=session.auth_session_id, outcome="success")
+        return user, session, access_token, refresh_token
+
+    def change_global_password(self, *, auth_context: AuthenticatedRequestContext, current_password: str, new_password: str) -> None:
+        self._require_global_password_auth()
+        self._validate_global_password(new_password)
+        user = self._require_user(auth_context.user_id)
+        if user.password_hash == "external-auth" or not self.password_hasher.verify_password(current_password, user.password_hash):
+            raise DomainRequestError("authentication", "global-password-change", "Current password is incorrect.", 401, "invalid_current_password")
+        now_ms = _now_ms()
+        self.repository.save_user(replace(user, password_hash=self.password_hasher.hash_password(new_password), updated_at_ms=now_ms))
+        self._revoke_user_sessions(user_id=user.user_id, except_session_id=auth_context.auth_session_id)
+        self._log(logging.INFO, "authentication.global_password_changed", user_id=user.user_id, auth_session_id=auth_context.auth_session_id, outcome="success")
+
+    def _verify_email_challenge(self, *, challenge_id: str, email: str, code: str, expected_purpose: str) -> tuple[str, EmailChallengeRecord]:
+        normalized_email = self._normalize_email(email)
+        email_hash = self._email_hash(normalized_email)
+        challenge = self.repository.get_email_challenge(challenge_id)
+        now_ms = _now_ms()
+        if challenge is None or challenge.email_hash != email_hash or challenge.purpose != expected_purpose:
+            raise DomainRequestError("authentication", "email-verify", "This verification session is no longer available.", 404, "email_challenge_not_found")
+        if challenge.status in {"verified", "locked"}:
+            raise DomainRequestError("authentication", "email-verify", "This verification code has already been used.", 409, "email_challenge_consumed")
+        if now_ms > challenge.expires_at_ms:
+            self.repository.save_email_challenge(replace(challenge, status="expired", updated_at_ms=now_ms, last_error_code="expired"))
+            raise DomainRequestError("authentication", "email-verify", "This verification code has expired.", 401, "email_challenge_expired")
+        if challenge.attempt_count >= challenge.max_attempts:
+            self.repository.save_email_challenge(replace(challenge, status="locked", updated_at_ms=now_ms, last_error_code="attempt_limit"))
+            raise DomainRequestError("authentication", "email-verify", "Too many incorrect attempts. Request a new code.", 429, "email_attempt_limit")
+        if self.email_provider is None:
+            raise DomainRequestError("authentication", "email-verify", "Email sign-in is temporarily unavailable.", 503, "email_provider_unavailable")
+        result = self.email_provider.verify_code(email=normalized_email, code=code.strip(), challenge=challenge)
+        attempt_count = challenge.attempt_count + (0 if result.outcome == "verified" else 1)
+        if result.outcome != "verified":
+            status = "locked" if attempt_count >= challenge.max_attempts else challenge.status
+            self.repository.save_email_challenge(replace(challenge, status=status, attempt_count=attempt_count, updated_at_ms=_now_ms(), last_error_code=result.error_code or result.outcome))
+            status_code = 429 if result.outcome == "rate_limited" else 401 if result.outcome in {"invalid", "expired", "failed"} else 503
+            message = "The verification code is incorrect or expired." if status_code == 401 else "Email verification is temporarily unavailable."
+            raise DomainRequestError("authentication", "email-verify", message, status_code, result.error_code or f"email_{result.outcome}")
+        self.repository.save_email_challenge(replace(challenge, status="verified", verified_at_ms=_now_ms(), updated_at_ms=_now_ms(), provider_request_id=result.provider_request_id or challenge.provider_request_id))
+        return normalized_email, challenge
 
     def create_wechat_authorization_session(self, *, client_label: str) -> WechatAuthorizationSessionRecord:
         now_ms = _now_ms()
@@ -559,6 +773,105 @@ class AuthenticationService:
             return self._require_user(user.user_id)
         return self.repository.save_user(replace(existing, last_login_provider="sms", last_login_at_ms=now_ms, updated_at_ms=now_ms))
 
+    def _get_or_create_email_user(self, *, email: str) -> UserRecord:
+        provider_subject = self._email_hash(email)
+        existing = self.repository.get_user_by_provider_subject(provider="email", provider_subject=provider_subject)
+        if existing is None:
+            existing = self.repository.get_user_by_login_id(email)
+        now_ms = _now_ms()
+        if existing is None:
+            user = self.repository.save_user(UserRecord(
+                user_id=f"user-{uuid4().hex}",
+                login_id=email,
+                password_hash="external-auth",
+                display_name=email.split("@", 1)[0][:80] or "OfferSteady user",
+                avatar_url=None,
+                last_login_provider="email",
+                last_login_at_ms=now_ms,
+                created_at_ms=now_ms,
+                updated_at_ms=now_ms,
+            ))
+            self.repository.save_identity_binding(ExternalIdentityBindingRecord(
+                binding_id=f"binding-{uuid4().hex}",
+                user_id=user.user_id,
+                provider="email",
+                provider_subject=provider_subject,
+                provider_subject_hint=self._mask_email(email),
+                display_name="Email",
+                status="active",
+                bound_at_ms=now_ms,
+            ))
+            return self._require_user(user.user_id)
+        if not any(item.provider == "email" and item.provider_subject == provider_subject for item in existing.bindings):
+            self.repository.save_identity_binding(ExternalIdentityBindingRecord(
+                binding_id=f"binding-{uuid4().hex}", user_id=existing.user_id, provider="email",
+                provider_subject=provider_subject, provider_subject_hint=self._mask_email(email),
+                display_name="Email", status="active", bound_at_ms=now_ms,
+            ))
+            existing = self._require_user(existing.user_id)
+        return self.repository.save_user(replace(existing, last_login_provider="email", last_login_at_ms=now_ms, updated_at_ms=now_ms))
+
+    def _ensure_email_binding(self, *, user: UserRecord, email: str, now_ms: int) -> None:
+        provider_subject = self._email_hash(email)
+        if any(item.provider == "email" and item.provider_subject == provider_subject for item in user.bindings):
+            return
+        self.repository.save_identity_binding(ExternalIdentityBindingRecord(
+            binding_id=f"binding-{uuid4().hex}", user_id=user.user_id, provider="email",
+            provider_subject=provider_subject, provider_subject_hint=self._mask_email(email),
+            display_name="Email", status="active", bound_at_ms=now_ms,
+        ))
+
+    def _require_global_password_auth(self) -> None:
+        self._require_email_enabled()
+        if self.settings.product_edition != "global":
+            raise DomainRequestError("authentication", "global-password", "Global password authentication is not available.", 404, "global_password_auth_disabled")
+
+    def _validate_global_password(self, password: str) -> None:
+        if len(password) < self.settings.auth_global_password_min_length:
+            raise DomainRequestError("authentication", "global-password-policy", f"Use at least {self.settings.auth_global_password_min_length} characters.", 422, "password_too_short")
+        if len(password) > self.settings.auth_global_password_max_length:
+            raise DomainRequestError("authentication", "global-password-policy", f"Use no more than {self.settings.auth_global_password_max_length} characters.", 422, "password_too_long")
+        normalized = " ".join(password.casefold().split())
+        blocked = {
+            "password", "password123", "password12345", "qwerty123456789",
+            "123456789012345", "letmein123456789", "offersteady12345",
+            "passwordpassword", "password123456", "1234567890abcdef",
+            "qwertyuiopasdfgh", "abcdefghijklmnop", "iloveyouforever",
+            "thisisapassword", "adminadminadmin", "welcome123456789",
+        }
+        if normalized in blocked:
+            raise DomainRequestError("authentication", "global-password-policy", "Choose a less common password.", 422, "password_blocklisted")
+
+    def _global_login_keys(self, email: str, request_origin: str | None) -> list[str]:
+        keys = [f"email:{self._email_hash(email)}"]
+        if request_origin:
+            keys.append(f"origin:{hmac.new((self.settings.auth_email_code_pepper or self.settings.auth_jwt_secret).encode('utf-8'), request_origin.encode('utf-8'), hashlib.sha256).hexdigest()}")
+        return keys
+
+    def _enforce_global_login_throttle(self, email: str, *, request_origin: str | None) -> None:
+        now_ms = _now_ms()
+        window_start = now_ms - self.settings.auth_global_login_window_seconds * 1000
+        for key in self._global_login_keys(email, request_origin):
+            attempts = [item for item in self._global_login_failures.get(key, []) if item >= window_start]
+            self._global_login_failures[key] = attempts
+            if len(attempts) >= self.settings.auth_global_login_attempt_limit:
+                raise DomainRequestError("authentication", "global-login", "Too many sign-in attempts. Try again later.", 429, "global_login_rate_limited")
+
+    def _record_global_login_failure(self, email: str, *, request_origin: str | None) -> None:
+        now_ms = _now_ms()
+        for key in self._global_login_keys(email, request_origin):
+            self._global_login_failures.setdefault(key, []).append(now_ms)
+
+    def _revoke_user_sessions(self, *, user_id: str, except_session_id: str | None = None) -> list[str]:
+        now_ms = _now_ms()
+        revoked_ids: list[str] = []
+        for session in self.repository.list_auth_sessions_for_user(user_id=user_id):
+            if session.status != "active" or session.auth_session_id == except_session_id:
+                continue
+            revoked = self.repository.save_auth_session(replace(session, status="revoked", revoked_at_ms=now_ms, last_used_at_ms=now_ms))
+            revoked_ids.append(revoked.auth_session_id)
+        return revoked_ids
+
     def _issue_access_token(self, *, user: UserRecord, auth_session: AuthSessionRecord) -> str:
         now_seconds = _now_seconds()
         payload = AccessTokenPayload(
@@ -597,6 +910,27 @@ class AuthenticationService:
     def _phone_hash(self, phone_e164: str) -> str:
         secret = self.settings.auth_jwt_secret or "offersteady-dev-jwt-secret"
         return hmac.new(secret.encode("utf-8"), phone_e164.encode("utf-8"), hashlib.sha256).hexdigest()
+
+    def _require_email_enabled(self) -> None:
+        if not self.settings.auth_email_enabled:
+            raise DomainRequestError("authentication", "email", "Email sign-in is not enabled.", 404, "email_auth_disabled")
+
+    @staticmethod
+    def _normalize_email(value: str) -> str:
+        email = value.strip().lower()
+        if len(email) > 254 or not re.fullmatch(r"[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+", email):
+            raise DomainRequestError("authentication", "email", "Enter a valid email address.", 422, "invalid_email")
+        return email
+
+    def _email_hash(self, email: str) -> str:
+        secret = self.settings.auth_email_code_pepper or self.settings.auth_jwt_secret
+        return hmac.new(secret.encode("utf-8"), email.encode("utf-8"), hashlib.sha256).hexdigest()
+
+    @staticmethod
+    def _mask_email(email: str) -> str:
+        local, domain = email.split("@", 1)
+        visible = local[:2] if len(local) > 2 else local[:1]
+        return f"{visible}{'*' * max(3, min(8, len(local) - len(visible)))}@{domain}"
 
     @staticmethod
     def _mask_phone(phone_e164: str) -> str:

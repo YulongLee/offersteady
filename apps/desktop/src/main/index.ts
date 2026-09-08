@@ -1,26 +1,41 @@
 import { app, BrowserWindow, Menu, Tray, desktopCapturer, globalShortcut, ipcMain, nativeImage, safeStorage, session, shell, systemPreferences } from "electron";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { CaptureState } from "@offersteady/protocol" with { "resolution-mode": "import" };
 import { DeviceCredentialVault } from "./credential-vault";
 import { DevicePairingIdentityStore } from "./device-pairing";
 import { DEFAULT_SCREENSHOT_SHORTCUT, SCREENSHOT_SHORTCUT_OPTIONS, ScreenshotShortcutStore, isSupportedScreenshotShortcut } from "./screenshot-shortcut";
 import { desktopPollDelayMs } from "./polling-policy";
-import { screenshotStreamEligible, screenshotStreamTransition } from "./screenshot-stream-policy";
+import {
+  screenshotBindingKey,
+  screenshotBindingTransition,
+  screenshotStreamAdmissionAction,
+  screenshotStreamEligible,
+  screenshotStreamSuspensionTransition,
+  screenshotStreamTransition,
+} from "./screenshot-stream-policy";
 import { ScreenshotCaptureLock } from "./screenshot-capture-lock";
 import { DesktopCaptureEventParser } from "./capture-event-stream";
 import { decideRendererRecovery } from "./renderer-recovery-policy";
 import { RealtimeTransportDiagnosticsLog } from "./realtime-transport-diagnostics-log";
 import { canAcquireDisplaySources, resolveDisplayMediaSource, type ScreenPermissionStatus } from "./display-media-access";
-import { legacyUserDataDirectories, migrateLegacyCompanionState, stableUserDataDirectory } from "./user-data-bootstrap";
+import { globalStableUserDataDirectory, legacyUserDataDirectories, migrateLegacyCompanionState, stableUserDataDirectory } from "./user-data-bootstrap";
+import { resolveDesktopProductEdition } from "./product-edition";
+
+const packagedGlobalRuntimeConfigPath = () => path.join(process.resourcesPath, "global-runtime-config.json");
+const isGlobalRelease = () => resolveDesktopProductEdition({
+  explicitEdition: process.env.OFFERSTEADY_PRODUCT_EDITION,
+  hasPackagedGlobalRuntimeConfig: app.isPackaged && existsSync(packagedGlobalRuntimeConfigPath()),
+  applicationName: app.getName(),
+}) === "global";
+const desktopCopy = (domestic: string, global: string) => isGlobalRelease() ? global : domestic;
 
 const originalUserDataDirectory = app.getPath("userData");
-const stableCompanionUserDataDirectory = stableUserDataDirectory(app.getPath("appData"));
-const companionLegacyUserDataDirectories = legacyUserDataDirectories(
-  app.getPath("appData"),
-  originalUserDataDirectory,
-);
+const stableCompanionUserDataDirectory = isGlobalRelease()
+  ? globalStableUserDataDirectory(app.getPath("appData"))
+  : stableUserDataDirectory(app.getPath("appData"));
+const companionLegacyUserDataDirectories = isGlobalRelease() ? [] : legacyUserDataDirectories(app.getPath("appData"), originalUserDataDirectory);
 app.setPath("userData", stableCompanionUserDataDirectory);
 
 // Local ad-hoc builds cannot reliably retain Apple's separate Audio Capture
@@ -73,6 +88,8 @@ let remoteScreenshotPollInFlight = false;
 let remoteScreenshotPollFailureCount = 0;
 let remoteScreenshotStreamController: AbortController | null = null;
 let remoteScreenshotLoopGeneration = 0;
+let remoteScreenshotSuspended = false;
+let remoteScreenshotBindingKey: string | null = null;
 let displayMediaFailureBackoffUntil = 0;
 let rendererRecoveryAttempts: readonly number[] = [];
 let rendererRecoveryResetTimer: NodeJS.Timeout | null = null;
@@ -205,18 +222,33 @@ const stopNativeAudioStreams = () => {
 };
 
 const stateLabels: Record<CaptureState, string> = {
-  "not-connected": "未连接",
-  "permission-required": "需要权限",
-  ready: "收音已就绪",
-  capturing: "正在收音",
-  paused: "已暂停",
-  reconnecting: "正在重连",
-  error: "连接异常",
+  "not-connected": desktopCopy("未连接", "Not connected"),
+  "permission-required": desktopCopy("需要权限", "Permission required"),
+  ready: desktopCopy("收音已就绪", "Audio ready"),
+  capturing: desktopCopy("正在收音", "Listening"),
+  paused: desktopCopy("已暂停", "Paused"),
+  reconnecting: desktopCopy("正在重连", "Reconnecting"),
+  error: desktopCopy("连接异常", "Connection issue"),
 };
 
 const isBetaRelease = () => process.env.OFFERSTEADY_RELEASE_CHANNEL === "beta" || /\bbeta\b/i.test(app.getName());
-const defaultWebWorkspaceUrl = () => isBetaRelease() ? "https://beta.mianshiwen.cn/app" : "https://mianshiwen.cn/app";
-const defaultApiBaseUrl = () => isBetaRelease() ? "https://beta.mianshiwen.cn/api/v1" : "https://mianshiwen.cn/api/v1";
+const packagedGlobalConfig = () => {
+  if (!isGlobalRelease() || !app.isPackaged) return null;
+  try {
+    const parsed = JSON.parse(readFileSync(packagedGlobalRuntimeConfigPath(), "utf8")) as { webWorkspaceUrl?: string; apiBaseUrl?: string };
+    return parsed.webWorkspaceUrl && parsed.apiBaseUrl ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+const defaultWebWorkspaceUrl = () => {
+  if (isGlobalRelease()) return process.env.OFFERSTEADY_GLOBAL_WEB_URL || packagedGlobalConfig()?.webWorkspaceUrl || "";
+  return isBetaRelease() ? "https://beta.mianshiwen.cn/app" : "https://mianshiwen.cn/app";
+};
+const defaultApiBaseUrl = () => {
+  if (isGlobalRelease()) return process.env.OFFERSTEADY_GLOBAL_API_BASE_URL || packagedGlobalConfig()?.apiBaseUrl || "";
+  return isBetaRelease() ? "https://beta.mianshiwen.cn/api/v1" : "https://mianshiwen.cn/api/v1";
+};
 
 const desktopConfig = () => ({
   appVersion: app.getVersion(),
@@ -225,9 +257,13 @@ const desktopConfig = () => ({
   platformVersion: process.getSystemVersion(),
   protocolVersion: "2.0",
   captureRuntime: "electron-single-owner",
-  releaseChannel: isBetaRelease() ? "beta" : "production",
-  webWorkspaceUrl: process.env.OFFERSTEADY_DESKTOP_WEB_URL || defaultWebWorkspaceUrl(),
-  apiBaseUrl: process.env.OFFERSTEADY_API_BASE_URL || defaultApiBaseUrl(),
+  releaseChannel: isGlobalRelease() ? "global" : isBetaRelease() ? "beta" : "production",
+  webWorkspaceUrl: isGlobalRelease()
+    ? defaultWebWorkspaceUrl()
+    : process.env.OFFERSTEADY_DESKTOP_WEB_URL || defaultWebWorkspaceUrl(),
+  apiBaseUrl: isGlobalRelease()
+    ? defaultApiBaseUrl()
+    : process.env.OFFERSTEADY_API_BASE_URL || defaultApiBaseUrl(),
   realtimeEndpointing: {
     mode: process.env.OFFERSTEADY_REALTIME_ENDPOINTING_MODE === "legacy-threshold"
       ? "legacy-threshold"
@@ -673,19 +709,20 @@ const permissionSettingsUrl = (kind: "microphone" | "screen" | "camera" | "audio
 };
 
 const trayImage = () => {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" rx="8" fill="#5ee0b5"/><text x="16" y="22" text-anchor="middle" font-size="18" font-family="sans-serif" font-weight="700" fill="#07130f">稳</text></svg>`;
+  const glyph = desktopCopy("稳", "O");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" rx="8" fill="#5ee0b5"/><text x="16" y="22" text-anchor="middle" font-size="18" font-family="sans-serif" font-weight="700" fill="#07130f">${glyph}</text></svg>`;
   return nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`);
 };
 
 const updateTray = () => {
   if (!tray) return;
-  tray.setToolTip(`面试稳伴随程序 · ${stateLabels[captureState]}`);
+  tray.setToolTip(`${desktopCopy("面试稳伴随程序", "OfferSteady Companion")} · ${stateLabels[captureState]}`);
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: stateLabels[captureState], enabled: false },
     { type: "separator" },
-    { label: "打开伴随程序", click: () => mainWindow?.show() },
+    { label: desktopCopy("打开伴随程序", "Open companion"), click: () => mainWindow?.show() },
     {
-      label: "停止并退出",
+      label: desktopCopy("停止并退出", "Stop and quit"),
       click: () => {
         captureState = "not-connected";
         app.quit();
@@ -874,7 +911,7 @@ const pollRemoteScreenshotRequest = async (lockAlreadyHeld = false) => {
   if (screenshotCaptureLock.state().locked && !lockAlreadyHeld) return true;
   const identity = pollingState.identity;
   const response = await fetchWithTimeout(desktopApiUrl(`/screenshot-answer/desktop-devices/${encodeURIComponent(identity.deviceId)}/capture-requests/next?manualCode=${encodeURIComponent(identity.manualCode)}`));
-  if (!response.ok) throw new Error(`remote_screenshot_poll_${response.status}`);
+  if (!response.ok) throw new RemoteScreenshotAdmissionError("poll", response.status);
   const envelope = await response.json() as { data?: { requestId: string; status: string } | null };
   const request = envelope.data;
   if (!request || request.status !== "requested") {
@@ -883,6 +920,13 @@ const pollRemoteScreenshotRequest = async (lockAlreadyHeld = false) => {
   }
   return processRemoteScreenshotRequest(identity, request.requestId, lockAlreadyHeld);
 };
+
+class RemoteScreenshotAdmissionError extends Error {
+  constructor(readonly channel: "stream" | "poll", readonly status: number) {
+    super(`remote_screenshot_${channel}_${status}`);
+    this.name = "RemoteScreenshotAdmissionError";
+  }
+}
 
 const shortcutNotice = (message: string) => {
   mainWindow?.webContents.send("desktop:screenshot-shortcut-notice", message);
@@ -972,7 +1016,7 @@ const consumeRemoteScreenshotEventStream = async (
 ) => {
   const url = desktopApiUrl(`/screenshot-answer/desktop-devices/${encodeURIComponent(identity.deviceId)}/capture-requests/stream?manualCode=${encodeURIComponent(identity.manualCode)}`);
   const response = await fetch(url, { headers: { Accept: "text/event-stream" }, signal });
-  if (!response.ok) throw new Error(`remote_screenshot_stream_${response.status}`);
+  if (!response.ok) throw new RemoteScreenshotAdmissionError("stream", response.status);
   if (!response.body) throw new Error("remote_screenshot_stream_body_missing");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -993,6 +1037,7 @@ const startRemoteScreenshotRequestLoop = () => {
   remoteScreenshotStreamController?.abort();
   remoteScreenshotStreamController = null;
   remoteScreenshotPollFailureCount = 0;
+  remoteScreenshotSuspended = false;
   const schedule = (delayMs: number) => {
     if (generation !== remoteScreenshotLoopGeneration || isQuitting) return;
     screenshotRequestTimer = setTimeout(() => void run(), delayMs);
@@ -1022,11 +1067,25 @@ const startRemoteScreenshotRequestLoop = () => {
         schedule(0);
         return;
       }
+      if (screenshotStreamAdmissionAction(error instanceof RemoteScreenshotAdmissionError ? error.status : null) === "suspend") {
+        remoteScreenshotSuspended = true;
+        console.info("[remote-screenshot] suspended until binding eligibility changes", {
+          status: error instanceof RemoteScreenshotAdmissionError ? error.status : null,
+        });
+        return;
+      }
       console.warn("[remote-screenshot] poll failed", error);
       remoteScreenshotPollFailureCount += 1;
       try {
         await pollRemoteScreenshotRequest();
       } catch (fallbackError) {
+        if (screenshotStreamAdmissionAction(fallbackError instanceof RemoteScreenshotAdmissionError ? fallbackError.status : null) === "suspend") {
+          remoteScreenshotSuspended = true;
+          console.info("[remote-screenshot] fallback suspended until binding eligibility changes", {
+            status: fallbackError instanceof RemoteScreenshotAdmissionError ? fallbackError.status : null,
+          });
+          return;
+        }
         console.warn("[remote-screenshot] fallback poll failed", fallbackError);
       }
       schedule(desktopPollDelayMs("failure", remoteScreenshotPollFailureCount));
@@ -1047,6 +1106,7 @@ const stopRemoteScreenshotRequestLoop = () => {
   remoteScreenshotStreamController?.abort();
   remoteScreenshotStreamController = null;
   remoteScreenshotPollFailureCount = 0;
+  remoteScreenshotSuspended = false;
 };
 
 const createWindow = () => {
@@ -1055,7 +1115,7 @@ const createWindow = () => {
     height: 540,
     minWidth: 700,
     minHeight: 500,
-    title: "面试稳伴随程序",
+    title: desktopCopy("面试稳伴随程序", "OfferSteady Companion"),
     backgroundColor: "#080d18",
     show: false,
     webPreferences: {
@@ -1132,7 +1192,21 @@ const createWindow = () => {
   });
 };
 
-app.whenReady().then(async () => {
+const ownsCompanionInstance = app.requestSingleInstanceLock({
+  productEdition: isGlobalRelease() ? "global" : "domestic",
+  userDataDirectory: stableCompanionUserDataDirectory,
+});
+
+if (!ownsCompanionInstance) app.quit();
+else {
+  app.on("second-instance", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+
+  void app.whenReady().then(async () => {
   try {
     const migration = await migrateLegacyCompanionState({
       stableDirectory: stableCompanionUserDataDirectory,
@@ -1218,16 +1292,34 @@ app.whenReady().then(async () => {
   app.on("activate", () => {
     if (!mainWindow) createWindow();
     else mainWindow.show();
+    if (remoteScreenshotSuspended && screenshotStreamEligible(captureState)) startRemoteScreenshotRequestLoop();
   });
-});
+  });
+}
 
 ipcMain.on("capture:set-state", (_event, state: CaptureState) => {
   const previousState = captureState;
   captureState = state;
   updateTray();
   const transition = screenshotStreamTransition(previousState, state);
-  if (transition === "start") startRemoteScreenshotRequestLoop();
+  const suspendedTransition = remoteScreenshotSuspended
+    ? screenshotStreamSuspensionTransition(previousState, state)
+    : "preserve";
+  if (transition === "start" || suspendedTransition === "resume") startRemoteScreenshotRequestLoop();
   else if (transition === "stop") stopRemoteScreenshotRequestLoop();
+});
+
+ipcMain.on("desktop:screenshot-binding", (_event, binding: { sessionId?: unknown; bindingId?: unknown } | null) => {
+  const normalizedBinding = binding
+    && typeof binding.sessionId === "string"
+    && typeof binding.bindingId === "string"
+    ? { sessionId: binding.sessionId, bindingId: binding.bindingId }
+    : null;
+  const nextBindingKey = screenshotBindingKey(normalizedBinding);
+  const transition = screenshotBindingTransition(remoteScreenshotBindingKey, nextBindingKey, remoteScreenshotSuspended);
+  remoteScreenshotBindingKey = nextBindingKey;
+  if (transition === "stop") stopRemoteScreenshotRequestLoop();
+  else if (transition === "restart" && screenshotStreamEligible(captureState)) startRemoteScreenshotRequestLoop();
 });
 
 ipcMain.on("desktop:renderer-reliability-heartbeat", (event, heartbeat: RendererReliabilityHeartbeat) => {

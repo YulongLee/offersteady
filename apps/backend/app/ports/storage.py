@@ -43,6 +43,12 @@ class ConfirmedUploadObject:
     content_fingerprint: str | None = None
 
 
+class UploadIntentRepository(Protocol):
+    def save(self, reservation: UploadIntentReservation) -> UploadIntentReservation: ...
+
+    def get(self, intent_id: str) -> UploadIntentReservation | None: ...
+
+
 class FileStoragePort(Protocol):
     def create_upload_intent(
         self,

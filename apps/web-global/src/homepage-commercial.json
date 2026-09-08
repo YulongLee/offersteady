@@ -1,0 +1,35 @@
+{
+  "metaDescription": "Follow live questions with AI transcription, resume-based guidance and Screen Assist. Explore flexible plans and try OfferSteady free, with no card required.",
+  "benefitsTitle": "More context. A clearer place to start.",
+  "benefitsIntro": "From hearing the question to finding your own words.",
+  "benefits": [
+    { "label": "LIVE TRANSCRIPTION", "title": "Keep up with the question.", "body": "Follow interviewer and microphone audio as text, so you can focus on the conversation." },
+    { "label": "PERSONAL CONTEXT", "title": "Bring your experience into the answer.", "body": "Use your selected resume, job description and project materials to shape relevant guidance." },
+    { "label": "SCREEN ASSIST", "title": "Work through what's on screen.", "body": "Capture a question or diagram and explore a suggested approach without retyping the prompt." },
+    { "label": "SESSION REVIEW", "title": "Make the next conversation stronger.", "body": "Revisit questions, transcripts and guidance after your session to see what to work on next." }
+  ],
+  "pricingIntro": "One interview day or a longer search. Choose your window, without an annual commitment.",
+  "accessNote": "Paid access starts when payment is confirmed, not at your first session. One-time passes run for their stated duration; monthly access follows the paid billing period.",
+  "checkoutNote": "Online checkout requires payment provider approval and completed production setup. You can start free today.",
+  "tourTitle": "See it. Set it up. Make it yours.",
+  "steps": [
+    { "title": "Create your account", "body": "Start free and explore the workspace." },
+    { "title": "Connect your Companion", "body": "Install on Windows or Mac, then check your audio and permissions." },
+    { "title": "Choose your context", "body": "Select the materials included in your plan, then start a session." }
+  ],
+  "videos": [
+    { "id": "global-product-film-title", "title": "A look inside OfferSteady", "description": "From a live question to structured guidance.", "label": "OfferSteady product film", "src": "/media/offersteady-global-commercial-20260907.mp4", "poster": "/media/offersteady-global-commercial-poster-20260907.jpg" },
+    { "id": "global-usage-film-title", "title": "Your first session, step by step", "description": "Connect your Companion and get ready to begin.", "label": "OfferSteady getting started guide", "src": "/media/offersteady-global-usage-20260907.mp4", "poster": "/media/offersteady-global-usage-poster-20260907.jpg" }
+  ],
+  "faqs": [
+    { "question": "What can I try for free?", "answer": "Free includes a one-time allowance of 15 Copilot minutes and 3 Screen Assist uses. No card is required. Resume/JD context, knowledge materials and Written Exam mode require an eligible paid plan.", "href": "/pricing", "linkLabel": "See plan details" },
+    { "question": "How does guidance use my experience?", "answer": "You choose the resume, job description and optional knowledge materials for each session. These help make suggestions relevant to you. Check every suggestion against your actual experience; AI can still make mistakes.", "href": "/features", "linkLabel": "Explore the features" },
+    { "question": "Does it work on my computer?", "answer": "The desktop Companion is available for Windows and macOS. Use it on the computer providing audio or screenshots, with the Web workspace in your browser. Compatibility depends on your operating system, audio route and permissions.", "href": "/download", "linkLabel": "Check setup details" },
+    { "question": "Do the paid plans renew automatically?", "answer": "Only Pro Monthly renews automatically until cancelled. Interview Day Pass, Pro Weekly and Job Hunt are one-time purchases. Paid access starts at confirmed payment, not first use.", "href": "/pricing", "linkLabel": "Review billing and access" },
+    { "question": "Why can't I purchase a paid plan yet?", "answer": "Online checkout requires payment provider merchant approval and completed production configuration. Paid purchase controls remain disabled. Free access is available without a card.", "href": "/contact", "linkLabel": "Contact support" },
+    { "question": "Can I use AI assistance in every interview?", "answer": "No. Follow the interview organiser's rules for AI assistance, recording, screen capture and confidentiality. Obtain consent where required. If a feature is not permitted, do not use it in that session.", "href": "/terms", "linkLabel": "Read the usage rules" },
+    { "question": "What happens to my interview data?", "answer": "Raw audio is not stored by default. Uploaded materials, transcripts, screenshots and generated results are processed for the features you use and may be retained under the service's retention and deletion controls.", "href": "/privacy", "linkLabel": "Read the Privacy Policy" }
+  ],
+  "closingTitle": "Get to know your interview toolkit.",
+  "closingBody": "Try the free allowance before you choose a paid plan. No credit card required."
+}

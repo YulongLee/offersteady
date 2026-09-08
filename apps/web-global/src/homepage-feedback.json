@@ -1,0 +1,27 @@
+{
+  "heading": "What our users say",
+  "intro": "From finding the right words to getting started. Experiences, small wins, and ideas for what comes next.",
+  "note": "Translated from user submissions. Experiences and plans may differ by edition; see current Global plans for pricing and features.",
+  "entries": [
+    { "id": "feedback-01", "topic": "Response speed", "quote": "After using it a few times, I've found the responses pretty quick. Ideas usually appear shortly after the interviewer finishes asking, so I don't end up sitting through long silences during the interview." },
+    { "id": "feedback-02", "topic": "Flexible spending", "quote": "I've tried a few other interview assistants, and they were quite expensive. This one's pricing feels more manageable for someone like me who only needs it while looking for a job." },
+    { "id": "feedback-03", "topic": "Resume & job context", "quote": "My favorite part is being able to upload my resume and the job description beforehand. The answers aren't just generic AI responses; they draw on my project experience. That's genuinely useful." },
+    { "id": "feedback-04", "topic": "Getting started", "quote": "I was a little worried it would be complicated at first, but after starting a session I pretty much understood how to use it. I'd still like to see a more detailed guide for new users." },
+    { "id": "feedback-05", "topic": "Technical interviews", "quote": "I'm interviewing for technical roles. For questions about projects and some technical topics, the suggested approach is useful. At the very least, it helps me organize what I want to say quickly." },
+    { "id": "feedback-06", "topic": "Screen Assist", "quote": "Screenshot answers are convenient, especially when the interviewer suddenly sends a question or shares one on screen. I don't have to type the whole thing out myself." },
+    { "id": "feedback-07", "topic": "Short-term access", "quote": "I bought a one-day plan just to try it, then renewed when I had more interviews. I'd love an option to buy access by the number of sessions in the future." },
+    { "id": "feedback-08", "topic": "Finding your words", "quote": "It's really helpful when you get nervous around people 😂 Sometimes I know the answer, but my mind goes blank in an interview. Having a prompt beside me makes me feel a lot more at ease." },
+    { "id": "feedback-09", "topic": "Transcription", "quote": "Responses are faster than with some tools I've tried, and the transcription is fairly good. A sentence is occasionally transcribed inaccurately, though. I hope that keeps improving." },
+    { "id": "feedback-10", "topic": "Answer structure", "quote": "For me, the biggest benefit isn't having it answer for you. It's getting a framework for an answer. Once I have a direction, I can put it into my own words and sound much more natural." },
+    { "id": "feedback-11", "topic": "Project experience", "quote": "Importing my resume makes a noticeable difference compared with asking AI directly. When the interviewer follows up on past projects, it can give me prompts based on what's in my resume." },
+    { "id": "feedback-12", "topic": "A clear workspace", "quote": "The interface is clean, without a clutter of features. A complicated interface is the last thing I want during an interview, so keeping it simple works better for me." },
+    { "id": "feedback-13", "topic": "First interviews", "quote": "I'm a new graduate and used it for my first formal interview. I don't know the result yet, but the process felt much smoother than my previous interviews on my own." },
+    { "id": "feedback-14", "topic": "Ideas for the future", "quote": "I'd like more role-specific modes, such as product management, operations, algorithms, Java, and frontend development, with the answer style adapting automatically to the role." },
+    { "id": "feedback-15", "topic": "Student budgets", "quote": "Price was one of the main reasons I chose it. I looked at a range of similar products, and some monthly prices really are quite high for students." },
+    { "id": "feedback-16", "topic": "Audio sources", "quote": "Being able to recognize both computer audio and the microphone is important. The interviewer's questions are transcribed automatically, so I don't have to copy and paste them myself." },
+    { "id": "feedback-17", "topic": "Follow-up questions", "quote": "An interviewer once asked several follow-up questions in a row. The AI could still use the earlier context rather than treating each question as completely separate. That was a good experience." },
+    { "id": "feedback-18", "topic": "Ideas for the future", "quote": "I'd suggest a post-interview review that automatically brings together the questions, my answers, and areas to improve. I think that would be really useful." },
+    { "id": "feedback-19", "topic": "Your own voice", "quote": "At first I thought a tool like this would noticeably disrupt the interview. In practice, treating it as a prompt rather than reading it word for word doesn't really get in the way of a normal conversation." },
+    { "id": "feedback-20", "topic": "Everyday experience", "quote": "Overall, it's a practical interview assistant at a price I can accept. My main hope now is for continued improvements to speech recognition accuracy and response time. Better stability would make it even better." }
+  ]
+}

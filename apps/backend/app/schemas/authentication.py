@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal
 
 from app.ports.authentication import AuthSessionStatus, IdentityProviderKind, WechatAuthorizationStatus
 
@@ -42,6 +43,63 @@ class SmsVerifyLoginRequest(BaseModel):
     challenge_id: str = Field(min_length=1, alias="challengeId")
     code: str = Field(min_length=4, max_length=8)
     client_label: str = Field(default="web", alias="clientLabel")
+
+
+class EmailSendCodeRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    email: str = Field(min_length=3, max_length=254)
+    client_label: str = Field(default="web-global", alias="clientLabel")
+
+
+class EmailSendCodeResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    challenge_id: str = Field(alias="challengeId")
+    status: str
+    provider: str
+    expires_at_ms: int = Field(alias="expiresAtMs")
+    cooldown_seconds: int = Field(alias="cooldownSeconds")
+    masked_email: str = Field(alias="maskedEmail")
+
+
+class EmailVerifyLoginRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    email: str = Field(min_length=3, max_length=254)
+    challenge_id: str = Field(min_length=1, alias="challengeId")
+    code: str = Field(min_length=4, max_length=8)
+    client_label: str = Field(default="web-global", alias="clientLabel")
+
+
+class GlobalEmailCodeRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    email: str = Field(min_length=3, max_length=254)
+    purpose: Literal["registration", "password_setup", "password_reset"]
+    client_label: str = Field(default="web-global", alias="clientLabel")
+
+
+class GlobalPasswordCompletionRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    email: str = Field(min_length=3, max_length=254)
+    challenge_id: str = Field(min_length=1, alias="challengeId")
+    code: str = Field(min_length=4, max_length=8)
+    password: str = Field(min_length=1, max_length=128)
+    client_label: str = Field(default="web-global", alias="clientLabel")
+
+
+class GlobalPasswordLoginRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=1, max_length=128)
+    client_label: str = Field(default="web-global", alias="clientLabel")
+
+
+class GlobalPasswordChangeRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    current_password: str = Field(min_length=1, max_length=128, alias="currentPassword")
+    new_password: str = Field(min_length=1, max_length=128, alias="newPassword")
+
+
+class GlobalPasswordChangeResponse(BaseModel):
+    changed: bool
 
 
 class RefreshTokenRequest(BaseModel):

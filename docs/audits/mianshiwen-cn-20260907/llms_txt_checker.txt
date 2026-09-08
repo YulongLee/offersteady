@@ -1,0 +1,10 @@
+llms.txt Check — https://mianshiwen.cn/llms.txt
+==================================================
+Status: ✅ Found (HTTP 200)
+Title: é¢è¯ç¨³AIå©æ
+Description: é¢è¯ç¨³æ¯ä¸æ¬¾é¢åæ±èè
+Sections: 3
+Links: 27
+Quality Score: 95/100
+
+llms-full.txt: ✅ Found

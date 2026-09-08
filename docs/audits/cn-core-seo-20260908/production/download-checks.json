@@ -1,0 +1,20 @@
+[
+  {
+    "name": "OfferSteady-Companion-1.2.15-macOS-arm64.dmg",
+    "status": 206,
+    "contentType": "application/x-apple-diskimage",
+    "contentRange": "bytes 0-0/124967957"
+  },
+  {
+    "name": "OfferSteady-Companion-1.2.15-macOS-x64.dmg",
+    "status": 206,
+    "contentType": "application/x-apple-diskimage",
+    "contentRange": "bytes 0-0/128621845"
+  },
+  {
+    "name": "OfferSteady-Companion-Setup-1.2.15-Windows-x64.exe",
+    "status": 206,
+    "contentType": "application/vnd.microsoft.portable-executable",
+    "contentRange": "bytes 0-0/102150405"
+  }
+]

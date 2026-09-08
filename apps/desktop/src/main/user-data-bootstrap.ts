@@ -9,6 +9,9 @@ const INDEPENDENT_SETTINGS_FILES = ["screenshot-shortcut.json"] as const;
 export const stableUserDataDirectory = (appDataDirectory: string) =>
   path.join(appDataDirectory, ...STABLE_USER_DATA_SEGMENTS);
 
+export const globalStableUserDataDirectory = (appDataDirectory: string) =>
+  path.join(appDataDirectory, ...STABLE_USER_DATA_SEGMENTS, "global");
+
 export const legacyUserDataDirectories = (
   appDataDirectory: string,
   originalUserDataDirectory: string,

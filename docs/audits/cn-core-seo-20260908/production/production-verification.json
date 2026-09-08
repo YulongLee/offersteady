@@ -1,0 +1,1096 @@
+{
+  "capturedAt": "2026-09-07T17:29:56.772Z",
+  "version": "cn-core-seo-20260908.1",
+  "pages": [
+    {
+      "agent": "normal",
+      "path": "/",
+      "status": 200,
+      "title": "AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳",
+      "description": "面试稳是一款面向求职者的AI面试助手，结合简历、目标岗位和知识资料，帮助整理实时面试问题、截图题与技术题的回答思路。",
+      "h1": [
+        "AI 面试助手，让你的经历更好表达。"
+      ],
+      "canonical": "https://mianshiwen.cn/",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": true
+    },
+    {
+      "agent": "normal",
+      "path": "/guide",
+      "status": 200,
+      "title": "面试稳AI助手使用手册｜安装、收音、截图回答与支付说明",
+      "description": "面试稳AI助手使用手册：了解账号登录、面试资料、Windows 与 macOS 伴随程序、实时面试、截图回答、积分会员、支付和隐私设置。",
+      "h1": [
+        "从准备资料到面试现场，按步骤完成设置"
+      ],
+      "canonical": "https://mianshiwen.cn/guide",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/features",
+      "status": 200,
+      "title": "AI面试助手功能｜面试稳",
+      "description": "了解面试稳AI面试助手的核心功能：结合简历、职位JD和知识资料准备面试，支持实时语音、手动输入、截图回答与面试复盘。",
+      "h1": [
+        "从面试准备到现场回答，一条清晰工作流"
+      ],
+      "canonical": "https://mianshiwen.cn/features",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/interview-questions",
+      "status": 200,
+      "title": "面试题与技术专题｜面试稳",
+      "description": "面试稳面试题与专题入口：按大模型、RAG、AI Agent、Java后端、前端和算法岗位理解考察重点，并结合简历与JD准备真实回答。",
+      "h1": [
+        "不要只背题目，先理解岗位为什么这样问"
+      ],
+      "canonical": "https://mianshiwen.cn/interview-questions",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/guides",
+      "status": 200,
+      "title": "面试指南与使用建议｜面试稳",
+      "description": "面试稳面试指南汇总面试准备、STAR回答、电脑收音、macOS权限以及飞书和腾讯会议音频设置方法；产品操作请查看独立使用手册。",
+      "h1": [
+        "把面试准备、回答方法和设备排查分开处理"
+      ],
+      "canonical": "https://mianshiwen.cn/guides",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/pricing",
+      "status": 200,
+      "title": "AI面试助手价格与套餐｜面试稳",
+      "description": "查看面试稳AI面试助手价格：按天会员和积分包的人民币金额、有效期、主要权益，以及语音、回答、截图和知识材料的计费说明。",
+      "h1": [
+        "面试稳价格与套餐"
+      ],
+      "canonical": "https://mianshiwen.cn/pricing",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": true
+    },
+    {
+      "agent": "normal",
+      "path": "/download",
+      "status": 200,
+      "title": "电脑伴随程序下载与安装｜面试稳",
+      "description": "了解面试稳电脑伴随程序的 macOS Apple Silicon、Intel 与 Windows 版本选择、系统权限、安装检查和官方版本入口。",
+      "h1": [
+        "先选对版本，再检查系统权限"
+      ],
+      "canonical": "https://mianshiwen.cn/download",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/security",
+      "status": 200,
+      "title": "数据安全与隐私边界｜面试稳",
+      "description": "了解面试稳如何处理麦克风、电脑音频、截图、简历、JD、知识材料和面试记录，以及用户授权、导出和删除边界。",
+      "h1": [
+        "每一种输入，都有清楚的用途和边界"
+      ],
+      "canonical": "https://mianshiwen.cn/security",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/about",
+      "status": 200,
+      "title": "关于面试稳AI助手与产品定位",
+      "description": "了解面试稳AI助手的产品定位、适用边界、公开能力、品牌联系信息和对真实表达、授权与隐私的基本原则。",
+      "h1": [
+        "让面试准备、现场表达和复盘连成一条线"
+      ],
+      "canonical": "https://mianshiwen.cn/about",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/contact",
+      "status": 200,
+      "title": "联系面试稳AI助手产品支持",
+      "description": "通过面试稳官方客服微信和联系邮箱咨询安装、收音、账户、订单或隐私问题，并了解提交问题时需要和不应提供的信息。",
+      "h1": [
+        "把问题说清楚，我们才能更快定位"
+      ],
+      "canonical": "https://mianshiwen.cn/contact",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/features/ai-interview-assistant",
+      "status": 200,
+      "title": "程序员面试助手：技术追问与回答思路｜面试稳",
+      "description": "面试稳程序员面试助手结合简历、JD 和知识资料，为 Java、前端、算法及 LLM 等技术岗位整理项目追问、技术原理、系统设计和截图题的回答思路。",
+      "h1": [
+        "程序员面试助手，把技术思路讲清楚"
+      ],
+      "canonical": "https://mianshiwen.cn/features/ai-interview-assistant",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": true
+    },
+    {
+      "agent": "normal",
+      "path": "/features/realtime-interview",
+      "status": 200,
+      "title": "实时面试辅助：语音识别与回答建议｜面试稳",
+      "description": "面试稳实时面试辅助说明：区分麦克风与电脑输出音频，持续整理对话，确认面试官问题，并结合本场资料生成回答建议。",
+      "h1": [
+        "实时面试辅助：从问题到回答建议"
+      ],
+      "canonical": "https://mianshiwen.cn/features/realtime-interview",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": true
+    },
+    {
+      "agent": "normal",
+      "path": "/features/screenshot-answer",
+      "status": 200,
+      "title": "截图回答：识别屏幕题目并整理思路｜面试稳",
+      "description": "面试稳截图回答功能说明：由用户主动截取当前屏幕，识别题目后生成结构化回答建议，适用于代码题、图表题和系统设计题。",
+      "h1": [
+        "截图回答，只使用当前屏幕题目信息"
+      ],
+      "canonical": "https://mianshiwen.cn/features/screenshot-answer",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/features/interview-review",
+      "status": 200,
+      "title": "面试复盘：保留问答并形成行动建议｜面试稳",
+      "description": "面试稳面试复盘说明：保留面试官问题和候选人回答，整理回答建议、资料来源和后续行动，并支持下载复盘文档。",
+      "h1": [
+        "面试复盘，既看问题，也看自己的回答"
+      ],
+      "canonical": "https://mianshiwen.cn/features/interview-review",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/guides/audio-troubleshooting",
+      "status": 200,
+      "title": "面试收音慢或丢字？麦克风与系统音频排查｜面试稳",
+      "description": "面试稳收音排查指南：检查麦克风、电脑输出音频、macOS 或 Windows 系统权限、会议软件音量、网络与转写状态。",
+      "h1": [
+        "面试收音慢、断续或丢字，先按来源排查"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/audio-troubleshooting",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/guides/interview-preparation",
+      "status": 200,
+      "title": "面试准备指南：简历、JD与知识材料怎么选｜面试稳",
+      "description": "面试稳面试准备指南：整理真实简历、目标岗位 JD 和必要知识材料，创建面试并完成电脑伴随程序与收音检查。",
+      "h1": [
+        "准备一场面试，先把资料变成可核对的事实"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/interview-preparation",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/guides/macos-permissions",
+      "status": 200,
+      "title": "macOS 麦克风与屏幕权限设置｜面试稳",
+      "description": "面试稳 macOS 权限指南：分别检查麦克风、屏幕与系统音频授权，重置旧授权，并验证电脑伴随程序是否真正收到声音。",
+      "h1": [
+        "macOS 已授权但不能收音，按权限类型重新检查"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/macos-permissions",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/guides/feishu-audio-setup",
+      "status": 200,
+      "title": "飞书视频面试收音设置｜面试稳",
+      "description": "飞书视频面试收音设置指南：检查麦克风、扬声器、电脑输出音量、系统权限与面试稳伴随程序状态，减少断续和漏字。",
+      "h1": [
+        "飞书面试声音断续，先分清是哪一路音频"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/feishu-audio-setup",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/guides/tencent-meeting-audio-setup",
+      "status": 200,
+      "title": "腾讯会议面试收音设置｜面试稳",
+      "description": "腾讯会议视频面试收音设置指南：检查麦克风、扬声器、系统输出与面试稳伴随程序输入，定位听得见但无法转写的问题。",
+      "h1": [
+        "腾讯会议听得见，不等于助手已经收到电脑声音"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/tencent-meeting-audio-setup",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/guides/star-interview-answer",
+      "status": 200,
+      "title": "STAR 面试回答怎么组织｜面试稳",
+      "description": "STAR 面试回答指南：用情境、任务、行动和结果整理真实项目经历，避免背景过长、职责不清、行动空泛和结果无法核对。",
+      "h1": [
+        "STAR 不是套话，而是让真实经历更容易被理解"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/star-interview-answer",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/guides/self-introduction",
+      "status": 200,
+      "title": "面试自我介绍怎么说：60秒结构与模板｜面试稳",
+      "description": "面试自我介绍怎么说？用岗位匹配、关键经历和求职动机组成60至90秒回答，附可填写模板、应届生与社招调整方法及常见错误检查表。",
+      "h1": [
+        "面试自我介绍怎么说？用60秒建立岗位匹配"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/self-introduction",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/guides/project-experience",
+      "status": 200,
+      "title": "面试项目经历怎么介绍：六段回答结构｜面试稳",
+      "description": "面试项目经历怎么介绍？用目标、约束、方案、个人行动、结果和反思六段结构讲清项目，附技术追问清单、填空模板与常见错误。",
+      "h1": [
+        "面试项目经历怎么介绍？讲清问题、取舍和你的行动"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/project-experience",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/guides/technical-interview",
+      "status": 200,
+      "title": "技术面试怎么准备：能力矩阵与解题流程｜面试稳",
+      "description": "技术面试怎么准备？从JD建立能力矩阵，按概念、原理、取舍和案例四层复习，并用澄清、方案、实现、测试与复盘完成现场解题。",
+      "h1": [
+        "技术面试怎么准备？从JD反推能力与证据"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/technical-interview",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/guides/common-interview-questions",
+      "status": 200,
+      "title": "面试常见问题：五类题目与回答框架｜面试稳",
+      "description": "面试常见问题如何准备？按背景动机、岗位匹配、行为经历、技术能力和反问五类理解考察意图，用真实证据库组织回答而非背标准答案。",
+      "h1": [
+        "面试常见问题怎么准备？先看考察意图，再找真实证据"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/common-interview-questions",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/interview-questions/llm",
+      "status": 200,
+      "title": "大模型面试题：原理、推理、上下文与评测｜面试稳",
+      "description": "大模型面试题准备指南：从Transformer、自注意力、训练与推理、上下文窗口、幻觉到评测与工程取舍，附常见追问、回答框架和可靠来源。",
+      "h1": [
+        "大模型面试题怎么准备？从原理讲到工程边界"
+      ],
+      "canonical": "https://mianshiwen.cn/interview-questions/llm",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/interview-questions/rag",
+      "status": 200,
+      "title": "RAG面试题：检索、重排、生成与评测｜面试稳",
+      "description": "RAG面试题准备指南：讲清文档解析、切分、Embedding、召回、混合检索、重排、生成引用、评测与线上故障定位，附回答框架和原始论文。",
+      "h1": [
+        "RAG面试题怎么回答？先把检索与生成拆开"
+      ],
+      "canonical": "https://mianshiwen.cn/interview-questions/rag",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/interview-questions/ai-agent",
+      "status": 200,
+      "title": "AI Agent面试题：工具、状态、恢复与安全｜面试稳",
+      "description": "AI Agent面试题准备指南：区分工作流与Agent，讲清任务规划、工具调用、状态与记忆、失败恢复、权限安全、可观测性和端到端评测。",
+      "h1": [
+        "AI Agent面试题怎么准备？重点是可控地完成任务"
+      ],
+      "canonical": "https://mianshiwen.cn/interview-questions/ai-agent",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/interview-questions/java-backend",
+      "status": 200,
+      "title": "Java后端面试题：并发、JVM与系统设计｜面试稳",
+      "description": "Java后端面试题准备指南：从Java语言、并发与JVM，到数据库、缓存、消息队列、接口设计、系统稳定性与项目表达，附追问框架和官方来源。",
+      "h1": [
+        "Java后端面试题怎么准备？从语言原理到系统证据"
+      ],
+      "canonical": "https://mianshiwen.cn/interview-questions/java-backend",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/interview-questions/frontend",
+      "status": 200,
+      "title": "前端面试题：浏览器、性能与工程实践｜面试稳",
+      "description": "前端面试题准备指南：从HTML、CSS、JavaScript事件循环，到网络、渲染、框架状态、性能、可访问性、测试与项目表达，附追问框架和权威来源。",
+      "h1": [
+        "前端面试题怎么准备？围绕浏览器与用户体验"
+      ],
+      "canonical": "https://mianshiwen.cn/interview-questions/frontend",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "normal",
+      "path": "/interview-questions/algorithms",
+      "status": 200,
+      "title": "算法面试题：思路、正确性与代码实现｜面试稳",
+      "description": "算法面试题准备指南：从澄清需求、选择数据结构、建立不变量，到证明正确性、分析复杂度、编写代码和测试边界，附题型地图与表达框架。",
+      "h1": [
+        "算法面试题怎么做？让思路、证明和代码对齐"
+      ],
+      "canonical": "https://mianshiwen.cn/interview-questions/algorithms",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/",
+      "status": 200,
+      "title": "AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳",
+      "description": "面试稳是一款面向求职者的AI面试助手，结合简历、目标岗位和知识资料，帮助整理实时面试问题、截图题与技术题的回答思路。",
+      "h1": [
+        "AI 面试助手，让你的经历更好表达。"
+      ],
+      "canonical": "https://mianshiwen.cn/",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": true
+    },
+    {
+      "agent": "baidu",
+      "path": "/guide",
+      "status": 200,
+      "title": "面试稳AI助手使用手册｜安装、收音、截图回答与支付说明",
+      "description": "面试稳AI助手使用手册：了解账号登录、面试资料、Windows 与 macOS 伴随程序、实时面试、截图回答、积分会员、支付和隐私设置。",
+      "h1": [
+        "从准备资料到面试现场，按步骤完成设置"
+      ],
+      "canonical": "https://mianshiwen.cn/guide",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/features",
+      "status": 200,
+      "title": "AI面试助手功能｜面试稳",
+      "description": "了解面试稳AI面试助手的核心功能：结合简历、职位JD和知识资料准备面试，支持实时语音、手动输入、截图回答与面试复盘。",
+      "h1": [
+        "从面试准备到现场回答，一条清晰工作流"
+      ],
+      "canonical": "https://mianshiwen.cn/features",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/interview-questions",
+      "status": 200,
+      "title": "面试题与技术专题｜面试稳",
+      "description": "面试稳面试题与专题入口：按大模型、RAG、AI Agent、Java后端、前端和算法岗位理解考察重点，并结合简历与JD准备真实回答。",
+      "h1": [
+        "不要只背题目，先理解岗位为什么这样问"
+      ],
+      "canonical": "https://mianshiwen.cn/interview-questions",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/guides",
+      "status": 200,
+      "title": "面试指南与使用建议｜面试稳",
+      "description": "面试稳面试指南汇总面试准备、STAR回答、电脑收音、macOS权限以及飞书和腾讯会议音频设置方法；产品操作请查看独立使用手册。",
+      "h1": [
+        "把面试准备、回答方法和设备排查分开处理"
+      ],
+      "canonical": "https://mianshiwen.cn/guides",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/pricing",
+      "status": 200,
+      "title": "AI面试助手价格与套餐｜面试稳",
+      "description": "查看面试稳AI面试助手价格：按天会员和积分包的人民币金额、有效期、主要权益，以及语音、回答、截图和知识材料的计费说明。",
+      "h1": [
+        "面试稳价格与套餐"
+      ],
+      "canonical": "https://mianshiwen.cn/pricing",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": true
+    },
+    {
+      "agent": "baidu",
+      "path": "/download",
+      "status": 200,
+      "title": "电脑伴随程序下载与安装｜面试稳",
+      "description": "了解面试稳电脑伴随程序的 macOS Apple Silicon、Intel 与 Windows 版本选择、系统权限、安装检查和官方版本入口。",
+      "h1": [
+        "先选对版本，再检查系统权限"
+      ],
+      "canonical": "https://mianshiwen.cn/download",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/security",
+      "status": 200,
+      "title": "数据安全与隐私边界｜面试稳",
+      "description": "了解面试稳如何处理麦克风、电脑音频、截图、简历、JD、知识材料和面试记录，以及用户授权、导出和删除边界。",
+      "h1": [
+        "每一种输入，都有清楚的用途和边界"
+      ],
+      "canonical": "https://mianshiwen.cn/security",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/about",
+      "status": 200,
+      "title": "关于面试稳AI助手与产品定位",
+      "description": "了解面试稳AI助手的产品定位、适用边界、公开能力、品牌联系信息和对真实表达、授权与隐私的基本原则。",
+      "h1": [
+        "让面试准备、现场表达和复盘连成一条线"
+      ],
+      "canonical": "https://mianshiwen.cn/about",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/contact",
+      "status": 200,
+      "title": "联系面试稳AI助手产品支持",
+      "description": "通过面试稳官方客服微信和联系邮箱咨询安装、收音、账户、订单或隐私问题，并了解提交问题时需要和不应提供的信息。",
+      "h1": [
+        "把问题说清楚，我们才能更快定位"
+      ],
+      "canonical": "https://mianshiwen.cn/contact",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/features/ai-interview-assistant",
+      "status": 200,
+      "title": "程序员面试助手：技术追问与回答思路｜面试稳",
+      "description": "面试稳程序员面试助手结合简历、JD 和知识资料，为 Java、前端、算法及 LLM 等技术岗位整理项目追问、技术原理、系统设计和截图题的回答思路。",
+      "h1": [
+        "程序员面试助手，把技术思路讲清楚"
+      ],
+      "canonical": "https://mianshiwen.cn/features/ai-interview-assistant",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": true
+    },
+    {
+      "agent": "baidu",
+      "path": "/features/realtime-interview",
+      "status": 200,
+      "title": "实时面试辅助：语音识别与回答建议｜面试稳",
+      "description": "面试稳实时面试辅助说明：区分麦克风与电脑输出音频，持续整理对话，确认面试官问题，并结合本场资料生成回答建议。",
+      "h1": [
+        "实时面试辅助：从问题到回答建议"
+      ],
+      "canonical": "https://mianshiwen.cn/features/realtime-interview",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": true
+    },
+    {
+      "agent": "baidu",
+      "path": "/features/screenshot-answer",
+      "status": 200,
+      "title": "截图回答：识别屏幕题目并整理思路｜面试稳",
+      "description": "面试稳截图回答功能说明：由用户主动截取当前屏幕，识别题目后生成结构化回答建议，适用于代码题、图表题和系统设计题。",
+      "h1": [
+        "截图回答，只使用当前屏幕题目信息"
+      ],
+      "canonical": "https://mianshiwen.cn/features/screenshot-answer",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/features/interview-review",
+      "status": 200,
+      "title": "面试复盘：保留问答并形成行动建议｜面试稳",
+      "description": "面试稳面试复盘说明：保留面试官问题和候选人回答，整理回答建议、资料来源和后续行动，并支持下载复盘文档。",
+      "h1": [
+        "面试复盘，既看问题，也看自己的回答"
+      ],
+      "canonical": "https://mianshiwen.cn/features/interview-review",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/guides/audio-troubleshooting",
+      "status": 200,
+      "title": "面试收音慢或丢字？麦克风与系统音频排查｜面试稳",
+      "description": "面试稳收音排查指南：检查麦克风、电脑输出音频、macOS 或 Windows 系统权限、会议软件音量、网络与转写状态。",
+      "h1": [
+        "面试收音慢、断续或丢字，先按来源排查"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/audio-troubleshooting",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/guides/interview-preparation",
+      "status": 200,
+      "title": "面试准备指南：简历、JD与知识材料怎么选｜面试稳",
+      "description": "面试稳面试准备指南：整理真实简历、目标岗位 JD 和必要知识材料，创建面试并完成电脑伴随程序与收音检查。",
+      "h1": [
+        "准备一场面试，先把资料变成可核对的事实"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/interview-preparation",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/guides/macos-permissions",
+      "status": 200,
+      "title": "macOS 麦克风与屏幕权限设置｜面试稳",
+      "description": "面试稳 macOS 权限指南：分别检查麦克风、屏幕与系统音频授权，重置旧授权，并验证电脑伴随程序是否真正收到声音。",
+      "h1": [
+        "macOS 已授权但不能收音，按权限类型重新检查"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/macos-permissions",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/guides/feishu-audio-setup",
+      "status": 200,
+      "title": "飞书视频面试收音设置｜面试稳",
+      "description": "飞书视频面试收音设置指南：检查麦克风、扬声器、电脑输出音量、系统权限与面试稳伴随程序状态，减少断续和漏字。",
+      "h1": [
+        "飞书面试声音断续，先分清是哪一路音频"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/feishu-audio-setup",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/guides/tencent-meeting-audio-setup",
+      "status": 200,
+      "title": "腾讯会议面试收音设置｜面试稳",
+      "description": "腾讯会议视频面试收音设置指南：检查麦克风、扬声器、系统输出与面试稳伴随程序输入，定位听得见但无法转写的问题。",
+      "h1": [
+        "腾讯会议听得见，不等于助手已经收到电脑声音"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/tencent-meeting-audio-setup",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/guides/star-interview-answer",
+      "status": 200,
+      "title": "STAR 面试回答怎么组织｜面试稳",
+      "description": "STAR 面试回答指南：用情境、任务、行动和结果整理真实项目经历，避免背景过长、职责不清、行动空泛和结果无法核对。",
+      "h1": [
+        "STAR 不是套话，而是让真实经历更容易被理解"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/star-interview-answer",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/guides/self-introduction",
+      "status": 200,
+      "title": "面试自我介绍怎么说：60秒结构与模板｜面试稳",
+      "description": "面试自我介绍怎么说？用岗位匹配、关键经历和求职动机组成60至90秒回答，附可填写模板、应届生与社招调整方法及常见错误检查表。",
+      "h1": [
+        "面试自我介绍怎么说？用60秒建立岗位匹配"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/self-introduction",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/guides/project-experience",
+      "status": 200,
+      "title": "面试项目经历怎么介绍：六段回答结构｜面试稳",
+      "description": "面试项目经历怎么介绍？用目标、约束、方案、个人行动、结果和反思六段结构讲清项目，附技术追问清单、填空模板与常见错误。",
+      "h1": [
+        "面试项目经历怎么介绍？讲清问题、取舍和你的行动"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/project-experience",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/guides/technical-interview",
+      "status": 200,
+      "title": "技术面试怎么准备：能力矩阵与解题流程｜面试稳",
+      "description": "技术面试怎么准备？从JD建立能力矩阵，按概念、原理、取舍和案例四层复习，并用澄清、方案、实现、测试与复盘完成现场解题。",
+      "h1": [
+        "技术面试怎么准备？从JD反推能力与证据"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/technical-interview",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/guides/common-interview-questions",
+      "status": 200,
+      "title": "面试常见问题：五类题目与回答框架｜面试稳",
+      "description": "面试常见问题如何准备？按背景动机、岗位匹配、行为经历、技术能力和反问五类理解考察意图，用真实证据库组织回答而非背标准答案。",
+      "h1": [
+        "面试常见问题怎么准备？先看考察意图，再找真实证据"
+      ],
+      "canonical": "https://mianshiwen.cn/guides/common-interview-questions",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/interview-questions/llm",
+      "status": 200,
+      "title": "大模型面试题：原理、推理、上下文与评测｜面试稳",
+      "description": "大模型面试题准备指南：从Transformer、自注意力、训练与推理、上下文窗口、幻觉到评测与工程取舍，附常见追问、回答框架和可靠来源。",
+      "h1": [
+        "大模型面试题怎么准备？从原理讲到工程边界"
+      ],
+      "canonical": "https://mianshiwen.cn/interview-questions/llm",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/interview-questions/rag",
+      "status": 200,
+      "title": "RAG面试题：检索、重排、生成与评测｜面试稳",
+      "description": "RAG面试题准备指南：讲清文档解析、切分、Embedding、召回、混合检索、重排、生成引用、评测与线上故障定位，附回答框架和原始论文。",
+      "h1": [
+        "RAG面试题怎么回答？先把检索与生成拆开"
+      ],
+      "canonical": "https://mianshiwen.cn/interview-questions/rag",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/interview-questions/ai-agent",
+      "status": 200,
+      "title": "AI Agent面试题：工具、状态、恢复与安全｜面试稳",
+      "description": "AI Agent面试题准备指南：区分工作流与Agent，讲清任务规划、工具调用、状态与记忆、失败恢复、权限安全、可观测性和端到端评测。",
+      "h1": [
+        "AI Agent面试题怎么准备？重点是可控地完成任务"
+      ],
+      "canonical": "https://mianshiwen.cn/interview-questions/ai-agent",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/interview-questions/java-backend",
+      "status": 200,
+      "title": "Java后端面试题：并发、JVM与系统设计｜面试稳",
+      "description": "Java后端面试题准备指南：从Java语言、并发与JVM，到数据库、缓存、消息队列、接口设计、系统稳定性与项目表达，附追问框架和官方来源。",
+      "h1": [
+        "Java后端面试题怎么准备？从语言原理到系统证据"
+      ],
+      "canonical": "https://mianshiwen.cn/interview-questions/java-backend",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/interview-questions/frontend",
+      "status": 200,
+      "title": "前端面试题：浏览器、性能与工程实践｜面试稳",
+      "description": "前端面试题准备指南：从HTML、CSS、JavaScript事件循环，到网络、渲染、框架状态、性能、可访问性、测试与项目表达，附追问框架和权威来源。",
+      "h1": [
+        "前端面试题怎么准备？围绕浏览器与用户体验"
+      ],
+      "canonical": "https://mianshiwen.cn/interview-questions/frontend",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    },
+    {
+      "agent": "baidu",
+      "path": "/interview-questions/algorithms",
+      "status": 200,
+      "title": "算法面试题：思路、正确性与代码实现｜面试稳",
+      "description": "算法面试题准备指南：从澄清需求、选择数据结构、建立不变量，到证明正确性、分析复杂度、编写代码和测试边界，附题型地图与表达框架。",
+      "h1": [
+        "算法面试题怎么做？让思路、证明和代码对齐"
+      ],
+      "canonical": "https://mianshiwen.cn/interview-questions/algorithms",
+      "robots": "indexable (not set)",
+      "xRobotsTag": null,
+      "matchesBuild": true,
+      "core": false
+    }
+  ],
+  "sitemap": [
+    {
+      "agent": "normal",
+      "status": 200,
+      "count": 30,
+      "equalsBuild": true
+    },
+    {
+      "agent": "baidu",
+      "status": 200,
+      "count": 30,
+      "equalsBuild": true
+    }
+  ],
+  "smoke": [
+    {
+      "path": "/login",
+      "status": 200,
+      "contentType": "text/html",
+      "bytes": 10712
+    },
+    {
+      "path": "/app",
+      "status": 200,
+      "contentType": "text/html",
+      "bytes": 10712
+    },
+    {
+      "path": "/app/billing",
+      "status": 200,
+      "contentType": "text/html",
+      "bytes": 10712
+    },
+    {
+      "path": "/app/interviews/new",
+      "status": 200,
+      "contentType": "text/html",
+      "bytes": 10712
+    },
+    {
+      "path": "/app/devices",
+      "status": 200,
+      "contentType": "text/html",
+      "bytes": 10712
+    },
+    {
+      "path": "/download",
+      "status": 200,
+      "contentType": "text/html",
+      "bytes": 5882
+    },
+    {
+      "path": "/healthz",
+      "status": 200,
+      "contentType": "application/json",
+      "bytes": 276
+    },
+    {
+      "path": "/api/v1/billing/status",
+      "status": 200,
+      "contentType": "application/json",
+      "bytes": 294
+    },
+    {
+      "path": "/assets/main-D8GtcuCK.js",
+      "status": 200,
+      "contentType": "application/javascript",
+      "bytes": 442705
+    },
+    {
+      "path": "/assets/main-DLJpquzR.js",
+      "status": 200,
+      "contentType": "application/javascript",
+      "bytes": 429288
+    }
+  ],
+  "links": [
+    {
+      "path": "/features",
+      "status": 200
+    },
+    {
+      "path": "/interview-questions",
+      "status": 200
+    },
+    {
+      "path": "/guides",
+      "status": 200
+    },
+    {
+      "path": "/pricing",
+      "status": 200
+    },
+    {
+      "path": "/download",
+      "status": 200
+    },
+    {
+      "path": "/login",
+      "status": 200
+    },
+    {
+      "path": "/app/partner-program",
+      "status": 200
+    },
+    {
+      "path": "/app/billing",
+      "status": 200
+    },
+    {
+      "path": "/features/realtime-interview",
+      "status": 200
+    },
+    {
+      "path": "/features/ai-interview-assistant",
+      "status": 200
+    },
+    {
+      "path": "/guide",
+      "status": 200
+    },
+    {
+      "path": "/security",
+      "status": 200
+    },
+    {
+      "path": "/about",
+      "status": 200
+    },
+    {
+      "path": "/contact",
+      "status": 200
+    },
+    {
+      "path": "/terms",
+      "status": 200
+    },
+    {
+      "path": "/privacy",
+      "status": 200
+    },
+    {
+      "path": "/",
+      "status": 200
+    },
+    {
+      "path": "/guides/interview-preparation",
+      "status": 200
+    },
+    {
+      "path": "/guides/technical-interview",
+      "status": 200
+    },
+    {
+      "path": "/features/screenshot-answer",
+      "status": 200
+    },
+    {
+      "path": "/interview-questions/java-backend",
+      "status": 200
+    },
+    {
+      "path": "/interview-questions/frontend",
+      "status": 200
+    },
+    {
+      "path": "/interview-questions/algorithms",
+      "status": 200
+    },
+    {
+      "path": "/interview-questions/llm",
+      "status": 200
+    },
+    {
+      "path": "/interview-questions/rag",
+      "status": 200
+    },
+    {
+      "path": "/interview-questions/ai-agent",
+      "status": 200
+    },
+    {
+      "path": "/features/interview-review",
+      "status": 200
+    },
+    {
+      "path": "/guides/audio-troubleshooting",
+      "status": 200
+    }
+  ]
+}

@@ -52,6 +52,8 @@
 - `OFFERSTEADY_MATERIAL_INDEXING_TIMEOUT_SECONDS`
 - `OFFERSTEADY_MATERIAL_DELETION_GRACE_SECONDS`
 - `OFFERSTEADY_MATERIAL_OBJECT_ID_BYTES`
+- `OFFERSTEADY_DOCUMENT_PROCESSING_INLINE_WORKER_ENABLED`
+- `OFFERSTEADY_DOCUMENT_PROCESSING_JOB_LEASE_SECONDS`
 - `OFFERSTEADY_ACCESS_TOKEN_EXPIRE_MINUTES`
 - `OFFERSTEADY_AUTH_REFRESH_TOKEN_TTL_SECONDS`
 - `OFFERSTEADY_AUTH_WECHAT_PROVIDER_MODE`
@@ -70,6 +72,25 @@
 - `OFFERSTEADY_AUTH_SMS_VERIFY_ATTEMPT_LIMIT`
 - `OFFERSTEADY_AUTH_SMS_FAKE_CODE`
 - `OFFERSTEADY_AUTH_SMS_TEST_PHONE_NUMBER`
+- `OFFERSTEADY_AUTH_EMAIL_ENABLED`
+- `OFFERSTEADY_AUTH_EMAIL_PROVIDER_MODE`
+- `OFFERSTEADY_AUTH_EMAIL_CODE_PEPPER`
+- `OFFERSTEADY_AUTH_EMAIL_TTL_SECONDS`
+- `OFFERSTEADY_AUTH_EMAIL_SEND_INTERVAL_SECONDS`
+- `OFFERSTEADY_AUTH_EMAIL_DAILY_LIMIT`
+- `OFFERSTEADY_AUTH_EMAIL_VERIFY_ATTEMPT_LIMIT`
+- `OFFERSTEADY_AUTH_EMAIL_SMTP_HOST`
+- `OFFERSTEADY_AUTH_EMAIL_SMTP_PORT`
+- `OFFERSTEADY_AUTH_EMAIL_SMTP_USERNAME`
+- `OFFERSTEADY_AUTH_EMAIL_SMTP_PASSWORD`
+- `OFFERSTEADY_AUTH_EMAIL_SMTP_SSL`
+- `OFFERSTEADY_AUTH_EMAIL_SMTP_STARTTLS`
+- `OFFERSTEADY_AUTH_EMAIL_FROM_ADDRESS`
+- `OFFERSTEADY_AUTH_EMAIL_FROM_NAME`
+- `OFFERSTEADY_AUTH_GLOBAL_PASSWORD_MIN_LENGTH`
+- `OFFERSTEADY_AUTH_GLOBAL_PASSWORD_MAX_LENGTH`
+- `OFFERSTEADY_AUTH_GLOBAL_LOGIN_ATTEMPT_LIMIT`
+- `OFFERSTEADY_AUTH_GLOBAL_LOGIN_WINDOW_SECONDS`
 - `OFFERSTEADY_ADMIN_ENABLED`
 - `OFFERSTEADY_ADMIN_ALLOWED_ORIGINS`
 - `OFFERSTEADY_ADMIN_SESSION_TTL_SECONDS`
@@ -184,6 +205,24 @@ OFFERSTEADY_ALIPAY_RETURN_URL=https://mianshiwen.cn/app/billing
 - `VITE_APP_ENV`
 - `VITE_API_BASE_URL`
 - `VITE_PUBLIC_APP_VERSION`
+- `VITE_GLOBAL_LOCALE`：仅供 `apps/web-global` 使用，可选 `en-US`、`en-GB`、`en-AU`、`en-CA`；默认 `en-US`
+- `VITE_GLOBAL_COMMERCE_ENABLED`：仅供 `apps/web-global` 使用；国际支付、币种、税务和退款链路完成前必须保持 `false`
+- `OFFERSTEADY_PRODUCT_EDITION`：后端产品边界，默认 `cn`；仅海外独立部署设为 `global`。
+- `OFFERSTEADY_GLOBAL_COMMERCE_ENABLED`：服务端新结账总开关，默认 `false`。关闭时仍允许已发生订单的签名 Webhook 与对账处理。
+- `OFFERSTEADY_GLOBAL_COMMERCE_PROVIDER_MODE`：`test` 或 `live`；两套密钥、映射、事件和启用状态不得混用。
+- `OFFERSTEADY_CREEM_TEST_API_KEY` / `OFFERSTEADY_CREEM_LIVE_API_KEY`：仅服务端注入，禁止放入 `VITE_`、日志、响应或后台表单。
+- `OFFERSTEADY_CREEM_TEST_WEBHOOK_SECRET` / `OFFERSTEADY_CREEM_LIVE_WEBHOOK_SECRET`：用于对原始请求体校验 `creem-signature`，仅服务端注入。
+- `OFFERSTEADY_CREEM_CHECKOUT_SUCCESS_URL`：Creem 支付完成后的站内返回页；返回页只查询后端订单状态，不能发放权益。
+- `OFFERSTEADY_CREEM_TEST_BASE_URL` / `OFFERSTEADY_CREEM_LIVE_BASE_URL`：Creem Test/Live API 地址，默认使用官方地址。
+- `OFFERSTEADY_CREEM_HTTP_TIMEOUT_SECONDS` / `OFFERSTEADY_CREEM_HTTP_RETRY_ATTEMPTS`：服务端调用的有界超时与安全重试参数；退款等非幂等操作不自动重试。
+- `OFFERSTEADY_GLOBAL_TERMS_URL` / `OFFERSTEADY_GLOBAL_PRIVACY_URL` / `OFFERSTEADY_GLOBAL_REFUND_POLICY_URL` / `OFFERSTEADY_GLOBAL_FAIR_USE_POLICY_URL`：Live 激活前必须配置的英文法律与支持页面。
+
+Global 伴随程序打包还需要两个公开地址：
+
+- `OFFERSTEADY_GLOBAL_WEB_URL`：独立 Global Web HTTPS 地址
+- `OFFERSTEADY_GLOBAL_API_BASE_URL`：独立 Global API HTTPS 地址，必须指向版本化 API 根路径，例如 `https://offersteady.com/api/v1`
+
+Global 打包脚本会拒绝国内生产域名。这两个变量只允许包含公开 URL，不得携带令牌或密钥。
 
 前端只允许读取 `VITE_` 前缀变量，不得读取 OSS、数据库或服务端密钥。产品运行时不再支持 `VITE_APP_DATA_SOURCE=fixture` 或 strict/fallback 开关；页面数据统一来自 `VITE_API_BASE_URL` 指向的 Backend API。
 
@@ -251,6 +290,13 @@ OSS 路径由以下变量共同决定：
 - `OFFERSTEADY_MATERIAL_MAX_TEXT_CHARACTERS`
 - `OFFERSTEADY_MATERIAL_SUPPORTED_EXTENSIONS`
 
+资料任务执行由以下变量控制：
+
+- `OFFERSTEADY_DOCUMENT_PROCESSING_INLINE_WORKER_ENABLED`：仅用于开发兼容；生产 API 必须为 `false`，资料解析由独立 `material-worker` 执行。
+- `OFFERSTEADY_DOCUMENT_PROCESSING_JOB_LEASE_SECONDS`：Worker 任务租约，默认 900 秒；Worker 异常退出后，超出租约的任务会安全重新排队。
+
+生产环境的上传凭证、处理任务和处理事件均写入 PostgreSQL。API 发布或 Worker 重启不得依赖进程内队列恢复资料任务。
+
 RAG 运行边界由以下变量控制：
 
 - `OFFERSTEADY_EMBEDDING_MODEL`
@@ -289,6 +335,18 @@ RAG 运行边界由以下变量控制：
 - 当前产品只支持中国大陆手机号，后端会以 `CountryCode=86` 调用阿里云接口。
 - `OFFERSTEADY_AUTH_SMS_TEST_PHONE_NUMBER` 只用于显式运行真实短信集成验收，普通单元测试不得调用真实短信 API。
 - 日志只允许记录手机号哈希、脱敏手机号、challenge id、provider request id、耗时和错误码，不能记录验证码明文。
+
+## 海外邮箱验证码登录
+
+- 邮箱认证默认关闭；只有海外独立部署设置 `OFFERSTEADY_AUTH_EMAIL_ENABLED=true` 后，邮箱接口才可用。国内环境保持关闭，不改变手机号登录。
+- 自动化测试可使用 `OFFERSTEADY_AUTH_EMAIL_PROVIDER_MODE=fake` 和合成验证码。生产环境启用邮箱认证时必须使用 `smtp`，否则后端拒绝启动该认证配置，禁止降级到 fake。
+- SMTP 生产配置至少需要 host、username、password、已验证的 from address 和独立高强度 `OFFERSTEADY_AUTH_EMAIL_CODE_PEPPER`。支持 587 + STARTTLS，也支持服务商要求的 465 隐式 TLS；隐式 TLS 时设置 `SMTP_SSL=true`、`SMTP_STARTTLS=false`。
+- 国际版普通用户默认使用邮箱和密码登录。新密码采用 Argon2id；注册、老用户首次设密和找回密码继续复用用途隔离的一次性邮箱验证码。密码策略与失败次数窗口仅在 `OFFERSTEADY_PRODUCT_EDITION=global` 时生效。
+- 发送域名上线前必须完成供应商验证，并配置 SPF、DKIM 和 DMARC。发件人名称默认 `OfferSteady`，实际发件地址由运营方确认。
+- 验证码为六位随机数，数据库只保存 HMAC 摘要；challenge 只保存邮箱哈希与脱敏地址。日志不得记录完整邮箱、验证码或 SMTP 凭据。
+- 默认验证码有效期 10 分钟、同邮箱 60 秒内不可重发、每日最多 20 次、最多验证 5 次。这些限制不替代供应商侧配额和网络层限流。
+- 上线顺序：先以关闭状态部署加法迁移和后端，再配置并验证真实邮件发送，最后启用邮箱认证并发布 Global Web。失败时回滚 Global Web/Backend 镜像，新增表可保留且不会影响国内库。
+- 生产冒烟测试必须覆盖：真实收件、错误码、过期码、重复使用、新账号、已有账号再次登录、刷新令牌、退出登录；测试邮箱必须为专用合成账号。
 
 ## 第三方集成验收补充
 

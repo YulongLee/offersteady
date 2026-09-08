@@ -1,0 +1,1 @@
+export class LocalSourceMonitor { constructor(private options:any){} async start(){this.options.onHealth(['microphone','system'].map(sourceKind=>({sourceKind,sourceId:sourceKind,state:'silent',level:0})));} async stop(){} }

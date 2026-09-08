@@ -1,5 +1,9 @@
 # 面试稳 SEO 优化行动计划
 
+最新索引优先计划：[2026-09-08 百度零索引后续行动](docs/audits/mianshiwen-cn-20260908-indexing/ACTION-PLAN.md)。
+
+最新执行建议：[2026-09-07 国服 SEO/GEO 分批计划](docs/audits/mianshiwen-cn-20260907/ACTION-PLAN.md)。下文保留历史记录。
+
 审计日期：2026-08-19
 
 ## P0：本周处理

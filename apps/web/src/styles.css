@@ -149,6 +149,12 @@ h1, h2, h3, p { margin-top: 0; }
 .public-section { padding: 100px 0; border-top: 1px solid var(--line); }
 .section-intro { max-width: 700px; margin-bottom: 42px; }
 .section-intro h2, .boundary-card h2 { margin: 13px 0 0; font-size: clamp(30px, 4vw, 48px); letter-spacing: -.04em; }
+.landing-film { display: grid; gap: 34px; padding-top: 90px; }
+.landing-film-intro { max-width: 790px; }
+.landing-film-intro h2 { margin: 14px 0 14px; font-size: clamp(32px, 4vw, 50px); line-height: 1.12; letter-spacing: -.045em; }
+.landing-film-intro p { max-width: 700px; color: var(--muted); margin: 0; font-size: 13px; line-height: 1.8; }
+.landing-film-frame { width: 100%; border: 1px solid rgba(110,231,189,.22); border-radius: 24px; background: #05080d; box-shadow: 0 34px 90px rgba(0,0,0,.36); padding: 10px; overflow: hidden; }
+.landing-film-frame video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border-radius: 16px; background: #05080d; object-fit: cover; }
 .workflow-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .workflow-grid article { min-height: 230px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-bg-soft); padding: 25px; }
 .workflow-grid b { color: var(--brand); font-size: 11px; }
@@ -1133,6 +1139,10 @@ h1, h2, h3, p { margin-top: 0; }
   .referral-link-controls { grid-template-columns: 1fr; }
   .landing-hero { min-height: 0; padding: 50px 0 70px; }
   .landing-hero h1 { font-size: 46px; }
+  .landing-film { gap: 24px; padding-block: 70px; }
+  .landing-film-intro h2 { font-size: 34px; }
+  .landing-film-frame { border-radius: 17px; padding: 5px; }
+  .landing-film-frame video { border-radius: 12px; }
   .workflow-grid, .boundary-card { grid-template-columns: 1fr; }
   .advantage-strip, .download-grid, .consumption-grid, .public-pricing-grid, .value-proof-grid { grid-template-columns: 1fr; }
 .core-capabilities-grid { grid-template-columns: 1fr; }

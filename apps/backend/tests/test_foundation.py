@@ -160,6 +160,9 @@ def test_runtime_performance_ack_accepts_only_allowlisted_metadata() -> None:
         "taskId": "answer-task-safe-1",
         "browserEventReceiveAtMs": 1_000,
         "browserRenderAtMs": 1_010,
+        "routeReceivedAtMs": 80,
+        "executorAdmittedAtMs": 90,
+        "answerGeneratorStartedAtMs": 100,
         "serverAcceptedAtMs": 100,
         "providerRequestAtMs": 200,
         "providerFirstTokenAtMs": 900,
@@ -183,6 +186,9 @@ def test_runtime_performance_ack_accepts_only_allowlisted_metadata() -> None:
         params={"userId": "performance-ack-user"},
     ))
     assert answer_summary["distributions"]["answerAdmissionToProviderMs"]["p95"] == 100
+    assert answer_summary["distributions"]["answerRouteToExecutorAdmissionMs"]["p95"] == 10
+    assert answer_summary["distributions"]["answerExecutorAdmissionToGeneratorMs"]["p95"] == 10
+    assert answer_summary["distributions"]["answerRouteToGeneratorMs"]["p95"] == 20
     assert answer_summary["distributions"]["answerProviderToFirstTokenMs"]["p95"] == 700
     assert answer_summary["distributions"]["answerFirstTokenToVisibleMs"]["p95"] == 500
     assert answer_summary["distributions"]["answerVisibleToSseYieldMs"]["p95"] == 5
@@ -205,6 +211,9 @@ def test_runtime_performance_ack_accepts_only_allowlisted_metadata() -> None:
         "browserEventReceiveAtMs": 1_000,
         "browserRenderAtMs": 1_010,
         "renderedTextLength": 18,
+        "routeReceivedAtMs": 80,
+        "executorAdmittedAtMs": 90,
+        "answerGeneratorStartedAtMs": 100,
         "serverAcceptedAtMs": 100,
         "providerRequestAtMs": 200,
         "providerFirstTokenAtMs": 900,
@@ -1943,8 +1952,11 @@ def test_live_answer_stream_emits_ordered_events_and_persists_completion() -> No
     chunk_events = [event for event in events if event["type"] == "chunk"]
     assert len(chunk_events) >= 2
     assert set(chunk_events[0]["timing"]) == {
+        "routeReceivedAtMs", "executorAdmittedAtMs", "answerGeneratorStartedAtMs",
         "serverAcceptedAtMs", "providerRequestAtMs", "providerFirstTokenAtMs", "firstVisibleAtMs", "sseYieldAtMs",
     }
+    assert chunk_events[0]["timing"]["routeReceivedAtMs"] <= chunk_events[0]["timing"]["executorAdmittedAtMs"]
+    assert chunk_events[0]["timing"]["executorAdmittedAtMs"] <= chunk_events[0]["timing"]["answerGeneratorStartedAtMs"]
     assert chunk_events[0]["timing"]["serverAcceptedAtMs"] <= chunk_events[0]["timing"]["providerRequestAtMs"]
     assert chunk_events[0]["timing"]["providerRequestAtMs"] <= chunk_events[0]["timing"]["firstVisibleAtMs"]
     assert chunk_events[0]["timing"]["firstVisibleAtMs"] <= chunk_events[0]["timing"]["sseYieldAtMs"]

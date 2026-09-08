@@ -1,0 +1,24 @@
+# OfferSteady
+> OfferSteady is an English AI interview assistant for preparation, live transcription, grounded answer guidance, user-triggered screenshot questions, written assessments, and interview review.
+
+## Product
+- [Features](https://offersteady.com/features)
+- [Interview topics](https://offersteady.com/interview-questions)
+- [Guides](https://offersteady.com/guides)
+- [Pricing](https://offersteady.com/pricing)
+- [Download](https://offersteady.com/download)
+
+## Company and policies
+- [About](https://offersteady.com/about)
+- [Contact](https://offersteady.com/contact)
+- [Security](https://offersteady.com/security)
+- [Terms of Service](https://offersteady.com/terms)
+- [Privacy Policy](https://offersteady.com/privacy)
+- [Refund Policy](https://offersteady.com/refund-policy)
+
+## Responsible use
+- AI output is guidance, not a hiring guarantee.
+- Users must verify every claim and answer from their real experience.
+- Users must follow the interview organiser's rules for recording, confidentiality, screen capture, and AI assistance.
+
+Support: contact@oneshowailab.com

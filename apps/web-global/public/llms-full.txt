@@ -1,0 +1,40 @@
+# OfferSteady: public product information
+
+OfferSteady is operated by 杭州临平知界智能技术工作室（个体工商户）, Hangzhou, China. The Global product is an English Web workspace and desktop Companion for interview preparation, live transcription, grounded answer guidance, typed questions, user-triggered screenshots, written assessments, and review.
+
+## How it works
+
+Users select a resume, job description, and optional knowledge materials for a session. The connected desktop Companion provides enabled microphone, supported computer-output audio, and user-triggered screenshot inputs. The Web workspace displays progressive transcripts and can prepare guidance manually or through optional Auto Answer for confirmed interviewer questions. Raw audio is not stored by default.
+
+## Plans
+
+Free: $0. Free · no recurring charge. Available on your account; the allowance is not replenished monthly. Includes: 15 minutes of realtime Copilot; 3 Screen Assist uses; One-time allowance per account; Resume/JD, knowledge base and Written Exam mode not included.
+Interview Day Pass: $9.99 / 24 hours. One-time payment · no automatic renewal. 24 consecutive hours from confirmed payment, not your first session. Includes: 180 minutes of realtime Copilot; Unlimited Screen Assist; Resume and job-description context; Written Exam mode; knowledge base not included.
+Pro Weekly: $49.99 / 7 days. One-time payment · no automatic renewal. 7 consecutive days from confirmed payment, not your first session. Includes: Unlimited Copilot; Unlimited Screen Assist; Resume, job-description, and knowledge materials; Written Exam mode and session review.
+Pro Monthly: $99.99/month. Monthly subscription · renews automatically until cancelled. From confirmed subscription payment through the paid billing period shown in your account. Includes: Unlimited Copilot; Unlimited Screen Assist; Resume, job-description, and knowledge materials; Written Exam mode and session review.
+Job Hunt: $199.99 / 90 days. One-time payment · no automatic renewal. 90 consecutive days from confirmed payment, not your first session. Includes: Unlimited Copilot; Unlimited Screen Assist; Resume, job-description, and knowledge materials; Written Exam mode and session review. Online checkout is temporarily unavailable. Live payments require payment provider merchant approval and completed production configuration. No payment is taken through the disabled controls on this site.
+
+## Boundaries
+
+AI output is guidance and can be inaccurate. Users must verify every claim, keep answers faithful to their real experience, obtain consent where required, and follow the interview organiser's rules for AI assistance, recording, screen capture, confidentiality, and external tools. Opening the website alone does not start audio or screenshot capture.
+
+## Canonical sources
+- [Home](https://offersteady.com/)
+- [Choose the plan that fits your interview schedule.](https://offersteady.com/pricing)
+- [Terms of Service](https://offersteady.com/terms)
+- [Privacy Policy](https://offersteady.com/privacy)
+- [Refund Policy](https://offersteady.com/refund-policy)
+- [Contact OfferSteady](https://offersteady.com/contact)
+- [Interview guidance grounded in your real experience.](https://offersteady.com/about)
+- [Security and privacy are product boundaries.](https://offersteady.com/security)
+- [AI interview guidance for preparation and live sessions.](https://offersteady.com/features)
+- [Keep interview guidance connected to your real experience.](https://offersteady.com/features/ai-interview-assistant)
+- [Follow live interview questions without losing the conversation.](https://offersteady.com/features/realtime-interview)
+- [Turn a selected screen region into structured answer guidance.](https://offersteady.com/features/screenshot-answer)
+- [Review what was asked, what appeared, and what to improve.](https://offersteady.com/features/interview-review)
+- [Prepare evidence before you prepare wording.](https://offersteady.com/guides)
+- [Understand what the interviewer is trying to evaluate.](https://offersteady.com/interview-questions)
+- [Connect interview audio and screenshots to your Web workspace.](https://offersteady.com/download)
+
+Last reviewed: September 7, 2026
+Support: contact@oneshowailab.com

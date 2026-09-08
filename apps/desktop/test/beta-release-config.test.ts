@@ -22,7 +22,7 @@ describe("isolated desktop Beta release", () => {
     expect(main).toContain('app.getName()');
     expect(main).toContain('"https://beta.mianshiwen.cn/app"');
     expect(main).toContain('"https://beta.mianshiwen.cn/api/v1"');
-    expect(main).toContain('releaseChannel: isBetaRelease() ? "beta" : "production"');
+    expect(main).toContain('releaseChannel: isGlobalRelease() ? "global" : isBetaRelease() ? "beta" : "production"');
   });
 
   it("creates a Beta-only manifest that is ineligible for production publication", () => {

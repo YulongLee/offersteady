@@ -1,0 +1,134 @@
+[
+  {
+    "width": 1440,
+    "pageWidth": 1440,
+    "h1": "AI 面试助手，让你的经历更好表达。",
+    "pageHeight": 4671,
+    "pricingTop": 1105.84375,
+    "ctaBottom": 454.390625,
+    "prices": [
+      "¥29.90",
+      "¥69.90",
+      "¥129.90",
+      "¥219.90",
+      "¥329.90"
+    ],
+    "benefits": 4,
+    "partner": true,
+    "videos": [
+      {
+        "muted": true,
+        "controls": true,
+        "inline": true,
+        "preload": "metadata",
+        "autoplay": false
+      },
+      {
+        "muted": true,
+        "controls": true,
+        "inline": true,
+        "preload": "metadata",
+        "autoplay": false
+      }
+    ]
+  },
+  {
+    "width": 900,
+    "pageWidth": 900,
+    "h1": "AI 面试助手，让你的经历更好表达。",
+    "pageHeight": 5355,
+    "pricingTop": 1691.578125,
+    "ctaBottom": 401.796875,
+    "prices": [
+      "¥29.90",
+      "¥69.90",
+      "¥129.90",
+      "¥219.90",
+      "¥329.90"
+    ],
+    "benefits": 4,
+    "partner": true,
+    "videos": [
+      {
+        "muted": true,
+        "controls": true,
+        "inline": true,
+        "preload": "metadata",
+        "autoplay": false
+      },
+      {
+        "muted": true,
+        "controls": true,
+        "inline": true,
+        "preload": "metadata",
+        "autoplay": false
+      }
+    ]
+  },
+  {
+    "width": 390,
+    "pageWidth": 390,
+    "h1": "AI 面试助手，让你的经历更好表达。",
+    "pageHeight": 7089,
+    "pricingTop": 2122.40625,
+    "ctaBottom": 448.875,
+    "prices": [
+      "¥29.90",
+      "¥69.90",
+      "¥129.90",
+      "¥219.90",
+      "¥329.90"
+    ],
+    "benefits": 4,
+    "partner": true,
+    "videos": [
+      {
+        "muted": true,
+        "controls": true,
+        "inline": true,
+        "preload": "metadata",
+        "autoplay": false
+      },
+      {
+        "muted": true,
+        "controls": true,
+        "inline": true,
+        "preload": "metadata",
+        "autoplay": false
+      }
+    ]
+  },
+  {
+    "width": 320,
+    "pageWidth": 320,
+    "h1": "AI 面试助手，让你的经历更好表达。",
+    "pageHeight": 7399,
+    "pricingTop": 2255.1875,
+    "ctaBottom": 487.984375,
+    "prices": [
+      "¥29.90",
+      "¥69.90",
+      "¥129.90",
+      "¥219.90",
+      "¥329.90"
+    ],
+    "benefits": 4,
+    "partner": true,
+    "videos": [
+      {
+        "muted": true,
+        "controls": true,
+        "inline": true,
+        "preload": "metadata",
+        "autoplay": false
+      },
+      {
+        "muted": true,
+        "controls": true,
+        "inline": true,
+        "preload": "metadata",
+        "autoplay": false
+      }
+    ]
+  }
+]

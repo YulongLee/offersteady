@@ -1,0 +1,51 @@
+{
+  "bpm": 130.01286585347825,
+  "fps": 60,
+  "encodedAudioOffsetFrames": 2.560000000000006,
+  "toleranceFrames": 3,
+  "maxSourceErrorFrames": 2.156,
+  "maxAudibleErrorFrames": 1.001,
+  "pass": true,
+  "checks": [
+    {
+      "boundaryFrame": 239,
+      "beatSeconds": 3.947392,
+      "sourceBeatFrame": 236.844,
+      "audibleBeatFrame": 239.404,
+      "sourceErrorFrames": 2.156,
+      "audibleErrorFrames": 0.404
+    },
+    {
+      "boundaryFrame": 543,
+      "beatSeconds": 9.020952,
+      "sourceBeatFrame": 541.257,
+      "audibleBeatFrame": 543.817,
+      "sourceErrorFrames": 1.743,
+      "audibleErrorFrames": 0.817
+    },
+    {
+      "boundaryFrame": 903,
+      "beatSeconds": 15.023311,
+      "sourceBeatFrame": 901.399,
+      "audibleBeatFrame": 903.959,
+      "sourceErrorFrames": 1.601,
+      "audibleErrorFrames": 0.959
+    },
+    {
+      "boundaryFrame": 1319,
+      "beatSeconds": 21.954467,
+      "sourceBeatFrame": 1317.268,
+      "audibleBeatFrame": 1319.828,
+      "sourceErrorFrames": 1.732,
+      "audibleErrorFrames": 0.828
+    },
+    {
+      "boundaryFrame": 1734,
+      "beatSeconds": 28.874014,
+      "sourceBeatFrame": 1732.441,
+      "audibleBeatFrame": 1735.001,
+      "sourceErrorFrames": 1.559,
+      "audibleErrorFrames": 1.001
+    }
+  ]
+}

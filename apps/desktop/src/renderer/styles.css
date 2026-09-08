@@ -160,8 +160,7 @@ select:focus {
   letter-spacing: -0.04em;
 }
 
-.brand-row::after {
-  content: "电脑伴随助手";
+.brand-badge {
   margin-left: auto;
   color: var(--brand);
   border: 1px solid rgba(110, 231, 189, .18);
@@ -830,7 +829,7 @@ select {
   font-size: 21px;
 }
 
-.brand-row::after {
+.brand-badge {
   padding: 5px 8px;
   font-size: 8px;
 }

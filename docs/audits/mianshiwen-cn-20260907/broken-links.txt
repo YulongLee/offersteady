@@ -1,0 +1,12 @@
+Broken Link Check — https://mianshiwen.cn/
+==================================================
+Total: 16 | ✅ Healthy: 14 | 🔴 Broken: 2 | ↪️ Redirected: 0 | ⏱️ Timeout: 0
+
+🔴 Broken Links:
+  [521] (external) https://beian.miit.gov.cn
+         anchor: "æµICPå¤2026052190å·-1"
+  [connection_failed] (external) https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=33010602014812
+         anchor: "æµå¬ç½å®å¤33010602014812å·"
+
+Issues:
+  🔴 2 broken link(s) found

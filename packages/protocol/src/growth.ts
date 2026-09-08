@@ -52,4 +52,4 @@ export interface ProductAssetEntry { readonly id: string; readonly category: Pro
 export interface ProductAssetManifest { readonly version: number; readonly entries: readonly ProductAssetEntry[] }
 
 export interface GuideChapter { readonly id: string; readonly title: string; readonly keywords: readonly string[]; readonly summary: string; readonly sections: readonly { readonly id: string; readonly title: string; readonly paragraphs: readonly string[] }[] }
-export interface GuideContent { readonly version: string; readonly locale: "zh-CN"; readonly chapters: readonly GuideChapter[] }
+export interface GuideContent { readonly version: string; readonly locale: "zh-CN" | "en-US"; readonly chapters: readonly GuideChapter[] }

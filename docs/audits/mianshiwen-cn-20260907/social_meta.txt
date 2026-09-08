@@ -1,0 +1,25 @@
+Social Meta Tags — https://mianshiwen.cn/
+==================================================
+Score: 85/100
+
+Open Graph (7/7):
+  ✅ og:title: AIé¢è¯å©æï½å®æ¶è¯­é³ä¸æªå¾åç­ - é¢è¯ç¨³
+  ✅ og:description: ç»åç®åãç®æ å²ä½åç¥è¯èµæï¼æ´çå®æ¶é¢...
+  ✅ og:image: https://mianshiwen.cn/assets/brand/share-card.png
+  ✅ og:url: https://mianshiwen.cn/
+  ✅ og:type: website
+  ✅ og:site_name: é¢è¯ç¨³AIå©æ
+  ✅ og:locale: zh_CN
+
+Twitter Card (4/6):
+  ✅ twitter:card: summary_large_image
+  ✅ twitter:title: AIé¢è¯å©æï½å®æ¶è¯­é³ä¸æªå¾åç­ - é¢è¯ç¨³
+  ✅ twitter:description: ç»åç®åãç®æ å²ä½åç¥è¯èµæï¼æ´çå®æ¶é¢
+  ✅ twitter:image: https://mianshiwen.cn/assets/brand/share-card.png
+  ℹ️ twitter:site: missing (optional)
+  ℹ️ twitter:creator: missing (optional)
+
+Social Preview:
+  Title: AIé¢è¯å©æï½å®æ¶è¯­é³ä¸æªå¾åç­ - é¢è¯ç¨³
+  Description: ç»åç®åãç®æ å²ä½åç¥è¯èµæï¼æ´çå®æ¶é¢è¯é®é¢ãæªå¾é¢
+  Image: https://mianshiwen.cn/assets/brand/share-card.png

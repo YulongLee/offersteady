@@ -15,11 +15,11 @@
 
 ## 3. Backend Processing Pipeline
 
-- [ ] 3.1 Ensure upload completion creates a processing job and returns control without requiring the user to keep the upload modal open
+- [x] 3.1 Ensure upload completion creates a processing job and returns control without requiring the user to keep the upload modal open
 - [ ] 3.2 Ensure MinerU conversion stores verified normalized Markdown for PDF, DOCX, DOC, TXT and MD inputs
 - [ ] 3.3 Ensure Knowledge materials generate chunks.jsonl, embeddings and runtime vector records before becoming selectable
 - [ ] 3.4 Ensure Resume and JD materials become selectable after normalized Markdown is verified without requiring default RAG retrieval
-- [ ] 3.5 Persist safe processing failures and retryable states without exposing raw provider payloads or document text
+- [x] 3.5 Persist safe processing failures and retryable states without exposing raw provider payloads or document text
 - [ ] 3.6 Ensure upload completion verifies the OSS original object before creating a ready processing record
 
 ## 4. Material Synchronization and Deletion
@@ -55,6 +55,8 @@
 - [ ] 7.5 Keep the existing prototype layout and navigation structure while improving status and grounding clarity
 - [x] 7.6 Connect the failed-material recovery action to the real backend processing retry endpoint and provide actionable fallback guidance
 - [x] 7.7 Remove the technical OSS/vector cleanup success notice after an individual material is deleted while preserving failure feedback
+- [x] 7.8 Distinguish an unconfirmed Knowledge index quote from active processing in backend payloads and the Web library without changing the indexing or billing path
+- [x] 7.9 Apply the same pending-confirmation state to the independent Global Web with English user-facing copy
 
 ## 8. Tests, Evals and Verification
 
@@ -69,6 +71,8 @@
 - [x] 8.9 Run OpenSpec strict validation for this change and record any implementation validation commands that are actually executed
   - 2026-08-12: `npm run test --workspaces --if-present`, `npm run typecheck --workspaces --if-present`, `npm run build --workspaces --if-present`, Backend `pytest` with a disposable PostgreSQL instance, and `openspec validate --all --strict` all passed.
 - [x] 8.10 Add a Web regression proving failed-material retry calls the backend task instead of only refreshing local state
+- [x] 8.11 Add backend and Web regressions proving an unconfirmed quote remains pending, unselectable and uncharged instead of appearing stuck in indexing
+- [x] 8.12 Add a Global Web regression proving an unconfirmed quote is shown as waiting for confirmation rather than active indexing
 
 ## 9. Migration and Cleanup
 
@@ -81,9 +85,14 @@
 
 - [ ] 12.1 Introduce or document a Worker/Queue boundary so API requests only enqueue long-running material processing, deletion and reconciliation work
 - [ ] 12.2 Add persistent material artifact manifest records for original files, normalized Markdown, chunk manifests and deletion markers
-- [ ] 12.3 Add durable processing job records with stage, status, retry count, safe error code and timestamps
+- [x] 12.3 Add durable processing job records with stage, status, retry count, safe error code and timestamps
 - [ ] 12.4 Add durable deletion job records for OSS artifact cleanup and vector chunk cleanup
 - [ ] 12.5 Add safe AI usage records for MinerU, qwen3-vl, embedding, rerank and chat operations
 - [ ] 12.6 Add RAG retrieval trace records that identify filters, counts and source versions without storing sensitive full text
 - [ ] 12.7 Keep qwen3-vl screenshot recognition separate from Chat answer generation in backend adapters and prompts
 - [ ] 12.8 Add commercial-readiness tests for user isolation across DB, OSS object keys, session material binding and RAG filters
+- [x] 12.9 Persist production upload intents so API replacement does not invalidate an uploaded OSS object
+- [x] 12.10 Persist processing tasks/events and consume processing jobs through an independently deployed Worker
+- [x] 12.11 Recover expired Worker leases and reconstruct legacy durable jobs without duplicate task or billing identities
+- [x] 12.12 Isolate blocking OSS upload fallback and MinerU quote calls from the API event loop
+- [x] 12.13 Add restart recovery, stale lease, legacy job, safe provider error and PostgreSQL persistence regressions

@@ -625,6 +625,58 @@ class AdminRepository:
             (pattern, pattern, pattern, limit, offset),
         )
 
+    def list_global_members(self, *, search: str, limit: int, offset: int) -> list[dict[str, Any]]:
+        if self.settings.product_edition != "global":
+            raise LookupError("global_member_admin_unavailable")
+        normalized = search.strip()
+        pattern = f"%{normalized}%"
+        current = now_ms()
+        return self._all(
+            """
+            SELECT u.user_id, u.login_id AS email, u.display_name, u.created_at_ms,
+                   u.last_login_at_ms, active.offer_code AS current_offer_code,
+                   active.display_name AS current_plan_name,
+                   active.ends_at_ms AS current_ends_at_ms,
+                   COALESCE(stats.order_count, 0)::INTEGER AS order_count,
+                   COALESCE(stats.paid_order_count, 0)::INTEGER AS paid_order_count
+            FROM auth_users u
+            LEFT JOIN LATERAL (
+              SELECT e.offer_code, e.ends_at_ms, p.display_name
+              FROM global_commerce_entitlements e
+              JOIN global_commerce_plan_versions p
+                ON p.offer_code = e.offer_code AND p.plan_version = e.plan_version
+              WHERE e.user_id = u.user_id AND e.status = 'active'
+                AND e.starts_at_ms <= %s
+                AND (e.ends_at_ms IS NULL OR e.ends_at_ms > %s)
+              ORDER BY e.full_product_enabled DESC,
+                       (e.offer_code = 'global-free') ASC,
+                       e.starts_at_ms DESC
+              LIMIT 1
+            ) active ON TRUE
+            LEFT JOIN LATERAL (
+              SELECT COUNT(*) AS order_count,
+                     COUNT(*) FILTER (WHERE status = 'paid') AS paid_order_count
+              FROM global_commerce_orders o WHERE o.user_id = u.user_id
+            ) stats ON TRUE
+            WHERE (%s = '' OR u.user_id ILIKE %s OR u.login_id ILIKE %s OR u.display_name ILIKE %s)
+            ORDER BY u.created_at_ms DESC
+            LIMIT %s OFFSET %s
+            """,
+            (current, current, normalized, pattern, pattern, pattern, limit, offset),
+        )
+
+    def global_member_identity(self, user_id: str) -> dict[str, Any] | None:
+        if self.settings.product_edition != "global":
+            raise LookupError("global_member_admin_unavailable")
+        return self._one(
+            """
+            SELECT user_id, login_id AS email, display_name, created_at_ms,
+                   updated_at_ms, last_login_at_ms, last_login_provider
+            FROM auth_users WHERE user_id = %s
+            """,
+            (user_id,),
+        )
+
     def payment_revenue_summary(self) -> dict[str, Any]:
         current = now_ms()
         local = datetime.fromtimestamp(current / 1000, tz=timezone.utc).astimezone(ZoneInfo("Asia/Shanghai"))
@@ -1013,7 +1065,7 @@ class AdminRepository:
         return self._one(
             """
             SELECT task_id, owner_user_id, document_id, current_stage
-            FROM processing_tasks WHERE task_id = %s
+            FROM material_processing_tasks WHERE task_id = %s
             """,
             (task_id,),
         )
@@ -1043,6 +1095,13 @@ class AdminRepository:
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0029_early_referral_mutual_rewards.sql",
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0031_capacity_metric_granularity.sql",
         ]
+        if self.settings.product_edition == "global":
+            migrations.extend([
+                Path(REPO_ROOT) / "apps/backend/migrations/versions/0040_global_creem_commerce.sql",
+                Path(REPO_ROOT) / "apps/backend/migrations/versions/0042_global_creem_lifecycle_hardening.sql",
+                Path(REPO_ROOT) / "apps/backend/migrations/versions/0043_global_creem_admin_configuration.sql",
+                Path(REPO_ROOT) / "apps/backend/migrations/versions/0045_global_commerce_catalog_v2.sql",
+            ])
         with self.connect() as connection, connection.cursor() as cursor:
             apply_sql_migrations(cursor, migrations)
             connection.commit()

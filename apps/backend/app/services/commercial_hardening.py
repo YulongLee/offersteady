@@ -71,6 +71,24 @@ class InMemoryCommercialHardeningRepository(CommercialHardeningRepository):
                 return self.mark_job_running(job_id=job.job_id, now_ms=now_ms)
         return None
 
+    def recover_stale_jobs(self, *, job_kind: CommercialJobKind, now_ms: int, stale_before_ms: int) -> int:
+        recovered = 0
+        for job in list(self.jobs.values()):
+            if job.job_kind != job_kind or job.status != "running" or job.updated_at_ms > stale_before_ms:
+                continue
+            retrying = job.retry_count < job.max_retries
+            self.jobs[job.job_id] = replace(
+                job,
+                status="retrying" if retrying else "failed",
+                retry_count=job.retry_count + 1,
+                safe_error_code="worker_lease_expired",
+                scheduled_after_ms=now_ms,
+                updated_at_ms=now_ms,
+                completed_at_ms=None if retrying else now_ms,
+            )
+            recovered += 1
+        return recovered
+
     def mark_job_running(self, *, job_id: str, now_ms: int) -> CommercialJobRecord | None:
         return self._update_job(job_id, status="running", started_at_ms=now_ms, updated_at_ms=now_ms)
 
@@ -169,6 +187,27 @@ class PostgresCommercialHardeningRepository(CommercialHardeningRepository):
             connection.commit()
             row = {**row, "status": "running", "started_at_ms": now_ms, "updated_at_ms": now_ms}
         return self._job_from_row(row, job_kind)
+
+    def recover_stale_jobs(self, *, job_kind: CommercialJobKind, now_ms: int, stale_before_ms: int) -> int:
+        table = self._table_for(job_kind)
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    UPDATE {table}
+                    SET status = CASE WHEN retry_count < max_retries THEN 'retrying' ELSE 'failed' END,
+                        retry_count = retry_count + 1,
+                        safe_error_code = 'worker_lease_expired',
+                        scheduled_after_ms = %s,
+                        updated_at_ms = %s,
+                        completed_at_ms = CASE WHEN retry_count < max_retries THEN NULL ELSE %s END
+                    WHERE status = 'running' AND updated_at_ms <= %s
+                    """,
+                    (now_ms, now_ms, now_ms, stale_before_ms),
+                )
+                recovered = cursor.rowcount
+            connection.commit()
+        return recovered
 
     def mark_job_running(self, *, job_id: str, now_ms: int) -> CommercialJobRecord | None:
         return self._update_job_by_id(job_id=job_id, status="running", started_at_ms=now_ms, updated_at_ms=now_ms)
@@ -292,6 +331,12 @@ class PostgresCommercialHardeningRepository(CommercialHardeningRepository):
                 cursor.execute("CREATE TABLE IF NOT EXISTS material_artifacts (artifact_id TEXT PRIMARY KEY, owner_user_id TEXT NOT NULL, document_id TEXT NOT NULL, document_version_id TEXT NOT NULL, document_kind TEXT NOT NULL, artifact_kind TEXT NOT NULL, object_key TEXT NOT NULL, sync_status TEXT NOT NULL, required BOOLEAN NOT NULL DEFAULT TRUE, content_type TEXT NULL, size_bytes BIGINT NULL, sha256 TEXT NULL, verified_at_ms BIGINT NULL, created_at_ms BIGINT NOT NULL, updated_at_ms BIGINT NOT NULL, safe_error_code TEXT NULL, UNIQUE(owner_user_id, document_version_id, artifact_kind))")
                 for table in ("material_processing_jobs", "material_deletion_jobs", "material_reconcile_jobs"):
                     cursor.execute(f"CREATE TABLE IF NOT EXISTS {table} (job_id TEXT PRIMARY KEY, owner_user_id TEXT NOT NULL, status TEXT NOT NULL, stage TEXT NOT NULL, document_id TEXT NULL, document_version_id TEXT NULL, related_task_id TEXT NULL, retry_count INTEGER NOT NULL DEFAULT 0, max_retries INTEGER NOT NULL DEFAULT 3, safe_error_code TEXT NULL, payload_json JSONB NOT NULL DEFAULT '{{}}'::jsonb, created_at_ms BIGINT NOT NULL, updated_at_ms BIGINT NOT NULL, scheduled_after_ms BIGINT NOT NULL DEFAULT 0, started_at_ms BIGINT NULL, completed_at_ms BIGINT NULL)")
+                    cursor.execute(
+                        f"CREATE INDEX IF NOT EXISTS idx_{table}_claim_runtime ON {table}(status, scheduled_after_ms, created_at_ms)"
+                    )
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_material_processing_jobs_related_task_runtime ON material_processing_jobs(related_task_id)"
+                )
                 cursor.execute("CREATE TABLE IF NOT EXISTS ai_usage_records (usage_id TEXT PRIMARY KEY, owner_user_id TEXT NOT NULL, operation_kind TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL, status TEXT NOT NULL, related_job_id TEXT NULL, related_task_id TEXT NULL, session_id TEXT NULL, document_id TEXT NULL, document_version_id TEXT NULL, trace_id TEXT NULL, input_units INTEGER NULL, output_units INTEGER NULL, total_units INTEGER NULL, point_cost INTEGER NULL, duration_ms INTEGER NULL, first_token_ms INTEGER NULL, final_latency_ms INTEGER NULL, safe_error_code TEXT NULL, created_at_ms BIGINT NOT NULL)")
                 cursor.execute("ALTER TABLE ai_usage_records ADD COLUMN IF NOT EXISTS first_token_ms INTEGER NULL, ADD COLUMN IF NOT EXISTS final_latency_ms INTEGER NULL")
                 cursor.execute("CREATE TABLE IF NOT EXISTS rag_retrieval_traces (trace_id TEXT PRIMARY KEY, owner_user_id TEXT NOT NULL, session_id TEXT NULL, query_hash TEXT NOT NULL, strategy TEXT NOT NULL, filter_document_ids TEXT[] NOT NULL DEFAULT '{}', filter_document_version_ids TEXT[] NOT NULL DEFAULT '{}', candidate_count INTEGER NOT NULL, reranked_count INTEGER NOT NULL, returned_count INTEGER NOT NULL, returned_source_ids TEXT[] NOT NULL DEFAULT '{}', safe_error_code TEXT NULL, created_at_ms BIGINT NOT NULL)")

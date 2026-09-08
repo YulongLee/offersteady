@@ -1,0 +1,66 @@
+[
+  {
+    "id": 1,
+    "start": 0.35,
+    "end": 4.7,
+    "text": "Your interview on the computer. Your guidance on the phone.",
+    "sourceDuration": 3.424943,
+    "file": "public/audio/voice/voice-01.mp3"
+  },
+  {
+    "id": 2,
+    "start": 5.3,
+    "end": 11.7,
+    "text": "Install and open the OfferSteady companion app, then allow microphone and screen access.",
+    "sourceDuration": 5.01551,
+    "file": "public/audio/voice/voice-02.mp3"
+  },
+  {
+    "id": 3,
+    "start": 12.3,
+    "end": 19.7,
+    "text": "On your phone, sign in to the same account and enter the connection code shown on your computer.",
+    "sourceDuration": 5.3,
+    "file": "public/audio/voice/voice-03.mp3"
+  },
+  {
+    "id": 4,
+    "start": 20.3,
+    "end": 28.7,
+    "text": "Start the interview. Your computer captures the conversation while your phone shows the live transcript. Tap Quick Answer whenever you need guidance.",
+    "sourceDuration": 7.894785,
+    "file": "public/audio/voice/voice-04.mp3"
+  },
+  {
+    "id": 5,
+    "start": 29.3,
+    "end": 35.7,
+    "text": "Use the key idea first, then open the detailed answer based on the materials selected for this session.",
+    "sourceDuration": 5.514739,
+    "file": "public/audio/voice/voice-05.mp3"
+  },
+  {
+    "id": 6,
+    "start": 36.2,
+    "end": 40.7,
+    "text": "Want more room? Open the interview page on a tablet.",
+    "sourceDuration": 3.262404,
+    "file": "public/audio/voice/voice-06.mp3"
+  },
+  {
+    "id": 7,
+    "start": 41.15,
+    "end": 44.8,
+    "text": "Prefer your computer? Use the web app there.",
+    "sourceDuration": 2.798005,
+    "file": "public/audio/voice/voice-07.mp3"
+  },
+  {
+    "id": 8,
+    "start": 45.2,
+    "end": 48.8,
+    "text": "OfferSteady. The computer runs it. You choose where to view it.",
+    "sourceDuration": 3.343673,
+    "file": "public/audio/voice/voice-08.mp3"
+  }
+]

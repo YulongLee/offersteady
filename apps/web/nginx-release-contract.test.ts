@@ -30,6 +30,17 @@ describe("production nginx release contract", () => {
     );
   });
 
+  it("serves homepage media files directly without falling back to the SPA", () => {
+    const nginxConfig = readFileSync(
+      resolve(process.cwd(), "../../infra/nginx/default.conf"),
+      "utf8",
+    );
+
+    expect(nginxConfig).toMatch(
+      /location \/media\/ \{[\s\S]*?try_files \$uri =404;/,
+    );
+  });
+
   it("proxies realtime transcript SSE without websocket upgrade or buffering", () => {
     const nginxConfig = readFileSync(
       resolve(process.cwd(), "../../infra/nginx/default.conf"),

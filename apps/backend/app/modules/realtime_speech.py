@@ -128,6 +128,8 @@ async def realtime_metrics(request: Request, service: RealtimeSpeechService = De
     screenshot_event_wait_diagnostics = screenshot_event_wait_executor.diagnostics() if screenshot_event_wait_executor is not None else {}
     screenshot_stream_admission = getattr(request.app.state, "screenshot_stream_admission", None)
     screenshot_stream_diagnostics = screenshot_stream_admission.diagnostics() if screenshot_stream_admission is not None else {}
+    live_answer_stream_executor = getattr(request.app.state, "live_answer_stream_executor", None)
+    live_answer_stream_diagnostics = live_answer_stream_executor.diagnostics() if live_answer_stream_executor is not None else {}
     return success_response(
         request=request,
         data={
@@ -138,6 +140,7 @@ async def realtime_metrics(request: Request, service: RealtimeSpeechService = De
             "realtimeEventWaitExecutor": event_wait_diagnostics,
             "screenshotEventWaitExecutor": screenshot_event_wait_diagnostics,
             "screenshotStreamAdmission": screenshot_stream_diagnostics,
+            "liveAnswerStreamExecutor": live_answer_stream_diagnostics,
         },
         timestamp=utc_now_iso(),
     )
@@ -164,6 +167,9 @@ def acknowledge_runtime_performance(
         browser_state_update_at_ms=request.browser_state_update_at_ms,
         browser_render_at_ms=request.browser_render_at_ms,
         server_accepted_at_ms=request.server_accepted_at_ms,
+        route_received_at_ms=request.route_received_at_ms,
+        executor_admitted_at_ms=request.executor_admitted_at_ms,
+        answer_generator_started_at_ms=request.answer_generator_started_at_ms,
         provider_request_at_ms=request.provider_request_at_ms,
         provider_first_token_at_ms=request.provider_first_token_at_ms,
         first_visible_at_ms=request.first_visible_at_ms,

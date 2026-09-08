@@ -1,0 +1,30 @@
+{
+  "text": "OfferSteady\nInterviews\nWritten exams\nMaterials\nPlans & credits\nProduct guide\nDevices\nSettings\nAudio is not stored by default\nDE\nDemo User\nAccount\nINTERVIEW MATERIALS\nInterview materials\n\nKeep reusable resumes here, then select one during interview preparation. Upload PDF、DOCX、DOC、TXT、MD.\n\n+ Add Resume\nR\nResume\n2 files\nJ\nJob Description\n3 files\nK\nKnowledge Base\n4 files\nResume\n\nOnly reusable materials are maintained here; please select when actually entering interview preparation. New additions on this page are not automatically authorized.\n\nUpload PDF、DOCX、DOC、TXT、MD.\nGo to Interview Prep →\nR\nSenior Frontend Engineer Resume (Synthetic)\nv3 · Ready · Pending verification · 6/29/2024\n\nResume processed. You can select it in Interview Prep.\n\nReady\nRename\nDownload original\nDelete\nR\nProduct Engineer Resume (Synthetic)\nv1 · Ready · Pending verification · 5/29/2024\n\nResume processed. You can select it in Interview Prep.\n\nReady\nRename\nDownload original\nDelete",
+  "classes": [
+    "app-shell",
+    "app-sidebar",
+    "logo-lockup",
+    "",
+    "nav-icon",
+    "active",
+    "sidebar-foot",
+    "privacy-note",
+    "account-menu drop-up",
+    "account-menu-popover",
+    "account-logout",
+    "app-content",
+    "app-page",
+    "page-header",
+    "kicker",
+    "button primary",
+    "material-tabs",
+    "panel typed-material-panel",
+    "panel-heading",
+    "typed-material-list",
+    "resource-icon",
+    "state-mark ready",
+    "danger-link",
+    "mobile-nav",
+    "account-menu compact drop-up"
+  ]
+}

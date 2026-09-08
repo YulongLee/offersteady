@@ -30,7 +30,8 @@ describe("desktop screenshot lock wiring", () => {
     expect(source).toContain("await pollRemoteScreenshotRequest()");
     expect(source).toContain('schedule(desktopPollDelayMs("failure", remoteScreenshotPollFailureCount))');
     expect(source).toContain("screenshotStreamTransition(previousState, state)");
-    expect(source).toContain('if (transition === "start") startRemoteScreenshotRequestLoop()');
+    expect(source).toContain('if (transition === "start" || suspendedTransition === "resume") startRemoteScreenshotRequestLoop()');
     expect(source).toContain('else if (transition === "stop") stopRemoteScreenshotRequestLoop()');
+    expect(source).toContain('screenshotStreamAdmissionAction(error instanceof RemoteScreenshotAdmissionError ? error.status : null) === "suspend"');
   });
 });

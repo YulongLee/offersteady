@@ -1,0 +1,20 @@
+# Global homepage comparison research — 2026-09-07
+
+Internal owner review only. Do not import this file or source domains into Web assets. Representative peer selection, not a verified traffic or market-share ranking. SEO metrics connector unavailable; official product pages were reviewed directly. No hands-on accuracy, latency or reliability benchmarks performed.
+
+## Anonymous mapping and evidence
+Publication revision September 7: Product A is displayed as `F*** R**** AI`, B as `P******* AI`, C as `L*****In AI`. Official A pricing article and B/C homepages rechecked before release. Partial masking does not guarantee protection from complaints. Retain uncertainty and no-endorsement disclosures; never invent unsupported absences or performance claims.
+
+Product A = Final Round AI. [Official homepage](https://www.finalroundai.com/) lists live assistance, screen assistance, resume/material context and macOS/Windows. [Official pricing article, updated August 17](https://www.finalroundai.com/blog/final-round-ai-pricing) lists monthly $90, quarterly $180 upfront and annual $300 upfront. The $25 headline is an annual monthly equivalent, not a $25 monthly purchase. No day or week pass found in these reviewed listings. Free trial descriptions conflict between homepage (no live trial) and article (10 minutes), so omit that comparison. Pricing should be rechecked before publication; the homepage pricing URL redirects to its main page.
+
+Product B = ParakeetAI. [Official homepage pricing section](https://www.parakeet-ai.com/#pricing) lists $78/week, $149.90/month, $599.90/year, plus credits (3 hours for $59, 8 for $118, 15 for $177 and a single credit for $38). It offers live assistance, screen questions and uploaded documents. No 24-hour pass found. Credits are not a day pass and must not be presented as equivalent. Do not claim OfferSteady beats its annual monthly equivalent or every usage scenario.
+
+Product C = LockedIn AI. [Official pricing](https://www.lockedinai.com/pricing) rendered plan types but no numeric prices to the research fetch. [Official billing documentation](https://docs.lockedinai.com/docs/billing/plans-credits-and-promos) confirms General/Pro unlimited plans, monthly/quarterly/yearly credit plans, lifetime and 10 initial Copilot minutes. Unlimited still has per-session ceilings. Price is Not verified, NOT unavailable. [Official product page](https://www.lockedinai.com/) and [its product setup description](https://www.lockedinai.com/compare/lockedinai-vs-interview-coder) describe live answers, screen/code assistance and resume/JD/supporting materials. Older promotional posts conflict on prices; do not use them. No day/week pass found in reviewed current plan documentation.
+
+Verve AI was also screened using [official pricing](https://www.vervecopilot.com/pricing). It publishes Free/Standard/Pro, 3/5/unlimited live sessions and per-session durations, but numeric prices did not render in the research fetch. Not included in this first three-peer design to keep the table manageable, not because it is inferior.
+
+## OfferSteady evidence and positioning
+
+Use `apps/web-global/src/public-review-pages.json`, pricing plans: Day Pass $9.99/24 hours, 180 Copilot minutes, unlimited Screen Assist, resume/JD context; Weekly $49.99/7 days; Monthly $99.99/month; Job Hunt $199.99/90 days. Unlimited wording applies to the stated paid plan only. Free is a one-time 15-minute/3-screen allowance, not best-in-market free access.
+
+Supported positioning: modest upfront price for a single interview day; a dedicated 7-day option; live and screenshot help plus personal context. These are product benefits, not unique features. Monthly is higher than Product A's documented $90, and Product C might also be cheaper. No absolute best/cheapest/speed/accuracy claims. Features listed describe availability somewhere in paid offerings, not all tiers or identical limits. Labels: Not listed = not found in reviewed official listings, not proven unavailable; Not verified = could not establish the current value. Comparison is a local draft; review fresh sources before any publication.

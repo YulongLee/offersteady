@@ -1,0 +1,38 @@
+Create a finished premium Chinese promotional banner for 面试稳AI助手 for its real website. Use case ads-marketing. Wide 1536x1024 or 3:2 composition, exceptionally crisp Chinese text. This is a restrained SaaS website editorial graphic, NOT a loud e-commerce poster.
+Use the attached local image ONLY as the exact small brand app icon top left, preserve its blue shield, white microphone and green check, do not invent a replacement logo.
+Strictly match the actual website design tokens: solid midnight background #080c13, card fill #101721, slightly raised #151e2b, thin gray borders rgba(152,169,190,.16), text #edf2f8, muted #8f9db0, mint #6ee7bd buttons with #06241b text. Sans serif upright typography, 16px-ish corner rounding. Extremely subtle mint radial glow only behind the demo. Flat clean frontal UI, generous negative space. No neon outlines, gold, metallic text, italic text, purple gradients, coins, ribbon swooshes, particles, fake 3D laptop, or competitor comparison.
+
+Layout with 64px outer margins:
+Top left small provided app icon and exact brand "面试稳AI助手"; top right muted "mianshiwen.cn".
+Central 2-column layout: left about 48%, right about 46%, generous gutter.
+Left eyebrow in mint "AI INTERVIEW COPILOT"
+Large bold headline in 3 clean lines:
+"每一次面试，"
+"都更从容。"
+Second line selectively mint, first white. Main headline must dominate, no extruded type.
+Under it exact description over 2-3 lines:
+"听清问题，理顺思路。"
+"结合简历、岗位与个人资料，"
+"帮你组织更清晰的回答。"
+Then solid mint rounded CTA badge "免费使用 →", with adjacent small muted text "先体验，再选择".
+Right: one polished real-site-style illustrative answer preview card, upright no tilt, tasteful small shadow and thin border. Top card status green dot "面试进行中"; right tiny label "示例预览".
+Label "当前问题"
+Question "请介绍一个最有挑战的项目"
+Inner slightly lighter answer card:
+mint label "回答建议"
+Three numbered lines, with ample readable size:
+"1  交代项目背景与目标"
+"2  聚焦你的职责与关键决策"
+"3  用真实、可核对的结果收尾"
+Bottom three tiny outlined pills "简历" "JD" "知识库".
+This preview matches the actual homepage demo. It is NOT a screenshot claim.
+
+Bottom around one quarter: broad subtle divided feature strip with four equal items, each minimal line icon and text:
+"实时语音识别" / "个性化回答" / "截图辅助" / "面试复盘"
+Under it a calm horizontal pricing strip, thin border top:
+Left large mint "¥29.90" with smaller white "/ 1天会员"
+Center "回答与截图不限次" and small muted "限本人合理使用，知识材料另计"
+Right small muted "30天会员 ¥329.90" above larger "日均约 ¥11"
+The prices are confirmed current by the user, don't change.
+Footer tiny but legible "会员权益及价格以购买页为准。"
+The whole composition should look naturally native to a professional dark SaaS website, not an overdecorated advertising graphic. Strong conversion hierarchy with real product explanation, quality typography and limited color. All Chinese text exactly correct and no additional claims or invented content.

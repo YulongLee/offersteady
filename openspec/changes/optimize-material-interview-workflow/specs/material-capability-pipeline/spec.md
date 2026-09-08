@@ -11,6 +11,10 @@ The system SHALL treat material upload completion as the start of an asynchronou
 - **WHEN** processing continues after the upload dialog closes or the user navigates away
 - **THEN** the backend continues the processing job and later exposes the final ready or failed state through the shared material list
 
+#### Scenario: Knowledge index quote is not confirmed
+- **WHEN** the original Knowledge file is uploaded and quoted but the user has not confirmed the index charge
+- **THEN** the backend and each localized Web library expose the material as pending confirmation in that product's language, do not claim indexing or artifact synchronization is running, do not create a processing task and do not reserve or deduct points
+
 ### Requirement: MinerU conversion produces verified Markdown artifacts
 The system SHALL convert uploaded materials to normalized Markdown through the configured parser pipeline and MUST store the resulting Markdown as a processed OSS artifact linked to the document version. The system MUST mark the document version failed or retryable when conversion cannot produce readable Markdown.
 
@@ -92,3 +96,32 @@ The system SHALL perform required OSS artifact existence and readability checks 
 #### Scenario: Background reconciliation finds missing artifacts
 - **WHEN** a later backend check detects that a previously verified processed artifact is missing
 - **THEN** the affected document version becomes stale or unselectable for future confirmations without silently modifying existing answer history
+
+### Requirement: Upload intents survive backend replacement
+The system SHALL persist production upload intents outside API process memory until they expire. A backend restart or rolling replacement MUST NOT make a valid OSS upload impossible to confirm solely because the issuing API process was replaced.
+
+#### Scenario: Backend restarts between upload intent and confirmation
+- **WHEN** a user receives an upload intent, uploads the object to OSS and the API process restarts before confirmation
+- **THEN** the replacement API process reloads the intent from persistent storage, verifies ownership, expiry, object key and content type, and continues the existing upload flow
+
+### Requirement: Material processing is executed by a durable worker
+Production material parsing and indexing SHALL be driven by durable database job and task records consumed by an independently deployed Worker. The API process MUST NOT be the sole owner of queued work. Jobs MUST be idempotent by document version, recoverable after Worker replacement and bounded by a lease before automatic retry.
+
+#### Scenario: API restarts after enqueue
+- **WHEN** upload completion has persisted a processing task and job but the API process is replaced before parsing begins
+- **THEN** the independent Worker claims the existing job and completes processing without another user action
+
+#### Scenario: Worker exits while processing
+- **WHEN** a Worker claims a job and exits without recording a terminal result
+- **THEN** the expired job lease makes the job retryable and a replacement Worker can safely process it without duplicate index settlement
+
+#### Scenario: Legacy durable job has no in-memory task
+- **WHEN** an existing queued processing job references a task that was previously stored only in process memory
+- **THEN** the Worker reconstructs a safe queued task from the durable job and current owned document record before continuing
+
+### Requirement: Blocking material provider calls do not occupy the API event loop
+The system SHALL isolate synchronous OSS and parser provider calls from the API event loop so a slow upload or quote does not block unrelated interview, quick-answer or status requests.
+
+#### Scenario: Knowledge quote parser is slow
+- **WHEN** MinerU takes multiple polling intervals to produce a Knowledge quote
+- **THEN** unrelated API requests remain schedulable while the quote request awaits its bounded provider result

@@ -1,0 +1,183 @@
+{
+  "baseline": {
+    "pageHeight": 5245,
+    "pricingTop": 1894.6875,
+    "primaryCtaBottom": 473.875,
+    "h1": "AI interview guidance. Built around you.",
+    "heroWords": 17
+  },
+  "results": [
+    {
+      "width": 1440,
+      "pageHeight": 5245,
+      "pricingTop": 1894.6875,
+      "primaryCtaBottom": 473.875,
+      "h1": "AI interview guidance. Built around you.",
+      "heroWords": 17,
+      "pageWidth": 1440,
+      "benefits": 4,
+      "faq": 7,
+      "video": [
+        {
+          "muted": true,
+          "autoplay": false,
+          "inline": true,
+          "preload": "metadata"
+        },
+        {
+          "muted": true,
+          "autoplay": false,
+          "inline": true,
+          "preload": "metadata"
+        }
+      ],
+      "pricingCards": [
+        {
+          "width": 298,
+          "scroll": 298
+        },
+        {
+          "width": 298,
+          "scroll": 298
+        },
+        {
+          "width": 298,
+          "scroll": 298
+        },
+        {
+          "width": 298,
+          "scroll": 298
+        }
+      ]
+    },
+    {
+      "width": 900,
+      "pageHeight": 6472,
+      "pricingTop": 2352.4375,
+      "primaryCtaBottom": 422.71875,
+      "h1": "AI interview guidance. Built around you.",
+      "heroWords": 17,
+      "pageWidth": 900,
+      "benefits": 4,
+      "faq": 7,
+      "video": [
+        {
+          "muted": true,
+          "autoplay": false,
+          "inline": true,
+          "preload": "metadata"
+        },
+        {
+          "muted": true,
+          "autoplay": false,
+          "inline": true,
+          "preload": "metadata"
+        }
+      ],
+      "pricingCards": [
+        {
+          "width": 417,
+          "scroll": 417
+        },
+        {
+          "width": 417,
+          "scroll": 417
+        },
+        {
+          "width": 417,
+          "scroll": 417
+        },
+        {
+          "width": 417,
+          "scroll": 417
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "pageHeight": 8845,
+      "pricingTop": 2912.015625,
+      "primaryCtaBottom": 413,
+      "h1": "AI interview guidance. Built around you.",
+      "heroWords": 17,
+      "pageWidth": 390,
+      "benefits": 4,
+      "faq": 7,
+      "video": [
+        {
+          "muted": true,
+          "autoplay": false,
+          "inline": true,
+          "preload": "metadata"
+        },
+        {
+          "muted": true,
+          "autoplay": false,
+          "inline": true,
+          "preload": "metadata"
+        }
+      ],
+      "pricingCards": [
+        {
+          "width": 360,
+          "scroll": 360
+        },
+        {
+          "width": 360,
+          "scroll": 360
+        },
+        {
+          "width": 360,
+          "scroll": 360
+        },
+        {
+          "width": 360,
+          "scroll": 360
+        }
+      ]
+    },
+    {
+      "width": 320,
+      "pageHeight": 9626,
+      "pricingTop": 3335.15625,
+      "primaryCtaBottom": 454.71875,
+      "h1": "AI interview guidance. Built around you.",
+      "heroWords": 17,
+      "pageWidth": 320,
+      "benefits": 4,
+      "faq": 7,
+      "video": [
+        {
+          "muted": true,
+          "autoplay": false,
+          "inline": true,
+          "preload": "metadata"
+        },
+        {
+          "muted": true,
+          "autoplay": false,
+          "inline": true,
+          "preload": "metadata"
+        }
+      ],
+      "pricingCards": [
+        {
+          "width": 290,
+          "scroll": 290
+        },
+        {
+          "width": 290,
+          "scroll": 290
+        },
+        {
+          "width": 290,
+          "scroll": 290
+        },
+        {
+          "width": 290,
+          "scroll": 290
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,3320 @@
+[
+  {
+    "url": "https://mianshiwen.cn/",
+    "final": "https://mianshiwen.cn/",
+    "status": 200,
+    "seconds": 0.362,
+    "title": "AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳",
+    "description": [
+      "面试稳是一款 AI 面试助手，可结合简历、目标岗位和知识资料，整理实时面试问题、截图题与技术题的回答思路。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "AI 面试助手，让你的经历更好表达。"
+    ],
+    "body_chars": 856,
+    "body_hash": "32c85671faa85c84af3f397decdf90360e1a46d2f4e64835b498d5165f018220",
+    "body": "AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳 面试稳AI助手 AI 面试助手，让你的经历更好表达。 跟上面试问题，结合你的简历与目标岗位，整理更贴合自己的回答思路。 从听清问题，到讲清自己 跟上每一个问题 实时转写面试官与自己的声音，把注意力留给交流。 回答更贴合你的经历 按场选择简历、JD 和知识材料，围绕自己的项目与目标岗位组织回答。 截图题，也有思路 通过电脑助手截取题目，查看识别与生成进度，无需手动重新输入。 让下一场准备更充分 回看问题、回答建议与资料来源，整理需要补充的经历和表达。 偶尔一场，或密集准备，都有选择 先了解产品，再按实际需要选择积分或按天会员。具体积分消耗、会员时长和当前价格以登录后的积分与会员页面为准。 查看积分与会员 · 免费使用 从准备到连接，三步进入状态 准备自己的资料：添加简历和岗位 JD，按需要整理知识材料。 连接电脑助手：选择适合系统的版本，检查连接、声音与采集权限。 选择本场上下文：确认这场面试使用的资料，通过语音、手动输入或截图获取建议。 一段视频，了解面试稳 从连接到使用，看一遍就明白 常见问题 面试稳可以免费使用吗？ 可以先免费使用，具体可用权益以登录后的积分与会员页面实时显示为准。 支持哪些设备和输入方式？ 下载中心提供当前可用电脑版本。支持授权后的语音输入、手动输入和截图题回答；手机端可同步查看回答和会话状态。 如何选择套餐和支付方式？ 按实际使用需要选择积分或按天会员，价格、额度及可用支付方式以实时配置和订单确认为准。 如何使用 AI 建议？ 请根据真实经历核对内容，遵守面试组织方的规则，不能保证面试或录用结果。 清楚的数据与隐私边界 原始音频默认不保存；简历、JD、截图和会话记录提供管理或删除入口。请遵守面试规则，并始终基于真实经历作答。 产品支持 Web、macOS 和 Windows 使用方式。遇到问题可通过微信 mianshiwen-cn 或邮箱 contact@oneshowailab.com 联系客服。",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "@id": "https://mianshiwen.cn/#organization",
+        "name": "OneShow AI Lab",
+        "alternateName": "面试稳",
+        "url": "https://mianshiwen.cn/",
+        "logo": "https://mianshiwen.cn/assets/brand/logo.svg",
+        "email": "contact@oneshowailab.com"
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": "https://mianshiwen.cn/#website",
+        "url": "https://mianshiwen.cn/",
+        "name": "面试稳AI助手",
+        "inLanguage": "zh-CN",
+        "publisher": {
+          "@id": "https://mianshiwen.cn/#organization"
+        }
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "@id": "https://mianshiwen.cn/#software",
+        "name": "面试稳AI助手",
+        "url": "https://mianshiwen.cn/",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web, macOS, Windows",
+        "description": "结合简历、目标岗位和知识资料，整理实时面试问题、截图题与技术题的回答思路。",
+        "publisher": {
+          "@id": "https://mianshiwen.cn/#organization"
+        }
+      }
+    ],
+    "links": [
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/pricing",
+      "/download",
+      "/login",
+      "/app/partner-program",
+      "/app/billing",
+      "/login",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/pricing",
+      "/download",
+      "/security",
+      "/about",
+      "/contact",
+      "/terms",
+      "/privacy",
+      "https://beian.miit.gov.cn",
+      "https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=33010602014812"
+    ],
+    "redirects": [],
+    "images": [],
+    "incoming": 30
+  },
+  {
+    "url": "https://mianshiwen.cn/guide",
+    "final": "https://mianshiwen.cn/guide",
+    "status": 200,
+    "seconds": 0.599,
+    "title": "面试稳AI助手使用手册｜安装、收音、截图回答与支付说明",
+    "description": [
+      "面试稳AI助手使用手册：了解账号登录、面试资料、Windows 与 macOS 伴随程序、实时面试、截图回答、积分会员、支付和隐私设置。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/guide"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "从准备资料到面试现场，按步骤完成设置"
+    ],
+    "body_chars": 753,
+    "body_hash": "9bde4c59cf54a2d7bae8293de52f26b97f80348657d51418f8994cb66d5a5f98",
+    "body": "面试稳AI助手使用手册｜安装、收音、截图回答与支付说明 面试稳AI助手 · 使用手册 从准备资料到面试现场，按步骤完成设置 本手册说明账号登录、面试资料、电脑伴随程序、实时面试、截图回答、积分会员、支付确认和隐私设置。页面加载完成后可搜索关键词并按章节阅读。 快速开始 使用手机号验证码登录或注册，在资料页按需维护简历、职位 JD 和知识材料。 创建面试并选择本场需要使用的资料；资料不会自动授权给每场面试。 下载与 Windows、Apple Silicon 或 Intel 设备匹配的电脑伴随程序。 根据系统提示授权麦克风、系统音频和屏幕捕捉，再连接当前面试。 开始面试后，可通过实时对话、手动输入、快答或截图回答整理表达思路。 电脑伴随程序与收音 本地麦克风或耳机用于识别候选人声音，系统音频用于识别面试官声音。若系统权限或音频来源无法区分，产品会提示当前状态，并保留手动输入与截图回答等可用方式。 查看 Windows 与 macOS 安装说明 实时面试与截图回答 实时页面分别展示对话和回答建议。快答可以读取手动输入或最近确认的问题；截图回答用于根据当前屏幕截图整理题目与回答。AI 输出是表达建议，个人经历和项目结果应始终以真实情况为准。 查看面试现场与截图题说明 · 了解实时面试辅助 · 了解截图回答 积分、会员与支付确认 积分消耗、会员时长、知识材料额度和当前价格以登录后的积分与会员页面为准。支付页面返回不代表服务端已经确认到账；订单长时间未确认时，请不要重复付款，并携带订单号联系客服。 查看积分、会员与支付说明 隐私与人工帮助 原始音频默认不保存，资料与面试记录提供相应的管理入口。咨询问题时不要发送密码、验证码、完整兑换码或完整身份资料。 阅读隐私政策 · 阅读用户协议 常用专题",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "@id": "https://mianshiwen.cn/guide#webpage",
+        "url": "https://mianshiwen.cn/guide",
+        "name": "面试稳AI助手使用手册",
+        "description": "了解账号登录、面试资料、电脑伴随程序、实时面试、截图回答、积分会员、支付和隐私设置。",
+        "inLanguage": "zh-CN",
+        "isPartOf": {
+          "@id": "https://mianshiwen.cn/#website"
+        }
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "面试稳AI助手",
+            "item": "https://mianshiwen.cn/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "使用手册",
+            "item": "https://mianshiwen.cn/guide"
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/login",
+      "/privacy",
+      "/terms",
+      "/guide#desktop",
+      "/guide#live",
+      "/features/realtime-interview",
+      "/features/screenshot-answer",
+      "/guide#billing",
+      "/privacy",
+      "/terms",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/features/ai-interview-assistant",
+      "/features/interview-review",
+      "/guides/interview-preparation",
+      "/guides/audio-troubleshooting",
+      "/guides/macos-permissions",
+      "/guides/feishu-audio-setup",
+      "/guides/tencent-meeting-audio-setup",
+      "/guides/star-interview-answer",
+      "/guides/self-introduction",
+      "/guides/project-experience",
+      "/guides/technical-interview",
+      "/guides/common-interview-questions",
+      "/pricing",
+      "/download",
+      "/security"
+    ],
+    "redirects": [],
+    "images": [],
+    "incoming": 30
+  },
+  {
+    "url": "https://mianshiwen.cn/features",
+    "final": "https://mianshiwen.cn/features",
+    "status": 200,
+    "seconds": 0.662,
+    "title": "AI面试助手功能｜面试稳",
+    "description": [
+      "了解面试稳AI面试助手的核心功能：结合简历、职位JD和知识资料准备面试，支持实时语音、手动输入、截图回答与面试复盘。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/features"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "从面试准备到现场回答，一条清晰工作流"
+    ],
+    "body_chars": 846,
+    "body_hash": "6ff29a187237a81b9d20b29c2608d1008cb77f643fa26111244ca9767603cb52",
+    "body": "AI面试助手功能｜面试稳 面试稳AI助手 PRODUCT CAPABILITIES 从面试准备到现场回答，一条清晰工作流 面试稳是一款AI面试辅助工具。你可以先整理简历、职位JD和知识资料，再在面试中通过实时语音、手动输入或截图获取回答思路，结束后查看问题与回答记录。 免费使用 查看使用手册 面试稳能做什么？ 核心能力分为准备、识别、回答和复盘四步。 资料用于帮助回答贴合岗位和个人背景；语音与截图用于输入当前问题；AI生成的是可参考的表达思路，最终内容仍应由用户结合真实经历判断和调整。 AI面试助手 结合简历、JD与知识资料，为当前问题整理简单或详细回答建议。 实时语音辅助 识别麦克风和电脑输出中的对话，把连续语音整理为可确认的问题。 截图回答 针对屏幕中的笔试题、代码题或系统设计内容，直接依据当前截图分析。 面试复盘 保留本场问题与候选人回答，便于面试结束后复习并导出记录。 如何选择输入方式？ 场景 建议方式 先检查什么 远程语音面试 电脑伴随助手 + 实时语音 麦克风、电脑输出和系统权限 文字或补充提问 手动输入 问题是否完整、是否需要资料 代码题、图表、笔试题 截图回答 截图是否包含完整题目和约束 面试结束后总结 面试复盘 问题和个人回答记录是否齐全 使用前需要准备什么？ 上传或选择与本场面试相关的简历和职位JD。 按需选择知识资料，不相关的材料不必全部加入。 安装电脑伴随助手并完成麦克风、系统音频与屏幕录制授权。 正式面试前做一次收音和截图测试，确认设备选择正确。 如果你希望按步骤操作，请进入 产品使用手册 ；如果需要准备方法或排查建议，请进入 面试指南 。 能力边界 请基于真实经历使用： AI输出是回答建议，不保证识别、答案或面试结果完全准确，也不应被用来虚构经历。远程平台的可用效果取决于电脑系统权限、音频路由、网络和当前助手版本；平台名称仅用于说明常见使用场景，不代表官方合作。 继续了解 面试准备清单 收音问题排查 面试题与专题 积分与会员 数据与隐私",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebPage",
+            "@id": "https://mianshiwen.cn/features#webpage",
+            "url": "https://mianshiwen.cn/features",
+            "name": "面试稳AI面试助手功能",
+            "description": "从面试准备、现场回答到复盘，了解面试稳的产品能力和边界。",
+            "inLanguage": "zh-CN",
+            "isPartOf": {
+              "@id": "https://mianshiwen.cn/#website"
+            },
+            "about": {
+              "@id": "https://mianshiwen.cn/#software"
+            },
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "产品功能",
+                "item": "https://mianshiwen.cn/features"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/pricing",
+      "/download",
+      "/login",
+      "/login",
+      "/guide",
+      "/features/ai-interview-assistant",
+      "/features/realtime-interview",
+      "/features/screenshot-answer",
+      "/features/interview-review",
+      "/guide",
+      "/guides",
+      "/guides/interview-preparation",
+      "/guides/audio-troubleshooting",
+      "/interview-questions",
+      "/pricing",
+      "/security",
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 17
+  },
+  {
+    "url": "https://mianshiwen.cn/interview-questions",
+    "final": "https://mianshiwen.cn/interview-questions",
+    "status": 200,
+    "seconds": 0.623,
+    "title": "面试题与技术专题｜面试稳",
+    "description": [
+      "面试稳面试题与专题入口：按大模型、RAG、AI Agent、Java后端、前端和算法岗位理解考察重点，并结合简历与JD准备真实回答。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/interview-questions"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "不要只背题目，先理解岗位为什么这样问"
+    ],
+    "body_chars": 1015,
+    "body_hash": "ce08ce2c2556dd1bcdbb1c1c973f2ee6117234ac3404d512c253332870c66da6",
+    "body": "面试题与技术专题｜面试稳 面试稳AI助手 INTERVIEW TOPICS 不要只背题目，先理解岗位为什么这样问 技术面试通常同时考察概念、取舍和实际经历。面试稳将逐步按技术方向整理专题；当前页面先给出一套通用准备框架，帮助你把题目与JD、简历和项目证据连接起来。 查看准备清单 用自己的资料准备 技术面试题应该怎么准备？ 每个主题至少准备四层：定义、原理、选型取舍和真实案例。 只背定义很难应对追问；只有项目结论又无法证明理解。把JD中的能力要求映射到自己的项目，再补齐可能被追问的边界和失败经验。 从JD提取必须掌握的技术栈、业务场景和经验要求。 从简历找到能证明这些能力的项目、职责和结果。 为每个项目准备“为什么这样做、还有什么方案、出了什么问题”。 用简短结论开头，再根据追问展开原理与细节。 面试专题如何分类？ 大模型面试题 从Transformer、自注意力、训练与推理讲到上下文、幻觉、性能和评测。 RAG面试题 文档解析、切分、召回、重排、引用、评测，以及检索失败时如何定位。 AI Agent面试题 工作流与Agent、工具调用、状态管理、失败恢复、权限边界和可观测性。 Java后端面试题 语言、并发、JVM、数据库、缓存、消息队列、系统设计与故障定位。 前端面试题 HTML、CSS、JavaScript、浏览器、状态、性能、可访问性与测试。 算法与工程实现 澄清、数据结构、不变量、复杂度、边界条件、代码正确性与测试。 六个专题均已完成内容复核并纳入发布检查；内容用于理解和准备，不代表特定公司的官方题库。 同一道题，回答为什么不能完全一样？ 信息 对回答的影响 职位JD 决定回答重点更偏原理、工程落地、业务还是团队协作 个人简历 决定可以引用哪些真实项目、职责和结果 面试阶段 初筛通常先看匹配度，技术轮会继续追问细节和边界 问题上下文 决定应该直接回答、澄清前提还是先说明假设 如何用面试稳辅助准备？ 创建面试并填写目标岗位和公司信息。 选择对应简历、JD和必要的知识材料。 先用手动问题验证回答是否符合真实背景。 练习先说结论，再补充证据、取舍和反思。 回答边界： 专题内容和AI输出用于帮助理解与组织表达，不是标准答案，也不保证覆盖具体公司的真实题目。请勿虚构项目、成绩或工作经历；遇到不确定事实时应主动说明假设。 现有资源 技术面试准备 面试常见问题 项目经历回答 自我介绍结构 全部面试指南",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebPage",
+            "@id": "https://mianshiwen.cn/interview-questions#webpage",
+            "url": "https://mianshiwen.cn/interview-questions",
+            "name": "面试稳面试题与技术专题",
+            "description": "按技术方向理解面试考察重点并准备真实回答。",
+            "inLanguage": "zh-CN",
+            "isPartOf": {
+              "@id": "https://mianshiwen.cn/#website"
+            },
+            "about": {
+              "@id": "https://mianshiwen.cn/#software"
+            },
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "面试题与专题",
+                "item": "https://mianshiwen.cn/interview-questions"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/pricing",
+      "/download",
+      "/login",
+      "/guides/interview-preparation",
+      "/login",
+      "/interview-questions/llm",
+      "/interview-questions/rag",
+      "/interview-questions/ai-agent",
+      "/interview-questions/java-backend",
+      "/interview-questions/frontend",
+      "/interview-questions/algorithms",
+      "/guides/technical-interview",
+      "/guides/common-interview-questions",
+      "/guides/project-experience",
+      "/guides/self-introduction",
+      "/guides",
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 17
+  },
+  {
+    "url": "https://mianshiwen.cn/guides",
+    "final": "https://mianshiwen.cn/guides",
+    "status": 200,
+    "seconds": 1.041,
+    "title": "面试指南与使用建议｜面试稳",
+    "description": [
+      "面试稳面试指南汇总面试准备、STAR回答、电脑收音、macOS权限以及飞书和腾讯会议音频设置方法；产品操作请查看独立使用手册。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/guides"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "把面试准备、回答方法和设备排查分开处理"
+    ],
+    "body_chars": 872,
+    "body_hash": "cae21d76d3906cb3d33079eb749c2507d340fb2ebd9e6361e4e3ffa959c520be",
+    "body": "面试指南与使用建议｜面试稳 面试稳AI助手 INTERVIEW GUIDES 把面试准备、回答方法和设备排查分开处理 这里汇总面试方法与常见设备问题。想了解如何创建面试、连接助手或使用截图功能，请查看“使用手册”；想准备回答、检查收音或调整会议软件，请从本页选择对应指南。 从准备清单开始 打开产品使用手册 面试方法与回答结构 先确定岗位要求和自己的真实证据，再练习表达结构。 不要先背一套通用答案；简历、JD和项目材料越清楚，后续回答越容易保持一致。 面试前如何准备？ 按简历、职位JD、知识资料、设备和模拟问答五部分完成检查。 自我介绍怎么说？ 用当前定位、关键证据和岗位连接组成60至90秒回答。 项目经历怎么介绍？ 按目标、约束、方案、行动、结果和反思讲清个人贡献。 技术面试怎么准备？ 从JD建立能力矩阵，并练习澄清、方案、实现、测试和复盘。 常见问题怎么准备？ 理解五类问题的考察意图，用真实证据组织回答。 STAR法则怎么回答？ 用情境、任务、行动和结果组织真实经历，避免只有结论没有证据。 收音与系统权限 为什么收音慢或丢字？ 从设备选择、音量、网络、系统占用和说话停顿逐项定位。 macOS权限如何重置？ 检查麦克风、屏幕录制和系统音频权限，并在需要时重新授权。 常见远程面试平台设置 飞书视频面试收音设置 区分会议麦克风、扬声器、电脑输出通道和伴随助手的输入来源。 腾讯会议收音设置 确认会议软件与助手没有选错设备，并在正式面试前完成试听。 使用手册和面试指南有什么不同？ 入口 解决的问题 适合什么时候看 产品使用手册 注册、创建面试、连接助手、截图、积分与会员等操作 第一次使用或找不到产品功能时 面试指南 准备方法、回答结构、权限、收音和会议平台排查 准备面试或遇到具体使用问题时 内容边界： 指南提供通用方法和产品使用建议，不替代具体公司的面试要求，也不保证面试结果。涉及个人经历的答案必须以用户真实信息为准；平台名称不代表官方合作。 按目标选择 了解产品功能 浏览面试题与专题 下载电脑助手 了解数据边界 联系支持",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebPage",
+            "@id": "https://mianshiwen.cn/guides#webpage",
+            "url": "https://mianshiwen.cn/guides",
+            "name": "面试稳面试指南",
+            "description": "面试准备、回答结构、收音排查和平台设置指南目录。",
+            "inLanguage": "zh-CN",
+            "isPartOf": {
+              "@id": "https://mianshiwen.cn/#website"
+            },
+            "about": {
+              "@id": "https://mianshiwen.cn/#software"
+            },
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "面试指南",
+                "item": "https://mianshiwen.cn/guides"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/pricing",
+      "/download",
+      "/login",
+      "/guides/interview-preparation",
+      "/guide",
+      "/guides/interview-preparation",
+      "/guides/self-introduction",
+      "/guides/project-experience",
+      "/guides/technical-interview",
+      "/guides/common-interview-questions",
+      "/guides/star-interview-answer",
+      "/guides/audio-troubleshooting",
+      "/guides/macos-permissions",
+      "/guides/feishu-audio-setup",
+      "/guides/tencent-meeting-audio-setup",
+      "/guide",
+      "/guides",
+      "/features",
+      "/interview-questions",
+      "/download",
+      "/security",
+      "/contact",
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 17
+  },
+  {
+    "url": "https://mianshiwen.cn/pricing",
+    "final": "https://mianshiwen.cn/pricing",
+    "status": 200,
+    "seconds": 1.47,
+    "title": "积分与会员计费说明｜面试稳",
+    "description": [
+      "了解面试稳AI助手的免费使用、积分按次与按天会员逻辑，以及回答、截图、知识材料和支付到账的计费边界。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/pricing"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "先免费体验，再按面试节奏选择"
+    ],
+    "body_chars": 662,
+    "body_hash": "40d516d43a4ba21f75cca323e337508a471d4d1f4ebeb3b3e6f5ddc941ba9045",
+    "body": "积分与会员计费说明｜面试稳 面试稳AI助手 PRICING EXPLAINED 先免费体验，再按面试节奏选择 面试稳同时提供积分按次和按天会员。偶尔使用时可以按实际功能消耗积分；面试安排密集时可以选择短期会员。购买前先理解两种权益的边界，避免重复充值。 查看当前价格 阅读支付说明 积分和会员有什么区别？ 积分适合低频、按功能使用；会员适合短期内有多场面试的用户。 积分会按照回答、截图或知识材料等实际能力扣减；会员在有效期内免除约定范围内的回答积分消耗，但不自动等同于全部知识材料免费。 积分按次 余额长期保留，使用具体能力时按当前规则扣减。适合先体验或面试频率不固定的用户。 按天会员 权益按购买时长累加，适合短期密集准备。会员包含哪些知识材料额度，以购买页面展示为准。 哪些信息以产品页面为准？ 信息 权威入口 当前价格、商品和活动 登录后的“积分与会员”页面 积分余额与明细 账户对应的积分流水 会员到期时间 账户权益卡片显示的累计到期时间 支付是否到账 服务端支付通知与订单状态 动态信息边界： 公开页不复制可能调整的商品价格、支付渠道或活动额度。付款返回页不代表到账，权益以服务端确认结果为准。 购买前建议怎么选？ 第一次使用先完成免费体验，确认收音、问题识别和回答方式适合自己的设备。 只有少量问题或一场面试时，优先评估积分。 短期连续面试时，再比较会员天数和知识材料额度。 支付后不要重复下单，先等待订单确认或通过订单号联系客服。 继续了解 产品能力总览 电脑助手下载说明 数据与安全边界 联系支持 用户协议",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebPage",
+            "@id": "https://mianshiwen.cn/pricing#webpage",
+            "url": "https://mianshiwen.cn/pricing",
+            "name": "面试稳积分与会员计费说明",
+            "description": "了解免费使用、积分按次与按天会员的计费边界。",
+            "inLanguage": "zh-CN",
+            "isPartOf": {
+              "@id": "https://mianshiwen.cn/#website"
+            },
+            "about": {
+              "@id": "https://mianshiwen.cn/#software"
+            },
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "积分与会员",
+                "item": "https://mianshiwen.cn/pricing"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/download",
+      "/security",
+      "/guide#billing",
+      "/login",
+      "/login",
+      "/guide#billing",
+      "/features/ai-interview-assistant",
+      "/download",
+      "/security",
+      "/contact",
+      "/terms",
+      "/",
+      "/guide",
+      "/privacy",
+      "/contact"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 12
+  },
+  {
+    "url": "https://mianshiwen.cn/download",
+    "final": "https://mianshiwen.cn/download",
+    "status": 200,
+    "seconds": 0.443,
+    "title": "电脑伴随程序下载与安装｜面试稳",
+    "description": [
+      "了解面试稳电脑伴随程序的 macOS Apple Silicon、Intel 与 Windows 版本选择、系统权限、安装检查和官方版本入口。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/download"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "先选对版本，再检查系统权限"
+    ],
+    "body_chars": 736,
+    "body_hash": "0edec3204445ff4e08b732da3c9bd600badc8a5575955f805937cf2a81832433",
+    "body": "电脑伴随程序下载与安装｜面试稳 面试稳AI助手 DESKTOP COMPANION 先选对版本，再检查系统权限 电脑伴随程序负责在用户授权后接收麦克风、电脑输出音频和主动截图任务，并与网页中的当前面试连接。正式安装包、版本号和校验信息由产品下载中心统一发布。 进入官方下载中心 查看安装步骤 我的电脑应该下载哪个版本？ Apple 芯片的 Mac 选择 Apple Silicon 版本，Intel 芯片的 Mac 选择 Intel 版本；Windows 用户选择下载中心当前标记为正式发布的 Windows 版本。 不要从聊天群、网盘或历史消息安装无法核对来源的文件。 macOS Apple Silicon 适用于 M1、M2、M3、M4、M5 等 Apple 芯片电脑。 macOS Intel 适用于“关于本机”中处理器显示 Intel 的 Mac。 Windows 只有下载中心显示“可下载”的正式版本才对用户开放。 版本校验 以下载中心显示的版本、文件大小、签名和校验信息为准。 安装后需要哪些权限？ 麦克风权限：识别候选人自己的声音。 系统音频或电脑输出：识别会议软件播放的面试官声音。 屏幕录制：只在用户主动使用截图回答或预览时读取当前屏幕。 权限边界： 拒绝某项权限只会影响对应能力。原始音频默认不保存；截图由用户主动发起，具体数据处理方式以隐私政策为准。 为什么这里不直接展示固定版本？ 桌面版本会随签名、兼容性和修复状态调整。公开说明页如果复制固定版本号或下载地址，可能让用户拿到已经撤回的文件。因此本页只说明如何选择，实际文件始终由当前下载中心提供。 安装与排查 macOS 权限设置 收音慢或丢字排查 飞书面试音频设置 腾讯会议音频设置 联系支持",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebPage",
+            "@id": "https://mianshiwen.cn/download#webpage",
+            "url": "https://mianshiwen.cn/download",
+            "name": "面试稳电脑伴随程序下载与安装",
+            "description": "了解 macOS 与 Windows 版本选择、安装和权限检查。",
+            "inLanguage": "zh-CN",
+            "isPartOf": {
+              "@id": "https://mianshiwen.cn/#website"
+            },
+            "about": {
+              "@id": "https://mianshiwen.cn/#software"
+            },
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "下载与安装",
+                "item": "https://mianshiwen.cn/download"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/guide#desktop",
+      "/guides/macos-permissions",
+      "/security",
+      "/login",
+      "/login",
+      "/guide#desktop",
+      "/guides/macos-permissions",
+      "/guides/audio-troubleshooting",
+      "/guides/feishu-audio-setup",
+      "/guides/tencent-meeting-audio-setup",
+      "/contact",
+      "/",
+      "/pricing",
+      "/security",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 15
+  },
+  {
+    "url": "https://mianshiwen.cn/security",
+    "final": "https://mianshiwen.cn/security",
+    "status": 200,
+    "seconds": 0.444,
+    "title": "数据安全与隐私边界｜面试稳",
+    "description": [
+      "了解面试稳如何处理麦克风、电脑音频、截图、简历、JD、知识材料和面试记录，以及用户授权、导出和删除边界。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/security"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "每一种输入，都有清楚的用途和边界"
+    ],
+    "body_chars": 600,
+    "body_hash": "88384ee62716d0ed9b49c211a96009276542a317806b653e51e1b56da3954471",
+    "body": "数据安全与隐私边界｜面试稳 面试稳AI助手 SECURITY & PRIVACY 每一种输入，都有清楚的用途和边界 麦克风、电脑音频、截图、简历、JD 和知识材料用途不同。面试稳遵循数据最小化、明确授权和用户控制原则，公开说明页只描述当前可以验证的行为。 阅读完整隐私政策 查看数据操作说明 面试稳会默认保存原始音频吗？ 原始音频默认不保存。 获得授权后的麦克风和电脑输出音频用于当前转写链路；面试记录、用户上传资料和用户主动截图属于不同数据类别，应通过对应产品入口查看、管理或删除。 不同数据分别用来做什么？ 数据 主要用途 用户控制 麦克风 识别候选人自己的声音 系统权限与暂停收音 电脑输出音频 识别会议软件播放的声音 系统权限与暂停收音 屏幕截图 用户主动发起题目识别 主动触发或取消任务 简历、JD、知识材料 让建议贴近本场选择的真实资料 按资料管理、选择和删除 面试记录 展示对话、建议和复盘 查看、导出和对应删除入口 用户还需要注意什么？ 用户应取得适当授权，遵守所在地区的录音规则、面试要求和会议平台规则。AI 输出是辅助建议，不保证完全准确，也不应替代用户基于真实经历作答。 公开说明边界： 本页是产品事实摘要，不替代完整隐私政策，也不构成法律意见。数据类别、供应商或实际流程变化时，应以更新后的政策为准。 相关说明 完整隐私政策 用户协议 实时语音处理 主动截图回答 隐私问题联系",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebPage",
+            "@id": "https://mianshiwen.cn/security#webpage",
+            "url": "https://mianshiwen.cn/security",
+            "name": "面试稳数据安全与隐私边界",
+            "description": "说明音频、截图和面试资料的数据用途与用户控制。",
+            "inLanguage": "zh-CN",
+            "isPartOf": {
+              "@id": "https://mianshiwen.cn/#website"
+            },
+            "about": {
+              "@id": "https://mianshiwen.cn/#software"
+            },
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "数据安全与隐私",
+                "item": "https://mianshiwen.cn/security"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/privacy",
+      "/terms",
+      "/download",
+      "/contact",
+      "/privacy",
+      "/guide#privacy-support",
+      "/privacy",
+      "/terms",
+      "/features/realtime-interview",
+      "/features/screenshot-answer",
+      "/contact",
+      "/",
+      "/about",
+      "/download",
+      "/contact"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 15
+  },
+  {
+    "url": "https://mianshiwen.cn/about",
+    "final": "https://mianshiwen.cn/about",
+    "status": 200,
+    "seconds": 0.807,
+    "title": "关于面试稳AI助手与产品定位",
+    "description": [
+      "了解面试稳AI助手的产品定位、适用边界、公开能力、品牌联系信息和对真实表达、授权与隐私的基本原则。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/about"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "让面试准备、现场表达和复盘连成一条线"
+    ],
+    "body_chars": 632,
+    "body_hash": "7d18c9c4b0793ac1613abd63656ba4aca9aab862a8d268205dbce1191ddc505c",
+    "body": "关于面试稳AI助手与产品定位 面试稳AI助手 ABOUT OFFERSTEADY 让面试准备、现场表达和复盘连成一条线 面试稳AI助手面向需要梳理材料、理解问题、组织回答和复盘表达的求职者。产品把简历、岗位 JD、知识材料、实时问题、主动截图和复盘记录放进一条用户可控制的工作流。 免费开始使用 阅读使用手册 面试稳解决什么问题？ 面试稳帮助用户把已有的真实经历和目标岗位要求整理成更清楚的表达，而不是替用户虚构经历或保证录用结果。 用户可以在面试前准备资料，在面试中查看问题与建议，在面试后回看双方对话并形成下一轮行动重点。 面试前：整理简历、JD 和知识材料。 面试中：接收授权音频、手动问题或主动截图。 回答时：区分问题、资料来源和 AI 建议。 面试后：保留问答、导出记录并完成复盘。 我们坚持哪些边界？ 不承诺 Offer、录用结果或回答完全准确。 不鼓励未经授权的录音、隐蔽使用或违反面试规则。 不把虚构案例、客户、评分和性能数字包装成真实事实。 原始音频默认不保存，敏感资料按最小必要原则处理。 主体信息边界： 面试稳是产品名称，OneShow AI Lab 是当前公开团队标识。注册运营主体在完成正式核验前不从短信签名或其他配置中推断。 如何获得帮助？ 使用问题可先查看公开手册和故障指南。订单、账户或隐私问题请通过正式联系页提供必要信息，不要发送密码、短信验证码或完整身份证件。 官方入口 使用手册 积分与会员 电脑助手下载 安全与隐私 联系支持",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "AboutPage",
+            "@id": "https://mianshiwen.cn/about#webpage",
+            "url": "https://mianshiwen.cn/about",
+            "name": "关于面试稳AI助手",
+            "description": "介绍产品定位、能力与使用边界。",
+            "inLanguage": "zh-CN",
+            "isPartOf": {
+              "@id": "https://mianshiwen.cn/#website"
+            },
+            "about": {
+              "@id": "https://mianshiwen.cn/#software"
+            },
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "关于产品",
+                "item": "https://mianshiwen.cn/about"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/features/ai-interview-assistant",
+      "/security",
+      "/contact",
+      "/login",
+      "/login",
+      "/guide",
+      "/guide",
+      "/pricing",
+      "/download",
+      "/security",
+      "/contact",
+      "/",
+      "/terms",
+      "/privacy",
+      "https://beian.miit.gov.cn"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 7
+  },
+  {
+    "url": "https://mianshiwen.cn/contact",
+    "final": "https://mianshiwen.cn/contact",
+    "status": 200,
+    "seconds": 0.654,
+    "title": "联系面试稳AI助手产品支持",
+    "description": [
+      "通过面试稳官方客服微信和联系邮箱咨询安装、收音、账户、订单或隐私问题，并了解提交问题时需要和不应提供的信息。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/contact"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "把问题说清楚，我们才能更快定位"
+    ],
+    "body_chars": 576,
+    "body_hash": "a6eaf18778dad60ca20146d9baa93538da438c1c0502d26907a9663dadfe19f1",
+    "body": "联系面试稳AI助手产品支持 面试稳AI助手 CONTACT & SUPPORT 把问题说清楚，我们才能更快定位 安装、权限、收音、截图、账户、订单和隐私问题都可以通过官方支持渠道反馈。建议先说明设备、系统、问题发生时间和可复现步骤。 发送邮件 先查使用手册 官方联系方式是什么？ 客服微信：mianshiwen-cn；联系邮箱：contact@oneshowailab.com。 咨询订单时提供订单号即可；咨询设备问题时提供操作系统、助手版本和发生时间，有助于定位日志范围。 客服微信 mianshiwen-cn 适合常见使用、安装和订单沟通。 联系邮箱 contact@oneshowailab.com 适合附带较完整的问题说明。 反馈问题时提供什么？ 问题发生的日期和大致时间。 macOS 或 Windows 版本、助手版本和使用的会议软件。 期望结果、实际结果和复现步骤。 订单问题提供订单号，不需要提供支付密码。 不要发送： 账户密码、短信验证码、支付密码、商户私钥、完整身份证件、未经脱敏的简历或其他人员的敏感信息。 不同问题先看哪里？ 安装和版本： 电脑助手下载说明 收音慢或丢字： 收音排查指南 支付和会员： 积分与会员说明 音频与资料处理： 数据安全边界 自助入口 使用手册 macOS 权限 飞书音频设置 腾讯会议音频设置 隐私政策",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "ContactPage",
+            "@id": "https://mianshiwen.cn/contact#webpage",
+            "url": "https://mianshiwen.cn/contact",
+            "name": "联系面试稳产品支持",
+            "description": "面试稳官方支持渠道和安全提交问题说明。",
+            "inLanguage": "zh-CN",
+            "isPartOf": {
+              "@id": "https://mianshiwen.cn/#website"
+            },
+            "about": {
+              "@id": "https://mianshiwen.cn/#software"
+            },
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "联系我们",
+                "item": "https://mianshiwen.cn/contact"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/guide",
+      "/security",
+      "/pricing",
+      "/login",
+      "mailto:contact@oneshowailab.com",
+      "/guide",
+      "mailto:contact@oneshowailab.com",
+      "/download",
+      "/guides/audio-troubleshooting",
+      "/pricing",
+      "/security",
+      "/guide",
+      "/guides/macos-permissions",
+      "/guides/feishu-audio-setup",
+      "/guides/tencent-meeting-audio-setup",
+      "/privacy",
+      "/",
+      "/about",
+      "/terms",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 13
+  },
+  {
+    "url": "https://mianshiwen.cn/features/ai-interview-assistant",
+    "final": "https://mianshiwen.cn/features/ai-interview-assistant",
+    "status": 200,
+    "seconds": 1.182,
+    "title": "AI面试助手：从资料准备到面试复盘｜面试稳",
+    "description": [
+      "了解面试稳 AI 面试助手如何结合简历、岗位 JD 和知识材料，覆盖面试准备、实时问题整理、截图回答与面试复盘。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/features/ai-interview-assistant"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "AI 面试助手，不只回答一道题"
+    ],
+    "body_chars": 749,
+    "body_hash": "707a4f52cb21fa1f07a25efa3410c3a0e4331e22cc990e964dc3a0c1651d9eb6",
+    "body": "AI面试助手：从资料准备到面试复盘｜面试稳 面试稳AI助手 AI Interview Assistant AI 面试助手，不只回答一道题 面试稳把面试前的资料准备、面试中的问题整理和面试后的复盘连接起来。回答建议可以参考你为本场选择的简历、岗位 JD 和知识材料，帮助你把重点放回真实经历与清晰表达。 免费开始使用 阅读完整手册 一条完整的面试辅助流程 面试前： 准备简历、岗位 JD 和确有必要的知识材料，为每场面试选择相关内容。 面试中： 通过实时对话、手动输入或截图整理当前问题，并查看简单与详细回答建议。 面试后： 保留面试官问题和候选人回答，结合复盘内容检查表达与资料准备。 回答建议如何贴近个人情况 通用答案往往缺少岗位背景，也容易脱离候选人的真实项目。面试稳允许用户在创建面试时选择本场简历、JD 和知识材料，让回答结构围绕岗位要求和可核对经历组织。界面会展示资料使用情况，资料不足时也会提醒用户不要补造细节。 简历与 JD 用于理解候选人的已有经历和目标岗位重点。 知识材料 由用户主动选择，用于补充技术、行业或项目背景。 回答层次 简单回答便于快速浏览，详细回答用于补充结构和取舍。 面试复盘 保留问题与回答，便于结束后形成下一步行动。 适合哪些使用方式 产品支持 Web 页面和电脑伴随程序协同。电脑端在用户明确授权后提供麦克风、系统音频和屏幕捕捉能力；网页端负责资料选择、面试状态、实时对话、回答建议和复盘。若某项设备能力不可用，仍可使用手动输入等替代方式。 使用边界： AI 输出仅供参考，不保证面试结果，也不能替代用户对个人经历、技术事实和面试规则的判断。请在获得必要许可并遵守面试平台要求的前提下使用。 继续了解 实时面试辅助 截图回答 面试复盘 准备面试资料 隐私政策",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebPage",
+            "@id": "https://mianshiwen.cn/features/ai-interview-assistant#webpage",
+            "url": "https://mianshiwen.cn/features/ai-interview-assistant",
+            "name": "AI面试助手：从资料准备到面试复盘",
+            "description": "了解面试稳如何结合简历、岗位JD和知识材料，覆盖面试准备、实时问题整理、截图回答与面试复盘。",
+            "inLanguage": "zh-CN",
+            "isPartOf": {
+              "@id": "https://mianshiwen.cn/#website"
+            },
+            "about": {
+              "@id": "https://mianshiwen.cn/#software"
+            },
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "AI面试助手",
+                "item": "https://mianshiwen.cn/features/ai-interview-assistant"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/guide",
+      "/guides/interview-preparation",
+      "/login",
+      "/login",
+      "/guide",
+      "/features/realtime-interview",
+      "/features/screenshot-answer",
+      "/features/interview-review",
+      "/guides/interview-preparation",
+      "/privacy",
+      "/",
+      "/guide",
+      "/terms",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 13
+  },
+  {
+    "url": "https://mianshiwen.cn/features/realtime-interview",
+    "final": "https://mianshiwen.cn/features/realtime-interview",
+    "status": 200,
+    "seconds": 0.614,
+    "title": "实时面试辅助：语音识别与回答建议｜面试稳",
+    "description": [
+      "面试稳实时面试辅助说明：区分麦克风与电脑输出音频，持续整理对话，确认面试官问题，并结合本场资料生成回答建议。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/features/realtime-interview"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "实时面试辅助，从听清问题开始"
+    ],
+    "body_chars": 663,
+    "body_hash": "95e950d18ed3520b12084cd31120f3daf683b867f8e2dcad31e80fc48bc3f266",
+    "body": "实时面试辅助：语音识别与回答建议｜面试稳 面试稳AI助手 Realtime Interview Support 实时面试辅助，从听清问题开始 电脑伴随程序在获得系统授权后分别接收候选人麦克风和电脑输出音频，网页持续展示对话状态。系统确认面试官问题后，再结合本场选择的资料生成回答建议。 准备一场面试 查看操作说明 实时链路包含哪些步骤 电脑伴随程序检测麦克风和电脑输出音频，用户确认设备与系统权限。 音频分段上传并生成临时转写，页面持续更新当前说话内容。 在语义完整且角色明确后，问题被确认并进入回答流程。 网页展示简单回答和详细回答，用户根据真实情况组织自己的表达。 为什么区分“我”和“面试官” 候选人的补充说明与面试官的问题承担不同作用。如果把两者混在一起，系统可能围绕候选人刚说过的话重复回答。面试稳将麦克风和电脑输出作为不同来源展示，并允许用户查看转写状态，减少角色混淆。 实时识别仍会受到耳机、会议软件音量、系统权限、网络和说话节奏影响。遇到声音过小或来源不可用时，应先排查设备，再使用手动输入作为降级方式。 暂停、恢复与问题确认 面试页面提供明确的暂停收音和恢复操作。暂停期间不应继续创建新的语音转写；恢复后从新的音频开始。若某条内容长时间停留在“转写中”，页面应允许后续问题继续推进，而不是把整场面试锁死。 使用边界： 请遵守面试和会议平台的录音、转写与辅助工具规则，并在需要时取得许可。AI 建议不等同于面试官认可的标准答案。 相关页面 麦克风与系统音频排查 AI 面试助手总览 截图回答 面试复盘 隐私政策",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebPage",
+            "@id": "https://mianshiwen.cn/features/realtime-interview#webpage",
+            "url": "https://mianshiwen.cn/features/realtime-interview",
+            "name": "实时面试辅助：语音识别与回答建议",
+            "description": "了解麦克风、系统音频、问题确认和回答建议的完整链路。",
+            "inLanguage": "zh-CN",
+            "isPartOf": {
+              "@id": "https://mianshiwen.cn/#website"
+            },
+            "about": {
+              "@id": "https://mianshiwen.cn/#software"
+            },
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "实时面试辅助",
+                "item": "https://mianshiwen.cn/features/realtime-interview"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/guide#live",
+      "/guides/audio-troubleshooting",
+      "/login",
+      "/login",
+      "/guide#live",
+      "/guides/audio-troubleshooting",
+      "/features/ai-interview-assistant",
+      "/features/screenshot-answer",
+      "/features/interview-review",
+      "/privacy",
+      "/",
+      "/guide",
+      "/terms",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 10
+  },
+  {
+    "url": "https://mianshiwen.cn/features/screenshot-answer",
+    "final": "https://mianshiwen.cn/features/screenshot-answer",
+    "status": 200,
+    "seconds": 0.576,
+    "title": "截图回答：识别屏幕题目并整理思路｜面试稳",
+    "description": [
+      "面试稳截图回答功能说明：由用户主动截取当前屏幕，识别题目后生成结构化回答建议，适用于代码题、图表题和系统设计题。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/features/screenshot-answer"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "截图回答，只使用当前屏幕题目信息"
+    ],
+    "body_chars": 616,
+    "body_hash": "98a4ff8b1f2a2f4209e98eda02488af5c866278fcc6a2862b0637902d6bc878d",
+    "body": "截图回答：识别屏幕题目并整理思路｜面试稳 面试稳AI助手 Screenshot Answer 截图回答，只使用当前屏幕题目信息 当代码、图表、案例或系统设计题难以手动复制时，用户可以通过按钮或电脑快捷键主动发起截图。截图链路以当前屏幕内容为输入，不需要混入实时对话中的面试官转写。 进入产品 查看截图步骤 从截图到回答的处理过程 用户在电脑伴随程序中选择需要捕捉的屏幕并确认预览。 网页按钮或快捷键创建一次截图任务，并立即展示等待状态。 本地助手接收任务、截取当前屏幕并上传本次图片。 视觉模型识别题目后生成结构化回答，网页展示完成或失败状态。 适合处理哪些信息 代码与算法题 识别函数签名、约束和示例，整理思路、复杂度与可运行代码。 图表与数据题 提取指标、趋势和异常，再组织分析路径与结论。 系统设计题 围绕目标、容量、组件、可靠性和技术取舍形成回答结构。 案例与文字题 先确认任务要求，再拆分假设、分析步骤和可验证结论。 避免重复截图和输入混淆 一次截图任务处理期间，界面会给出明确状态，避免用户反复触发多个任务造成顺序混乱。按钮和快捷键应进入同一条处理链路，显示一致的等待、生成、完成、失败或取消状态。 使用边界： 截图可能包含个人信息、公司资料或受限制的题目内容。请只截取必要范围，遵守笔试与面试规则，并对识别结果和生成代码进行独立核对。 相关页面 实时面试辅助 AI 面试助手总览 面试资料准备 面试复盘 截图与隐私说明",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebPage",
+            "@id": "https://mianshiwen.cn/features/screenshot-answer#webpage",
+            "url": "https://mianshiwen.cn/features/screenshot-answer",
+            "name": "截图回答：识别屏幕题目并整理思路",
+            "description": "主动截取当前屏幕，识别题目并生成可核对的结构化回答建议。",
+            "inLanguage": "zh-CN",
+            "isPartOf": {
+              "@id": "https://mianshiwen.cn/#website"
+            },
+            "about": {
+              "@id": "https://mianshiwen.cn/#software"
+            },
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "截图回答",
+                "item": "https://mianshiwen.cn/features/screenshot-answer"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/guide#live",
+      "/features/realtime-interview",
+      "/login",
+      "/login",
+      "/guide#live",
+      "/features/realtime-interview",
+      "/features/ai-interview-assistant",
+      "/guides/interview-preparation",
+      "/features/interview-review",
+      "/privacy",
+      "/",
+      "/guide",
+      "/terms",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 11
+  },
+  {
+    "url": "https://mianshiwen.cn/features/interview-review",
+    "final": "https://mianshiwen.cn/features/interview-review",
+    "status": 200,
+    "seconds": 0.575,
+    "title": "面试复盘：保留问答并形成行动建议｜面试稳",
+    "description": [
+      "面试稳面试复盘说明：保留面试官问题和候选人回答，整理回答建议、资料来源和后续行动，并支持下载复盘文档。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/features/interview-review"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "面试复盘，既看问题，也看自己的回答"
+    ],
+    "body_chars": 636,
+    "body_hash": "4a38853085057ad79d01a650d9f408c0fea66205e15facc8b849fa9606f6043a",
+    "body": "面试复盘：保留问答并形成行动建议｜面试稳 面试稳AI助手 Interview Review 面试复盘，既看问题，也看自己的回答 结束面试后，仅保留面试官问题并不足以判断表达效果。面试稳将候选人的回答一起纳入复盘，帮助用户检查信息是否完整、结构是否清楚，以及下一轮还需要补充哪些真实证据。 查看我的面试 阅读复盘说明 一份复盘应回答什么 问了什么 按顺序保留已确认的面试官问题和上下文。 我怎么回答 保留候选人的表达，避免只复盘系统建议。 建议依据 检查回答是否使用了简历、JD 或知识材料。 下一步行动 把模糊问题变成下一轮可执行的准备任务。 如何判断回答是否需要优化 先核对事实是否准确，再检查回答是否直接回应问题。行为问题可以查看背景、行动、结果和个人贡献是否完整；技术问题可以查看前提、方案、取舍、风险和验证方式；项目问题则要区分团队结果与个人职责。 复盘不应把 AI 建议当成唯一答案。更有价值的做法是将建议与候选人的原始表达并排查看，选择自己能证明、能解释并能继续接受追问的内容。 本地下载与后续使用 复盘内容可以下载为更便于编辑和归档的文档，用户可在本地补充面试结果、遗漏信息和下一轮计划。下载文件由用户自行保管，不应包含不必要的验证码、支付信息或与求职无关的敏感数据。 隐私边界： 面试对话可能包含个人经历和公司信息。请根据需要删除不再使用的会话，并在分享复盘文档前移除敏感内容。 相关页面 面试准备流程 实时面试辅助 AI 面试助手总览 截图回答 隐私政策",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebPage",
+            "@id": "https://mianshiwen.cn/features/interview-review#webpage",
+            "url": "https://mianshiwen.cn/features/interview-review",
+            "name": "面试复盘：保留问答并形成行动建议",
+            "description": "回看问题、候选人回答和建议，整理下一轮面试的准备重点。",
+            "inLanguage": "zh-CN",
+            "isPartOf": {
+              "@id": "https://mianshiwen.cn/#website"
+            },
+            "about": {
+              "@id": "https://mianshiwen.cn/#software"
+            },
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "面试复盘",
+                "item": "https://mianshiwen.cn/features/interview-review"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/guide#review",
+      "/guides/interview-preparation",
+      "/login",
+      "/login",
+      "/guide#review",
+      "/guides/interview-preparation",
+      "/features/realtime-interview",
+      "/features/ai-interview-assistant",
+      "/features/screenshot-answer",
+      "/privacy",
+      "/",
+      "/guide",
+      "/terms",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 7
+  },
+  {
+    "url": "https://mianshiwen.cn/guides/audio-troubleshooting",
+    "final": "https://mianshiwen.cn/guides/audio-troubleshooting",
+    "status": 200,
+    "seconds": 1.536,
+    "title": "面试收音慢或丢字？麦克风与系统音频排查｜面试稳",
+    "description": [
+      "面试稳收音排查指南：检查麦克风、电脑输出音频、macOS 或 Windows 系统权限、会议软件音量、网络与转写状态。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/guides/audio-troubleshooting"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "面试收音慢、断续或丢字，先按来源排查"
+    ],
+    "body_chars": 990,
+    "body_hash": "67930c7ef89830b0e91ea11b5fea3dd0fd97c4614a85c8668d7d8e911a899ef5",
+    "body": "面试收音慢或丢字？麦克风与系统音频排查｜面试稳 面试稳AI助手 Audio Troubleshooting 面试收音慢、断续或丢字，先按来源排查 实时识别同时依赖本地设备、操作系统权限、会议软件音量、网络传输和转写服务。先判断是“我的声音”还是“面试官声音”异常，再逐项检查，通常比反复重启更有效。 审核：面试稳产品与支持团队 发布：2026-08-19 更新：2026-08-19 查看完整权限说明 了解实时链路 面试收音异常，第一步应该检查什么？ 先确认异常来自“我的声音”还是“面试官声音”。 麦克风负责候选人声音，电脑输出音频负责面试官声音；伴随程序的两路音量指示可以判断当前是否收到信号。只有一路没有波动时，应优先检查对应设备和权限。 我的声音为 0 检查麦克风选择、系统麦克风权限、耳机静音和输入音量。 面试官声音为 0 检查电脑输出通道、会议软件播放设备和系统音频权限。 两路都有但很慢 检查网络、CPU 占用和会议软件是否同时使用重型降噪。 一直显示转写中 确认后续语音是否仍推进；必要时暂停后恢复，或改用手动输入。 macOS 与 Windows 权限 macOS 在“系统设置 → 隐私与安全性”中检查麦克风和屏幕与系统音频录制权限。权限修改后通常需要完全退出伴随程序再重新打开。若应用升级或包标识变化，可按使用手册重新授权。 Windows 检查系统“隐私和安全性 → 麦克风”是否允许桌面应用访问；确认会议软件输出设备与伴随程序选择的电脑输出通道一致。蓝牙耳机切换通话模式时，也可能改变采样质量和设备名称。 减少延迟和丢字的实际做法 优先使用稳定网络，避免同时上传大文件或进行系统更新。 让会议软件和伴随程序使用明确的输入、输出设备，不频繁自动切换。 保持面试官播放音量足够，但避免扬声器回声重新进入麦克风。 出现异常时记录具体时间、哪一路声音和界面状态，便于定位链路环节。 仍未解决： 可先使用手动输入继续面试，不要反复点击生成同一问题。联系客服时请勿发送密码、验证码或完整个人资料。 信息来源与适用范围 本指南依据面试稳当前实时音频链路、电脑伴随程序状态提示和公开使用手册整理。操作系统与会议平台界面可能更新，具体设备名称与权限路径以当前系统和平台官方说明为准。 相关页面 电脑伴随程序安装 macOS 权限设置 飞书音频设置 腾讯会议设置 音频与隐私",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://mianshiwen.cn/guides/audio-troubleshooting#article",
+            "headline": "面试收音慢或丢字：麦克风与系统音频排查",
+            "description": "按顺序检查设备、权限、音量、网络和转写状态。",
+            "inLanguage": "zh-CN",
+            "mainEntityOfPage": "https://mianshiwen.cn/guides/audio-troubleshooting",
+            "author": {
+              "@type": "Organization",
+              "name": "面试稳产品与支持团队"
+            },
+            "publisher": {
+              "@id": "https://mianshiwen.cn/#organization"
+            },
+            "datePublished": "2026-08-19",
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "使用手册",
+                "item": "https://mianshiwen.cn/guide"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "收音排查",
+                "item": "https://mianshiwen.cn/guides/audio-troubleshooting"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/guide#desktop",
+      "/features/realtime-interview",
+      "/login",
+      "/guide#desktop",
+      "/features/realtime-interview",
+      "/guide#desktop",
+      "/guides/macos-permissions",
+      "/guides/feishu-audio-setup",
+      "/guides/tencent-meeting-audio-setup",
+      "/privacy",
+      "/",
+      "/guide",
+      "/terms",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 10
+  },
+  {
+    "url": "https://mianshiwen.cn/guides/interview-preparation",
+    "final": "https://mianshiwen.cn/guides/interview-preparation",
+    "status": 200,
+    "seconds": 0.798,
+    "title": "面试准备指南：简历、JD与知识材料怎么选｜面试稳",
+    "description": [
+      "面试稳面试准备指南：整理真实简历、目标岗位 JD 和必要知识材料，创建面试并完成电脑伴随程序与收音检查。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/guides/interview-preparation"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "准备一场面试，先把资料变成可核对的事实"
+    ],
+    "body_chars": 959,
+    "body_hash": "c2b50cc3d5038ef4933091081d98d765f6654efa65438f23790c96a604998f27",
+    "body": "面试准备指南：简历、JD与知识材料怎么选｜面试稳 面试稳AI助手 Interview Preparation 准备一场面试，先把资料变成可核对的事实 高质量回答不是资料越多越好。更有效的准备方式，是用一份真实简历说明“我做过什么”，用目标岗位 JD 说明“对方关心什么”，再用少量知识材料补充技术和行业背景。 审核：面试稳产品与支持团队 发布：2026-08-19 更新：2026-08-19 创建面试 阅读完整手册 面试前应该准备哪些资料？ 优先准备一份真实简历、一份当前岗位 JD，再按需选择少量知识材料。 简历说明“我做过什么”，JD 说明“对方关心什么”，知识材料只补充技术或行业背景；每场只选择真正相关的内容。 简历 提供教育、工作、项目和技能等个人事实，回答必须能由候选人解释和证明。 岗位 JD 提供职责、能力和业务重点，帮助回答更贴近当前岗位，而不是泛泛而谈。 知识材料 补充技术原理、项目文档或行业背景，不替代候选人的真实经历。 本场选择 每场面试只选择真正相关的资料，减少无关内容干扰回答。 从 JD 反推准备重点 先标出岗位的核心目标、必须技能、协作对象和可能的结果指标。再回到简历，选择能够证明这些能力的真实项目。对于每个项目，至少准备背景、目标、个人职责、关键判断、行动、结果和复盘，避免只背一段固定自我介绍。 如果 JD 中存在不熟悉的技术或业务词，可以把经过核对的学习资料加入知识库，但要区分“我实际做过”和“我为了面试了解过”。 开始前的设备与流程检查 创建面试并确认名称、目标岗位和公司信息。 选择本场使用的简历、JD 和知识材料，检查处理状态。 连接上次设备或输入电脑伴随程序显示的连接码。 检查麦克风、电脑输出音频和需要捕捉的屏幕。 用一段短语音确认“我”和“面试官”来源没有混淆。 准备原则： 不要为了让答案完整而虚构经历，也不要上传与求职无关的敏感资料。资料越准确、范围越清楚，回答建议越容易核对。 信息来源与适用范围 本指南依据面试稳当前资料选择、面试创建和设备连接流程整理。资料如何保存、使用和删除以产品实际入口与隐私政策为准；STAR 等表达结构只是辅助方法，不替代用户核对真实经历。 相关页面 STAR 回答结构 AI 面试助手总览 面试收音排查 面试复盘 资料与隐私",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://mianshiwen.cn/guides/interview-preparation#article",
+            "headline": "面试准备指南：简历、JD与知识材料怎么选",
+            "description": "用真实简历、目标岗位JD和必要知识材料准备一场面试。",
+            "inLanguage": "zh-CN",
+            "mainEntityOfPage": "https://mianshiwen.cn/guides/interview-preparation",
+            "author": {
+              "@type": "Organization",
+              "name": "面试稳产品与支持团队"
+            },
+            "publisher": {
+              "@id": "https://mianshiwen.cn/#organization"
+            },
+            "datePublished": "2026-08-19",
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "使用手册",
+                "item": "https://mianshiwen.cn/guide"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "面试准备",
+                "item": "https://mianshiwen.cn/guides/interview-preparation"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/guide",
+      "/features/ai-interview-assistant",
+      "/login",
+      "/login",
+      "/guide",
+      "/guides/star-interview-answer",
+      "/features/ai-interview-assistant",
+      "/guides/audio-troubleshooting",
+      "/features/interview-review",
+      "/privacy",
+      "/",
+      "/guide",
+      "/terms",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 13
+  },
+  {
+    "url": "https://mianshiwen.cn/guides/macos-permissions",
+    "final": "https://mianshiwen.cn/guides/macos-permissions",
+    "status": 200,
+    "seconds": 0.533,
+    "title": "macOS 麦克风与屏幕权限设置｜面试稳",
+    "description": [
+      "面试稳 macOS 权限指南：分别检查麦克风、屏幕与系统音频授权，重置旧授权，并验证电脑伴随程序是否真正收到声音。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/guides/macos-permissions"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "macOS 已授权但不能收音，按权限类型重新检查"
+    ],
+    "body_chars": 784,
+    "body_hash": "6765ecfd0bc12012f9ea3f554d5883f4c2154dc3e05274092a2cc5fd918aa225",
+    "body": "macOS 麦克风与屏幕权限设置｜面试稳 面试稳AI助手 MACOS PERMISSIONS macOS 已授权但不能收音，按权限类型重新检查 macOS 会分别管理麦克风、屏幕录制和部分系统音频能力。看到某一项“已允许”不代表其他能力也已生效，授权后通常还需要完全退出并重新打开电脑伴随程序。 审核：面试稳产品与支持团队 发布：2026-08-19 更新：2026-08-19 macOS 权限已经打开，为什么助手仍然不能用？ 最常见原因是只打开了其中一种权限、授权对应了旧版本应用，或者授权后没有完全重启助手。 先在“系统设置 → 隐私与安全性”中分别确认麦克风和屏幕录制，再退出托盘中的伴随程序并重新打开，最后用页面音量条验证真实输入。 应该按什么顺序检查？ 确认运行的是产品下载中心当前正式版本，而不是旧安装包或重复副本。 打开“系统设置 → 隐私与安全性 → 麦克风”，允许面试稳伴随程序。 需要截图时，打开“屏幕与系统音频录制”相关权限。 从菜单栏或托盘完全退出助手，而不是只关闭窗口。 重新打开助手，分别观察“我的声音”和“面试官声音”音量状态。 什么时候才需要重置旧授权？ 只有应用已在权限列表中、反复切换仍无效，或重新安装后系统继续引用旧签名记录时，才考虑使用系统授权重置。重置会让对应应用下次使用能力时重新弹出授权请求，不会替你自动点击允许。 不要盲目清空全部权限： 应只重置面试稳对应的麦克风、屏幕和音频授权。企业设备受管理策略限制时，需要联系设备管理员。 信息来源与适用范围 本指南依据面试稳当前电脑伴随程序的权限用途、产品使用手册与 Apple“隐私与安全性”设置路径整理。macOS 菜单名称会随系统版本调整，应以电脑当前显示和 Apple 官方支持说明为准。 相关指南 选择正确安装版本 完整收音排查 飞书音频设置 截图回答说明 隐私政策",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://mianshiwen.cn/guides/macos-permissions#article",
+            "headline": "macOS 麦克风与屏幕权限设置",
+            "description": "分别检查面试稳电脑伴随程序的麦克风、屏幕和系统音频授权。",
+            "inLanguage": "zh-CN",
+            "mainEntityOfPage": "https://mianshiwen.cn/guides/macos-permissions",
+            "author": {
+              "@type": "Organization",
+              "name": "面试稳产品与支持团队"
+            },
+            "publisher": {
+              "@id": "https://mianshiwen.cn/#organization"
+            },
+            "datePublished": "2026-08-19",
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "使用手册",
+                "item": "https://mianshiwen.cn/guide"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "macOS 权限",
+                "item": "https://mianshiwen.cn/guides/macos-permissions"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/download",
+      "/guides/audio-troubleshooting",
+      "/security",
+      "/contact",
+      "/download",
+      "/guides/audio-troubleshooting",
+      "/guides/feishu-audio-setup",
+      "/features/screenshot-answer",
+      "/privacy",
+      "/",
+      "/guide",
+      "/security",
+      "/contact"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 7
+  },
+  {
+    "url": "https://mianshiwen.cn/guides/feishu-audio-setup",
+    "final": "https://mianshiwen.cn/guides/feishu-audio-setup",
+    "status": 200,
+    "seconds": 1.089,
+    "title": "飞书视频面试收音设置｜面试稳",
+    "description": [
+      "飞书视频面试收音设置指南：检查麦克风、扬声器、电脑输出音量、系统权限与面试稳伴随程序状态，减少断续和漏字。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/guides/feishu-audio-setup"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "飞书面试声音断续，先分清是哪一路音频"
+    ],
+    "body_chars": 779,
+    "body_hash": "679e174ab63d8fe49912cea451edba98026609c308337801b796a957134fa889",
+    "body": "飞书视频面试收音设置｜面试稳 面试稳AI助手 FEISHU AUDIO SETUP 飞书面试声音断续，先分清是哪一路音频 飞书中的麦克风设备决定对方能否听见你，飞书的扬声器输出决定你和伴随程序能否听见面试官。两路声音需要分开验证，不要只看到飞书会议正常就认为网页转写一定正常。 审核：面试稳产品与支持团队 发布：2026-08-19 更新：2026-08-19 飞书面试官声音识别断断续续怎么办？ 先确认飞书扬声器确实播放到电脑当前输出设备，再检查助手的“面试官声音”音量条。 如果飞书能听见但助手音量始终为零，问题通常在系统音频权限或输出通道；如果音量正常但转写仍断续，再检查网络、对方音质和静音切分。 面试前 3 分钟检查 在飞书音频设置中选择实际使用的麦克风和扬声器，不要保留已经断开的蓝牙设备。 让对方或测试音频说一句完整的话，确认电脑扬声器输出不是零。 打开面试稳助手，确认“我的声音”和“面试官声音”分别出现音量变化。 网页进入准备页并连接助手后，再进入正式面试。 蓝牙耳机不稳定时，优先尝试有线耳机或电脑内置输入输出进行对照。 为什么飞书正常，网页仍可能慢？ 会议通话、系统采集、网络上传、语音识别和网页展示是连续但独立的环节。飞书通话正常只能证明会议连接可用，不能证明系统授权、伴随程序输入和转写服务全部正常。排查时应以两路音量条和最新转写状态为依据。 平台关系说明： 本页仅说明常见使用场景和用户侧音频设置。面试稳不代表与飞书存在官方合作、授权或直接产品集成，飞书界面和功能以其当前官方版本为准。 信息来源与适用范围 本指南依据面试稳当前音频链路、公开使用手册和飞书客户端常见音频设备设置整理。平台菜单可能更新，具体名称应以飞书当前客户端及其官方帮助中心为准。 相关指南 完整收音排查 macOS 权限 腾讯会议设置 实时语音链路 联系支持",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://mianshiwen.cn/guides/feishu-audio-setup#article",
+            "headline": "飞书视频面试收音设置",
+            "description": "分别检查飞书麦克风、扬声器、系统权限与面试稳助手输入。",
+            "inLanguage": "zh-CN",
+            "mainEntityOfPage": "https://mianshiwen.cn/guides/feishu-audio-setup",
+            "author": {
+              "@type": "Organization",
+              "name": "面试稳产品与支持团队"
+            },
+            "publisher": {
+              "@id": "https://mianshiwen.cn/#organization"
+            },
+            "datePublished": "2026-08-19",
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "收音排查",
+                "item": "https://mianshiwen.cn/guides/audio-troubleshooting"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "飞书音频设置",
+                "item": "https://mianshiwen.cn/guides/feishu-audio-setup"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/guides/audio-troubleshooting",
+      "/guides/macos-permissions",
+      "/download",
+      "/login",
+      "/guides/audio-troubleshooting",
+      "/guides/macos-permissions",
+      "/guides/tencent-meeting-audio-setup",
+      "/features/realtime-interview",
+      "/contact",
+      "/",
+      "/guide",
+      "/security",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 7
+  },
+  {
+    "url": "https://mianshiwen.cn/guides/tencent-meeting-audio-setup",
+    "final": "https://mianshiwen.cn/guides/tencent-meeting-audio-setup",
+    "status": 200,
+    "seconds": 0.506,
+    "title": "腾讯会议面试收音设置｜面试稳",
+    "description": [
+      "腾讯会议视频面试收音设置指南：检查麦克风、扬声器、系统输出与面试稳伴随程序输入，定位听得见但无法转写的问题。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/guides/tencent-meeting-audio-setup"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "腾讯会议听得见，不等于助手已经收到电脑声音"
+    ],
+    "body_chars": 766,
+    "body_hash": "e6ecb78d117c6f7973a46c1c3cb568e1f925f50367f58d08b9f387d5e7533d46",
+    "body": "腾讯会议面试收音设置｜面试稳 面试稳AI助手 TENCENT MEETING AUDIO 腾讯会议听得见，不等于助手已经收到电脑声音 腾讯会议负责通话，伴随程序负责在系统授权范围内接收对应输入。排查时应分别确认自己的麦克风、会议扬声器、电脑输出和助手音量状态。 审核：面试稳产品与支持团队 发布：2026-08-19 更新：2026-08-19 腾讯会议能听到对方，为什么面试稳没有转写？ 先检查腾讯会议当前扬声器与电脑系统输出是否一致，再查看助手“面试官声音”音量条。 会议声音可能播放到蓝牙耳机、显示器或虚拟设备，而助手监听的是另一条输出；把两者切到同一实际设备后再测试完整句子。 应该怎么逐段验证？ 在腾讯会议设置中测试麦克风，确认对方能稳定听见你。 测试扬声器并确认电脑当前输出设备与会议选择一致。 关闭不用的虚拟声卡和已经断开的蓝牙设备，减少自动切换。 观察助手的两路音量状态，确定异常属于“我的声音”还是“面试官声音”。 进入网页准备页并确认设备已连接，再开始正式面试。 面试中突然没有声音怎么办？ 先不要频繁切换多个设备。记录异常时间，检查会议是否自动切换了扬声器或麦克风，再确认助手仍在线。如果音量条恢复而转写没有恢复，可暂停后手动恢复收音；仍异常时使用手动输入作为临时替代，并在面试后向支持提供时间和版本信息。 平台关系说明： 本页仅说明常见使用场景和用户侧音频设置。面试稳不代表与腾讯会议存在官方合作、授权或直接产品集成，平台能力以腾讯会议当前官方版本为准。 信息来源与适用范围 本指南依据面试稳当前音频链路、公开使用手册和腾讯会议客户端常见音频设备设置整理。不同系统和版本界面可能不同，应以腾讯会议当前客户端及其官方帮助说明为准。 相关指南 完整收音排查 macOS 权限 飞书音频设置 实时语音链路 联系支持",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://mianshiwen.cn/guides/tencent-meeting-audio-setup#article",
+            "headline": "腾讯会议面试收音设置",
+            "description": "检查腾讯会议麦克风、扬声器、系统输出和面试稳助手输入。",
+            "inLanguage": "zh-CN",
+            "mainEntityOfPage": "https://mianshiwen.cn/guides/tencent-meeting-audio-setup",
+            "author": {
+              "@type": "Organization",
+              "name": "面试稳产品与支持团队"
+            },
+            "publisher": {
+              "@id": "https://mianshiwen.cn/#organization"
+            },
+            "datePublished": "2026-08-19",
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "收音排查",
+                "item": "https://mianshiwen.cn/guides/audio-troubleshooting"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "腾讯会议音频设置",
+                "item": "https://mianshiwen.cn/guides/tencent-meeting-audio-setup"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/guides/audio-troubleshooting",
+      "/guides/macos-permissions",
+      "/download",
+      "/login",
+      "/guides/audio-troubleshooting",
+      "/guides/macos-permissions",
+      "/guides/feishu-audio-setup",
+      "/features/realtime-interview",
+      "/contact",
+      "/",
+      "/guide",
+      "/security",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 6
+  },
+  {
+    "url": "https://mianshiwen.cn/guides/star-interview-answer",
+    "final": "https://mianshiwen.cn/guides/star-interview-answer",
+    "status": 200,
+    "seconds": 1.142,
+    "title": "STAR 面试回答怎么组织｜面试稳",
+    "description": [
+      "STAR 面试回答指南：用情境、任务、行动和结果整理真实项目经历，避免背景过长、职责不清、行动空泛和结果无法核对。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/guides/star-interview-answer"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "STAR 不是套话，而是让真实经历更容易被理解"
+    ],
+    "body_chars": 816,
+    "body_hash": "8c095bb93f93ac9449d05380e17e4952883564a239a51148b78ae2d71b9cf6d2",
+    "body": "STAR 面试回答怎么组织｜面试稳 面试稳AI助手 STAR INTERVIEW ANSWER STAR 不是套话，而是让真实经历更容易被理解 STAR 分别代表情境、任务、行动和结果。它适合项目经历、冲突处理、困难解决和行为面试题，但结构只是表达工具，内容必须来自用户真实参与的经历。 审核：面试稳产品与支持团队 发布：2026-08-19 更新：2026-08-19 STAR 面试回答应该怎么说？ 先用一两句话交代情境和目标，把主要篇幅放在“我具体做了什么”，最后给出可以核对的结果和复盘。 面试官通常更关心你的判断、行动和取舍，而不是长篇项目背景。 四个部分分别回答什么？ 部分 核心问题 表达重点 Situation 情境 当时发生了什么？ 只保留理解问题所需背景 Task 任务 你的目标和责任是什么？ 区分团队目标与个人职责 Action 行动 你具体做了什么？为什么？ 说明判断、步骤、协作和取舍 Result 结果 结果如何？学到了什么？ 使用真实、可解释的证据 如何避免回答听起来像模板？ 不要把所有项目都套成相同句式，先确认问题真正考察的能力。 行动部分使用“我判断、我负责、我推动”，但不要把团队成果全部归给自己。 没有精确数字时可以描述可验证变化，不要为了好看虚构百分比。 结果不理想也可以回答，重点说明复盘和之后如何改进。 回答后准备两三个追问点，例如技术选择、冲突处理和失败风险。 AI 使用边界： 面试稳可以结合用户选择的简历和 JD 整理表达结构，但不会知道未提供的真实细节。用户必须核对建议并删除任何不属于自己的经历、数字或结论。 信息来源与适用范围 本指南依据常见行为面试结构和面试稳“以真实经历作答”的产品边界整理。STAR 不是所有问题的唯一回答方式；技术原理题、代码题和开放讨论题应根据问题类型选择更自然的结构。 继续准备 准备简历与 JD 个性化回答说明 面试复盘 积分与会员 使用手册",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://mianshiwen.cn/guides/star-interview-answer#article",
+            "headline": "STAR 面试回答怎么组织",
+            "description": "用情境、任务、行动和结果整理真实项目经历。",
+            "inLanguage": "zh-CN",
+            "mainEntityOfPage": "https://mianshiwen.cn/guides/star-interview-answer",
+            "author": {
+              "@type": "Organization",
+              "name": "面试稳产品与支持团队"
+            },
+            "publisher": {
+              "@id": "https://mianshiwen.cn/#organization"
+            },
+            "datePublished": "2026-08-19",
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "面试准备",
+                "item": "https://mianshiwen.cn/guides/interview-preparation"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "STAR 回答结构",
+                "item": "https://mianshiwen.cn/guides/star-interview-answer"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/guides/interview-preparation",
+      "/features/interview-review",
+      "/security",
+      "/login",
+      "/guides/interview-preparation",
+      "/features/ai-interview-assistant",
+      "/features/interview-review",
+      "/pricing",
+      "/guide",
+      "/",
+      "/about",
+      "/security",
+      "/contact"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 7
+  },
+  {
+    "url": "https://mianshiwen.cn/guides/self-introduction",
+    "final": "https://mianshiwen.cn/guides/self-introduction",
+    "status": 200,
+    "seconds": 0.958,
+    "title": "面试自我介绍怎么说：60秒结构与模板｜面试稳",
+    "description": [
+      "面试自我介绍怎么说？用岗位匹配、关键经历和求职动机组成60至90秒回答，附可填写模板、应届生与社招调整方法及常见错误检查表。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/guides/self-introduction"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "面试自我介绍怎么说？用60秒建立岗位匹配"
+    ],
+    "body_chars": 2047,
+    "body_hash": "8c8a78a0587c11a3cf044ac06a7c8d92c34682b6fc58f766b62048a20ecd5b49",
+    "body": "面试自我介绍怎么说：60秒结构与模板｜面试稳 面试稳AI助手 SELF INTRODUCTION 面试自我介绍怎么说？用60秒建立岗位匹配 自我介绍不是把简历从头念一遍，而是帮助面试官快速理解：你是谁、哪段经历最能证明匹配、为什么关注这个岗位，以及接下来值得追问什么。 发布与复核：2026-08-19 复核：面试稳产品与支持团队 阅读约 8 分钟 面试自我介绍的直接答案 建议用“当前定位—关键证据—岗位连接”三段式，在60至90秒内完成。 先用一句话说明当前专业或职业方向；再选择一至两个与JD最相关、能够接受追问的经历；最后说明你为什么申请，以及希望在这个岗位继续解决什么问题。 面试官通常已经看过简历。你的任务不是覆盖全部经历，而是主动建立一条清晰主线。美国人事管理局对结构化面试的说明表明，面试问题往往围绕岗位相关能力和过去行为展开；因此，自我介绍中最值得保留的是后续能够用事实展开的岗位证据，而不是宽泛形容词。 60秒自我介绍的三段结构 1. 当前定位：10至15秒 说明你目前的身份、方向和最相关年限或领域。不要从出生地讲起，也不要堆叠与岗位无关的课程。应届生可以说专业、研究或实习方向；社招可以说当前职责和擅长解决的问题。 2. 关键证据：30至50秒 从简历中选一至两件最匹配JD的事情。每件只讲“负责什么—做了什么—产生什么可核对结果”。如果结果不能量化，可以说明交付、质量、效率、风险或协作上的具体变化，但不要为了显得优秀而编造数字。 3. 岗位连接：10至20秒 用岗位要求收尾：你对哪类问题感兴趣、已有哪部分基础、希望继续承担什么。避免只说“贵公司平台大”“想学习”；要让动机与岗位工作本身发生关系。 可填写的自我介绍模板 模板不是成品答案： 方括号内容必须替换为你能用简历、作品或实际细节证明的事实。删除任何无法经受追问的技能、结果或职责。 “您好，我目前是/担任 [当前身份与方向] ，主要关注 [与岗位相关的领域] 。过去在 [课程、实习、工作或项目] 中，我负责 [具体职责] ，通过 [关键行动或技术选择] 完成了 [可核对的交付或结果] 。这段经历让我积累了 [JD要求的能力] 。我关注这个岗位，是因为 [岗位任务与你的真实连接] ，希望继续在 [具体问题] 上贡献并成长。” 写完后做三次删减：删掉简历上已经一目了然的细节；删掉与JD没有关系的信息；删掉无法解释“我具体做了什么”的集体成果。然后朗读计时，不必逐字背诵，只需记住三段顺序和关键词。 应届生、社招和转岗怎么调整？ 情况 重点 避免 应届生 课程或研究方向、实习/项目中的个人行动、可迁移能力 用“没有经验”开头，或只报课程名称 社招 当前职责、最匹配的复杂问题、技术或业务取舍 逐家公司复述履历，忽略当前岗位要求 转岗 转岗原因、已有能力如何迁移、为新方向完成的真实准备 否定原行业，或假装已经具备尚未验证的能力 有空窗期 简洁说明事实，再把重点转回期间的准备与当前匹配 过度辩解或隐藏容易核验的信息 五个常见错误 照念简历： 面试官听不到你选择信息的能力。 讲得太长： 两三分钟仍没有主线，后续追问被挤压。 只有形容词： “学习能力强”“沟通好”没有行为证据。 每家公司说同一版： 没有根据JD重新排序经历。 背稿痕迹过重： 被打断后无法自然继续，也无法应对追问。 如果核心证据来自项目，可继续使用 项目经历回答结构 展开；行为问题可使用 STAR回答方法 补充行动和结果。 练习前后的检查清单 第一句话是否让人知道你的职业定位？ 关键经历是否与JD至少一项要求直接相关？ 是否说清“我”负责的部分，而不是只说“我们”？ 结果是否真实、可解释、可继续追问？ 结尾是否自然连接到当前岗位？ 被中途打断时，能否用一句话总结？ 可以先按 面试准备清单 整理简历和JD，再了解 AI面试助手如何结合资料 生成表达建议。产品内建议仍需要你按真实经历修改。 常见问题 自我介绍应该说多久？ 多数情况下先准备60至90秒版本。若面试官要求“简单介绍”，可压缩到30秒；若明确要求介绍经历，再扩展到两分钟左右，并观察对方是否准备追问。 要说兴趣爱好吗？ 只有在它能帮助理解岗位匹配、长期投入或团队协作时才简要提及。与工作无关的个人信息不是必填项。 学历或经历不够亮眼怎么办？ 不要用夸大弥补。聚焦可证明的行动、学习过程和交付质量，并说明它们如何对应岗位要求。 可以直接背模板吗？ 不建议。模板只帮助确定顺序；逐字背诵会让回答僵硬，也更难应对追问。用关键词卡片练习更自然。 来源与适用范围 方法参考 OPM结构化面试说明 、 Microsoft Careers面试建议 和 Harvard FAS职业中心转载的自我介绍指南 。不同公司和岗位的要求会变化，请以招聘方通知和JD为准。这些来源与面试稳不存在合作关系。 继续准备 项目经历怎么介绍 面试常见问题 技术面试怎么准备 面试题与专题 用自己的资料练习",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://mianshiwen.cn/guides/self-introduction#article",
+            "headline": "面试自我介绍怎么说：60秒结构与模板",
+            "description": "用岗位匹配、关键经历和求职动机组成真实、简洁的面试自我介绍。",
+            "inLanguage": "zh-CN",
+            "mainEntityOfPage": "https://mianshiwen.cn/guides/self-introduction",
+            "author": {
+              "@type": "Organization",
+              "name": "面试稳产品与支持团队"
+            },
+            "publisher": {
+              "@id": "https://mianshiwen.cn/#organization"
+            },
+            "datePublished": "2026-08-19",
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "面试指南",
+                "item": "https://mianshiwen.cn/guides"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "面试自我介绍",
+                "item": "https://mianshiwen.cn/guides/self-introduction"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/login",
+      "/guides/project-experience",
+      "/guides/star-interview-answer",
+      "/guides/interview-preparation",
+      "/features/ai-interview-assistant",
+      "https://www.opm.gov/policy-data-oversight/assessment-and-selection/structured-interviews/",
+      "https://careers.microsoft.com/v2/global/en/hiring-tips/interview-tips.html",
+      "https://careerservices.fas.harvard.edu/blog/2026/04/03/how-to-answer-tell-me-about-yourself/",
+      "/guides/project-experience",
+      "/guides/common-interview-questions",
+      "/guides/technical-interview",
+      "/interview-questions",
+      "/login",
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 6
+  },
+  {
+    "url": "https://mianshiwen.cn/guides/project-experience",
+    "final": "https://mianshiwen.cn/guides/project-experience",
+    "status": 200,
+    "seconds": 0.631,
+    "title": "面试项目经历怎么介绍：六段回答结构｜面试稳",
+    "description": [
+      "面试项目经历怎么介绍？用目标、约束、方案、个人行动、结果和反思六段结构讲清项目，附技术追问清单、填空模板与常见错误。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/guides/project-experience"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "面试项目经历怎么介绍？讲清问题、取舍和你的行动"
+    ],
+    "body_chars": 2120,
+    "body_hash": "1229afc84f82f0fcb448c132e4ef2d4b6b15532154225b2031aa0713f5c8f936",
+    "body": "面试项目经历怎么介绍：六段回答结构｜面试稳 面试稳AI助手 PROJECT EXPERIENCE 面试项目经历怎么介绍？讲清问题、取舍和你的行动 好的项目回答不是技术名词列表。面试官需要知道项目为什么存在、约束是什么、你负责哪部分、为什么选择这个方案、结果如何，以及如果重来会怎样改进。 发布与复核：2026-08-19 复核：面试稳产品与支持团队 阅读约 9 分钟 项目经历回答的直接结构 用“目标—约束—方案—行动—结果—反思”六段式回答。 先在20秒内交代业务或用户目标和项目范围；再说明最关键约束；接着解释方案与备选方案；重点讲你亲自完成的行动；用可核对结果收尾；最后补充局限和复盘。 这个结构比单纯罗列框架更能体现判断过程。技术面试不仅看最终方案，也看你如何澄清问题、提出假设、比较取舍并测试结果。Microsoft Careers 的技术面试说明同样强调问题拆解、澄清歧义、设计、编码与测试过程。 六段分别讲什么？ 1. 目标：为什么要做 用一句话说明服务对象、原有问题和成功标准。避免从“我们用了某框架”开始；技术是手段，不是项目目标。 2. 约束：为什么难 选择最影响方案的两三个约束，例如数据规模、延迟、兼容性、团队时间、合规或历史系统。没有约束的“最优方案”通常无法解释选型。 3. 方案：为什么这样选 先说总体结构，再比较至少一个合理备选。讲清选择依据、放弃了什么，以及哪些判断当时只是需要验证的假设。 4. 行动：你具体做了什么 把团队成果拆回个人职责：你负责设计、实现、协调、测试还是上线？遇到什么变化，你做了哪个关键决定？这一段应占回答最长时间。 5. 结果：如何证明完成 有真实数据就说明口径和时间范围；没有数据时，可以用稳定上线、缺陷减少、交付完成、人工步骤减少或用户反馈等可核对事实。不要补造百分比。 6. 反思：下次怎样更好 指出一个真实限制、技术债或协作改进，并说明现在会先验证什么。反思不是否定项目，而是展示你理解方案边界。 项目介绍填空模板 请只填真实信息： 如果某项是团队结果，要明确你的贡献；如果数字没有统计口径，就不要写。任何写进回答的技术选择，都应能够解释原理、替代方案和失败边界。 “这个项目面向 [用户/业务场景] ，目标是解决 [具体问题] 。当时主要约束是 [规模、时间、兼容性或其他限制] 。团队比较过 [备选方案] ，最终选择 [方案] ，原因是 [取舍依据] 。我主要负责 [个人职责] ，其中最关键的行动是 [你的决策与执行] 。最终 [可核对结果] 。现在复盘，我会优先改进 [局限] ，并通过 [验证方法] 降低风险。” 技术面试官可能怎样追问？ 追问方向 准备问题 需求与范围 谁提出需求？成功标准是什么？哪些内容明确不做？ 架构与选型 为什么用这个方案？备选是什么？数据流和故障边界在哪里？ 性能与容量 规模是多少？瓶颈如何发现？压测、监控或估算怎样做？ 可靠性 失败如何恢复？是否幂等？如何处理超时、重试和降级？ 质量 怎么测试？覆盖哪些边界？上线后如何确认结果？ 个人贡献 哪个决定是你做的？遇到分歧如何推进？最难的问题是什么？ 可把这些问题加入 技术面试准备矩阵 ，逐项补齐概念、原理、取舍和案例。 项目回答和STAR有什么区别？ STAR结构 适合强调一次具体行为：情境、任务、行动和结果。项目介绍通常还需要更多工程上下文，尤其是约束、方案比较和复盘。可以把六段式作为项目总览，再用STAR展开某次故障、冲突、延期或关键决策。 在 自我介绍 中只需要放项目的一句摘要；面试官追问后，再切换到六段结构。这样既不会开场过长，也能保持前后事实一致。 四个常见错误 只讲技术栈： 听不到目标、约束和选择理由。 把团队贡献全算给自己： 追问职责边界时容易前后矛盾。 结果只有“成功上线”： 没有说明怎样判断正确、稳定或有价值。 只准备顺利版本： 无法回答失败、权衡、风险和复盘。 准备材料时，可参考 面试准备清单 先核对简历与JD。如果需要分析屏幕中的系统设计或代码题，再了解 截图回答的适用边界 。 常见问题 应该准备几个项目？ 通常准备一个主项目和一到两个备选更实用。主项目要能覆盖岗位核心能力，备选项目用于回答不同方向或避免所有例子重复。 项目不是我主导的还能讲吗？ 可以，但必须清楚区分团队目标和个人贡献。重点讲你实际承担的任务、判断和学习，不要把主导权说成自己的。 没有量化结果怎么办？ 使用可核对的交付证据，例如完成何种功能、解决哪类缺陷、通过什么测试或减少哪个人工步骤。若没有统计，不编造数字。 面试官问到不会的细节怎么办？ 先说明职责或知识边界，再讲你能确认的部分和验证思路。诚实澄清通常比猜测一个确定答案更可靠。 来源与适用范围 方法参考 Microsoft Careers技术面试建议 、 Microsoft Careers通用面试建议 与 OPM结构化面试指南 。六段结构是面试稳对项目表达的编辑整理，不是招聘方统一评分标准；实际流程以招聘方要求为准。 继续准备 技术面试怎么准备 面试常见问题 STAR回答方法 面试题与专题 结合简历和JD练习",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://mianshiwen.cn/guides/project-experience#article",
+            "headline": "面试项目经历怎么介绍：六段回答结构",
+            "description": "用目标、约束、方案、个人行动、结果和反思讲清项目经历。",
+            "inLanguage": "zh-CN",
+            "mainEntityOfPage": "https://mianshiwen.cn/guides/project-experience",
+            "author": {
+              "@type": "Organization",
+              "name": "面试稳产品与支持团队"
+            },
+            "publisher": {
+              "@id": "https://mianshiwen.cn/#organization"
+            },
+            "datePublished": "2026-08-19",
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "面试指南",
+                "item": "https://mianshiwen.cn/guides"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "项目经历",
+                "item": "https://mianshiwen.cn/guides/project-experience"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/login",
+      "/guides/technical-interview",
+      "/guides/star-interview-answer",
+      "/guides/self-introduction",
+      "/guides/interview-preparation",
+      "/features/screenshot-answer",
+      "https://careers.microsoft.com/v2/global/en/hiring-tips/technical-interviewing.html",
+      "https://careers.microsoft.com/v2/global/en/hiring-tips/interview-tips.html",
+      "https://www.opm.gov/policy-data-oversight/assessment-and-selection/structured-interviews/guide/",
+      "/guides/technical-interview",
+      "/guides/common-interview-questions",
+      "/guides/star-interview-answer",
+      "/interview-questions",
+      "/login",
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 12
+  },
+  {
+    "url": "https://mianshiwen.cn/guides/technical-interview",
+    "final": "https://mianshiwen.cn/guides/technical-interview",
+    "status": 200,
+    "seconds": 0.835,
+    "title": "技术面试怎么准备：能力矩阵与解题流程｜面试稳",
+    "description": [
+      "技术面试怎么准备？从JD建立能力矩阵，按概念、原理、取舍和案例四层复习，并用澄清、方案、实现、测试与复盘完成现场解题。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/guides/technical-interview"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "技术面试怎么准备？从JD反推能力与证据"
+    ],
+    "body_chars": 2074,
+    "body_hash": "49fa704af329fd16c49a07d6179bfe79b0de08d1954131e782ccf919bbbae84c",
+    "body": "技术面试怎么准备：能力矩阵与解题流程｜面试稳 面试稳AI助手 TECHNICAL INTERVIEW 技术面试怎么准备？从JD反推能力与证据 技术面试不是无限刷题。先判断岗位实际考什么，再把每项能力准备到“能定义、懂原理、会取舍、有案例”，最后用模拟练习检验表达和现场解题过程。 发布与复核：2026-08-19 复核：面试稳产品与支持团队 阅读约 9 分钟 技术面试准备的直接方法 先用JD建立能力矩阵，再按概念、原理、取舍和案例四层补齐。 将要求分成“必须掌握、需要证明、加分项”三组；每项写出一句定义、关键机制、适用边界、真实项目证据和一个失败场景。最后练习现场澄清、规划、实现、测试与复盘。 招聘流程和题型会因公司与岗位变化。Microsoft Careers 的技术面试公开说明强调，评估不只覆盖知识，还关注问题拆解、技术选择、设计、编码和测试。因此，准备计划应同时覆盖知识与过程，而不是只记最终答案。 第一步：把JD变成能力矩阵 层级 识别方法 准备输出 必须掌握 职责和任职要求反复出现，直接影响日常交付 原理、常见问题、项目证据、现场演示 需要证明 “负责、设计、优化、主导”等行为词 一段可追问的 项目经历 加分项 了解、优先、熟悉更佳等非核心要求 说明接触程度和学习路径，不假装精通 业务与协作 用户场景、跨团队、稳定性、成本或合规要求 决策标准、沟通过程和结果边界 矩阵完成后，从高频且薄弱的交集开始，不平均分配时间。岗位未要求的冷门细节可以放后；简历上已经写出的技能则必须能够解释。 第二步：每个主题准备四层 概念： 它是什么，解决什么问题，与相邻概念有什么区别。 原理： 核心数据流、状态变化、复杂度或运行机制是什么。 取舍： 什么时候适合、什么时候不适合，替代方案和成本是什么。 案例： 你在哪个真实场景使用、承担什么、怎样验证、结果和反思是什么。 例如准备缓存时，不只记“提高性能”。还要能解释命中与失效、数据一致性、穿透/击穿/雪崩、容量与淘汰、监控指标，并说明自己是否真的处理过。没有实践时，清楚标注学习范围。 能力边界： 不要把看过文章、完成练习或团队使用过描述成自己主导过。无法证明的经历会在连续追问中暴露，也会破坏整份简历的一致性。 第三步：现场解题用五步流程 1. 澄清问题 复述目标，确认输入输出、规模、边界条件和成功标准。题目有歧义时主动说明假设，不要悄悄选一个前提。 2. 提出方案 先讲最直接可行方案，再讨论优化。说明数据结构、模块或数据流，让面试官能跟上你的思路。 3. 分析取舍 比较时间、空间、复杂度、可靠性、扩展性或维护成本。系统设计题还应说明容量估算和故障边界。 4. 实现并持续沟通 编码时使用自己熟悉的语言，保持命名和结构清楚。遇到卡点，说明当前判断和下一步验证，而不是长时间沉默。 5. 测试与复盘 至少覆盖正常、边界和异常输入。发现问题时直接修正并说明原因；时间不足时，明确剩余风险和下一步。 不同题型分别准备什么？ 知识与原理题 练习40至60秒直接回答，再准备机制、边界和案例应对追问。 算法与编码题 练习澄清、样例、复杂度、可运行实现和测试，不只看题解。 系统设计题 练习需求、估算、接口、数据模型、核心组件、瓶颈、容错与演进。 项目深挖 围绕目标、约束、选型、个人行动、结果和复盘建立追问树。 可从 面试题与技术专题 选择方向；面对屏幕中的代码或设计题时，先理解 截图回答能力与识别边界 ，不要把AI输出当成无需验证的答案。 一周冲刺怎么安排？ 第1天： 拆JD、标记简历风险点、确认面试形式。 第2至3天： 补齐必须掌握主题的四层卡片。 第4天： 准备主项目与备选项目的追问树。 第5天： 限时完成编码或系统设计模拟，记录卡点。 第6天： 模拟完整面试，检查答案长度、事实一致和表达顺序。 第7天： 只复盘高风险项，完成设备和资料检查，保证休息。 更完整的设备和资料步骤见 面试准备清单 ；需要练习行为问题时，可结合 常见问题分类 和 STAR方法 。 常见问题 刷多少题才够？ 没有统一数量。用“是否覆盖JD核心能力、能否独立解释和实现、是否能处理变化”判断，比追求题数更可靠。 遇到完全不会的问题怎么办？ 先澄清问题并说出已知部分，再提出验证或拆解方法。不要编造确定答案；明确知识边界也能展示判断和学习方式。 技术面试要背标准答案吗？ 不建议。可以记定义和框架，但取舍与案例必须基于真实理解。问题稍作变化，死记答案很容易失效。 是否需要准备反问？ 需要。优先询问岗位实际问题、成功标准、团队协作和技术挑战，既帮助判断机会，也体现你对工作内容的关注。 来源与适用范围 方法参考 Microsoft Careers技术面试说明 、 Microsoft Careers面试建议 和 OPM结构化面试说明 。本页是通用准备框架，不代表任何公司的官方流程或题库；请以招聘方通知为准。 继续准备 面试题与技术专题 项目经历怎么介绍 自我介绍怎么说 实时面试辅助 结合岗位资料练习",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://mianshiwen.cn/guides/technical-interview#article",
+            "headline": "技术面试怎么准备：能力矩阵与解题流程",
+            "description": "从JD建立能力矩阵，按四层复习并用五步流程完成现场解题。",
+            "inLanguage": "zh-CN",
+            "mainEntityOfPage": "https://mianshiwen.cn/guides/technical-interview",
+            "author": {
+              "@type": "Organization",
+              "name": "面试稳产品与支持团队"
+            },
+            "publisher": {
+              "@id": "https://mianshiwen.cn/#organization"
+            },
+            "datePublished": "2026-08-19",
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "面试指南",
+                "item": "https://mianshiwen.cn/guides"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "技术面试准备",
+                "item": "https://mianshiwen.cn/guides/technical-interview"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/login",
+      "/guides/project-experience",
+      "/interview-questions",
+      "/features/screenshot-answer",
+      "/guides/interview-preparation",
+      "/guides/common-interview-questions",
+      "/guides/star-interview-answer",
+      "https://careers.microsoft.com/v2/global/en/hiring-tips/technical-interviewing.html",
+      "https://careers.microsoft.com/v2/global/en/hiring-tips/interview-tips.html",
+      "https://www.opm.gov/policy-data-oversight/assessment-and-selection/structured-interviews/",
+      "/interview-questions",
+      "/guides/project-experience",
+      "/guides/self-introduction",
+      "/features/realtime-interview",
+      "/login",
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 12
+  },
+  {
+    "url": "https://mianshiwen.cn/guides/common-interview-questions",
+    "final": "https://mianshiwen.cn/guides/common-interview-questions",
+    "status": 200,
+    "seconds": 0.689,
+    "title": "面试常见问题：五类题目与回答框架｜面试稳",
+    "description": [
+      "面试常见问题如何准备？按背景动机、岗位匹配、行为经历、技术能力和反问五类理解考察意图，用真实证据库组织回答而非背标准答案。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/guides/common-interview-questions"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "面试常见问题怎么准备？先看考察意图，再找真实证据"
+    ],
+    "body_chars": 2181,
+    "body_hash": "471949a5f3fbe5279b56deb41977e244d3af2831578f9876d7fa317ed73670ee",
+    "body": "面试常见问题：五类题目与回答框架｜面试稳 面试稳AI助手 COMMON QUESTIONS 面试常见问题怎么准备？先看考察意图，再找真实证据 同一句问题在不同岗位可能有不同重点。与其背几十份标准答案，不如把问题分成背景动机、岗位匹配、行为经历、技术能力和反问五类，为每类准备可复用的真实证据。 发布与复核：2026-08-19 复核：面试稳产品与支持团队 阅读约 9 分钟 准备常见问题的直接方法 先识别面试官想验证的岗位能力，再用“结论—证据—岗位连接”回答。 开放题先给一句明确结论，随后用真实经历或判断依据证明，最后说明它如何对应当前岗位。行为问题可展开为STAR，技术问题则补充原理、取舍和案例。 结构化面试常通过过去行为或假设情境评估岗位相关能力，并可能使用一致评价标准。这意味着“听起来漂亮”并不够；回答需要提供与能力相关、可继续追问的信息。 第一类：背景与自我介绍 常见问法 请介绍一下自己。 能否简单讲讲你的经历？ 为什么从上一段经历转到现在的方向？ 考察意图： 沟通结构、经历一致性和岗位主线。先准备 60至90秒自我介绍 ，再为学历、转岗、空窗或职责变化准备简洁事实说明。 第二类：求职动机与岗位匹配 常见问法 为什么申请这个岗位？ 为什么选择我们公司或这个方向？ 你的优势和不足是什么？ 未来一到三年希望做什么？ 回答框架： 岗位事实—个人证据—双向期待。先从JD或公开业务中选一个具体任务；再说明自己的哪段经验能贡献；最后讲希望继续发展的能力。不要把“公司大、待遇好”作为唯一理由，也不要把包装后的优点当作虚假缺点。 事实边界： 只使用公开、可核对的公司信息，不猜测内部战略或团队情况。职业计划可以表达方向，但不必承诺无法确定的年限和职位。 第三类：行为与情境问题 常见问法 讲一次你解决复杂问题的经历。 遇到冲突、延期或需求变化时怎么处理？ 讲一次失败，以及你学到了什么。 如何推动没有直接汇报关系的人协作？ 考察意图： 判断、行动、协作、责任和复盘。使用 STAR结构 时，把篇幅重点放在行动，不要只讲背景和团队结果。准备三至五个真实故事，分别覆盖解决问题、合作、失败、主动性和学习；一个故事可以应对多种问法，但每次突出不同能力。 第四类：项目与技术能力 常见问法 介绍一个最有挑战的项目。 为什么选择这个技术方案？ 如果数据量或用户量扩大，会有什么问题？ 线上出现故障时如何定位？ 请现场完成一道代码题或系统设计题。 项目题使用 目标—约束—方案—行动—结果—反思 结构。知识题按概念、原理、取舍和案例准备；现场题按澄清、方案、实现、测试和复盘推进。完整方法见 技术面试准备指南 和 面试题与技术专题 。 第五类：候选人反问 可以问什么？ 这个岗位入职前三个月最重要的目标是什么？ 团队当前最希望解决的技术或业务挑战是什么？ 这项工作的成功标准如何判断？ 团队如何协作、评审和复盘？ 后续流程与大致时间安排是什么？ 反问用于双向判断，不是表演“聪明”。避免询问官网已明确的信息，也不要在对方无法回答时持续追问敏感内容。不同面试轮次可调整：HR更适合流程和职责，业务负责人更适合目标与协作，技术面试官更适合工程问题。 建立一份可复用的证据库 能力 证据问题 准备材料 解决问题 最难的限制是什么？你如何定位和验证？ 问题、行动、结果、复盘 协作沟通 分歧是什么？你怎样让信息和决策透明？ 对象、冲突、沟通动作、结果 责任感 出现问题后你承担了什么？如何避免再发生？ 影响、止损、根因、长期改进 学习能力 为什么要学？如何验证掌握并用于交付？ 目标、学习路径、实践证据 技术判断 有哪些方案？你依据什么选择？ 约束、备选、取舍、监控 证据库应来自简历、项目记录和实际成果。可以用 面试准备清单 核对资料，再了解 AI面试助手 如何基于用户主动选择的资料整理建议。 回答完成后的四项检查 是否先回答问题？ 不要铺垫一分钟才出现结论。 是否有个人行动？ 团队故事中要明确你的职责。 是否有事实边界？ 数字、技术和结果都能解释来源。 是否留出追问空间？ 首答控制长度，把细节放到后续。 现场获得的AI建议只能作为草稿。请删除与你经历不一致的内容，不要因为表达流畅而保留虚构事实。 常见问题 每道题都要准备完整稿吗？ 不需要。准备框架、关键词和证据卡片更灵活。逐字稿适合首次梳理，但练习阶段应逐步脱稿。 回答多长比较合适？ 简单动机或知识题可先控制在40至90秒；复杂行为或项目题可在两分钟左右给出主线，再按追问展开。以问题复杂度和面试官反馈调整。 弱点问题应该怎么说？ 选择真实但可管理、与岗位核心底线不冲突的问题，说明它造成的影响和正在采取的改进。不要把明显优点包装成弱点。 遇到不想回答的私人问题怎么办？ 可以礼貌确认它与岗位的关系，或把回答转向工作安排和履职能力。涉及具体法律权利时，应咨询当地专业机构，本指南不提供法律意见。 来源与适用范围 方法参考 OPM结构化面试说明 、 OPM结构化面试指南 和 Microsoft Careers面试建议 。问题分类是通用整理，不是任何公司的官方题库或评分标准；具体问题和流程以招聘方通知为准。 继续准备 自我介绍怎么说 项目经历怎么介绍 技术面试怎么准备 STAR回答方法 用自己的资料练习",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://mianshiwen.cn/guides/common-interview-questions#article",
+            "headline": "面试常见问题：五类题目与回答框架",
+            "description": "按五类问题理解考察意图，用真实证据组织回答。",
+            "inLanguage": "zh-CN",
+            "mainEntityOfPage": "https://mianshiwen.cn/guides/common-interview-questions",
+            "author": {
+              "@type": "Organization",
+              "name": "面试稳产品与支持团队"
+            },
+            "publisher": {
+              "@id": "https://mianshiwen.cn/#organization"
+            },
+            "datePublished": "2026-08-19",
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "面试指南",
+                "item": "https://mianshiwen.cn/guides"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "面试常见问题",
+                "item": "https://mianshiwen.cn/guides/common-interview-questions"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/login",
+      "/guides/self-introduction",
+      "/guides/star-interview-answer",
+      "/guides/project-experience",
+      "/guides/technical-interview",
+      "/interview-questions",
+      "/guides/interview-preparation",
+      "/features/ai-interview-assistant",
+      "https://www.opm.gov/policy-data-oversight/assessment-and-selection/structured-interviews/",
+      "https://www.opm.gov/policy-data-oversight/assessment-and-selection/structured-interviews/guide/",
+      "https://careers.microsoft.com/v2/global/en/hiring-tips/interview-tips.html",
+      "/guides/self-introduction",
+      "/guides/project-experience",
+      "/guides/technical-interview",
+      "/guides/star-interview-answer",
+      "/login",
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 8
+  },
+  {
+    "url": "https://mianshiwen.cn/interview-questions/llm",
+    "final": "https://mianshiwen.cn/interview-questions/llm",
+    "status": 200,
+    "seconds": 1.242,
+    "title": "大模型面试题：原理、推理、上下文与评测｜面试稳",
+    "description": [
+      "大模型面试题准备指南：从Transformer、自注意力、训练与推理、上下文窗口、幻觉到评测与工程取舍，附常见追问、回答框架和可靠来源。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/interview-questions/llm"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "大模型面试题怎么准备？从原理讲到工程边界"
+    ],
+    "body_chars": 2209,
+    "body_hash": "0838ec7e17ab098f5390498632ec217d48b50e2f09568d4bba3870c4ba46159e",
+    "body": "大模型面试题：原理、推理、上下文与评测｜面试稳 面试稳AI助手 LARGE LANGUAGE MODEL 大模型面试题怎么准备？从原理讲到工程边界 大模型面试不只考概念。完整回答需要说明模型怎样处理上下文、训练与推理有什么差异、为什么会产生不可靠输出，以及在质量、延迟、成本和安全之间如何取舍。 发布与复核：2026-08-19 复核：面试稳产品与支持团队 阅读约 10 分钟 大模型面试的直接准备框架 用“机制—能力—限制—验证”四层回答。 先讲清输入如何被表示和计算，再说明该机制带来的能力；随后指出上下文、事实性、延迟或成本限制，最后给出可复现的评测与监控方案。 如果只背“Transformer 使用注意力”，面试官通常会继续追问复杂度、位置关系、训练目标和推理缓存。准备时应把每个概念连接到一次工程决策：为什么选择某种上下文长度、怎样降低首字延迟、什么情况下需要检索增强，而不是把术语逐个背诵。 Transformer 与自注意力应该讲到什么程度？ Transformer 用注意力机制建模序列中不同位置的关系。输入经过词元化和向量表示后，注意力通过查询、键和值计算当前位置应该聚合哪些信息，多头机制让不同子空间学习不同关系；前馈网络、残差连接和归一化共同组成层级结构。位置编码或位置表示补充序列顺序。 常见追问 为什么能并行训练？ 训练时同一层可以并行计算多个位置，不需要像循环网络那样逐步传递隐藏状态。 注意力代价在哪里？ 标准全注意力对序列长度的时间与内存开销会快速增长，长上下文需要在质量、显存和吞吐之间取舍。 训练与生成为什么不同？ 训练可以一次处理目标序列，生成通常自回归地产生下一个词元；KV Cache 复用历史键值以减少重复计算，但会占用显存。 预训练、微调、提示和RAG怎么区分？ 方法 改变什么 适合解决 主要边界 预训练 模型基础参数 获得通用语言与知识能力 数据和计算成本极高 监督微调 参数或适配器 任务格式、风格和领域行为 不是实时更新事实的捷径 提示与上下文 单次请求输入 约束任务、提供示例和临时事实 受上下文长度与模型利用能力影响 RAG 外部检索上下文 更新知识、提供依据与可追溯内容 检索错误会传递到生成阶段 为什么上下文更长不等于效果一定更好？ 上下文窗口表示一次推理可接收的最大词元范围，但“能放进去”不等于“能稳定使用”。《Lost in the Middle》显示，相关信息的位置变化可能显著影响长上下文任务表现。因此工程上仍要做信息筛选、排序、去重和分段评测，不能把所有资料直接拼接后期待模型自动找到重点。 面试回答可以先说明假设，再从三个层面诊断：输入是否包含答案、相关内容是否位于模型容易利用的位置、生成指令是否要求引用和拒答。若知识频繁变化或需要来源，应考虑 检索增强 ；若任务需要外部操作，则再考虑 Agent 。 幻觉问题应该怎样回答？ “幻觉”不是单一故障。可能是模型参数中没有可靠知识、输入缺少上下文、检索返回错误材料、指令冲突、解码随机性，或评测标准本身不清楚。治理方案也应分层： 明确允许回答和必须拒答的范围。 对需要事实依据的任务提供受控资料和引用。 将格式、数值和权限校验交给确定性代码。 对高风险输出增加人工确认与审计。 用失败样本集持续评测，而不是只看几次演示。 能力边界： 检索、微调或更长上下文都不能保证输出绝对正确。NIST 的生成式 AI 风险资料强调，应在具体使用场景中持续测量、监控和管理风险，而不是把模型能力当作固定事实。 大模型应用如何评测？ 维度 可观察指标 避免的误区 任务质量 正确性、完整性、可执行性、拒答准确性 只用单一自动分数 事实与依据 引用支持率、事实核验、无依据断言 把流畅度当正确性 性能 首字延迟、总耗时、吞吐、超时率 只看平均值，不看P95 成本 输入/输出词元、缓存命中、重试成本 忽略失败请求和长上下文 安全 越权工具调用、敏感信息、提示注入成功率 只做正常路径测试 回答自己的项目时，用真实数据说明基线、样本构成、判定规则和上线阈值；如果没有做过某项评测，应明确说“我会怎样验证”，不要编造实验结果。可结合 项目经历回答结构 组织。 常见问题 参数量越大模型就一定越好吗？ 不一定。任务质量还受训练数据、架构、推理配置、上下文、工具和评测方式影响；业务选型还必须考虑延迟、成本、部署与合规。 Temperature 是什么？ 它影响采样分布的平滑程度，但不同接口实现和其他采样参数会共同影响结果。低温度通常更稳定，不代表事实一定正确。 什么时候用微调？ 当需要稳定的任务行为、格式或领域模式，并且有高质量样本与评测基线时考虑。需要频繁更新事实或给出来源时，通常先评估RAG。 回答不知道的问题会扣分吗？ 比编造更好的方式是说明已知边界、给出合理假设和验证步骤。技术面试也在考察风险意识和问题拆解能力。 来源与适用范围 核心原理参考 Attention Is All You Need ；长上下文限制参考 Lost in the Middle ；风险与评测边界参考 NIST生成式AI风险管理资料 。论文结论对应其测试条件，不代表所有模型和业务场景；来源与面试稳不存在合作关系。 继续准备 RAG面试题 AI Agent面试题 技术面试准备 项目经历表达 AI面试助手能力 用真实资料练习",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://mianshiwen.cn/interview-questions/llm#article",
+            "headline": "大模型面试题：原理、推理、上下文与评测",
+            "description": "系统准备大模型面试中的核心原理、工程取舍、故障诊断和评测问题。",
+            "inLanguage": "zh-CN",
+            "mainEntityOfPage": "https://mianshiwen.cn/interview-questions/llm",
+            "author": {
+              "@type": "Organization",
+              "name": "面试稳产品与支持团队"
+            },
+            "publisher": {
+              "@id": "https://mianshiwen.cn/#organization"
+            },
+            "datePublished": "2026-08-19",
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "面试题与专题",
+                "item": "https://mianshiwen.cn/interview-questions"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "大模型面试题",
+                "item": "https://mianshiwen.cn/interview-questions/llm"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/login",
+      "/interview-questions/rag",
+      "/interview-questions/rag",
+      "/interview-questions/ai-agent",
+      "/guides/project-experience",
+      "https://arxiv.org/abs/1706.03762",
+      "https://arxiv.org/abs/2307.03172",
+      "https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence",
+      "/interview-questions/rag",
+      "/interview-questions/ai-agent",
+      "/guides/technical-interview",
+      "/guides/project-experience",
+      "/features/ai-interview-assistant",
+      "/login",
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 3
+  },
+  {
+    "url": "https://mianshiwen.cn/interview-questions/rag",
+    "final": "https://mianshiwen.cn/interview-questions/rag",
+    "status": 200,
+    "seconds": 0.712,
+    "title": "RAG面试题：检索、重排、生成与评测｜面试稳",
+    "description": [
+      "RAG面试题准备指南：讲清文档解析、切分、Embedding、召回、混合检索、重排、生成引用、评测与线上故障定位，附回答框架和原始论文。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/interview-questions/rag"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "RAG面试题怎么回答？先把检索与生成拆开"
+    ],
+    "body_chars": 2315,
+    "body_hash": "4508158e183d398501f87d42017ca782a0924d188afa672c5d9f20e9319464e1",
+    "body": "RAG面试题：检索、重排、生成与评测｜面试稳 面试稳AI助手 RETRIEVAL-AUGMENTED GENERATION RAG面试题怎么回答？先把检索与生成拆开 RAG不是“向量库加大模型”这么简单。面试中要能讲清数据如何进入索引、查询如何召回与重排、上下文如何供模型使用，以及答案错误时如何判断是检索失败还是生成失败。 发布与复核：2026-08-19 复核：面试稳产品与支持团队 阅读约 11 分钟 RAG是什么？ RAG（检索增强生成）是在生成回答前，从外部知识源检索相关内容并作为上下文提供给模型。 它把参数化模型与可更新、可追溯的非参数知识连接起来，适合需要私有资料、时效信息或引用依据的任务。 原始RAG论文研究的是预训练生成模型与外部稠密索引的结合。工程实践通常扩展为文档解析、切分、索引、查询理解、召回、重排、上下文组装、生成、引用与评测。回答时应先说明自己的系统边界，避免把某个框架的默认流程当成RAG的唯一实现。 端到端链路应该怎么讲？ 摄取： 读取文件，保留标题、章节、页码、权限和更新时间等元数据。 切分： 按语义或结构形成可检索片段，设置重叠以减少边界信息丢失。 索引： 生成向量表示，也可同时建立关键词倒排索引。 查询： 对用户问题做规范化、改写、分解或过滤。 召回与重排： 先广泛找候选，再按相关性、权限、新鲜度排序。 上下文组装： 去重、控制词元预算，保留来源标识。 生成与校验： 要求基于证据作答，无法支持时拒答或提示缺少资料。 切分策略为什么影响很大？ 策略 优势 风险 适用线索 固定长度 简单、吞吐稳定 可能截断语义和表格 结构弱、文本较规整 按段落/标题 保留文档结构 片段长度差异大 手册、规范、知识文章 滑动重叠 缓解边界丢失 重复召回和索引膨胀 连续叙述、跨段信息 父子分块 小块召回、大块补上下文 链路与存储更复杂 长文档和章节型资料 不要直接回答“最佳块大小是多少”。块大小取决于文档结构、问题粒度、Embedding模型、召回数量和上下文预算，应通过真实查询集评测。PDF还要先检查重复页眉、断行、扫描OCR和表格解析，否则异常文本会导致索引成本和召回噪声同时上升。 向量检索、关键词检索与混合检索怎么选？ 向量检索更擅长语义相似，关键词检索对专有名词、编号、错误码和精确短语更稳定。混合检索把两类候选合并，再用重排器或业务规则排序。选择不应基于“哪个更先进”，而应基于查询分布：如果用户经常输入产品型号、法规条款或代码符号，纯向量检索可能漏掉关键精确匹配。 Embedding模型更换要注意什么？ 查询与文档通常应使用兼容的表示方式；更换模型、维度或归一化规则后，需要重新构建索引并回归评测。多语言、领域术语、文本长度和部署延迟都应纳入选型，不能只看公开榜单。 回答错误时怎样定位？ 先问“正确证据有没有被检索到”，再问“模型有没有正确使用证据”。 这一步能把RAG故障分成数据、检索、上下文和生成四类。 现象 优先检查 可能改进 完全没有相关片段 解析、切分、查询、权限过滤、召回 修复数据，查询改写或混合检索 相关片段排在后面 Top-K、相似度、重排和去重 增加候选并优化重排 证据正确但回答错 上下文顺序、提示、冲突资料 压缩上下文、明确引用与拒答 回答引用不存在内容 引用映射与生成后校验 引用必须绑定实际片段ID 线上越来越慢 解析队列、向量请求、检索P95、重排 缓存、批处理、限流和超时降级 RAG如何评测？ 评测至少拆成三层。检索层看相关片段是否进入候选以及排名；生成层看答案是否由上下文支持、是否回答问题；端到端层看任务成功、延迟、成本和拒答。RAGAS论文提出从上下文相关性、回答忠实度和回答相关性等维度评估RAG，但自动指标应与人工审阅和业务样本结合。 构建覆盖正常问题、歧义问题、无答案问题和权限问题的测试集。 保存每次检索候选、分数、重排结果、最终上下文和引用。 分别记录召回、生成与全链路P50/P95延迟。 变更切分、Embedding或提示时运行同一回归集。 工程边界： RAG可以增加依据和知识更新能力，但不能自动保证真实、完整或无偏。索引中的错误、过时与恶意内容会进入回答链路；高风险场景仍需要权限、来源校验和人工确认。 常见问题 Top-K越大召回越好吗？ 候选更多可能提高召回，也会增加噪声、重排和上下文成本。应同时评估召回率、最终答案和延迟，而不是只调一个参数。 RAG与微调有什么区别？ RAG主要在请求时提供外部知识；微调主要改变模型行为或参数。知识更新、引用和访问控制通常优先考虑RAG，稳定格式与任务行为可评估微调，两者也可组合。 为什么PDF比Markdown难处理？ PDF保存的是版面表达，可能包含重复页眉、分栏、扫描图像、表格和错乱阅读顺序；Markdown通常已有清晰文本结构。应先解析清洗再估算词元和索引费用。 怎样回答没做过的RAG优化？ 明确自己的经验范围，再给出诊断顺序、实验变量和成功指标。不要把阅读过的方案包装成亲自上线的结果。 来源与适用范围 定义与架构参考 Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks ；评测维度参考 RAGAS ；长上下文利用限制参考 Lost in the Middle 。论文中的系统与指标对应其研究设定，工程实现需以自己的数据、权限和延迟目标验证；来源与面试稳不存在合作关系。 继续准备 大模型面试题 AI Agent面试题 技术面试准备 项目经历表达 面试资料准备 用真实资料练习",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://mianshiwen.cn/interview-questions/rag#article",
+            "headline": "RAG面试题：检索、重排、生成与评测",
+            "description": "从端到端链路准备RAG面试中的原理、取舍、故障定位和评测问题。",
+            "inLanguage": "zh-CN",
+            "mainEntityOfPage": "https://mianshiwen.cn/interview-questions/rag",
+            "author": {
+              "@type": "Organization",
+              "name": "面试稳产品与支持团队"
+            },
+            "publisher": {
+              "@id": "https://mianshiwen.cn/#organization"
+            },
+            "datePublished": "2026-08-19",
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "面试题与专题",
+                "item": "https://mianshiwen.cn/interview-questions"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "RAG面试题",
+                "item": "https://mianshiwen.cn/interview-questions/rag"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/login",
+      "https://arxiv.org/abs/2005.11401",
+      "https://arxiv.org/abs/2309.15217",
+      "https://arxiv.org/abs/2307.03172",
+      "/interview-questions/llm",
+      "/interview-questions/ai-agent",
+      "/guides/technical-interview",
+      "/guides/project-experience",
+      "/guides/interview-preparation",
+      "/login",
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 3
+  },
+  {
+    "url": "https://mianshiwen.cn/interview-questions/ai-agent",
+    "final": "https://mianshiwen.cn/interview-questions/ai-agent",
+    "status": 200,
+    "seconds": 1.182,
+    "title": "AI Agent面试题：工具、状态、恢复与安全｜面试稳",
+    "description": [
+      "AI Agent面试题准备指南：区分工作流与Agent，讲清任务规划、工具调用、状态与记忆、失败恢复、权限安全、可观测性和端到端评测。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/interview-questions/ai-agent"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "AI Agent面试题怎么准备？重点是可控地完成任务"
+    ],
+    "body_chars": 2568,
+    "body_hash": "e4ec201b58f4eb36d0a22da076ee31fe654c0d86732cdee4861cfcdf045f6dcd",
+    "body": "AI Agent面试题：工具、状态、恢复与安全｜面试稳 面试稳AI助手 AI AGENT AI Agent面试题怎么准备？重点是可控地完成任务 Agent不是给大模型接几个工具就完成了。面试中应讲清任务如何分解、工具如何约束、状态如何保存、失败如何恢复，以及怎样证明系统在真实场景中既有效又安全。 发布与复核：2026-08-19 复核：面试稳产品与支持团队 阅读约 11 分钟 AI Agent是什么？ AI Agent通常是由模型、指令、工具和运行时共同组成的任务执行系统。 模型根据当前状态选择下一步行动，工具连接外部数据或执行动作，运行时负责状态、循环、权限、超时、重试和观察，直到任务完成、失败或需要人工介入。 ReAct论文探索了推理与行动交错的方式：模型根据观察更新计划并调用外部环境。实际系统不必暴露或保存模型内部推理文本，重点是能记录可审计的输入、工具选择、参数、结果和状态变化。 工作流和Agent有什么区别？ 类型 路径 优势 风险 确定性工作流 代码预先规定 易测试、延迟和权限可控 难适应开放任务 带模型的工作流 关键步骤固定，局部由模型判断 平衡灵活性与可控性 分支仍需充分评测 自主Agent 模型动态选择步骤和工具 可处理路径未知的任务 循环、越权、成本和错误传播 面试中的成熟回答不是“Agent一定更先进”，而是说明什么时候固定工作流已经足够。高频、规则清楚、风险高的流程通常应尽量确定；只有任务路径难以预先枚举、收益足以覆盖风险时，再增加自主决策。 一个可落地Agent有哪些组件？ 任务入口： 解析目标、约束、截止条件和用户权限。 模型与策略： 决定下一步、生成结构化工具参数或请求澄清。 工具层： 用清晰schema定义输入输出，执行检索、查询或外部动作。 状态： 保存当前任务、已完成步骤、工具结果和错误，不等同于把全部对话无限累积。 控制器： 限制循环次数、预算、超时、重试与终止条件。 安全边界： 鉴权、最小权限、参数校验、人工确认和审计。 可观测性： 记录每一步耗时、错误、模型版本、工具调用和最终结果。 LangGraph官方文档用状态、节点和边描述有状态工作流，并强调持久化、人工介入和调试能力。这是一种实现思路，不是Agent的通用定义，也不是所有项目必须选择的框架。 工具调用怎样保证安全？ 模型输出的工具名称和参数都应视为不可信输入。系统必须在执行层重新鉴权、校验参数、限制资源范围。读取天气与删除数据的风险完全不同，工具权限不应共享一套默认策略。 只暴露完成任务必需的工具和字段。 读操作与写操作分离，敏感写操作要求明确确认。 使用幂等键避免超时重试造成重复扣款、重复发信或重复写入。 对URL、文件路径、数据库条件和命令参数使用白名单与结构化校验。 工具返回内容也可能包含提示注入，不能自动提升为系统指令。 记录谁在什么上下文授权了哪次操作，并提供撤销或补偿路径。 安全边界： 自然语言约束不能替代服务端权限。NIST的生成式AI与Agent安全资料强调持续风险管理；涉及资金、账号、隐私或外部消息时，应默认采用最小权限和人工确认。 状态、记忆和上下文有什么区别？ 概念 保存内容 常见问题 运行状态 当前步骤、工具结果、错误、预算 并发覆盖、无法恢复、重复执行 短期上下文 本次任务需要给模型的信息 无限增长、重点被淹没 长期记忆 跨任务复用的用户偏好或事实 过期、隐私、错误写入 审计日志 动作和决策的可追溯记录 敏感数据泄露、无法关联请求 持久化不是越多越好。应定义每类数据的用途、保留时间、访问权限和删除方式。恢复时还要判断上一步是否已经产生外部副作用，不能简单从失败节点重复执行。 Agent卡住或反复调用工具怎样排查？ 按“目标—状态—决策—工具—终止”顺序还原轨迹。 先确认任务目标是否清楚，再看模型拿到的状态是否完整、工具反馈是否可判定成功，以及终止条件是否能被触发。 现象 常见原因 控制措施 重复调用同一工具 结果没有写入状态或成功条件模糊 幂等键、状态归约、最大次数 工具参数反复报错 schema含糊、示例不足、校验反馈不清 严格结构、可操作错误、有限重试 任务越做越偏 目标漂移、上下文噪声、工具过多 阶段目标、上下文压缩、工具路由 中断后重复执行 检查点与副作用状态不一致 事务边界、幂等、补偿操作 成本不可控 无预算和终止条件 词元/步骤/时间预算与降级 Agent如何评测？ 最终答案分数不足以解释Agent系统。评测应覆盖任务成功率、步骤效率、工具选择、参数正确性、恢复能力、安全违规、延迟和成本。对有外部动作的任务，还应在沙箱中检查副作用是否符合预期。 建立正常、歧义、工具失败、权限不足和恶意输入用例。 定义完成、部分完成、拒绝和人工接管的判定规则。 检查轨迹，但不要要求模型输出私有思维过程；关注可观测动作与状态。 按模型、工具和流程版本保存回归结果。 上线后监控循环次数、失败节点、重试和人工接管率。 如果系统主要依赖知识检索，应同时使用 RAG评测方法 ；如果问题来自基础模型能力，则回到 大模型评测维度 。 常见问题 多Agent一定比单Agent好吗？ 不一定。多Agent增加角色隔离和并行可能性，也增加通信、状态、延迟和错误归因成本。只有任务天然可分且单体边界已经清楚时才值得评估。 Agent为什么需要人工介入？ 当信息不足、动作不可逆、风险超出阈值或策略冲突时，人工确认是正常控制机制，不是系统失败。 怎样避免无限循环？ 设置明确终止状态、最大步骤、时间和费用预算；识别重复状态；失败后选择降级、澄清或人工接管。 没有Agent项目经验怎么回答？ 区分亲自做过与理论设计。可以基于真实工作流说明如何加入模型决策、工具约束和评测，但不要声称不存在的线上结果。 来源与适用范围 推理与行动模式参考 ReAct ；状态化编排概念参考 LangGraph官方Graph API说明 ；风险边界参考 NIST生成式AI风险管理资料 。框架文档只代表一种实现，面试回答应结合具体任务、权限和失败成本；来源与面试稳不存在合作关系。 继续准备 大模型面试题 RAG面试题 技术面试准备 项目经历表达 AI面试助手能力 用真实资料练习",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://mianshiwen.cn/interview-questions/ai-agent#article",
+            "headline": "AI Agent面试题：工具、状态、恢复与安全",
+            "description": "从可控工作流到自主Agent，准备架构、失败恢复、安全和评测问题。",
+            "inLanguage": "zh-CN",
+            "mainEntityOfPage": "https://mianshiwen.cn/interview-questions/ai-agent",
+            "author": {
+              "@type": "Organization",
+              "name": "面试稳产品与支持团队"
+            },
+            "publisher": {
+              "@id": "https://mianshiwen.cn/#organization"
+            },
+            "datePublished": "2026-08-19",
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "面试题与专题",
+                "item": "https://mianshiwen.cn/interview-questions"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "AI Agent面试题",
+                "item": "https://mianshiwen.cn/interview-questions/ai-agent"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/login",
+      "/interview-questions/rag",
+      "/interview-questions/llm",
+      "https://arxiv.org/abs/2210.03629",
+      "https://langchain-ai.github.io/langgraph/how-tos/state-reducers/",
+      "https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence",
+      "/interview-questions/llm",
+      "/interview-questions/rag",
+      "/guides/technical-interview",
+      "/guides/project-experience",
+      "/features/ai-interview-assistant",
+      "/login",
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 4
+  },
+  {
+    "url": "https://mianshiwen.cn/interview-questions/java-backend",
+    "final": "https://mianshiwen.cn/interview-questions/java-backend",
+    "status": 200,
+    "seconds": 0.635,
+    "title": "Java后端面试题：并发、JVM与系统设计｜面试稳",
+    "description": [
+      "Java后端面试题准备指南：从Java语言、并发与JVM，到数据库、缓存、消息队列、接口设计、系统稳定性与项目表达，附追问框架和官方来源。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/interview-questions/java-backend"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "Java后端面试题怎么准备？从语言原理到系统证据"
+    ],
+    "body_chars": 2229,
+    "body_hash": "5e92987fe7a3f3c647720e9d25b8526ea4d1c08610fa6e8e85f36c24ba35b9b9",
+    "body": "Java后端面试题：并发、JVM与系统设计｜面试稳 面试稳AI助手 JAVA BACKEND Java后端面试题怎么准备？从语言原理到系统证据 Java后端面试通常从语言、并发和JVM逐步进入数据库、缓存、消息队列与系统设计。比背结论更重要的是说明适用条件、失败模式、监控指标，以及你在真实项目中承担了什么。 发布与复核：2026-08-19 复核：面试稳产品与支持团队 阅读约 11 分钟 Java后端面试的回答框架 用“语义—机制—场景—故障—验证”回答技术题。 先给出准确含义，再解释运行机制；随后说明何时使用、可能怎样失败，最后给出测试、日志、指标或项目证据。 例如回答线程安全，不要停在“加锁”。应先指出共享可变状态和并发访问，再比较不可变对象、线程封闭、原子变量、锁与并发容器，解释可见性、原子性、活性和性能代价。Oracle并发教程与JLS把内存一致性和happens-before作为关键基础，但具体实现仍要结合当前JDK文档。 重点知识地图 层次 核心问题 常见追问 Java语言 对象、泛型、异常、集合、反射 equals/hashCode、类型擦除、不可变性 并发 内存模型、锁、线程池、并发容器 happens-before、死锁、任务背压 JVM 内存区域、类加载、GC、诊断 泄漏与溢出、停顿、线程与堆分析 数据层 事务、索引、隔离、连接池 慢查询、死锁、幂等与一致性 分布式组件 缓存、消息、服务调用 击穿、重复消费、超时与重试 系统设计 容量、可靠性、可观测性 P95、降级、限流、故障恢复 并发题怎样避免只背术语？ volatile和synchronized有什么区别？ 回答应从问题出发：volatile用于建立特定的可见性和有序性关系，不能把复合读改写操作自动变成原子操作；synchronized通过监视器提供互斥，并建立相应的happens-before关系。选择时要说明共享状态、临界区和竞争程度，而不是只列关键字定义。 线程池参数怎样定？ 先区分CPU密集与I/O等待，再结合到达率、单任务耗时、下游容量、队列长度和延迟目标。必须说明拒绝策略、监控、超时和优雅关闭。固定公式只能作为初始估计，最终要压测并观察队列、活跃线程和下游错误。 死锁怎么查？ 确认线程是否长期等待，获取线程转储查看锁持有与等待关系，再定位不一致的加锁顺序或跨资源事务。修复可包括统一锁顺序、缩小临界区、超时或减少嵌套；不能简单靠增加线程数。 JVM问题怎样连接到线上诊断？ 先描述症状：延迟上升、吞吐下降、CPU高、内存增长、频繁GC或进程退出。 检查时间相关的指标、GC日志、线程和堆信息，避免只看一次快照。 区分堆内对象、线程、直接内存、类元数据和本地资源。 建立假设后用负载、采样或最小复现验证。 修改配置或代码后回归延迟、吞吐和资源占用。 GC选择与参数依赖JDK版本、堆大小、分配速率和停顿目标。面试时先声明版本与工作负载，再讨论吞吐、停顿和内存之间的取舍，不要声称某个收集器适合所有系统。 数据库、缓存和消息队列常见追问 问题 回答重点 验证方式 索引为什么没用 查询条件、选择性、统计信息、排序与回表 执行计划和真实数据分布 事务隔离怎么选 异常类型、一致性要求、锁与吞吐 并发测试和数据库文档 缓存与数据库不一致 更新顺序、失效、重试和容忍窗口 故障注入与对账 消息重复消费 投递语义、幂等键、事务边界 重复投递和崩溃恢复测试 调用雪崩 超时、重试放大、隔离、限流和降级 依赖故障与容量压测 系统设计没有脱离约束的标准答案。先问QPS、数据规模、一致性、延迟和可用性目标，再画核心链路与数据流，最后讨论瓶颈、故障和演进。 项目经历怎样讲出后端深度？ 使用 项目经历结构 说明背景和职责后，重点讲一个你真正做过的技术决策：基线有什么问题、有哪些候选方案、为什么选择当前方案、如何上线、如何监控、结果怎样核对、还有什么遗留风险。不要把团队成果全部写成个人成果，也不要编造QPS、延迟或节省比例。 版本与经验边界： Java语言、JVM和框架会演进。回答前说明使用的JDK、数据库和组件版本；本文提供准备框架，不替代对应版本的官方文档，也不代表特定公司的题库。 常见问题 需要把Spring源码都背下来吗？ 通常更重要的是理解依赖注入、事务边界、代理、请求链路和失败行为，并能结合实际版本定位问题。源码可用于验证理解，不应替代场景分析。 八股题怎么准备更有效？ 每个结论补三个追问：为什么、什么时候不适用、怎样验证。再把它连接到一个真实项目或最小实验。 系统设计应该先画什么？ 先澄清目标和容量，再画用户请求、核心服务、数据存储和外部依赖；之后补缓存、异步、扩展、监控和故障路径。 没有高并发经验怎么办？ 如实说明规模，展示你对容量估算、瓶颈、压测和风险的推理。不要把测试环境或理论估计说成线上结果。 来源与适用范围 并发基础参考 Oracle Java并发教程 ；内存模型与happens-before参考 Java Language Specification第17章 ；当前JDK工具、JVM与GC入口参考 JDK 25官方文档 。教程可能对应较早JDK，具体行为应以项目版本规范为准；来源与面试稳不存在合作关系。 继续准备 算法与工程实现 AI Agent面试题 技术面试准备 项目经历回答 常见面试问题 用真实资料练习",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://mianshiwen.cn/interview-questions/java-backend#article",
+            "headline": "Java后端面试题：并发、JVM与系统设计",
+            "description": "按基础原理、工程取舍、故障定位和真实项目证据准备Java后端面试。",
+            "inLanguage": "zh-CN",
+            "mainEntityOfPage": "https://mianshiwen.cn/interview-questions/java-backend",
+            "author": {
+              "@type": "Organization",
+              "name": "面试稳产品与支持团队"
+            },
+            "publisher": {
+              "@id": "https://mianshiwen.cn/#organization"
+            },
+            "datePublished": "2026-08-19",
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "面试题与专题",
+                "item": "https://mianshiwen.cn/interview-questions"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "Java后端面试题",
+                "item": "https://mianshiwen.cn/interview-questions/java-backend"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/login",
+      "/guides/project-experience",
+      "https://docs.oracle.com/javase/tutorial/essential/concurrency/index.html",
+      "https://docs.oracle.com/javase/specs/jls/se26/html/jls-17.html",
+      "https://docs.oracle.com/en/java/javase/25/",
+      "/interview-questions/algorithms",
+      "/interview-questions/ai-agent",
+      "/guides/technical-interview",
+      "/guides/project-experience",
+      "/guides/common-interview-questions",
+      "/login",
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 3
+  },
+  {
+    "url": "https://mianshiwen.cn/interview-questions/frontend",
+    "final": "https://mianshiwen.cn/interview-questions/frontend",
+    "status": 200,
+    "seconds": 0.676,
+    "title": "前端面试题：浏览器、性能与工程实践｜面试稳",
+    "description": [
+      "前端面试题准备指南：从HTML、CSS、JavaScript事件循环，到网络、渲染、框架状态、性能、可访问性、测试与项目表达，附追问框架和权威来源。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/interview-questions/frontend"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "前端面试题怎么准备？围绕浏览器与用户体验"
+    ],
+    "body_chars": 2459,
+    "body_hash": "5b0fd3bc599b5d8a0cab0e32cf9e0297f2a8cbd3ecb9e98979ccf7704798a1f9",
+    "body": "前端面试题：浏览器、性能与工程实践｜面试稳 面试稳AI助手 FRONTEND ENGINEERING 前端面试题怎么准备？围绕浏览器与用户体验 前端面试不是框架API背诵。完整回答应从HTML语义、CSS布局、JavaScript执行、浏览器渲染和网络出发，再说明状态设计、性能、可访问性、测试与工程化如何影响真实用户。 发布与复核：2026-08-19 复核：面试稳产品与支持团队 阅读约 11 分钟 前端面试的直接准备框架 用“平台机制—界面状态—用户结果—测量验证”串起答案。 先解释浏览器或语言行为，再说明组件与数据如何变化，最后落到加载、响应、稳定、可访问和错误恢复。 例如回答“页面为什么卡”，应区分网络下载、JavaScript解析执行、主线程长任务、布局绘制和内存问题，再结合Performance面板、真实用户指标或最小复现验证。MDN指出，Web性能既包括客观加载与运行指标，也包括用户感知；优化不能只看打包体积。 重点知识地图 层次 核心主题 面试追问 HTML 语义、表单、资源、可访问性 为什么不用div、键盘如何操作 CSS 盒模型、布局、层叠、响应式 包含块、堆叠上下文、重排 JavaScript 作用域、闭包、原型、异步 事件循环、Promise、内存 浏览器 网络、解析、渲染、缓存、安全 关键渲染路径、跨域、CSP 框架与状态 组件、更新、数据流、副作用 状态放哪里、为何重复渲染 质量 性能、无障碍、测试、监控 怎样测、怎样防回退 事件循环应该怎样回答？ JavaScript引擎执行语言代码，浏览器等宿主提供DOM、网络和计时器。一个事件循环依次处理任务，并在适当时机处理微任务和渲染。Promise回调进入微任务队列；计时器回调在达到条件后进入任务队列，不保证精确时刻立即执行。 MDN对执行模型的说明强调，每个任务会运行到完成。若一个任务长期占用主线程，用户输入和渲染都无法及时处理。优化可以拆分长任务、减少同步计算、避免微任务无限增长，或把适合的计算转移到Worker；但DOM更新仍需在正确线程协调。 常见追问 为什么Promise通常先于setTimeout回调？ 微任务不断追加会发生什么？ async/await怎样转换为异步控制流？ 网络请求异步为什么仍可能让页面卡顿？ 从输入URL到页面可用，应该讲哪些阶段？ DNS、连接与安全协商建立网络通道。 请求、缓存与服务端响应决定首批字节到达。 浏览器解析HTML，发现CSS、脚本、字体和图片等资源。 样式与DOM参与布局和绘制，脚本执行可能阻塞或改变流程。 页面显示后仍要处理交互响应、异步数据、错误和布局稳定。 回答时无需机械背完整浏览器实现，而应结合问题定位瓶颈。首屏慢先看响应、资源优先级与LCP元素；点击慢看事件处理和主线程；跳动看尺寸占位与动态插入；滚动卡看绘制、合成和高频事件。 状态管理如何体现工程判断？ 状态应放在能够表达其生命周期和共享范围的最小位置：局部交互留在组件内，跨页面业务状态进入明确的数据层，服务端数据需要缓存与失效策略，URL适合可分享的导航状态。不要因为使用某框架就把所有数据放进全局仓库。 问题 可能原因 验证 重复请求 副作用依赖、重挂载、缓存策略 网络轨迹与组件生命周期 旧数据覆盖新数据 竞态、请求未取消、版本缺失 人为延迟与乱序响应 重复渲染 状态范围过大、引用变化 Profiler与更新来源 刷新状态丢失 把持久状态只放内存 明确URL、服务端或本地存储边界 多标签不一致 缺少同步和冲突策略 并发编辑与版本测试 性能与可访问性怎么一起回答？ 性能应同时关注加载、交互与视觉稳定，并使用真实设备和网络条件。优化顺序通常从测量开始：确定关键用户路径和基线，定位最大瓶颈，做单变量改动，再防止回退。图片、字体、JavaScript和第三方脚本应按实际影响排序。 可访问性不是上线前加ARIA。优先使用语义HTML，保证键盘操作、焦点、标签、对比度、错误提示和动态状态可感知。自定义控件必须补齐原生控件已有的交互语义。可以结合自动检查，但仍需键盘和读屏器人工验证。 平台边界： 浏览器、框架和性能指标会演进。本文聚焦稳定机制；具体API支持、Core Web Vitals阈值和框架行为应以当前官方文档和项目目标为准，不代表特定公司的题库。 项目经历怎样讲清前端价值？ 不要只说“用了React/Vue”。按 项目经历方法 说明用户问题、原始表现、你负责的链路、候选方案、测量方法、上线风险和结果。性能结果要注明设备、网络、样本与分位数；体验改进要说明如何验证，而不是只用“更流畅”。 复杂交互可以从状态模型讲起：有哪些状态、事件怎样改变状态、异步失败如何恢复、移动端与键盘如何操作、测试覆盖哪些边界。这样能同时体现技术和产品判断。 常见问题 框架原理需要讲多深？ 至少能解释组件更新、状态与副作用、列表标识和性能问题如何产生。具体内部实现应声明版本，不确定时回到官方文档或可复现实验。 为什么不要滥用memo？ 记忆化本身有比较与维护成本，也可能掩盖状态设计问题。先用测量确认瓶颈，再对稳定、昂贵且高频的计算或渲染优化。 前端安全常问什么？ 常见方向包括XSS、CSRF、CSP、跨域、依赖风险和敏感数据处理。回答应区分浏览器约束与服务端鉴权，前端隐藏按钮不能替代权限控制。 没有大型项目怎么办？ 用真实小项目说明可验证的设计、测试与改进过程。规模不能虚构，清晰推理比夸大流量更有价值。 来源与适用范围 JavaScript执行与事件循环参考 MDN JavaScript执行模型 和 MDN微任务深入说明 ；性能定义与测量参考 MDN Web Performance 。MDN是社区维护的Web文档，规范细节应进一步核对对应标准；来源与面试稳不存在合作关系。 继续准备 算法与工程实现 Java后端面试题 技术面试准备 项目经历回答 截图回答能力 用真实资料练习",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://mianshiwen.cn/interview-questions/frontend#article",
+            "headline": "前端面试题：浏览器、性能与工程实践",
+            "description": "从浏览器机制和用户体验出发，准备前端原理、性能、测试与工程取舍。",
+            "inLanguage": "zh-CN",
+            "mainEntityOfPage": "https://mianshiwen.cn/interview-questions/frontend",
+            "author": {
+              "@type": "Organization",
+              "name": "面试稳产品与支持团队"
+            },
+            "publisher": {
+              "@id": "https://mianshiwen.cn/#organization"
+            },
+            "datePublished": "2026-08-19",
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "面试题与专题",
+                "item": "https://mianshiwen.cn/interview-questions"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "前端面试题",
+                "item": "https://mianshiwen.cn/interview-questions/frontend"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/login",
+      "/guides/project-experience",
+      "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Event_loop",
+      "https://developer.mozilla.org/en-US/docs/Web/API/HTML_DOM_API/Microtask_guide/In_depth",
+      "https://developer.mozilla.org/en-US/docs/Web/Performance",
+      "/interview-questions/algorithms",
+      "/interview-questions/java-backend",
+      "/guides/technical-interview",
+      "/guides/project-experience",
+      "/features/screenshot-answer",
+      "/login",
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 2
+  },
+  {
+    "url": "https://mianshiwen.cn/interview-questions/algorithms",
+    "final": "https://mianshiwen.cn/interview-questions/algorithms",
+    "status": 200,
+    "seconds": 1.004,
+    "title": "算法面试题：思路、正确性与代码实现｜面试稳",
+    "description": [
+      "算法面试题准备指南：从澄清需求、选择数据结构、建立不变量，到证明正确性、分析复杂度、编写代码和测试边界，附题型地图与表达框架。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/interview-questions/algorithms"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "算法面试题怎么做？让思路、证明和代码对齐"
+    ],
+    "body_chars": 2166,
+    "body_hash": "7c441a37d5f9d1af259690fa94ded36d6c5f3a64538bda66d5d3d34d0c19f228",
+    "body": "算法面试题：思路、正确性与代码实现｜面试稳 面试稳AI助手 ALGORITHMS & IMPLEMENTATION 算法面试题怎么做？让思路、证明和代码对齐 算法面试不只看最终代码。面试官也在观察你怎样澄清问题、选择表示、建立正确性依据、分析复杂度、处理边界，并在发现错误后有序修正。 发布与复核：2026-08-19 复核：面试稳产品与支持团队 阅读约 10 分钟 算法面试的六步框架 澄清输入与目标 → 给出基线 → 选择数据结构与算法 → 说明不变量或正确性 → 分析复杂度 → 编码并测试。 先让面试官知道你正在解决同一个问题，再逐步优化。 复述与澄清： 输入规模、重复值、顺序、空值、输出格式、是否原地修改。 小例子： 手工走一遍正常和边界情况，确认理解。 基线方案： 给出直接但可能较慢的方法，建立正确起点。 优化： 从重复计算、搜索空间或数据访问方式寻找改进。 证明： 说明循环不变量、递归关系、贪心选择或状态定义。 实现与测试： 边写边说明关键状态，完成后用用例执行。 常见题型如何映射数据结构？ 信号 候选工具 需要追问 快速查找、计数、去重 哈希表、集合 键是否稳定、空间是否允许 有序数组查条件 二分、双指针 单调性和边界定义 连续区间 滑动窗口、前缀和 窗口何时扩张或收缩 层级与连通 树、图、DFS、BFS 是否有环、是否需最短步数 反复取最值 堆、单调队列 更新频率和Top-K大小 重叠子问题 动态规划、记忆化 状态、转移、初值和顺序 MIT算法课程把“接口/问题”与“表示/解决方案”区分开：先确认需要支持哪些操作，再选择实现这些操作的数据结构。面试中不要看到关键词就套模板，应先验证约束是否满足。 正确性应该怎样说明？ 循环不变量 说明每次循环开始或结束时始终成立的性质，再解释初始化为什么成立、一次迭代如何保持、终止时怎样推出答案。例如双指针归并可说明已写入区间始终包含当前应输出的最小元素序列。 递归与动态规划 定义函数或状态表示什么，列出基础情况，说明较大问题如何由较小问题组成。动态规划还要说明计算顺序为何保证依赖已完成，以及是否能压缩空间。 贪心 不能只说“每次取最优”。需要解释局部选择为什么不破坏全局最优，可用交换论证、领先性质或问题结构。若无法证明，应回到搜索或动态规划。 复杂度怎样说得准确？ 先定义n代表什么，再分别分析时间与额外空间；如果输入有多个维度，用m、n分别表示。区分平均、最坏、摊还与输出规模，说明排序、递归栈、哈希冲突或复制操作是否计入。 常见错误 更好的表达 有一层循环就是O(n) 看迭代总次数和每次操作成本 哈希操作永远O(1) 通常期望常数时间，最坏与实现和冲突有关 递归只算调用次数 同时分析每层工作和递归栈 忽略输出 生成k个结果至少需要与输出规模相关的成本 只说大O 解释约束下为什么可接受及真实常数因素 编码时如何减少低级错误？ 先确定函数签名、输入是否可修改和索引区间定义。 统一使用闭区间或半开区间，不要中途改变。 为循环写清进入条件与终止条件。 命名表达角色，如left、right、write，而不是全部使用i、j、k。 处理空输入、单元素、重复值、极值、已排序和无解。 完成后用一个正常用例和两个边界用例逐行走代码。 如果卡住，说明目前已知和未知，回到最小例子或基线方案。沉默地继续写往往比主动校正更危险。使用 截图回答 做练习时，仍应自行验证题意、复杂度和代码；面试中需遵守招聘方规则。 刷题如何转化为面试能力？ 按模式复盘，而不是只记录题号。 每题写下触发条件、核心不变量、复杂度和易错边界。 隔天脱离答案重新口述并编码。 对错误分类：理解、思路、证明、实现或测试。 定期限时模拟，同时练习向面试官解释。 题量不是唯一指标。若同一错误反复出现，应降低新题数量，针对边界或状态定义做小练习。岗位不以算法为核心时，也要根据JD合理分配时间，可先看 技术面试准备方法 。 使用边界： 本文不提供特定公司的泄露题库，也不保证命中真实题目。算法存在多种正确方案，复杂度与实现要结合输入约束和所用语言；面试时应遵守工具使用规则。 常见问题 一开始想不到最优解怎么办？ 先给出正确基线，指出瓶颈，再尝试用数据结构、单调性、预处理或剪枝优化。这样既推进问题，也让面试官看见推理过程。 需要背模板吗？ 可以记住遍历、二分、图搜索等骨架，但必须理解状态、不变量和边界。不能解释的模板在题目变化时很容易失效。 代码写完发现错误怎么办？ 明确指出错误影响，给出修复，再用失败用例验证。快速、透明地纠错也是工程能力。 面试语言怎么选？ 在招聘方允许范围内选自己最熟悉、能准确表达数据结构和边界的语言，并提前熟悉标准库复杂度与常用API。 来源与适用范围 数据结构接口与问题表示参考 MIT 6.006 Introduction to Algorithms ；正确性与复杂度的系统训练可参考 MIT 6.046J Design and Analysis of Algorithms 。课程内容用于建立方法，不代表招聘方范围或评分标准；来源与面试稳不存在合作关系。 继续准备 Java后端面试题 前端面试题 技术面试准备 项目经历回答 常见面试问题 用真实资料练习",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://mianshiwen.cn/interview-questions/algorithms#article",
+            "headline": "算法面试题：思路、正确性与代码实现",
+            "description": "用澄清、数据结构、不变量、复杂度和测试组织算法面试全过程。",
+            "inLanguage": "zh-CN",
+            "mainEntityOfPage": "https://mianshiwen.cn/interview-questions/algorithms",
+            "author": {
+              "@type": "Organization",
+              "name": "面试稳产品与支持团队"
+            },
+            "publisher": {
+              "@id": "https://mianshiwen.cn/#organization"
+            },
+            "datePublished": "2026-08-19",
+            "dateModified": "2026-08-19"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "面试稳AI助手",
+                "item": "https://mianshiwen.cn/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "面试题与专题",
+                "item": "https://mianshiwen.cn/interview-questions"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "算法面试题",
+                "item": "https://mianshiwen.cn/interview-questions/algorithms"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/login",
+      "/features/screenshot-answer",
+      "/guides/technical-interview",
+      "https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-spring-2020/",
+      "https://ocw.mit.edu/courses/6-046j-design-and-analysis-of-algorithms-spring-2015/",
+      "/interview-questions/java-backend",
+      "/interview-questions/frontend",
+      "/guides/technical-interview",
+      "/guides/project-experience",
+      "/guides/common-interview-questions",
+      "/login",
+      "/",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/privacy"
+    ],
+    "redirects": [],
+    "images": [
+      {
+        "src": "/assets/brand/app-icon.svg",
+        "alt": "",
+        "width": "42",
+        "height": "42"
+      }
+    ],
+    "incoming": 3
+  },
+  {
+    "url": "https://mianshiwen.cn/terms",
+    "final": "https://mianshiwen.cn/terms",
+    "status": 200,
+    "seconds": 0.925,
+    "title": "AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳",
+    "description": [
+      "面试稳是一款 AI 面试助手，可结合简历、目标岗位和知识资料，整理实时面试问题、截图题与技术题的回答思路。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/"
+    ],
+    "robots": [],
+    "xrobots": "noindex, follow",
+    "h1": [
+      "AI 面试助手，让你的经历更好表达。"
+    ],
+    "body_chars": 856,
+    "body_hash": "32c85671faa85c84af3f397decdf90360e1a46d2f4e64835b498d5165f018220",
+    "body": "AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳 面试稳AI助手 AI 面试助手，让你的经历更好表达。 跟上面试问题，结合你的简历与目标岗位，整理更贴合自己的回答思路。 从听清问题，到讲清自己 跟上每一个问题 实时转写面试官与自己的声音，把注意力留给交流。 回答更贴合你的经历 按场选择简历、JD 和知识材料，围绕自己的项目与目标岗位组织回答。 截图题，也有思路 通过电脑助手截取题目，查看识别与生成进度，无需手动重新输入。 让下一场准备更充分 回看问题、回答建议与资料来源，整理需要补充的经历和表达。 偶尔一场，或密集准备，都有选择 先了解产品，再按实际需要选择积分或按天会员。具体积分消耗、会员时长和当前价格以登录后的积分与会员页面为准。 查看积分与会员 · 免费使用 从准备到连接，三步进入状态 准备自己的资料：添加简历和岗位 JD，按需要整理知识材料。 连接电脑助手：选择适合系统的版本，检查连接、声音与采集权限。 选择本场上下文：确认这场面试使用的资料，通过语音、手动输入或截图获取建议。 一段视频，了解面试稳 从连接到使用，看一遍就明白 常见问题 面试稳可以免费使用吗？ 可以先免费使用，具体可用权益以登录后的积分与会员页面实时显示为准。 支持哪些设备和输入方式？ 下载中心提供当前可用电脑版本。支持授权后的语音输入、手动输入和截图题回答；手机端可同步查看回答和会话状态。 如何选择套餐和支付方式？ 按实际使用需要选择积分或按天会员，价格、额度及可用支付方式以实时配置和订单确认为准。 如何使用 AI 建议？ 请根据真实经历核对内容，遵守面试组织方的规则，不能保证面试或录用结果。 清楚的数据与隐私边界 原始音频默认不保存；简历、JD、截图和会话记录提供管理或删除入口。请遵守面试规则，并始终基于真实经历作答。 产品支持 Web、macOS 和 Windows 使用方式。遇到问题可通过微信 mianshiwen-cn 或邮箱 contact@oneshowailab.com 联系客服。",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "@id": "https://mianshiwen.cn/#organization",
+        "name": "OneShow AI Lab",
+        "alternateName": "面试稳",
+        "url": "https://mianshiwen.cn/",
+        "logo": "https://mianshiwen.cn/assets/brand/logo.svg",
+        "email": "contact@oneshowailab.com"
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": "https://mianshiwen.cn/#website",
+        "url": "https://mianshiwen.cn/",
+        "name": "面试稳AI助手",
+        "inLanguage": "zh-CN",
+        "publisher": {
+          "@id": "https://mianshiwen.cn/#organization"
+        }
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "@id": "https://mianshiwen.cn/#software",
+        "name": "面试稳AI助手",
+        "url": "https://mianshiwen.cn/",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web, macOS, Windows",
+        "description": "结合简历、目标岗位和知识资料，整理实时面试问题、截图题与技术题的回答思路。",
+        "publisher": {
+          "@id": "https://mianshiwen.cn/#organization"
+        }
+      }
+    ],
+    "links": [
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/pricing",
+      "/download",
+      "/login",
+      "/app/partner-program",
+      "/app/billing",
+      "/login",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/pricing",
+      "/download",
+      "/security",
+      "/about",
+      "/contact",
+      "/terms",
+      "/privacy",
+      "https://beian.miit.gov.cn",
+      "https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=33010602014812"
+    ],
+    "redirects": [],
+    "images": [],
+    "incoming": 14
+  },
+  {
+    "url": "https://mianshiwen.cn/privacy",
+    "final": "https://mianshiwen.cn/privacy",
+    "status": 200,
+    "seconds": 0.532,
+    "title": "AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳",
+    "description": [
+      "面试稳是一款 AI 面试助手，可结合简历、目标岗位和知识资料，整理实时面试问题、截图题与技术题的回答思路。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/"
+    ],
+    "robots": [],
+    "xrobots": "noindex, follow",
+    "h1": [
+      "AI 面试助手，让你的经历更好表达。"
+    ],
+    "body_chars": 856,
+    "body_hash": "32c85671faa85c84af3f397decdf90360e1a46d2f4e64835b498d5165f018220",
+    "body": "AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳 面试稳AI助手 AI 面试助手，让你的经历更好表达。 跟上面试问题，结合你的简历与目标岗位，整理更贴合自己的回答思路。 从听清问题，到讲清自己 跟上每一个问题 实时转写面试官与自己的声音，把注意力留给交流。 回答更贴合你的经历 按场选择简历、JD 和知识材料，围绕自己的项目与目标岗位组织回答。 截图题，也有思路 通过电脑助手截取题目，查看识别与生成进度，无需手动重新输入。 让下一场准备更充分 回看问题、回答建议与资料来源，整理需要补充的经历和表达。 偶尔一场，或密集准备，都有选择 先了解产品，再按实际需要选择积分或按天会员。具体积分消耗、会员时长和当前价格以登录后的积分与会员页面为准。 查看积分与会员 · 免费使用 从准备到连接，三步进入状态 准备自己的资料：添加简历和岗位 JD，按需要整理知识材料。 连接电脑助手：选择适合系统的版本，检查连接、声音与采集权限。 选择本场上下文：确认这场面试使用的资料，通过语音、手动输入或截图获取建议。 一段视频，了解面试稳 从连接到使用，看一遍就明白 常见问题 面试稳可以免费使用吗？ 可以先免费使用，具体可用权益以登录后的积分与会员页面实时显示为准。 支持哪些设备和输入方式？ 下载中心提供当前可用电脑版本。支持授权后的语音输入、手动输入和截图题回答；手机端可同步查看回答和会话状态。 如何选择套餐和支付方式？ 按实际使用需要选择积分或按天会员，价格、额度及可用支付方式以实时配置和订单确认为准。 如何使用 AI 建议？ 请根据真实经历核对内容，遵守面试组织方的规则，不能保证面试或录用结果。 清楚的数据与隐私边界 原始音频默认不保存；简历、JD、截图和会话记录提供管理或删除入口。请遵守面试规则，并始终基于真实经历作答。 产品支持 Web、macOS 和 Windows 使用方式。遇到问题可通过微信 mianshiwen-cn 或邮箱 contact@oneshowailab.com 联系客服。",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "@id": "https://mianshiwen.cn/#organization",
+        "name": "OneShow AI Lab",
+        "alternateName": "面试稳",
+        "url": "https://mianshiwen.cn/",
+        "logo": "https://mianshiwen.cn/assets/brand/logo.svg",
+        "email": "contact@oneshowailab.com"
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": "https://mianshiwen.cn/#website",
+        "url": "https://mianshiwen.cn/",
+        "name": "面试稳AI助手",
+        "inLanguage": "zh-CN",
+        "publisher": {
+          "@id": "https://mianshiwen.cn/#organization"
+        }
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "@id": "https://mianshiwen.cn/#software",
+        "name": "面试稳AI助手",
+        "url": "https://mianshiwen.cn/",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web, macOS, Windows",
+        "description": "结合简历、目标岗位和知识资料，整理实时面试问题、截图题与技术题的回答思路。",
+        "publisher": {
+          "@id": "https://mianshiwen.cn/#organization"
+        }
+      }
+    ],
+    "links": [
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/pricing",
+      "/download",
+      "/login",
+      "/app/partner-program",
+      "/app/billing",
+      "/login",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/pricing",
+      "/download",
+      "/security",
+      "/about",
+      "/contact",
+      "/terms",
+      "/privacy",
+      "https://beian.miit.gov.cn",
+      "https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=33010602014812"
+    ],
+    "redirects": [],
+    "images": [],
+    "incoming": 31
+  },
+  {
+    "url": "https://mianshiwen.cn/login",
+    "final": "https://mianshiwen.cn/login",
+    "status": 200,
+    "seconds": 1.1,
+    "title": "AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳",
+    "description": [
+      "面试稳是一款 AI 面试助手，可结合简历、目标岗位和知识资料，整理实时面试问题、截图题与技术题的回答思路。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/"
+    ],
+    "robots": [],
+    "xrobots": "noindex, follow",
+    "h1": [
+      "AI 面试助手，让你的经历更好表达。"
+    ],
+    "body_chars": 856,
+    "body_hash": "32c85671faa85c84af3f397decdf90360e1a46d2f4e64835b498d5165f018220",
+    "body": "AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳 面试稳AI助手 AI 面试助手，让你的经历更好表达。 跟上面试问题，结合你的简历与目标岗位，整理更贴合自己的回答思路。 从听清问题，到讲清自己 跟上每一个问题 实时转写面试官与自己的声音，把注意力留给交流。 回答更贴合你的经历 按场选择简历、JD 和知识材料，围绕自己的项目与目标岗位组织回答。 截图题，也有思路 通过电脑助手截取题目，查看识别与生成进度，无需手动重新输入。 让下一场准备更充分 回看问题、回答建议与资料来源，整理需要补充的经历和表达。 偶尔一场，或密集准备，都有选择 先了解产品，再按实际需要选择积分或按天会员。具体积分消耗、会员时长和当前价格以登录后的积分与会员页面为准。 查看积分与会员 · 免费使用 从准备到连接，三步进入状态 准备自己的资料：添加简历和岗位 JD，按需要整理知识材料。 连接电脑助手：选择适合系统的版本，检查连接、声音与采集权限。 选择本场上下文：确认这场面试使用的资料，通过语音、手动输入或截图获取建议。 一段视频，了解面试稳 从连接到使用，看一遍就明白 常见问题 面试稳可以免费使用吗？ 可以先免费使用，具体可用权益以登录后的积分与会员页面实时显示为准。 支持哪些设备和输入方式？ 下载中心提供当前可用电脑版本。支持授权后的语音输入、手动输入和截图题回答；手机端可同步查看回答和会话状态。 如何选择套餐和支付方式？ 按实际使用需要选择积分或按天会员，价格、额度及可用支付方式以实时配置和订单确认为准。 如何使用 AI 建议？ 请根据真实经历核对内容，遵守面试组织方的规则，不能保证面试或录用结果。 清楚的数据与隐私边界 原始音频默认不保存；简历、JD、截图和会话记录提供管理或删除入口。请遵守面试规则，并始终基于真实经历作答。 产品支持 Web、macOS 和 Windows 使用方式。遇到问题可通过微信 mianshiwen-cn 或邮箱 contact@oneshowailab.com 联系客服。",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "@id": "https://mianshiwen.cn/#organization",
+        "name": "OneShow AI Lab",
+        "alternateName": "面试稳",
+        "url": "https://mianshiwen.cn/",
+        "logo": "https://mianshiwen.cn/assets/brand/logo.svg",
+        "email": "contact@oneshowailab.com"
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": "https://mianshiwen.cn/#website",
+        "url": "https://mianshiwen.cn/",
+        "name": "面试稳AI助手",
+        "inLanguage": "zh-CN",
+        "publisher": {
+          "@id": "https://mianshiwen.cn/#organization"
+        }
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "@id": "https://mianshiwen.cn/#software",
+        "name": "面试稳AI助手",
+        "url": "https://mianshiwen.cn/",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web, macOS, Windows",
+        "description": "结合简历、目标岗位和知识资料，整理实时面试问题、截图题与技术题的回答思路。",
+        "publisher": {
+          "@id": "https://mianshiwen.cn/#organization"
+        }
+      }
+    ],
+    "links": [
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/pricing",
+      "/download",
+      "/login",
+      "/app/partner-program",
+      "/app/billing",
+      "/login",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/pricing",
+      "/download",
+      "/security",
+      "/about",
+      "/contact",
+      "/terms",
+      "/privacy",
+      "https://beian.miit.gov.cn",
+      "https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=33010602014812"
+    ],
+    "redirects": [],
+    "images": [],
+    "incoming": 30
+  },
+  {
+    "url": "https://mianshiwen.cn/seo-audit-missing-20260907",
+    "final": "https://mianshiwen.cn/seo-audit-missing-20260907",
+    "status": 404,
+    "seconds": 0.451,
+    "title": "页面不存在 - 面试稳",
+    "description": [],
+    "canonical": [],
+    "robots": [
+      "noindex, follow"
+    ],
+    "xrobots": null,
+    "h1": [
+      "没有找到这个页面"
+    ],
+    "body_chars": 62,
+    "body_hash": "3e6d9dc61ae355aa76b295a768c780b11d317b71263705b940f58b68791beebe",
+    "body": "页面不存在 - 面试稳 404 没有找到这个页面 地址可能已经失效，或页面从未存在。你可以返回面试稳首页继续使用。 返回首页",
+    "schema": [],
+    "links": [
+      "/"
+    ],
+    "redirects": [],
+    "images": [],
+    "incoming": 0
+  },
+  {
+    "url": "https://www.mianshiwen.cn/",
+    "final": "https://www.mianshiwen.cn/",
+    "status": 200,
+    "seconds": 2.246,
+    "title": "AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳",
+    "description": [
+      "面试稳是一款 AI 面试助手，可结合简历、目标岗位和知识资料，整理实时面试问题、截图题与技术题的回答思路。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "AI 面试助手，让你的经历更好表达。"
+    ],
+    "body_chars": 856,
+    "body_hash": "32c85671faa85c84af3f397decdf90360e1a46d2f4e64835b498d5165f018220",
+    "body": "AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳 面试稳AI助手 AI 面试助手，让你的经历更好表达。 跟上面试问题，结合你的简历与目标岗位，整理更贴合自己的回答思路。 从听清问题，到讲清自己 跟上每一个问题 实时转写面试官与自己的声音，把注意力留给交流。 回答更贴合你的经历 按场选择简历、JD 和知识材料，围绕自己的项目与目标岗位组织回答。 截图题，也有思路 通过电脑助手截取题目，查看识别与生成进度，无需手动重新输入。 让下一场准备更充分 回看问题、回答建议与资料来源，整理需要补充的经历和表达。 偶尔一场，或密集准备，都有选择 先了解产品，再按实际需要选择积分或按天会员。具体积分消耗、会员时长和当前价格以登录后的积分与会员页面为准。 查看积分与会员 · 免费使用 从准备到连接，三步进入状态 准备自己的资料：添加简历和岗位 JD，按需要整理知识材料。 连接电脑助手：选择适合系统的版本，检查连接、声音与采集权限。 选择本场上下文：确认这场面试使用的资料，通过语音、手动输入或截图获取建议。 一段视频，了解面试稳 从连接到使用，看一遍就明白 常见问题 面试稳可以免费使用吗？ 可以先免费使用，具体可用权益以登录后的积分与会员页面实时显示为准。 支持哪些设备和输入方式？ 下载中心提供当前可用电脑版本。支持授权后的语音输入、手动输入和截图题回答；手机端可同步查看回答和会话状态。 如何选择套餐和支付方式？ 按实际使用需要选择积分或按天会员，价格、额度及可用支付方式以实时配置和订单确认为准。 如何使用 AI 建议？ 请根据真实经历核对内容，遵守面试组织方的规则，不能保证面试或录用结果。 清楚的数据与隐私边界 原始音频默认不保存；简历、JD、截图和会话记录提供管理或删除入口。请遵守面试规则，并始终基于真实经历作答。 产品支持 Web、macOS 和 Windows 使用方式。遇到问题可通过微信 mianshiwen-cn 或邮箱 contact@oneshowailab.com 联系客服。",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "@id": "https://mianshiwen.cn/#organization",
+        "name": "OneShow AI Lab",
+        "alternateName": "面试稳",
+        "url": "https://mianshiwen.cn/",
+        "logo": "https://mianshiwen.cn/assets/brand/logo.svg",
+        "email": "contact@oneshowailab.com"
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": "https://mianshiwen.cn/#website",
+        "url": "https://mianshiwen.cn/",
+        "name": "面试稳AI助手",
+        "inLanguage": "zh-CN",
+        "publisher": {
+          "@id": "https://mianshiwen.cn/#organization"
+        }
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "@id": "https://mianshiwen.cn/#software",
+        "name": "面试稳AI助手",
+        "url": "https://mianshiwen.cn/",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web, macOS, Windows",
+        "description": "结合简历、目标岗位和知识资料，整理实时面试问题、截图题与技术题的回答思路。",
+        "publisher": {
+          "@id": "https://mianshiwen.cn/#organization"
+        }
+      }
+    ],
+    "links": [
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/pricing",
+      "/download",
+      "/login",
+      "/app/partner-program",
+      "/app/billing",
+      "/login",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/pricing",
+      "/download",
+      "/security",
+      "/about",
+      "/contact",
+      "/terms",
+      "/privacy",
+      "https://beian.miit.gov.cn",
+      "https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=33010602014812"
+    ],
+    "redirects": [],
+    "images": [],
+    "incoming": 0
+  },
+  {
+    "url": "http://mianshiwen.cn/",
+    "final": "https://mianshiwen.cn/",
+    "status": 200,
+    "seconds": 2.099,
+    "title": "AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳",
+    "description": [
+      "面试稳是一款 AI 面试助手，可结合简历、目标岗位和知识资料，整理实时面试问题、截图题与技术题的回答思路。"
+    ],
+    "canonical": [
+      "https://mianshiwen.cn/"
+    ],
+    "robots": [],
+    "xrobots": null,
+    "h1": [
+      "AI 面试助手，让你的经历更好表达。"
+    ],
+    "body_chars": 856,
+    "body_hash": "32c85671faa85c84af3f397decdf90360e1a46d2f4e64835b498d5165f018220",
+    "body": "AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳 面试稳AI助手 AI 面试助手，让你的经历更好表达。 跟上面试问题，结合你的简历与目标岗位，整理更贴合自己的回答思路。 从听清问题，到讲清自己 跟上每一个问题 实时转写面试官与自己的声音，把注意力留给交流。 回答更贴合你的经历 按场选择简历、JD 和知识材料，围绕自己的项目与目标岗位组织回答。 截图题，也有思路 通过电脑助手截取题目，查看识别与生成进度，无需手动重新输入。 让下一场准备更充分 回看问题、回答建议与资料来源，整理需要补充的经历和表达。 偶尔一场，或密集准备，都有选择 先了解产品，再按实际需要选择积分或按天会员。具体积分消耗、会员时长和当前价格以登录后的积分与会员页面为准。 查看积分与会员 · 免费使用 从准备到连接，三步进入状态 准备自己的资料：添加简历和岗位 JD，按需要整理知识材料。 连接电脑助手：选择适合系统的版本，检查连接、声音与采集权限。 选择本场上下文：确认这场面试使用的资料，通过语音、手动输入或截图获取建议。 一段视频，了解面试稳 从连接到使用，看一遍就明白 常见问题 面试稳可以免费使用吗？ 可以先免费使用，具体可用权益以登录后的积分与会员页面实时显示为准。 支持哪些设备和输入方式？ 下载中心提供当前可用电脑版本。支持授权后的语音输入、手动输入和截图题回答；手机端可同步查看回答和会话状态。 如何选择套餐和支付方式？ 按实际使用需要选择积分或按天会员，价格、额度及可用支付方式以实时配置和订单确认为准。 如何使用 AI 建议？ 请根据真实经历核对内容，遵守面试组织方的规则，不能保证面试或录用结果。 清楚的数据与隐私边界 原始音频默认不保存；简历、JD、截图和会话记录提供管理或删除入口。请遵守面试规则，并始终基于真实经历作答。 产品支持 Web、macOS 和 Windows 使用方式。遇到问题可通过微信 mianshiwen-cn 或邮箱 contact@oneshowailab.com 联系客服。",
+    "schema": [
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "@id": "https://mianshiwen.cn/#organization",
+        "name": "OneShow AI Lab",
+        "alternateName": "面试稳",
+        "url": "https://mianshiwen.cn/",
+        "logo": "https://mianshiwen.cn/assets/brand/logo.svg",
+        "email": "contact@oneshowailab.com"
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": "https://mianshiwen.cn/#website",
+        "url": "https://mianshiwen.cn/",
+        "name": "面试稳AI助手",
+        "inLanguage": "zh-CN",
+        "publisher": {
+          "@id": "https://mianshiwen.cn/#organization"
+        }
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "@id": "https://mianshiwen.cn/#software",
+        "name": "面试稳AI助手",
+        "url": "https://mianshiwen.cn/",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web, macOS, Windows",
+        "description": "结合简历、目标岗位和知识资料，整理实时面试问题、截图题与技术题的回答思路。",
+        "publisher": {
+          "@id": "https://mianshiwen.cn/#organization"
+        }
+      }
+    ],
+    "links": [
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/pricing",
+      "/download",
+      "/login",
+      "/app/partner-program",
+      "/app/billing",
+      "/login",
+      "/features",
+      "/interview-questions",
+      "/guides",
+      "/guide",
+      "/pricing",
+      "/download",
+      "/security",
+      "/about",
+      "/contact",
+      "/terms",
+      "/privacy",
+      "https://beian.miit.gov.cn",
+      "https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=33010602014812"
+    ],
+    "redirects": [
+      308
+    ],
+    "images": [],
+    "incoming": 0
+  }
+]

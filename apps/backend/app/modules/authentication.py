@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request
 
 from app.core.logging import utc_now_iso
 from app.core.responses import success_response
-from app.deps import authentication_service, require_authenticated_context
+from app.deps import authentication_service, global_commerce_service, require_authenticated_context
 from app.ports.authentication import AuthenticatedRequestContext
 from app.schemas.authentication import (
     AuthSessionListResponse,
@@ -24,9 +24,18 @@ from app.schemas.authentication import (
     SmsSendCodeRequest,
     SmsSendCodeResponse,
     SmsVerifyLoginRequest,
+    EmailSendCodeRequest,
+    EmailSendCodeResponse,
+    EmailVerifyLoginRequest,
+    GlobalEmailCodeRequest,
+    GlobalPasswordChangeRequest,
+    GlobalPasswordChangeResponse,
+    GlobalPasswordCompletionRequest,
+    GlobalPasswordLoginRequest,
 )
 from app.schemas.foundation import ApiEnvelope, ModuleDescriptor
 from app.services.authentication_service import AuthenticationService
+from app.services.global_commerce_service import GlobalCommerceService
 
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -178,6 +187,92 @@ async def verify_sms_login(
         client_label=request.client_label,
     )
     return success_response(request=request_context, data=_to_result_response(user, auth_session, access_token, refresh_token, service), timestamp=utc_now_iso())
+
+
+@router.post("/email/send-code", response_model=ApiEnvelope[EmailSendCodeResponse])
+async def send_email_code(
+    request_context: Request,
+    request: EmailSendCodeRequest,
+    service: AuthenticationService = Depends(authentication_service),
+) -> ApiEnvelope[EmailSendCodeResponse]:
+    challenge = service.send_email_code(email=request.email, client_label=request.client_label)
+    return success_response(
+        request=request_context,
+        data=EmailSendCodeResponse(
+            challengeId=challenge.challenge_id,
+            status=challenge.status,
+            provider=challenge.provider,
+            expiresAtMs=challenge.expires_at_ms,
+            cooldownSeconds=service.settings.auth_email_send_interval_seconds,
+            maskedEmail=challenge.masked_email,
+        ),
+        timestamp=utc_now_iso(),
+    )
+
+
+@router.post("/email/verify-login", response_model=ApiEnvelope[AuthenticationResultResponse])
+async def verify_email_login(
+    request_context: Request,
+    request: EmailVerifyLoginRequest,
+    service: AuthenticationService = Depends(authentication_service),
+    commerce: GlobalCommerceService = Depends(global_commerce_service),
+) -> ApiEnvelope[AuthenticationResultResponse]:
+    user, auth_session, access_token, refresh_token = service.verify_email_login(
+        challenge_id=request.challenge_id,
+        email=request.email,
+        code=request.code,
+        client_label=request.client_label,
+    )
+    if service.settings.product_edition == "global":
+        commerce.ensure_free_grant(user.user_id)
+    return success_response(request=request_context, data=_to_result_response(user, auth_session, access_token, refresh_token, service), timestamp=utc_now_iso())
+
+
+@router.post("/global/email/send-code", response_model=ApiEnvelope[EmailSendCodeResponse])
+async def send_global_email_code(
+    request_context: Request,
+    request: GlobalEmailCodeRequest,
+    service: AuthenticationService = Depends(authentication_service),
+) -> ApiEnvelope[EmailSendCodeResponse]:
+    service._require_global_password_auth()
+    challenge = service.send_email_code(email=request.email, client_label=request.client_label, purpose=request.purpose)
+    return success_response(request=request_context, data=EmailSendCodeResponse(
+        challengeId=challenge.challenge_id, status=challenge.status, provider=challenge.provider,
+        expiresAtMs=challenge.expires_at_ms, cooldownSeconds=service.settings.auth_email_send_interval_seconds,
+        maskedEmail=challenge.masked_email,
+    ), timestamp=utc_now_iso())
+
+
+def _complete_global_auth(*, request_context: Request, result, service: AuthenticationService, commerce: GlobalCommerceService):
+    user, auth_session, access_token, refresh_token = result
+    commerce.ensure_free_grant(user.user_id)
+    return success_response(request=request_context, data=_to_result_response(user, auth_session, access_token, refresh_token, service), timestamp=utc_now_iso())
+
+
+@router.post("/global/register", response_model=ApiEnvelope[AuthenticationResultResponse])
+async def register_global_customer(request_context: Request, request: GlobalPasswordCompletionRequest, service: AuthenticationService = Depends(authentication_service), commerce: GlobalCommerceService = Depends(global_commerce_service)) -> ApiEnvelope[AuthenticationResultResponse]:
+    return _complete_global_auth(request_context=request_context, result=service.register_global_user(challenge_id=request.challenge_id, email=request.email, code=request.code, password=request.password, client_label=request.client_label), service=service, commerce=commerce)
+
+
+@router.post("/global/password/setup", response_model=ApiEnvelope[AuthenticationResultResponse])
+async def setup_global_password(request_context: Request, request: GlobalPasswordCompletionRequest, service: AuthenticationService = Depends(authentication_service), commerce: GlobalCommerceService = Depends(global_commerce_service)) -> ApiEnvelope[AuthenticationResultResponse]:
+    return _complete_global_auth(request_context=request_context, result=service.setup_global_password(challenge_id=request.challenge_id, email=request.email, code=request.code, password=request.password, client_label=request.client_label), service=service, commerce=commerce)
+
+
+@router.post("/global/password/login", response_model=ApiEnvelope[AuthenticationResultResponse])
+async def login_global_customer(request_context: Request, request: GlobalPasswordLoginRequest, service: AuthenticationService = Depends(authentication_service), commerce: GlobalCommerceService = Depends(global_commerce_service)) -> ApiEnvelope[AuthenticationResultResponse]:
+    return _complete_global_auth(request_context=request_context, result=service.login_global_user(email=request.email, password=request.password, client_label=request.client_label, request_origin=request_context.client.host if request_context.client else None), service=service, commerce=commerce)
+
+
+@router.post("/global/password/reset", response_model=ApiEnvelope[AuthenticationResultResponse])
+async def reset_global_password(request_context: Request, request: GlobalPasswordCompletionRequest, service: AuthenticationService = Depends(authentication_service), commerce: GlobalCommerceService = Depends(global_commerce_service)) -> ApiEnvelope[AuthenticationResultResponse]:
+    return _complete_global_auth(request_context=request_context, result=service.reset_global_password(challenge_id=request.challenge_id, email=request.email, code=request.code, password=request.password, client_label=request.client_label), service=service, commerce=commerce)
+
+
+@router.post("/global/password/change", response_model=ApiEnvelope[GlobalPasswordChangeResponse])
+async def change_global_password(request_context: Request, request: GlobalPasswordChangeRequest, auth_context: AuthenticatedRequestContext = Depends(require_authenticated_context), service: AuthenticationService = Depends(authentication_service)) -> ApiEnvelope[GlobalPasswordChangeResponse]:
+    service.change_global_password(auth_context=auth_context, current_password=request.current_password, new_password=request.new_password)
+    return success_response(request=request_context, data=GlobalPasswordChangeResponse(changed=True), timestamp=utc_now_iso())
 
 
 @router.post("/refresh", response_model=ApiEnvelope[AuthenticationResultResponse])

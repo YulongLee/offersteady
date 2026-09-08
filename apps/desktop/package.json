@@ -1,6 +1,6 @@
 {
   "name": "@offersteady/desktop",
-  "version": "1.2.14",
+  "version": "1.2.17",
   "description": "面试稳 macOS 与 Windows 音频伴随程序",
   "author": "OfferSteady",
   "private": true,
@@ -9,11 +9,13 @@
   "scripts": {
     "dev": "npm run build && electron .",
     "build": "npm run build:main && npm run build:renderer",
+    "build:global": "npm run copy:global && npm run build:main && OFFERSTEADY_PRODUCT_EDITION=global npm run build:renderer",
+    "copy:global": "node scripts/generate-global-companion-copy.mjs",
     "build:native": "node scripts/build-native-runtime.mjs",
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "vite build -c vite.config.mts",
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
-    "test": "vitest run",
+    "test": "npm run copy:global && vitest run",
     "diagnose:runtime": "node scripts/diagnose-runtime.mjs",
     "benchmark:commercial-finalization": "vitest run test/commercial-finalization-baseline.test.ts --reporter=verbose",
     "package:mac": "npm run package:mac:arm64",
@@ -23,6 +25,8 @@
     "reset-privacy-open:mac:x64": "node scripts/reset-privacy-and-open.mjs x64",
     "package:mac:builder:arm64": "node scripts/build-native-runtime.mjs arm64 && npm run build && electron-builder --mac --arm64 --config electron-builder.yml",
     "package:mac:builder:x64": "npm run package:mac:x64",
+    "package:mac:global:arm64": "node scripts/prepare-global-runtime-config.mjs && node scripts/build-native-runtime.mjs arm64 && npm run build:global && OFFERSTEADY_PRODUCT_EDITION=global electron-builder --mac --arm64 --config electron-builder.global.yml",
+    "package:mac:global:x64": "node scripts/prepare-global-runtime-config.mjs && node scripts/build-native-runtime.mjs x64 && npm run build:global && OFFERSTEADY_PRODUCT_EDITION=global electron-builder --mac --x64 --config electron-builder.global.yml",
     "package:mac:dir": "npm run build && electron-builder --mac --dir --config electron-builder.yml",
     "package:mac:release:arm64": "node scripts/package-release-mac.mjs arm64",
     "package:mac:release:x64": "node scripts/package-release-mac.mjs x64",
@@ -35,6 +39,8 @@
     "metadata:mac:release:x64": "node scripts/generate-production-mac-metadata.mjs x64",
     "package:win:x64": "npm run build && node scripts/package-local-windows.mjs",
     "package:win:installer:x64": "npm run package:win:x64 && node scripts/package-windows-installer.mjs",
+    "package:win:global:x64": "node scripts/prepare-global-runtime-config.mjs && npm run build:global && OFFERSTEADY_PRODUCT_EDITION=global electron-builder --win --x64 --config electron-builder.global.yml",
+    "metadata:global": "node scripts/generate-global-release-metadata.mjs",
     "diagnose:e2e": "node scripts/diagnose-runtime.mjs"
   },
   "dependencies": {

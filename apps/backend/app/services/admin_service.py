@@ -51,6 +51,7 @@ SAFE_DETAIL_KEYS = frozenset({
     "published", "catalog_version",
     "enabled", "reward_points", "invitee_reward_points", "config_version",
     "channel_id", "campaign_id", "link_id", "scope_type", "amount_cents", "status",
+    "offer_code", "plan_version", "entitlement_id", "source_kind",
 })
 HIGH_RISK_PERMISSIONS = frozenset({
     "users.suspend", "billing.adjust", "catalog.manage", "redemptions.generate", "payments.manage", "payments.reconcile", "growth.manage", "admins.manage", "promotion.cost.manage",

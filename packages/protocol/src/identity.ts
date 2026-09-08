@@ -1,4 +1,4 @@
-export type IdentityProvider = "wechat" | "sms" | "prototype";
+export type IdentityProvider = "wechat" | "sms" | "email" | "prototype";
 export type IdentityBindingStatus = "active" | "recovery-required" | "revoked";
 
 export interface IdentityAuthorizationState {

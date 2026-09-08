@@ -1042,8 +1042,10 @@ class ChatService:
         self, *, user_id: str, session_id: str, question: str, usage_id: str | None = None,
         question_id: str | None = None, question_revision: int | None = None,
         clicked_at_ms: int | None = None, prefetch_revision: int | None = None,
+        route_received_at_ms: int | None = None, executor_admitted_at_ms: int | None = None,
+        answer_generator_started_at_ms: int | None = None,
     ) -> Iterator[dict]:
-        answer_accepted_at_ms = _now_ms()
+        answer_accepted_at_ms = answer_generator_started_at_ms or _now_ms()
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         if session.session_mode == "written":
             raise DomainRequestError("live-answer", "start-stream", "笔试模式仅支持截屏回答。", 409, error_code="written_exam_mode_mismatch")
@@ -1163,6 +1165,9 @@ class ChatService:
             first_visible_at_ms = _now_ms()
             timing = {
                 "serverAcceptedAtMs": answer_accepted_at_ms,
+                "routeReceivedAtMs": route_received_at_ms or answer_accepted_at_ms,
+                "executorAdmittedAtMs": executor_admitted_at_ms or answer_accepted_at_ms,
+                "answerGeneratorStartedAtMs": answer_generator_started_at_ms or answer_accepted_at_ms,
                 "providerRequestAtMs": provider_request_at_ms,
                 "providerFirstTokenAtMs": first_token_at_ms or first_visible_at_ms,
                 "firstVisibleAtMs": first_visible_at_ms,
@@ -1215,6 +1220,8 @@ class ChatService:
                             session_id=session_id,
                             task_id=current_task.task_id,
                             admission_to_provider_ms=max(0, provider_request_at_ms - answer_accepted_at_ms),
+                            route_to_executor_admission_ms=max(0, (executor_admitted_at_ms or answer_accepted_at_ms) - (route_received_at_ms or answer_accepted_at_ms)),
+                            executor_admission_to_generator_ms=max(0, (answer_generator_started_at_ms or answer_accepted_at_ms) - (executor_admitted_at_ms or answer_accepted_at_ms)),
                             provider_first_token_ms=max(0, first_token_at_ms - provider_request_at_ms),
                         )
                     visible_text = chunk.text

@@ -108,6 +108,26 @@ const connectWithMachineCode = async () => {
 };
 
 describe("categorized materials and reachable live actions", () => {
+  it("shows an unconfirmed knowledge quote as pending without claiming indexing started", () => {
+    open("/app/library", state => {
+      state.knowledgeDocuments = state.knowledgeDocuments.map((item, index) => index === 0 ? {
+        ...item,
+        status: "pending",
+        indexState: "not_indexed",
+        syncStatus: "synced",
+        selectable: false,
+        safeSummary: "文件已上传，等待确认服务端索引报价。",
+      } : item);
+    });
+
+    const row = screen.getByText("前端性能治理").closest("article")!;
+    expect(within(row).getAllByText("等待确认报价").length).toBeGreaterThan(0);
+    expect(within(row).getByText("未开始索引")).toBeInTheDocument();
+    expect(within(row).getByText(/本次未扣积分/)).toBeInTheDocument();
+    expect(within(row).queryByText("建立索引中")).not.toBeInTheDocument();
+    expect(within(row).queryByText("同步中")).not.toBeInTheDocument();
+  });
+
   it("persists collection rename through the backend before confirming success", async () => {
     const rename = vi.spyOn(materialUploadAdapter, "renameKnowledgeCollection").mockResolvedValue({
       collectionId: "collection-frontend",

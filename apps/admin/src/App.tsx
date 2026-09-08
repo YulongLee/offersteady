@@ -16,24 +16,48 @@ import {
   saveRememberedAdminPhone,
 } from "./login-preferences";
 
-type View = "dashboard" | "server" | "promotion" | "users" | "orders" | "payments" | "growth" | "pricing" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
+export type View = "dashboard" | "server" | "promotion" | "users" | "orders" | "payments" | "globalCommerce" | "globalMembers" | "growth" | "pricing" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
 type Row = Record<string, unknown>;
+const globalEdition = import.meta.env.VITE_PRODUCT_EDITION === "global";
 
-const views: { id: View; label: string; eyebrow: string; permission: string }[] = [
+export type AdminViewDefinition = { id: View; label: string; eyebrow: string; permission: string };
+
+const commonCoreViews: AdminViewDefinition[] = [
   { id: "dashboard", label: "运营总览", eyebrow: "OVERVIEW", permission: "observability.read" },
   { id: "server", label: "服务器监控", eyebrow: "SERVER", permission: "observability.read" },
-  { id: "promotion", label: "推广中心", eyebrow: "ACQUISITION", permission: "promotion.read" },
   { id: "users", label: "用户与权益", eyebrow: "CUSTOMERS", permission: "users.read" },
-  { id: "orders", label: "订单与支付", eyebrow: "BILLING", permission: "billing.read" },
-  { id: "payments", label: "支付设置", eyebrow: "PAYMENTS", permission: "payments.manage" },
-  { id: "growth", label: "增长设置", eyebrow: "GROWTH", permission: "growth.manage" },
-  { id: "pricing", label: "商品定价", eyebrow: "CATALOG", permission: "billing.read" },
-  { id: "redemptions", label: "兑换码", eyebrow: "BENEFITS", permission: "billing.read" },
+];
+
+const commonOperationsViews: AdminViewDefinition[] = [
   { id: "materials", label: "资料任务", eyebrow: "KNOWLEDGE", permission: "materials.read" },
   { id: "interviews", label: "面试会话", eyebrow: "SESSIONS", permission: "sessions.read" },
   { id: "audit", label: "审计记录", eyebrow: "AUDIT", permission: "audit.read" },
   { id: "admins", label: "管理员", eyebrow: "ACCESS", permission: "admins.manage" },
 ];
+
+const chinaViews: AdminViewDefinition[] = [
+  ...commonCoreViews,
+  { id: "promotion", label: "推广中心", eyebrow: "ACQUISITION", permission: "promotion.read" },
+  { id: "orders", label: "订单与支付", eyebrow: "BILLING", permission: "billing.read" },
+  { id: "payments", label: "支付设置", eyebrow: "PAYMENTS", permission: "payments.manage" },
+  { id: "growth", label: "增长设置", eyebrow: "GROWTH", permission: "growth.manage" },
+  { id: "pricing", label: "商品定价", eyebrow: "CATALOG", permission: "billing.read" },
+  { id: "redemptions", label: "兑换码", eyebrow: "BENEFITS", permission: "billing.read" },
+  ...commonOperationsViews,
+];
+
+const globalViews: AdminViewDefinition[] = [
+  ...commonCoreViews,
+  { id: "globalMembers", label: "国际会员", eyebrow: "MEMBERS", permission: "users.read" },
+  { id: "globalCommerce", label: "国际商业化", eyebrow: "CREEM", permission: "payments.manage" },
+  ...commonOperationsViews,
+];
+
+export function adminViewsForEdition(edition: "cn" | "global"): readonly AdminViewDefinition[] {
+  return edition === "global" ? globalViews : chinaViews;
+}
+
+const views = adminViewsForEdition(globalEdition ? "global" : "cn");
 
 const labels: Record<string, string> = {
   users: "累计用户",
@@ -52,17 +76,183 @@ const display = (value: unknown) => {
   return String(value);
 };
 
-function Login({ onReady, initialMessage = "" }: { onReady: () => void; initialMessage?: string }) {
+export function GlobalCommercePanel({ row }: { row: Row | undefined; onChanged: () => void }) {
+  const [mode, setMode] = useState<"test" | "live">("test");
+  const [data, setData] = useState<Row | undefined>(row);
+  const [products, setProducts] = useState<Row[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [apiKey, setApiKey] = useState("");
+  const [webhookSecret, setWebhookSecret] = useState("");
+  const [reason, setReason] = useState("配置 Creem 支付环境");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState("");
+  useEffect(() => { if (row && mode === "test") setData(row); }, [row, mode]);
+  const reload = async (selectedMode = mode) => {
+    const [overview, operations] = await Promise.all([adminApi.globalCommerceOverview(selectedMode), adminApi.globalCommerceOperations(selectedMode)]);
+    setData({ ...overview, operations });
+  };
+  const selectMode = async (selectedMode: "test" | "live") => {
+    setMode(selectedMode); setProducts([]); setDrafts({}); setMessage(""); setBusy("mode");
+    try { await reload(selectedMode); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "环境配置读取失败"); }
+    finally { setBusy(""); }
+  };
+  if (!data) return <div className="loading">国际商业化配置暂不可用</div>;
+  const blockers = Array.isArray(data.blockers) ? data.blockers.map(String) : [];
+  const mappings = Array.isArray(data.mappings) ? data.mappings as Row[] : [];
+  const credentials = data.credentials as Record<string, Row> | undefined;
+  const metrics = data.metrics as Row | undefined;
+  const operations = data.operations as Row | undefined;
+  const urls = data.urls as Row | undefined;
+  const orders = Array.isArray(operations?.orders) ? operations.orders as Row[] : [];
+  const subscriptions = Array.isArray(operations?.subscriptions) ? operations.subscriptions as Row[] : [];
+  const events = Array.isArray(operations?.events) ? operations.events as Row[] : [];
+  const formatProduct = (product: Row) => `${display(product.name)} · $${(Number(product.priceCents ?? 0) / 100).toFixed(2)} ${display(product.currency)} · ${product.billingMode === "recurring" ? "订阅" : "一次性"}`;
+  const saveCredentials = async () => {
+    if (!apiKey.trim() && !webhookSecret.trim()) { setMessage("请填写需要更新的 API Key 或 Webhook Secret。"); return; }
+    setBusy("credentials"); setMessage("");
+    try { await adminApi.saveGlobalCommerceCredentials(mode, apiKey.trim(), webhookSecret.trim(), reason); setApiKey(""); setWebhookSecret(""); setProducts([]); await reload(); setMessage("密钥已加密保存。当前环境的新结账保持关闭，请继续读取商品并完成映射。"); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "密钥保存失败"); }
+    finally { setBusy(""); }
+  };
+  const syncProducts = async () => {
+    setBusy("products"); setMessage("");
+    try { const result = await adminApi.globalCommerceProducts(mode); setProducts(result.items); setMessage(`Creem ${mode === "test" ? "测试" : "正式"}环境连接成功，读取到 ${result.items.length} 个商品。`); await reload(); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "Creem 商品读取失败"); }
+    finally { setBusy(""); }
+  };
+  const saveMapping = async (offerCode: string) => {
+    const productId = (drafts[offerCode] || "").trim();
+    if (!productId) { setMessage("请从 Creem 商品列表中选择对应商品。"); return; }
+    setBusy(offerCode); setMessage("");
+    try { await adminApi.saveGlobalCommerceMapping(mode, offerCode, productId, reason); await reload(); setMessage("商品匹配及校验已通过；新结账仍保持关闭，需全部完成后单独启用。"); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "商品映射验证失败"); }
+    finally { setBusy(""); }
+  };
+  const activate = async (enabled: boolean) => {
+    setBusy("activation"); setMessage("");
+    try { await adminApi.activateGlobalCommerce(mode, enabled, reason); await reload(); setMessage(enabled ? `${mode === "test" ? "测试" : "正式"}环境的新结账已启用。` : "新结账已关闭，历史回调不受影响。"); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "启用检查失败"); }
+    finally { setBusy(""); }
+  };
+  const reconcile = async (orderId: string) => {
+    setBusy(`reconcile:${orderId}`); setMessage("");
+    try { await adminApi.reconcileGlobalCommerceOrder(orderId, reason); await reload(); setMessage(`订单 ${orderId} 已完成对账。`); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "订单对账失败"); }
+    finally { setBusy(""); }
+  };
+  const reconcilableOrders = orders.filter(order => ["checkout_created", "confirming"].includes(String(order.status)) && order.id && order.providerCheckoutId);
+  const runtimeMode = String(data.runtimeMode || "test");
+  const active = Boolean(data.providerActivated);
+  const activationAllowed = Boolean(data.configurationReady) && Boolean(data.masterSwitchEnabled) && runtimeMode === mode;
+  return <div className="global-commerce-admin">
+    <section className="signal-panel"><div><p className="eyebrow">CREEM PAYMENT</p><h3>{mode === "test" ? "测试环境配置" : "正式环境配置"}</h3></div><div className="page-actions"><button className={mode === "test" ? "primary" : "secondary"} disabled={Boolean(busy)} onClick={() => void selectMode("test")}>Test 测试</button><button className={mode === "live" ? "primary" : "secondary"} disabled={Boolean(busy)} onClick={() => void selectMode("live")}>Live 正式</button></div></section>
+    <section className={active ? "signal-panel" : "alert"}><strong>{active ? "当前环境已允许创建结账" : "当前环境支付未启用"}</strong><span>服务器当前运行：{runtimeMode === "test" ? "Test 测试" : "Live 正式"}；{mode === "test" ? "测试支付不会产生真实扣款。" : "正式支付需在审核通过后启用。"}</span></section>
+    {message ? <section className="alert">{message}</section> : null}
+    <section className="panel"><p className="eyebrow">01 · CONNECTION</p><h2>连接 Creem {mode === "test" ? "测试环境" : "正式环境"}</h2><p>已保存的密钥不会回显；留空表示保留原值。保存新密钥会自动关闭该环境支付。</p>
+      <div className="payment-grid"><label>API Key <small>{credentials?.apiKey?.configured ? `已配置 · 指纹 ${display(credentials.apiKey.fingerprint)}` : "未配置"}</small><input type="password" autoComplete="new-password" value={apiKey} placeholder={credentials?.apiKey?.configured ? "留空保留原 API Key" : mode === "test" ? "creem_test_…" : "creem_…"} onChange={event => setApiKey(event.target.value)} /></label><label>Webhook Secret <small>{credentials?.webhookSecret?.configured ? `已配置 · 指纹 ${display(credentials.webhookSecret.fingerprint)}` : "未配置"}</small><input type="password" autoComplete="new-password" value={webhookSecret} placeholder={credentials?.webhookSecret?.configured ? "留空保留原 Webhook Secret" : "填写 Creem Webhook Secret"} onChange={event => setWebhookSecret(event.target.value)} /></label></div>
+      <label>操作说明<input value={reason} onChange={event => setReason(event.target.value)} /></label>
+      <div className="page-actions"><button className="secondary" disabled={Boolean(busy)} onClick={() => void saveCredentials()}>{busy === "credentials" ? "加密保存中…" : "保存密钥"}</button><button className="primary" disabled={Boolean(busy) || !credentials?.apiKey?.configured} onClick={() => void syncProducts()}>{busy === "products" ? "连接中…" : "测试连接并读取商品"}</button></div>
+      <div className="signal-panel"><div><strong>Webhook URL</strong><p>{display(urls?.webhookUrl)}</p></div><button className="secondary" onClick={() => void navigator.clipboard.writeText(String(urls?.webhookUrl ?? ""))}>复制地址</button></div>
+    </section>
+    <section className="panel"><p className="eyebrow">02 · PLAN MAPPING</p><h2>套餐与 Creem 商品关联</h2><p>Free 是免费权益，不需要 Creem 商品。下面只显示4个需要收款的套餐，不再展示内部技术字段。</p>
+      {!products.length ? <div className="empty">先点击“测试连接并读取商品”，系统会显示 Creem 中的真实商品供你选择。</div> : null}
+      <div className="payment-grid">{mappings.map(mapping => { const code = String(mapping.offerCode); const selected = drafts[code] ?? String(mapping.providerProductId ?? ""); return <article className="payment-card" key={code}><strong>{display(mapping.displayName)}</strong><small>${(Number(mapping.priceCents ?? 0) / 100).toFixed(2)} {display(mapping.currency)} · {mapping.billingMode === "recurring" ? "每月订阅" : "一次性购买"} · {mapping.validationStatus === "ready" ? "已匹配" : "待匹配"}</small><label>对应的 Creem 商品<select value={selected} disabled={!products.length || Boolean(busy)} onChange={event => setDrafts(current => ({ ...current, [code]: event.target.value }))}><option value="">请选择 Creem 商品</option>{products.map(product => <option key={String(product.id)} value={String(product.id)}>{formatProduct(product)}</option>)}</select></label><button className="payment-save" disabled={Boolean(busy) || !selected} onClick={() => void saveMapping(code)}>{busy === code ? "校验中…" : "保存并校验"}</button></article>; })}</div>
+    </section>
+    {blockers.length ? <section className="alert"><strong>启用前还需完成：</strong> {blockers.join("；")}</section> : <section className="signal-panel"><strong>配置校验已完成</strong><span>仍需手动点击启用，不会自动开放支付。</span></section>}
+    <div className="page-actions"><button className="secondary" disabled={Boolean(busy) || !active} onClick={() => void activate(false)}>关闭当前环境支付</button><button className="primary" disabled={Boolean(busy) || active || !activationAllowed} onClick={() => void activate(true)}>{busy === "activation" ? "最终检查中…" : mode === "test" ? "启用 Test 测试支付" : "启用 Live 正式支付"}</button></div>
+    <div className="metric-grid"><article className="metric"><span>01</span><strong>{display(metrics?.paidOrders ?? 0)}</strong><p>{mode === "test" ? "测试" : "正式"}已支付订单</p></article><article className="metric"><span>02</span><strong>${(Number(metrics?.grossRevenueCents ?? 0) / 100).toFixed(2)}</strong><p>确认收入</p></article><article className="metric"><span>03</span><strong>${(Number(metrics?.estimatedNetBeforeServiceCostCents ?? 0) / 100).toFixed(2)}</strong><p>估算渠道费后收入</p></article></div>
+    <section><p className="eyebrow">ORDERS</p><h2>最近订单</h2><Table rows={orders} />{reconcilableOrders.length ? <div className="page-actions">{reconcilableOrders.slice(0, 8).map(order => { const orderId = String(order.id); return <button className="secondary" key={orderId} disabled={Boolean(busy)} onClick={() => void reconcile(orderId)}>{busy === `reconcile:${orderId}` ? "对账中…" : `对账 ${orderId}`}</button>; })}</div> : null}</section>
+    <section><p className="eyebrow">SUBSCRIPTIONS</p><h2>订阅状态</h2><Table rows={subscriptions} /></section>
+    <section><p className="eyebrow">WEBHOOKS</p><h2>回调记录</h2><Table rows={events} /></section>
+  </div>;
+}
+
+const globalMemberOffers = [
+  ["global-interview-pass", "Interview Day Pass · 24 小时 / 180 分钟"],
+  ["global-pro-weekly", "Pro Weekly · 7 天无限使用"],
+  ["global-pro-monthly", "Pro Monthly · 人工赠送 30 天（不自动续费）"],
+  ["global-job-hunt", "Job Hunt · 90 天无限使用"],
+] as const;
+
+export function GlobalMembersPanel() {
+  const [search, setSearch] = useState("");
+  const [members, setMembers] = useState<Row[]>([]);
+  const [detail, setDetail] = useState<Row | null>(null);
+  const [offerCode, setOfferCode] = useState(globalMemberOffers[0][0]);
+  const [reason, setReason] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState("");
+  const runSearch = async () => {
+    setBusy("search"); setMessage("");
+    try { const result = await adminApi.globalMembers(search.trim()); setMembers(result.items); if (!result.items.length) setMessage("没有找到匹配的国际版用户。"); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "用户搜索失败"); }
+    finally { setBusy(""); }
+  };
+  const openMember = async (userId: string) => {
+    setBusy(`member:${userId}`); setMessage("");
+    try { setDetail(await adminApi.globalMember(userId)); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "会员详情读取失败"); }
+    finally { setBusy(""); }
+  };
+  const refreshDetail = async () => {
+    const userId = String((detail?.identity as Row | undefined)?.user_id ?? "");
+    if (userId) setDetail(await adminApi.globalMember(userId));
+  };
+  const grant = async () => {
+    const identity = detail?.identity as Row | undefined; const userId = String(identity?.user_id ?? "");
+    if (!userId || reason.trim().length < 3) { setMessage("请选择用户并填写操作原因。"); return; }
+    if (!window.confirm("确认人工赠送该套餐？本操作不会创建 Creem 订单或自动续费。")) return;
+    setBusy("grant"); setMessage("");
+    try { await adminApi.grantGlobalMemberPlan(userId, offerCode, reason.trim(), crypto.randomUUID()); await refreshDetail(); setMessage("会员权益已赠送并记录审计日志。"); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "会员赠送失败"); }
+    finally { setBusy(""); }
+  };
+  const revoke = async (entitlementId: string) => {
+    const identity = detail?.identity as Row | undefined; const userId = String(identity?.user_id ?? "");
+    if (!userId || reason.trim().length < 3) { setMessage("撤销前请填写操作原因。"); return; }
+    if (!window.confirm("确认仅撤销这条会员权益？订单与订阅历史会保留。")) return;
+    setBusy(`revoke:${entitlementId}`); setMessage("");
+    try { await adminApi.revokeGlobalMemberEntitlement(userId, entitlementId, reason.trim(), crypto.randomUUID()); await refreshDetail(); setMessage("指定会员权益已撤销，其他有效权益不受影响。"); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "会员撤销失败"); }
+    finally { setBusy(""); }
+  };
+  const identity = detail?.identity as Row | undefined;
+  const state = detail?.state as Row | undefined;
+  const usage = state?.usage as Row | undefined;
+  const features = state?.features as Row | undefined;
+  const entitlements = Array.isArray(detail?.entitlements) ? detail.entitlements as Row[] : [];
+  const orders = Array.isArray(detail?.orders) ? detail.orders as Row[] : [];
+  const subscriptions = Array.isArray(detail?.subscriptions) ? detail.subscriptions as Row[] : [];
+  return <div className="global-members-admin">
+    <section className="member-search"><div><p className="eyebrow">GLOBAL MEMBER SEARCH</p><h2>查找国际版用户</h2><p>支持邮箱、昵称或用户 ID；查询有分页与数量限制，不扫描面试内容。</p></div><div><input aria-label="搜索国际版用户" value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === "Enter") void runSearch(); }} placeholder="输入邮箱、昵称或用户 ID" /><button className="primary" disabled={busy === "search"} onClick={() => void runSearch()}>{busy === "search" ? "查询中…" : "搜索用户"}</button></div></section>
+    {message ? <section className="alert" role="status">{message}</section> : null}
+    <div className="member-layout"><section className="member-results"><h3>搜索结果</h3>{members.length ? members.map(member => <button key={String(member.user_id)} onClick={() => void openMember(String(member.user_id))} className={identity?.user_id === member.user_id ? "active" : ""}><strong>{display(member.email)}</strong><span>{display(member.display_name)} · {display(member.current_plan_name || "Free / 未激活")}</span><small>{member.current_ends_at_ms ? `有效至 ${display(member.current_ends_at_ms)}` : "无固定到期时间"}</small></button>) : <div className="empty">输入邮箱或用户信息开始查询</div>}</section>
+      <section className="member-detail">{identity ? <><div className="member-identity"><div><p className="eyebrow">MEMBER DETAIL</p><h2>{display(identity.email)}</h2><p>{display(identity.display_name)} · 注册于 {display(identity.created_at_ms)}</p></div><span className="status-badge active">国际版账号</span></div>
+        <div className="member-usage"><article><small>Copilot</small><strong>{usage?.copilotUnlimited ? "Unlimited" : `${display(usage?.copilotMinutesRemaining ?? 0)} 分钟`}</strong></article><article><small>Screen Assist</small><strong>{usage?.screenAssistUnlimited ? "Unlimited" : `${display(usage?.screenAssistUsesRemaining ?? 0)} 次`}</strong></article><article><small>资料能力</small><strong>{features?.resumeJd ? "Resume / JD" : "未包含"}</strong></article><article><small>知识库 / 笔试</small><strong>{features?.knowledgeBase || features?.writtenExam ? "已包含" : "未包含"}</strong></article></div>
+        <section className="member-adjust"><div><h3>人工会员管理</h3><p>按当前套餐权益与期限赠送；不会生成支付订单，Pro Monthly 人工赠送也不会自动续费。</p></div><select aria-label="选择赠送套餐" value={offerCode} onChange={event => setOfferCode(event.target.value as typeof offerCode)}>{globalMemberOffers.map(([code, label]) => <option value={code} key={code}>{label}</option>)}</select><input aria-label="会员操作原因" value={reason} onChange={event => setReason(event.target.value)} placeholder="填写赠送或撤销原因" /><button className="primary" disabled={Boolean(busy)} onClick={() => void grant()}>{busy === "grant" ? "处理中…" : "确认赠送"}</button></section>
+        <section><p className="eyebrow">ENTITLEMENTS</p><h3>会员权益记录</h3>{entitlements.length ? <div className="entitlement-list">{entitlements.map(item => <article key={String(item.id)}><div><strong>{globalMemberOffers.find(([code]) => code === item.offerCode)?.[1] ?? (item.offerCode === "global-free" ? "Free" : display(item.offerCode))}</strong><span>{display(item.status)} · {display(item.sourceKind)} · {item.endsAtMs ? `至 ${display(item.endsAtMs)}` : "长期 / 用完为止"}</span></div>{item.status === "active" && item.sourceKind !== "free_grant" ? <button disabled={Boolean(busy)} onClick={() => void revoke(String(item.id))}>{busy === `revoke:${item.id}` ? "撤销中…" : "撤销此权益"}</button> : null}</article>)}</div> : <div className="empty">暂无权益记录</div>}</section>
+        <section><p className="eyebrow">ORDERS & SUBSCRIPTIONS</p><h3>订单与订阅</h3><Table rows={orders} /><Table rows={subscriptions} /></section></> : <div className="empty">从左侧搜索结果选择一名用户查看详情</div>}</section></div>
+  </div>;
+}
+
+type AdminLoginMode = "phone" | "email";
+
+export function Login({ onReady, initialMessage = "", mode = globalEdition ? "email" : "phone" }: { onReady: () => void; initialMessage?: string; mode?: AdminLoginMode }) {
   const rememberedPhone = useMemo(() => readRememberedAdminPhone(), []);
   const [phone, setPhone] = useState(rememberedPhone);
+  const [email, setEmail] = useState("");
   const [rememberPhone, setRememberPhone] = useState(Boolean(rememberedPhone));
   const [challengeId, setChallengeId] = useState("");
-  const [smsCode, setSmsCode] = useState("");
-  const [message, setMessage] = useState(initialMessage || "使用已授权的管理员手机号和短信验证码登录。");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [message, setMessage] = useState(initialMessage || (mode === "email" ? "使用已授权的管理员邮箱和邮件验证码登录。" : "使用已授权的管理员手机号和短信验证码登录。"));
   const [busy, setBusy] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const normalizedPhone = normalizeAdminPhone(phone);
   const phoneValid = isValidAdminPhone(normalizedPhone);
+  const normalizedEmail = email.trim().toLowerCase();
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+  const identityValid = mode === "email" ? emailValid : phoneValid;
 
   useEffect(() => {
     if (cooldownSeconds <= 0) return;
@@ -76,7 +266,16 @@ function Login({ onReady, initialMessage = "" }: { onReady: () => void; initialM
     setPhone(value);
     if (challengeId) {
       setChallengeId("");
-      setSmsCode("");
+      setVerificationCode("");
+    }
+    setCooldownSeconds(0);
+  };
+
+  const updateEmail = (value: string) => {
+    setEmail(value);
+    if (challengeId) {
+      setChallengeId("");
+      setVerificationCode("");
     }
     setCooldownSeconds(0);
   };
@@ -88,20 +287,24 @@ function Login({ onReady, initialMessage = "" }: { onReady: () => void; initialM
   };
 
   const send = async () => {
-    if (!phoneValid) {
-      setMessage("请输入有效的 11 位中国大陆手机号。");
+    if (!identityValid) {
+      setMessage(mode === "email" ? "请输入有效的邮箱地址。" : "请输入有效的 11 位中国大陆手机号。");
       return;
     }
     setBusy(true);
     try {
-      const result = await adminApi.sendSms(normalizedPhone);
+      const result = mode === "email"
+        ? await adminApi.sendEmailCode(normalizedEmail)
+        : await adminApi.sendSms(normalizedPhone);
       setChallengeId(result.challengeId);
       const seconds = Math.max(0, Math.ceil(result.cooldownSeconds));
       setCooldownSeconds(seconds);
-      if (rememberPhone) saveRememberedAdminPhone(normalizedPhone);
-      setMessage(`验证码已发送，${seconds} 秒后可重新获取。`);
+      if (mode === "phone" && rememberPhone) saveRememberedAdminPhone(normalizedPhone);
+      setMessage(mode === "email" && "maskedEmail" in result
+        ? `验证码已发送至 ${result.maskedEmail}，${seconds} 秒后可重新获取。`
+        : `验证码已发送，${seconds} 秒后可重新获取。`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "验证码发送失败");
+      setMessage(error instanceof Error ? error.message : (mode === "email" ? "邮件验证码发送失败" : "短信验证码发送失败"));
     } finally {
       setBusy(false);
     }
@@ -109,15 +312,17 @@ function Login({ onReady, initialMessage = "" }: { onReady: () => void; initialM
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!phoneValid) {
-      setMessage("请输入有效的 11 位中国大陆手机号。");
+    if (!identityValid) {
+      setMessage(mode === "email" ? "请输入有效的邮箱地址。" : "请输入有效的 11 位中国大陆手机号。");
       return;
     }
     setBusy(true);
     try {
-      const user = await adminApi.verifySms(normalizedPhone, challengeId, smsCode);
+      const user = mode === "email"
+        ? await adminApi.verifyEmailLogin(normalizedEmail, challengeId, verificationCode)
+        : await adminApi.verifySms(normalizedPhone, challengeId, verificationCode);
       await adminApi.login(user.tokens.accessToken);
-      if (rememberPhone) saveRememberedAdminPhone(normalizedPhone);
+      if (mode === "phone" && rememberPhone) saveRememberedAdminPhone(normalizedPhone);
       onReady();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "管理身份验证失败");
@@ -138,11 +343,15 @@ function Login({ onReady, initialMessage = "" }: { onReady: () => void; initialM
       <form className="login-card" onSubmit={submit}>
         <p className="eyebrow">SECURE ACCESS</p>
         <h2>管理员验证</h2>
-        <label>手机号<input value={phone} onChange={event => updatePhone(event.target.value)} placeholder="请输入已授权手机号" inputMode="tel" autoComplete="tel" /></label>
-        <label className="remember-phone"><input type="checkbox" checked={rememberPhone} onChange={event => updateRememberPhone(event.target.checked)} /><span>在这台浏览器记住手机号</span></label>
-        <button className="secondary" type="button" onClick={send} disabled={busy || !phoneValid || cooldownSeconds > 0}>{cooldownSeconds > 0 ? `${cooldownSeconds} 秒后重新获取` : "获取短信验证码"}</button>
-        <label>短信验证码<input value={smsCode} onChange={event => setSmsCode(event.target.value)} placeholder="6 位验证码" maxLength={6} /></label>
-        <button className="primary" disabled={busy || !challengeId || smsCode.length !== 6}>进入运营中心</button>
+        {mode === "email" ? (
+          <label>管理员邮箱<input value={email} onChange={event => updateEmail(event.target.value)} placeholder="请输入已授权邮箱" inputMode="email" autoComplete="email" /></label>
+        ) : <>
+          <label>手机号<input value={phone} onChange={event => updatePhone(event.target.value)} placeholder="请输入已授权手机号" inputMode="tel" autoComplete="tel" /></label>
+          <label className="remember-phone"><input type="checkbox" checked={rememberPhone} onChange={event => updateRememberPhone(event.target.checked)} /><span>在这台浏览器记住手机号</span></label>
+        </>}
+        <button className="secondary" type="button" onClick={send} disabled={busy || !identityValid || cooldownSeconds > 0}>{cooldownSeconds > 0 ? `${cooldownSeconds} 秒后重新获取` : mode === "email" ? "获取邮件验证码" : "获取短信验证码"}</button>
+        <label>{mode === "email" ? "邮件验证码" : "短信验证码"}<input value={verificationCode} onChange={event => setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 8))} placeholder="请输入验证码" inputMode="numeric" autoComplete="one-time-code" maxLength={8} /></label>
+        <button className="primary" disabled={busy || !challengeId || verificationCode.length < 6}>进入运营中心</button>
         <p className="form-message">{message}</p>
       </form>
     </main>
@@ -818,7 +1027,7 @@ export function App() {
       setRole(session.role);
       setPermissions(session.permissions);
       const targetView = views.find(item => item.id === target);
-      if (targetView && !session.permissions.includes(targetView.permission)) {
+      if (!targetView || !session.permissions.includes(targetView.permission)) {
         const fallback = views.find(item => session.permissions.includes(item.permission));
         if (!fallback) throw new Error("当前管理员角色没有可访问的后台页面");
         if (fallback.id !== target) setView(fallback.id);
@@ -830,6 +1039,11 @@ export function App() {
       } else if (target === "growth") {
         const settings = await adminApi.growthReferralSettings();
         if (sequence === loadSequence.current) setRows([settings]);
+      } else if (target === "globalCommerce") {
+        const [overview, operations] = await Promise.all([adminApi.globalCommerceOverview(), adminApi.globalCommerceOperations()]);
+        if (sequence === loadSequence.current) setRows([{ ...overview, operations }]);
+      } else if (target === "globalMembers") {
+        if (sequence === loadSequence.current) setRows([]);
       } else if (target !== "server" && target !== "promotion") {
         const resource = target === "redemptions" ? "redemption-batches" : target === "pricing" ? "catalog-products" : target === "payments" ? "payment-channels" : target;
         const nextRows = (await adminApi.list(resource, offset)).items;
@@ -863,7 +1077,7 @@ export function App() {
       <main className="workspace">
         <header><div><p className="eyebrow">{current.eyebrow}</p><h1>{current.label}</h1></div><div className="header-actions"><span>{new Date().toLocaleDateString("zh-CN")}</span><button onClick={() => void load(view)}>刷新</button><button onClick={() => adminApi.logout().then(() => { sessionRequest.current = null; setAuthenticated(false); })}>退出</button></div></header>
         {error && <div className="alert">{error}</div>}
-        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} onAuthenticationExpired={requireNewAdminLogin} /> : view === "server" ? <ServerMonitor onAuthenticationExpired={requireNewAdminLogin} /> : view === "promotion" ? <PromotionCenter permissions={permissions} onAuthenticationExpired={requireNewAdminLogin} /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "pricing" ? <PricingPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "payments" ? <PaymentPanel rows={rows} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "growth" ? <GrowthPanel row={rows[0]} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "orders" ? <OrdersPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : <>
+        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} onAuthenticationExpired={requireNewAdminLogin} /> : view === "server" ? <ServerMonitor onAuthenticationExpired={requireNewAdminLogin} /> : view === "promotion" ? <PromotionCenter permissions={permissions} onAuthenticationExpired={requireNewAdminLogin} /> : view === "globalMembers" ? <GlobalMembersPanel /> : view === "globalCommerce" ? <GlobalCommercePanel row={rows[0]} onChanged={() => void load(view, true)} /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "pricing" ? <PricingPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "payments" ? <PaymentPanel rows={rows} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "growth" ? <GrowthPanel row={rows[0]} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "orders" ? <OrdersPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : <>
           <Table rows={rows} />
           <div className="pagination"><button disabled={offset === 0} onClick={() => setOffset(value => Math.max(0, value - 50))}>上一页</button><span>第 {offset / 50 + 1} 页</span><button disabled={rows.length < 50} onClick={() => setOffset(value => value + 50)}>下一页</button></div>
           <ActionPanel view={view} rows={rows} permissions={permissions} onChanged={() => void load(view, true)} />

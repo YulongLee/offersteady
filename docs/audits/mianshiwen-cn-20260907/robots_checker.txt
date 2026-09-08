@@ -1,0 +1,30 @@
+robots.txt Analysis — https://mianshiwen.cn/robots.txt
+==================================================
+Status: 200
+
+Sitemaps (1):
+  • https://mianshiwen.cn/sitemap.xml
+
+User-Agents (6):
+  *: 0 disallow, 1 allow
+  GPTBot: 0 disallow, 1 allow
+  OAI-SearchBot: 0 disallow, 1 allow
+  ChatGPT-User: 0 disallow, 1 allow
+  ClaudeBot: 0 disallow, 1 allow
+  PerplexityBot: 0 disallow, 1 allow
+
+AI Crawler Management:
+  ℹ️ GPTBot: explicitly allowed
+  ℹ️ ChatGPT-User: explicitly allowed
+  ℹ️ ClaudeBot: explicitly allowed
+  ℹ️ PerplexityBot: explicitly allowed
+  ⚠️ Google-Extended: not managed (inherits * rules)
+  ⚠️ Applebot-Extended: not managed (inherits * rules)
+  ⚠️ Bytespider: not managed (inherits * rules)
+  ⚠️ CCBot: not managed (inherits * rules)
+  ⚠️ anthropic-ai: not managed (inherits * rules)
+  ⚠️ FacebookBot: not managed (inherits * rules)
+  ⚠️ Amazonbot: not managed (inherits * rules)
+
+Issues (1):
+  ⚠️ 7 AI crawlers not explicitly managed: Google-Extended, Applebot-Extended, Bytespider, CCBot, anthropic-ai

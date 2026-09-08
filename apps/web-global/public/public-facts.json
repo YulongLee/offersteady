@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "lastReviewed": "2026-09-07",
+  "canonicalSite": "https://offersteady.com",
+  "name": "OfferSteady",
+  "description": "English AI interview guidance for preparation, live sessions, screenshot questions, written assessments, and review.",
+  "operator": {
+    "legalName": "杭州临平知界智能技术工作室（个体工商户）",
+    "location": "Hangzhou, China"
+  },
+  "support": {
+    "email": "contact@oneshowailab.com",
+    "url": "https://offersteady.com/contact"
+  },
+  "product": {
+    "languages": [
+      "English"
+    ],
+    "platforms": [
+      "Web",
+      "macOS",
+      "Windows"
+    ],
+    "capabilities": [
+      "live transcription",
+      "grounded answer guidance",
+      "typed questions",
+      "user-triggered screenshot questions",
+      "written assessments",
+      "interview review"
+    ],
+    "rawAudioStoredByDefault": false,
+    "guidanceOnly": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "checkoutActive": false,
+    "paymentNotice": "Online checkout is temporarily unavailable. Live payments require payment provider merchant approval and completed production configuration. No payment is taken through the disabled controls on this site.",
+    "plans": [
+      {
+        "name": "Free",
+        "price": 0,
+        "term": null,
+        "status": "available",
+        "billing": "Free · no recurring charge",
+        "accessStarts": "Available on your account; the allowance is not replenished monthly.",
+        "features": [
+          "15 minutes of realtime Copilot",
+          "3 Screen Assist uses",
+          "One-time allowance per account",
+          "Resume/JD, knowledge base and Written Exam mode not included"
+        ]
+      },
+      {
+        "name": "Interview Day Pass",
+        "price": 9.99,
+        "term": "/ 24 hours",
+        "status": "approval-required",
+        "billing": "One-time payment · no automatic renewal",
+        "accessStarts": "24 consecutive hours from confirmed payment, not your first session.",
+        "features": [
+          "180 minutes of realtime Copilot",
+          "Unlimited Screen Assist",
+          "Resume and job-description context",
+          "Written Exam mode; knowledge base not included"
+        ]
+      },
+      {
+        "name": "Pro Weekly",
+        "price": 49.99,
+        "term": "/ 7 days",
+        "status": "approval-required",
+        "billing": "One-time payment · no automatic renewal",
+        "accessStarts": "7 consecutive days from confirmed payment, not your first session.",
+        "features": [
+          "Unlimited Copilot",
+          "Unlimited Screen Assist",
+          "Resume, job-description, and knowledge materials",
+          "Written Exam mode and session review"
+        ]
+      },
+      {
+        "name": "Pro Monthly",
+        "price": 99.99,
+        "term": "/month",
+        "status": "approval-required",
+        "billing": "Monthly subscription · renews automatically until cancelled",
+        "accessStarts": "From confirmed subscription payment through the paid billing period shown in your account.",
+        "features": [
+          "Unlimited Copilot",
+          "Unlimited Screen Assist",
+          "Resume, job-description, and knowledge materials",
+          "Written Exam mode and session review"
+        ]
+      },
+      {
+        "name": "Job Hunt",
+        "price": 199.99,
+        "term": "/ 90 days",
+        "status": "approval-required",
+        "billing": "One-time payment · no automatic renewal",
+        "accessStarts": "90 consecutive days from confirmed payment, not your first session.",
+        "features": [
+          "Unlimited Copilot",
+          "Unlimited Screen Assist",
+          "Resume, job-description, and knowledge materials",
+          "Written Exam mode and session review"
+        ]
+      }
+    ]
+  },
+  "canonicalPages": [
+    "https://offersteady.com/",
+    "https://offersteady.com/pricing",
+    "https://offersteady.com/terms",
+    "https://offersteady.com/privacy",
+    "https://offersteady.com/refund-policy",
+    "https://offersteady.com/contact",
+    "https://offersteady.com/about",
+    "https://offersteady.com/security",
+    "https://offersteady.com/features",
+    "https://offersteady.com/features/ai-interview-assistant",
+    "https://offersteady.com/features/realtime-interview",
+    "https://offersteady.com/features/screenshot-answer",
+    "https://offersteady.com/features/interview-review",
+    "https://offersteady.com/guides",
+    "https://offersteady.com/interview-questions",
+    "https://offersteady.com/download"
+  ],
+  "responsibleUse": [
+    "Verify every claim.",
+    "Answer from real experience.",
+    "Follow the interview organiser's rules."
+  ]
+}

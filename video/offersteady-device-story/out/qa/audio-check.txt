@@ -1,0 +1,40 @@
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'out/offersteady-device-story.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf61.7.100
+    comment         : Made with Remotion 4.0.484
+  Duration: 00:00:49.05, start: 0.000000, bitrate: 1229 kb/s
+  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuvj420p(pc, bt470bg/unknown/unknown, progressive), 1920x1080 [SAR 1:1 DAR 16:9], 904 kb/s, 30 fps, 30 tbr, 90k tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      encoder         : Lavc61.19.100 libx264
+    Side data:
+      ICC Profile: (456 bytes)
+  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 317 kb/s (default)
+    Metadata:
+      handler_name    : SoundHandler
+[Parsed_volumedetect_0 @ 0x12df14190] n_samples: 0
+Stream mapping:
+  Stream #0:1 -> #0:0 (aac (native) -> pcm_s16le (native))
+Press [q] to stop, [?] for help
+Output #0, null, to 'pipe:':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    comment         : Made with Remotion 4.0.484
+    encoder         : Lavf63.1.101
+  Stream #0:0(und): Audio: pcm_s16le, 48000 Hz, stereo, s16, 1536 kb/s (default)
+    Metadata:
+      encoder         : Lavc63.1.101 pcm_s16le
+      handler_name    : SoundHandler
+[Parsed_volumedetect_0 @ 0x12de143b0] n_samples: 4708352
+[Parsed_volumedetect_0 @ 0x12de143b0] mean_volume: -31.2 dB
+[Parsed_volumedetect_0 @ 0x12de143b0] max_volume: -16.7 dB
+[Parsed_volumedetect_0 @ 0x12de143b0] histogram_16db: 45
+[Parsed_volumedetect_0 @ 0x12de143b0] histogram_17db: 2418
+[Parsed_volumedetect_0 @ 0x12de143b0] histogram_18db: 6856
+[out#0/null @ 0x12df0edd0] video:0KiB audio:9196KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown
+size=N/A time=00:00:49.04 bitrate=N/A speed=1.29e+03x elapsed=0:00:00.03    

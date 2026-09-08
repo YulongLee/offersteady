@@ -8,7 +8,9 @@
   ],
   "scripts": {
     "dev:web": "npm run dev -w @offersteady/web",
+    "dev:web-global": "npm run dev -w @offersteady/web-global",
     "preview:web": "npm run preview -w @offersteady/web",
+    "preview:web-global": "npm run preview -w @offersteady/web-global",
     "doctor:web": "npm run doctor:access -w @offersteady/web",
     "dev:backend": "python3 -m uvicorn app.main:app --reload --app-dir apps/backend",
     "dev:desktop": "npm run dev -w @offersteady/desktop",

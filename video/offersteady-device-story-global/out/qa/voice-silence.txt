@@ -1,0 +1,47 @@
+[aist#0:0/pcm_s16le @ 0x12070fb40] Guessed Channel Layout: mono
+Input #0, wav, from 'out/offersteady-device-story-global-narration.wav':
+  Duration: 00:00:49.00, bitrate: 768 kb/s
+  Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 48000 Hz, mono, s16, 768 kb/s
+Stream mapping:
+  Stream #0:0 -> #0:0 (pcm_s16le (native) -> pcm_s16le (native))
+Press [q] to stop, [?] for help
+Output #0, null, to 'pipe:':
+  Metadata:
+    encoder         : Lavf63.1.101
+  Stream #0:0: Audio: pcm_s16le, 48000 Hz, mono, s16, 768 kb/s
+    Metadata:
+      encoder         : Lavc63.1.101 pcm_s16le
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_start: 0
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_end: 0.387083 | silence_duration: 0.387083
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_start: 1.834521
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_end: 2.134437 | silence_duration: 0.299917
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_start: 3.408625
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_end: 5.335938 | silence_duration: 1.927312
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_start: 7.574646
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_end: 7.898 | silence_duration: 0.323354
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_start: 9.899458
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_end: 12.33375 | silence_duration: 2.434292
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_start: 17.155333
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_end: 20.337062 | silence_duration: 3.181729
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_start: 21.158396
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_end: 21.528688 | silence_duration: 0.370292
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_start: 25.211479
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_end: 25.66225 | silence_duration: 0.450771
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_start: 27.82325
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_end: 29.340167 | silence_duration: 1.516917
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_start: 34.529438
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_end: 36.245625 | silence_duration: 1.716187
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_start: 36.985771
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_end: 37.307437 | silence_duration: 0.321667
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_start: 39.1535
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_end: 41.186563 | silence_duration: 2.033062
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_start: 42.241417
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_end: 42.530833 | silence_duration: 0.289417
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_start: 43.613729
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_end: 45.238271 | silence_duration: 1.624542
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_start: 46.974917
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_end: 47.281292 | silence_duration: 0.306375
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_start: 48.276042
+[Parsed_silencedetect_0 @ 0x120711bd0] silence_end: 49 | silence_duration: 0.723958
+[out#0/null @ 0x12070fd70] video:0KiB audio:4594KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown
+size=N/A time=00:00:49.00 bitrate=N/A speed=5.22e+03x elapsed=0:00:00.00    

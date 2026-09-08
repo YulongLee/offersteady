@@ -101,3 +101,34 @@ def test_manifest_replaces_both_mac_entries_and_preserves_windows(tmp_path: Path
     assert {entry["architecture"] for entry in mac_entries} == {"arm64", "x64"}
     assert all(entry["fileName"].endswith(".dmg") for entry in mac_entries)
     assert all(entry["signingStatus"] == "verified" and entry["notarized"] for entry in mac_entries)
+
+
+def test_global_manifest_uses_english_windows_display_name(tmp_path: Path) -> None:
+    metadata_path = _metadata(tmp_path)
+    payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    artifact = tmp_path / "OfferSteady-Companion-Global-Setup-0.1.16-Windows-x64.exe"
+    Path(payload["artifactPath"]).rename(artifact)
+    payload.update({
+        "platform": "windows",
+        "architecture": "x64",
+        "artifactPath": str(artifact),
+        "fileSizeBytes": artifact.stat().st_size,
+        "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+        "signingStatus": "unsigned",
+        "notarized": False,
+    })
+    metadata_path.write_text(json.dumps(payload), encoding="utf-8")
+    metadata, prepared_artifact = publish_desktop_release._prepare_release(
+        metadata_path,
+        is_production=True,
+        verify_platform=False,
+    )
+    manifest = publish_desktop_release._build_manifest(
+        {"entries": []},
+        [(metadata, prepared_artifact, "global-desktop-releases/windows/x64/0.1.16/setup.exe")],
+        published_at_ms=123,
+        is_production=True,
+        edition="global",
+    )
+
+    assert manifest["entries"][0]["displayName"] == "Windows 10/11 Installer"

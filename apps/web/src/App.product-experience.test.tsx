@@ -27,6 +27,21 @@ describe("optimized product experience", () => {
     expect(hero).not.toHaveTextContent("看看怎么收费");
   });
 
+  it("renders the homepage commercial film with audio-capable user-controlled playback", () => {
+    open("/", false);
+    const section = screen.getByRole("heading", { name: /一段视频，了解面试稳/ }).closest("section");
+    expect(section).not.toBeNull();
+    const video = within(section!).getByLabelText("面试稳产品宣传片") as HTMLVideoElement;
+    expect(video).toHaveAttribute("controls");
+    expect(video.muted).toBe(true);
+    expect(video).toHaveAttribute("playsinline");
+    expect(video).toHaveAttribute("preload", "metadata");
+    expect(video).toHaveAttribute("poster", "/media/offersteady-commercial-poster.jpg");
+    expect(video).not.toHaveAttribute("autoplay");
+    expect(video.querySelector("source")).toHaveAttribute("src", "/media/offersteady-commercial.web.mp4");
+    expect(video.querySelector("source")).toHaveAttribute("type", "video/mp4");
+  });
+
   it("renders a commercial footer with public documents and configured contacts", () => {
     open("/", false, state => {
       state.billing = { ...state.billing, support: { ...state.billing.support, wechatId: "configured-wechat", email: "help@example.test", serviceHours: "每天 09:00–21:00" } };

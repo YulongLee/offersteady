@@ -7,6 +7,7 @@ from time import time
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 
+from app.core.errors import DomainRequestError
 from app.core.logging import utc_now_iso
 from app.core.responses import success_response
 from app.deps import chat_service, optional_authenticated_context, realtime_speech_service, resolve_owned_user_id
@@ -14,6 +15,7 @@ from app.ports.authentication import AuthenticatedRequestContext
 from app.schemas.foundation import ApiEnvelope, ModuleDescriptor
 from app.schemas.live_answer import CancelLiveAnswerRequest, CancelLiveAnswerResponse, LiveAnswerQuestionRequest, LiveAnswerResponse, LiveAnswerStreamEvent, LiveAnswerTaskResponse, LiveAnswerChunkResponse
 from app.services.chat_service import ChatService
+from app.services.live_answer_stream_executor import LiveAnswerStreamExecutor
 from app.services.realtime_speech_service import RealtimeSpeechService
 
 
@@ -168,19 +170,46 @@ async def start_live_answer(
 
 @router.post("/questions/stream")
 async def stream_live_answer(
+    request_context: Request,
     request: LiveAnswerQuestionRequest,
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: ChatService = Depends(chat_service),
     realtime: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> StreamingResponse:
+    route_received_at_ms = int(time() * 1_000)
     user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
-    claim = None
-    if request.trigger_mode == "auto":
-        claim = realtime.claim_auto_answer_candidate(
-            user_id=user_id, session_id=request.session_id, candidate_id=request.question_id or ""
+    executor = getattr(request_context.app.state, "live_answer_stream_executor", None)
+    if not isinstance(executor, LiveAnswerStreamExecutor) or not executor.available():
+        raise DomainRequestError(
+            "live-answer",
+            "stream-admission",
+            "回答服务正在启动，请稍后重试。",
+            503,
+            error_code="live_answer_stream_unavailable",
+            retry_after_ms=1_000,
         )
+    lease = executor.try_acquire()
+    if lease is None:
+        raise DomainRequestError(
+            "live-answer",
+            "stream-admission",
+            "回答请求较多，请稍后重试。",
+            503,
+            error_code="live_answer_stream_capacity",
+            retry_after_ms=1_000,
+        )
+    claim = None
+    try:
+        if request.trigger_mode == "auto":
+            claim = realtime.claim_auto_answer_candidate(
+                user_id=user_id, session_id=request.session_id, candidate_id=request.question_id or ""
+            )
+    except Exception:
+        lease.release()
+        raise
 
     def events() -> Iterator[str]:
+        answer_generator_started_at_ms = int(time() * 1_000)
         first_visible_sent = False
         claim_bound = False
         try:
@@ -193,6 +222,9 @@ async def stream_live_answer(
                 question_revision=request.question_revision,
                 clicked_at_ms=request.clicked_at_ms,
                 prefetch_revision=request.prefetch_revision,
+                route_received_at_ms=route_received_at_ms,
+                executor_admitted_at_ms=lease.admitted_at_ms,
+                answer_generator_started_at_ms=answer_generator_started_at_ms,
             ):
                 phase = str(payload.get("type") or "update")
                 task = payload.get("task")
@@ -228,7 +260,7 @@ async def stream_live_answer(
                     )
 
     return StreamingResponse(
-        events(),
+        executor.stream(lease, events),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

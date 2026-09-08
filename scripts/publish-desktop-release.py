@@ -65,7 +65,7 @@ def _prepare_release(metadata_path: Path, *, is_production: bool, verify_platfor
     return metadata, artifact
 
 
-def _build_manifest(existing_payload: dict[str, object], releases: list[tuple[dict[str, object], Path, str]], *, published_at_ms: int, is_production: bool) -> dict[str, object]:
+def _build_manifest(existing_payload: dict[str, object], releases: list[tuple[dict[str, object], Path, str]], *, published_at_ms: int, is_production: bool, edition: str = "cn") -> dict[str, object]:
     targets = {(str(metadata["platform"]), str(metadata["architecture"])) for metadata, _, _ in releases}
     existing_entries = [
         entry for entry in existing_payload.get("entries", [])
@@ -80,6 +80,7 @@ def _build_manifest(existing_payload: dict[str, object], releases: list[tuple[di
         display_name = (
             "macOS Apple Silicon" if platform == "macos" and architecture == "arm64"
             else "macOS Intel" if platform == "macos"
+            else "Windows 10/11 Installer" if edition == "global"
             else "Windows 10/11 安装版"
         )
         new_entries.append({
@@ -109,6 +110,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Publish an OfferSteady desktop artifact to OSS and update the backend release manifest.")
     parser.add_argument("--metadata", action="append", help="Metadata path; repeat to publish multiple targets atomically in one manifest update.")
     parser.add_argument("--channel", default="test")
+    parser.add_argument("--edition", choices=("cn", "global"), default="cn")
     args = parser.parse_args()
     is_production = args.channel == "production"
 
@@ -133,7 +135,8 @@ def main() -> int:
         version = str(metadata["version"])
         platform = str(metadata["platform"])
         architecture = str(metadata["architecture"])
-        object_key = f"desktop-releases/{platform}/{architecture}/{version}/{artifact.name}"
+        release_prefix = "global-desktop-releases" if args.edition == "global" else "desktop-releases"
+        object_key = f"{release_prefix}/{platform}/{architecture}/{version}/{artifact.name}"
         result = resumable_upload(
             bucket,
             object_key,
@@ -148,14 +151,15 @@ def main() -> int:
         uploaded.append((metadata, artifact, object_key))
 
     published_at_ms = int(time() * 1000)
-    manifest_path = ROOT / "apps" / "backend" / "app" / "desktop_release_manifest.json"
+    manifest_name = "global_desktop_release_manifest.json" if args.edition == "global" else "desktop_release_manifest.json"
+    manifest_path = ROOT / "apps" / "backend" / "app" / manifest_name
     existing_payload = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.is_file() else {"entries": []}
-    manifest = _build_manifest(existing_payload, uploaded, published_at_ms=published_at_ms, is_production=is_production)
+    manifest = _build_manifest(existing_payload, uploaded, published_at_ms=published_at_ms, is_production=is_production, edition=args.edition)
     manifest_bytes = (json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
     manifest_path.write_bytes(manifest_bytes)
     for metadata, _, _ in uploaded:
         bucket.put_object(
-            f"desktop-releases/{metadata['platform']}/{metadata['architecture']}/latest.json",
+            f"{'global-desktop-releases' if args.edition == 'global' else 'desktop-releases'}/{metadata['platform']}/{metadata['architecture']}/latest.json",
             manifest_bytes,
             headers={"Content-Type": "application/json"},
         )

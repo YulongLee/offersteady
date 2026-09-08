@@ -165,10 +165,20 @@ class DocumentParserService:
             raise ParserExecutionError(task=failed_task, failure=failure) from exc
         except Exception as exc:
             safe_message = "文档解析阶段出现未预期错误。"
-            if exc.__class__.__name__ == "RuntimeError" and str(exc).startswith("MinerU parsing failed"):
+            error_code = "parser_unexpected_error"
+            if exc.__class__.__name__ == "RuntimeError" and str(exc).startswith("MinerU parsing failed:"):
                 safe_message = str(exc)
+                provider_code = safe_message.rsplit(":", 1)[-1].strip()
+                error_code = {
+                    "provider_timeout": "parser_provider_timeout",
+                    "provider_rate_limited": "parser_provider_rate_limited",
+                    "provider_unavailable": "parser_provider_unavailable",
+                    "provider_network_error": "parser_provider_network_error",
+                    "provider_rejected_document": "parser_document_rejected",
+                    "provider_invalid_result": "parser_invalid_result",
+                }.get(provider_code, "parser_provider_unexpected_error")
             failure = ParserFailure(
-                error_code="parser_unexpected_error",
+                error_code=error_code,
                 error_type="recoverable",
                 retryable=True,
                 provider_name="document-parser-service",

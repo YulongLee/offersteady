@@ -163,6 +163,26 @@ function LandingPage() {
           <div className="demo-answer"><span className="advice-label">回答建议</span><ol><li>一句话交代项目背景与目标</li><li>聚焦你的职责与技术决策</li><li>用简历中可核对的结果收尾</li></ol><div className="source-pills"><span>简历</span><span>JD</span><span>知识库</span></div></div>
         </div>
       </section>
+      <section className="public-section landing-film" aria-labelledby="landing-film-title">
+        <div className="landing-film-intro">
+          <span className="kicker">SEE OFFERSTEADY IN ACTION</span>
+          <h2 id="landing-film-title">一段视频，了解面试稳如何陪你准备与作答</h2>
+          <p>从资料准备、实时辅助到截图回答，快速了解完整使用流程。视频默认静音，你可以在播放器中开启声音或全屏观看。</p>
+        </div>
+        <div className="landing-film-frame">
+          <video
+            aria-label="面试稳产品宣传片"
+            controls
+            muted
+            playsInline
+            preload="metadata"
+            poster="/media/offersteady-commercial-poster.jpg"
+          >
+            <source src="/media/offersteady-commercial.web.mp4" type="video/mp4" />
+            你的浏览器暂不支持视频播放，请升级浏览器后重试。
+          </video>
+        </div>
+      </section>
       <section id="workflow" className="public-section">
         <div className="section-intro"><span className="kicker">YOUR INTERVIEW RHYTHM</span><h2>从准备到现场，少一点慌乱</h2></div>
         <div className="workflow-grid"><article><b>01 · PERSONAL</b><h3>理解你的真实经历</h3><p>每场面试单独选择简历、JD 和知识材料，减少无关内容，也不替你虚构经历。</p></article><article><b>02 · REAL-TIME</b><h3>听懂问题，也看懂截图</h3><p>支持授权语音、手动输入和截图题；系统持续整理面试官问题，由你点击快答或截屏回答后生成答案。</p></article><article><b>03 · TRACEABLE</b><h3>知道建议从哪里来</h3><p>每条回答显示实际使用的资料名称与版本，资料和模型推断保持清晰分离。</p></article></div>

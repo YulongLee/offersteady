@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1 import api_router
 from app.api.admin import admin_router, admin_service
 from app.api.admin_promotion import admin_promotion_router
+from app.api.admin_global_commerce import admin_global_commerce_router
 from app.api.promotion import public_promotion_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging, utc_now_iso
@@ -17,6 +18,7 @@ from app.core.errors import install_exception_handlers
 from app.middleware.request_context import RequestContextMiddleware
 from app.schemas.foundation import HealthResponse
 from app.services.admin_capacity import AdminCapacityMonitor
+from app.services.live_answer_stream_executor import LiveAnswerStreamExecutor
 from app.services.realtime_event_wait import RealtimeEventWaitExecutor
 from app.services.realtime_control_executor import RealtimeControlExecutor
 from app.services.screenshot_stream_admission import ScreenshotStreamAdmissionCoordinator
@@ -25,6 +27,11 @@ from app.services.screenshot_stream_admission import ScreenshotStreamAdmissionCo
 def create_app() -> FastAPI:
     settings = get_settings()
     logger = configure_logging(settings)
+    live_answer_stream_executor = LiveAnswerStreamExecutor(
+        max_workers=settings.live_answer_stream_worker_count,
+        queue_max=settings.live_answer_stream_queue_max,
+        event_queue_max=settings.live_answer_stream_event_queue_max,
+    )
 
     @asynccontextmanager
     async def lifespan(application: FastAPI):
@@ -50,6 +57,7 @@ def create_app() -> FastAPI:
         application.state.screenshot_event_wait_executor = screenshot_event_wait_executor
         application.state.screenshot_stream_admission = screenshot_stream_admission
         application.state.realtime_control_executor = realtime_control_executor
+        application.state.live_answer_stream_executor = live_answer_stream_executor
         if settings.admin_enabled and settings.database_url:
             try:
                 monitor = AdminCapacityMonitor(settings, admin_service().repository)
@@ -77,6 +85,7 @@ def create_app() -> FastAPI:
             screenshot_event_wait_executor.shutdown()
             screenshot_stream_admission.shutdown()
             realtime_control_executor.shutdown()
+            live_answer_stream_executor.shutdown()
             from app.deps import llm_gateway_port
 
             if llm_gateway_port.cache_info().currsize:
@@ -86,6 +95,7 @@ def create_app() -> FastAPI:
                     close()
 
     application = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
+    application.state.live_answer_stream_executor = live_answer_stream_executor
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[
@@ -116,6 +126,7 @@ def create_app() -> FastAPI:
     application.include_router(api_router, prefix=settings.api_prefix)
     application.include_router(admin_router, prefix=settings.api_prefix)
     application.include_router(admin_promotion_router, prefix=settings.api_prefix)
+    application.include_router(admin_global_commerce_router, prefix=settings.api_prefix)
     application.include_router(public_promotion_router)
     return application
 

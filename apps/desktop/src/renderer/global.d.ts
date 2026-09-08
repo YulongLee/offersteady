@@ -54,6 +54,7 @@ declare global {
   interface Window {
     offersteady: {
       publishCaptureState: (state: CaptureState) => void;
+      publishScreenshotBinding?: (binding: { readonly sessionId: string; readonly bindingId: string } | null) => void;
       publishRendererReliabilityHeartbeat?: (heartbeat: Record<string, unknown>) => void;
       publishRealtimeTransportDiagnostics?: (snapshot: Record<string, unknown>) => void;
       getRendererRecoveryContext?: () => Promise<{

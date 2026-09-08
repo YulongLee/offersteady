@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "generatedAtMs": 1788640469184,
+  "entries": [
+    {
+      "id": "mac-arm64-1217",
+      "platform": "macos",
+      "architecture": "arm64",
+      "displayName": "macOS Apple Silicon",
+      "version": "1.2.17",
+      "minimumOs": "macOS 14.2+",
+      "fileName": "OfferSteady-Companion-Global-1.2.17-macOS-arm64.dmg",
+      "fileSizeBytes": 126689466,
+      "sha256": "f59db0ad9dad3ee0021505c36f53c998a6042100946a61dccdb0baea2a69c46b",
+      "signingStatus": "verified",
+      "distributionStatus": "published",
+      "notarized": true,
+      "publishedAtMs": 1788640469184,
+      "protocolVersion": "2.0",
+      "captureRuntime": "electron-single-owner",
+      "developmentOnly": false,
+      "objectKey": "global-desktop-releases/macos/arm64/1.2.17/OfferSteady-Companion-Global-1.2.17-macOS-arm64.dmg",
+      "capabilities": {
+        "microphone": true,
+        "systemAudio": true,
+        "screenCapture": true,
+        "manualInputFallback": true,
+        "screenshotFallback": true
+      }
+    },
+    {
+      "id": "mac-x64-1217",
+      "platform": "macos",
+      "architecture": "x64",
+      "displayName": "macOS Intel",
+      "version": "1.2.17",
+      "minimumOs": "macOS 14.2+",
+      "fileName": "OfferSteady-Companion-Global-1.2.17-macOS-x64.dmg",
+      "fileSizeBytes": 130372700,
+      "sha256": "69d09fcf1d0960bbc92b5590073a6d5130f98247ec51d86c59ae117a033e9abe",
+      "signingStatus": "verified",
+      "distributionStatus": "published",
+      "notarized": true,
+      "publishedAtMs": 1788640469184,
+      "protocolVersion": "2.0",
+      "captureRuntime": "electron-single-owner",
+      "developmentOnly": false,
+      "objectKey": "global-desktop-releases/macos/x64/1.2.17/OfferSteady-Companion-Global-1.2.17-macOS-x64.dmg",
+      "capabilities": {
+        "microphone": true,
+        "systemAudio": true,
+        "screenCapture": true,
+        "manualInputFallback": true,
+        "screenshotFallback": true
+      }
+    },
+    {
+      "id": "win-x64-1217",
+      "platform": "windows",
+      "architecture": "x64",
+      "displayName": "Windows 10/11 Installer",
+      "version": "1.2.17",
+      "minimumOs": "Windows 10 22H2+",
+      "fileName": "OfferSteady-Companion-Global-Setup-1.2.17-Windows-x64.exe",
+      "fileSizeBytes": 102795566,
+      "sha256": "16c832112c5c477f15455595bdf442d206c159ea2d0d451b1a51347efe91f680",
+      "signingStatus": "unsigned",
+      "distributionStatus": "published",
+      "notarized": false,
+      "publishedAtMs": 1788640469184,
+      "protocolVersion": "2.0",
+      "captureRuntime": "electron-wasapi-loopback",
+      "developmentOnly": false,
+      "objectKey": "global-desktop-releases/windows/x64/1.2.17/OfferSteady-Companion-Global-Setup-1.2.17-Windows-x64.exe",
+      "capabilities": {
+        "microphone": true,
+        "systemAudio": true,
+        "screenCapture": true,
+        "manualInputFallback": true,
+        "screenshotFallback": true
+      }
+    }
+  ]
+}

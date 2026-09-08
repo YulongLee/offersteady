@@ -1,0 +1,203 @@
+{
+  "landing": {
+    "pageH": 3315,
+    "elements": {
+      "landing-hero": {
+        "x": 340,
+        "y": 76,
+        "w": 1240,
+        "h": 670
+      },
+      "answer-demo": {
+        "x": 1025.8363037109375,
+        "y": 222.53233337402344,
+        "w": 557.327392578125,
+        "h": 376.919677734375
+      }
+    }
+  },
+  "live": {
+    "pageH": 1080,
+    "elements": {
+      "live-top": {
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 64
+      },
+      "conversation-monitor": {
+        "x": 14,
+        "y": 78,
+        "w": 779.59375,
+        "h": 776
+      },
+      "answer-workspace": {
+        "x": 825.59375,
+        "y": 78,
+        "w": 1080.390625,
+        "h": 832
+      },
+      "answer-action-bar": {
+        "x": 825.59375,
+        "y": 920,
+        "w": 1080.390625,
+        "h": 104
+      },
+      "simple-answer": {
+        "x": 868.59375,
+        "y": 341.90625,
+        "w": 994.390625,
+        "h": 104
+      },
+      "detailed-answer": {
+        "x": 868.59375,
+        "y": 445.90625,
+        "w": 994.390625,
+        "h": 249
+      },
+      "advice-footer": {
+        "x": 868.59375,
+        "y": 712.90625,
+        "w": 994.390625,
+        "h": 67
+      },
+      "advice-card": {
+        "x": 844.59375,
+        "y": 283.90625,
+        "w": 1042.390625,
+        "h": 520
+      }
+    },
+    "answerRows": [
+      {
+        "x": 868.59375,
+        "y": 494.90625,
+        "w": 994.390625,
+        "h": 54,
+        "text": "Context\nAs the workspace grew, initial bundles and long lists became the main bottlenecks."
+      },
+      {
+        "x": 868.59375,
+        "y": 558.90625,
+        "w": 994.390625,
+        "h": 54,
+        "text": "My actions\nI traced the bottleneck, then added route splitting, lazy loading, and virtualized lists."
+      },
+      {
+        "x": 868.59375,
+        "y": 622.90625,
+        "w": 994.390625,
+        "h": 54,
+        "text": "Trade-offs\nI prioritized high-frequency journeys and used staged releases with monitoring to control risk."
+      }
+    ]
+  },
+  "screenshot": {
+    "pageH": 1080,
+    "elements": {
+      "answer-workspace": {
+        "x": 825.59375,
+        "y": 78,
+        "w": 1080.390625,
+        "h": 832
+      },
+      "simple-answer": {
+        "x": 868.59375,
+        "y": 388.8125,
+        "w": 994.390625,
+        "h": 104
+      },
+      "detailed-answer": {
+        "x": 868.59375,
+        "y": 492.8125,
+        "w": 994.390625,
+        "h": 249
+      },
+      "answer-action-bar": {
+        "x": 825.59375,
+        "y": 920,
+        "w": 1080.390625,
+        "h": 104
+      }
+    },
+    "answerRows": [
+      {
+        "x": 868.59375,
+        "y": 541.8125,
+        "w": 994.390625,
+        "h": 54,
+        "text": "Traffic control\nRate-limit at the gateway and reject ineligible requests before they reach core services."
+      },
+      {
+        "x": 868.59375,
+        "y": 605.8125,
+        "w": 994.390625,
+        "h": 54,
+        "text": "Inventory consistency\nReserve stock atomically in Redis, persist orders idempotently, and restore inventory after failures."
+      },
+      {
+        "x": 868.59375,
+        "y": 669.8125,
+        "w": 994.390625,
+        "h": 54,
+        "text": "Resilience\nUse a queue to absorb bursts, with monitoring and graceful degradation around the critical path."
+      }
+    ]
+  },
+  "prepare": {
+    "pageH": 1506,
+    "elements": {}
+  },
+  "review": {
+    "pageH": 1080,
+    "elements": {
+      "review-main": {
+        "x": 480,
+        "y": 255,
+        "w": 797.84375,
+        "h": 467.34375
+      },
+      "review-summary": {
+        "x": 1295.84375,
+        "y": 255,
+        "w": 384.15625,
+        "h": 227.53125
+      },
+      "review-timeline": {
+        "x": 503,
+        "y": 568.5,
+        "w": 751.84375,
+        "h": 130.84375
+      }
+    }
+  },
+  "library": {
+    "pageH": 1080,
+    "elements": {
+      "app-page": {
+        "x": 480,
+        "y": 0,
+        "w": 1200,
+        "h": 832.59375
+      },
+      "material-0": {
+        "x": 503,
+        "y": 371,
+        "w": 1154,
+        "h": 98
+      },
+      "material-1": {
+        "x": 503,
+        "y": 386.953125,
+        "w": 1154,
+        "h": 98
+      },
+      "material-2": {
+        "x": 781,
+        "y": 382.59375,
+        "w": 876,
+        "h": 119
+      }
+    }
+  }
+}

@@ -258,6 +258,12 @@ export class BackendMaterialUploadAdapter implements MaterialUploadAdapter {
       body: proxyBody,
       ...(signal ? { signal } : {}),
     });
+    if (response.status === 413) {
+      throw new AppError(
+        "validation",
+        "文件大小超过上传限制，请选择不超过 20 MB 的文件",
+      );
+    }
     if (!response.ok) throw new AppError("network", "对象存储上传失败，请稍后重试");
   }
 }

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">OfferSteady AI Interview Assistant</title>
+  <desc id="description">OfferSteady brand card for responsible, real-time interview guidance.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111a"/>
+      <stop offset="1" stop-color="#0c1f25"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="80%" cy="18%" r="60%">
+      <stop offset="0" stop-color="#2dd4a3" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#2dd4a3" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#background)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <rect x="78" y="72" width="90" height="90" rx="25" fill="#67e8c0"/>
+  <path d="M123 91l28 11v22c0 20-12 35-28 44-16-9-28-24-28-44v-22z" fill="#0a2530"/>
+  <path d="M111 121v10a12 12 0 0024 0v-10M123 141v10M113 151h20" fill="none" stroke="#67e8c0" stroke-width="6" stroke-linecap="round"/>
+  <rect x="115" y="108" width="16" height="25" rx="8" fill="#67e8c0"/>
+  <text x="195" y="133" font-family="Inter,Arial,sans-serif" font-size="42" font-weight="750" fill="#eef4f8">OfferSteady</text>
+  <text x="78" y="295" font-family="Inter,Arial,sans-serif" font-size="68" font-weight="760" fill="#eef4f8">AI interview guidance</text>
+  <text x="78" y="378" font-family="Inter,Arial,sans-serif" font-size="68" font-weight="760" fill="#67e8c0">grounded in your experience.</text>
+  <text x="80" y="470" font-family="Inter,Arial,sans-serif" font-size="27" fill="#aeb9c8">Prepare · Follow live questions · Review</text>
+  <text x="80" y="526" font-family="Inter,Arial,sans-serif" font-size="22" fill="#7f91a4">Verify every claim and follow the interview organiser's rules.</text>
+  <text x="80" y="578" font-family="Inter,Arial,sans-serif" font-size="21" font-weight="650" fill="#67e8c0">offersteady.com</text>
+</svg>
