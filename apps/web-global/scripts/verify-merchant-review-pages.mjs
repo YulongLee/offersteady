@@ -59,14 +59,14 @@ for (const page of catalogue.pages) {
 }
 
 const pricing = await readFile(resolve(root, "dist/pricing/index.html"), "utf8");
-for (const expected of ["Free", "$0", "Interview Day Pass", "$9.99 / 24 hours", "Pro Weekly", "$49.99 / 7 days", "Pro Monthly", "$99.99/month", "Job Hunt", "$199.99 / 90 days", "Start Free", "Checkout requires provider approval"]) {
+for (const expected of ["Free", "$0", "Interview Day Pass", "$9.99 / 24 hours", "Pro Weekly", "$49.99 / 7 days", "Pro Monthly", "$99.99/month", "Job Hunt", "$199.99 / 90 days", "Start Free", "Sign in to choose plan", "Secure checkout is available through Creem"]) {
   if (!pricing.includes(expected)) failures.push(`pricing: missing ${expected}`);
 }
-if ((pricing.match(/<button type="button" disabled>/g) ?? []).length !== 4) failures.push("pricing: expected four disabled purchase controls");
+if ((pricing.match(/<a href="\/login">Sign in to choose plan<\/a>/g) ?? []).length !== 4) failures.push("pricing: expected four sign-in purchase links");
 for (const plan of catalogue.pages.find(page => page.slug === "pricing").plans) {
   if (!pricing.includes(plan.billing) || !pricing.includes(plan.accessStarts)) failures.push(`pricing: missing billing/access for ${plan.name}`);
 }
-if (/\/api\/v1\/global-commerce|checkoutUrl|Choose plan|Buy now/i.test(pricing)) failures.push("pricing: contains an active-payment control");
+if (/\/api\/v1\/global-commerce|checkoutUrl|Buy now/i.test(pricing)) failures.push("pricing: contains an unauthenticated payment control");
 
 const download = await readFile(resolve(root, "dist/download/index.html"), "utf8");
 for (const expected of ['href="/login">Start Free</a>', "Verified Companion release options appear in the interview preparation flow."]) {
@@ -119,7 +119,7 @@ const publicFactsText = await readFile(resolve(root, "dist/public-facts.json"), 
 try {
   const facts = JSON.parse(publicFactsText);
   if (facts.canonicalSite !== catalogue.siteUrl) failures.push("public-facts: canonical mismatch");
-  if (facts.pricing?.checkoutActive !== false) failures.push("public-facts: checkout must remain disabled");
+  if (facts.pricing?.checkoutActive !== true) failures.push("public-facts: checkout must be active");
   if (JSON.stringify(facts.canonicalPages) !== JSON.stringify(publicUrls)) failures.push("public-facts: canonical page mismatch");
 } catch (error) {
   failures.push(`public-facts: invalid JSON (${error.message})`);

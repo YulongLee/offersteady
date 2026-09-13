@@ -10,7 +10,7 @@
   ],
   "pricingIntro": "One interview day or a longer search. Choose your window, without an annual commitment.",
   "accessNote": "Paid access starts when payment is confirmed, not at your first session. One-time passes run for their stated duration; monthly access follows the paid billing period.",
-  "checkoutNote": "Online checkout requires payment provider approval and completed production setup. You can start free today.",
+  "checkoutNote": "Secure checkout is available through Creem for approved paid plans. Sign in to choose a plan, or start free today without a card.",
   "tourTitle": "See it. Set it up. Make it yours.",
   "steps": [
     { "title": "Create your account", "body": "Start free and explore the workspace." },
@@ -26,7 +26,7 @@
     { "question": "How does guidance use my experience?", "answer": "You choose the resume, job description and optional knowledge materials for each session. These help make suggestions relevant to you. Check every suggestion against your actual experience; AI can still make mistakes.", "href": "/features", "linkLabel": "Explore the features" },
     { "question": "Does it work on my computer?", "answer": "The desktop Companion is available for Windows and macOS. Use it on the computer providing audio or screenshots, with the Web workspace in your browser. Compatibility depends on your operating system, audio route and permissions.", "href": "/download", "linkLabel": "Check setup details" },
     { "question": "Do the paid plans renew automatically?", "answer": "Only Pro Monthly renews automatically until cancelled. Interview Day Pass, Pro Weekly and Job Hunt are one-time purchases. Paid access starts at confirmed payment, not first use.", "href": "/pricing", "linkLabel": "Review billing and access" },
-    { "question": "Why can't I purchase a paid plan yet?", "answer": "Online checkout requires payment provider merchant approval and completed production configuration. Paid purchase controls remain disabled. Free access is available without a card.", "href": "/contact", "linkLabel": "Contact support" },
+    { "question": "How do I purchase a paid plan?", "answer": "Sign in to choose a paid plan, review the final total and applicable taxes in Creem checkout, and authorise payment. Free access is available without a card.", "href": "/pricing", "linkLabel": "Review pricing" },
     { "question": "Can I use AI assistance in every interview?", "answer": "No. Follow the interview organiser's rules for AI assistance, recording, screen capture and confidentiality. Obtain consent where required. If a feature is not permitted, do not use it in that session.", "href": "/terms", "linkLabel": "Read the usage rules" },
     { "question": "What happens to my interview data?", "answer": "Raw audio is not stored by default. Uploaded materials, transcripts, screenshots and generated results are processed for the features you use and may be retained under the service's retention and deletion controls.", "href": "/privacy", "linkLabel": "Read the Privacy Policy" }
   ],

@@ -121,6 +121,10 @@ class CreemProvider:
         else:
             raise CreemRequestError("provider_product_shape_invalid")
         provider_mode = data.get("mode")
+        # Creem's production API currently returns `prod` for live products.
+        # Normalize it to our internal mode name before validation.
+        if provider_mode == "prod":
+            provider_mode = "live"
         if provider_mode is not None and provider_mode not in {"test", "live"}:
             raise CreemRequestError("provider_product_shape_invalid")
         name = data.get("name")

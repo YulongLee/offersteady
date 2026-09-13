@@ -77,6 +77,12 @@ def create_app() -> FastAPI:
         try:
             yield
         finally:
+            from app.deps import realtime_speech_service
+
+            service = realtime_speech_service()
+            stop_reclamation = getattr(service, "stop_reclamation", None)
+            if callable(stop_reclamation):
+                stop_reclamation()
             if task is not None:
                 task.cancel()
                 with suppress(asyncio.CancelledError):

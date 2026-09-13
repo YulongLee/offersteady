@@ -127,6 +127,7 @@ def test_production_email_provider_configuration_fails_closed(monkeypatch: pytes
 
 def test_smtp_provider_supports_implicit_tls_without_starttls(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
+    sent_messages = []
 
     class FakeSmtp:
         def __init__(self, host: str, port: int, timeout: int) -> None:
@@ -146,6 +147,7 @@ def test_smtp_provider_supports_implicit_tls_without_starttls(monkeypatch: pytes
 
         def send_message(self, message) -> None:  # noqa: ANN001
             calls.append("send")
+            sent_messages.append(message)
 
     import app.services.email_verification_provider as provider_module
 
@@ -166,3 +168,10 @@ def test_smtp_provider_supports_implicit_tls_without_starttls(monkeypatch: pytes
     result = SmtpEmailVerificationProvider(settings).send_code(email="candidate@example.test", challenge_id="email-challenge-tls")
     assert result.outcome == "sent"
     assert calls == ["connect:465:10", "login", "send"]
+    assert sent_messages[0]["Subject"] == "Your OfferSteady verification code"
+    assert sent_messages[0].is_multipart()
+    assert sent_messages[0].get_body("plain").get_content().startswith("OfferSteady\nYour verification code")
+    html = sent_messages[0].get_body("html").get_content()
+    assert "Your verification code" in html
+    assert "One-time code" in html
+    assert "https://offersteady.com" in html

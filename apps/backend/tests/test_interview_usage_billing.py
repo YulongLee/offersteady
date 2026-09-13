@@ -131,6 +131,7 @@ def test_written_exam_entry_costs_30_points_even_with_active_pass() -> None:
     assert first.reservation_id == replay.reservation_id
     assert first.billing_source == "points"
     assert first.points_reserved == 30
+    assert first.wallet_only is True
     service.settle_usage(usage_id=first.usage_id)
     service.settle_usage(usage_id=first.usage_id)
     assert service.state_for_user(user_id=user_id).balance == 170

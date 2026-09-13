@@ -1432,8 +1432,12 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       }, signal);
       return binding.status === "bound" ? toDesktopDeviceBinding(binding) : null;
     } catch (error) {
+      if (error instanceof AppError && error.status === 404) return null;
       if (error instanceof Error && (error.message.includes("404") || error.message.includes("尚未绑定"))) return null;
-      return null;
+      // Do not turn a network/API outage into an apparently unbound device.
+      // The preparation page can then show the real connectivity error and
+      // retry instead of asking the user to re-enter a valid machine code.
+      throw error;
     }
   }
 

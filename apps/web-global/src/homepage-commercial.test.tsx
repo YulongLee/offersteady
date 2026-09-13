@@ -56,7 +56,8 @@ describe("Commercial homepage clarity", () => {
     const footer = container.querySelector("footer")!;
     expect(footer.textContent).toContain(catalogue.operator);
     expect(footer.textContent).toContain(catalogue.supportEmail);
-    expect(container.textContent).toContain("payment provider approval");
+    expect(container.textContent).toContain("Secure checkout is available through Creem");
+    expect(container.textContent).not.toMatch(/temporarily unavailable|payment provider approval|disabled controls/i);
     expect(container.textContent).not.toMatch(/coming soon|creem verified|guaranteed offer|never get caught|fastest|cheapest/i);
     for (const path of ["/terms", "/privacy", "/refund-policy", "/about", "/contact"]) expect(footer.querySelector(`a[href='${path}']`)).toBeInTheDocument();
   });

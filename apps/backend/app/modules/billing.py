@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from app.core.logging import utc_now_iso
 from app.core.responses import success_response
 from app.core.config import Settings
-from app.deps import billing_service, optional_authenticated_context, require_authenticated_context, resolve_owned_user_id, settings_dependency
+from app.deps import billing_service, optional_authenticated_context, require_authenticated_context, resolve_owned_user_id, settings_dependency, usage_billing_service
 from app.ports.authentication import AuthenticatedRequestContext
 from app.schemas.foundation import ApiEnvelope, ModuleDescriptor
 from app.services.alipay_provider import AlipayPaymentProvider
@@ -72,11 +72,12 @@ async def status(request: Request) -> ApiEnvelope[dict[str, str]]:
 async def get_billing_state(
     request: Request,
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
-    service: BillingService = Depends(billing_service),
+    service = Depends(usage_billing_service),
     settings: Settings = Depends(settings_dependency),
 ) -> ApiEnvelope[dict[str, object]]:
     data = service.state_payload(service.state_for_user(user_id=resolve_owned_user_id(explicit_user_id=None, auth_context=auth_context)))
-    data["availablePaymentChannels"] = PaymentChannelService(settings, service.billing_repository).available_channels() if service.billing_repository else []
+    billing_repository = getattr(service, "billing_repository", None)
+    data["availablePaymentChannels"] = PaymentChannelService(settings, billing_repository).available_channels() if billing_repository else []
     return success_response(request=request, data=data, timestamp=utc_now_iso())
 
 

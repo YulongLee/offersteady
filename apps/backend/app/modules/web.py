@@ -20,6 +20,7 @@ from app.deps import (
     screenshot_answer_service,
     session_service,
     storage_port,
+    usage_billing_service,
 )
 from app.ports.commercial_hardening import CommercialHardeningRepository
 from app.ports.authentication import AuthenticatedRequestContext, UserRecord
@@ -567,7 +568,7 @@ async def get_web_state(
     request: Request,
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     documents: DocumentService = Depends(document_read_service),
-    billing: BillingService = Depends(billing_service),
+    billing = Depends(usage_billing_service),
     sessions: SessionService = Depends(session_service),
 ) -> ApiEnvelope[dict[str, object]]:
     user = authentication_service().get_current_user(auth_context=auth_context) if auth_context else None
@@ -582,7 +583,8 @@ async def get_web_state(
     review_screenshots: list[dict[str, object]] = []
     resources = [_prepared_resource_payload(item) for item in document_items[:3]]
     billing_payload = billing.state_payload(billing_state)
-    billing_payload["availablePaymentChannels"] = PaymentChannelService(settings, billing.billing_repository).available_channels() if billing.billing_repository else []
+    billing_repository = getattr(billing, "billing_repository", None)
+    billing_payload["availablePaymentChannels"] = PaymentChannelService(settings, billing_repository).available_channels() if billing_repository else []
     state = {
         "interviews": [_session_payload(item) for item in session_items],
         "preparation": {"resources": resources, "device": None},

@@ -9,7 +9,6 @@ describe("edition-specific Admin modules", () => {
     expect(ids("global")).toEqual([
       "dashboard",
       "server",
-      "users",
       "globalMembers",
       "globalCommerce",
       "materials",
@@ -34,6 +33,7 @@ describe("edition-specific Admin modules", () => {
     expect(ids("cn")).toEqual([
       "dashboard",
       "server",
+      "seo",
       "users",
       "promotion",
       "orders",

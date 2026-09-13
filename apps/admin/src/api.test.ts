@@ -48,20 +48,20 @@ describe("Global Admin email authentication client", () => {
 });
 
 describe("Global Creem administration client", () => {
-  it("keeps Test mode explicit and never sends blank secrets as persisted values", async () => {
+  it("always targets Live mode and never sends blank secrets as persisted values", async () => {
     const envelope = (data: unknown) => new Response(JSON.stringify({ data }), { status: 200, headers: { "content-type": "application/json" } });
     const fetchSpy = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(envelope({ credentials: { apiKey: { configured: true } } }))
-      .mockResolvedValueOnce(envelope({ mode: "test", items: [], syncedAtMs: 1 }))
+      .mockResolvedValueOnce(envelope({ mode: "live", items: [], syncedAtMs: 1 }))
       .mockResolvedValueOnce(envelope({ validationStatus: "ready" }));
 
-    await adminApi.saveGlobalCommerceCredentials("test", "creem_test_synthetic", "", "configure test mode");
+    await adminApi.saveGlobalCommerceCredentials("test", "creem_synthetic", "", "configure live mode");
     await adminApi.globalCommerceProducts("test");
-    await adminApi.saveGlobalCommerceMapping("test", "global-pro-weekly", "prod_synthetic", "map test product");
+    await adminApi.saveGlobalCommerceMapping("test", "global-pro-weekly", "prod_synthetic", "map live product");
 
-    expect(String(fetchSpy.mock.calls[0]?.[0])).toContain("/credentials?mode=test");
-    expect(JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body))).toEqual({ apiKey: "creem_test_synthetic", webhookSecret: null, reason: "configure test mode" });
-    expect(String(fetchSpy.mock.calls[1]?.[0])).toContain("/products?mode=test");
-    expect(String(fetchSpy.mock.calls[2]?.[0])).toContain("/mappings/global-pro-weekly?mode=test");
+    expect(String(fetchSpy.mock.calls[0]?.[0])).toContain("/credentials?mode=live");
+    expect(JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body))).toEqual({ apiKey: "creem_synthetic", webhookSecret: null, reason: "configure live mode" });
+    expect(String(fetchSpy.mock.calls[1]?.[0])).toContain("/products?mode=live");
+    expect(String(fetchSpy.mock.calls[2]?.[0])).toContain("/mappings/global-pro-weekly?mode=live");
   });
 });

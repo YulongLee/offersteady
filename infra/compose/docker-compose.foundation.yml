@@ -116,6 +116,25 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  baidu-ranking:
+    build:
+      context: ../..
+      dockerfile: infra/docker/backend.Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}
+        PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-mirrors.aliyun.com}
+    command: ["sh", "-c", "while true; do python -m app.services.baidu_ranking || true; sleep 86400; done"]
+    working_dir: /app/apps/backend
+    env_file:
+      - ../../${OFFERSTEADY_ENV_FILE:-.env.production}
+    environment:
+      OFFERSTEADY_ENV: ${OFFERSTEADY_ENV:-development}
+      OFFERSTEADY_DATABASE_URL: ${OFFERSTEADY_DATABASE_URL:-postgresql://offersteady:offersteady@postgres:5432/offersteady}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   promotion-analytics:
     build:
       context: ../..

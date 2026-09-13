@@ -40,7 +40,10 @@ class SmsSendCodeResponse(BaseModel):
 class SmsVerifyLoginRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
     phone_number: str = Field(min_length=5, alias="phoneNumber")
-    challenge_id: str = Field(min_length=1, alias="challengeId")
+    # The Alipay review account may authenticate with its server-configured
+    # fixed code without first requesting an SMS challenge. Normal users still
+    # receive and must provide a challenge id from /sms/send-code.
+    challenge_id: str = Field(default="", max_length=160, alias="challengeId")
     code: str = Field(min_length=4, max_length=8)
     client_label: str = Field(default="web", alias="clientLabel")
 

@@ -538,7 +538,7 @@ function NewWrittenExamPage() {
       setSaving(false);
     }
   };
-  return <main className="app-page narrow"><Link className="back-link" to={routes.writtenExams}>← 返回笔试模式</Link><PageHeader eyebrow="NEW WRITTEN EXAM" title="创建一场笔试" detail="笔试模式只使用截屏回答，不启用收音和实时转写。" /><form className="form-panel" onSubmit={submit}><label>笔试名称<input value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} placeholder="例如：算法笔试" /></label><label>目标岗位<input value={form.role} onChange={event => setForm({ ...form, role: event.target.value })} placeholder="例如：算法工程师" /></label><label>公司（可选）<input value={form.company} onChange={event => setForm({ ...form, company: event.target.value })} placeholder="例如：示例科技" /></label>{error ? <div className="inline-error" role="alert">{error}</div> : null}<div className="form-actions"><Link className="button ghost" to={routes.writtenExams}>取消</Link><button className="button primary" type="submit" disabled={saving}>{saving ? "创建中…" : "保存并准备 →"}</button></div><small className="saved-note">成功进入笔试固定扣除 30 积分，每次截屏回答按现有规则计费。</small></form></main>;
+  return <main className="app-page narrow"><Link className="back-link" to={routes.writtenExams}>← Back to written exams</Link><PageHeader eyebrow="NEW WRITTEN EXAM" title="Create a written exam" detail="Written mode uses screenshot answers only; audio capture and live transcription stay off." /><form className="form-panel" onSubmit={submit}><label>Exam name<input value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} placeholder="e.g. Algorithms assessment" /></label><label>Target role<input value={form.role} onChange={event => setForm({ ...form, role: event.target.value })} placeholder="e.g. Software Engineer" /></label><label>Company (optional)<input value={form.company} onChange={event => setForm({ ...form, company: event.target.value })} placeholder="e.g. Example Inc." /></label>{error ? <div className="inline-error" role="alert">{error}</div> : null}<div className="form-actions"><Link className="button ghost" to={routes.writtenExams}>Cancel</Link><button className="button primary" type="submit" disabled={saving}>{saving ? "Creating…" : "Save and prepare →"}</button></div><small className="saved-note">Written exam access follows your selected membership plan.</small></form></main>;
 }
 
 function CompanionUpdateReminder({ update, onContinue }: { readonly update: CompanionUpdate; readonly onContinue: () => void }) {
@@ -547,6 +547,10 @@ function CompanionUpdateReminder({ update, onContinue }: { readonly update: Comp
     <div><strong>发现新版伴随程序 {update.release.version}</strong><small>当前版本 {update.currentVersion}，建议更新到与你设备匹配的最新版；本次也可以继续使用。</small></div>
     <div className="companion-update-actions"><a className="button primary" href={update.release.downloadUrl} download>立即下载</a><button className="button ghost" type="button" onClick={onContinue}>继续使用</button></div>
   </section>;
+}
+
+function CompanionUpdateRequired({ message }: { readonly message: string }) {
+  return <div className="inline-error companion-update-required" role="alert"><span>{message}</span><Link className="button ghost" to={routes.devices}>Download latest companion</Link></div>;
 }
 
 function PreparationPage() {
@@ -702,6 +706,35 @@ function PreparationPage() {
       window.clearInterval(timer);
     };
   }, [id, deviceBinding?.bindingId]);
+  useEffect(() => {
+    // Keep the preparation page in sync when the Companion starts after the
+    // page was opened. Previously the binding was fetched only once, leaving
+    // a valid online Companion displayed as "待连接" until a manual refresh.
+    let stopped = false;
+    let inFlight = false;
+    const refreshBinding = async () => {
+      if (stopped || inFlight) return;
+      inFlight = true;
+      try {
+        const next = await runAdapterOperation(signal => interviewAppAdapter.getDesktopDeviceBinding(id, signal));
+        if (stopped) return;
+        setDeviceBinding(next);
+        if (next) {
+          setMachineCode(next.manualCode);
+          setBindingError("");
+        }
+      } catch (error) {
+        if (!stopped) setBindingError(error instanceof Error ? error.message : "无法确认桌面助手连接状态，请稍后重试。");
+      } finally {
+        inFlight = false;
+      }
+    };
+    const timer = window.setInterval(() => void refreshBinding(), 5_000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [id]);
   const connectDesktopDevice = async (reuseLastDevice = false) => {
     if (!conflictResolved) {
       setBindingError(activeConflict ? "请先处理正在进行中的面试。" : "正在确认账号的面试状态，请稍候。");
@@ -774,12 +807,12 @@ function PreparationPage() {
         <label><span>机器码</span><input inputMode="numeric" maxLength={6} value={machineCode} onChange={event => setMachineCode(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="输入 6 位机器码" /></label>
         <button className="button ghost" disabled={!conflictResolved || binding || machineReady && machineCode === deviceBinding?.manualCode} onClick={() => void connectDesktopDevice(false)}>{binding ? "连接中…" : "验证连接"}</button>
         {lastDevice ? <button className="button primary" disabled={!conflictResolved || binding || !lastDevice.online || deviceBinding?.deviceId === lastDevice.deviceId} onClick={() => void connectDesktopDevice(true)}>{deviceBinding?.deviceId === lastDevice.deviceId ? "上次设备已连接" : "连接上次设备"}</button> : null}
-        {bindingError ? <div className="inline-error" role="alert">{bindingError}</div> : null}
+        {bindingError ? (bindingError.includes("Companion version") ? <CompanionUpdateRequired message={bindingError} /> : <div className="inline-error" role="alert">{bindingError}</div>) : null}
       </div>
       {visibleUpdate ? <CompanionUpdateReminder update={visibleUpdate} onContinue={() => setDismissedUpdateKey(updateKey)} /> : null}
       {startError ? <div className="inline-error written-start-error" role="alert">{startError}</div> : null}
       <div className="written-start-row">
-        <small>开始时扣除 30 积分</small>
+        <small>Written exam access follows your membership plan</small>
         <button className="button primary" disabled={!canStart || starting} onClick={() => void startInterview()}>{starting ? "正在进入…" : "开始笔试 →"}</button>
       </div>
     </section>
@@ -792,13 +825,13 @@ function PreparationPage() {
           <label><span>{newlyCreatedInterview ? "输入机器码连接本场" : "重新输入机器码"}</span><input inputMode="numeric" maxLength={6} value={machineCode} onChange={event => setMachineCode(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="输入 6 位机器码" /></label>
           <button className="button ghost" disabled={!conflictResolved || binding || machineReady && machineCode === deviceBinding?.manualCode} onClick={() => void connectDesktopDevice(false)}>{binding ? "连接中…" : "验证并连接"}</button>
           <small>{deviceBinding ? `Connected for this session: ${deviceBinding.displayName}` : "输入助手显示的固定机器码，或直接连接当前账号上次使用的设备。"}</small>
-          {bindingError ? <div className="inline-error" role="alert">{bindingError}</div> : null}
+          {bindingError ? (bindingError.includes("Companion version") ? <CompanionUpdateRequired message={bindingError} /> : <div className="inline-error" role="alert">{bindingError}</div>) : null}
           {lastDevice ? <><div className="connection-divider"><span>或使用上次设备</span></div><div className={`last-device-choice ${lastDevice.online ? "online" : "offline"}`}><span><b>{lastDevice.displayName}</b><small>{lastDevice.online ? `Device online · ${lastDevice.maskedManualCode}` : "设备离线，请先打开助手"}</small></span><button className="button primary" disabled={!conflictResolved || binding || !lastDevice.online || deviceBinding?.deviceId === lastDevice.deviceId} onClick={() => void connectDesktopDevice(true)}>{deviceBinding?.deviceId === lastDevice.deviceId ? "已连接本场" : "一键连接上次设备"}</button></div></> : null}
         </div>
         {visibleUpdate ? <CompanionUpdateReminder update={visibleUpdate} onContinue={() => setDismissedUpdateKey(updateKey)} /> : null}
         <div className="device-mini"><span className="device-glyph">⌘</span><div><strong>{deviceBinding?.displayName ?? state.preparation.device?.displayName ?? "电脑伴随程序"}</strong><small>{deviceBinding ? "本场设备已连接；系统权限沿用助手首次授权结果" : "当前仅缺少本场设备连接，不代表助手系统权限失效"}</small></div><Link to={routes.devices}>管理</Link></div>
         <div className="privacy-confirm preparation-disclosure"><span><strong>本场数据说明</strong><small>已选资料和转录仅用于生成回答建议；原始音频默认不保存，会话记录可在复盘中删除。麦克风和屏幕权限只由桌面助手首次申请，网页不会再次申请。</small></span></div>
-        <div className="points-mini"><strong>{state.billing.balance} 点</strong><span>回答 5 点 · 截图 15 点</span><Link to={routes.billing}>查看收费说明</Link><Link to={`${routes.guide}#quick-start`}>准备流程说明</Link></div>
+        <div className="points-mini"><strong>Membership access</strong><span>Live Copilot and Screen Assist usage follows your selected plan.</span><Link to={routes.billing}>View plans and billing</Link><Link to={`${routes.guide}#quick-start`}>Preparation guide</Link></div>
         {startError ? <div className="inline-error" role="alert">{startError}</div> : null}<button className="button primary full" disabled={!canStart || starting} onClick={() => void startInterview()}>{starting ? "正在开始面试…" : "开始面试 →"}</button>{!selectionReady ? <small className="blocked-help">确认本场资料选择（可以为空）后继续。</small> : !machineReady ? <small className="blocked-help">请选择上次设备或输入机器码，为本场建立设备连接。</small> : level === "none" ? <small className="blocked-help context-disclosure">本场未使用个人资料。伴随程序会在后台准备音频，开始后直接切换到实时链路。</small> : <small className="blocked-help context-disclosure">伴随程序正在后台准备麦克风、电脑输出和识别服务；无需播放测试音或提前说话。</small>}
       </aside></div>
     {activeConflict ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="active-interview-conflict-title"><section className="sheet active-interview-conflict-sheet"><span className="conflict-kicker">单设备 · 单场面试</span><h2 id="active-interview-conflict-title">已有一场面试正在进行</h2><p>为避免旧页面和新页面同时占用语音链路，请先选择如何继续。</p><div className="active-interview-card"><span>进行中</span><strong>{activeConflict.title}</strong><small>结束上一场只会停止实时连接，历史记录和资料不会删除。</small></div>{conflictError ? <div className="inline-error" role="alert">{conflictError}</div> : null}<div className="sheet-actions conflict-actions"><button className="button primary" disabled={resolvingConflict} onClick={() => navigate(routes.live(activeConflict.id))}>继续上一场面试</button><button className="button ghost" disabled={resolvingConflict} onClick={() => void supersedePreviousInterview()}>{resolvingConflict ? "正在切换…" : "结束上一场，准备当前面试"}</button></div><Link className="conflict-return" to={routes.app}>暂不进入，返回面试首页</Link></section></div> : null}

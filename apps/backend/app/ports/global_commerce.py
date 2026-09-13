@@ -13,7 +13,7 @@ OfferCode = Literal[
     "global-job-hunt",
 ]
 BillingMode = Literal["free", "one_time", "recurring"]
-UsageKind = Literal["copilot_minute", "screen_assist"]
+UsageKind = Literal["copilot_minute", "screen_assist", "knowledge_token"]
 
 
 @dataclass(frozen=True)
@@ -36,6 +36,7 @@ class GlobalPlan:
     display_order: int = 0
     currency: Literal["USD"] = "USD"
     created_at_ms: int = 0
+    knowledge_tokens: int = 0
 
     def purchased_snapshot(self) -> dict[str, object]:
         return {
@@ -50,6 +51,7 @@ class GlobalPlan:
             "screenAssistUses": self.screen_assist_uses,
             "resumeJdEnabled": self.resume_jd_enabled,
             "knowledgeBaseEnabled": self.knowledge_base_enabled,
+            "knowledgeTokens": self.knowledge_tokens,
             "writtenExamEnabled": self.written_exam_enabled,
             "fullProductEnabled": self.full_product_enabled,
         }
@@ -76,6 +78,9 @@ class GlobalEntitlement:
     copilot_minutes_locked: int = 0
     screen_assist_uses_used: int = 0
     screen_assist_uses_locked: int = 0
+    knowledge_tokens_granted: int = 0
+    knowledge_tokens_used: int = 0
+    knowledge_tokens_locked: int = 0
 
     def with_usage(self, *, kind: UsageKind, used_delta: int = 0, locked_delta: int = 0) -> "GlobalEntitlement":
         if kind == "copilot_minute":
@@ -84,10 +89,16 @@ class GlobalEntitlement:
                 copilot_minutes_used=max(0, self.copilot_minutes_used + used_delta),
                 copilot_minutes_locked=max(0, self.copilot_minutes_locked + locked_delta),
             )
+        if kind == "screen_assist":
+            return replace(
+                self,
+                screen_assist_uses_used=max(0, self.screen_assist_uses_used + used_delta),
+                screen_assist_uses_locked=max(0, self.screen_assist_uses_locked + locked_delta),
+            )
         return replace(
             self,
-            screen_assist_uses_used=max(0, self.screen_assist_uses_used + used_delta),
-            screen_assist_uses_locked=max(0, self.screen_assist_uses_locked + locked_delta),
+            knowledge_tokens_used=max(0, self.knowledge_tokens_used + used_delta),
+            knowledge_tokens_locked=max(0, self.knowledge_tokens_locked + locked_delta),
         )
 
 

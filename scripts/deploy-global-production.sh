@@ -32,9 +32,24 @@ for service in backend analytics web admin; do
   COMPOSE_PARALLEL_LIMIT=1 docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build "$service"
 done
 
-log "Starting Global services without recreating unrelated workloads"
-docker compose --project-name "$PROJECT_NAME" --profile admin --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --no-build
+log "Starting Global application services from this release without recreating data services"
+# Recreate only the application containers so a changed release directory
+# cannot leave an old Web container beside the new Backend (or vice versa).
+docker compose --project-name "$PROJECT_NAME" --profile admin --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --no-build --no-deps --force-recreate backend analytics web admin
 docker compose --project-name "$PROJECT_NAME" --profile admin --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps
+
+# A Global Web/Backend split-brain is particularly hard to diagnose: both
+# containers can be healthy while pairing and realtime state contracts differ.
+# Refuse to complete a release if the application containers were created from
+# a different Compose release directory than this deployment bundle.
+EXPECTED_COMPOSE_DIR="$(cd "$(dirname "$COMPOSE_FILE")" && pwd)"
+for service in backend web; do
+  container="${PROJECT_NAME}-${service}-1"
+  actual_compose_dir="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' "$container" 2>/dev/null || true)"
+  if [ "$actual_compose_dir" != "$EXPECTED_COMPOSE_DIR" ]; then
+    fail "Global $service is running from $actual_compose_dir, expected $EXPECTED_COMPOSE_DIR; Web and Backend must be released together"
+  fi
+done
 
 log "Checking loopback entrypoints"
 curl -fsS http://127.0.0.1:18000/healthz >/dev/null || fail "Global Backend health failed"

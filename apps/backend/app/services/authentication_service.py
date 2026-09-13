@@ -327,6 +327,20 @@ class AuthenticationService:
             updated_at_ms=now_ms,
         )
         challenge = self.repository.save_sms_challenge(challenge)
+        if self._is_alipay_review_phone(phone_e164=phone_e164):
+            self._log(
+                logging.INFO,
+                "authentication.alipay_review_sms_code_issued",
+                user_id=None,
+                auth_session_id=challenge.challenge_id,
+                outcome="success",
+                login_id=phone_e164,
+            )
+            return self.repository.save_sms_challenge(replace(
+                challenge,
+                status="sent",
+                updated_at_ms=_now_ms(),
+            ))
         result = self.sms_provider.send_code(phone_e164=phone_e164, challenge_id=challenge.challenge_id)
         status = "sent" if result.outcome == "sent" else "failed"
         stored = self.repository.save_sms_challenge(replace(
@@ -354,8 +368,16 @@ class AuthenticationService:
     def verify_sms_login(self, *, challenge_id: str, phone_number: str, code: str, client_label: str) -> tuple[UserRecord, AuthSessionRecord, str, str]:
         phone_e164 = self._normalize_phone(phone_number)
         phone_hash = self._phone_hash(phone_e164)
-        challenge = self.repository.get_sms_challenge(challenge_id)
+        challenge = self.repository.get_sms_challenge(challenge_id) if challenge_id else None
         now_ms = _now_ms()
+        # The review account is intentionally scoped to both configured values.
+        # It can skip the SMS challenge because no real handset receives the
+        # review code; all issued auth state still uses the normal session path.
+        if challenge is None and self._is_alipay_review_sms_code(phone_e164=phone_e164, code=code):
+            user = self._get_or_create_sms_user(phone_e164=phone_e164)
+            auth_session, access_token, refresh_token = self._issue_auth_session(user=user, client_label=client_label)
+            self._log(logging.INFO, "authentication.alipay_review_sms_logged_in", user_id=user.user_id, auth_session_id=auth_session.auth_session_id, outcome="success", login_id=phone_e164)
+            return user, auth_session, access_token, refresh_token
         if challenge is None or challenge.phone_hash != phone_hash:
             raise DomainRequestError("authentication", "sms-verify", "验证码会话不存在或已失效。", 404, "sms_challenge_not_found")
         if challenge.status in {"verified", "locked"}:
@@ -366,6 +388,39 @@ class AuthenticationService:
         if challenge.attempt_count >= challenge.max_attempts:
             self.repository.save_sms_challenge(replace(challenge, status="locked", updated_at_ms=now_ms, last_error_code="attempt_limit"))
             raise DomainRequestError("authentication", "sms-verify", "验证码错误次数过多，请重新获取。", 429, "sms_attempt_limit")
+        if self._is_alipay_review_sms_code(phone_e164=phone_e164, code=code):
+            self._log(
+                logging.INFO,
+                "authentication.alipay_review_sms_logged_in",
+                user_id=None,
+                auth_session_id=None,
+                outcome="success",
+                login_id=phone_e164,
+            )
+            self.repository.save_sms_challenge(
+                replace(
+                    challenge,
+                    status="verified",
+                    verified_at_ms=_now_ms(),
+                    updated_at_ms=_now_ms(),
+                    provider_request_id=challenge.provider_request_id,
+                )
+            )
+            user = self._get_or_create_sms_user(phone_e164=phone_e164)
+            auth_session, access_token, refresh_token = self._issue_auth_session(user=user, client_label=client_label)
+            self._log(logging.INFO, "authentication.sms_logged_in", user_id=user.user_id, auth_session_id=auth_session.auth_session_id, outcome="success", login_id=phone_e164)
+            return user, auth_session, access_token, refresh_token
+        if self._is_alipay_review_phone(phone_e164=phone_e164):
+            attempt_count = challenge.attempt_count + 1
+            status = "locked" if attempt_count >= challenge.max_attempts else challenge.status
+            self.repository.save_sms_challenge(replace(
+                challenge,
+                status=status,
+                attempt_count=attempt_count,
+                updated_at_ms=_now_ms(),
+                last_error_code="invalid_code",
+            ))
+            raise DomainRequestError("authentication", "sms-verify", "验证码不正确或已过期，请检查后重新输入。", 401, "sms_invalid_code")
         result = self.sms_provider.verify_code(phone_e164=phone_e164, code=code.strip(), challenge=challenge)
         attempt_count = challenge.attempt_count + (0 if result.outcome == "verified" else 1)
         if result.outcome != "verified":
@@ -381,7 +436,7 @@ class AuthenticationService:
                 message = "短信校验服务暂时不可用，请稍后重试。"
                 status_code = 503
             raise DomainRequestError("authentication", "sms-verify", message, status_code, result.error_code or f"sms_{result.outcome}")
-        verified = self.repository.save_sms_challenge(replace(challenge, status="verified", verified_at_ms=_now_ms(), updated_at_ms=_now_ms(), provider_request_id=result.provider_request_id or challenge.provider_request_id))
+        self.repository.save_sms_challenge(replace(challenge, status="verified", verified_at_ms=_now_ms(), updated_at_ms=_now_ms(), provider_request_id=result.provider_request_id or challenge.provider_request_id))
         user = self._get_or_create_sms_user(phone_e164=phone_e164)
         auth_session, access_token, refresh_token = self._issue_auth_session(user=user, client_label=client_label)
         self._log(logging.INFO, "authentication.sms_logged_in", user_id=user.user_id, auth_session_id=auth_session.auth_session_id, outcome="success", login_id=phone_e164)
@@ -571,6 +626,7 @@ class AuthenticationService:
         return normalized_email, challenge
 
     def create_wechat_authorization_session(self, *, client_label: str) -> WechatAuthorizationSessionRecord:
+        self._require_wechat_login_available()
         now_ms = _now_ms()
         auth_request_id = f"wechat-auth-{uuid4().hex}"
         state_token = secrets.token_urlsafe(24)
@@ -609,6 +665,7 @@ class AuthenticationService:
         return session
 
     def simulate_wechat_scan(self, *, auth_request_id: str) -> WechatAuthorizationSessionRecord:
+        self._require_wechat_login_available()
         if self.wechat_provider.provider_mode().mode != "compatible":
             raise DomainRequestError("authentication", "wechat-scan", "当前提供方不支持开发态扫码模拟。", 400)
         session = self.get_wechat_authorization_session(auth_request_id=auth_request_id)
@@ -622,6 +679,7 @@ class AuthenticationService:
         return self.repository.save_wechat_authorization_session(replace(session, status="scanned", updated_at_ms=_now_ms()))
 
     def simulate_wechat_authorize(self, *, auth_request_id: str) -> WechatAuthorizationSessionRecord:
+        self._require_wechat_login_available()
         if self.wechat_provider.provider_mode().mode != "compatible":
             raise DomainRequestError("authentication", "wechat-authorize", "当前提供方不支持开发态授权模拟。", 400)
         session = self.get_wechat_authorization_session(auth_request_id=auth_request_id)
@@ -635,6 +693,7 @@ class AuthenticationService:
         return self._complete_wechat_authorization(session=session, profile=profile, source="compatible-simulated")
 
     def complete_wechat_callback(self, *, state_token: str, code: str) -> WechatAuthorizationSessionRecord:
+        self._require_wechat_login_available()
         session = self.repository.get_wechat_authorization_session_by_state(state_token)
         if session is None:
             raise DomainRequestError("authentication", "wechat-callback", "微信授权状态无效或已过期。", 401)
@@ -643,6 +702,23 @@ class AuthenticationService:
             raise DomainRequestError("authentication", "wechat-callback", "微信授权回调已被消费。", 409)
         profile = self.wechat_provider.exchange_callback(payload=ProviderCallbackPayload(state_token=state_token, code=code))
         return self._complete_wechat_authorization(session=session, profile=profile, source="provider-callback")
+
+    def _require_wechat_login_available(self) -> None:
+        """Keep the development-compatible identity provider out of production.
+
+        The current provider adapter intentionally generates synthetic identities for
+        local/test flows.  Allowing its authorization endpoints in production would
+        let unauthenticated callers create arbitrary ``wechat`` users.  A future
+        official provider must explicitly replace this adapter before enabling the
+        production flow.
+        """
+        if self.settings.environment == "production":
+            raise DomainRequestError(
+                "authentication",
+                "wechat-production-disabled",
+                "微信登录当前未在生产环境启用。",
+                404,
+            )
 
     def list_auth_sessions(self, *, auth_context: AuthenticatedRequestContext) -> list[AuthSessionRecord]:
         current = _now_ms()
@@ -906,6 +982,25 @@ class AuthenticationService:
         if not re.fullmatch(r"1[3-9]\d{9}", digits):
             raise DomainRequestError("authentication", "sms-phone", "请输入有效的中国大陆手机号。", 422, "invalid_phone_number")
         return f"+86{digits}"
+
+    def _normalize_phone_for_review(self, phone_number: str | None) -> str | None:
+        if not phone_number:
+            return None
+        try:
+            return self._normalize_phone(phone_number)
+        except DomainRequestError:
+            return None
+
+    def _is_alipay_review_phone(self, *, phone_e164: str) -> bool:
+        if not self.settings.alipay_review_login_enabled:
+            return False
+        configured_phone = self._normalize_phone_for_review(self.settings.alipay_review_phone)
+        if configured_phone is None or not self.settings.alipay_review_code:
+            return False
+        return phone_e164 == configured_phone
+
+    def _is_alipay_review_sms_code(self, *, phone_e164: str, code: str) -> bool:
+        return self._is_alipay_review_phone(phone_e164=phone_e164) and code.strip() == (self.settings.alipay_review_code or "").strip()
 
     def _phone_hash(self, phone_e164: str) -> str:
         secret = self.settings.auth_jwt_secret or "offersteady-dev-jwt-secret"

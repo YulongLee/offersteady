@@ -101,13 +101,15 @@ class GlobalCommerceService:
         primary = active[0] if active else None
         copilot = self._remaining(active, "copilot_minute")
         screen = self._remaining(active, "screen_assist")
+        knowledge = self._remaining(active, "knowledge_token")
         subscriptions = self.repository.subscriptions_for_user(user_id)
         return {
             "entitlements": [self._entitlement_payload(item) for item in active],
             "entitlement": self._entitlement_payload(primary) if primary else None,
             "copilot": copilot,
             "screenAssist": screen,
-            "usage": {"copilotMinutesRemaining": copilot["remaining"], "screenAssistUsesRemaining": screen["remaining"], "copilotUnlimited": copilot["unlimited"], "screenAssistUnlimited": screen["unlimited"]},
+            "knowledge": knowledge,
+            "usage": {"copilotMinutesRemaining": copilot["remaining"], "screenAssistUsesRemaining": screen["remaining"], "copilotUnlimited": copilot["unlimited"], "screenAssistUnlimited": screen["unlimited"], "knowledgeTokensRemaining": knowledge["remaining"], "knowledgeTokensUnlimited": knowledge["unlimited"]},
             "features": {
                 "resumeJd": any(e.resume_jd_enabled or e.full_product_enabled for e in active),
                 "knowledgeBase": any(e.knowledge_base_enabled or e.full_product_enabled for e in active),
@@ -131,14 +133,26 @@ class GlobalCommerceService:
 
     @staticmethod
     def _remaining(active: list[GlobalEntitlement], kind: UsageKind) -> dict[str, object]:
-        if any((e.copilot_minutes_granted if kind == "copilot_minute" else e.screen_assist_uses_granted) is None for e in active):
+        if kind == "copilot_minute":
+            limits = [e.copilot_minutes_granted for e in active]
+        elif kind == "screen_assist":
+            limits = [e.screen_assist_uses_granted for e in active]
+        else:
+            limits = [e.knowledge_tokens_granted for e in active]
+        if any(limit is None for limit in limits):
             return {"unlimited": True, "remaining": None}
-        remaining = sum(max(0, (e.copilot_minutes_granted or 0) - e.copilot_minutes_used - e.copilot_minutes_locked) if kind == "copilot_minute" else max(0, (e.screen_assist_uses_granted or 0) - e.screen_assist_uses_used - e.screen_assist_uses_locked) for e in active)
+        def remaining_for(entitlement: GlobalEntitlement) -> int:
+            if kind == "copilot_minute":
+                return max(0, (entitlement.copilot_minutes_granted or 0) - entitlement.copilot_minutes_used - entitlement.copilot_minutes_locked)
+            if kind == "screen_assist":
+                return max(0, (entitlement.screen_assist_uses_granted or 0) - entitlement.screen_assist_uses_used - entitlement.screen_assist_uses_locked)
+            return max(0, entitlement.knowledge_tokens_granted - entitlement.knowledge_tokens_used - entitlement.knowledge_tokens_locked)
+        remaining = sum(remaining_for(e) for e in active)
         return {"unlimited": False, "remaining": remaining}
 
     @staticmethod
     def _entitlement_from_plan(*, user_id: str, plan: GlobalPlan, source_kind: str, source_id: str, starts_at_ms: int, ends_at_ms: int | None) -> GlobalEntitlement:
-        return GlobalEntitlement(str(uuid4()), user_id, plan.offer_code, plan.version, source_kind, source_id, starts_at_ms, ends_at_ms, plan.copilot_minutes, plan.screen_assist_uses, plan.resume_jd_enabled, plan.knowledge_base_enabled, plan.written_exam_enabled, plan.full_product_enabled)
+        return GlobalEntitlement(str(uuid4()), user_id, plan.offer_code, plan.version, source_kind, source_id, starts_at_ms, ends_at_ms, plan.copilot_minutes, plan.screen_assist_uses, plan.resume_jd_enabled, plan.knowledge_base_enabled, plan.written_exam_enabled, plan.full_product_enabled, knowledge_tokens_granted=plan.knowledge_tokens)
 
     @staticmethod
     def _entitlement_payload(item: GlobalEntitlement) -> dict[str, object]:
@@ -151,7 +165,8 @@ class GlobalCommerceService:
             "endsAtMs": item.ends_at_ms,
             "copilotMinutesRemaining": None if item.copilot_minutes_granted is None else max(0, item.copilot_minutes_granted-item.copilot_minutes_used-item.copilot_minutes_locked),
             "screenAssistUsesRemaining": None if item.screen_assist_uses_granted is None else max(0, item.screen_assist_uses_granted-item.screen_assist_uses_used-item.screen_assist_uses_locked),
-            "benefits": {"copilotMinutes": item.copilot_minutes_granted, "screenAssistUses": item.screen_assist_uses_granted, "resumeAndJobDescription": item.resume_jd_enabled, "knowledgeBase": item.knowledge_base_enabled, "writtenExam": item.written_exam_enabled, "fullProduct": item.full_product_enabled},
+            "knowledgeTokensRemaining": max(0, item.knowledge_tokens_granted-item.knowledge_tokens_used-item.knowledge_tokens_locked),
+            "benefits": {"copilotMinutes": item.copilot_minutes_granted, "screenAssistUses": item.screen_assist_uses_granted, "resumeAndJobDescription": item.resume_jd_enabled, "knowledgeBase": item.knowledge_base_enabled, "knowledgeTokens": item.knowledge_tokens_granted, "writtenExam": item.written_exam_enabled, "fullProduct": item.full_product_enabled},
         }
 
     @staticmethod

@@ -11,7 +11,7 @@ const open = (path: string, authenticated = true, mutate?: (state: WebAppState) 
 describe("optimized product experience", () => {
   it("matches the filed website name and exposes the official filing links", () => {
     open("/", false);
-    expect(document.title).toBe("AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳");
+    expect(document.title).toBe("AI面试助手｜AI面试辅助、实时语音与截图回答 - 面试稳");
     expect(screen.getAllByText("面试稳AI助手").length).toBeGreaterThan(0);
     const filing = screen.getByRole("link", { name: "浙ICP备2026052190号-1" });
     expect(filing).toHaveAttribute("href", "https://beian.miit.gov.cn");

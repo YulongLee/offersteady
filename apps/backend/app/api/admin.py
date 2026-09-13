@@ -29,6 +29,7 @@ from app.services.billing_service import BillingService
 from app.services.document_processing import DocumentProcessingService
 from app.services.realtime_speech_service import RealtimeSpeechService
 from app.services.payment_channel_service import PaymentChannelService
+from app.services.baidu_ranking import BaiduRankingService
 from app.deps import billing_service, document_processing_service, realtime_speech_service
 
 
@@ -57,6 +58,16 @@ class GrowthReferralSettingsRequest(BaseModel):
     reward_points: int = Field(ge=1, le=100_000, alias="rewardPoints")
     invitee_reward_points: int = Field(ge=1, le=100_000, alias="inviteeRewardPoints")
     confirmed: bool
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class BaiduKeywordRequest(BaseModel):
+    keyword: str = Field(min_length=1, max_length=100)
+    active: bool = True
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class BaiduRefreshRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
 
 
@@ -259,6 +270,55 @@ def server_health(
     if monitor is None:
         raise HTTPException(status_code=503, detail="server_health_monitor_unavailable")
     return {"data": monitor.server_report()}
+
+
+@admin_router.get("/seo/baidu-ranking")
+def baidu_ranking(principal: Annotated[AdminPrincipal, Depends(permission("seo.read"))]):
+    settings = get_settings()
+    service = BaiduRankingService(settings, admin_service().repository)
+    service.seed_default_keywords()
+    return {"data": {**admin_service().repository.baidu_ranking_overview(domain=settings.baidu_ranking_domain), "configured": bool(settings.baidu_ranking_endpoint)}}
+
+
+@admin_router.post("/seo/baidu-ranking/refresh")
+def refresh_baidu_ranking(payload: BaiduRefreshRequest, request: Request, principal: Annotated[AdminPrincipal, Depends(permission("seo.manage"))]):
+    settings = get_settings()
+    if not settings.baidu_ranking_manual_refresh_enabled:
+        raise HTTPException(status_code=409, detail="baidu_ranking_manual_refresh_disabled")
+    refresh_key = f"baidu-ranking:{principal.admin_session_id}"
+    with _rate_lock:
+        refresh_window = _rate_windows[refresh_key]
+        now = monotonic()
+        while refresh_window and refresh_window[0] <= now - 3600:
+            refresh_window.popleft()
+        if len(refresh_window) >= max(1, settings.baidu_ranking_manual_refresh_limit_per_hour):
+            raise HTTPException(status_code=429, detail="baidu_ranking_refresh_rate_limited")
+        refresh_window.append(now)
+    result = BaiduRankingService(settings, admin_service().repository).sync(force=True)
+    hashes = _client_hashes(request)
+    admin_service().audit(principal=principal, action="seo.baidu_ranking.refresh", resource_type="baidu_ranking", resource_id=settings.baidu_ranking_domain, reason=payload.reason, request_id=_request_id(request), result="success", ip_hash=hashes[0], user_agent_hash=hashes[1])
+    return {"data": result}
+
+
+@admin_router.post("/seo/baidu-ranking/keywords")
+def add_baidu_keyword(payload: BaiduKeywordRequest, request: Request, principal: Annotated[AdminPrincipal, Depends(permission("seo.manage"))]):
+    settings = get_settings(); keyword = payload.keyword.strip()
+    if not keyword:
+        raise HTTPException(status_code=422, detail="keyword_required")
+    row = admin_service().repository.upsert_baidu_keyword(domain=settings.baidu_ranking_domain, keyword=keyword, status="active" if payload.active else "inactive")
+    hashes = _client_hashes(request)
+    admin_service().audit(principal=principal, action="seo.baidu_ranking.keyword.add", resource_type="baidu_keyword", resource_id=row["keyword_id"], reason=payload.reason, request_id=_request_id(request), result="success", ip_hash=hashes[0], user_agent_hash=hashes[1])
+    return {"data": row}
+
+
+@admin_router.patch("/seo/baidu-ranking/keywords/{keyword_id}")
+def update_baidu_keyword(keyword_id: str, payload: BaiduKeywordRequest, request: Request, principal: Annotated[AdminPrincipal, Depends(permission("seo.manage"))]):
+    row = admin_service().repository.set_baidu_keyword_status(keyword_id=keyword_id, status="active" if payload.active else "inactive")
+    if not row:
+        raise HTTPException(status_code=404, detail="baidu_keyword_not_found")
+    hashes = _client_hashes(request)
+    admin_service().audit(principal=principal, action="seo.baidu_ranking.keyword.update", resource_type="baidu_keyword", resource_id=keyword_id, reason=payload.reason, request_id=_request_id(request), result="success", ip_hash=hashes[0], user_agent_hash=hashes[1])
+    return {"data": row}
 
 
 @admin_router.get("/users")

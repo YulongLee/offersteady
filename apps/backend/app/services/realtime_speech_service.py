@@ -4,7 +4,9 @@ import base64
 import concurrent.futures
 from copy import deepcopy
 import logging
+import json
 import math
+from pathlib import Path
 import queue
 import random
 import re
@@ -12,7 +14,7 @@ import threading
 from collections import Counter, deque
 from dataclasses import replace
 from difflib import SequenceMatcher
-from time import sleep, time
+from time import monotonic, sleep, time
 from typing import Any, Callable
 from uuid import uuid4
 
@@ -62,6 +64,32 @@ from app.services.billing_service import BillingService, UsageReservationRecord
 
 def _now_ms() -> int:
     return int(time() * 1000)
+
+
+def _compare_companion_versions(left: object, right: object) -> int | None:
+    """Compare the deliberately small dotted-version format used by releases."""
+    def parse(value: object) -> tuple[list[int], str | None] | None:
+        if not isinstance(value, str):
+            return None
+        match = re.fullmatch(r"v?(\d+(?:\.\d+)*)([a-z][0-9a-z.-]*)?", value.strip(), re.IGNORECASE)
+        if not match:
+            return None
+        numbers = [int(part) for part in match.group(1).split(".")]
+        return numbers, (match.group(2) or "").lower() or None
+    a, b = parse(left), parse(right)
+    if a is None or b is None:
+        return None
+    for index in range(max(len(a[0]), len(b[0]))):
+        diff = (a[0][index] if index < len(a[0]) else 0) - (b[0][index] if index < len(b[0]) else 0)
+        if diff:
+            return -1 if diff < 0 else 1
+    if a[1] == b[1]:
+        return 0
+    if a[1] is None:
+        return 1
+    if b[1] is None:
+        return -1
+    return -1 if a[1] < b[1] else 1
 
 
 REALTIME_STREAM_BOOTSTRAP_EVENT_KINDS: set[RealtimeEventKind] = {
@@ -199,6 +227,7 @@ class RealtimeSpeechService:
         self._frame_workers: dict[tuple[str, RealtimeSourceKind], threading.Thread] = {}
         self._frame_queues: dict[tuple[str, RealtimeSourceKind], "queue.Queue[dict[str, object]]"] = {}
         self._retired_session_ids: set[str] = set()
+        self._retired_session_order: deque[str] = deque(maxlen=4096)
         self._delivery_metric_counts: Counter[str] = Counter()
         self._delivery_metric_latest_ms: dict[str, int] = {}
         self._terminal_lock = threading.Lock()
@@ -241,17 +270,140 @@ class RealtimeSpeechService:
         self._meter_lock = threading.Lock()
         self._meter_stops: dict[str, threading.Event] = {}
         self._meter_threads: dict[str, threading.Thread] = {}
+        self._session_activity_lock = threading.Lock()
+        self._session_last_activity_ms: dict[str, int] = {}
+        self._session_owners: dict[str, str] = {}
+        # Cleanup can be requested concurrently by disconnect handlers,
+        # watchdogs, and explicit end actions. Keep the coordinator
+        # session-scoped so unrelated interviews never block each other.
+        self._session_cleanup_locks: dict[str, threading.Lock] = {}
+        self._reclamation_stop = threading.Event()
+        self._reclamation_thread: threading.Thread | None = None
+        self._reclamation_metrics_lock = threading.Lock()
+        self._reclamation_metrics: dict[str, int | float | str | None] = {
+            "candidates": 0,
+            "dryRunCandidates": 0,
+            "reclaimed": 0,
+            "failures": 0,
+            "lastDurationMs": 0,
+            "maxDurationMs": 0,
+            "lastReason": None,
+            "lastSessionId": None,
+            "releasedBindings": 0,
+            "closedPublishers": 0,
+            "closedAsrSessions": 0,
+            "clearedQueues": 0,
+            "clearedBufferedSegments": 0,
+        }
         partial_listener_setter = getattr(self.asr_gateway, "set_partial_listener", None)
         if callable(partial_listener_setter):
             partial_listener_setter(self._publish_provider_partial)
+        if settings.realtime_session_reclamation_enabled and settings.environment == "production":
+            self._reclamation_thread = threading.Thread(
+                target=self._reclamation_loop,
+                name="realtime-session-reclamation",
+                daemon=True,
+            )
+            self._reclamation_thread.start()
+
+    def _touch_session_activity(self, *, session_id: str, user_id: str, at_ms: int | None = None) -> None:
+        with self._session_activity_lock:
+            self._session_last_activity_ms[session_id] = at_ms or _now_ms()
+            self._session_owners[session_id] = user_id
+
+    def stop_reclamation(self) -> None:
+        self._reclamation_stop.set()
+
+    def reclamation_metrics(self) -> dict[str, int | float | str | None]:
+        with self._reclamation_metrics_lock:
+            return dict(self._reclamation_metrics)
+
+    def _record_reclamation(self, *, reason: str, session_id: str, duration_ms: int, resources: dict[str, int], failed: bool = False, dry_run: bool = False) -> None:
+        with self._reclamation_metrics_lock:
+            metrics = self._reclamation_metrics
+            metrics["candidates"] = int(metrics["candidates"] or 0) + 1
+            if dry_run:
+                metrics["dryRunCandidates"] = int(metrics["dryRunCandidates"] or 0) + 1
+            elif failed:
+                metrics["failures"] = int(metrics["failures"] or 0) + 1
+            else:
+                metrics["reclaimed"] = int(metrics["reclaimed"] or 0) + 1
+            metrics["lastDurationMs"] = duration_ms
+            metrics["maxDurationMs"] = max(int(metrics["maxDurationMs"] or 0), duration_ms)
+            metrics["lastReason"] = reason
+            metrics["lastSessionId"] = session_id
+            for key, value in resources.items():
+                metrics[key] = int(metrics.get(key) or 0) + int(value)
+
+    def _reclamation_loop(self) -> None:
+        interval = max(5.0, self.settings.realtime_session_reclamation_interval_seconds)
+        grace_ms = max(30_000, self.settings.realtime_session_reclamation_grace_seconds * 1000)
+        lease_ms = max(
+            self.settings.realtime_web_heartbeat_ttl_seconds,
+            self.settings.realtime_desktop_heartbeat_ttl_seconds,
+        ) * 1000
+        while not self._reclamation_stop.wait(interval):
+            now = _now_ms()
+            with self._session_activity_lock:
+                tracked_candidates = [
+                    (session_id, self._session_owners.get(session_id))
+                    for session_id, last_seen in self._session_last_activity_ms.items()
+                    if now - last_seen > lease_ms + grace_ms
+                ]
+            candidates = list(tracked_candidates)
+            # Recover live sessions that predate this process. This keeps a
+            # backend restart from losing the only in-memory lease record; the
+            # longer persisted idle timeout is intentionally conservative.
+            try:
+                persisted_idle = self.session_service.list_idle_live_sessions(at_ms=now)
+                known = {session_id for session_id, _ in candidates}
+                candidates.extend(
+                    (session.session_id, session.owner_user_id)
+                    for session in persisted_idle
+                    if session.session_id not in known
+                )
+            except Exception:
+                self.logger.warning("realtime_session_persisted_idle_scan_failed")
+            for session_id, user_id in candidates:
+                if not user_id:
+                    continue
+                if self.settings.realtime_session_reclamation_dry_run:
+                    self._record_reclamation(reason="watchdog-dry-run", session_id=session_id, duration_ms=0, resources={}, dry_run=True)
+                    continue
+                try:
+                    started = monotonic()
+                    session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+                    if session.status == "live":
+                        result = self.terminate_session_for_admin(user_id=user_id, session_id=session_id, reason="heartbeat-expired")
+                        self._record_reclamation(reason="heartbeat-expired", session_id=session_id, duration_ms=int((monotonic() - started) * 1000), resources={
+                            "releasedBindings": int(result.get("released_bindings", 0)),
+                            "closedPublishers": int(result.get("closed_publishers", 0)),
+                            "closedAsrSessions": int(result.get("closed_asr_sessions", 0)),
+                            "clearedQueues": int(result.get("cleared_queues", 0)),
+                            "clearedBufferedSegments": int(result.get("cleared_buffered_segments", 0)),
+                        })
+                except Exception:
+                    self._record_reclamation(reason="heartbeat-expired", session_id=session_id, duration_ms=0, resources={}, failed=True)
+                    self.logger.warning("realtime_session_reclamation_failed", extra={"sessionId": session_id})
+                finally:
+                    if not self.settings.realtime_session_reclamation_dry_run:
+                        with self._session_activity_lock:
+                            self._session_last_activity_ms.pop(session_id, None)
+                            self._session_owners.pop(session_id, None)
 
     def start_live_session(self, *, user_id: str, session_id: str) -> InterviewSessionRecord:
         """Start one commercial interview, charge its first minute and prewarm ASR."""
         current = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        bound_device = self.repository.get_session_desktop_binding(user_id=user_id, session_id=session_id)
+        if bound_device is not None:
+            device = self.repository.get_desktop_device_by_code(bound_device.manual_code)
+            if device is not None:
+                self._assert_companion_current(device=device, action="start-interview")
         if current.status == "live":
+            self._touch_session_activity(session_id=session_id, user_id=user_id)
             return current
         if current.session_mode == "written":
-            binding = self.repository.get_session_desktop_binding(user_id=user_id, session_id=session_id)
+            binding = bound_device
             device = self.repository.get_desktop_device_by_code(binding.manual_code) if binding is not None else None
             if binding is None or not self._binding_is_active(binding=binding, device=device):
                 raise DomainRequestError("realtime-speech", "start-written-exam", "请先连接在线的桌面助手后再进入笔试。", 409, error_code="written_exam_desktop_required")
@@ -296,6 +448,7 @@ class RealtimeSpeechService:
         if reservation is not None and reservation.status == "reserved":
             self.billing_service.settle_usage(usage_id=reservation.usage_id)  # type: ignore[union-attr]
         self._capture_control_cache[session_id] = "capturing"
+        self._touch_session_activity(session_id=session_id, user_id=user_id)
         self._session_language_cache[session_id] = session.interview_language
         self._ensure_realtime_metering(user_id=user_id, session_id=session_id)
         # Prewarm remains best-effort and asynchronous. Interview entry must not
@@ -387,7 +540,17 @@ class RealtimeSpeechService:
                 if session.status != "live":
                     return
                 if self.capture_control_state(session_id=session_id) == "capturing":
-                    if not self._settle_realtime_minute(user_id=user_id, session_id=session_id):
+                    try:
+                        if not self._settle_realtime_minute(user_id=user_id, session_id=session_id):
+                            return
+                    except Exception:
+                        # Billing failures must not leave a hot, orphaned
+                        # metering thread behind. The session remains usable
+                        # until the normal balance/error path handles it.
+                        self.logger.exception(
+                            "realtime_meter_settlement_failed",
+                            extra={"sessionId": session_id, "userId": user_id},
+                        )
                         return
                 now_ms = _now_ms()
                 next_boundary_ms = (
@@ -943,6 +1106,12 @@ class RealtimeSpeechService:
             },
             "eventStore": repository_diagnostics() if callable(repository_diagnostics) else {},
             "controlPlane": self._control_query_diagnostics(),
+            "sessionReclamation": {
+                "enabled": self.settings.realtime_session_reclamation_enabled,
+                "dryRun": self.settings.realtime_session_reclamation_dry_run,
+                "activeTrackedSessions": len(self._session_last_activity_ms),
+                **self.reclamation_metrics(),
+            },
             "traceSummary": self.performance_summary(),
         }
 
@@ -1286,6 +1455,55 @@ class RealtimeSpeechService:
             reason=reason,
         )
 
+    def _latest_companion_version(self, *, platform: object, architecture: object) -> str | None:
+        normalized_platform = str(platform or "").strip().lower()
+        normalized_architecture = str(architecture or "").strip().lower()
+        if normalized_platform in {"darwin", "mac"}:
+            normalized_platform = "macos"
+        if normalized_architecture in {"aarch64"}:
+            normalized_architecture = "arm64"
+        if normalized_architecture in {"amd64", "x86_64"}:
+            normalized_architecture = "x64"
+        manifest_name = "global_desktop_release_manifest.json" if self.settings.product_edition == "global" else "desktop_release_manifest.json"
+        manifest_path = Path(__file__).resolve().parents[1] / manifest_name
+        try:
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        versions = [
+            entry.get("version")
+            for entry in payload.get("entries", [])
+            if isinstance(entry, dict)
+            and str(entry.get("platform", "")).lower() == normalized_platform
+            and str(entry.get("architecture", "")).lower() == normalized_architecture
+            and entry.get("distributionStatus") == "published"
+            and (entry.get("signingStatus") in {"verified", "local-development", "unsigned"})
+        ]
+        latest: str | None = None
+        for version in versions:
+            if latest is None or (_compare_companion_versions(version, latest) or -1) > 0:
+                latest = str(version)
+        return latest
+
+    def _assert_companion_current(self, *, device: DesktopDeviceRecord, action: str) -> None:
+        capabilities = device.capabilities
+        current = capabilities.get("appVersion")
+        latest = self._latest_companion_version(platform=capabilities.get("platform"), architecture=capabilities.get("architecture"))
+        comparison = _compare_companion_versions(current, latest) if latest is not None else None
+        if comparison == -1:
+            message = (
+                f"Companion version {current} is outdated. Please download the latest version {latest} from the companion downloads page before continuing."
+                if self.settings.product_edition == "global"
+                else f"电脑伴随程序版本 {current} 已过期，请先在下载中心安装最新版 {latest} 后再继续。"
+            )
+            raise DomainRequestError(
+                "realtime-speech",
+                action,
+                message,
+                409,
+                error_code="companion_update_required",
+            )
+
     def register_desktop_device(self, *, device_id: str, manual_code: str, display_name: str, capabilities: dict[str, object]) -> DesktopDeviceRecord:
         code = manual_code.strip()
         if not code.isdigit() or len(code) != 6:
@@ -1396,6 +1614,7 @@ class RealtimeSpeechService:
             raise DomainRequestError("realtime-speech", "bind-device", "未找到对应机器码。请确认电脑伴随程序已打开，并输入 6 位验证码。", 404)
         if not self._desktop_device_fresh(device):
             raise DomainRequestError("realtime-speech", "bind-device", "上次使用的设备当前离线，请打开助手或输入其他机器码。", 409)
+        self._assert_companion_current(device=device, action="bind-device")
         for existing in self.repository.list_session_desktop_bindings_for_device(
             device_id=device.device_id,
             manual_code=device.manual_code,
@@ -1547,46 +1766,63 @@ class RealtimeSpeechService:
         self._invalidate_control_query_cache()
         return sorted(conflict_ids)
 
-    def terminate_session_for_admin(self, *, user_id: str, session_id: str) -> dict[str, object]:
-        session = self.session_service.get_session(user_id=user_id, session_id=session_id)
-        already_ended = session.status == "ended"
-        if not already_ended:
-            session = self.session_service.end_session(user_id=user_id, session_id=session_id)
-        now_ms = _now_ms()
-        released_bindings = 0
-        closed_publishers = 0
-        for binding in self.repository.list_session_desktop_bindings_for_user(user_id=user_id):
-            if binding.session_id == session_id and binding.status == "bound":
-                self.repository.save_session_desktop_binding(replace(binding, status="stale"))
-                released_bindings += 1
-        for publisher in self.repository.list_publishers_for_session(session_id=session_id):
-            if publisher.status not in {"closed", "failed"}:
-                self.repository.save_publisher(
-                    replace(publisher, disconnected_at_ms=now_ms, status="closed")
-                )
-                closed_publishers += 1
-        self._stop_realtime_metering(session_id=session_id)
-        self._reset_realtime_session(session_id=session_id, retired=True)
-        self._save_event(
-            session_id=session_id,
-            owner_user_id=user_id,
-            kind="connection-state",
-            payload={"status": "terminated-by-admin"},
-        )
-        self._invalidate_control_query_cache()
-        return {
-            "session_id": session_id,
-            "status": session.status,
-            "already_ended": already_ended,
-            "released_bindings": released_bindings,
-            "closed_publishers": closed_publishers,
-        }
+    def terminate_session_for_admin(self, *, user_id: str, session_id: str, reason: str = "explicit-end") -> dict[str, object]:
+        started = monotonic()
+        with self._session_activity_lock:
+            cleanup_lock = self._session_cleanup_locks.setdefault(session_id, threading.Lock())
+        with cleanup_lock:
+            session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+            already_ended = session.status == "ended"
+            if not already_ended:
+                session = self.session_service.end_session(user_id=user_id, session_id=session_id)
+            now_ms = _now_ms()
+            released_bindings = 0
+            closed_publishers = 0
+            for binding in self.repository.list_session_desktop_bindings_for_user(user_id=user_id):
+                if binding.session_id == session_id and binding.status == "bound":
+                    self.repository.save_session_desktop_binding(replace(binding, status="stale"))
+                    released_bindings += 1
+            for publisher in self.repository.list_publishers_for_session(session_id=session_id):
+                if publisher.status not in {"closed", "failed"}:
+                    self.repository.save_publisher(
+                        replace(publisher, disconnected_at_ms=now_ms, status="closed")
+                    )
+                    closed_publishers += 1
+            self._stop_realtime_metering(session_id=session_id)
+            resources = self._reset_realtime_session(session_id=session_id, retired=True)
+            self._save_event(
+                session_id=session_id,
+                owner_user_id=user_id,
+                kind="connection-state",
+                payload={"status": "terminated-by-admin", "reason": reason},
+            )
+            with self._session_activity_lock:
+                self._session_last_activity_ms.pop(session_id, None)
+                self._session_owners.pop(session_id, None)
+            self._invalidate_control_query_cache()
+            result = {
+                "session_id": session_id,
+                "status": session.status,
+                "already_ended": already_ended,
+                "released_bindings": released_bindings,
+                "closed_publishers": closed_publishers,
+                **resources,
+            }
+            if reason != "heartbeat-expired":
+                self._record_reclamation(reason=reason, session_id=session_id, duration_ms=int((monotonic() - started) * 1000), resources={
+                    "releasedBindings": released_bindings,
+                    "closedPublishers": closed_publishers,
+                    "closedAsrSessions": int(resources.get("closed_asr_sessions", 0)),
+                    "clearedQueues": int(resources.get("cleared_queues", 0)),
+                    "clearedBufferedSegments": int(resources.get("cleared_buffered_segments", 0)),
+                })
+            return result
 
     def reconcile_idle_session(self, *, user_id: str, session_id: str) -> dict[str, object]:
         status = self.session_service.idle_status(user_id=user_id, session_id=session_id)
         if status["state"] != "expired":
             return status
-        result = self.terminate_session_for_admin(user_id=user_id, session_id=session_id)
+        result = self.terminate_session_for_admin(user_id=user_id, session_id=session_id, reason="idle-timeout")
         return {**status, "state": "ended", "autoEnded": True, "release": result}
 
     def reconcile_idle_sessions(self, *, user_id: str | None = None) -> list[str]:
@@ -1598,6 +1834,7 @@ class RealtimeSpeechService:
         return ended
 
     def record_web_session_heartbeat(self, *, user_id: str, session_id: str, binding_id: str | None, page: str, page_instance_id: str | None = None) -> WebSessionHeartbeatRecord:
+        self._touch_session_activity(session_id=session_id, user_id=user_id)
         idle = self.reconcile_idle_session(user_id=user_id, session_id=session_id)
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         if session.status == "ended":
@@ -2161,6 +2398,7 @@ class RealtimeSpeechService:
                 and previous.status not in {"closed", "failed"}
             ):
                 self.repository.save_publisher(replace(previous, disconnected_at_ms=now_ms, status="closed"))
+                self._cleanup_source_resources(session_id=session_id, source_kind=source_kind)
         publisher = RealtimePublisherRecord(
             publisher_id=f"publisher-{uuid4().hex}",
             token=f"rt-{uuid4().hex}",
@@ -2205,6 +2443,41 @@ class RealtimeSpeechService:
         self._log(logging.INFO, "realtime_speech.publisher_connected", session_id=connected.session_id, publisher_id=connected.publisher_id, state=connected.status)
         return connected
 
+    def _cleanup_source_resources(self, *, session_id: str, source_kind: RealtimeSourceKind) -> dict[str, int]:
+        """Release one disconnected source without terminating the other channel."""
+        resources = {"closed_asr_sessions": 0, "cleared_queues": 0, "cleared_buffered_segments": 0}
+        close_source = getattr(self.asr_gateway, "close_source", None)
+        try:
+            resources["closed_asr_sessions"] = int(close_source(session_id=session_id, source_kind=source_kind)) if callable(close_source) else int(self.asr_gateway.close_session(session_id=session_id))
+        except Exception as exc:
+            self.logger.warning("realtime_source_cleanup_failed", extra={"sessionId": session_id, "sourceKind": source_kind, "safeErrorCode": exc.__class__.__name__})
+        key = self._session_source_key(session_id, source_kind)
+        with self._frame_worker_lock:
+            work_queue = self._frame_queues.pop(key, None)
+            self._frame_workers.pop(key, None)
+            if work_queue is not None:
+                resources["cleared_queues"] = 1
+                while True:
+                    try:
+                        work_queue.get_nowait()
+                    except queue.Empty:
+                        break
+                    else:
+                        work_queue.task_done()
+            self._active_requests_by_session_source.pop(key, None)
+            self._latest_timings_by_session_source.pop(key, None)
+            self._queue_wait_samples.pop(key, None)
+        with self._segment_audio_lock:
+            resources["cleared_buffered_segments"] = sum(1 for item_key in self._segment_audio_buffers if item_key[:2] == key)
+            self._segment_audio_buffers = {
+                item_key: value for item_key, value in self._segment_audio_buffers.items() if item_key[:2] != key
+            }
+        with self._watchdog_lock:
+            self._active_source_turns.pop(key, None)
+            for commit_key in [item_key for item_key in self._committing_source_turns if item_key[:2] == key]:
+                self._committing_source_turns.pop(commit_key, None)
+        return resources
+
     def disconnect_publisher(self, *, token: str, final_state: str = "closed") -> RealtimePublisherRecord:
         publisher = self.repository.get_publisher_by_token(token)
         if publisher is None:
@@ -2213,6 +2486,16 @@ class RealtimeSpeechService:
             return publisher
         updated = self.repository.save_publisher(replace(publisher, disconnected_at_ms=_now_ms(), status=final_state))  # type: ignore[arg-type]
         self._publisher_status_cache.pop(updated.publisher_id, None)
+        # A replacement publisher for the same source may already be active;
+        # only release source resources when this was the last live owner.
+        source_still_active = any(
+            item.source_kind == updated.source_kind
+            and item.owner_user_id == updated.owner_user_id
+            and item.status not in {"closed", "failed"}
+            for item in self.repository.list_publishers_for_session(session_id=updated.session_id)
+        )
+        if not source_still_active:
+            self._cleanup_source_resources(session_id=updated.session_id, source_kind=updated.source_kind)
         self._save_event(
             session_id=updated.session_id,
             owner_user_id=updated.owner_user_id,
@@ -2281,6 +2564,7 @@ class RealtimeSpeechService:
         )
         publisher = prepared.get("publisher")
         if isinstance(publisher, RealtimePublisherRecord):
+            self._touch_session_activity(session_id=publisher.session_id, user_id=publisher.owner_user_id)
             self.session_service.touch_activity(user_id=publisher.owner_user_id, session_id=publisher.session_id)
         return self._process_prepared_audio_frame(prepared)
 
@@ -4099,12 +4383,11 @@ class RealtimeSpeechService:
         raise DomainRequestError("realtime-speech", "transcribe", "实时语音转写失败。", 502, error_code=error_code)
 
     def _close_asr_source(self, *, session_id: str, source_kind: RealtimeSourceKind) -> int:
-        close_source = getattr(self.asr_gateway, "close_source", None)
-        if callable(close_source):
-            closed = int(close_source(session_id=session_id, source_kind=source_kind))
-        else:
-            # Compatibility for third-party/test adapters predating source-scoped recovery.
-            closed = int(self.asr_gateway.close_session(session_id=session_id))
+        # ASR failures use the same idempotent source cleanup coordinator as
+        # publisher disconnects. This prevents a failed provider connection
+        # from leaving its queue, watchdog turn, or buffered audio alive.
+        resources = self._cleanup_source_resources(session_id=session_id, source_kind=source_kind)
+        closed = int(resources.get("closed_asr_sessions", 0))
         bucket = self._counter_bucket(session_id=session_id, source_kind=source_kind)
         bucket["sourceReconnects"] = int(bucket.get("sourceReconnects", 0)) + max(1, closed)
         return closed
@@ -4180,16 +4463,27 @@ class RealtimeSpeechService:
         )
         return terminal
 
-    def _reset_realtime_session(self, *, session_id: str, retired: bool) -> None:
+    def _reset_realtime_session(self, *, session_id: str, retired: bool) -> dict[str, int]:
+        resources = {
+            "closed_asr_sessions": 0,
+            "cleared_queues": 0,
+            "cleared_buffered_segments": 0,
+        }
         if retired:
             self._stop_realtime_metering(session_id=session_id)
-        self.asr_gateway.close_session(session_id=session_id)
+        try:
+            resources["closed_asr_sessions"] = int(self.asr_gateway.close_session(session_id=session_id))
+        except Exception as exc:
+            self.logger.warning("realtime_session_asr_cleanup_failed", extra={"sessionId": session_id, "safeErrorCode": exc.__class__.__name__})
         with self._prewarm_metrics_lock:
             self._prewarm_ready_by_session.pop(session_id, None)
             self._prewarm_ready_at_by_session.pop(session_id, None)
         with self._frame_worker_lock:
             if retired:
                 self._retired_session_ids.add(session_id)
+                self._retired_session_order.append(session_id)
+                while len(self._retired_session_ids) > self._retired_session_order.maxlen:
+                    self._retired_session_ids.discard(self._retired_session_order.popleft())
             else:
                 self._retired_session_ids.discard(session_id)
             queues = [
@@ -4200,6 +4494,7 @@ class RealtimeSpeechService:
             for key, work_queue in queues:
                 self._frame_queues.pop(key, None)
                 self._frame_workers.pop(key, None)
+                resources["cleared_queues"] += 1
                 while True:
                     try:
                         work_queue.get_nowait()
@@ -4221,6 +4516,9 @@ class RealtimeSpeechService:
             self._queue_wait_samples = {
                 key: value for key, value in self._queue_wait_samples.items() if key[0] != session_id
             }
+            self._counters_by_session_source = {
+                key: value for key, value in self._counters_by_session_source.items() if key[0] != session_id
+            }
         with self._watchdog_lock:
             self._active_source_turns = {
                 key: value for key, value in self._active_source_turns.items() if key[0] != session_id
@@ -4228,7 +4526,17 @@ class RealtimeSpeechService:
             self._committing_source_turns = {
                 key: value for key, value in self._committing_source_turns.items() if key[0] != session_id
             }
-        self._clear_session_audio(session_id)
+        with self._segment_audio_lock:
+            resources["cleared_buffered_segments"] = sum(1 for key in self._segment_audio_buffers if key[0] == session_id)
+            self._segment_audio_buffers = {
+                key: value for key, value in self._segment_audio_buffers.items() if key[0] != session_id
+            }
+        self._capture_control_cache.pop(session_id, None)
+        self._session_language_cache.pop(session_id, None)
+        for publisher_id, status in list(self._publisher_status_cache.items()):
+            if status in {"closed", "failed"}:
+                self._publisher_status_cache.pop(publisher_id, None)
+        return resources
 
     def _asr_timeout_seconds(self, frame: AudioFrame) -> float:
         configured = max(1.0, float(self.settings.realtime_asr_frame_timeout_seconds))

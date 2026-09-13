@@ -1,0 +1,29 @@
+{
+  "captured_at": "2026-09-12T16:14:45Z",
+  "site": "https://mianshiwen.cn/",
+  "window": { "start": "2026-08-16", "end": "2026-09-12" },
+  "providers": [],
+  "metrics": {
+    "clicks": null,
+    "impressions": null,
+    "ctr": null,
+    "average_position": null,
+    "organic_sessions": null,
+    "organic_conversions": null,
+    "indexed_pages": null
+  },
+  "keyword_groups": [
+    { "page": "/", "primary": "AI面试助手", "volume": null },
+    { "page": "/features/realtime-interview", "primary": "实时面试辅助", "volume": null },
+    { "page": "/features/ai-interview-assistant", "primary": "程序员面试助手", "volume": null },
+    { "page": "/pricing", "primary": "AI面试助手价格", "volume": null },
+    { "page": "/download", "primary": "面试稳下载", "volume": null }
+  ],
+  "limitations": [
+    "Placeholder measurement window only; no provider data was captured for this window.",
+    "No current Baidu query/index data supplied; historical zero index is not asserted as current.",
+    "OpenSEO configuration exists but no callable keyword-metric tools were available in this session.",
+    "GSC and GA4 credentials unavailable; no search-volume, ranking-difficulty or conversion claims.",
+    "Local HTTP checks and sitemap URL counts do not measure actual search-engine indexing."
+  ]
+}

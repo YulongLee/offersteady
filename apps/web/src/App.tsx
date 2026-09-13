@@ -153,7 +153,7 @@ function LandingPage() {
         <div>
           <span className="kicker">AI INTERVIEW COPILOT</span>
           <h1>AI 面试助手，<br />助你更从容地冲刺 Offer。</h1>
-          <p>实时理解面试问题，结合你的简历、岗位要求和个人资料，快速生成清晰回答思路。语音、手动输入和截图题都支持。</p>
+          <p>面试稳是一款面向求职者的 AI 面试助手。它实时理解面试问题，结合你的简历、岗位要求和个人资料，快速生成清晰回答思路；语音、手动输入和截图题都支持。</p>
           <div className="hero-actions"><Link className="button primary large" to={routes.login}>免费使用 <span>→</span></Link><Link className="button ghost large" to={routes.publicGuide}>使用手册</Link></div>
           <div className="trust-list"><span>✓ 实时辅助</span><span>✓ 个性化回答</span><span>✓ 按自己的节奏使用</span></div>
         </div>
@@ -191,7 +191,7 @@ function LandingPage() {
       <section id="core-capabilities" className="public-section core-capabilities" aria-labelledby="core-capabilities-title">
         <div className="core-capabilities-intro"><span className="kicker">CORE CAPABILITIES</span><h2 id="core-capabilities-title">面试稳AI助手核心功能</h2><p>从面试准备、现场辅助到结束复盘，用一套清晰的工作流陪你完成每一次求职面试。</p></div>
         <div className="core-capabilities-grid">
-          <article className="core-capability-card accent-coral"><span className="core-capability-icon" aria-hidden="true"><ChatCircleTextIcon size={28} weight="duotone" /></span><div><h3>实时面试辅助</h3><p>识别面试官问题并生成回答建议，支持语音、手动输入；回答内容结合当前面试上下文，并明确作为参考建议。</p></div></article>
+          <article className="core-capability-card accent-coral"><span className="core-capability-icon" aria-hidden="true"><ChatCircleTextIcon size={28} weight="duotone" /></span><div><h3>实时面试辅助</h3><p>识别面试官问题并生成 AI 面试实时回答建议，支持语音、手动输入；回答内容结合当前面试上下文，并明确作为参考建议。</p></div></article>
           <article className="core-capability-card accent-gold"><span className="core-capability-icon" aria-hidden="true"><ScanIcon size={28} weight="duotone" /></span><div><h3>截图题快速回答</h3><p>通过电脑伴随助手截取题目，识别代码、笔试题或系统设计内容，并在回答区展示处理状态与建议答案。</p></div></article>
           <article className="core-capability-card accent-green"><span className="core-capability-icon" aria-hidden="true"><DatabaseIcon size={28} weight="duotone" /></span><div><h3>个性化知识库</h3><p>按岗位或主题整理知识材料，每场面试自主选择需要的资料，让回答更贴近你实际准备的内容。</p></div></article>
           <article className="core-capability-card accent-blue"><span className="core-capability-icon" aria-hidden="true"><IdentificationCardIcon size={28} weight="duotone" /></span><div><h3>简历与 JD 上下文</h3><p>每场单独选择简历和职位描述，回答建议优先引用可核对的经历与岗位要求，不替你虚构项目经验。</p></div></article>
@@ -295,7 +295,7 @@ function LoginPage() {
   };
   const verifyCode = async (event: FormEvent) => {
     event.preventDefault();
-    if (!challengeId) {
+    if (!challengeId && !code.trim()) {
       setMessage("请先获取验证码");
       return;
     }
@@ -310,7 +310,7 @@ function LoginPage() {
       setBusy("");
     }
   };
-  return <main className="center-page"><section className="login-card"><Logo /><span className="prototype-badge">当前可免费使用</span><h1>开始你的面试准备</h1><p>使用手机号验证码完成登录或注册，同一个账号可以管理资料、积分和不同设备上的面试。</p><form className="sms-login-form" onSubmit={challengeId ? verifyCode : sendCode}><label><span>手机号</span><input value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} inputMode="tel" autoComplete="tel" placeholder="请输入手机号" /></label>{challengeId ? <label><span>验证码</span><input value={code} onChange={event => setCode(event.target.value)} inputMode="numeric" autoComplete="one-time-code" placeholder="请输入验证码" /></label> : null}<div className="sms-actions"><button className="button primary large full" type="submit" disabled={Boolean(busy)}>{busy === "verify" ? "登录中..." : challengeId ? "登录 / 注册" : busy === "send" ? "发送中..." : "获取验证码"}</button>{challengeId ? <button className="button ghost full" type="button" disabled={cooldown > 0 || Boolean(busy)} onClick={event => { void sendCode(event as unknown as FormEvent); }}>{cooldown > 0 ? `${cooldown}s 后重发` : "重新发送验证码"}</button> : null}</div></form>{message ? <p className="login-message">{message}</p> : null}<Link className="text-link login-back" to={routes.landing}>返回首页</Link><small className="login-legal-copy">登录即表示你同意<Link to={routes.terms}>用户协议</Link>与<Link to={routes.privacy}>隐私政策</Link>。验证码只用于账号识别和登录校验。</small></section></main>;
+  return <main className="center-page"><section className="login-card"><Logo /><span className="prototype-badge">当前可免费使用</span><h1>开始你的面试准备</h1><p>使用手机号验证码完成登录或注册，同一个账号可以管理资料、积分和不同设备上的面试。</p><form className="sms-login-form" onSubmit={challengeId || code.trim() ? verifyCode : sendCode}><label><span>手机号</span><input value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} inputMode="tel" autoComplete="tel" placeholder="请输入手机号" /></label><label><span>验证码</span><input value={code} onChange={event => setCode(event.target.value)} inputMode="numeric" autoComplete="one-time-code" placeholder="请输入验证码" /></label><div className="sms-actions"><button className="button primary large full" type="submit" disabled={Boolean(busy)}>{busy === "verify" ? "登录中..." : challengeId || code.trim() ? "登录 / 注册" : busy === "send" ? "发送中..." : "获取验证码"}</button>{challengeId ? <button className="button ghost full" type="button" disabled={cooldown > 0 || Boolean(busy)} onClick={event => { void sendCode(event as unknown as FormEvent); }}>{cooldown > 0 ? `${cooldown}s 后重发` : "重新发送验证码"}</button> : null}</div></form>{message ? <p className="login-message">{message}</p> : null}<Link className="text-link login-back" to={routes.landing}>返回首页</Link><small className="login-legal-copy">登录即表示你同意<Link to={routes.terms}>用户协议</Link>与<Link to={routes.privacy}>隐私政策</Link>。验证码只用于账号识别和登录校验。</small></section></main>;
 }
 
 function ReferralLandingPage() {
@@ -597,6 +597,10 @@ function CompanionUpdateReminder({ update, onContinue }: { readonly update: Comp
   </section>;
 }
 
+function CompanionUpdateRequired({ message }: { readonly message: string }) {
+  return <div className="inline-error companion-update-required" role="alert"><span>{message}</span><Link className="button ghost" to={routes.devices}>下载最新版助手</Link></div>;
+}
+
 function PreparationPage() {
   const { id = "demo" } = useParams();
   const { state, setState } = usePrototype();
@@ -818,7 +822,7 @@ function PreparationPage() {
         <label><span>机器码</span><input inputMode="numeric" maxLength={6} value={machineCode} onChange={event => setMachineCode(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="输入 6 位机器码" /></label>
         <button className="button ghost" disabled={!conflictResolved || binding || machineReady && machineCode === deviceBinding?.manualCode} onClick={() => void connectDesktopDevice(false)}>{binding ? "连接中…" : "验证连接"}</button>
         {lastDevice ? <button className="button primary" disabled={!conflictResolved || binding || !lastDevice.online || deviceBinding?.deviceId === lastDevice.deviceId} onClick={() => void connectDesktopDevice(true)}>{deviceBinding?.deviceId === lastDevice.deviceId ? "上次设备已连接" : "连接上次设备"}</button> : null}
-        {bindingError ? <div className="inline-error" role="alert">{bindingError}</div> : null}
+        {bindingError ? (bindingError.includes("伴随程序版本") ? <CompanionUpdateRequired message={bindingError} /> : <div className="inline-error" role="alert">{bindingError}</div>) : null}
       </div>
       {visibleUpdate ? <CompanionUpdateReminder update={visibleUpdate} onContinue={() => setDismissedUpdateKey(updateKey)} /> : null}
       {startError ? <div className="inline-error written-start-error" role="alert">{startError}</div> : null}
@@ -836,7 +840,7 @@ function PreparationPage() {
           <label><span>{newlyCreatedInterview ? "输入机器码连接本场" : "重新输入机器码"}</span><input inputMode="numeric" maxLength={6} value={machineCode} onChange={event => setMachineCode(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="输入 6 位机器码" /></label>
           <button className="button ghost" disabled={!conflictResolved || binding || machineReady && machineCode === deviceBinding?.manualCode} onClick={() => void connectDesktopDevice(false)}>{binding ? "连接中…" : "验证并连接"}</button>
           <small>{deviceBinding ? `本场已连接：${deviceBinding.displayName}` : "输入助手显示的固定机器码，或直接连接当前账号上次使用的设备。"}</small>
-          {bindingError ? <div className="inline-error" role="alert">{bindingError}</div> : null}
+          {bindingError ? (bindingError.includes("伴随程序版本") ? <CompanionUpdateRequired message={bindingError} /> : <div className="inline-error" role="alert">{bindingError}</div>) : null}
           {lastDevice ? <><div className="connection-divider"><span>或使用上次设备</span></div><div className={`last-device-choice ${lastDevice.online ? "online" : "offline"}`}><span><b>{lastDevice.displayName}</b><small>{lastDevice.online ? `设备在线 · ${lastDevice.maskedManualCode}` : "设备离线，请先打开助手"}</small></span><button className="button primary" disabled={!conflictResolved || binding || !lastDevice.online || deviceBinding?.deviceId === lastDevice.deviceId} onClick={() => void connectDesktopDevice(true)}>{deviceBinding?.deviceId === lastDevice.deviceId ? "已连接本场" : "一键连接上次设备"}</button></div></> : null}
         </div>
         {visibleUpdate ? <CompanionUpdateReminder update={visibleUpdate} onContinue={() => setDismissedUpdateKey(updateKey)} /> : null}
@@ -1974,7 +1978,7 @@ function DocumentTitleManager() {
   const { pathname } = useLocation();
   useEffect(() => {
     if (pathname === routes.landing) {
-      document.title = "AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳";
+      document.title = "AI面试助手｜AI面试辅助、实时语音与截图回答 - 面试稳";
     } else if (pathname === routes.publicGuide) {
       document.title = "面试稳AI助手使用手册｜安装、收音、截图回答与支付说明";
     } else if (pathname === routes.terms) {

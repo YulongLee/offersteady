@@ -122,7 +122,8 @@ assert.match(robots, /Sitemap: https:\/\/mianshiwen\.cn\/sitemap\.xml/);
 const sitemapEntries = [...sitemap.matchAll(/<url>\s*<loc>(https:\/\/mianshiwen\.cn(?:\/[^<]*)?)<\/loc>\s*<lastmod>(\d{4}-\d{2}-\d{2})<\/lastmod>/g)].map((match) => ({ url: new URL(match[1]), lastmod: match[2] }));
 assert.deepEqual(new Set(sitemapEntries.map(({ url }) => url.pathname)), new Set(publicEntries.keys()));
 assert.equal(sitemapEntries.length, publicEntries.size);
-assert.ok(sitemapEntries.every(({ lastmod }) => lastmod === "2026-08-19"));
+const updatedRoutes = new Set(["/", "/features", "/pricing", "/features/ai-interview-assistant", "/features/realtime-interview"]);
+assert.ok(sitemapEntries.every(({ url, lastmod }) => lastmod === (updatedRoutes.has(url.pathname) ? "2026-09-13" : "2026-08-19")));
 assert.doesNotMatch(sitemap, /\/login|\/app/);
 
 const discoveryHtml = `${indexHtml}\n${guideHtml}\n${[...hubRoutes.keys()].map((route) => topicDocuments.get(route)).join("\n")}`;
@@ -134,7 +135,7 @@ assert.match(llms, /AI 输出仅供参考/);
 assert.match(llmsFull, /价格.*积分消耗.*支付渠道.*调整/);
 assert.doesNotMatch(`${llms}\n${llmsFull}`, /\/api\/|AccessKey|Secret|private key|BEGIN .* KEY/iu);
 const facts = JSON.parse(factsText);
-assert.equal(facts.schemaVersion, "1.1");
+assert.equal(facts.schemaVersion, "1.2");
 assert.equal(facts.canonicalSite, "https://mianshiwen.cn/");
 assert.equal(facts.product.name, "面试稳AI助手");
 assert.equal(facts.dataBoundaries.rawAudioStoredByDefault, false);

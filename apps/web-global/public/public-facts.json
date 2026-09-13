@@ -34,8 +34,8 @@
   },
   "pricing": {
     "currency": "USD",
-    "checkoutActive": false,
-    "paymentNotice": "Online checkout is temporarily unavailable. Live payments require payment provider merchant approval and completed production configuration. No payment is taken through the disabled controls on this site.",
+    "checkoutActive": true,
+    "paymentNotice": "Secure checkout is available for approved live plans. Sign in to choose a plan and review the final total, taxes, and billing terms before payment.",
     "plans": [
       {
         "name": "Free",
@@ -55,7 +55,7 @@
         "name": "Interview Day Pass",
         "price": 9.99,
         "term": "/ 24 hours",
-        "status": "approval-required",
+        "status": "available",
         "billing": "One-time payment · no automatic renewal",
         "accessStarts": "24 consecutive hours from confirmed payment, not your first session.",
         "features": [
@@ -69,7 +69,7 @@
         "name": "Pro Weekly",
         "price": 49.99,
         "term": "/ 7 days",
-        "status": "approval-required",
+        "status": "available",
         "billing": "One-time payment · no automatic renewal",
         "accessStarts": "7 consecutive days from confirmed payment, not your first session.",
         "features": [
@@ -83,7 +83,7 @@
         "name": "Pro Monthly",
         "price": 99.99,
         "term": "/month",
-        "status": "approval-required",
+        "status": "available",
         "billing": "Monthly subscription · renews automatically until cancelled",
         "accessStarts": "From confirmed subscription payment through the paid billing period shown in your account.",
         "features": [
@@ -97,7 +97,7 @@
         "name": "Job Hunt",
         "price": 199.99,
         "term": "/ 90 days",
-        "status": "approval-required",
+        "status": "available",
         "billing": "One-time payment · no automatic renewal",
         "accessStarts": "90 consecutive days from confirmed payment, not your first session.",
         "features": [

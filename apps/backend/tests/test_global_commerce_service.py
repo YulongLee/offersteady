@@ -35,10 +35,12 @@ def test_catalogue_has_approved_order_prices_and_billing_modes() -> None:
     day_pass, weekly, monthly, job_hunt = plans[1:]
     assert (day_pass.duration_days, day_pass.copilot_minutes, day_pass.screen_assist_uses) == (1, 180, None)
     assert day_pass.resume_jd_enabled is True
+    assert day_pass.knowledge_tokens == 0
     for plan, days in ((weekly, 7), (monthly, 30), (job_hunt, 90)):
         assert plan.duration_days == days
         assert plan.copilot_minutes is None and plan.screen_assist_uses is None
         assert plan.resume_jd_enabled and plan.knowledge_base_enabled and plan.written_exam_enabled and plan.full_product_enabled
+    assert [plan.knowledge_tokens for plan in (weekly, monthly, job_hunt)] == [50_000, 200_000, 1_000_000]
 
 
 def test_free_is_once_and_usage_reservations_are_idempotent() -> None:
