@@ -36,6 +36,7 @@ import globalScreenshotInstruction from "../../../ai/prompts/global-screenshot-i
 import "./styles.css";
 import { HomepageAdvantages } from "./HomepageAdvantages";
 import { HomepageDownloads } from "./HomepageDownloads";
+import { HomepageLanguages } from "./HomepageLanguages";
 import homeCopy from "./homepage-commercial.json";
 import "./homepage-commercial.css";
 
@@ -174,6 +175,7 @@ function LandingPage() {
         <div className="demo-answer"><span className="advice-label">A place to start</span><ol><li>Set the context and goal in one sentence.</li><li>Focus on your decisions, actions, and trade-offs.</li><li>Close with a result you can verify.</li></ol><div className="source-pills"><span>Resume</span><span>Job description</span><span>Your experience</span></div></div>
       </div>
     </section>
+    <HomepageLanguages />
     <section id="benefits" className="public-section" aria-labelledby="commercial-benefits-title">
       <div className="section-intro"><span className="kicker">BUILT FOR THE CONVERSATION</span><h2 id="commercial-benefits-title">{homeCopy.benefitsTitle}</h2><p>{homeCopy.benefitsIntro}</p></div>
       <div className="commercial-benefits">{homeCopy.benefits.map((benefit, index) => {

@@ -11,6 +11,13 @@
 - **WHEN** 客户端提交 registry 之外的语言值
 - **THEN** 后端拒绝请求并返回稳定的无敏感内容错误，不创建或修改会话语言
 
+### Requirement: Declare production language coverage on the public homepage
+国际版首页 MUST 从同一 locale registry 展示所有 production 语言，并明确说明其他语言属于 Beta；首页声明 MUST 不把 Beta 语言描述为已验证能力，也 MUST 保持现有页面视觉布局和商业文案层级。
+
+#### Scenario: Visitor reviews language coverage
+- **WHEN** 未登录用户浏览国际版首页
+- **THEN** 页面展示 10 种 production 语言及其原生名称，并说明额外语言可在设置中以 Beta 方式使用
+
 ### Requirement: Persist a default language and a session language independently
 系统 MUST 在用户设置中保存默认面试语言，并在创建草稿时使用它；准备阶段允许用户覆盖当前会话语言。会话开始后语言 MUST 锁定，刷新、重新进入和重连 MUST 恢复同一值。
 

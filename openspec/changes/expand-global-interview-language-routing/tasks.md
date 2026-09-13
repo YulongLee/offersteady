@@ -11,6 +11,7 @@
 - [x] 2.2 Replace the Global preparation page's fixed English control with the registry-backed selector, Production/Beta labels, persistence, refresh recovery, and save-error rollback.
 - [x] 2.3 Render the locked locale in live, review, written-exam, and export surfaces using the existing badge and typography patterns.
 - [ ] 2.4 Add localized UI copy for selector descriptions, capability warnings, RTL direction, and recoverable errors while preserving existing English commercial copy.
+- [x] 2.5 Add a registry-backed production-language coverage section to the public homepage without changing the existing visual system.
 
 ## 3. Backend routing
 
