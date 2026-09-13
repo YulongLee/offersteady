@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Literal
+from pathlib import Path
+import re
 
 InterviewLanguage = Literal[
     "zh-CN", "en-US", "ja-JP", "ko-KR", "vi-VN", "th-TH", "id-ID", "ms-MY", "fil-PH", "hi-IN",
@@ -46,6 +48,62 @@ INTERVIEW_LANGUAGE_REGISTRY: dict[InterviewLanguage, InterviewLanguageDefinition
 }
 
 DEFAULT_GLOBAL_INTERVIEW_LANGUAGE: InterviewLanguage = "en-US"
+
+_HAN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+_HANGUL = re.compile(r"[\uac00-\ud7af]")
+_KANA = re.compile(r"[\u3040-\u30ff]")
+_ARABIC = re.compile(r"[\u0600-\u06ff]")
+_CYRILLIC = re.compile(r"[\u0400-\u04ff]")
+_GREEK = re.compile(r"[\u0370-\u03ff]")
+_LATIN = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿĀ-ž]" )
+
+
+def interview_prompt_directory(locale: str, *, repository_root: Path | None = None) -> Path:
+    """Return the checked-in prompt directory for a registered locale."""
+    root = repository_root or Path(__file__).resolve().parents[4]
+    return root / "ai" / "prompts" / "global-interview" / locale
+
+
+def interview_prompt_assets_ready(locale: str, *, repository_root: Path | None = None) -> bool:
+    definition = get_interview_language(locale)
+    if definition is None:
+        return False
+    directory = interview_prompt_directory(locale, repository_root=repository_root)
+    return all((directory / f"{stage}.md").is_file() for stage in ("system", "quick", "detail", "continuation", "screenshot"))
+
+
+def output_language_violation(value: str, locale: str) -> bool:
+    """Conservative script guard; allows product names, code and source evidence."""
+    text = value.strip()
+    if not text:
+        return True
+    counts = {
+        "han": len(_HAN.findall(text)),
+        "hangul": len(_HANGUL.findall(text)),
+        "kana": len(_KANA.findall(text)),
+        "arabic": len(_ARABIC.findall(text)),
+        "cyrillic": len(_CYRILLIC.findall(text)),
+        "greek": len(_GREEK.findall(text)),
+        "latin": len(_LATIN.findall(text)),
+    }
+    # Chinese/Japanese/Korean/Arabic/Russian/Greek have distinctive scripts.
+    if locale == "zh-CN":
+        return counts["han"] < 2 and len(text) > 40
+    if locale == "ja-JP":
+        return counts["kana"] < 2 and counts["han"] < 2 and len(text) > 40
+    if locale == "ko-KR":
+        return counts["hangul"] < 2 and len(text) > 40
+    if locale == "ar-SA":
+        return counts["arabic"] < 2 and len(text) > 40
+    if locale == "ru-RU":
+        return counts["cyrillic"] < 2 and len(text) > 40
+    if locale == "el-GR":
+        return counts["greek"] < 2 and len(text) > 40
+    # Latin locales must not silently publish Chinese, Cyrillic, Arabic or Greek prose.
+    if locale in INTERVIEW_LANGUAGE_REGISTRY and locale not in {"zh-CN", "ja-JP", "ko-KR", "ar-SA", "ru-RU", "el-GR"}:
+        dominant = max(counts["han"], counts["cyrillic"], counts["arabic"], counts["greek"])
+        return dominant >= 4 and dominant / max(1, sum(counts.values())) >= 0.08
+    return False
 
 
 def get_interview_language(locale: str) -> InterviewLanguageDefinition | None:
