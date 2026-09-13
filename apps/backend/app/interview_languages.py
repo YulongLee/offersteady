@@ -60,7 +60,7 @@ _LATIN = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿĀ-ž]" )
 
 def interview_prompt_directory(locale: str, *, repository_root: Path | None = None) -> Path:
     """Return the checked-in prompt directory for a registered locale."""
-    root = repository_root or Path(__file__).resolve().parents[4]
+    root = repository_root or Path(__file__).resolve().parents[3]
     return root / "ai" / "prompts" / "global-interview" / locale
 
 
