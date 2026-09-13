@@ -12,6 +12,7 @@
 - [x] 2.3 Render the locked locale in live, review, written-exam, and export surfaces using the existing badge and typography patterns.
 - [ ] 2.4 Add localized UI copy for selector descriptions, capability warnings, RTL direction, and recoverable errors while preserving existing English commercial copy.
 - [x] 2.5 Add a registry-backed production-language coverage section to the public homepage without changing the existing visual system.
+- [x] 2.6 Make the preparation-page language selector collapsible by default, show English as the green default Production tier, and preserve the existing readiness flow.
 
 ## 3. Backend routing
 

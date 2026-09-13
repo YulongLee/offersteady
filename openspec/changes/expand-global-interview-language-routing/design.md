@@ -44,7 +44,7 @@
 
 ### 5. Make UI language changes additive
 
-沿用现有 `.interview-language-picker`、设置面板和 `live-language-badge` 样式，增加搜索/分组或折叠仅在语言数量超过两项时启用。默认布局、颜色、间距和主要 CTA 不变。语言条目显示“生产支持”或“Beta”标签；RTL 语言只增加方向属性和文本流适配，不重排页面结构。
+沿用现有 `.interview-language-picker`、设置面板和 `live-language-badge` 样式，将语言列表放入原生可访问的折叠面板。准备页默认以紧凑摘要显示当前语言（新会话默认为英语），通过明确的展开操作查看和切换其他语言；默认布局、颜色、间距和主要 CTA 不变。英语摘要与条目使用绿色的默认 Production 标识，其他条目显示“生产支持”或“Beta”标签；RTL 语言只增加方向属性和文本流适配，不重排页面结构。
 
 ### 6. Gate commercial claims with evals and telemetry
 

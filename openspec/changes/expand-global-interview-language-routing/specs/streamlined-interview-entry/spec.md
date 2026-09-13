@@ -15,6 +15,10 @@
 - **WHEN** 用户明确确认简历、JD 和知识材料均为空
 - **THEN** 系统保存空允许清单和当前会话语言并允许继续，不要求额外通用复选框
 
+#### Scenario: Keep the language control compact by default
+- **WHEN** 用户进入准备页且当前会话语言为默认英语
+- **THEN** 页面以收起状态显示英语和绿色的 Production 标识，用户可通过明确的展开操作查看并切换其他语言；展开或收起不改变现有资料确认和设备准备条件
+
 ### Requirement: Keep disclosure and permission specific to the sensitive action
 准备页 SHALL 在开始操作附近简洁说明所选语言会影响语音识别、问题检测和 AI 回答，并继续说明已选资料和转录用途、原始音频默认不保存以及记录可删除。麦克风、系统音频、截图上传或其他敏感采集 MUST 在首次执行相应操作时继续取得平台权限或针对性确认。
 
