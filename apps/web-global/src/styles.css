@@ -612,16 +612,8 @@ h1, h2, h3, p { margin-top: 0; }
 .interview-language-options small { color: var(--muted); font-size: 8px; line-height: 1.45; }
 .legacy-language-picker { display: none; }
 .interview-language-picker legend { padding: 0; font-size: 12px; font-weight: 800; }
-.interview-language-picker details { margin-top: 8px; }
-.interview-language-summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid var(--line-strong); border-radius: 12px; background: rgba(255,255,255,.025); padding: 12px; cursor: pointer; list-style: none; }
-.interview-language-summary::-webkit-details-marker { display: none; }
-.interview-language-summary::after { content: "+"; color: var(--brand); font-size: 17px; font-weight: 500; line-height: 1; }
-.interview-language-picker details[open] .interview-language-summary::after { content: "–"; }
-.interview-language-summary > span:first-child { display: grid; gap: 4px; }
-.interview-language-summary strong { font-size: 11px; }
-.interview-language-summary-action { color: var(--brand); font-size: 8px; font-weight: 700; white-space: nowrap; }
-.interview-language-picker details > p { margin: 10px 0 12px; color: var(--muted); font-size: 9px; line-height: 1.55; }
-.interview-language-picker details > .interview-language-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.interview-language-picker > p { margin: 6px 0 12px; color: var(--muted); font-size: 9px; line-height: 1.55; }
+.interview-language-picker > div:first-of-type { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .interview-language-picker label { display: flex; align-items: flex-start; gap: 9px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.02); padding: 12px; cursor: pointer; }
 .interview-language-picker label.selected { border-color: rgba(110,231,189,.55); background: rgba(110,231,189,.08); }
 .interview-language-picker label.preferred { border-color: rgba(110,231,189,.72); background: rgba(110,231,189,.11); }

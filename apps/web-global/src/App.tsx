@@ -557,23 +557,10 @@ function CompanionUpdateRequired({ message }: { readonly message: string }) {
 }
 
 export function LanguagePicker({ value, saving, onChange, error = "" }: { readonly value: import("@offersteady/protocol").InterviewLanguage; readonly saving: boolean; readonly onChange: (value: import("@offersteady/protocol").InterviewLanguage) => void; readonly error?: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const selected = interviewLanguageDefinition(value) ?? interviewLanguageDefinition("en-US")!;
-
-  useEffect(() => {
-    setExpanded(false);
-  }, [value]);
-
-  return <fieldset className={`interview-language-picker ${expanded ? "expanded" : "collapsed"}`} disabled={saving}>
+  return <fieldset className="interview-language-picker" disabled={saving}>
     <legend>Interview language</legend>
-    <details open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
-      <summary className="interview-language-summary">
-        <span><strong>{selected.nativeLabel} <small>{selected.label}</small></strong><small className={`interview-language-tier ${selected.locale === "en-US" ? "preferred" : ""}`}>{selected.locale === "en-US" ? "Default · Production" : selected.tier === "production" ? "Production support" : "Beta · quality validation in progress"}</small></span>
-        <span className="interview-language-summary-action">{expanded ? "Done" : "Change language"}</span>
-      </summary>
-      <p>Choose the language used for transcription, question detection, and AI answers in this session.</p>
-      <div className="interview-language-options">{INTERVIEW_LANGUAGE_REGISTRY.map(language => <label key={language.locale} className={`${value === language.locale ? "selected" : ""} ${language.locale === "en-US" ? "preferred" : ""}`}><input type="radio" name="interview-language" value={language.locale} checked={value === language.locale} onChange={() => onChange(language.locale)} /><span><strong>{language.nativeLabel} <small>{language.label}</small></strong><small className={language.locale === "en-US" ? "interview-language-tier preferred" : "interview-language-tier"}>{language.tier === "production" ? "Production support" : "Beta · quality validation in progress"}</small></span></label>)}</div>
-    </details>
+    <p>Choose the language used for transcription, question detection, and AI answers in this session.</p>
+    <div className="interview-language-options">{INTERVIEW_LANGUAGE_REGISTRY.map(language => <label key={language.locale} className={`${value === language.locale ? "selected" : ""} ${language.locale === "en-US" ? "preferred" : ""}`}><input type="radio" name="interview-language" value={language.locale} checked={value === language.locale} onChange={() => onChange(language.locale)} /><span><strong>{language.nativeLabel} <small>{language.label}</small></strong><small className={language.locale === "en-US" ? "interview-language-tier preferred" : "interview-language-tier"}>{language.locale === "en-US" ? "Default · Production" : language.tier === "production" ? "Production support" : "Beta · quality validation in progress"}</small></span></label>)}</div>
     {saving ? <small role="status">Saving interview language…</small> : null}
     {error ? <div className="inline-error" role="alert">{error}</div> : null}
   </fieldset>;
