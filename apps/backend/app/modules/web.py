@@ -137,6 +137,7 @@ def _account_payload(user: UserRecord | None) -> dict[str, object]:
             "id": "anonymous",
             "displayName": "访客",
             "createdAtMs": 1_719_000_000_000,
+            "defaultInterviewLanguage": "en-US",
             "bindings": [
                 {
                     "id": "anonymous-prototype-binding",
@@ -152,6 +153,7 @@ def _account_payload(user: UserRecord | None) -> dict[str, object]:
         "id": user.user_id,
         "displayName": user.display_name,
         "createdAtMs": user.created_at_ms,
+        "defaultInterviewLanguage": getattr(user, "default_interview_language", "en-US"),
         "bindings": [
             {
                 "id": item.binding_id,

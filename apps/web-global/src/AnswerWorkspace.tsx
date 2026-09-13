@@ -38,7 +38,7 @@ const AnswerContent = memo(function AnswerContent({ content, streaming }: { read
 
 export function AnswerWorkspace({ answers, viewingAnswerId, newAnswerAvailable, activeTask, cancelling, cancelError, interviewLanguage = "zh-CN", onView, onRetry, onStop }: Props) {
   const [mobileExpanded, setMobileExpanded] = useState(false);
-  const english = interviewLanguage === "en-US";
+  const english = interviewLanguage !== "zh-CN";
   const page = answerPage(answers, viewingAnswerId);
   const taskActive = activeTask?.status === "queued" || activeTask?.status === "generating";
   if (!page) return <section className="answer-workspace empty-state" aria-labelledby="answer-title"><h2 id="answer-title">{english ? "Answer" : "回答"}</h2><p>{english ? "Confirm the interviewer's question or enter one manually to see the answer here." : "确认面试官问题或手动输入问题后，答案会显示在这里。"}</p></section>;

@@ -8,7 +8,7 @@ from app.material_formats import MaterialKind
 
 InterviewSessionState = Literal["preparing", "live", "ended"]
 InterviewSessionMode = Literal["interview", "written"]
-InterviewLanguage = Literal["zh-CN", "en-US"]
+from app.interview_languages import InterviewLanguage
 ProgrammingLanguage = Literal["python", "java", "cpp", "javascript", "typescript", "go"]
 SessionContinueTarget = Literal["preparing", "live", "history"]
 ConversationRole = Literal["system", "interviewer", "candidate", "assistant", "manual-question", "screenshot", "event"]

@@ -1,9 +1,9 @@
-import type { AnswerProvenance, AnswerTaskSnapshot, AudioSourceDegradedEvent, BillingOrder, BillingProduct, BillingSupportConfig, CancelAnswerCommand, CancelAnswerResult, CaptureState, CompanionDeviceStatus, ContextLibrarySource, DesktopReleaseManifest, KnowledgeCollection, KnowledgeDocumentVersion, OfficialCheckoutOrder, PointsLedgerEntry, PointsRedemptionRequest, PointsRedemptionResult, QuestionCandidateEvent, SafeAccountSummary, SessionContextSelection, SpeakerTranscriptSegment, TimePassEntitlement, UsageRates } from "@offersteady/protocol";
+import type { AnswerProvenance, AnswerTaskSnapshot, AudioSourceDegradedEvent, BillingOrder, BillingProduct, BillingSupportConfig, CancelAnswerCommand, CancelAnswerResult, CaptureState, CompanionDeviceStatus, ContextLibrarySource, DesktopReleaseManifest, InterviewLanguage, KnowledgeCollection, KnowledgeDocumentVersion, OfficialCheckoutOrder, PointsLedgerEntry, PointsRedemptionRequest, PointsRedemptionResult, QuestionCandidateEvent, SafeAccountSummary, SessionContextSelection, SpeakerTranscriptSegment, TimePassEntitlement, UsageRates } from "@offersteady/protocol";
 import type { LiveAnswerStreamEvent, ManualAnswerStreamUpdate } from "./live-answer-stream";
 
 export type ResourceStatus = "missing" | "processing" | "ready" | "error" | "deleted";
 export type SessionStatus = "preparing" | "ready" | "active" | "paused" | "ended" | "error";
-export type InterviewLanguage = "zh-CN" | "en-US";
+export type { InterviewLanguage } from "@offersteady/protocol";
 export type SessionMode = "interview" | "written";
 export type ProgrammingLanguage = "python" | "java" | "cpp" | "javascript" | "typescript" | "go";
 export type QuestionStatus = "listening" | "transcribing" | "confirmed" | "generating" | "streaming" | "uncertain" | "failed" | "offline" | "cancelled";
@@ -248,6 +248,7 @@ export interface InterviewAppAdapter {
   getBillingState(signal?: AbortSignal): Promise<BillingPresentationState>;
   createDraft(input: { title: string; role: string; company?: string; sessionMode?: SessionMode; interviewLanguage?: InterviewLanguage }, signal?: AbortSignal): Promise<InterviewSummary>;
   updateInterviewLanguage(id: string, interviewLanguage: InterviewLanguage, signal?: AbortSignal): Promise<InterviewSummary>;
+  updateDefaultInterviewLanguage(interviewLanguage: InterviewLanguage, signal?: AbortSignal): Promise<SafeAccountSummary>;
   updateInterviewProgramming(id: string, programmingRequired: boolean, programmingLanguage: ProgrammingLanguage | null, signal?: AbortSignal): Promise<InterviewSummary>;
   updateInterviewAutoAnswer(id: string, enabled: boolean, signal?: AbortSignal): Promise<InterviewSummary>;
   confirmInterviewMaterials(selection: SessionContextSelection, signal?: AbortSignal): Promise<SessionContextSelection>;

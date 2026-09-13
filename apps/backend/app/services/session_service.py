@@ -22,6 +22,7 @@ from app.ports.interview_session import (
     SessionUsageTotals,
 )
 from app.services.material_availability import MaterialAvailabilityValidator
+from app.interview_languages import get_interview_language
 
 
 def _now_ms() -> int:
@@ -54,6 +55,8 @@ class SessionService:
         programming_language: ProgrammingLanguage | None = None,
         restart_of_session_id: str | None = None,
     ) -> InterviewSessionRecord:
+        if get_interview_language(interview_language) is None:
+            raise DomainRequestError("session", "create", "暂不支持该面试语言，请选择其他语言。", 422, error_code="unsupported_interview_language")
         now_ms = _now_ms()
         session_id = f"session-{uuid4().hex}"
         config_snapshot = self._default_config_snapshot(captured_at_ms=now_ms)
@@ -97,6 +100,8 @@ class SessionService:
     def update_interview_language(
         self, *, user_id: str, session_id: str, interview_language: InterviewLanguage
     ) -> InterviewSessionRecord:
+        if get_interview_language(interview_language) is None:
+            raise DomainRequestError("session", "update-language", "暂不支持该面试语言，请选择其他语言。", 422, error_code="unsupported_interview_language")
         session = self.get_session(user_id=user_id, session_id=session_id)
         if session.status != "preparing":
             raise DomainRequestError(

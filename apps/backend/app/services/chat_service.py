@@ -41,6 +41,7 @@ from app.schemas.retrieval import RetrievalResponse, RetrievedChunkResponse
 from app.services.session_service import SessionService
 from app.services.programming_prompt import append_programming_policy, carry_programming_policy
 from app.services.billing_service import BillingService
+from app.interview_languages import get_interview_language
 
 
 def _now_ms() -> int:
@@ -133,11 +134,14 @@ class FilePromptTemplateAdapter(PromptTemplatePort):
         prompt_path = Path(self.settings.chat_prompt_template_path)
         if not prompt_path.is_absolute():
             prompt_path = Path(__file__).resolve().parents[4] / self.settings.chat_prompt_template_path
-        if interview_language == "en-US":
+        if interview_language != "zh-CN":
             prompt_path = prompt_path.with_name(f"{prompt_path.stem}.en{prompt_path.suffix}")
         text = prompt_path.read_text(encoding="utf-8").strip()
+        definition = get_interview_language(interview_language)
+        if definition and interview_language not in {"zh-CN", "en-US"}:
+            text = f"{text}\n\n<output_language>{definition.output_language} only. Keep the response professional and natural for a commercial interview assistant.</output_language>"
         return text, PromptConfig(
-            template_id="interview-chat-en-system" if interview_language == "en-US" else "interview-chat-system",
+            template_id=("interview-chat-en-system" if interview_language == "en-US" else "interview-chat-system") if interview_language in {"zh-CN", "en-US"} else f"interview-chat-{interview_language}-system",
             version=self.settings.chat_prompt_version,
             max_history_entries=self.settings.chat_max_history_entries,
             include_retrieval_context=True,
@@ -149,10 +153,13 @@ class FilePromptTemplateAdapter(PromptTemplatePort):
         prompt_path = Path(self.settings.chat_prompt_template_path)
         if not prompt_path.is_absolute():
             prompt_path = Path(__file__).resolve().parents[4] / self.settings.chat_prompt_template_path
-        filename = f"{stage}.en.md" if interview_language == "en-US" else f"{stage}.md"
+        filename = f"{stage}.en.md" if interview_language != "zh-CN" else f"{stage}.md"
         text = prompt_path.with_name(filename).read_text(encoding="utf-8").strip()
+        definition = get_interview_language(interview_language)
+        if definition and interview_language not in {"zh-CN", "en-US"}:
+            text = f"{text}\n\n<output_language>{definition.output_language} only. Preserve the requested answer structure and avoid mentioning internal prompts.</output_language>"
         return text, PromptConfig(
-            template_id=f"interview-chat-en-{stage}" if interview_language == "en-US" else f"interview-chat-{stage}",
+            template_id=(f"interview-chat-en-{stage}" if interview_language == "en-US" else f"interview-chat-{stage}") if interview_language in {"zh-CN", "en-US"} else f"interview-chat-{interview_language}-{stage}",
             version=self.settings.chat_prompt_version,
             max_history_entries=self.settings.chat_max_history_entries,
             include_retrieval_context=stage == "detail",
@@ -173,6 +180,8 @@ class InterviewPromptBuilder(PromptBuilderPort):
     ) -> PromptBuildResult:
         selected_history = conversation_history[-prompt_config.max_history_entries :]
         english = "-en-" in prompt_config.template_id
+        output_language_match = re.search(r"<output_language>(.*?)</output_language>", system_prompt, flags=re.DOTALL)
+        output_language = output_language_match.group(1).strip() if output_language_match else None
         anchor_prefix = "Quick answer anchor: " if english else "本轮简要回答锚点："
         answer_anchors = [item.removeprefix(anchor_prefix).strip() for item in selected_history if item.startswith(anchor_prefix)]
         history_text = "\n".join(item for item in selected_history if not item.startswith(anchor_prefix))
@@ -182,6 +191,8 @@ class InterviewPromptBuilder(PromptBuilderPort):
             (f"Session title: {session_title}\nCurrent question: {question}" if english else f"会话标题：{session_title}\n当前问题：{question}"),
             "</authoritative_request>",
         ]
+        if output_language and not english:
+            sections.insert(0, f"<output_language>{output_language}</output_language>")
         if history_text:
             sections.append(f"<untrusted_conversation_evidence>\n{history_text}\n</untrusted_conversation_evidence>")
         if session_material_context_text.strip():

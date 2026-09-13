@@ -32,6 +32,7 @@ from app.schemas.authentication import (
     GlobalPasswordChangeResponse,
     GlobalPasswordCompletionRequest,
     GlobalPasswordLoginRequest,
+    UpdateDefaultInterviewLanguageRequest,
 )
 from app.schemas.foundation import ApiEnvelope, ModuleDescriptor
 from app.services.authentication_service import AuthenticationService
@@ -68,6 +69,7 @@ def _to_user_response(user) -> CurrentUserResponse:
             for item in user.bindings
         ],
         membershipAnchorRef=user.membership_anchor_ref,
+        defaultInterviewLanguage=getattr(user, "default_interview_language", "en-US"),
     )
 
 
@@ -293,6 +295,17 @@ async def me(
 ) -> ApiEnvelope[CurrentUserResponse]:
     user = service.get_current_user(auth_context=auth_context)
     return success_response(request=request, data=_to_user_response(user), timestamp=utc_now_iso())
+
+
+@router.patch("/me/interview-language", response_model=ApiEnvelope[CurrentUserResponse])
+async def update_default_interview_language(
+    request_context: Request,
+    request: UpdateDefaultInterviewLanguageRequest,
+    auth_context: AuthenticatedRequestContext = Depends(require_authenticated_context),
+    service: AuthenticationService = Depends(authentication_service),
+) -> ApiEnvelope[CurrentUserResponse]:
+    user = service.update_default_interview_language(auth_context=auth_context, interview_language=request.interview_language)
+    return success_response(request=request_context, data=_to_user_response(user), timestamp=utc_now_iso())
 
 
 @router.get("/sessions", response_model=ApiEnvelope[AuthSessionListResponse])

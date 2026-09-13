@@ -60,6 +60,7 @@ from app.services.session_service import SessionService
 from app.services.programming_prompt import render_programming_policy
 from app.services.billing_service import BillingService
 from app.ports.interview_session import InterviewLanguage, ProgrammingLanguage
+from app.interview_languages import get_interview_language
 
 
 def _now_ms() -> int:
@@ -111,11 +112,14 @@ class FileScreenshotPromptTemplateAdapter(ScreenshotPromptTemplatePort):
         prompt_path = Path(self.settings.screenshot_prompt_template_path)
         if not prompt_path.is_absolute():
             prompt_path = Path(__file__).resolve().parents[4] / self.settings.screenshot_prompt_template_path
-        if interview_language == "en-US":
+        if interview_language != "zh-CN":
             prompt_path = prompt_path.with_name(f"{prompt_path.stem}.en{prompt_path.suffix}")
         text = prompt_path.read_text(encoding="utf-8").strip()
+        definition = get_interview_language(interview_language)
+        if definition and interview_language not in {"zh-CN", "en-US"}:
+            text = f"{text}\n\n<output_language>{definition.output_language} only. Return concise, professional interview guidance.</output_language>"
         return text, PromptConfig(
-            template_id="screenshot-answer-en-system" if interview_language == "en-US" else "screenshot-answer-system",
+            template_id=("screenshot-answer-en-system" if interview_language == "en-US" else "screenshot-answer-system") if interview_language in {"zh-CN", "en-US"} else f"screenshot-answer-{interview_language}-system",
             version=self.settings.screenshot_prompt_version,
             max_history_entries=self.settings.screenshot_max_history_entries,
             include_retrieval_context=False,

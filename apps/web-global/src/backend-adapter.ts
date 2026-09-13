@@ -577,7 +577,7 @@ const toInterviewSummary = (session: BackendSessionResponse, fallback?: { title?
   id: session.sessionId,
   title: session.title || fallback?.title || "新的面试",
   sessionMode: session.sessionMode ?? "interview",
-  interviewLanguage: session.interviewLanguage ?? "zh-CN",
+  interviewLanguage: session.interviewLanguage ?? "en-US",
   programmingRequired: session.programmingRequired ?? false,
   programmingLanguage: session.programmingRequired ? session.programmingLanguage ?? "python" : null,
   autoAnswerEnabled: session.autoAnswerEnabled ?? false,
@@ -1293,6 +1293,13 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       body: JSON.stringify({ userId: requireUserId(), interviewLanguage }),
     }, signal);
     return toInterviewSummary(updated);
+  }
+
+  async updateDefaultInterviewLanguage(interviewLanguage: InterviewLanguage, signal?: AbortSignal) {
+    const updated = await this.client.request<import("@offersteady/protocol").SafeAccountSummary>("/api/v1/auth/me/interview-language", {
+      method: "PATCH", headers: authHeaders(), body: JSON.stringify({ interviewLanguage }),
+    }, signal);
+    return updated;
   }
 
   async updateInterviewProgramming(id: string, programmingRequired: boolean, programmingLanguage: ProgrammingLanguage | null, signal?: AbortSignal) {

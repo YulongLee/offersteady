@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
+from app.interview_languages import InterviewLanguage
+
 
 AuthSessionStatus = Literal["active", "revoked", "expired"]
 IdentityProviderKind = Literal["password", "wechat", "sms", "email", "prototype", "other"]
@@ -40,6 +42,7 @@ class UserRecord:
     updated_at_ms: int
     bindings: list[ExternalIdentityBindingRecord] = field(default_factory=list)
     membership_anchor_ref: str | None = None
+    default_interview_language: InterviewLanguage = "en-US"
 
 
 @dataclass(frozen=True)
@@ -258,6 +261,8 @@ class AuthenticationRepository(Protocol):
     def get_user_by_login_id(self, login_id: str) -> UserRecord | None: ...
 
     def get_user(self, user_id: str) -> UserRecord | None: ...
+
+    def update_default_interview_language(self, *, user_id: str, interview_language: InterviewLanguage, updated_at_ms: int) -> UserRecord | None: ...
 
     def get_user_by_provider_subject(self, *, provider: IdentityProviderKind, provider_subject: str) -> UserRecord | None: ...
 

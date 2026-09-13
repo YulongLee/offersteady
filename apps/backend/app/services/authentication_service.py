@@ -18,6 +18,7 @@ import jwt
 
 from app.core.config import Settings
 from app.core.errors import DomainRequestError
+from app.interview_languages import InterviewLanguage, get_interview_language
 from app.core.logging import log_event
 from app.ports.authentication import (
     AccessTokenCodecPort,
@@ -292,6 +293,14 @@ class AuthenticationService:
 
     def get_current_user(self, *, auth_context: AuthenticatedRequestContext) -> UserRecord:
         return self._require_user(auth_context.user_id)
+
+    def update_default_interview_language(self, *, auth_context: AuthenticatedRequestContext, interview_language: InterviewLanguage) -> UserRecord:
+        if get_interview_language(interview_language) is None:
+            raise DomainRequestError("authentication", "default-language", "Unsupported interview language.", 422, "unsupported_interview_language")
+        updated = self.repository.update_default_interview_language(user_id=auth_context.user_id, interview_language=interview_language, updated_at_ms=_now_ms())
+        if updated is None:
+            raise DomainRequestError("authentication", "default-language", "Account is no longer available.", 404, "account_not_found")
+        return updated
 
     def send_sms_code(self, *, phone_number: str, client_label: str) -> SmsChallengeRecord:
         phone_e164 = self._normalize_phone(phone_number)

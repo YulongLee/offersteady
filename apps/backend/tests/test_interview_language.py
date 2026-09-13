@@ -85,7 +85,7 @@ def test_language_update_rejects_non_owner_and_live_session() -> None:
 
 def test_language_request_rejects_unsupported_value() -> None:
     with pytest.raises(ValidationError):
-        UpdateInterviewLanguageRequest(userId="language-owner", interviewLanguage="fr-FR")
+        UpdateInterviewLanguageRequest(userId="language-owner", interviewLanguage="xx-XX")
 
 
 def test_concurrent_start_and_language_update_never_mutate_a_live_session_after_start() -> None:

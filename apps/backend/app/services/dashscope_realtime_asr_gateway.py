@@ -15,6 +15,7 @@ from app.core.config import Settings
 from app.ports.interview_session import InterviewLanguage
 from app.ports.realtime_speech import AsrUsageReport, AudioFrame, RealtimeAsrGatewayPort, TranscriptResult
 from app.services.realtime_speech_service import NonRetryableAsrError, RetryableAsrError
+from app.interview_languages import asr_language_code
 
 
 @dataclass
@@ -531,7 +532,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             "input_audio_format": "pcm",
             "sample_rate": frame.sample_rate_hz,
             "input_audio_transcription": {
-                "language": "en" if frame.interview_language == "en-US" else "zh",
+                "language": asr_language_code(frame.interview_language),
             },
         }
         if mode == "vad":

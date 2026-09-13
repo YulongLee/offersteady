@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
 
 from app.ports.authentication import AuthSessionStatus, IdentityProviderKind, WechatAuthorizationStatus
+from app.interview_languages import InterviewLanguage
 
 
 class RegisterUserRequest(BaseModel):
@@ -135,6 +136,12 @@ class CurrentUserResponse(BaseModel):
     last_login_at_ms: int = Field(alias="lastLoginAtMs")
     bindings: list[SafeIdentityBindingResponse] = Field(default_factory=list)
     membership_anchor_ref: str | None = Field(default=None, alias="membershipAnchorRef")
+    default_interview_language: InterviewLanguage = Field(default="en-US", alias="defaultInterviewLanguage")
+
+
+class UpdateDefaultInterviewLanguageRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    interview_language: InterviewLanguage = Field(alias="interviewLanguage")
 
 
 class AuthTokensResponse(BaseModel):
