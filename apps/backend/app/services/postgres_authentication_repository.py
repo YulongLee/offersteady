@@ -465,6 +465,7 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
                     REPO_ROOT / "apps/backend/migrations/versions/0030_dysmsapi_code_digest.sql",
                     REPO_ROOT / "apps/backend/migrations/versions/0039_global_email_authentication.sql",
                     REPO_ROOT / "apps/backend/migrations/versions/0041_global_password_authentication.sql",
+                    REPO_ROOT / "apps/backend/migrations/versions/0048_global_interview_language_preferences.sql",
                 ])
             connection.commit()
 
