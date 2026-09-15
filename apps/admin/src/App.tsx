@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { adminApi, isAdminAuthenticationError } from "./api";
 import { buildLinePath, chartDomain, formatTrendChange, formatTrendValue, type TrendMetric, type TrendResponse } from "./analytics";
-import { capacityLevelLabel, formatCapacityValue, type CapacityMetric, type CapacityResponse } from "./capacity";
+import { capacityLevelLabel, formatCapacityValue, hasRequestBreakdownData, requestClassLabels, type CapacityMetric, type CapacityResponse, type RequestBreakdown } from "./capacity";
 import { paymentAcceptanceOutcomeLabel, paymentChannelStatus } from "./payment-channel-status";
 import { diagnosticLabel, formatCny, type PaymentRevenueSummary } from "./payment-monitoring";
 import { formatUptime, type ServerHealthResponse } from "./server-health";
@@ -464,6 +464,7 @@ function Dashboard({ data, onAuthenticationExpired }: { data: Row; onAuthenticat
             <small>更新于 {new Date(capacity.generatedAtMs).toLocaleString("zh-CN")}</small>
           </div>
           <div className="capacity-grid">{capacity.metrics.map(metric => <CapacityCard metric={metric} key={metric.key} />)}</div>
+          {hasRequestBreakdownData(capacity.supporting.requestBreakdown) && <RequestBreakdownPanel breakdown={capacity.supporting.requestBreakdown} />}
         </> : <div className="trend-state">正在读取实时容量...</div>}
       </section>
       <section className="trend-section">
@@ -482,6 +483,31 @@ function Dashboard({ data, onAuthenticationExpired }: { data: Row; onAuthenticat
       </section>
     </>
   );
+}
+
+function RequestBreakdownPanel({ breakdown }: { breakdown: RequestBreakdown }) {
+  const summaries = Object.entries(breakdown.classes).filter((entry): entry is [keyof typeof requestClassLabels, NonNullable<typeof entry[1]>] => Boolean(entry[1]?.requestCount));
+  const series = breakdown.series || [];
+  return (
+    <section className="request-breakdown" aria-label="请求链路诊断">
+      <div className="request-breakdown-heading"><div><p className="eyebrow">REQUEST DIAGNOSTICS</p><h3>请求链路诊断</h3></div><small>仅保留最近窗口的脱敏统计</small></div>
+      <div className="request-breakdown-summary">
+        {summaries.map(([key, item]) => <article key={key}><span>{requestClassLabels[key]}</span><strong>{formatCapacityValue(item.p95Ms, "ms")}</strong><small>{item.requestCount} 次 · 5xx {item.errorCount} 次</small></article>)}
+      </div>
+      {summaries.length === 0 && breakdown.slowRoutes.length === 0 && <div className="trend-state">当前窗口暂无请求数据，产生请求后会显示分类 P95 和慢路由。</div>}
+      {series.length > 0 && <div className="request-breakdown-charts">{(Object.keys(requestClassLabels) as Array<keyof typeof requestClassLabels>).map(key => <RequestClassChart key={key} label={requestClassLabels[key]} points={series.map(point => ({ date: String(point.atMs), value: point.classes[key] ?? 0, coverage: "complete" }))} />)}</div>}
+      {breakdown.slowRoutes.length > 0 && <div className="slow-route-list"><div className="slow-route-title"><span>慢请求路由</span><small>按 P95 降序</small></div>{breakdown.slowRoutes.map(item => <div className="slow-route-row" key={`${item.class}:${item.route}`}><code>{item.route}</code><span>{requestClassLabels[item.class]}</span><strong>{formatCapacityValue(item.p95Ms, "ms")}</strong><small>{item.requestCount} 次 · 5xx {item.errorCount}</small></div>)}</div>}
+    </section>
+  );
+}
+
+function RequestClassChart({ label, points }: { label: string; points: { date: string; value: number; coverage: string }[] }) {
+  const path = buildLinePath(points, 360, 120);
+  const domain = chartDomain(points);
+  const first = points.at(0);
+  const last = points.at(-1);
+  const timeLabel = (value: string | undefined) => value ? new Date(Number(value)).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "—";
+  return <article className="request-breakdown-chart"><div><span>{label} P95</span><strong>{formatCapacityValue(last?.value ?? null, "ms")}</strong></div>{path && domain ? <svg viewBox="0 0 360 120" role="img" aria-label={`${label} P95 最近 60 分钟趋势`}><line className="chart-grid" x1="52" x2="350" y1="10" y2="10" /><line className="chart-grid" x1="52" x2="350" y1="50" y2="50" /><line className="chart-grid" x1="52" x2="350" y1="90" y2="90" /><line className="chart-axis" x1="52" x2="52" y1="10" y2="90" /><line className="chart-axis" x1="52" x2="350" y1="90" y2="90" /><text className="chart-label y" x="45" y="14">{formatCapacityValue(domain.maximum, "ms")}</text><text className="chart-label y" x="45" y="94">{formatCapacityValue(domain.minimum, "ms")}</text><text className="chart-label x" x="52" y="114">{timeLabel(first?.date)}</text><text className="chart-label x end" x="350" y="114">{timeLabel(last?.date)}</text><path className="chart-glow" d={path} /><path className="chart-line" d={path} /></svg> : <div className="capacity-empty">等待形成分钟曲线</div>}</article>;
 }
 
 function OrdersPanel({ rows, permissions, onChanged }: { rows: Row[]; permissions: string[]; onChanged: () => void }) {
@@ -517,7 +543,7 @@ function ServerMonitor({ onAuthenticationExpired }: { onAuthenticationExpired: (
   if (!health) return error ? <div className="monitor-error"><span>{error}</span><button onClick={() => setReloadKey(value => value + 1)}>重新加载</button></div> : <div className="loading">正在读取服务器状态...</div>;
   return <>
     <section className="server-hero"><div><p className="eyebrow">INFRASTRUCTURE HEALTH</p><h2>服务状态：{health.overall === "healthy" ? "正常" : health.overall === "warning" ? "需关注" : "异常"}</h2><p>每 15 秒刷新，只展示只读运行指标，不暴露密钥、连接串或用户内容。</p></div><div><strong>{formatUptime(health.supporting.uptimeSeconds)}</strong><small>主机运行时长</small><span>{display(health.supporting.requestsPerMinute)} 请求/分钟</span></div></section>
-    <section className="capacity-section"><div className="trend-heading"><div><p className="eyebrow">HOST RESOURCES</p><h2>主机资源</h2></div><small>更新于 {new Date(health.generatedAtMs).toLocaleString("zh-CN")}</small></div><div className="capacity-grid server-resources">{health.resources.map(metric => <CapacityCard metric={metric} key={metric.key} />)}</div></section>
+    <section className="capacity-section"><div className="trend-heading"><div><p className="eyebrow">HOST RESOURCES</p><h2>主机资源</h2></div><small>更新于 {new Date(health.generatedAtMs).toLocaleString("zh-CN")}</small></div><div className="capacity-grid server-resources">{health.resources.map(metric => <CapacityCard metric={metric} key={metric.key} />)}</div>{hasRequestBreakdownData(health.supporting.requestBreakdown) && <RequestBreakdownPanel breakdown={health.supporting.requestBreakdown} />}</section>
     <section className="dependency-section"><p className="eyebrow">DEPENDENCIES</p><h2>依赖服务</h2><div className="dependency-grid">{health.dependencies.map(item => <article className={item.status} key={item.key}><span className="status-dot" /><div><strong>{item.label}</strong><p>{item.detail}</p></div><small>{item.latencyMs === null ? "—" : `${item.latencyMs} ms`}</small></article>)}</div></section>
   </>;
 }

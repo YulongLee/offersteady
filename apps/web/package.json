@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:seo-p0": "node scripts/verify-seo-p0.mjs",
     "test:seo-build": "node scripts/verify-seo-build.mjs",
+    "test:route-split": "node scripts/verify-route-split.mjs",
     "review:live": "node scripts/review-live-workspace.mjs",
     "doctor:access": "node scripts/doctor-local-access.mjs"
   },

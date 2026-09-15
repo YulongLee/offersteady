@@ -61,7 +61,41 @@ ol, ul { padding-left: 1.4em; }
 .page-footer { padding: 34px 0 46px; border-top: 1px solid var(--line); }
 .page-footer nav { display: flex; flex-wrap: wrap; gap: 16px; }
 .page-footer small { display: block; margin-top: 18px; color: var(--muted); line-height: 1.7; }
+/* Core product pages share the homepage palette without restyling the guides. */
+body.conversion-page { --page: #081711; --surface: #10251d; --surface-strong: #163226; --line: #2a4438; --text: #f0f6f2; --muted: #b0c2b7; }
+.conversion-page .hero { padding: 56px 0 32px; }
+.conversion-page h1 { max-width: 880px; font-size: clamp(32px, 4.4vw, 54px); line-height: 1.24; letter-spacing: -.025em; text-wrap: balance; }
+.conversion-page .lede { max-width: 800px; margin-top: 22px; font-size: 18px; }
+.conversion-page .eyebrow { letter-spacing: .12em; margin-bottom: 16px; }
+.conversion-page .hero-actions { margin-top: 24px; }
+.conversion-page .meta-strip { border: 0; padding: 0; font-size: 13px; }
+.conversion-page .content-grid { grid-template-columns: minmax(0, 1fr) 248px; align-items: start; gap: 36px; padding-top: 14px; }
+.conversion-page .content-grid > div { min-width: 0; }
+.conversion-page .article-section { padding: 30px 0; scroll-margin-top: 24px; }
+.conversion-page .answer-block + h2 { margin-top: 28px; }
+.conversion-page h2 { font-size: clamp(24px, 2.6vw, 30px); line-height: 1.4; }
+.conversion-page .side-card { align-self: start; padding: 22px; }
+.conversion-page .side-card h2 { font-size: 18px; }
+.conversion-page .side-card nav + h2 { margin-top: 26px; }
+.conversion-page .side-card h3 { font-size: 16px; }
+.conversion-page .side-card a { font-size: 14px; line-height: 1.6; }
+.conversion-page .side-card li + li { margin-top: 2px; }
+.conversion-page .example-block { margin-top: 24px; padding: 22px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 12px; background: var(--surface); }
+.conversion-page .example-block h3 { margin-top: 0; }
+.conversion-page .example-block p:last-child { margin-bottom: 0; }
+.conversion-page .pricing-table { font-size: 14px; }
+.conversion-page .pricing-table th, .conversion-page .pricing-table td { padding: 12px 10px; }
+.conversion-page .pricing-table thead th { white-space: nowrap; }
+.conversion-page .pricing-table tbody th { white-space: nowrap; }
+.conversion-page a:focus-visible, .conversion-page main:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; }
+.conversion-page .skip-link { position: fixed; z-index: 10; top: 8px; left: 8px; padding: 12px 18px; border-radius: 8px; background: var(--accent); color: #062019; transform: translateY(-150%); }
+.conversion-page .skip-link:focus { transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 @media (max-width: 760px) {
+  .conversion-page .hero { padding: 38px 0 22px; }
+  .conversion-page .content-grid { grid-template-columns: 1fr; gap: 24px; padding-bottom: 44px; }
+  .conversion-page .hero-actions .button { width: 100%; text-align: center; padding: 12px 16px; }
+  .conversion-page .article-section { padding: 26px 0; }
   .site-header { align-items: flex-start; flex-direction: column; }
   .site-nav { justify-content: flex-start; }
   .content-grid { grid-template-columns: 1fr; }

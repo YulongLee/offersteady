@@ -1,14 +1,21 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { App } from "./App";
+import { interviewAppAdapter } from "./app-adapter";
 import type { WebAppState } from "./domain";
 import { mockSuccessfulMaterialUploadAdapter } from "./test-adapter-builders";
-import { syntheticState } from "./test-state";
+import { fixtureAdapter, syntheticState } from "./test-state";
 
 const open = (path: string, authenticated = true, mutate?: (state: WebAppState) => void) => { mockSuccessfulMaterialUploadAdapter(); const state = structuredClone(syntheticState); mutate?.(state); window.history.pushState({}, "", path); return render(<App initialAuthenticated={authenticated} initialState={state} />); };
 
 describe("optimized product experience", () => {
+  beforeEach(() => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Network access is disabled in component tests"));
+    vi.spyOn(interviewAppAdapter, "getPartnerProgramConfig").mockImplementation(signal => fixtureAdapter.getPartnerProgramConfig(signal));
+  });
+  afterEach(() => vi.restoreAllMocks());
+
   it("matches the filed website name and exposes the official filing links", () => {
     open("/", false);
     expect(document.title).toBe("AI面试助手｜实时语音识别、截图解题与个性化回答 - 面试稳");
@@ -19,27 +26,14 @@ describe("optimized product experience", () => {
     expect(publicSecurityFiling).toHaveAttribute("href", "https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=33010602014812");
     expect(publicSecurityFiling).toHaveAttribute("target", "_blank");
     expect(publicSecurityFiling).toHaveAttribute("rel", "noreferrer");
-    const hero = screen.getByRole("heading", { name: /更从容地冲刺 Offer/ }).closest("section");
+    const hero = screen.getByRole("heading", { level: 1 }).closest("section");
     expect(hero).not.toBeNull();
+    expect(within(hero!).getByRole("heading", { level: 1 })).toHaveTextContent("AI 面试助手，让你的经历更好表达。");
     expect(within(hero!).getByRole("link", { name: /免费使用/ })).toHaveAttribute("href", "/login");
-    expect(within(hero!).getByRole("link", { name: "使用手册" })).toHaveAttribute("href", "/guide");
+    const tour = document.querySelector<HTMLElement>("#product-tour")!;
+    expect(within(tour).getByRole("link", { name: /打开使用手册/ })).toHaveAttribute("href", "/guide");
     expect(hero).not.toHaveTextContent("200 点");
     expect(hero).not.toHaveTextContent("看看怎么收费");
-  });
-
-  it("renders the homepage commercial film with audio-capable user-controlled playback", () => {
-    open("/", false);
-    const section = screen.getByRole("heading", { name: /一段视频，了解面试稳/ }).closest("section");
-    expect(section).not.toBeNull();
-    const video = within(section!).getByLabelText("面试稳产品宣传片") as HTMLVideoElement;
-    expect(video).toHaveAttribute("controls");
-    expect(video.muted).toBe(true);
-    expect(video).toHaveAttribute("playsinline");
-    expect(video).toHaveAttribute("preload", "metadata");
-    expect(video).toHaveAttribute("poster", "/media/offersteady-commercial-poster.jpg");
-    expect(video).not.toHaveAttribute("autoplay");
-    expect(video.querySelector("source")).toHaveAttribute("src", "/media/offersteady-commercial.web.mp4");
-    expect(video.querySelector("source")).toHaveAttribute("type", "video/mp4");
   });
 
   it("renders a commercial footer with public documents and configured contacts", () => {
@@ -85,42 +79,72 @@ describe("optimized product experience", () => {
   });
 
   it("uses product-value messaging and exposes SMS login without pretending it is live", () => {
-    open("/", false); expect(screen.getByRole("heading", { name: /更从容地冲刺 Offer/ })).toBeInTheDocument(); expect(screen.getByRole("heading", { name: "回答更贴合你的经历" })).toBeInTheDocument();
+    open("/", false);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("AI 面试助手，让你的经历更好表达。");
+    expect(screen.getByRole("heading", { name: "回答更贴合你的经历" })).toBeInTheDocument();
     const pricing = document.querySelector<HTMLElement>("#pricing-value");
     expect(pricing).not.toBeNull();
-    expect(within(pricing!).getByText(/知识材料 20 点起/)).toBeInTheDocument();
-    expect(within(pricing!).getByText(/15 天和 30 天各含 2 份/)).toBeInTheDocument(); expect(screen.queryByText(/进入产品原型/)).not.toBeInTheDocument(); expect(document.body).not.toHaveTextContent(/保证.*Offer|唯一标准答案|完全准确/);
-    fireEvent.click(screen.getByText("查看使用与隐私说明")); expect(screen.getAllByText(/原始音频默认不保存/).length).toBeGreaterThan(0);
+    const knowledgeRate = within(pricing!).getByText("知识材料", { selector: "dt" }).parentElement!;
+    expect(knowledgeRate).toHaveTextContent(`${syntheticState.billing.rates.knowledgeIndexMinimumPoints} 点起`);
+    const plans = within(pricing!).getByRole("group", { name: "按天会员套餐" });
+    for (const pass of syntheticState.billing.catalog.filter(item => item.kind === "time_pass" && item.published)) {
+      fireEvent.click(within(plans).getByRole("button", { name: `${pass.durationDays} 天 ¥${(pass.priceCents / 100).toFixed(2)}` }));
+      const benefits = within(pricing!).getByRole("region", { name: "当前会员权益" });
+      expect(benefits).toHaveTextContent((pass.knowledgeIndexAllowance ?? 0) > 0
+        ? `含 ${pass.knowledgeIndexAllowance} 份知识材料额度`
+        : "知识材料按实际用量另行计费");
+    }
+    expect(screen.queryByText(/进入产品原型/)).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/保证.*Offer|唯一标准答案|完全准确/);
+    const privacy = screen.getByText("使用面试稳会造成信息泄露吗？").closest("details")!;
+    expect(privacy).not.toHaveAttribute("open");
+    fireEvent.click(within(privacy).getByText("使用面试稳会造成信息泄露吗？"));
+    expect(privacy).toHaveAttribute("open");
+    expect(within(privacy).getByText(/默认不保存原始音频/)).toBeVisible();
+    expect(within(privacy).getByRole("link", { name: "隐私政策" })).toHaveAttribute("href", "/privacy");
     fireEvent.click(screen.getAllByRole("link", { name: /免费使用/ })[0]!); expect(screen.getByRole("button", { name: /获取验证码/ })).toBeInTheDocument(); expect(screen.getByText(/手机号验证码/)).toBeInTheDocument();
   });
 
   it("opens the user guide from the public homepage without requiring login", () => {
     open("/", false);
-    const hero = screen.getByRole("heading", { name: /更从容地冲刺 Offer/ }).closest("section");
-    fireEvent.click(within(hero!).getByRole("link", { name: "使用手册" }));
+    const tour = document.querySelector<HTMLElement>("#product-tour")!;
+    fireEvent.click(within(tour).getByRole("link", { name: /打开使用手册/ }));
+    expect(window.location.pathname).toBe("/guide");
     expect(screen.getByRole("heading", { name: "使用说明" })).toBeInTheDocument();
     expect(document.title).toBe("面试稳AI助手使用手册｜安装、收音、截图回答与支付说明");
     expect(screen.getByPlaceholderText(/Windows、支付未到账/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "免费使用" })).toHaveAttribute("href", "/login");
   });
 
-  it("presents six truthful core capabilities in an accessible responsive grid", () => {
+  it("presents four approved product benefits in an accessible responsive grid", () => {
     open("/", false);
-    const section = screen.getByRole("heading", { name: "面试稳AI助手核心功能" }).closest("section");
+    const section = screen.getByRole("heading", { name: "从听清问题，到讲清自己" }).closest("section");
     expect(section).not.toBeNull();
-    expect(within(section!).getAllByRole("article")).toHaveLength(6);
-    ["实时面试辅助", "截图题快速回答", "个性化知识库", "简历与 JD 上下文", "面试记录与复盘", "跨设备伴随使用"].forEach(title => {
-      expect(within(section!).getByRole("heading", { name: title })).toBeInTheDocument();
-    });
-    expect(section!.querySelectorAll('.core-capability-icon[aria-hidden="true"] svg')).toHaveLength(6);
+    expect(within(section!).getAllByRole("article")).toHaveLength(4);
+    const benefits = [
+      ["跟上每一个问题", /转写.*声音/],
+      ["回答更贴合你的经历", /简历、JD 和知识材料/],
+      ["截图题，也有思路", /截图|截取题目/],
+      ["让下一场准备更充分", /回看问题.*回答建议.*资料来源/],
+    ] as const;
+    for (const [title, description] of benefits) {
+      const card = within(section!).getByRole("heading", { name: title }).closest("article")!;
+      expect(card).toHaveTextContent(description);
+      expect(card.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(1);
+    }
     expect(section).not.toHaveTextContent(/99%|保证.*Offer|绝对隐蔽|面试猫/);
-    const styles = readFileSync("src/styles.css", "utf8");
-    expect(styles).toMatch(/\.core-capabilities-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s);
-    expect(styles).toMatch(/@media\s*\(max-width:\s*720px\)[\s\S]*\.core-capabilities-grid\s*\{\s*grid-template-columns:\s*1fr;/);
+    const styles = readFileSync("src/homepage-commercial.css", "utf8");
+    expect(styles).toMatch(/\.cn-benefits\s*\{[^}]*grid-template-columns:\s*repeat\(4,/s);
+    expect(styles).toMatch(/@media\s*\(max-width:\s*850px\)[\s\S]*\.cn-benefits\s*\{[^}]*grid-template-columns:\s*repeat\(2,/);
+    expect(styles).toMatch(/@media\s*\(max-width:\s*600px\)[\s\S]*\.cn-benefits\s*\{\s*grid-template-columns:\s*1fr;/);
   });
 
   it("presents common interview platforms without claiming universal or official integration", () => {
     open("/", false);
+    const disclosure = screen.getByText("更多岗位与常见使用平台").closest("details")!;
+    expect(disclosure).not.toHaveAttribute("open");
+    fireEvent.click(within(disclosure).getByText("更多岗位与常见使用平台"));
+    expect(disclosure).toHaveAttribute("open");
     const section = screen.getByRole("heading", { name: "适配常见远程面试与在线笔试平台" }).closest("section");
     expect(section).not.toBeNull();
     expect(within(section!).getAllByRole("listitem")).toHaveLength(10);
@@ -161,7 +185,7 @@ describe("optimized product experience", () => {
     expect(styles).toMatch(/@media\s*\(max-width:\s*720px\)[\s\S]*\.user-scenarios-grid\s*\{\s*grid-template-columns:\s*1fr;/);
   });
 
-  it("shows the requested commercial metrics without exposing the welcome-point amount", () => {
+  it("keeps FAQs truthful and configuration-driven without unsupported metrics or welcome-point marketing", () => {
     open("/", false, state => {
       state.billing = {
         ...state.billing,
@@ -171,26 +195,39 @@ describe("optimized product experience", () => {
       };
     });
     const section = screen.getByRole("region", { name: "产品信息与常见问题" });
-    const facts = within(section).getByLabelText("产品数据");
-    expect(facts.querySelectorAll("article")).toHaveLength(4);
-    expect(facts).toHaveTextContent("10W+");
-    expect(facts).toHaveTextContent("98%");
-    expect(facts).toHaveTextContent("1W+");
-    expect(facts).toHaveTextContent("100+");
-    expect(facts).not.toHaveTextContent(/300 点|免费使用积分/);
-    expect(document.querySelector("main")).not.toHaveTextContent(/200\s*点/);
+    expect(within(section).queryByLabelText("产品数据")).toBeNull();
+    expect(document.querySelector("main")).not.toHaveTextContent(/10W\+|98%|1W\+|100\+|(?:200|300)\s*点|新用户赠送|免费使用积分/);
+    const pricing = document.querySelector<HTMLElement>("#pricing-value")!;
+    for (const [label, rate] of [["回答建议", 7], ["截图回答", 18], ["知识材料", 25]] as const) {
+      expect(within(pricing).getByText(label, { selector: "dt" }).parentElement).toHaveTextContent(`${rate} 点起`);
+    }
     const faq = within(section).getByRole("heading", { name: "常见问题" }).closest<HTMLElement>("div.public-faq");
     expect(faq).not.toBeNull();
-    expect(faq!.querySelectorAll("details")).toHaveLength(6);
-    expect(within(faq!).getByText(/具体可用权益和后续使用方式/)).toBeInTheDocument();
-    expect(within(faq!).getByText(/支付宝。实际可用方式/)).toBeInTheDocument();
-    const firstDetails = faq!.querySelector("details")!;
-    expect(firstDetails).toHaveAttribute("open");
-    fireEvent.click(within(firstDetails).getByText("面试稳AI助手适合哪些岗位？"));
-    expect(firstDetails).not.toHaveAttribute("open");
-    const styles = readFileSync("src/styles.css", "utf8");
-    expect(styles).toMatch(/\.product-facts-grid\s*\{[^}]*grid-template-columns:\s*repeat\(4,/s);
-    expect(styles).toMatch(/@media\s*\(max-width:\s*720px\)[\s\S]*\.product-facts-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,/);
+    const answers = [
+      ["面试稳是什么？", /面向求职者的AI面试助手/],
+      ["AI 面试助手如何工作？", /核对事实.*自己的语言/],
+      ["面试稳如何收费？", /无需登录即可查看/],
+      ["面试稳AI助手适合哪些岗位？", /不能保证面试或录用结果/],
+      ["面试稳可以免费使用吗？", /具体可用权益和后续使用方式/],
+      ["支持哪些问题输入方式？", /语音输入.*手动输入.*截图题回答/],
+      ["支持哪些设备平台？", /macOS Apple Silicon.*macOS Intel.*Windows/],
+      ["支持哪些支付方式？", /支付宝。实际可用方式/],
+      ["使用面试稳会造成信息泄露吗？", /默认不保存原始音频/],
+    ] as const;
+    for (const [question, answer] of answers) {
+      const summary = within(faq!).getByText(question).closest("summary")!;
+      const details = summary.closest("details")!;
+      expect(details).not.toHaveAttribute("open");
+      fireEvent.click(summary);
+      expect(details).toHaveAttribute("open");
+      expect(within(details).getByText(answer)).toBeVisible();
+      fireEvent.click(summary);
+      expect(details).not.toHaveAttribute("open");
+    }
+    const pricingFaq = within(faq!).getByText("面试稳如何收费？").closest("details")!;
+    expect(pricingFaq.querySelector('a[href="/pricing"]')).not.toBeNull();
+    const paymentFaq = within(faq!).getByText("支持哪些支付方式？").closest("details")!;
+    expect(paymentFaq).not.toHaveTextContent("微信支付");
   });
 
   it("exposes directly accessible legal pages and links them from login", () => {

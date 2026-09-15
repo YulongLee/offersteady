@@ -1,4 +1,5 @@
 import { lazy } from "react";
+export { LivePage, preloadLivePage } from "./live-route-loader";
 
 export const DownloadCenter = lazy(() => import("./DownloadCenter").then(module => ({ default: module.DownloadCenter })));
 export const LibraryManager = lazy(() => import("./LibraryManager").then(module => ({ default: module.LibraryManager })));

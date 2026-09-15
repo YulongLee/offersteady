@@ -122,7 +122,8 @@ assert.match(robots, /Sitemap: https:\/\/mianshiwen\.cn\/sitemap\.xml/);
 const sitemapEntries = [...sitemap.matchAll(/<url>\s*<loc>(https:\/\/mianshiwen\.cn(?:\/[^<]*)?)<\/loc>\s*<lastmod>(\d{4}-\d{2}-\d{2})<\/lastmod>/g)].map((match) => ({ url: new URL(match[1]), lastmod: match[2] }));
 assert.deepEqual(new Set(sitemapEntries.map(({ url }) => url.pathname)), new Set(publicEntries.keys()));
 assert.equal(sitemapEntries.length, publicEntries.size);
-assert.ok(sitemapEntries.every(({ lastmod }) => lastmod === "2026-08-19"));
+const updatedCorePages = new Set(["/pricing", "/download", "/features/realtime-interview", "/features/ai-interview-assistant"]);
+assert.ok(sitemapEntries.every(({ url, lastmod }) => lastmod === (updatedCorePages.has(url.pathname) ? "2026-09-12" : url.pathname === "/" ? "2026-09-08" : "2026-08-19")));
 assert.doesNotMatch(sitemap, /\/login|\/app/);
 
 const discoveryHtml = `${indexHtml}\n${guideHtml}\n${[...hubRoutes.keys()].map((route) => topicDocuments.get(route)).join("\n")}`;
@@ -148,7 +149,7 @@ for (const url of ["https://mianshiwen.cn/guide", "https://mianshiwen.cn/privacy
 }
 
 assert.match(notFound, /<meta name="robots" content="noindex, follow"\s*\/>/);
-assert.match(nginx, /if \(\$host = www\.mianshiwen\.cn\)[\s\S]*?return 308 https:\/\/mianshiwen\.cn\$request_uri;/);
+assert.ok(nginx.includes('if ($redirect_public_www) { return 308 https://mianshiwen.cn$request_uri; }'));
 assert.ok(nginx.includes("location ~ ^/features/(ai-interview-assistant|realtime-interview|screenshot-answer|interview-review)/?$"));
 assert.ok(nginx.includes("location ~ ^/(features|guides|interview-questions)/?$"));
 assert.ok(nginx.includes("location ~ ^/(pricing|download|security|about|contact)/?$"));
@@ -157,7 +158,9 @@ assert.ok(nginx.includes("location ~ ^/interview-questions/(llm|rag|ai-agent)/?$
 assert.ok(nginx.includes("location ~ ^/interview-questions/(java-backend|frontend|algorithms)/?$"));
 for (const resource of ["llms.txt", "llms-full.txt", "public-facts.json"]) assert.ok(nginx.includes(`location = /${resource}`), `Missing Nginx route for ${resource}`);
 assert.match(nginx, /location ~\* "\^\/assets\/[\s\S]*?Cache-Control "public, max-age=31536000, immutable"/);
-assert.match(nginx, /location ~ \^\/\(\?:login\|terms\|privacy\|error\|invite\/[\s\S]*?Cache-Control "no-store"[\s\S]*?X-Robots-Tag "noindex, follow"/);
+assert.ok(nginx.includes('location ~ ^/(?:login|error|invite/'));
+assert.ok(nginx.includes('add_header X-Robots-Tag "noindex, follow" always;'));
+assert.ok(nginx.includes('location ~ ^/(terms|privacy)/?$'));
 assert.match(nginx, /location \/\s*\{\s*return 404;/);
 assert.doesNotMatch(nginx, /try_files \$uri \$uri\/ \/index\.html/);
 

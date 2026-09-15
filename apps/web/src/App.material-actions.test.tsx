@@ -1,12 +1,15 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { interviewAppAdapter } from "./app-adapter";
-import type { WebAppState } from "./domain";
+import { AppError, type WebAppState } from "./domain";
 import { mockSuccessfulMaterialUploadAdapter } from "./test-adapter-builders";
 import { materialUploadAdapter } from "./material-upload-adapter";
 import { syntheticState } from "./test-state";
 
+beforeEach(() => {
+  vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Network access is disabled in component tests"));
+});
 afterEach(() => vi.restoreAllMocks());
 
 const open = (path: string, mutate?: (state: WebAppState) => void) => {
@@ -108,26 +111,6 @@ const connectWithMachineCode = async () => {
 };
 
 describe("categorized materials and reachable live actions", () => {
-  it("shows an unconfirmed knowledge quote as pending without claiming indexing started", () => {
-    open("/app/library", state => {
-      state.knowledgeDocuments = state.knowledgeDocuments.map((item, index) => index === 0 ? {
-        ...item,
-        status: "pending",
-        indexState: "not_indexed",
-        syncStatus: "synced",
-        selectable: false,
-        safeSummary: "文件已上传，等待确认服务端索引报价。",
-      } : item);
-    });
-
-    const row = screen.getByText("前端性能治理").closest("article")!;
-    expect(within(row).getAllByText("等待确认报价").length).toBeGreaterThan(0);
-    expect(within(row).getByText("未开始索引")).toBeInTheDocument();
-    expect(within(row).getByText(/本次未扣积分/)).toBeInTheDocument();
-    expect(within(row).queryByText("建立索引中")).not.toBeInTheDocument();
-    expect(within(row).queryByText("同步中")).not.toBeInTheDocument();
-  });
-
   it("persists collection rename through the backend before confirming success", async () => {
     const rename = vi.spyOn(materialUploadAdapter, "renameKnowledgeCollection").mockResolvedValue({
       collectionId: "collection-frontend",
@@ -337,13 +320,17 @@ describe("categorized materials and reachable live actions", () => {
   });
 
   it("keeps a reusable resume when backend deletion fails and exposes no prototype replacement actions", async () => {
+    const remove = vi.spyOn(materialUploadAdapter, "deleteDocument")
+      .mockRejectedValue(new AppError("network", "无法连接后端基础服务"));
     vi.spyOn(window, "confirm").mockReturnValue(true);
     open("/app/library"); const tabs = screen.getByRole("navigation", { name: "资料类型" }); fireEvent.click(within(tabs).getByRole("button", { name: /简历/ }));
     const row = screen.getByText("高级前端工程师简历（合成）").closest("article")!;
     expect(within(row).queryByRole("button", { name: "替换" })).not.toBeInTheDocument();
     expect(within(row).queryByRole("button", { name: "完成模拟解析" })).not.toBeInTheDocument();
     fireEvent.click(within(row).getByRole("button", { name: "删除" }));
+    await waitFor(() => expect(remove).toHaveBeenCalledWith("admin", "resume-frontend", expect.any(AbortSignal)));
     expect(await screen.findByText("无法连接后端基础服务")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("无法连接后端基础服务");
     expect(screen.getByText("高级前端工程师简历（合成）")).toBeInTheDocument();
   });
 

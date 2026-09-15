@@ -1,4 +1,4 @@
-import type { CapacityMetric } from "./capacity";
+import type { CapacityMetric, RequestBreakdown } from "./capacity";
 
 export type DependencyHealth = {
   key: string;
@@ -15,7 +15,7 @@ export type ServerHealthResponse = {
   overall: "healthy" | "warning" | "critical";
   resources: CapacityMetric[];
   dependencies: DependencyHealth[];
-  supporting: { uptimeSeconds: number | null; requestsPerMinute: number | null };
+  supporting: { uptimeSeconds: number | null; requestsPerMinute: number | null; requestBreakdown?: RequestBreakdown };
 };
 
 export const formatUptime = (seconds: number | null | undefined) => {
@@ -24,4 +24,3 @@ export const formatUptime = (seconds: number | null | undefined) => {
   const hours = Math.floor((seconds % 86_400) / 3_600);
   return days ? `${days} 天 ${hours} 小时` : `${hours} 小时`;
 };
-

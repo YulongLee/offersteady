@@ -11,6 +11,13 @@ export type CapacityMetric = {
   description: string;
   points: CapacityPoint[];
 };
+export type RequestClassSummary = { requestCount: number; p95Ms: number; errorCount: number; errorRate: number };
+export type SlowRouteDiagnostic = RequestClassSummary & { route: string; class: "user_api" | "telemetry" | "recovery_snapshot" | "sse_stream" };
+export type RequestBreakdown = {
+  classes: Partial<Record<"user_api" | "telemetry" | "recovery_snapshot" | "sse_stream", RequestClassSummary>>;
+  slowRoutes: SlowRouteDiagnostic[];
+  series?: Array<{ atMs: number; classes: Partial<Record<"user_api" | "telemetry" | "recovery_snapshot" | "sse_stream", number>> }>;
+};
 export type CapacityResponse = {
   generatedAtMs: number;
   sampleIntervalSeconds: number;
@@ -20,7 +27,19 @@ export type CapacityResponse = {
     activeUsers: number | null;
     requestsPerMinute: number | null;
     databaseConnectionLimit: number | null;
+    requestBreakdown?: RequestBreakdown;
   };
+};
+
+export const requestClassLabels: Record<keyof RequestBreakdown["classes"], string> = {
+  user_api: "用户请求",
+  telemetry: "后台遥测",
+  recovery_snapshot: "恢复快照",
+  sse_stream: "实时流",
+};
+
+export const hasRequestBreakdownData = (breakdown: RequestBreakdown | undefined): breakdown is RequestBreakdown => {
+  return Boolean(breakdown);
 };
 
 export const formatCapacityValue = (value: number | null, unit: string): string => {

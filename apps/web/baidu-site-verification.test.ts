@@ -12,6 +12,9 @@ describe("Baidu site verification", () => {
     const head = sourceHtml.match(/<head>([\s\S]*?)<\/head>/)?.[1] ?? "";
 
     expect(head).toContain(marker);
-    expect(sourceHtml.match(/name="baidu-site-verification"/g)).toHaveLength(1);
+    expect(head).toContain('<meta name="baidu-site-verification" content="codeva-Z0cblvEvbJ" />');
+    expect(sourceHtml.match(/codeva-QBTtniJaXE/g)).toHaveLength(1);
+    expect(sourceHtml.match(/codeva-Z0cblvEvbJ/g)).toHaveLength(1);
+    expect(sourceHtml.match(/name="baidu-site-verification"/g)).toHaveLength(2);
   });
 });

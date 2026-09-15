@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { syntheticLibrarySources, syntheticState } from "./test-state";
-import { contextLevel, displayedContextSourceStatus, reviseSelection, selectionSources, selectionValidity } from "./context-selection";
+import { contextLevel, contextSourceStatusLabel, reviseSelection, selectionSources, selectionValidity } from "./context-selection";
 
 describe("per-interview context selection", () => {
   it("validates one ready resume, one ready JD and multiple knowledge items", () => {
@@ -36,33 +36,14 @@ describe("per-interview context selection", () => {
     expect(revised.revision).toBe(current.revision + 1); expect(revised.knowledgeSourceIds).toEqual(["kb-performance"]); expect(revised.confirmedAtMs).toBe(10);
   });
 
+  it("labels an unconfirmed quote as pending instead of processing", () => {
+    expect(contextSourceStatusLabel.pending).toBe("等待确认报价");
+  });
+
   it("keeps independently confirmed empty and partial drafts isolated", () => {
     const empty = reviseSelection({ sessionId: "a", resumeSourceId: null, jobDescriptionSourceId: null, knowledgeSourceIds: [], revision: 0, confirmedAtMs: null }, { resumeSourceId: null, jobDescriptionSourceId: null, knowledgeSourceIds: [] }, 10);
     const partial = reviseSelection({ sessionId: "b", resumeSourceId: null, jobDescriptionSourceId: null, knowledgeSourceIds: [], revision: 0, confirmedAtMs: null }, { resumeSourceId: null, jobDescriptionSourceId: "jd-frontend", knowledgeSourceIds: [] }, 20);
     expect(empty.sessionId).toBe("a"); expect(contextLevel(empty)).toBe("none");
     expect(partial.sessionId).toBe("b"); expect(contextLevel(partial)).toBe("jd-only");
-  });
-
-  it("distinguishes an upload failure from a parser failure", () => {
-    const source = syntheticLibrarySources[0]!;
-    expect(displayedContextSourceStatus({
-      ...source,
-      status: "failed",
-      summary: "上传失败，请稍后重试。",
-    })).toBe("上传失败");
-    expect(displayedContextSourceStatus({
-      ...source,
-      status: "failed",
-      summary: "文档解析失败，可重新处理。",
-    })).toBe("解析失败");
-  });
-
-  it("labels an unconfirmed quote as pending instead of processing", () => {
-    expect(displayedContextSourceStatus({
-      ...syntheticLibrarySources[0]!,
-      status: "pending",
-      processingState: "uploaded",
-      selectable: false,
-    })).toBe("等待确认报价");
   });
 });

@@ -1,0 +1,209 @@
+/* Domestic marketing homepage only; business and overseas views are unchanged. */
+.cn-commercial-home { --home-muted: #adb9c6; }
+.cn-home-shell > .public-nav { display: flex; height: 80px; gap: 24px; flex-wrap: nowrap; }
+.cn-home-shell > .public-nav nav { gap: 24px; width: auto; }
+.cn-home-shell > .public-nav .partner-nav-entry { margin: 0; padding: 0; border: 0; background: transparent; color: #9aaab6; }
+.cn-commercial-home .kicker { font-size: 11px; letter-spacing: .12em; }
+.cn-commercial-home .landing-hero { grid-template-columns: minmax(0,1fr) minmax(0,1fr); min-height: 0; gap: 56px; padding: 64px 0 72px; }
+.cn-commercial-home .landing-hero h1 { max-width: none; margin: 20px 0 24px; font-size: clamp(34px,3.15vw,46px); line-height: 1.3; letter-spacing: -.045em; }
+.cn-commercial-home .landing-hero h1 em { font-style: normal; color: var(--brand); }
+.cn-commercial-home .landing-hero > div:first-child > p { max-width: 500px; margin: 0 0 28px; color: #b7c3ce; font-size: 16px; line-height: 1.85; }
+.cn-commercial-home .hero-actions { gap: 24px; }
+.cn-commercial-home .hero-actions .button { padding-inline: 28px; font-size: 14px; }
+.cn-commercial-home .text-link { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; }
+.cn-commercial-home .landing-hero > div:first-child > p.cn-hero-note { margin: 18px 0 0; font-size: 12px; color: var(--home-muted); }
+.cn-hero-downloads { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; width: min(360px,100%); gap: 12px; margin-top: 22px; }
+.cn-download-button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 48px; padding: 0 16px; border: 1px solid #34434c; border-radius: 10px; background: #111b23; color: #dceae5; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; list-style: none; }
+.cn-download-button:hover { border-color: var(--brand); color: var(--brand); background: #132720; }
+.cn-download-button:disabled { opacity: .5; cursor: not-allowed; }
+.cn-download-button::-webkit-details-marker { display: none; }
+.cn-mac-download { position: relative; min-width: 0; }
+.cn-mac-download[open] summary { border-color: var(--brand); }
+.cn-mac-download:not([open]) .cn-mac-options { display: none; }
+.cn-mac-options { position: absolute; top: 56px; right: 0; z-index: 8; width: 200px; max-width: calc(100vw - 32px); padding: 8px; border: 1px solid #385248; border-radius: 12px; background: #101b20; box-shadow: 0 15px 35px #0008; }
+.cn-mac-options a { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 0 12px; border-radius: 8px; color: #dff8ee; font-size: 13px; font-weight: 600; text-decoration: none; }
+.cn-mac-options a:hover { background: #1c342d; }
+.cn-product-preview { min-width: 0; margin: 0; border: 1px solid #33454d; border-radius: 14px; background: #101821; overflow: hidden; }
+.cn-preview-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.cn-preview-switch { display: flex; gap: 4px; }
+.cn-preview-switch button, .cn-preview-expand { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; font: inherit; font-size: 13px; }
+.cn-preview-switch button { cursor: pointer; padding: 0 12px; border: 0; border-radius: 7px; background: transparent; color: #b7c4cf; }
+.cn-preview-switch button[aria-pressed="true"] { background: #1a332e; color: var(--brand); }
+.cn-preview-switch button:hover { color: var(--text); }
+.cn-preview-expand { color: #bdc9d2; white-space: nowrap; text-decoration: none; }
+/* Focus on the actual answer pane; the original, unedited capture stays linked. */
+.cn-preview-image { display: block; aspect-ratio: 1.58; overflow: hidden; background: #080d13; }
+.cn-preview-image img { display: block; width: 175%; max-width: none; height: auto; transform: translate(-42.5%, -7.5%); }
+.cn-product-preview figcaption { padding: 18px 20px; border-top: 1px solid var(--line); }
+.cn-product-preview figcaption strong { display: block; font-size: 16px; line-height: 1.5; }
+.cn-product-preview figcaption p { margin: 5px 0 8px; color: var(--home-muted); font-size: 13px; line-height: 1.6; }
+.cn-product-preview figcaption > span { color: #9aaab6; font-size: 11px; }
+.cn-commercial-home :is(a, button, summary):focus-visible { outline: 2px solid var(--brand); outline-offset: 4px; }
+.cn-commercial-home .cn-preview-image:focus-visible { outline-offset: -3px; }
+.cn-commercial-home .public-section { padding-block: 72px; }
+.cn-commercial-home .section-intro { max-width: 760px; margin-bottom: 32px; }
+.cn-commercial-home .section-intro h2, .cn-commercial-home .public-faq-intro h2 { margin: 14px 0 12px; font-size: clamp(28px,2.6vw,36px); line-height: 1.35; letter-spacing: -.035em; }
+.cn-commercial-home .section-intro p { margin: 0; color: var(--home-muted); font-size: 15px; line-height: 1.8; }
+.cn-commercial-home #core-capabilities { padding-block: 40px 48px; }
+.cn-commercial-home #core-capabilities .section-intro { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 24px; max-width: none; margin-bottom: 28px; }
+.cn-commercial-home #core-capabilities .section-intro > .kicker { display: none; }
+.cn-commercial-home #core-capabilities .section-intro h2 { font-size: 26px; margin: 0; }
+.cn-benefits { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); }
+.cn-benefits article { min-width: 0; padding: 0 24px; border-left: 1px solid var(--line); }
+.cn-benefits article:first-child { padding-left: 0; border-left: 0; }
+.cn-benefits svg { color: var(--brand); margin-bottom: 14px; }
+.cn-benefits h3 { margin: 0 0 10px; font-size: 17px; line-height: 1.5; }
+.cn-benefits p { margin: 0; color: var(--home-muted); font-size: 14px; line-height: 1.8; }
+.cn-tour-layout { display: grid; grid-template-columns: minmax(0,.85fr) minmax(0,1.15fr); gap: 64px; align-items: center; }
+.cn-commercial-home .cn-tour-layout .section-intro { margin: 0; }
+.cn-tour-steps { margin-top: 24px; display: grid; gap: 22px; }
+.cn-tour-steps > div { display: grid; grid-template-columns: 28px 1fr; gap: 14px; }
+.cn-tour-steps > div > span { color: var(--brand); font-size: 12px; padding-top: 4px; }
+.cn-tour-steps h3 { margin: 0 0 6px; font-size: 16px; }
+.cn-commercial-home .cn-tour-steps p { font-size: 14px; }
+.cn-tour-layout .text-link { margin-top: 20px; }
+.cn-tour-caption { display: block; margin-top: 12px; color: var(--home-muted); font-size: 12px; }
+.cn-commercial-home .landing-film-frame { margin: 0; padding: 6px; border: 1px solid #34414b; border-radius: 12px; background: #080d13; box-shadow: none; }
+.cn-commercial-home .landing-film-frame video { width: 100%; height: auto; aspect-ratio: 16 / 9; border-radius: 8px; object-fit: contain; }
+.cn-film-details { margin-top: 32px; border-top: 1px solid var(--line); }
+.cn-film-details > summary { display: flex; align-items: center; justify-content: space-between; min-height: 52px; list-style: none; cursor: pointer; color: #bcc9d2; font-size: 13px; }
+.cn-film-details > summary::-webkit-details-marker { display: none; }
+.cn-film-details[open] > summary svg { transform: rotate(180deg); }
+.cn-film-details:not([open]) > div { display: none; }
+.cn-film-details > .landing-film-frame { max-width: 840px; margin: 0 auto; }
+.cn-pricing-layout { display: grid; grid-template-columns: minmax(0,.72fr) minmax(0,1.28fr); border: 1px solid #33434a; border-radius: 16px; overflow: hidden; }
+.cn-flexible-plan { padding: 36px; background: #10171e; }
+.cn-pricing-layout h3 { margin: 12px 0 16px; font-size: 24px; letter-spacing: -.025em; }
+.cn-flexible-plan > p { max-width: 320px; font-size: 14px; color: var(--home-muted); line-height: 1.8; }
+.cn-rate-list { margin: 28px 0 18px; }
+.cn-rate-list > div { display: flex; justify-content: space-between; gap: 16px; padding: 17px 0; border-bottom: 1px solid var(--line); align-items: baseline; }
+.cn-rate-list dt { color: #c5cfd7; font-size: 14px; }
+.cn-rate-list dd { margin: 0; color: var(--text); font-size: 24px; font-weight: 600; }
+.cn-rate-list dd span { font-size: 12px; font-weight: 400; color: var(--home-muted); }
+.cn-flexible-plan small { display: block; color: var(--home-muted); font-size: 12px; }
+.cn-flexible-plan > a { color: var(--brand); margin-top: 24px; border: 0; }
+.cn-membership-plan { padding: 36px; background: #14221f; border-left: 1px solid #33434a; }
+.cn-membership-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 20px; }
+.cn-membership-heading > a { font-size: 12px; color: #b7c9c1; white-space: nowrap; display: inline-flex; align-items: center; min-height: 44px; }
+.cn-duration-options { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; margin: 12px 0 24px; }
+.cn-duration-options button { display: grid; justify-items: center; gap: 6px; min-height: 76px; padding: 12px 4px; font: inherit; border: 1px solid #40554d; border-radius: 8px; color: #d0ded7; background: transparent; cursor: pointer; }
+.cn-duration-options button strong { font-size: 15px; font-weight: 600; }
+.cn-duration-options button span { font-size: 12px; }
+.cn-duration-options button[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: #072b20; }
+.cn-duration-options button:hover:not([aria-pressed="true"]) { border-color: var(--brand); }
+.cn-member-price { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.cn-member-price > div > span { font-size: 14px; color: #c1d2c9; }
+.cn-member-price p { margin: 8px 0 0; }
+.cn-member-price strong { font-size: 44px; letter-spacing: -.04em; line-height: 1.2; }
+.cn-member-price p > span, .cn-duration-caption { font-size: 13px; color: #b8c9c0; }
+.cn-member-benefits { list-style: none; margin: 24px 0; padding: 0; display: grid; gap: 12px; }
+.cn-member-benefits li { display: flex; gap: 10px; font-size: 14px; line-height: 1.6; }
+.cn-member-benefits svg { color: var(--brand); flex-shrink: 0; margin-top: 2px; }
+.cn-member-action { min-height: 48px; width: 100%; font-size: 14px; }
+.cn-member-limits { margin: 16px 0 0; color: #adc0b6; font-size: 12px; line-height: 1.8; }
+.cn-catalog-unavailable { font-size: 14px; line-height: 1.8; }
+.cn-purchase-note { display: flex; justify-content: space-between; align-items: start; gap: 32px; margin-top: 20px; }
+.cn-purchase-note p { max-width: 850px; margin: 0; color: var(--home-muted); font-size: 12px; line-height: 1.9; }
+.cn-purchase-note > a { display: inline-flex; min-height: 44px; align-items: center; flex-shrink: 0; color: var(--brand); font-size: 12px; }
+.cn-scenario-paths { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 40px; }
+.cn-scenario-paths > a { padding: 4px 0 28px; text-decoration: none; }
+.cn-scenario-paths svg { color: var(--brand); }
+.cn-scenario-paths h3 { margin: 16px 0 10px; font-size: 18px; }
+.cn-scenario-paths p { color: var(--home-muted); font-size: 14px; line-height: 1.8; }
+.cn-scenario-paths span { display: inline-flex; align-items: center; min-height: 44px; color: var(--brand); font-size: 13px; }
+.cn-scenario-paths a:hover h3 { color: var(--brand); }
+.cn-more-scenarios > details { border-top: 1px solid var(--line); }
+.cn-more-scenarios > details > summary { cursor: pointer; padding: 20px 0; color: #b9c6d0; font-size: 14px; }
+.cn-more-scenarios > details:not([open]) > :not(summary) { display: none; }
+.cn-more-scenarios .public-section { padding-block: 32px; }
+.cn-commercial-home .public-faq { width: 100%; margin: 0; display: grid; grid-template-columns: minmax(0,.65fr) minmax(0,1.35fr); gap: 64px; align-items: start; }
+.cn-commercial-home .public-faq-intro { text-align: left; margin: 0; }
+.cn-commercial-home .public-faq-intro p { color: var(--home-muted); font-size: 14px; }
+.cn-commercial-home .public-faq-intro .text-link { margin-top: 20px; }
+.cn-commercial-home .public-faq-list { gap: 0; border-top: 1px solid #34414b; }
+.cn-commercial-home .public-faq-list details { border: 0; border-bottom: 1px solid #34414b; border-radius: 0; background: transparent; }
+.cn-commercial-home .public-faq-list summary { min-height: 60px; padding: 16px 0; font-size: 15px; font-weight: 500; }
+.cn-commercial-home .public-faq-list details > div { border: 0; padding: 0 24px 18px 0; }
+.cn-commercial-home .public-faq-list details p { margin: 0; color: #c0ccd6; font-size: 14px; line-height: 1.9; }
+.cn-closing { padding: 40px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-radius: 12px; background: #122720; }
+.cn-closing h2 { font-size: 32px; margin: 12px 0; line-height: 1.4; }
+.cn-closing p { margin: 0; color: #b7cbbf; font-size: 14px; }
+.cn-closing .button { flex-shrink: 0; }
+.cn-partner-inline { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 12px; padding: 20px 0 28px; font-size: 13px; }
+.cn-partner-inline p { color: var(--home-muted); margin: 0; }
+.cn-partner-inline a { display: inline-flex; min-height: 44px; align-items: center; color: #c2cfd7; }
+.cn-commercial-home .public-footer { margin-top: 16px; }
+@media (max-width:1100px) {
+  .cn-commercial-home .landing-hero { gap: 32px; padding-block: 48px; }
+  .cn-commercial-home .landing-hero h1 { font-size: 34px; }
+  .cn-home-shell > .public-nav nav { gap: 16px; }
+  .cn-home-shell > .public-nav .partner-nav-entry { display: none; }
+  .cn-tour-layout { gap: 40px; }
+  .cn-pricing-layout { grid-template-columns: minmax(0,.7fr) minmax(0,1.3fr); }
+  .cn-flexible-plan, .cn-membership-plan { padding: 28px; }
+  .cn-pricing-layout h3 { font-size: 21px; }
+  .cn-membership-heading { flex-wrap: wrap; gap: 0; }
+}
+@media (max-width:850px) {
+  .cn-commercial-home .landing-hero { grid-template-columns: 1fr; gap: 32px; }
+  .cn-commercial-home .landing-hero h1 { font-size: 44px; }
+  .cn-product-preview { max-width: 640px; width: 100%; }
+  .cn-benefits { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 28px 0; }
+  .cn-benefits article:nth-child(3) { border-left: 0; padding-left: 0; }
+  .cn-tour-layout { grid-template-columns: 1fr; gap: 30px; }
+  .cn-commercial-home .cn-tour-layout .section-intro { max-width: none; }
+  .cn-pricing-layout { grid-template-columns: 1fr; }
+  .cn-membership-plan { border-left: 0; border-top: 1px solid #33434a; }
+  .cn-flexible-plan > p { max-width: none; }
+  .cn-commercial-home .public-faq { grid-template-columns: 1fr; gap: 28px; }
+  .cn-purchase-note { flex-direction: column; gap: 8px; }
+  .cn-scenario-paths { gap: 24px; }
+  .cn-closing { flex-direction: column; align-items: flex-start; }
+}
+@media (max-width:600px) {
+  .public-shell.cn-home-shell { width: calc(100% - 32px); }
+  .cn-home-shell > .public-nav { min-height: 68px; height: 68px; padding: 0; gap: 12px; }
+  .cn-home-shell > .public-nav nav { width: auto; }
+  .cn-home-shell > .public-nav .logo-lockup { gap: 8px; }
+  .cn-home-shell > .public-nav .logo-lockup > img { width: 32px; height: 32px; }
+  .cn-home-shell > .public-nav .logo-lockup strong { font-size: 14px; }
+  .cn-commercial-home .landing-hero { padding: 36px 0 40px; }
+  .cn-commercial-home .landing-hero h1 { font-size: clamp(25px,7.1vw,40px); line-height: 1.4; letter-spacing: -.045em; }
+  .cn-commercial-home .landing-hero > div:first-child > p { font-size: 15px; margin-bottom: 24px; }
+  .cn-commercial-home .hero-actions { gap: 20px; }
+  .cn-commercial-home .landing-hero > div:first-child > p.cn-hero-note { font-size: 11px; }
+  .cn-download-button { padding-inline: 8px; gap: 8px; font-size: 12px; }
+  .cn-preview-toolbar { padding: 6px 8px; }
+  .cn-preview-switch button { padding-inline: 8px; font-size: 12px; gap: 5px; }
+  .cn-preview-expand { font-size: 11px; gap: 3px; }
+  .cn-product-preview figcaption { padding: 14px 16px; }
+  .cn-product-preview figcaption strong { font-size: 15px; }
+  .cn-product-preview figcaption p { font-size: 12px; }
+  .cn-product-preview figcaption > span { font-size: 10px; }
+  .cn-commercial-home .public-section { padding-block: 44px; }
+  .cn-commercial-home .section-intro { margin-bottom: 24px; }
+  .cn-commercial-home .section-intro h2, .cn-commercial-home .public-faq-intro h2 { font-size: 27px; }
+  .cn-commercial-home #core-capabilities { padding-block: 32px; }
+  .cn-commercial-home #core-capabilities .section-intro h2 { font-size: 24px; }
+  .cn-benefits { grid-template-columns: 1fr; gap: 0; }
+  .cn-benefits article, .cn-benefits article:first-child, .cn-benefits article:nth-child(3) { display: grid; grid-template-columns: 28px 1fr; gap: 8px 12px; padding: 20px 0; border: 0; border-top: 1px solid var(--line); }
+  .cn-benefits article > svg { grid-row: 1 / span 2; margin: 0; }
+  .cn-benefits h3, .cn-benefits p { grid-column: 2; margin: 0; }
+  .cn-flexible-plan, .cn-membership-plan { padding: 24px 20px; }
+  .cn-duration-options { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .cn-duration-options button { min-height: 68px; }
+  .cn-member-price strong { font-size: 38px; }
+  .cn-duration-caption { display: none; }
+  .cn-member-price { gap: 12px; }
+  .cn-scenario-paths { grid-template-columns: 1fr; gap: 0; }
+  .cn-scenario-paths > a { padding-block: 22px; border-top: 1px solid var(--line); }
+  .cn-more-scenarios .platform-brand { flex-direction: column; width: 100%; }
+  .cn-more-scenarios .platform-brand-copy { align-items: center; max-width: 100%; text-align: center; }
+  .cn-more-scenarios .platform-brand-copy strong { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+  .cn-more-scenarios .platform-brand-wordmark img { max-width: 100%; }
+  .cn-closing { padding: 28px 24px; }
+  .cn-closing h2 { font-size: 27px; }
+}
+@media (max-width:360px) {
+  .cn-preview-switch button svg { display: none; }
+}

@@ -338,6 +338,7 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
                     """
                 )
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_interview_sessions_owner_updated ON interview_sessions (owner_user_id, updated_at_ms DESC)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_interview_sessions_live_activity ON interview_sessions (last_activity_at_ms DESC) WHERE status = 'live' AND deleted_at_ms IS NULL")
                 cursor.execute(
                     """
                     CREATE TABLE IF NOT EXISTS interview_session_context_entries (

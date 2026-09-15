@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import shutil
+import re
 from collections import deque
 from pathlib import Path
 from threading import Lock
@@ -19,6 +20,7 @@ CAPACITY_KEY = "offersteady:admin:capacity:v1"
 REQUEST_WINDOW_MS = 5 * 60 * 1000
 DISPLAY_WINDOW_MS = 60 * 60 * 1000
 PEAK_PERSISTENCE_WARNING_INTERVAL_MS = 5 * 60 * 1000
+REQUEST_BREAKDOWN_ROUTE_LIMIT = 8
 logger = logging.getLogger(__name__)
 
 
@@ -46,11 +48,14 @@ def capacity_level(value: float | int | None, warning: float | int | None, criti
 
 class RequestWindow:
     def __init__(self) -> None:
-        self._events: deque[tuple[int, float, int, str]] = deque(maxlen=20_000)
+        self._events: deque[tuple[int, float, int, str, str]] = deque(maxlen=20_000)
         self._lock = Lock()
 
     @staticmethod
     def request_class(path: str) -> str:
+        path = path.split("?", 1)[0]
+        if path.startswith("/api/v1/admin/"):
+            return "telemetry"
         if path.startswith("/api/v1/realtime-speech/sessions/") and path.endswith("/snapshot"):
             return "recovery_snapshot"
         if path.endswith("/stream") and (
@@ -58,14 +63,62 @@ class RequestWindow:
             or path.startswith("/api/v1/screenshot-answer/")
         ):
             return "sse_stream"
+        if any(
+            marker in path
+            for marker in (
+                "/performance-ack",
+                "/web-heartbeat",
+                "/device-status",
+                "/heartbeat",
+                "/active-connection",
+                "/idle-status",
+            )
+        ):
+            return "telemetry"
         return "control_api"
+
+    @staticmethod
+    def normalized_route(path: str) -> str:
+        """Return a stable route template without query strings or identifiers."""
+        clean = path.split("?", 1)[0].split("#", 1)[0]
+        segments = clean.split("/")
+        dynamic_parent = {
+            "sessions",
+            "interviews",
+            "desktop-devices",
+            "capture-requests",
+            "materials",
+            "documents",
+            "tasks",
+        }
+        normalized: list[str] = []
+        for index, segment in enumerate(segments):
+            if not segment:
+                continue
+            previous = segments[index - 1] if index else ""
+            if previous in dynamic_parent or re.fullmatch(r"(?:session|device|capture|desktop-binding|task|request)-[A-Za-z0-9_-]+", segment):
+                normalized.append("{id}")
+            elif re.fullmatch(r"[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,}", segment):
+                normalized.append("{id}")
+            else:
+                normalized.append(segment)
+        return "/" + "/".join(normalized)
+
+    @staticmethod
+    def _breakdown_class(request_class: str) -> str:
+        return {
+            "control_api": "user_api",
+            "telemetry": "telemetry",
+            "recovery_snapshot": "recovery_snapshot",
+            "sse_stream": "sse_stream",
+        }.get(request_class, "user_api")
 
     def record(self, *, path: str, elapsed_ms: float, status_code: int) -> None:
         if path in {"/healthz", "/api/v1/admin/capacity", "/api/v1/admin/server-health"}:
             return
         current = _now_ms()
         with self._lock:
-            self._events.append((current, elapsed_ms, status_code, self.request_class(path)))
+            self._events.append((current, elapsed_ms, status_code, self.request_class(path), self.normalized_route(path)))
             self._prune(current)
 
     def summary(self, current: int | None = None) -> dict[str, float]:
@@ -77,10 +130,12 @@ class RequestWindow:
         durations = [item[1] for item in ordinary_events]
         errors = sum(1 for item in ordinary_events if item[2] >= 500)
         span_minutes = max(1.0, min(5.0, (now - events[0][0]) / 60_000)) if events else 1.0
-        result = {
+        result: dict[str, Any] = {
             "apiP95Ms": round(percentile(durations, 0.95) or 0.0, 2),
             "apiErrorRate": round(errors * 100 / len(ordinary_events), 2) if ordinary_events else 0.0,
             "requestsPerMinute": round(len(events) / span_minutes, 2),
+            "userApiP95Ms": round(percentile([item[1] for item in events if self._breakdown_class(item[3]) == "user_api"], 0.95) or 0.0, 2),
+            "telemetryP95Ms": round(percentile([item[1] for item in events if self._breakdown_class(item[3]) == "telemetry"], 0.95) or 0.0, 2),
         }
         for request_class, prefix in (
             ("control_api", "controlApi"),
@@ -90,6 +145,37 @@ class RequestWindow:
             classified = [item[1] for item in events if item[3] == request_class]
             result[f"{prefix}P95Ms"] = round(percentile(classified, 0.95) or 0.0, 2)
             result[f"{prefix}RequestCount"] = len(classified)
+        class_summary: dict[str, dict[str, float | int]] = {}
+        for breakdown_class in ("user_api", "telemetry", "recovery_snapshot", "sse_stream"):
+            classified = [item for item in events if self._breakdown_class(item[3]) == breakdown_class]
+            class_durations = [item[1] for item in classified]
+            error_count = sum(1 for item in classified if item[2] >= 500)
+            class_summary[breakdown_class] = {
+                "requestCount": len(classified),
+                "p95Ms": round(percentile(class_durations, 0.95) or 0.0, 2),
+                "errorCount": error_count,
+                "errorRate": round(error_count * 100 / len(classified), 2) if classified else 0.0,
+            }
+        route_groups: dict[tuple[str, str], list[tuple[int, float, int, str, str]]] = {}
+        for event in events:
+            key = (self._breakdown_class(event[3]), event[4])
+            route_groups.setdefault(key, []).append(event)
+        slow_routes = []
+        for (breakdown_class, route), grouped in route_groups.items():
+            route_durations = [item[1] for item in grouped]
+            error_count = sum(1 for item in grouped if item[2] >= 500)
+            slow_routes.append({
+                "route": route,
+                "class": breakdown_class,
+                "requestCount": len(grouped),
+                "p95Ms": round(percentile(route_durations, 0.95) or 0.0, 2),
+                "errorCount": error_count,
+                "errorRate": round(error_count * 100 / len(grouped), 2),
+            })
+        result["requestBreakdown"] = {
+            "classes": class_summary,
+            "slowRoutes": sorted(slow_routes, key=lambda item: (-float(item["p95Ms"]), -int(item["requestCount"])))[:REQUEST_BREAKDOWN_ROUTE_LIMIT],
+        }
         # Preserve the existing response fields for older admin clients while
         # exposing the accurate full-connection duration name to new clients.
         result["sseHandshakeP95Ms"] = result["sseStreamDurationP95Ms"]
@@ -171,7 +257,8 @@ class AdminCapacityMonitor:
             ("onlineDevices", "在线桌面助手", "台", None, None, "最近 45 秒仍有心跳的桌面助手。"),
             ("activeAudioStreams", "活跃 ASR 音频流", "路", self.settings.admin_capacity_audio_streams_warning, self.settings.admin_capacity_audio_streams_critical, "最近 30 秒收到真实音频帧的去重音轨。"),
             ("cpuPercent", "后端容器 CPU", "%", self.settings.admin_capacity_cpu_warning_percent, self.settings.admin_capacity_cpu_critical_percent, "相对容器 CPU 配额的使用率。"),
-            ("memoryPercent", "后端容器内存", "%", self.settings.admin_capacity_memory_warning_percent, self.settings.admin_capacity_memory_critical_percent, "相对容器内存上限的使用率。"),
+            ("memoryPercent", "后端容器内存", "%", self.settings.admin_capacity_memory_warning_percent, self.settings.admin_capacity_memory_critical_percent, "后端进程容器内存使用率；无容器上限时按容器 RSS/主机总内存计算。"),
+            ("hostMemoryPercent", "主机内存", "%", None, None, "整台服务器内存使用率，仅用于主机容量参考。"),
             ("diskPercent", "服务器磁盘", "%", 75, 90, "应用所在文件系统的整体使用率，不扫描文件内容。"),
             ("loadAverage1m", "系统 1 分钟负载", "load", None, None, "Linux 系统一分钟平均负载。"),
             ("uptimeSeconds", "服务器运行时长", "s", None, None, "Linux 主机或容器可见的运行时长。"),
@@ -193,6 +280,17 @@ class AdminCapacityMonitor:
                 "description": description,
                 "points": [{"atMs": item["atMs"], "value": item.get(key)} for item in samples],
             })
+        request_breakdown = dict(current.get("requestBreakdown") or {})
+        request_breakdown["series"] = [
+            {
+                "atMs": int(item["atMs"]),
+                "classes": {
+                    key: float((item.get("requestBreakdown") or {}).get("classes", {}).get(key, {}).get("p95Ms") or 0.0)
+                    for key in ("user_api", "telemetry", "recovery_snapshot", "sse_stream")
+                },
+            }
+            for item in samples
+        ]
         return {
             "generatedAtMs": _now_ms(),
             "sampleIntervalSeconds": self.settings.admin_capacity_sample_interval_seconds,
@@ -201,6 +299,21 @@ class AdminCapacityMonitor:
             "supporting": {
                 "activeUsers": current.get("activeUsers"),
                 "requestsPerMinute": current.get("requestsPerMinute"),
+                "containerMemory": {
+                    "bytes": current.get("containerMemoryBytes"),
+                    "limitBytes": current.get("containerMemoryLimitBytes"),
+                    "source": current.get("containerMemorySource"),
+                },
+                "hostMemoryPercent": current.get("hostMemoryPercent"),
+                "requestBreakdown": request_breakdown or {
+                    "classes": {
+                        "user_api": {"requestCount": 0, "p95Ms": 0.0, "errorCount": 0, "errorRate": 0.0},
+                        "telemetry": {"requestCount": 0, "p95Ms": 0.0, "errorCount": 0, "errorRate": 0.0},
+                        "recovery_snapshot": {"requestCount": 0, "p95Ms": 0.0, "errorCount": 0, "errorRate": 0.0},
+                        "sse_stream": {"requestCount": 0, "p95Ms": 0.0, "errorCount": 0, "errorRate": 0.0},
+                    },
+                    "slowRoutes": [],
+                },
                 "requestClasses": {
                     "controlApi": {
                         "p95Ms": current.get("controlApiP95Ms"),
@@ -229,7 +342,7 @@ class AdminCapacityMonitor:
             if self._server_cache is not None and current_ms - self._server_cache_at_ms < 10_000:
                 return self._server_cache
         capacity = self.report()
-        allowed = {"cpuPercent", "memoryPercent", "diskPercent", "loadAverage1m", "uptimeSeconds"}
+        allowed = {"cpuPercent", "memoryPercent", "hostMemoryPercent", "diskPercent", "loadAverage1m", "uptimeSeconds"}
         resources = [item for item in capacity["metrics"] if item["key"] in allowed]
         current = {item["key"]: item["value"] for item in resources}
         dependencies = self._dependency_health()
@@ -247,6 +360,7 @@ class AdminCapacityMonitor:
             "supporting": {
                 "uptimeSeconds": current.get("uptimeSeconds"),
                 "requestsPerMinute": capacity["supporting"].get("requestsPerMinute"),
+                "requestBreakdown": capacity["supporting"].get("requestBreakdown"),
             },
         }
         with self._lock:
@@ -302,10 +416,15 @@ class AdminCapacityMonitor:
         except Exception:
             return {"activeWebSessions": None, "onlineDevices": None, "activeAudioStreams": None}
 
-    def _resource_counts(self) -> dict[str, float | None]:
+    def _resource_counts(self) -> dict[str, Any]:
+        memory = self._memory_stats()
         return {
             "cpuPercent": self._cpu_percent(),
-            "memoryPercent": self._memory_percent(),
+            "memoryPercent": memory["containerPercent"],
+            "containerMemoryBytes": memory["containerBytes"],
+            "containerMemoryLimitBytes": memory["containerLimitBytes"],
+            "containerMemorySource": memory["containerSource"],
+            "hostMemoryPercent": memory["hostPercent"],
             "diskPercent": self._disk_percent(),
             "loadAverage1m": self._load_average(),
             "uptimeSeconds": self._uptime_seconds(),
@@ -409,15 +528,40 @@ class AdminCapacityMonitor:
             return None
 
     @staticmethod
-    def _memory_percent() -> float | None:
+    def _memory_stats() -> dict[str, float | int | str | None]:
+        """Return container memory and host memory separately.
+
+        Docker installations without a memory limit expose ``memory.max`` as
+        ``max``. In that case the process RSS is the only container-specific
+        usage signal; it is deliberately reported as a percentage of host
+        total memory and tagged with its source instead of pretending a host
+        percentage is a container percentage.
+        """
+        current: int | None = None
+        maximum: int | None = None
         try:
             current = int(Path("/sys/fs/cgroup/memory.current").read_text(encoding="ascii").strip())
             maximum_text = Path("/sys/fs/cgroup/memory.max").read_text(encoding="ascii").strip()
             if maximum_text != "max":
                 maximum = int(maximum_text)
-                return round(current * 100 / maximum, 2) if maximum > 0 else None
         except (OSError, ValueError):
+            current = None
+
+        rss: int | None = None
+        try:
+            for line in Path("/proc/self/status").read_text(encoding="ascii").splitlines():
+                if line.startswith("VmRSS:"):
+                    rss = int(line.split()[1]) * 1024
+                    break
+        except (OSError, ValueError, IndexError):
             pass
+        container_bytes = current if current is not None else rss
+        if maximum is not None and maximum > 0 and current is not None:
+            container_percent = round(current * 100 / maximum, 2)
+            container_source = "cgroup"
+        else:
+            container_percent = None
+            container_source = "rss-host-total" if rss is not None else "unavailable"
         try:
             memory = {
                 line.split(":", 1)[0]: int(line.split()[1])
@@ -426,9 +570,29 @@ class AdminCapacityMonitor:
             }
             total = memory["MemTotal"]
             available = memory["MemAvailable"]
-            return round((total - available) * 100 / total, 2) if total > 0 else None
+            host_percent = round((total - available) * 100 / total, 2) if total > 0 else None
+            if container_percent is None and rss is not None and total > 0:
+                container_percent = round(rss * 100 / (total * 1024), 2)
+            return {
+                "containerBytes": container_bytes,
+                "containerLimitBytes": maximum,
+                "containerPercent": container_percent,
+                "containerSource": container_source,
+                "hostPercent": host_percent,
+            }
         except (OSError, KeyError, ValueError):
-            return None
+            return {
+                "containerBytes": container_bytes,
+                "containerLimitBytes": maximum,
+                "containerPercent": container_percent,
+                "containerSource": container_source,
+                "hostPercent": None,
+            }
+
+    @staticmethod
+    def _memory_percent() -> float | None:
+        """Compatibility helper returning the corrected container percentage."""
+        return AdminCapacityMonitor._memory_stats()["containerPercent"]  # type: ignore[return-value]
 
     def _persist(self, sample: dict[str, Any]) -> None:
         if self._redis is None:

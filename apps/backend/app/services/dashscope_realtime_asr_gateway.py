@@ -66,6 +66,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         self._connection_lifetime_total_ms: dict[str, int] = {}
         self._connection_lifetime_max_ms: dict[str, int] = {}
         self._connection_closed_counts: dict[str, int] = {}
+        self._closure_failures: dict[str, int] = {}
         self._connected_source_keys: set[str] = set()
         self._utterance_counts: dict[str, int] = {}
         self._session_created_missing: dict[str, int] = {}
@@ -222,6 +223,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             "append_count": self._append_counts.get(source_kind, 0),
             "commit_count": self._commit_counts.get(source_kind, 0),
             "active_provider_sessions": active_provider_sessions,
+            "closure_failures": self._closure_failures.get(source_kind, 0),
             "frames_before_first_partial": self._frames_before_first_partial.get(source_kind, 0),
         }
 
@@ -244,6 +246,12 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         for source_session_key in source_session_keys:
             self._close_source_session(source_session_key)
         return len(source_session_keys)
+
+    def close_all_sessions(self) -> int:
+        """Close every provider source session during application shutdown."""
+        with self._source_sessions_lock:
+            session_ids = {key.split(":", 1)[0] for key in self._source_sessions}
+        return sum(self.close_session(session_id=session_id) for session_id in session_ids)
 
     def close_source(self, *, session_id: str, source_kind: str) -> int:
         source_session_key = f"{session_id}:{source_kind}"
@@ -428,7 +436,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                 try:
                     existing.connection.close()
                 except Exception:
-                    pass
+                    self._closure_failures[existing.source_kind] = self._closure_failures.get(existing.source_kind, 0) + 1
             connection, mode = self._open_connection(frame)
             with self._source_sessions_lock:
                 self._connection_recreations[frame.source_kind] = self._connection_recreations.get(frame.source_kind, 0) + 1
@@ -724,7 +732,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         try:
             session.connection.close()
         except Exception:
-            pass
+            self._closure_failures[session.source_kind] = self._closure_failures.get(session.source_kind, 0) + 1
 
     def _record_closed_lifetime(self, session: _SourceRealtimeSession) -> None:
         lifetime_ms = max(0, int((time.monotonic() - session.created_at_monotonic) * 1000))
@@ -769,7 +777,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             try:
                 session.connection.close()
             except Exception:
-                pass
+                self._closure_failures[session.source_kind] = self._closure_failures.get(session.source_kind, 0) + 1
 
     def _connect_url(self) -> str:
         dedicated_workspace_base = None

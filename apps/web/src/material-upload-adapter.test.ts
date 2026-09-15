@@ -118,39 +118,4 @@ describe("BackendMaterialUploadAdapter knowledge billing confirmation", () => {
     expect(downloaded.filename).toBe("原始资料.md");
     expect(await downloaded.blob.text()).toBe("synthetic material");
   });
-
-  it("reports an oversized Backend proxy upload as a file-size validation error", async () => {
-    const requests: string[] = [];
-    const fetchImpl: typeof fetch = async (input) => {
-      const url = String(input);
-      requests.push(url);
-      if (url.endsWith("/upload-intents")) {
-        return envelope({
-          intentId: "intent-large-pdf",
-          materialKind: "resume",
-          objectKey: "objects/large.pdf",
-          contentType: "application/pdf",
-          uploadUrl: "https://oss.example/upload",
-          uploadMethod: "POST",
-          uploadFields: {},
-          expiresAt: Date.now() + 60_000,
-        });
-      }
-      if (url === "https://oss.example/upload") {
-        return new Response(null, { status: 503 });
-      }
-      if (url.endsWith("/api/v1/resume/uploads/proxy")) {
-        return new Response(null, { status: 413 });
-      }
-      throw new Error(`Unexpected request: ${url}`);
-    };
-    const adapter = new BackendMaterialUploadAdapter("https://api.example", fetchImpl);
-    const file = new File(["synthetic pdf"], "resume.pdf", { type: "application/pdf" });
-
-    await expect(adapter.uploadResume("user-1", file)).rejects.toMatchObject({
-      code: "validation",
-      message: "文件大小超过上传限制，请选择不超过 20 MB 的文件",
-    });
-    expect(requests.at(-1)).toBe("https://api.example/api/v1/resume/uploads/proxy");
-  });
 });

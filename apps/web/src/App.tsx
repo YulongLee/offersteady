@@ -1,53 +1,33 @@
-import { createContext, Suspense, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { BrowserRouter, Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
-import type { AnswerTaskSnapshot, CaptureState, ContextLibrarySource } from "@offersteady/protocol";
-import { BriefcaseIcon, CaretDownIcon, ChartLineUpIcon, ChatCircleTextIcon, ClipboardTextIcon, CodeIcon, DatabaseIcon, DevicesIcon, GraduationCapIcon, IdentificationCardIcon, PaletteIcon, ScanIcon, UserFocusIcon } from "@phosphor-icons/react";
-
-import type { IdleInterviewStatus, InterviewQuestion, LiveActionState, ProgrammingLanguage, QuestionStatus, RealtimeSessionUpdate, ScreenshotTask, SessionMode, SessionStatus, WebAppState } from "./domain";
+import type { ContextLibrarySource } from "@offersteady/protocol";
+import { BriefcaseIcon, CaretDownIcon, ChartLineUpIcon, ChatCircleTextIcon, ClipboardTextIcon, CodeIcon, GraduationCapIcon, IdentificationCardIcon, PaletteIcon, ScanIcon, UserFocusIcon } from "@phosphor-icons/react";
+import type { PartnerProgramState, ProgrammingLanguage, SessionMode, SessionStatus, WebAppState } from "./domain";
 import { runAdapterOperation } from "./api-client";
 import { interviewAppAdapter } from "./app-adapter";
 import { routes } from "./routes";
 import { ContextPicker } from "./ContextPicker";
-import { contextLevel, eligibleSource, managedLibrarySources, selectionSources, selectionValidity } from "./context-selection";
+import { contextLevel, managedLibrarySources, selectionValidity } from "./context-selection";
 import { assetUrl } from "./assets";
 import { interviewPlatforms } from "./platform-brands";
-import { ConversationMonitor } from "./ConversationMonitor";
-import { AnswerWorkspace, BillingPage, DownloadCenter, GuidePage, LegalPage, LibraryManager } from "./route-components";
-import { latestInterviewerTurnText } from "./conversation-turns";
-import { ManualQuestionComposer } from "./ManualQuestionComposer";
-import { AnswerActionBar } from "./AnswerActionBar";
-import { MobileInterviewControls } from "./MobileInterviewControls";
-import { ABSOLUTE_MAX_SPLIT_RATIO, ABSOLUTE_MIN_SPLIT_RATIO, clampSplitRatio, initialLiveWorkspaceView, isolateRealtimeSpeakerSession, noteNewAnswer, parseStoredSplitRatio, reconcileAnswerWorkspace, reconcileRealtimeSpeaker, resetTransientInterviewState, serializeSplitRatio, splitRatioBounds, splitRatioStorageKey } from "./live-workspace";
-import { WorkspaceDivider } from "./WorkspaceDivider";
+import { LivePage, preloadLivePage, BillingPage, DownloadCenter, GuidePage, LegalPage, LibraryManager } from "./route-components";
+import { resetTransientInterviewState } from "./live-workspace";
 import { authClient } from "./auth-client";
 import { materialUploadAdapter, saveMaterialDownload } from "./material-upload-adapter";
-import { isInvalidRealtimeSessionStatus, realtimeReconnectAttemptAfterRecovery, realtimeRetryDelayMs } from "./realtime-recovery";
-import { createLiveSessionLeaderCoordinator } from "./live-session-leader";
 import { applyAppearancePreferences, persistAppearancePreferences, readAppearancePreferences, type AppearancePreferences } from "./appearance-preferences";
-import { isFreshShortcutScreenshotAcceptance, SHORTCUT_SCREENSHOT_RECOVERY_POLL_INTERVAL_MS } from "./screenshot-shortcut-feedback";
-import type { LiveAnswerStreamEvent } from "./live-answer-stream";
 import { officialSocialContacts } from "./social-contacts";
 import { companionUpdate, type CompanionUpdate } from "./platform";
 import "./styles.css";
+import "./homepage-commercial.css";
+import { HomepageDownloads } from "./HomepageDownloads";
+import { HomepageProductPreview } from "./HomepageProductPreview";
+import { HomepagePricing } from "./HomepagePricing";
+import type { PublicStartupSnapshot } from "./public-startup";
+import { PrototypeContext, usePrototype } from "./app-context";
 
 
-interface PrototypeContextValue {
-  authenticated: boolean;
-  setAuthenticated(value: boolean): void;
-  state: WebAppState;
-  setState: React.Dispatch<React.SetStateAction<WebAppState>>;
-  logout(): Promise<void>;
-}
-
-const PrototypeContext = createContext<PrototypeContextValue | null>(null);
-
-const usePrototype = () => {
-  const value = useContext(PrototypeContext);
-  if (!value) throw new Error("Prototype context is unavailable");
-  return value;
-};
-
-function PrototypeProvider({ children, initialAuthenticated, initialState }: { readonly children: ReactNode; readonly initialAuthenticated?: boolean | undefined; readonly initialState?: WebAppState | undefined }) {
+function PrototypeProvider({ children, initialAuthenticated, initialState, publicStartup }: { readonly children: ReactNode; readonly initialAuthenticated?: boolean | undefined; readonly initialState?: WebAppState | undefined; readonly publicStartup?: PublicStartupSnapshot | undefined }) {
+  const { pathname } = useLocation();
   const [authenticated, setAuthenticatedState] = useState(() => initialAuthenticated ?? Boolean(authClient.readStoredSession()));
   const [state, setState] = useState<WebAppState | null>(() => initialState ? structuredClone(initialState) : null);
   const [loadError, setLoadError] = useState("");
@@ -122,6 +102,9 @@ function PrototypeProvider({ children, initialAuthenticated, initialState }: { r
     try { setState(await interviewAppAdapter.loadState()); } catch { setState(current => current); }
   };
 
+  if (!state && publicStartup?.pathname === pathname && /^\/(?:guide|terms|privacy)?\/?$/.test(pathname)) {
+    return <><div data-public-startup dangerouslySetInnerHTML={{ __html: publicStartup.html }} />{loadError ? <aside className="seo-prerender" role="status"><p>实时信息暂时未加载，产品介绍和公开页面仍可浏览。</p><button type="button" onClick={retryInitialLoad}>重新加载实时信息</button></aside> : null}</>;
+  }
   if (!state && !loadError) return <RouteLoadingPage />;
   if (!state && loadError) return <IntegrationModeErrorPage message={loadError} onRetry={retryInitialLoad} />;
 
@@ -133,11 +116,13 @@ const Logo = () => <span className="logo-lockup"><img src={assetUrl("brand.app-i
 
 function PublicLayout() {
   const { authenticated } = usePrototype();
+  const { pathname } = useLocation();
   return (
-    <div className="public-shell">
+    <div className={pathname === routes.landing ? "public-shell cn-home-shell" : "public-shell"}>
       <header className="public-nav">
         <Link to={routes.landing} aria-label="面试稳AI助手首页"><Logo /></Link>
-        <nav aria-label="公开导航"><a href="/features">产品功能</a><a href="/interview-questions">面试题与专题</a><a href="/guides">面试指南</a><a href="/pricing">价格</a><a href="/download">下载</a><Link className="button ghost" to={authenticated ? routes.app : routes.login}>{authenticated ? "进入应用" : "登录"}</Link></nav>
+        {pathname !== routes.landing && <Link className="button ghost partner-nav-entry" to={routes.partnerProgram}>合作伙伴计划</Link>}
+        <nav aria-label="公开导航"><a href="/features">产品功能</a><a href="/#product-tour">使用演示</a><a href="/pricing">价格</a><a href="/download">下载</a>{pathname === routes.landing && <Link className="partner-nav-entry" to={routes.partnerProgram}>合作伙伴计划</Link>}<Link className="button ghost" to={authenticated ? routes.app : routes.login}>{authenticated ? "进入应用" : "登录"}</Link></nav>
       </header>
       <Outlet />
     </div>
@@ -145,64 +130,48 @@ function PublicLayout() {
 }
 
 function LandingPage() {
-  const { state } = usePrototype(); const passes = state.billing.catalog.filter(item => item.kind === "time_pass");
+  const { state } = usePrototype();
+  const [partnerProgramEnabled, setPartnerProgramEnabled] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    void interviewAppAdapter.getPartnerProgramConfig(controller.signal)
+      .then(config => setPartnerProgramEnabled(config.enabled))
+      .catch(() => setPartnerProgramEnabled(false));
+    return () => controller.abort();
+  }, []);
   const paymentChannelsLabel = state.billing.availablePaymentChannels.length ? state.billing.availablePaymentChannels.map(channel => channel === "wechat" ? "微信支付" : "支付宝").join("、") : "当前未开启在线支付渠道";
-  return (
-    <main>
-      <section className="landing-hero">
-        <div>
-          <span className="kicker">AI INTERVIEW COPILOT</span>
-          <h1>AI 面试助手，<br />助你更从容地冲刺 Offer。</h1>
-          <p>实时理解面试问题，结合你的简历、岗位要求和个人资料，快速生成清晰回答思路。语音、手动输入和截图题都支持。</p>
-          <div className="hero-actions"><Link className="button primary large" to={routes.login}>免费使用 <span>→</span></Link><Link className="button ghost large" to={routes.publicGuide}>使用手册</Link></div>
-          <div className="trust-list"><span>✓ 实时辅助</span><span>✓ 个性化回答</span><span>✓ 按自己的节奏使用</span></div>
-        </div>
-        <div className="answer-demo" aria-label="实时回答区域预览">
-          <div className="demo-top"><span><i className="online-dot" /> 面试进行中</span><span>18:24</span></div>
-          <small>当前问题</small><h2>请介绍一个最有挑战的项目</h2>
-          <div className="demo-answer"><span className="advice-label">回答建议</span><ol><li>一句话交代项目背景与目标</li><li>聚焦你的职责与技术决策</li><li>用简历中可核对的结果收尾</li></ol><div className="source-pills"><span>简历</span><span>JD</span><span>知识库</span></div></div>
-        </div>
-      </section>
-      <section className="public-section landing-film" aria-labelledby="landing-film-title">
-        <div className="landing-film-intro">
-          <span className="kicker">SEE OFFERSTEADY IN ACTION</span>
-          <h2 id="landing-film-title">一段视频，了解面试稳如何陪你准备与作答</h2>
-          <p>从资料准备、实时辅助到截图回答，快速了解完整使用流程。视频默认静音，你可以在播放器中开启声音或全屏观看。</p>
-        </div>
-        <div className="landing-film-frame">
-          <video
-            aria-label="面试稳产品宣传片"
-            controls
-            muted
-            playsInline
-            preload="metadata"
-            poster="/media/offersteady-commercial-poster.jpg"
-          >
-            <source src="/media/offersteady-commercial.web.mp4" type="video/mp4" />
-            你的浏览器暂不支持视频播放，请升级浏览器后重试。
-          </video>
-        </div>
-      </section>
-      <section id="workflow" className="public-section">
-        <div className="section-intro"><span className="kicker">YOUR INTERVIEW RHYTHM</span><h2>从准备到现场，少一点慌乱</h2></div>
-        <div className="workflow-grid"><article><b>01 · PERSONAL</b><h3>理解你的真实经历</h3><p>每场面试单独选择简历、JD 和知识材料，减少无关内容，也不替你虚构经历。</p></article><article><b>02 · REAL-TIME</b><h3>听懂问题，也看懂截图</h3><p>支持授权语音、手动输入和截图题；系统持续整理面试官问题，由你点击快答或截屏回答后生成答案。</p></article><article><b>03 · TRACEABLE</b><h3>知道建议从哪里来</h3><p>每条回答显示实际使用的资料名称与版本，资料和模型推断保持清晰分离。</p></article></div>
-        <div className="advantage-strip"><div><strong>电脑端</strong><span>macOS 双芯片已规划，Windows 版本按签名状态逐步开放</span></div><div><strong>手机端</strong><span>同步查看回答和会话状态，不被单一设备绑住</span></div><div><strong>你的数据</strong><span>资料可管理、可删除，原始音频默认不保存</span></div></div>
-      </section>
-      <section id="core-capabilities" className="public-section core-capabilities" aria-labelledby="core-capabilities-title">
-        <div className="core-capabilities-intro"><span className="kicker">CORE CAPABILITIES</span><h2 id="core-capabilities-title">面试稳AI助手核心功能</h2><p>从面试准备、现场辅助到结束复盘，用一套清晰的工作流陪你完成每一次求职面试。</p></div>
-        <div className="core-capabilities-grid">
-          <article className="core-capability-card accent-coral"><span className="core-capability-icon" aria-hidden="true"><ChatCircleTextIcon size={28} weight="duotone" /></span><div><h3>实时面试辅助</h3><p>识别面试官问题并生成回答建议，支持语音、手动输入；回答内容结合当前面试上下文，并明确作为参考建议。</p></div></article>
-          <article className="core-capability-card accent-gold"><span className="core-capability-icon" aria-hidden="true"><ScanIcon size={28} weight="duotone" /></span><div><h3>截图题快速回答</h3><p>通过电脑伴随助手截取题目，识别代码、笔试题或系统设计内容，并在回答区展示处理状态与建议答案。</p></div></article>
-          <article className="core-capability-card accent-green"><span className="core-capability-icon" aria-hidden="true"><DatabaseIcon size={28} weight="duotone" /></span><div><h3>个性化知识库</h3><p>按岗位或主题整理知识材料，每场面试自主选择需要的资料，让回答更贴近你实际准备的内容。</p></div></article>
-          <article className="core-capability-card accent-blue"><span className="core-capability-icon" aria-hidden="true"><IdentificationCardIcon size={28} weight="duotone" /></span><div><h3>简历与 JD 上下文</h3><p>每场单独选择简历和职位描述，回答建议优先引用可核对的经历与岗位要求，不替你虚构项目经验。</p></div></article>
-          <article className="core-capability-card accent-violet"><span className="core-capability-icon" aria-hidden="true"><ClipboardTextIcon size={28} weight="duotone" /></span><div><h3>面试记录与复盘</h3><p>保留已确认的问题和回答建议，面试结束后可查看 AI 整理摘要、资料来源，并管理相关记录与附件。</p></div></article>
-          <article className="core-capability-card accent-indigo"><span className="core-capability-icon" aria-hidden="true"><DevicesIcon size={28} weight="duotone" /></span><div><h3>跨设备伴随使用</h3><p>电脑伴随助手负责授权采集与截图，网页端展示实时回答；手机端可同步查看回答和当前会话状态。</p></div></article>
-        </div>
-      </section>
+  return <main className="cn-commercial-home">
+    <section className="landing-hero">
+      <div><span className="kicker">面试稳 · AI 面试助手</span><h1>AI 面试助手，<br /><em>让你的经历更好表达。</em></h1>
+        <p>面试稳是一款面向求职者的AI面试助手。结合你的简历与目标岗位，整理更贴合自己的回答思路。</p>
+        <div className="hero-actions"><Link className="button primary large" to={routes.login}>免费使用 <span>→</span></Link><a className="text-link" href="#product-tour">看看怎么用 ↗</a></div>
+        <HomepageDownloads manifest={state.releaseManifest} />
+        <p className="cn-hero-note">AI 建议仅供参考，请以真实经历作答，并遵守面试规则。</p>
+      </div>
+      <HomepageProductPreview />
+    </section>
+    <section id="core-capabilities" className="public-section"><div className="section-intro"><span className="kicker">围绕你的面试</span><h2>从听清问题，到讲清自己</h2><p>把问题、资料和回答思路放在一起，表达更有条理。</p></div>
+      <div className="cn-benefits">
+        <article><ChatCircleTextIcon size={28} aria-hidden="true" /><h3>跟上每一个问题</h3><p>实时转写面试官与自己的声音，减少来回整理，把注意力留给交流。</p></article>
+        <article><IdentificationCardIcon size={28} aria-hidden="true" /><h3>回答更贴合你的经历</h3><p>按场选择简历、JD 和知识材料，围绕自己的项目与目标岗位组织回答。</p></article>
+        <article><ScanIcon size={28} aria-hidden="true" /><h3>截图题，也有思路</h3><p>通过电脑助手截取题目，查看识别与生成进度，无需手动重新输入。</p></article>
+        <article><ClipboardTextIcon size={28} aria-hidden="true" /><h3>让下一场准备更充分</h3><p>回看问题、回答建议与资料来源，整理需要补充的经历和表达。</p></article>
+      </div>
+    </section>
+    <section id="product-tour" className="public-section cn-tour-section">
+      <div className="cn-tour-layout">
+        <div className="section-intro"><span className="kicker">从准备到开始</span><h2>三步，把工具用起来。</h2><div className="cn-tour-steps" aria-label="开始使用的三个步骤"><div><span>01</span><div><h3>准备简历与岗位资料</h3><p>添加简历、JD，按需选择知识材料。</p></div></div><div><span>02</span><div><h3>连接电脑助手</h3><p>检查连接、声音与采集权限。</p></div></div><div><span>03</span><div><h3>获取建议，自己表达</h3><p>用语音、输入或截图提问，核对后组织回答。</p></div></div></div><Link className="text-link" to={routes.publicGuide}>打开使用手册 ↗</Link></div>
+        <div className="cn-tutorial-media"><div className="landing-film-frame"><video aria-label="面试稳工具使用教程" controls muted playsInline preload="none" poster="/media/device-story-poster-20260907.jpg"><source src="/media/device-story-voice-20260907.mp4" type="video/mp4" /></video></div><span className="cn-tour-caption">真实操作演示 · 内容为合成示例</span></div>
+      </div>
+      <details className="cn-film-details"><summary>也可以先看产品概览<CaretDownIcon size={18} aria-hidden="true" /></summary><div className="landing-film-frame"><video aria-label="面试稳产品宣传片" controls muted playsInline preload="none" poster="/media/offersteady-commercial-poster.jpg"><source src="/media/offersteady-commercial.web.mp4" type="video/mp4" /></video></div></details>
+    </section>
+    <HomepagePricing billing={state.billing} />
+    <section id="more-scenarios" className="public-section cn-more-scenarios"><div className="section-intro"><span className="kicker">不同岗位，同样认真准备</span><h2>找到与你相关的面试场景。</h2></div><div className="cn-scenario-paths"><a href="/features/ai-interview-assistant"><CodeIcon size={24} aria-hidden="true" /><h3>程序员与技术岗位</h3><p>项目追问、技术原理与系统设计。</p><span>查看技术面试场景 ↗</span></a><a href="/features/realtime-interview"><ChatCircleTextIcon size={24} aria-hidden="true" /><h3>业务追问与现场表达</h3><p>听清问题，结合资料组织思路。</p><span>了解实时辅助 ↗</span></a><a href="/guides"><GraduationCapIcon size={24} aria-hidden="true" /><h3>首次面试与转岗准备</h3><p>梳理经历，让表达贴近目标岗位。</p><span>浏览面试指南 ↗</span></a></div><details><summary>更多岗位与常见使用平台</summary>
       <section id="platform-compatibility" className="public-section platform-compatibility" aria-labelledby="platform-compatibility-title">
         <div className="platform-compatibility-intro"><span className="kicker">PLATFORM COMPATIBILITY</span><h2 id="platform-compatibility-title">适配常见远程面试与在线笔试平台</h2><p>电脑伴随助手通过你明确授权的系统音频、麦克风和截图能力工作，无需安装平台插件。</p></div>
         <ul className="platform-grid" aria-label="常见使用平台">{interviewPlatforms.map(platform => <li className={`platform-card brand-${platform.slug}`} data-brand-source={platform.sourcePage} key={platform.name}><span className={`platform-brand platform-brand-${platform.presentation}`}><img src={platform.logoUrl} width="180" height="48" alt={`${platform.name} 品牌标识`} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={event => { event.currentTarget.hidden = true; }} /><span className={platform.presentation === "wordmark" ? "sr-only" : "platform-brand-copy"}><strong>{platform.name}</strong>{platform.secondaryLabel ? <small>{platform.secondaryLabel}</small> : null}</span></span></li>)}</ul>
       </section>
+
       <section id="user-scenarios" className="public-section user-scenarios" aria-labelledby="user-scenarios-title">
         <div className="user-scenarios-intro"><span className="kicker">ROLE-BASED WORKFLOWS</span><h2 id="user-scenarios-title">覆盖多种岗位与面试场景</h2><p>按岗位查看面试稳如何结合简历、JD、知识库、实时语音和截图回答，帮助你更快组织真实经历与专业表达。</p></div>
         <div className="user-scenarios-grid">
@@ -214,12 +183,16 @@ function LandingPage() {
           <article className="user-scenario-card"><header><span className="user-scenario-icon" aria-hidden="true"><UserFocusIcon size={25} weight="duotone" /></span><div><h3>跨行业求职者 · 转岗面试</h3><span>能力迁移与岗位匹配</span></div></header><div className="scenario-focus"><span>典型困扰</span><strong>原行业经历丰富，却很难对应目标岗位</strong></div><p>可以为每个岗位单独选择简历版本和 JD，把原行业经历整理为可迁移能力；再查看回答实际引用的资料，判断表达是否贴近目标岗位。</p><footer className="scenario-capabilities" aria-label="使用能力"><span>多版本简历</span><span>JD 上下文</span><span>来源核对</span></footer></article>
         </div>
       </section>
-      <section id="product-facts" className="public-section product-facts" aria-label="产品信息与常见问题">
-        <div className="product-facts-grid" aria-label="产品数据"><article><strong>10W+</strong><span>累计面试</span><small>持续服务求职面试场景</small></article><article><strong>98%</strong><span>效率提升</span><small>更快整理回答思路</small></article><article><strong>1W+</strong><span>面试题库</span><small>覆盖常见专业问题</small></article><article><strong>100+</strong><span>支持岗位</span><small>适配多行业求职方向</small></article></div>
+
+    </details></section>
+    <section id="product-facts" className="public-section" aria-label="产品信息与常见问题">
         <div className="public-faq" aria-labelledby="public-faq-title">
-          <div className="public-faq-intro"><span className="kicker">FREQUENTLY ASKED QUESTIONS</span><h2 id="public-faq-title">常见问题</h2><p>先了解适用场景、使用成本和数据边界，再决定是否开始使用。</p></div>
+          <div className="public-faq-intro"><span className="kicker">开始前，你可能想知道</span><h2 id="public-faq-title">常见问题</h2><p>关于使用、费用和隐私的说明。</p><a className="text-link" href="/guide">查看完整使用手册 ↗</a></div>
           <div className="public-faq-list">
-            <details open><summary><span>面试稳AI助手适合哪些岗位？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>适用于需要结构化表达、专业追问或截图题辅助的求职场景，例如产品、技术、数据、设计、运营等岗位。建议质量取决于问题识别、你选择的简历与 JD 以及真实资料完整度，不能保证面试或录用结果。</p></div></details>
+            <details><summary><span>面试稳是什么？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>面试稳是一款面向求职者的AI面试助手，通过语音、手动输入或截图整理问题，结合本场选择的简历、JD 和知识资料提供回答建议。</p></div></details>
+            <details><summary><span>AI 面试助手如何工作？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>先准备资料并连接电脑助手，再选择本场上下文。系统识别或接收问题、生成回答建议，最后由你核对事实并用自己的语言表达。了解<a href="/features/realtime-interview">实时面试辅助流程</a>，或查看<a href="/features/ai-interview-assistant">程序员与技术岗位场景</a>。</p></div></details>
+            <details><summary><span>面试稳如何收费？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>提供积分包和按天会员，适合不同使用频率。无需登录即可查看<a href="/pricing">当前套餐价格、有效期与计费边界</a>，购买通过账户内的积分与会员页面完成。</p></div></details>
+            <details><summary><span>面试稳AI助手适合哪些岗位？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>适用于需要结构化表达、专业追问或截图题辅助的求职场景，例如产品、技术、数据、设计、运营等岗位。建议质量取决于问题识别、你选择的简历与 JD 以及真实资料完整度，不能保证面试或录用结果。</p></div></details>
             <details><summary><span>面试稳可以免费使用吗？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>可以先免费使用。具体可用权益和后续使用方式以登录后的“积分与会员”页面实时显示为准；需要高频使用时也可以选择按天会员。</p></div></details>
             <details><summary><span>支持哪些问题输入方式？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>支持电脑伴随助手授权后的语音输入、网页手动输入和截图题回答。设备收音不可用时仍可切换到手动输入；截图任务会显示上传、识别和生成状态。</p></div></details>
             <details><summary><span>支持哪些设备平台？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>设备中心会按当前发布状态提供 macOS Apple Silicon、macOS Intel 和 Windows 版本；未完成签名或仍在预览的版本会明确提示。手机端可用于同步查看回答和会话状态。</p></div></details>
@@ -227,9 +200,10 @@ function LandingPage() {
             <details><summary><span>使用面试稳会造成信息泄露吗？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>产品默认不保存原始音频；简历、JD、知识材料、截图和会话记录提供管理或删除入口。请不要上传与求职无关的敏感信息，完整处理规则可查看<Link to={routes.privacy}>隐私政策</Link>。</p></div></details>
           </div>
         </div>
-      </section>
-      <section id="pricing-value" className="public-section pricing-value"><div className="section-intro"><span className="kicker">FLEXIBLE & FAIR</span><h2>按你的面试节奏选择</h2><p>可以先免费使用。偶尔使用按点结算，面试密集期选择按天会员，再按实际面试节奏购买。</p></div><div className="public-pricing-grid"><article><span>灵活按次</span><h3>积分使用</h3><strong>回答 5 点起</strong><p>知识材料 20 点起，完整 Token 规则可在积分页查看。</p><Link to={routes.login}>免费开始 →</Link></article><article className="featured"><span>短期高频</span><h3>按天会员</h3><strong>3 天 ¥{((passes.find(item => item.durationDays === 3)?.priceCents ?? 0) / 100).toFixed(2)} 起</strong><p>{passes.map(item => `${item.durationDays}天`).join(" / ")}；15 天和 30 天各含 2 份知识材料额度。</p><Link to={routes.login}>免费使用 →</Link></article></div></section>
-      <section id="value-proof" className="public-section value-proof"><div className="section-intro"><span className="kicker">WHY OFFERSTEADY</span><h2>从听懂问题，到组织答案，现场更从容。</h2><p>结合你的简历、目标岗位和知识材料，快速抓住问题重点，生成清晰、贴合你的回答思路。</p></div><div className="value-proof-grid"><article><span>01</span><h3>实时抓住问题重点</h3><p>区分面试官与候选人的对话，让你把注意力放在真正需要回答的问题上。</p></article><article><span>02</span><h3>回答更贴合你的经历</h3><p>按场选择简历、JD 和知识材料，快速整理更相关的表达结构。</p></article><article><span>03</span><h3>按求职节奏灵活使用</h3><p>偶尔面试按点使用，密集面试选择短期会员，不必承担长期订阅。</p></article></div><div id="privacy" className="value-trust"><p>AI 内容为回答建议，重要经历请以真实情况为准；资料和会话记录可管理、可删除。</p><details><summary>查看使用与隐私说明</summary><p>原始音频默认不保存；简历、JD、截图和会话记录提供删除入口。请遵守面试规则并以真实经历作答。</p></details></div></section>
+
+    </section>
+    <section className="cn-closing"><div><span className="kicker">为下一场面试做好准备</span><h2>让准备过的经历，表达得更清楚。</h2><p>先体验，再决定适合自己的使用方式。</p></div><Link className="button primary large" to={routes.login}>免费使用 →</Link></section>
+      {partnerProgramEnabled ? <section className="cn-partner-inline" aria-label="合作伙伴计划"><p>分享面试稳，获得 20% 推广佣金。</p><Link to={routes.partnerProgram}>了解合作伙伴计划 ↗</Link></section> : null}
       <footer className="public-footer">
         <div className="public-footer-main">
           <section className="footer-brand"><Logo /><p>面向求职者的 AI 面试辅助工具，从资料准备、现场表达建议到面试复盘，让每一次面试更有条理。</p><span>AI 输出仅供参考，请始终以真实经历作答。</span></section>
@@ -251,8 +225,8 @@ function LandingPage() {
           </div>
         </div>
       </footer>
-    </main>
-  );
+
+  </main>;
 }
 
 function LoginPage() {
@@ -295,7 +269,7 @@ function LoginPage() {
   };
   const verifyCode = async (event: FormEvent) => {
     event.preventDefault();
-    if (!challengeId) {
+    if (!challengeId && !code.trim()) {
       setMessage("请先获取验证码");
       return;
     }
@@ -310,7 +284,7 @@ function LoginPage() {
       setBusy("");
     }
   };
-  return <main className="center-page"><section className="login-card"><Logo /><span className="prototype-badge">当前可免费使用</span><h1>开始你的面试准备</h1><p>使用手机号验证码完成登录或注册，同一个账号可以管理资料、积分和不同设备上的面试。</p><form className="sms-login-form" onSubmit={challengeId ? verifyCode : sendCode}><label><span>手机号</span><input value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} inputMode="tel" autoComplete="tel" placeholder="请输入手机号" /></label>{challengeId ? <label><span>验证码</span><input value={code} onChange={event => setCode(event.target.value)} inputMode="numeric" autoComplete="one-time-code" placeholder="请输入验证码" /></label> : null}<div className="sms-actions"><button className="button primary large full" type="submit" disabled={Boolean(busy)}>{busy === "verify" ? "登录中..." : challengeId ? "登录 / 注册" : busy === "send" ? "发送中..." : "获取验证码"}</button>{challengeId ? <button className="button ghost full" type="button" disabled={cooldown > 0 || Boolean(busy)} onClick={event => { void sendCode(event as unknown as FormEvent); }}>{cooldown > 0 ? `${cooldown}s 后重发` : "重新发送验证码"}</button> : null}</div></form>{message ? <p className="login-message">{message}</p> : null}<Link className="text-link login-back" to={routes.landing}>返回首页</Link><small className="login-legal-copy">登录即表示你同意<Link to={routes.terms}>用户协议</Link>与<Link to={routes.privacy}>隐私政策</Link>。验证码只用于账号识别和登录校验。</small></section></main>;
+  return <main className="center-page"><section className="login-card"><Logo /><span className="prototype-badge">当前可免费使用</span><h1>开始你的面试准备</h1><p>使用手机号验证码完成登录或注册，同一个账号可以管理资料、积分和不同设备上的面试。</p><form className="sms-login-form" onSubmit={challengeId || code.trim() ? verifyCode : sendCode}><label><span>手机号</span><input value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} inputMode="tel" autoComplete="tel" placeholder="请输入手机号" /></label><label><span>验证码</span><input value={code} onChange={event => setCode(event.target.value)} inputMode="numeric" autoComplete="one-time-code" placeholder="请输入验证码" /></label><div className="sms-actions"><button className="button primary large full" type="submit" disabled={Boolean(busy)}>{busy === "verify" ? "登录中..." : challengeId || code.trim() ? "登录 / 注册" : busy === "send" ? "发送中..." : "获取验证码"}</button>{challengeId ? <button className="button ghost full" type="button" disabled={cooldown > 0 || Boolean(busy)} onClick={event => { void sendCode(event as unknown as FormEvent); }}>{cooldown > 0 ? `${cooldown}s 后重发` : "重新发送验证码"}</button> : null}</div></form>{message ? <p className="login-message">{message}</p> : null}<Link className="text-link login-back" to={routes.landing}>返回首页</Link><small className="login-legal-copy">登录即表示你同意<Link to={routes.terms}>用户协议</Link>与<Link to={routes.privacy}>隐私政策</Link>。验证码只用于账号识别和登录校验。</small></section></main>;
 }
 
 function ReferralLandingPage() {
@@ -360,6 +334,7 @@ const navItems = [
   { to: routes.writtenExams, label: "笔试模式", icon: "◇" },
   { to: routes.library, label: "资料", icon: "◇" },
   { to: routes.billing, label: "积分与会员", icon: "点" },
+  { to: routes.partnerProgram, label: "合作伙伴计划", icon: "◇" },
   { to: routes.guide, label: "使用说明", icon: "?" },
   { href: USER_MANUAL_URL, label: "用户手册", icon: "册" },
   { to: routes.devices, label: "设备", icon: "⌘" },
@@ -369,7 +344,7 @@ const navItems = [
 function WorkbenchNavigationItems({ mobile = false }: { readonly mobile?: boolean }) {
   return <>{navItems.map(item => "href" in item
     ? <a key={item.href} href={item.href} target="_blank" rel="noopener noreferrer" aria-label={item.label}><span aria-hidden="true">{item.icon}</span>{mobile ? <small>{item.label}</small> : item.label}</a>
-    : <NavLink key={item.to} to={item.to} {...(item.end ? { end: true } : {})}><span aria-hidden="true">{item.icon}</span>{mobile ? <small>{item.label}</small> : item.label}</NavLink>)}</>;
+    : <NavLink key={item.to} to={item.to} className={({ isActive }) => isActive ? "active" : ""} {...(item.end ? { end: true } : {})}><span aria-hidden="true">{item.icon}</span>{mobile ? <small>{item.label}</small> : item.label}</NavLink>)}</>;
 }
 
 function AccountMenu({ compact = false, dropUp = false }: { readonly compact?: boolean; readonly dropUp?: boolean }) {
@@ -420,38 +395,6 @@ export const interviewContinuationRoute = (interview: Pick<WebAppState["intervie
 const sessionHomeRoute = (mode?: SessionMode) => mode === "written" ? routes.writtenExams : routes.app;
 
 const sessionStatusLabel: Record<SessionStatus, string> = { preparing: "准备中", ready: "待开始", active: "进行中", paused: "已暂停", ended: "已结束", error: "待恢复" };
-
-const emptyLiveQuestion: InterviewQuestion = {
-  id: "empty-live-question",
-  askedAt: "等待中",
-  text: "等待面试问题",
-  input: "manual",
-  status: "listening",
-  advice: {
-    outline: [],
-    detail: "当前还没有来自后端的面试问题记录。",
-    sourceTypes: [],
-    inference: "",
-    uncertain: true,
-    provenance: { selectionRevision: 0, usedSources: [] },
-  },
-};
-
-const QUICK_ANSWER_MISSING_QUESTION_NOTICE = "未能识别到面试官的问题";
-
-const extractLatestInterviewerQuestion = (speaker: WebAppState["speaker"]) => {
-  return latestInterviewerTurnText(speaker.transcripts, speaker.pendingQuestion?.text ?? "");
-};
-
-function useDesktopLiveLayout() {
-  const query = "(min-width: 721px)";
-  const [desktop, setDesktop] = useState(() => typeof window.matchMedia === "function" ? window.matchMedia(query).matches : window.innerWidth > 720);
-  useEffect(() => {
-    if (typeof window.matchMedia !== "function") { const update = () => setDesktop(window.innerWidth > 720); window.addEventListener("resize", update); return () => window.removeEventListener("resize", update); }
-    const media = window.matchMedia(query); const update = () => setDesktop(media.matches); update(); media.addEventListener?.("change", update); return () => media.removeEventListener?.("change", update);
-  }, []);
-  return desktop;
-}
 
 function HomePage() {
   const { state, setState } = usePrototype();
@@ -598,6 +541,7 @@ function CompanionUpdateReminder({ update, onContinue }: { readonly update: Comp
 }
 
 function PreparationPage() {
+  useEffect(() => { void preloadLivePage(); }, []);
   const { id = "demo" } = useParams();
   const { state, setState } = usePrototype();
   const navigate = useNavigate();
@@ -849,1018 +793,6 @@ function PreparationPage() {
   </main>;
 }
 
-function LivePage() {
-  const { id = "demo" } = useParams();
-  const { state, setState } = usePrototype();
-  const navigate = useNavigate();
-  const storageKey = splitRatioStorageKey(id);
-  const [view, setView] = useState(() => initialLiveWorkspaceView(parseStoredSplitRatio(typeof window.sessionStorage?.getItem === "function" ? window.sessionStorage.getItem(storageKey) : null)));
-  const [actionState, setActionState] = useState<Omit<LiveActionState, "pendingQuestion">>({ manualDraft: "", screenshotTask: null, quickAnswerStatus: "idle", quickAnswerMessage: "", screenshotAnswerStatus: "idle" });
-  const [notice, setNotice] = useState("");
-  const [cancellingAnswer, setCancellingAnswer] = useState(false);
-  const [cancelAnswerError, setCancelAnswerError] = useState("");
-  const [pageLeaseStatus, setPageLeaseStatus] = useState<"claiming" | "active" | "replaced">("claiming");
-  const [captureControlPending, setCaptureControlPending] = useState<"pause" | "resume" | null>(null);
-  const [realtimeDiagnosisNonce, setRealtimeDiagnosisNonce] = useState(0);
-  const [idleStatus, setIdleStatus] = useState<IdleInterviewStatus | null>(null);
-  const [continuingInterview, setContinuingInterview] = useState(false);
-  const [autoAnswerSaving, setAutoAnswerSaving] = useState(false);
-  const [splitBounds, setSplitBounds] = useState({ min: ABSOLUTE_MIN_SPLIT_RATIO, max: ABSOLUTE_MAX_SPLIT_RATIO });
-  const [mobilePanel, setMobilePanel] = useState<"answer" | "conversation">("answer");
-  const workspaceRef = useRef<HTMLDivElement>(null);
-  const desktopLayout = useDesktopLiveLayout();
-  const submittedCommands = useRef(new Set<string>());
-  const attemptedAutoCandidates = useRef(new Set<string>());
-  const previousLatestId = useRef(state.questions[0]?.id);
-  const screenshotController = useRef<AbortController | null>(null);
-  const manualAnswerController = useRef<AbortController | null>(null);
-  const beginInstantScreenshotRef = useRef<() => void>(() => undefined);
-  const activeShortcutScreenshotRequest = useRef<string | null>(null);
-  const terminalShortcutScreenshotRequests = useRef(new Set<string>());
-  const seenShortcutScreenshotNotifications = useRef(new Set<string>());
-  const realtimeHealthyRef = useRef(false);
-  const livePageMountedAtMs = useRef(Date.now());
-  const pageInstanceId = useRef(globalThis.crypto?.randomUUID?.() ?? `page-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  const liveInterview = state.interviews.find(item => item.id === id);
-  const isWritten = liveInterview?.sessionMode === "written";
-  const interviewTitle = liveInterview?.title ?? "本场面试";
-  const interviewLanguageLabel = (liveInterview?.interviewLanguage ?? "zh-CN") === "en-US" ? "English Interview" : "中文面试";
-  const active = state.questions[0] ?? emptyLiveQuestion;
-  const screenshot = actionState.screenshotTask;
-  const setScreenshot = (next: ScreenshotTask | null) => setActionState(current => ({
-    ...current,
-    screenshotTask: next,
-    screenshotAnswerStatus: next
-      ? next.stage === "completed" ? "success" : next.stage === "failed" ? "failed" : next.stage === "cancelled" ? "cancelled" : "processing"
-      : current.screenshotAnswerStatus ?? "idle",
-  }));
-  const contextSelection = state.contextSelections[id] ?? { sessionId: id, resumeSourceId: null, jobDescriptionSourceId: null, knowledgeSourceIds: [], revision: 0, confirmedAtMs: null };
-  const selectedContextSources = selectionSources(managedLibrarySources(state.librarySources, state.account.id).filter(eligibleSource), contextSelection);
-  useEffect(() => { if (typeof window.sessionStorage?.setItem === "function") window.sessionStorage.setItem(storageKey, serializeSplitRatio(view.splitRatio)); }, [storageKey, view.splitRatio]);
-  useEffect(() => {
-    if (!desktopLayout) return;
-    const updateBounds = () => { const width = workspaceRef.current?.getBoundingClientRect().width ?? 0; if (!width) return; const next = width < 900 ? splitRatioBounds(width, 240, 300) : splitRatioBounds(width); setSplitBounds(next); setView(current => ({ ...current, splitRatio: clampSplitRatio(current.splitRatio, next) })); };
-    updateBounds(); window.addEventListener("resize", updateBounds); const observer = typeof ResizeObserver === "function" ? new ResizeObserver(updateBounds) : null; if (workspaceRef.current) observer?.observe(workspaceRef.current); return () => { window.removeEventListener("resize", updateBounds); observer?.disconnect(); };
-  }, [desktopLayout]);
-  useEffect(() => {
-    const nextLatestId = state.questions[0]?.id;
-    if (!desktopLayout && previousLatestId.current && nextLatestId && previousLatestId.current !== nextLatestId) setMobilePanel("answer");
-    setView(current => noteNewAnswer(current, previousLatestId.current, nextLatestId));
-    previousLatestId.current = nextLatestId;
-  }, [desktopLayout, state.questions]);
-  useEffect(() => {
-    if (!desktopLayout && state.activeAnswerTask && ["pending", "generating"].includes(state.activeAnswerTask.status)) setMobilePanel("answer");
-  }, [desktopLayout, state.activeAnswerTask?.id, state.activeAnswerTask?.status]);
-  useEffect(() => () => { screenshotController.current?.abort(); manualAnswerController.current?.abort(); }, []);
-  useEffect(() => {
-    setState(current => ({
-      ...current,
-      speaker: isolateRealtimeSpeakerSession(current.speaker, id),
-      activeAnswerTask: current.activeAnswerTask?.interviewId === id ? current.activeAnswerTask : null,
-    }));
-  }, [id, setState]);
-  useEffect(() => {
-    const controller = new AbortController();
-    let stopped = false;
-    let inFlight = false;
-    const syncWorkspace = async () => {
-      if (stopped || inFlight || document.visibilityState !== "visible") return;
-      inFlight = true;
-      try {
-        const snapshot = await runAdapterOperation(signal => interviewAppAdapter.loadInterviewWorkspace(id, signal), controller.signal);
-        if (stopped) return;
-        setState(current => ({
-          ...current,
-          ...reconcileAnswerWorkspace(
-            { questions: current.questions, activeAnswerTask: current.activeAnswerTask },
-            snapshot,
-          ),
-        }));
-      } catch {
-        // Keep the current page usable while a cross-device history refresh is temporarily unavailable.
-      } finally {
-        inFlight = false;
-      }
-    };
-    void syncWorkspace();
-    const refreshOnReturn = () => {
-      if (document.visibilityState === "visible") void syncWorkspace();
-    };
-    document.addEventListener("visibilitychange", refreshOnReturn);
-    window.addEventListener("focus", refreshOnReturn);
-    return () => {
-      stopped = true;
-      controller.abort();
-      document.removeEventListener("visibilitychange", refreshOnReturn);
-      window.removeEventListener("focus", refreshOnReturn);
-    };
-  }, [id, setState]);
-  useEffect(() => {
-    if (pageLeaseStatus === "replaced") return;
-    const controller = new AbortController();
-    let stopped = false;
-    const refreshIdleStatus = async () => {
-      try {
-        const next = await runAdapterOperation(signal => interviewAppAdapter.getInterviewIdleStatus(id, signal), controller.signal);
-        if (stopped) return;
-        setIdleStatus(next);
-        if (next.state === "ended") {
-          setState(current => ({
-            ...current,
-            captureState: "ready",
-            interviews: current.interviews.map(item => item.id === id ? { ...item, status: "ended" } : item),
-          }));
-          navigate(routes.review(id), { replace: true });
-        }
-      } catch {
-        // Realtime heartbeat continues to handle connectivity failures.
-      }
-    };
-    void refreshIdleStatus();
-    const timer = window.setInterval(() => void refreshIdleStatus(), 15_000);
-    return () => { stopped = true; controller.abort(); window.clearInterval(timer); };
-  }, [id, navigate, pageLeaseStatus, setState]);
-  useEffect(() => {
-    if (pageLeaseStatus === "replaced") return;
-    const controller = new AbortController();
-    let stopped = false;
-    let inFlight = false;
-    const syncShortcutAnswers = async () => {
-      if (stopped || inFlight || realtimeHealthyRef.current || document.visibilityState !== "visible") return;
-      inFlight = true;
-      try {
-        const updates = await runAdapterOperation(
-          signal => interviewAppAdapter.loadDesktopShortcutScreenshotUpdates(id, signal),
-          controller.signal,
-        );
-        if (stopped || updates.length === 0) return;
-        const latest = updates[updates.length - 1]!;
-        const latestAlreadyTerminal = terminalShortcutScreenshotRequests.current.has(latest.requestId);
-        if ((latest.status === "requested" || latest.status === "processing") && !latestAlreadyTerminal) {
-          activeShortcutScreenshotRequest.current = latest.requestId;
-          setScreenshot(latest.screenshotTask);
-        } else if (!latestAlreadyTerminal) {
-          terminalShortcutScreenshotRequests.current.add(latest.requestId);
-          if (activeShortcutScreenshotRequest.current === latest.requestId) {
-            activeShortcutScreenshotRequest.current = null;
-          }
-          if (latest.status === "completed") {
-            setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "success" }));
-          } else {
-            setScreenshot(latest.screenshotTask);
-          }
-        }
-        const results = updates.flatMap(update => update.result ? [update.result] : []);
-        setState(current => {
-          if (results.length === 0) return current;
-          const newest = results.reduce((latest, result) => result.task.updatedAtMs > latest.task.updatedAtMs ? result : latest);
-          return {
-            ...current,
-            ...reconcileAnswerWorkspace(
-              { questions: current.questions, activeAnswerTask: current.activeAnswerTask },
-              { questions: results.map(result => result.question), activeAnswerTask: newest.task },
-            ),
-          };
-        });
-      } catch {
-        // Shortcut result synchronization is best-effort and must not interrupt live audio or manual answers.
-      } finally {
-        inFlight = false;
-      }
-    };
-    void syncShortcutAnswers();
-    const timer = window.setInterval(() => void syncShortcutAnswers(), SHORTCUT_SCREENSHOT_RECOVERY_POLL_INTERVAL_MS);
-    return () => {
-      stopped = true;
-      controller.abort();
-      window.clearInterval(timer);
-    };
-  }, [id, pageLeaseStatus, setState]);
-  useEffect(() => {
-    let stopped = false;
-    let heartbeatTimer: number | null = null;
-    let heartbeatBindingId: string | null = null;
-    let leaseGeneration: number | null = null;
-    let lastBindingRefreshAt = 0;
-    let reconnectTimer: number | null = null;
-    let reconnectAttempt = 0;
-    let invalidSessionSuspended = false;
-    let realtimeSubscribeInFlight = false;
-    let realtimeStreamHealthy = false;
-    let realtimeLoadInFlight = false;
-    let streamController: AbortController | null = null;
-    const realtimeController = new AbortController();
-    const coordinator = createLiveSessionLeaderCoordinator(
-      `offersteady:live-session:${state.account.id}:${id}`,
-      pageInstanceId.current,
-    );
-    let isRealtimeLeader = coordinator === null;
-    const realtimeErrorStatus = (error: unknown) => {
-      if (typeof error === "object" && error !== null && "status" in error && typeof error.status === "number") return error.status;
-      const match = error instanceof Error ? error.message.match(/[（(](\d{3})[）)]/) : null;
-      return match ? Number(match[1]) : null;
-    };
-    const pauseReplacedPage = () => {
-      if (stopped) return;
-      stopped = true;
-      realtimeHealthyRef.current = false;
-      setPageLeaseStatus("replaced");
-      setNotice("");
-      realtimeController.abort();
-      streamController?.abort();
-      manualAnswerController.current?.abort();
-      screenshotController.current?.abort();
-      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
-      if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);
-    };
-    const applyRealtimeState = (realtime: RealtimeSessionUpdate, relay = true) => {
-      if (stopped) return;
-      const shortcut = realtime.shortcutScreenshotUpdate;
-      const notificationId = shortcut?.notificationId;
-      if (
-        shortcut
-        && notificationId
-        && !seenShortcutScreenshotNotifications.current.has(notificationId)
-        && !terminalShortcutScreenshotRequests.current.has(shortcut.requestId)
-        && isFreshShortcutScreenshotAcceptance(shortcut.acceptedAtMs, livePageMountedAtMs.current)
-      ) {
-        seenShortcutScreenshotNotifications.current.add(notificationId);
-        activeShortcutScreenshotRequest.current = shortcut.requestId;
-        setScreenshot(shortcut.screenshotTask);
-      }
-      if (shortcut && shortcut.acceptedAtMs === undefined) {
-        const alreadyTerminal = terminalShortcutScreenshotRequests.current.has(shortcut.requestId);
-        if ((shortcut.status === "requested" || shortcut.status === "processing") && !alreadyTerminal) {
-          activeShortcutScreenshotRequest.current = shortcut.requestId;
-          setScreenshot(shortcut.screenshotTask);
-        } else if (!alreadyTerminal) {
-          terminalShortcutScreenshotRequests.current.add(shortcut.requestId);
-          if (activeShortcutScreenshotRequest.current === shortcut.requestId) activeShortcutScreenshotRequest.current = null;
-          if (shortcut.status === "completed") {
-            setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "success" }));
-          } else if (shortcut.status === "cancelled") {
-            setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "cancelled" }));
-          } else {
-            setScreenshot(shortcut.screenshotTask);
-          }
-        }
-      }
-      setState(current => {
-        const answerResults = [realtime.answerUpdate, shortcut?.result].filter((result): result is NonNullable<typeof result> => Boolean(result));
-        const newestAnswer = answerResults.length > 0
-          ? answerResults.reduce((latest, result) => result.task.updatedAtMs > latest.task.updatedAtMs ? result : latest)
-          : null;
-        const workspace = newestAnswer
-          ? reconcileAnswerWorkspace(
-              { questions: current.questions, activeAnswerTask: current.activeAnswerTask },
-              {
-                questions: answerResults.map(result => result.question),
-                activeAnswerTask: newestAnswer.task,
-              },
-            )
-          : { questions: current.questions, activeAnswerTask: current.activeAnswerTask };
-        return {
-          ...current,
-          ...workspace,
-          speaker: reconcileRealtimeSpeaker(current.speaker, realtime.speaker, id),
-          ...(realtime.captureState ? { captureState: realtime.captureState } : {}),
-        };
-      });
-      if (relay) coordinator?.publishState(realtime);
-    };
-    const sendHeartbeat = async () => {
-      if (!isRealtimeLeader) return false;
-      try {
-        const now = Date.now();
-        if (!heartbeatBindingId || now - lastBindingRefreshAt >= 30_000) {
-          const binding = await runAdapterOperation(signal => interviewAppAdapter.getDesktopDeviceBinding(id, signal));
-          if (binding?.bindingId) heartbeatBindingId = binding.bindingId;
-          lastBindingRefreshAt = now;
-        }
-        const lease = await runAdapterOperation(signal => interviewAppAdapter.sendDesktopSessionHeartbeat({ interviewId: id, bindingId: heartbeatBindingId, page: "live", pageInstanceId: pageInstanceId.current }, signal));
-        if (lease.pageInstanceId !== pageInstanceId.current || lease.leaseGeneration < 1) {
-          pauseReplacedPage();
-          return false;
-        }
-        leaseGeneration = lease.leaseGeneration;
-        setPageLeaseStatus("active");
-        return true;
-      } catch (error) {
-        if (isInvalidRealtimeSessionStatus(realtimeErrorStatus(error))) {
-          pauseReplacedPage();
-          return false;
-        }
-        heartbeatBindingId = null;
-        // Realtime polling below will continue to surface backend connectivity issues without blocking manual answers.
-        return false;
-      }
-    };
-    const loadRealtime = async () => {
-      if (!isRealtimeLeader || realtimeLoadInFlight || stopped || document.visibilityState !== "visible" || leaseGeneration === null) return false;
-      realtimeLoadInFlight = true;
-      try {
-        const realtime = await runAdapterOperation(signal => interviewAppAdapter.loadRealtimeSession(
-          id,
-          signal,
-          { pageInstanceId: pageInstanceId.current, leaseGeneration: leaseGeneration! },
-        ));
-        applyRealtimeState(realtime);
-        return true;
-      } catch {
-        // Keep manual question and screenshot flows available when realtime sync is temporarily unavailable.
-        return false;
-      } finally {
-        realtimeLoadInFlight = false;
-      }
-    };
-    const scheduleReconnect = (status: number | null = null) => {
-      if (stopped || realtimeController.signal.aborted) return;
-      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
-      invalidSessionSuspended = isInvalidRealtimeSessionStatus(status);
-      const delay = realtimeRetryDelayMs(status, reconnectAttempt);
-      reconnectAttempt += 1;
-      reconnectTimer = window.setTimeout(() => {
-        reconnectTimer = null;
-        invalidSessionSuspended = false;
-        void subscribeRealtime();
-      }, delay);
-    };
-    const subscribeRealtime = async () => {
-      if (!isRealtimeLeader || realtimeSubscribeInFlight || stopped || realtimeController.signal.aborted || leaseGeneration === null) return;
-      const activeLeaseGeneration = leaseGeneration;
-      const activeStreamController = new AbortController();
-      streamController = activeStreamController;
-      const abortStream = () => activeStreamController.abort();
-      realtimeController.signal.addEventListener("abort", abortStream, { once: true });
-      realtimeSubscribeInFlight = true;
-      try {
-        await runAdapterOperation(signal => interviewAppAdapter.subscribeRealtimeSession(id, (realtime, delivery) => {
-          if (delivery?.type === "snapshot") {
-            realtimeStreamHealthy = true;
-            realtimeHealthyRef.current = true;
-            invalidSessionSuspended = false;
-            reconnectAttempt = realtimeReconnectAttemptAfterRecovery(reconnectAttempt, "stream-snapshot");
-            if (reconnectTimer !== null) {
-              window.clearTimeout(reconnectTimer);
-              reconnectTimer = null;
-            }
-          }
-          applyRealtimeState(realtime);
-        }, signal, { pageInstanceId: pageInstanceId.current, leaseGeneration: activeLeaseGeneration }), activeStreamController.signal);
-        realtimeStreamHealthy = false;
-        realtimeHealthyRef.current = false;
-        if (!stopped && !realtimeController.signal.aborted) scheduleReconnect();
-      } catch (error) {
-        if (stopped || realtimeController.signal.aborted) return;
-        realtimeStreamHealthy = false;
-        realtimeHealthyRef.current = false;
-        const status = realtimeErrorStatus(error);
-        if (isInvalidRealtimeSessionStatus(status)) {
-          window.sessionStorage?.removeItem(`offersteady:realtime-cursor:${id}`);
-          if (status === 409 || status === 410) pauseReplacedPage();
-          else {
-            setNotice("当前面试会话已失效，请从面试首页重新进入。");
-            navigate(sessionHomeRoute(liveInterview?.sessionMode), { replace: true });
-          }
-          return;
-        }
-        const recovered = await loadRealtime();
-        if (recovered) reconnectAttempt = realtimeReconnectAttemptAfterRecovery(reconnectAttempt, "fallback-snapshot");
-        scheduleReconnect(status);
-      } finally {
-        realtimeSubscribeInFlight = false;
-        realtimeController.signal.removeEventListener("abort", abortStream);
-        if (streamController === activeStreamController) streamController = null;
-      }
-    };
-    coordinator?.start({
-      onLeadershipChange: leader => {
-        isRealtimeLeader = leader;
-        if (!leader) {
-          realtimeStreamHealthy = false;
-          realtimeHealthyRef.current = false;
-          streamController?.abort();
-          streamController = null;
-          if (reconnectTimer !== null) {
-            window.clearTimeout(reconnectTimer);
-            reconnectTimer = null;
-          }
-          return;
-        }
-        void sendHeartbeat().then(claimed => {
-          if (claimed) void subscribeRealtime();
-        });
-      },
-      onState: realtime => {
-        realtimeStreamHealthy = true;
-        realtimeHealthyRef.current = true;
-        applyRealtimeState(realtime, false);
-      },
-    }, document.visibilityState === "visible");
-    heartbeatTimer = window.setInterval(() => void sendHeartbeat(), 15_000);
-    const resumeRealtime = () => {
-      if (stopped || !isRealtimeLeader || document.visibilityState !== "visible") return;
-      void sendHeartbeat();
-      if (invalidSessionSuspended) return;
-      if (!realtimeStreamHealthy && !realtimeSubscribeInFlight) {
-        if (reconnectTimer !== null) {
-          window.clearTimeout(reconnectTimer);
-          reconnectTimer = null;
-        }
-        reconnectAttempt = 0;
-        void subscribeRealtime();
-      }
-    };
-    const handleVisibilityChange = () => {
-      coordinator?.setEligible(document.visibilityState === "visible");
-      if (document.visibilityState === "visible") resumeRealtime();
-    };
-    const handlePageHide = () => coordinator?.setEligible(false);
-    const handlePageShow = () => {
-      coordinator?.setEligible(document.visibilityState === "visible");
-      if (document.visibilityState === "visible") resumeRealtime();
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("pagehide", handlePageHide);
-    window.addEventListener("pageshow", handlePageShow);
-    window.addEventListener("focus", resumeRealtime);
-    window.addEventListener("online", resumeRealtime);
-    if (isRealtimeLeader) {
-      void sendHeartbeat().then(claimed => {
-        if (!claimed || stopped) return;
-        void subscribeRealtime();
-      });
-    }
-    return () => {
-      stopped = true;
-      realtimeHealthyRef.current = false;
-      realtimeController.abort();
-      streamController?.abort();
-      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
-      if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);
-      coordinator?.stop();
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("pagehide", handlePageHide);
-      window.removeEventListener("pageshow", handlePageShow);
-      window.removeEventListener("focus", resumeRealtime);
-      window.removeEventListener("online", resumeRealtime);
-    };
-  }, [id, navigate, realtimeDiagnosisNonce, setState, state.account.id]);
-  const scopedAdvice = {
-    ...active.advice,
-    detail: selectedContextSources.length ? active.advice.detail : "当前没有选择个人资料。请使用通用结构组织回答，并只补充你能够核对的真实经历、职责和结果。",
-    sourceTypes: selectedContextSources.map(source => source.kind === "resume" ? "简历" as const : source.kind === "jd" ? "JD" as const : "知识库" as const),
-    inference: "",
-    uncertain: selectedContextSources.length === 0,
-    provenance: { selectionRevision: contextSelection.revision, usedSources: selectedContextSources.map(source => ({ sourceId: source.id, sourceVersion: source.version, displayName: source.displayName, kind: source.kind })) },
-  };
-  const syncBilling = async () => {
-    try {
-      const refreshed = await interviewAppAdapter.loadState();
-      setState(current => ({ ...current, billing: refreshed.billing }));
-    } catch {
-      // The completed task remains usable; the next state refresh will reconcile billing.
-    }
-  };
-  const activeTaskFor = (question: InterviewQuestion, usageId: string): AnswerTaskSnapshot => ({ id: `answer:${question.id}:${Date.now()}`, interviewId: id, userId: state.account.id, billingUsageId: usageId, questionId: question.id, question: question.text, revision: 1, status: "generating", partialText: "正在整理回答结构…", updatedAtMs: Date.now() });
-  const pendingManualQuestion = (text: string, questionId: string, input: InterviewQuestion["input"] = "manual"): InterviewQuestion => ({
-    ...active,
-    id: questionId,
-    text,
-    input,
-    askedAt: "刚刚",
-    status: "generating",
-    advice: {
-      ...scopedAdvice,
-      detail: "正在调用当前对话模型生成回答…",
-      outline: [],
-      inference: "",
-      uncertain: selectedContextSources.length === 0,
-    },
-  });
-  const failedManualQuestion = (question: InterviewQuestion, message = "回答生成失败，请稍后重试。"): InterviewQuestion => ({
-    ...question,
-    status: "failed",
-    advice: {
-      ...question.advice,
-      outline: [],
-      detail: message,
-      inference: "",
-      uncertain: true,
-    },
-  });
-  const submitManualText = async (
-    text: string,
-    replaceQuestionId?: string,
-    frozenQuestion?: { readonly questionId: string; readonly questionRevision: number; readonly clickedAtMs: number; readonly prefetchRevision: number; readonly triggerMode?: "manual" | "auto" },
-  ) => {
-    const trimmed = text.trim(); if (!trimmed) return;
-    const clickedAtMs = frozenQuestion?.clickedAtMs ?? Date.now();
-    const command = frozenQuestion?.triggerMode === "auto" ? `auto:${id}:${frozenQuestion.questionId}` : `manual:${id}:${trimmed}`; if (submittedCommands.current.has(command)) return;
-    submittedCommands.current.add(command); setNotice("");
-    setActionState(current => ({ ...current, quickAnswerStatus: "processing", quickAnswerMessage: "" }));
-    const pendingId = replaceQuestionId ?? `manual-pending-${Date.now()}`;
-    const pendingQuestion = pendingManualQuestion(trimmed, pendingId, frozenQuestion?.triggerMode === "auto" ? "desktop-audio" : "manual");
-    const pendingTask: AnswerTaskSnapshot = { id: `pending:${pendingId}`, interviewId: id, userId: state.account.id, billingUsageId: `pending:${pendingId}`, questionId: pendingId, question: trimmed, revision: 1, status: "generating", partialText: "正在调用当前对话模型生成回答…", clickedAtMs, updatedAtMs: Date.now() };
-    setState(current => ({ ...current, questions: replaceQuestionId ? current.questions.map(item => item.id === replaceQuestionId ? pendingQuestion : item) : [pendingQuestion, ...current.questions], activeAnswerTask: pendingTask }));
-    setActionState(current => ({ ...current, manualDraft: "" }));
-    setView(current => ({ ...current, viewingAnswerId: null, newAnswerAvailable: false }));
-    let pendingStreamUpdate: Parameters<NonNullable<Parameters<typeof interviewAppAdapter.submitManualAnswer>[2]>>[0] | null = null;
-    let firstAnswerTiming: LiveAnswerStreamEvent["timing"];
-    let streamRenderTimer: number | null = null;
-    const applyStreamUpdate = (update: NonNullable<typeof pendingStreamUpdate>) => {
-      setState(current => ({
-        ...current,
-        ...reconcileAnswerWorkspace(
-          {
-            questions: current.questions.filter(item => item.id !== pendingId && item.id !== update.result.question.id),
-            activeAnswerTask: current.activeAnswerTask,
-          },
-          { questions: [update.result.question], activeAnswerTask: update.result.task },
-          { preferIncomingTask: true },
-        ),
-      }));
-      const renderedText = update.result.task.partialText ?? update.result.task.completedText ?? "";
-      if (
-        update.event.type === "chunk"
-        && renderedText.trim()
-        && update.result.task.clickedAtMs
-        && interviewAppAdapter.acknowledgeAnswerFirstRender
-      ) {
-        const acknowledge = () => interviewAppAdapter.acknowledgeAnswerFirstRender?.({
-          interviewId: id,
-          taskId: update.result.task.id,
-          clickedAtMs: update.result.task.clickedAtMs!,
-          ...(update.event.receivedAtMs === undefined ? {} : { browserEventReceiveAtMs: update.event.receivedAtMs }),
-          browserRenderAtMs: Date.now(),
-          renderedTextLength: renderedText.length,
-          timing: update.event.timing,
-        });
-        if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(acknowledge));
-        else window.setTimeout(acknowledge, 0);
-      }
-    };
-    const flushStreamUpdate = () => {
-      if (streamRenderTimer !== null) window.clearTimeout(streamRenderTimer);
-      streamRenderTimer = null;
-      if (!pendingStreamUpdate) return;
-      const update = pendingStreamUpdate;
-      pendingStreamUpdate = null;
-      applyStreamUpdate(update);
-    };
-    try {
-      manualAnswerController.current?.abort();
-      const controller = new AbortController();
-      manualAnswerController.current = controller;
-      const result = await runAdapterOperation(signal => interviewAppAdapter.submitManualAnswer({ interviewId: id, question: trimmed, idempotencyKey: command, ...frozenQuestion, clickedAtMs }, signal, update => {
-        firstAnswerTiming ??= update.event.timing;
-        pendingStreamUpdate = firstAnswerTiming && !update.event.timing
-          ? { ...update, event: { ...update.event, timing: firstAnswerTiming } }
-          : update;
-        if (["completed", "failed", "cancelled"].includes(update.event.type)) flushStreamUpdate();
-        else if (streamRenderTimer === null) streamRenderTimer = window.setTimeout(flushStreamUpdate, 100);
-      }), controller.signal);
-      flushStreamUpdate();
-      setState(current => ({
-        ...current,
-        ...reconcileAnswerWorkspace(
-          { questions: current.questions.filter(item => item.id !== pendingId && item.id !== result.question.id), activeAnswerTask: current.activeAnswerTask },
-          { questions: [result.question], activeAnswerTask: result.task },
-          { preferIncomingTask: true },
-        ),
-      }));
-      setActionState(current => ({ ...current, quickAnswerStatus: result.task.status === "failed" ? "failed" : result.task.status === "completed" ? "success" : "processing", quickAnswerMessage: result.task.status === "failed" ? result.task.partialText ?? "快答失败，可重试" : "" }));
-      if (result.task.status === "completed") void syncBilling();
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
-      if (error instanceof Error && error.message === "请求已取消") return;
-      const message = error instanceof Error ? error.message : "回答生成失败，请稍后重试。";
-      setNotice(message);
-      setActionState(current => ({ ...current, quickAnswerStatus: "failed", quickAnswerMessage: message }));
-      setState(current => ({ ...current, questions: current.questions.map(item => item.id === pendingId ? failedManualQuestion(item, message) : item), activeAnswerTask: current.activeAnswerTask?.questionId === pendingId ? { ...current.activeAnswerTask, status: "failed", partialText: message, updatedAtMs: Date.now() } : current.activeAnswerTask }));
-    } finally {
-      if (streamRenderTimer !== null) window.clearTimeout(streamRenderTimer);
-      manualAnswerController.current = null;
-      submittedCommands.current.delete(command);
-    }
-  };
-  useEffect(() => {
-    const candidate = state.speaker.autoAnswerQuestion;
-    const enabledAtMs = liveInterview?.autoAnswerEnabledAtMs ?? null;
-    const taskBusy = Boolean(state.activeAnswerTask && ["pending", "generating"].includes(state.activeAnswerTask.status));
-    if (
-      !liveInterview?.autoAnswerEnabled
-      || !enabledAtMs
-      || !candidate
-      || (candidate.createdAtMs ?? 0) < enabledAtMs
-      || candidate.answerTaskId
-      || candidate.state !== "auto-confirmed"
-      || state.speaker.mode !== "dual-channel"
-      || !["capturing", "reconnecting"].includes(state.captureState)
-      || pageLeaseStatus !== "active"
-      || taskBusy
-      || attemptedAutoCandidates.current.has(candidate.id)
-    ) return;
-    attemptedAutoCandidates.current.add(candidate.id);
-    void submitManualText(candidate.text, undefined, {
-      questionId: candidate.id,
-      questionRevision: candidate.revision,
-      clickedAtMs: Date.now(),
-      prefetchRevision: candidate.revision,
-      triggerMode: "auto",
-    });
-  }, [
-    liveInterview?.autoAnswerEnabled,
-    liveInterview?.autoAnswerEnabledAtMs,
-    pageLeaseStatus,
-    state.activeAnswerTask?.id,
-    state.activeAnswerTask?.status,
-    state.captureState,
-    state.speaker.autoAnswerQuestion?.id,
-    state.speaker.autoAnswerQuestion?.answerTaskId,
-    state.speaker.mode,
-  ]);
-  const toggleAutoAnswer = async (enabled: boolean) => {
-    if (autoAnswerSaving || pageLeaseStatus === "replaced") return;
-    setAutoAnswerSaving(true);
-    setNotice("");
-    try {
-      const updated = await runAdapterOperation(signal => interviewAppAdapter.updateInterviewAutoAnswer(id, enabled, signal));
-      attemptedAutoCandidates.current.clear();
-      setState(current => ({
-        ...current,
-        interviews: current.interviews.map(item => item.id === id ? { ...item, ...updated } : item),
-      }));
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "自动回答设置保存失败，请稍后重试。");
-    } finally {
-      setAutoAnswerSaving(false);
-    }
-  };
-  const latestInterviewerQuestion = () => extractLatestInterviewerQuestion(state.speaker);
-  const latestInterviewerText = latestInterviewerQuestion();
-  const submitManual = () => {
-    const fallback = latestInterviewerQuestion();
-    const question = actionState.manualDraft.trim() || fallback;
-    if (!question) { setNotice(QUICK_ANSWER_MISSING_QUESTION_NOTICE); return; }
-    const source = [...state.speaker.transcripts]
-      .reverse()
-      .find(item => item.sourceKind === "system" || item.role === "interviewer");
-    const candidate = state.speaker.pendingQuestion;
-    const revision = candidate?.revision ?? source?.revision;
-    const questionId = candidate?.id ?? source?.id;
-    void submitManualText(
-      question,
-      undefined,
-      questionId && revision ? {
-        questionId,
-        questionRevision: revision,
-        clickedAtMs: Date.now(),
-        prefetchRevision: revision,
-      } : undefined,
-    );
-  };
-  useEffect(() => {
-    if (latestInterviewerText && notice === QUICK_ANSWER_MISSING_QUESTION_NOTICE) setNotice("");
-  }, [latestInterviewerText, notice]);
-  const setCapture = (captureState: CaptureState, status: SessionStatus) => setState(current => ({
-    ...current,
-    captureState,
-    interviews: current.interviews.map(item => item.id === id ? { ...item, status } : item),
-  }));
-  const controlCapture = async (action: "pause" | "resume") => {
-    if (captureControlPending || pageLeaseStatus === "replaced") return;
-    setCaptureControlPending(action);
-    setNotice("");
-    try {
-      const captureState = await runAdapterOperation(signal => interviewAppAdapter.controlInterviewCapture(id, action, signal));
-      setCapture(captureState, captureState === "paused" ? "paused" : "active");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : action === "pause" ? "暂停收音失败，请稍后重试。" : "恢复收音失败，请稍后重试。");
-    } finally {
-      setCaptureControlPending(null);
-    }
-  };
-  const continueIdleInterview = async () => {
-    if (continuingInterview) return;
-    setContinuingInterview(true);
-    try {
-      const next = await runAdapterOperation(signal => interviewAppAdapter.continueInterviewSession(id, signal));
-      setIdleStatus(next);
-    } finally {
-      setContinuingInterview(false);
-    }
-  };
-  const finishInterview = async () => {
-    if (!window.confirm(isWritten ? "确认结束本场笔试？结束后仍可查看本场答题记录。" : "确认结束本场面试？结束后将停止采集并进入复盘。")) return;
-    try {
-      await runAdapterOperation(signal => interviewAppAdapter.endInterviewSession(id, signal));
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : isWritten ? "结束笔试失败，请稍后重试。" : "结束面试失败，请稍后重试。");
-      return;
-    }
-    setCapture("ready", "ended");
-    navigate(routes.review(id));
-  };
-  const updateQuestionStatus = (questionId: string, status: QuestionStatus) => {
-    const question = state.questions.find(item => item.id === questionId);
-    if (!question) return;
-    if (question.status === "cancelled" && status === "generating") {
-      if (question.input === "manual") { void submitManualText(question.text, questionId); return; }
-      const usageId = `retry:${questionId}:${Date.now()}`;
-      const task: AnswerTaskSnapshot = { id: `answer:${questionId}:${Date.now()}`, interviewId: id, userId: state.account.id, billingUsageId: usageId, questionId, question: question.text, revision: 1, status: "generating", partialText: "正在重新整理回答…", updatedAtMs: Date.now() };
-      setState(current => ({ ...current, questions: current.questions.map(item => item.id === questionId ? { ...item, status } : item), activeAnswerTask: task }));
-      return;
-    }
-    setState(current => ({ ...current, questions: current.questions.map(item => item.id === questionId ? { ...item, status } : item) }));
-  };
-  const screenshotInstruction = "请只依据当前截图识别其中的题目、代码或系统设计内容，并给出可直接使用的中文回答。不要使用实时对话、面试官最近的问题或其他会话信息。";
-  const submitScreenshot = async () => {
-    const usageId = `screenshot:remote:${Date.now()}`;
-    const placeholderId = `shot-pending-${Date.now()}`;
-    const placeholderQuestion: InterviewQuestion = {
-      ...active,
-      id: placeholderId,
-      text: "请根据当前截图直接回答",
-      input: "screenshot",
-      askedAt: "刚刚",
-      status: "generating",
-      advice: {
-        outline: [],
-        detail: "正在识别当前截图并生成回答…",
-        sourceTypes: [],
-        inference: "",
-        uncertain: false,
-        provenance: { selectionRevision: 0, usedSources: [] },
-      },
-    };
-    const placeholderTask = activeTaskFor(placeholderQuestion, usageId);
-    setState(current => ({ ...current, questions: [placeholderQuestion, ...current.questions], activeAnswerTask: placeholderTask }));
-    setView(current => ({ ...current, viewingAnswerId: null, newAnswerAvailable: false }));
-    try {
-      const result = await runAdapterOperation(signal => interviewAppAdapter.submitScreenshotAnswer({
-        interviewId: id,
-        instruction: screenshotInstruction,
-      }, signal, task => setScreenshot(task), streamed => {
-        setState(current => ({
-          ...current,
-          ...reconcileAnswerWorkspace(
-            {
-              questions: current.questions.filter(item => item.id !== placeholderId),
-              activeAnswerTask: current.activeAnswerTask?.questionId === placeholderId ? null : current.activeAnswerTask,
-            },
-            { questions: [streamed.question], activeAnswerTask: streamed.task },
-            { preferIncomingTask: true },
-          ),
-        }));
-      }), screenshotController.current?.signal);
-      setState(current => ({
-        ...current,
-        ...reconcileAnswerWorkspace(
-          {
-            questions: current.questions.filter(item => item.id !== placeholderId),
-            activeAnswerTask: current.activeAnswerTask?.questionId === placeholderId ? null : current.activeAnswerTask,
-          },
-          { questions: [result.question], activeAnswerTask: result.task },
-          { preferIncomingTask: true },
-        ),
-      }));
-      setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "success" }));
-      if (result.task.status === "completed") void syncBilling();
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
-      if (error instanceof Error && error.message === "请求已取消") return;
-      const message = error instanceof Error ? error.message : "截屏回答失败，请稍后重试。";
-      setState(current => ({
-        ...current,
-        questions: current.questions.map(item => item.id === placeholderId ? { ...item, status: "failed", advice: { ...item.advice, detail: message, uncertain: true } } : item),
-        activeAnswerTask: current.activeAnswerTask?.questionId === placeholderId ? { ...current.activeAnswerTask, status: "failed", partialText: message, updatedAtMs: Date.now() } : current.activeAnswerTask,
-      }));
-      screenshotFailure(message, "共享屏幕截取");
-    }
-  };
-  const screenshotFailure = (message: string, name = screenshot?.name ?? "当前屏幕截取") => {
-    setScreenshot({ name, stage: "failed", errorMessage: message });
-  };
-  const screenshotStageTitle = (task: ScreenshotTask) => {
-    if (task.stage === "failed") return "截屏回答失败";
-    if (task.stage === "waiting-desktop") return "等待本地助手";
-    if (task.stage === "uploading") return "正在上传截图";
-    if (task.stage === "uploaded") return "截图已上传";
-    if (task.stage === "recognizing") return "正在识别截图";
-    if (task.stage === "generating") return "正在生成答案";
-    if (task.stage === "completed") return "截屏回答已完成";
-    if (task.stage === "cancelled") return "截屏回答已取消";
-    return "正在截取当前屏幕";
-  };
-  const screenshotStageDetail = (task: ScreenshotTask) => {
-    if (task.stage === "failed") return task.errorMessage || "截屏回答失败，请稍后重试。";
-    if (task.stage === "waiting-desktop") return "网页端已创建截屏任务，正在等待本地助手接收。";
-    if (task.stage === "uploading") return "本地助手已接收任务，正在截取并上传压缩后的全屏截图。";
-    if (task.stage === "uploaded") return "截图已上传到后端，正在准备交给视觉模型识别。";
-    if (task.stage === "recognizing") return "正在识别截图中的题目、代码或系统设计内容。";
-    if (task.stage === "generating") return null;
-    if (task.stage === "completed") return "截图回答已完成，答案会显示在右侧回答区。";
-    if (task.stage === "cancelled") return "本次截屏回答已取消。";
-    return "正在截取你选择的共享屏幕，不会跳转到上传页面。";
-  };
-  const captureErrorMessage = (error: unknown) => {
-    if (error instanceof DOMException && error.name === "AbortError") return "";
-    if (error instanceof DOMException && error.name === "NotAllowedError") return "共享屏幕截取未获授权，请检查电脑伴随程序权限后重试。";
-    if (error instanceof Error && error.message) return error.message;
-    return "共享屏幕暂时无法截取，请重试。";
-  };
-  const cancelScreenshot = async () => {
-    const shortcutRequestId = activeShortcutScreenshotRequest.current;
-    if (shortcutRequestId) {
-      terminalShortcutScreenshotRequests.current.add(shortcutRequestId);
-      activeShortcutScreenshotRequest.current = null;
-      setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "cancelled" }));
-      try {
-        await runAdapterOperation(signal => interviewAppAdapter.cancelDesktopShortcutScreenshot(shortcutRequestId, signal));
-      } catch (error) {
-        terminalShortcutScreenshotRequests.current.delete(shortcutRequestId);
-        screenshotFailure(error instanceof Error ? error.message : "取消截屏回答失败，请稍后重试。");
-      }
-      return;
-    }
-    screenshotController.current?.abort();
-    screenshotController.current = null;
-    setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "cancelled" }));
-    setState(current => {
-      const task = current.activeAnswerTask;
-      if (!task || !task.billingUsageId.startsWith("screenshot:remote:") || (task.status !== "queued" && task.status !== "generating")) return current;
-      return {
-        ...current,
-        activeAnswerTask: { ...task, status: "cancelled", revision: task.revision + 1, updatedAtMs: Date.now() },
-        questions: current.questions.map(question => question.id === task.questionId ? { ...question, status: "cancelled" } : question),
-      };
-    });
-  };
-  const beginInstantScreenshot = () => {
-    if (screenshot && screenshot.stage !== "failed" && screenshot.stage !== "completed" && screenshot.stage !== "cancelled") {
-      setScreenshot({ ...screenshot });
-      return;
-    }
-    setNotice("");
-    screenshotController.current?.abort();
-    const controller = new AbortController();
-    screenshotController.current = controller;
-    setScreenshot({ name: "共享屏幕截取", stage: "capturing" });
-    window.setTimeout(() => {
-      void Promise.resolve()
-        .then(() => {
-          if (controller.signal.aborted) return;
-          setScreenshot({ name: "共享屏幕截取", stage: "recognizing" });
-          return submitScreenshot();
-        })
-        .then(() => {
-          screenshotController.current = null;
-        })
-        .catch(error => {
-          if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) {
-            screenshotController.current = null;
-            return;
-          }
-          screenshotController.current = null;
-          screenshotFailure(captureErrorMessage(error));
-        });
-    }, 0);
-  };
-  beginInstantScreenshotRef.current = beginInstantScreenshot;
-  useEffect(() => {
-    const handleScreenshotShortcut = (event: KeyboardEvent) => {
-      if (
-        pageLeaseStatus === "replaced" ||
-        event.repeat ||
-        event.altKey ||
-        event.metaKey ||
-        !event.ctrlKey ||
-        !event.shiftKey ||
-        event.code !== "Space"
-      ) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      beginInstantScreenshotRef.current();
-    };
-    window.addEventListener("keydown", handleScreenshotShortcut, { capture: true });
-    return () => window.removeEventListener("keydown", handleScreenshotShortcut, { capture: true });
-  }, [pageLeaseStatus]);
-  const dismissPending = () => setState(current => ({ ...current, speaker: { ...current.speaker, pendingQuestion: null } }));
-  const confirmPending = () => {
-    const candidate = state.speaker.pendingQuestion; if (!candidate) return;
-    setState(current => ({ ...current, speaker: { ...current.speaker, pendingQuestion: null } }));
-  };
-  const stopAnswer = async () => {
-    const task = state.activeAnswerTask;
-    if (!task || (task.status !== "queued" && task.status !== "generating") || cancellingAnswer) return;
-    const releaseReservedPoints = (usageId: string, points: number, description: string) => setState(current => current.billing.activePass ? current : ({
-      ...current,
-      billing: {
-        ...current.billing,
-        balance: current.billing.balance + points,
-        ledger: [{
-          id: `release-${usageId}`,
-          userId: current.account.id,
-          kind: "usage_release",
-          points,
-          createdAtMs: Date.now(),
-          referenceId: usageId,
-          description,
-        }, ...current.billing.ledger],
-      },
-    }));
-    const markLocallyCancelled = (description?: { readonly usageId: string; readonly points: number; readonly text: string }) => {
-      const taskInput = state.questions.find(question => question.id === task.questionId)?.input;
-      setActionState(current => ({
-        ...current,
-        screenshotTask: taskInput === "screenshot" ? null : current.screenshotTask,
-        ...(taskInput === "screenshot" ? { screenshotAnswerStatus: "cancelled" as const } : {}),
-        ...(taskInput === "manual" ? { quickAnswerStatus: "cancelled" as const, quickAnswerMessage: "" } : {}),
-      }));
-      setState(current => ({
-        ...current,
-        activeAnswerTask: { ...task, status: "cancelled", revision: task.revision + 1, updatedAtMs: Date.now() },
-        questions: current.questions.map(question => question.id === task.questionId ? { ...question, status: "cancelled" } : question),
-      }));
-      if (description) releaseReservedPoints(description.usageId, description.points, description.text);
-    };
-    if (task.billingUsageId.startsWith("pending:")) {
-      manualAnswerController.current?.abort();
-      markLocallyCancelled();
-      return;
-    }
-    if (task.billingUsageId.startsWith("screenshot:remote:")) {
-      screenshotController.current?.abort();
-      screenshotController.current = null;
-      markLocallyCancelled({
-        usageId: task.billingUsageId,
-        points: state.billing.rates.screenshotAnswerPoints,
-        text: "截图回答已终止，积分预留已释放",
-      });
-      return;
-    }
-    manualAnswerController.current?.abort();
-    setCancellingAnswer(true); setCancelAnswerError("");
-    try {
-      const result = await runAdapterOperation(signal => interviewAppAdapter.cancelAnswer({ interviewId: id, answerTaskId: task.id, expectedRevision: task.revision, idempotencyKey: `cancel:${task.id}:${task.revision}` }, task, signal));
-      if (result.outcome === "cancelled" || result.outcome === "already-cancelled") {
-        const taskInput = state.questions.find(question => question.id === result.task.questionId)?.input;
-        if (taskInput === "manual") setActionState(current => ({ ...current, quickAnswerStatus: "cancelled", quickAnswerMessage: "" }));
-        if (taskInput === "screenshot") setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "cancelled" }));
-        setState(current => {
-        const hasFrontendReserve = !result.task.billingUsageId.startsWith("live-answer:") && !result.task.billingUsageId.startsWith("pending:");
-        return { ...current, activeAnswerTask: result.task, questions: current.questions.map(question => question.id === result.task.questionId ? { ...question, status: "cancelled" } : question), billing: result.billingReleased && hasFrontendReserve && !current.billing.activePass ? { ...current.billing, balance: current.billing.balance + current.billing.rates.answerPoints, ledger: [{ id: `release-${result.task.billingUsageId}`, userId: current.account.id, kind: "usage_release", points: current.billing.rates.answerPoints, createdAtMs: Date.now(), referenceId: result.task.billingUsageId, description: "回答已终止，积分预留已释放" }, ...current.billing.ledger] } : current.billing };
-        });
-      }
-      else setCancelAnswerError(result.outcome === "stale-revision" ? "回答状态刚刚发生变化，请重试。" : "回答已经完成，无法终止。");
-    } catch { setCancelAnswerError("终止回答失败，当前回答状态未改变，请重试。"); }
-    finally { setCancellingAnswer(false); }
-  };
-  const dismissScreenshotFailure = () => {
-    screenshotController.current?.abort();
-    screenshotController.current = null;
-    setScreenshot(null);
-    setState(current => {
-      const task = current.activeAnswerTask;
-      if (!task || task.status !== "failed" || !task.billingUsageId.startsWith("screenshot:remote:")) return current;
-      return { ...current, activeAnswerTask: null };
-    });
-  };
-  const billingNotice = notice.includes("积分") || notice.includes("会员") || notice.toLowerCase().includes("billing");
-  const missingQuestionNotice = notice === QUICK_ANSWER_MISSING_QUESTION_NOTICE;
-  const captureActive = state.captureState === "capturing" || state.captureState === "reconnecting";
-  const captureStatus = pageLeaseStatus === "replaced" ? "已在其他页面继续" : captureActive ? "正在收音" : state.captureState === "paused" ? "收音已暂停" : state.captureState === "permission-required" ? "采集能力不可用" : state.captureState === "error" ? "设备连接异常" : "已连接，未采集";
-  const captureButton = captureActive
-    ? <button className="button warning live-session-control" disabled={pageLeaseStatus === "replaced" || captureControlPending !== null} onClick={() => void controlCapture("pause")}>{captureControlPending === "pause" ? "暂停中…" : "暂停收音"}</button>
-    : <button className="button primary live-session-control" disabled={pageLeaseStatus === "replaced" || captureControlPending !== null || (state.captureState !== "ready" && state.captureState !== "paused")} onClick={() => state.captureState === "paused" ? void controlCapture("resume") : setCapture("capturing", "active")}>{captureControlPending === "resume" ? "恢复中…" : state.captureState === "paused" ? "恢复收音" : "开始面试"}</button>;
-  const changeManualDraft = (value: string) => {
-    setActionState(current => ({ ...current, manualDraft: value, quickAnswerStatus: "idle", quickAnswerMessage: "" }));
-    if (value.trim() && notice === QUICK_ANSWER_MISSING_QUESTION_NOTICE) setNotice("");
-  };
-  const conversationPanel = <ConversationMonitor state={state} onConfirmQuestion={pageLeaseStatus === "replaced" ? dismissPending : confirmPending} onDismissQuestion={dismissPending} />;
-  const answerPanel = <AnswerWorkspace answers={state.questions} viewingAnswerId={view.viewingAnswerId} newAnswerAvailable={view.newAnswerAvailable} activeTask={state.activeAnswerTask} cancelling={cancellingAnswer} cancelError={cancelAnswerError} interviewLanguage={liveInterview?.interviewLanguage ?? "zh-CN"} onStop={() => void stopAnswer()} onView={answerId => setView(current => ({ ...current, viewingAnswerId: answerId, newAnswerAvailable: answerId ? current.newAnswerAvailable : false }))} onRetry={updateQuestionStatus} />;
-
-  if (isWritten) return <main className={`live-page focused-live-page${desktopLayout ? " desktop-live-page" : " mobile-live-page"}`}><header className="live-top"><Link to={routes.writtenExams} aria-label="返回笔试模式"><Logo /></Link><div className="live-session-heading"><strong>{interviewTitle}</strong><span><i className="online-dot" /> 桌面助手已连接 · 截屏回答可用</span><small className="live-language-badge">笔试模式</small></div><div className="live-top-actions"><Link className="live-balance" to={routes.billing}>积分与会员</Link><AccountMenu compact /><button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束笔试</button></div></header>{notice ? <div className="global-live-alert" role="alert"><strong>{notice}</strong><button type="button" onClick={() => setNotice("")}>关闭</button></div> : null}{pageLeaseStatus === "replaced" ? <div className="global-live-alert replaced-page-alert" role="status"><strong>本场笔试已在其他页面继续</strong><Link className="button primary" to={routes.writtenExams}>返回笔试模式</Link></div> : null}<div className="written-exam-workspace"><section className="answer-column">{answerPanel}<AnswerActionBar manualDraft="" screenshotTask={actionState.screenshotTask} screenshotOnly screenshotAnswerStatus={actionState.screenshotAnswerStatus ?? "idle"} disabled={pageLeaseStatus === "replaced"} onQuickAnswer={() => undefined} onScreenshot={beginInstantScreenshot} /></section></div>{screenshot && pageLeaseStatus !== "replaced" ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="screenshot-dialog-title"><section className="sheet"><h2 id="screenshot-dialog-title">{screenshotStageTitle(screenshot)}</h2>{screenshotStageDetail(screenshot) ? <p>{screenshotStageDetail(screenshot)}</p> : null}{screenshot.stage === "failed" ? <div className="sheet-actions split-actions"><button className="button ghost full" onClick={dismissScreenshotFailure}>删除本次失败</button><button className="button primary full" onClick={beginInstantScreenshot}>重新截屏</button></div> : <button className="button primary full" onClick={() => void cancelScreenshot()}>取消</button>}</section></div> : null}<footer className="session-bar"><div><i className="online-dot" /><strong>笔试进行中</strong></div><div><small>仅在你主动发起时截屏并生成回答</small></div></footer></main>;
-
-  return <main className={`live-page focused-live-page${desktopLayout ? " desktop-live-page" : " mobile-live-page"}`}>
-    <header className="live-top">
-      <Link to={routes.app} aria-label="返回面试首页"><Logo /></Link>
-      <div className="live-session-heading"><strong>{interviewTitle}</strong><span><i className={captureActive ? "recording-dot" : "online-dot"} /> {desktopLayout ? `这台设备 · ${captureStatus}` : captureStatus}</span><small className="live-language-badge">{interviewLanguageLabel}</small></div>
-      {desktopLayout ? <div className="live-top-actions"><div className="live-auto-answer"><span>自动回答</span><label className="switch-control"><input type="checkbox" role="switch" aria-label="自动回答" checked={liveInterview?.autoAnswerEnabled ?? false} disabled={autoAnswerSaving || pageLeaseStatus === "replaced"} onChange={event => void toggleAutoAnswer(event.target.checked)} /><span aria-hidden="true" /></label></div><Link className="live-balance" to={routes.billing}>积分与会员</Link><details className="live-contact-menu"><summary>联系我们</summary><div className="live-contact-popover" aria-label="官方社交账号">{officialSocialContacts.map(contact => <p key={contact.id}><small>{contact.label}</small><strong>{contact.account}</strong></p>)}</div></details><span>18:24</span><AccountMenu compact />{captureButton}<button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束面试</button></div> : <div className="mobile-live-top-actions"><div className="live-auto-answer mobile"><span>自动</span><label className="switch-control"><input type="checkbox" role="switch" aria-label="自动回答" checked={liveInterview?.autoAnswerEnabled ?? false} disabled={autoAnswerSaving || pageLeaseStatus === "replaced"} onChange={event => void toggleAutoAnswer(event.target.checked)} /><span aria-hidden="true" /></label></div>{captureButton}<details className="mobile-live-more"><summary aria-label="更多面试操作">•••</summary><div><Link to={routes.billing}>积分与会员</Link><Link to={routes.settings}>用户设置</Link><section className="mobile-live-contact-list" aria-label="官方社交账号">{officialSocialContacts.map(contact => <p key={contact.id}><small>{contact.label}</small><strong>{contact.account}</strong></p>)}</section><button className="danger" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束面试</button></div></details></div>}
-    </header>
-    {idleStatus?.state === "warning" ? <div className="global-live-alert" role="status"><strong>本场面试即将因空闲自动结束</strong><span>连续 20 分钟没有音频、回答或截图活动会释放当前设备连接，历史记录仍会保留。</span><button className="button primary" disabled={continuingInterview} onClick={() => void continueIdleInterview()}>{continuingInterview ? "正在继续…" : "继续本场面试"}</button></div> : null}
-    {pageLeaseStatus === "replaced" ? <div className="global-live-alert replaced-page-alert" role="status"><strong>本场面试已在其他页面继续</strong><span>当前页面已停止收音同步、实时订阅和回答请求；已显示内容仍可查看。关闭此页或返回面试首页即可。</span><Link className="button primary" to={routes.app}>返回面试首页</Link></div> : null}
-    {state.captureState === "permission-required" || state.captureState === "error" ? <div className="global-live-alert" role="status"><strong>{state.captureState === "permission-required" ? "助手采集能力不可用" : "桌面设备连接异常"}</strong><span>{state.captureState === "permission-required" ? "请在桌面助手中检查首次授权状态；网页不会申请麦克风或屏幕权限，手动输入仍可使用。" : "可以运行诊断，当前仍可使用手动问题和截图。"}</span><button onClick={() => state.captureState === "permission-required" ? setCapture("ready", "ready") : setRealtimeDiagnosisNonce(current => current + 1)}>{state.captureState === "permission-required" ? "关闭提示" : "重新诊断"}</button></div> : null}
-    {notice ? <div className="global-live-alert" role="status"><strong>{notice}</strong><span>{missingQuestionNotice ? "请等待面试官问题识别完成，或在左侧手动输入问题后再使用快答。" : billingNotice ? "当前任务未启动，请检查积分或会员权益。" : "当前回答没有成功启动，请根据上方原因重试。"}</span>{billingNotice ? <Link className="button primary" to={routes.billing}>前往积分与会员</Link> : null}</div> : null}
-    {desktopLayout ? <div ref={workspaceRef} className={`live-grid focused-live-grid${pageLeaseStatus === "replaced" ? " live-grid-readonly" : ""}`} style={{ gridTemplateColumns: `minmax(240px, ${view.splitRatio}fr) 12px minmax(300px, ${100 - view.splitRatio}fr)` }}><section className="conversation-column">{conversationPanel}<ManualQuestionComposer manualDraft={actionState.manualDraft} disabled={pageLeaseStatus === "replaced"} onChange={changeManualDraft} /></section><WorkspaceDivider containerRef={workspaceRef} ratio={view.splitRatio} bounds={splitBounds} onChange={splitRatio => setView(current => ({ ...current, splitRatio }))} /><section className="answer-column">{answerPanel}<AnswerActionBar manualDraft={actionState.manualDraft} latestInterviewerQuestion={latestInterviewerText} screenshotTask={actionState.screenshotTask} quickAnswerStatus={actionState.quickAnswerStatus ?? "idle"} quickAnswerMessage={actionState.quickAnswerMessage ?? ""} screenshotAnswerStatus={actionState.screenshotAnswerStatus ?? "idle"} disabled={pageLeaseStatus === "replaced"} onQuickAnswer={submitManual} onScreenshot={beginInstantScreenshot} /></section></div> : <div className={`mobile-live-workspace${pageLeaseStatus === "replaced" ? " live-grid-readonly" : ""}`}><nav className="mobile-live-tabs" role="tablist" aria-label="面试内容"><button role="tab" aria-selected={mobilePanel === "answer"} className={mobilePanel === "answer" ? "active" : ""} onClick={() => setMobilePanel("answer")}>回答{state.activeAnswerTask && ["pending", "generating"].includes(state.activeAnswerTask.status) ? <span>生成中</span> : null}</button><button role="tab" aria-selected={mobilePanel === "conversation"} className={mobilePanel === "conversation" ? "active" : ""} onClick={() => setMobilePanel("conversation")}>对话<span>{state.speaker.transcripts.length}</span></button></nav><section className={`mobile-live-panel ${mobilePanel}`} role="tabpanel">{mobilePanel === "answer" ? answerPanel : conversationPanel}</section><MobileInterviewControls manualDraft={actionState.manualDraft} latestInterviewerQuestion={latestInterviewerText} screenshotTask={actionState.screenshotTask} quickAnswerStatus={actionState.quickAnswerStatus ?? "idle"} quickAnswerMessage={actionState.quickAnswerMessage ?? ""} screenshotAnswerStatus={actionState.screenshotAnswerStatus ?? "idle"} disabled={pageLeaseStatus === "replaced"} onChange={changeManualDraft} onQuickAnswer={() => { setMobilePanel("answer"); submitManual(); }} onScreenshot={() => { setMobilePanel("answer"); beginInstantScreenshot(); }} /></div>}
-    {screenshot && pageLeaseStatus !== "replaced" ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="screenshot-dialog-title"><section className="sheet"><h2 id="screenshot-dialog-title">{screenshotStageTitle(screenshot)}</h2>{screenshotStageDetail(screenshot) ? <p>{screenshotStageDetail(screenshot)}</p> : null}{screenshot.stage === "failed" ? <div className="sheet-actions split-actions"><button className="button ghost full" onClick={dismissScreenshotFailure}>删除本次失败</button><button className="button primary full" onClick={beginInstantScreenshot}>重新截屏</button></div> : <button className="button primary full" onClick={() => void cancelScreenshot()}>取消</button>}</section></div> : null}
-    {desktopLayout ? <footer className="session-bar"><div><i className={captureActive ? "recording-dot" : "online-dot"} /><strong>{captureActive ? "面试进行中" : state.captureState === "paused" ? "面试已暂停" : "等待开始面试"}</strong></div><div><small>{captureActive ? "正在持续接收面试官与我的实时对话" : "开始面试后会在头部右侧管理本场状态"}</small></div></footer> : null}
-  </main>;
-}
-
 function ReviewPage() {
   const { id = "review" } = useParams();
   const { state, setState } = usePrototype();
@@ -1942,6 +874,58 @@ function ReviewPage() {
 
 function LibraryPage() { const { state, setState } = usePrototype(); return <LibraryManager state={state} setState={setState} />; }
 
+const money = (cents = 0) => new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2 }).format(cents / 100);
+
+function PartnerProgramPage() {
+  const [partner, setPartner] = useState<PartnerProgramState | null>(null);
+  const [accepted, setAccepted] = useState(false);
+  const [busy, setBusy] = useState<"join" | "payout" | "">("");
+  const [message, setMessage] = useState("");
+  const [payoutDraft, setPayoutDraft] = useState({ payoutMethod: "alipay" as "alipay" | "wechat", accountName: "", accountIdentifier: "" });
+  const load = async (clearMessage = true) => {
+    try { setPartner(await interviewAppAdapter.getPartnerProgram()); if (clearMessage) setMessage(""); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "合作伙伴数据暂时无法读取"); }
+  };
+  useEffect(() => { void load(); }, []);
+  const join = async () => {
+    if (!partner || !accepted) return;
+    setBusy("join");
+    try { setPartner(await interviewAppAdapter.joinPartnerProgram(partner.config.agreementVersion)); setMessage("合作伙伴计划已开通。专属链接可立即分享。"); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "暂时无法加入，请稍后重试"); }
+    finally { setBusy(""); }
+  };
+  const payout = async () => {
+    if (partner?.config.payoutProfileEnabled && !partner.payoutProfile) { setMessage("请先保存收款信息，再申请结算。"); return; }
+    setBusy("payout");
+    try { await interviewAppAdapter.requestPartnerPayout(); setMessage("本月结算申请已提交，我们会在审核后联系你。"); await load(false); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "暂时无法提交结算申请"); }
+    finally { setBusy(""); }
+  };
+  const savePayoutProfile = async (event: FormEvent) => {
+    event.preventDefault(); setBusy("payout");
+    try { await interviewAppAdapter.savePartnerPayoutProfile(payoutDraft); setMessage("收款信息已加密保存。后续修改不会影响已提交的结算申请。"); setPayoutDraft(current => ({ ...current, accountName: "", accountIdentifier: "" })); await load(false); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "暂时无法保存收款信息"); }
+    finally { setBusy(""); }
+  };
+  const copy = async () => {
+    if (!partner?.shareUrl) return;
+    await navigator.clipboard?.writeText(partner.shareUrl);
+    setMessage("专属推广链接已复制。");
+  };
+  if (!partner) return <main className="app-page"><PageHeader eyebrow="PARTNER PROGRAM" title="合作伙伴计划" detail="分享面试稳，获得长期、透明、可核对的推广佣金。" /><div className="panel">{message || "正在读取合作伙伴信息…"}</div></main>;
+  if (!partner.config.enabled) return <main className="app-page"><PageHeader eyebrow="PARTNER PROGRAM" title="合作伙伴计划" detail="分享面试稳，获得长期、透明、可核对的推广佣金。" /><EmptyState title="活动正在筹备" detail="开放后你可以主动加入并获得专属链接；这不会影响现有面试和积分权益。" /></main>;
+  return <main className="app-page partner-program-page">
+    <PageHeader eyebrow="PARTNER PROGRAM" title="合作伙伴计划" detail="一级推广，按净实收的 20% 计佣；每月可申请一次人工结算。" />
+    {!partner.joined ? <section className="partner-intro panel"><div><span className="kicker">SHARE & EARN</span><h2>把真正有用的工具分享给更多求职者</h2><p>访客通过你的专属链接注册后，90 天内产生的合格订单会按退款后的净实收计算佣金。佣金经过 {partner.config.refundHoldDays} 天观察期后可申请结算。</p></div><dl><div><dt>佣金比例</dt><dd>{partner.config.commissionRateBps / 100}%</dd></div><div><dt>归因窗口</dt><dd>点击后 30 天内注册</dd></div><div><dt>订单周期</dt><dd>注册后 {partner.config.eligibleOrderDays} 天</dd></div><div><dt>最低结算</dt><dd>{money(partner.config.minimumPayoutCents)}</dd></div></dl><label className="partner-agreement"><input type="checkbox" checked={accepted} onChange={event => setAccepted(event.target.checked)} /><span>我已阅读并同意：仅进行真实推广，不进行自推、刷量或多级分销；佣金按退款后的净实收核算，结算时依法处理相关税务。</span></label><button className="button primary" disabled={!accepted || Boolean(busy)} onClick={() => void join()}>{busy === "join" ? "正在开通…" : "加入合作伙伴计划"}</button></section> : <>
+      <section className="partner-share panel"><div><span className="kicker">YOUR PARTNER LINK</span><h2>你的专属推广链接</h2><p>同一个链接长期有效。请勿将链接用于自购、刷量或误导性推广。</p></div><div><code>{partner.shareUrl}</code><button className="button primary" onClick={() => void copy()}>复制链接</button></div></section>
+      <section className="partner-metrics" aria-label="合作伙伴数据看板"><article><span>有效访客</span><strong>{partner.metrics?.validVisitors ?? 0}</strong></article><article><span>注册用户</span><strong>{partner.metrics?.registrations ?? 0}</strong></article><article><span>付费用户</span><strong>{partner.metrics?.payingUsers ?? 0}</strong></article><article><span>归因实收</span><strong>{money(partner.metrics?.attributedReceiptsCents)}</strong></article><article><span>待确认佣金</span><strong>{money(partner.balances?.pendingCents)}</strong></article><article><span>可提现佣金</span><strong>{money(partner.balances?.availableCents)}</strong></article><article><span>审核中</span><strong>{money(partner.balances?.reservedCents)}</strong></article><article><span>已结算</span><strong>{money(partner.balances?.settledCents)}</strong></article></section>
+      {partner.config.payoutProfileEnabled ? <form className="partner-payout-profile panel" onSubmit={savePayoutProfile}><div><h2>人工结算收款信息</h2><p>仅用于管理员审核后人工打款。页面只显示脱敏信息，不会自动发起支付宝或微信转账。</p>{partner.payoutProfile ? <small>当前：{partner.payoutProfile.payoutMethod === "alipay" ? "支付宝" : "微信"} · {partner.payoutProfile.maskedAccountName} · {partner.payoutProfile.maskedAccountIdentifier}</small> : null}</div><label>收款方式<select value={payoutDraft.payoutMethod} onChange={event => setPayoutDraft(current => ({ ...current, payoutMethod: event.target.value as "alipay" | "wechat" }))}><option value="alipay">支付宝</option><option value="wechat">微信</option></select></label><label>实名姓名<input required minLength={2} maxLength={80} autoComplete="name" value={payoutDraft.accountName} onChange={event => setPayoutDraft(current => ({ ...current, accountName: event.target.value }))} /></label><label>收款账号<input required minLength={4} maxLength={160} autoComplete="off" value={payoutDraft.accountIdentifier} onChange={event => setPayoutDraft(current => ({ ...current, accountIdentifier: event.target.value }))} /></label><button className="button secondary" disabled={Boolean(busy)}>保存收款信息</button></form> : null}
+      <section className="partner-settlement panel"><div><h2>月度结算</h2><p>可提现达到 {money(partner.config.minimumPayoutCents)} 后，每个自然月可以申请一次。退款或拒付会以冲正记录调整。</p></div><button className="button primary" disabled={Boolean(busy) || (partner.balances?.availableCents ?? 0) < partner.config.minimumPayoutCents} onClick={() => void payout()}>{busy === "payout" ? "正在提交…" : "申请结算"}</button>{partner.payouts?.length ? <div className="partner-payout-list">{partner.payouts.map(item => <p key={item.payoutRequestId}><span>{item.periodKey}</span><strong>{money(item.amountCents)}</strong><em>{item.status === "requested" ? "待审核" : item.status === "approved" ? "已批准" : item.status === "paid" ? "已结算" : "已驳回"}</em></p>)}</div> : <small>暂时没有结算记录。</small>}</section>
+    </>}
+    {message ? <p className="partner-message" role="status">{message}</p> : null}
+  </main>;
+}
+
 function BillingRoutePage() { const { state, setState } = usePrototype(); return <BillingPage state={state} setState={setState} />; }
 function GuideRoutePage() { const { state } = usePrototype(); return <GuidePage support={state.billing.support} />; }
 
@@ -1967,7 +951,7 @@ function NotFoundPage() { return <main className="center-page"><EmptyState title
 function RouteLoadingPage() { return <main className="route-loading-page" role="status" aria-label="页面加载中" />; }
 
 export function AppRoutes() {
-  return <Routes><Route element={<PublicLayout />}><Route path={routes.landing} element={<LandingPage />} /><Route path={routes.login} element={<LoginPage />} /><Route path={routes.publicGuide} element={<GuideRoutePage />} /><Route path={routes.invite()} element={<ReferralLandingPage />} /><Route path={routes.terms} element={<LegalPage kind="terms" />} /><Route path={routes.privacy} element={<LegalPage kind="privacy" />} /></Route><Route element={<ProtectedRoute />}><Route path="/app" element={<AppLayout />}><Route index element={<HomePage />} /><Route path="written-exams" element={<WrittenExamHomePage />} /><Route path="interviews/new" element={<NewInterviewPage />} /><Route path="written-exams/new" element={<NewWrittenExamPage />} /><Route path="interviews/:id/prepare" element={<PreparationPage />} /><Route path="interviews/:id/review" element={<ReviewPage />} /><Route path="library" element={<LibraryPage />} /><Route path="billing" element={<BillingRoutePage />} /><Route path="guide" element={<GuideRoutePage />} /><Route path="devices" element={<DevicesPage />} /><Route path="settings" element={<SettingsPage />} /></Route><Route path="/app/interviews/:id/live" element={<LivePage />} /></Route><Route path="/error" element={<RouteErrorPage />} /><Route path="*" element={<NotFoundPage />} /></Routes>;
+  return <Routes><Route element={<PublicLayout />}><Route path={routes.landing} element={<LandingPage />} /><Route path={routes.login} element={<LoginPage />} /><Route path={routes.publicGuide} element={<GuideRoutePage />} /><Route path={routes.invite()} element={<ReferralLandingPage />} /><Route path={routes.terms} element={<LegalPage kind="terms" />} /><Route path={routes.privacy} element={<LegalPage kind="privacy" />} /></Route><Route element={<ProtectedRoute />}><Route path="/app" element={<AppLayout />}><Route index element={<HomePage />} /><Route path="written-exams" element={<WrittenExamHomePage />} /><Route path="interviews/new" element={<NewInterviewPage />} /><Route path="written-exams/new" element={<NewWrittenExamPage />} /><Route path="interviews/:id/prepare" element={<PreparationPage />} /><Route path="interviews/:id/review" element={<ReviewPage />} /><Route path="library" element={<LibraryPage />} /><Route path="billing" element={<BillingRoutePage />} /><Route path="partner-program" element={<PartnerProgramPage />} /><Route path="guide" element={<GuideRoutePage />} /><Route path="devices" element={<DevicesPage />} /><Route path="settings" element={<SettingsPage />} /></Route><Route path="/app/interviews/:id/live" element={<LivePage brand={<Logo />} accountMenu={<AccountMenu compact />} />} /></Route><Route path="/error" element={<RouteErrorPage />} /><Route path="*" element={<NotFoundPage />} /></Routes>;
 }
 
 function DocumentTitleManager() {
@@ -1981,6 +965,8 @@ function DocumentTitleManager() {
       document.title = "用户协议 - 面试稳AI助手";
     } else if (pathname === routes.privacy) {
       document.title = "隐私政策 - 面试稳AI助手";
+    } else if (pathname === routes.partnerProgram) {
+      document.title = "合作伙伴计划 - 面试稳AI助手";
     } else {
       document.title = "面试稳AI助手";
     }
@@ -1988,8 +974,8 @@ function DocumentTitleManager() {
   return null;
 }
 
-export interface AppProps { readonly initialAuthenticated?: boolean; readonly initialState?: WebAppState }
+export interface AppProps { readonly initialAuthenticated?: boolean; readonly initialState?: WebAppState; readonly publicStartup?: PublicStartupSnapshot | undefined }
 
-export function App({ initialAuthenticated, initialState }: AppProps) {
-  return <BrowserRouter><DocumentTitleManager /><PrototypeProvider initialAuthenticated={initialAuthenticated} initialState={initialState}><Suspense fallback={<RouteLoadingPage />}><AppRoutes /></Suspense></PrototypeProvider></BrowserRouter>;
+export function App({ initialAuthenticated, initialState, publicStartup }: AppProps) {
+  return <BrowserRouter><DocumentTitleManager /><PrototypeProvider initialAuthenticated={initialAuthenticated} initialState={initialState} publicStartup={publicStartup}><Suspense fallback={<RouteLoadingPage />}><AppRoutes /></Suspense></PrototypeProvider></BrowserRouter>;
 }

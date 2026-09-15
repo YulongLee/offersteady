@@ -96,6 +96,7 @@ def test_close_session_only_closes_provider_connections_for_target_session() -> 
     gateway._source_sessions = {}
     gateway._source_sessions_lock = __import__("threading").Lock()
     gateway._connection_state_by_source = {}
+    gateway._closure_failures = {}
     target_microphone = FakeConnection()
     target_system = FakeConnection()
     other_microphone = FakeConnection()
@@ -120,6 +121,7 @@ def test_close_session_only_closes_provider_connections_for_target_session() -> 
     assert target_system.closed is True
     assert other_microphone.closed is False
     assert list(gateway._source_sessions) == ["session-other:microphone"]
+    assert gateway.close_session(session_id="session-target") == 0
 
 
 def test_close_source_does_not_interrupt_the_other_channel() -> None:

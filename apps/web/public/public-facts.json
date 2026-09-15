@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.1",
-  "lastUpdated": "2026-08-19",
+  "lastUpdated": "2026-09-12",
   "canonicalSite": "https://mianshiwen.cn/",
   "product": {
     "name": "面试稳AI助手",
@@ -23,6 +23,11 @@
       "url": "https://mianshiwen.cn/features/realtime-interview"
     },
     {
+      "id": "technical-interview-assistant",
+      "name": "程序员与技术岗位 AI 面试助手",
+      "url": "https://mianshiwen.cn/features/ai-interview-assistant"
+    },
+    {
       "id": "screenshot-answer",
       "name": "截图回答",
       "url": "https://mianshiwen.cn/features/screenshot-answer"
@@ -41,9 +46,9 @@
     "detailsUrl": "https://mianshiwen.cn/privacy"
   },
   "dynamicFacts": {
-    "pricing": "以登录后的积分与会员页面为准",
-    "paymentChannels": "以登录后的积分与会员页面为准",
-    "desktopDownloads": "以产品下载页当前发布状态为准"
+    "pricing": "无需登录即可在 https://mianshiwen.cn/pricing 查看生产目录构建生成的套餐价格；个人余额、订单与支付需要登录，付款前核对当前订单金额和权益",
+    "paymentChannels": "以登录后创建订单时展示的当前可用渠道为准",
+    "desktopDownloads": "官网首页提供 Windows / macOS 当前下载入口，无需登录；安装后按网页提示连接设备，以当前发布状态为准"
   },
   "officialPages": {
     "homepage": "https://mianshiwen.cn/",

@@ -7,13 +7,15 @@ import { App } from "./App";
 import { applyStoredAppearancePreferences } from "./appearance-preferences";
 import { installWebVersionRefresh } from "./web-version-refresh";
 import { installPromotionQualification } from "./promotion-attribution";
+import { capturePublicStartup } from "./public-startup";
 
 applyStoredAppearancePreferences();
 installWebVersionRefresh();
 installPromotionQualification();
 
+const publicStartup = capturePublicStartup(document, window.location.pathname);
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <App publicStartup={publicStartup} />
   </StrictMode>,
 );

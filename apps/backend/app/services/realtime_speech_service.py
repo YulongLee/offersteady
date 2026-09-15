@@ -20,6 +20,7 @@ from app.core.config import Settings
 from app.core.errors import DomainRequestError
 from app.core.logging import log_event
 from app.ports.commercial_hardening import AiUsageRecord, CommercialHardeningRepository
+from app.ports.screenshot_answer import ScreenshotUploadPort
 from app.ports.realtime_speech import (
     AccountDesktopDeviceRecord,
     AsrUsageReport,
@@ -154,6 +155,9 @@ class SyntheticRealtimeAsrGateway(RealtimeAsrGatewayPort):
     def close_session(self, *, session_id: str) -> int:
         return 0
 
+    def close_all_sessions(self) -> int:
+        return 0
+
     def finalize(self, *, frame: AudioFrame, attempt: int) -> TranscriptResult:
         return self.transcribe(frame=frame, attempt=attempt)
 
@@ -173,6 +177,7 @@ class RealtimeSpeechService:
         billing_service: BillingService | None = None,
         commercial_repository: CommercialHardeningRepository | None = None,
         question_prefetcher: Callable[..., object] | None = None,
+        screenshot_upload_port: ScreenshotUploadPort | None = None,
     ) -> None:
         self.settings = settings
         self.logger = logger
@@ -182,6 +187,7 @@ class RealtimeSpeechService:
         self.billing_service = billing_service
         self.commercial_repository = commercial_repository
         self.question_prefetcher = question_prefetcher
+        self.screenshot_upload_port = screenshot_upload_port
         self._asr_executor = concurrent.futures.ThreadPoolExecutor(
             max_workers=max(2, settings.realtime_asr_worker_count),
             thread_name_prefix="realtime-asr",
@@ -241,6 +247,14 @@ class RealtimeSpeechService:
         self._meter_lock = threading.Lock()
         self._meter_stops: dict[str, threading.Event] = {}
         self._meter_threads: dict[str, threading.Thread] = {}
+        self._reaper_lock = threading.Lock()
+        self._reaper_runs = 0
+        self._reaper_reclaimed_sessions = 0
+        self._reaper_failures = 0
+        self._reaper_last_run_at_ms: int | None = None
+        self._reaper_last_error_code: str | None = None
+        self._shutdown_lock = threading.Lock()
+        self._shutdown_complete = False
         partial_listener_setter = getattr(self.asr_gateway, "set_partial_listener", None)
         if callable(partial_listener_setter):
             partial_listener_setter(self._publish_provider_partial)
@@ -881,6 +895,27 @@ class RealtimeSpeechService:
         import os
         import resource
 
+        def read_numeric_file(path: str) -> int | None:
+            try:
+                with open(path, encoding="utf-8") as numeric_file:
+                    return int(numeric_file.read().strip())
+            except (OSError, ValueError):
+                return None
+
+        current_resident_set_kb: int | None = None
+        try:
+            with open("/proc/self/status", encoding="utf-8") as status_file:
+                for line in status_file:
+                    if line.startswith("VmRSS:"):
+                        current_resident_set_kb = int(line.split()[1])
+                        break
+        except (OSError, ValueError, IndexError):
+            pass
+        cgroup_memory_current_bytes = read_numeric_file("/sys/fs/cgroup/memory.current")
+        cgroup_memory_max_bytes = read_numeric_file("/sys/fs/cgroup/memory.max")
+        if cgroup_memory_max_bytes is not None and cgroup_memory_max_bytes >= 2**60:
+            cgroup_memory_max_bytes = None
+
         descriptor_root = "/proc/self/fd" if os.path.isdir("/proc/self/fd") else "/dev/fd"
         try:
             file_descriptors = len(os.listdir(descriptor_root))
@@ -919,6 +954,20 @@ class RealtimeSpeechService:
                 for audio in [item.get("audio")]
                 if isinstance(audio, bytearray)
             )
+        screenshot_diagnostics = getattr(self.screenshot_upload_port, "operational_diagnostics", None)
+        screenshot_state = screenshot_diagnostics() if callable(screenshot_diagnostics) else {}
+        short_lived_state: dict[str, object] = {
+            "sessionSourceCounters": len(self._counters_by_session_source),
+            "sessionSourceTimings": len(self._latest_timings_by_session_source),
+            "acceptedTerminalKeys": len(self._accepted_terminal_ids),
+            "sourceGenerationKeys": len(self._latest_source_generations),
+            "languageCacheEntries": len(self._session_language_cache),
+            "captureControlEntries": len(self._capture_control_cache),
+            "stableQuestionEntries": len(self._stable_question_state),
+            "retiredSessionIds": len(self._retired_session_ids),
+        }
+        if screenshot_state:
+            short_lived_state["screenshot"] = screenshot_state
         return {
             "activeQueueWorkers": sum(1 for worker in self._frame_workers.values() if worker.is_alive()),
             "queueDepthByChannel": queues,
@@ -926,6 +975,9 @@ class RealtimeSpeechService:
             "queueByChannel": queue_channels,
             "fileDescriptors": file_descriptors,
             "maxResidentSetKb": int(usage.ru_maxrss),
+            "currentResidentSetKb": current_resident_set_kb,
+            "cgroupMemoryCurrentBytes": cgroup_memory_current_bytes,
+            "cgroupMemoryMaxBytes": cgroup_memory_max_bytes,
             "asr": {
                 source_kind: self._gateway_diagnostics(source_kind=source_kind)  # type: ignore[arg-type]
                 for source_kind in ("microphone", "system")
@@ -936,6 +988,14 @@ class RealtimeSpeechService:
                 "bufferedSegments": buffered_segments,
                 "bufferedBytes": buffered_audio_bytes,
                 "persisted": False,
+            },
+            "shortLivedState": short_lived_state,
+            "resourceReaper": {
+                "runs": getattr(self, "_reaper_runs", 0),
+                "reclaimedSessions": getattr(self, "_reaper_reclaimed_sessions", 0),
+                "failures": getattr(self, "_reaper_failures", 0),
+                "lastRunAtMs": getattr(self, "_reaper_last_run_at_ms", None),
+                "lastErrorCode": getattr(self, "_reaper_last_error_code", None),
             },
             "delivery": {
                 "counts": dict(self._delivery_metric_counts),
@@ -1596,6 +1656,66 @@ class RealtimeSpeechService:
             self.terminate_session_for_admin(user_id=session.owner_user_id, session_id=session.session_id)
             ended.append(session.session_id)
         return ended
+
+    def reap_idle_sessions(self) -> dict[str, object]:
+        """Reclaim expired live sessions without blocking request handlers."""
+        lock = getattr(self, "_reaper_lock", None)
+        if lock is None or not lock.acquire(blocking=False):
+            return {"reclaimedSessions": 0, "skipped": True}
+        try:
+            self._reaper_runs = getattr(self, "_reaper_runs", 0) + 1
+            self._reaper_last_run_at_ms = _now_ms()
+            self._reaper_last_error_code = None
+            reclaimed = 0
+            failures = 0
+            try:
+                expired = self.session_service.list_idle_live_sessions()
+            except Exception as exc:
+                failures = 1
+                self._reaper_failures = getattr(self, "_reaper_failures", 0) + failures
+                self._reaper_last_error_code = exc.__class__.__name__
+                self.logger.warning("realtime_speech.resource_reaper_scan_failed", extra={"errorCode": exc.__class__.__name__})
+                return {"reclaimedSessions": 0, "failures": failures}
+            for session in expired:
+                try:
+                    self.terminate_session_for_admin(user_id=session.owner_user_id, session_id=session.session_id)
+                    reclaimed += 1
+                except Exception as exc:
+                    failures += 1
+                    self.logger.warning(
+                        "realtime_speech.resource_reaper_session_failed",
+                        extra={"sessionId": session.session_id, "errorCode": exc.__class__.__name__},
+                    )
+            self._reaper_reclaimed_sessions = getattr(self, "_reaper_reclaimed_sessions", 0) + reclaimed
+            self._reaper_failures = getattr(self, "_reaper_failures", 0) + failures
+            if failures:
+                self._reaper_last_error_code = "session_reclamation_failed"
+            return {"reclaimedSessions": reclaimed, "failures": failures}
+        finally:
+            lock.release()
+
+    def shutdown(self) -> None:
+        """Release provider sessions and worker pools during application shutdown."""
+        lock = getattr(self, "_shutdown_lock", None)
+        if lock is None:
+            return
+        with lock:
+            if getattr(self, "_shutdown_complete", False):
+                return
+            self._shutdown_complete = True
+        close_all = getattr(self.asr_gateway, "close_all_sessions", None)
+        if callable(close_all):
+            try:
+                close_all()
+            except Exception as exc:
+                self.logger.warning("realtime_speech.provider_shutdown_failed", extra={"errorCode": exc.__class__.__name__})
+        else:
+            with self._frame_worker_lock:
+                session_ids = {key[0] for key in self._frame_queues}
+            for session_id in session_ids:
+                self.asr_gateway.close_session(session_id=session_id)
+        for executor in (self._asr_executor, self._cold_executor):
+            executor.shutdown(wait=False, cancel_futures=True)
 
     def record_web_session_heartbeat(self, *, user_id: str, session_id: str, binding_id: str | None, page: str, page_instance_id: str | None = None) -> WebSessionHeartbeatRecord:
         idle = self.reconcile_idle_session(user_id=user_id, session_id=session_id)
@@ -4228,7 +4348,51 @@ class RealtimeSpeechService:
             self._committing_source_turns = {
                 key: value for key, value in self._committing_source_turns.items() if key[0] != session_id
             }
+        self._clear_session_state_indexes(session_id=session_id, release_screenshot=retired)
+
+    def _clear_session_state_indexes(self, *, session_id: str, release_screenshot: bool = True) -> None:
+        """Drop all bounded in-process state associated with one interview."""
+        with self._terminal_lock:
+            self._accepted_terminal_ids = {
+                key: value for key, value in self._accepted_terminal_ids.items() if key[0] != session_id
+            }
+            self._latest_source_generations = {
+                key: value for key, value in self._latest_source_generations.items() if key[0] != session_id
+            }
+        self._counters_by_session_source = {
+            key: value for key, value in self._counters_by_session_source.items() if key[0] != session_id
+        }
         self._clear_session_audio(session_id)
+        self._capture_control_cache.pop(session_id, None)
+        self._session_language_cache.pop(session_id, None)
+        self._auto_answer_active_candidates.pop(session_id, None)
+        self._stable_question_state = {
+            key: value for key, value in self._stable_question_state.items() if key[0] != session_id
+        }
+        with self._trace_lock:
+            stale_trace_ids = {
+                trace_id
+                for trace_id, record in self._trace_records.items()
+                if record.get("sessionId") == session_id
+            }
+            for trace_id in stale_trace_ids:
+                self._trace_records.pop(trace_id, None)
+            if stale_trace_ids:
+                self._trace_order = deque(
+                    (trace_id for trace_id in self._trace_order if trace_id not in stale_trace_ids),
+                    maxlen=self._trace_order.maxlen,
+                )
+        if len(self._retired_session_ids) > 4096:
+            self._retired_session_ids = set(list(self._retired_session_ids)[-2048:])
+        release_session = getattr(self.screenshot_upload_port, "release_session", None)
+        if release_screenshot and callable(release_session):
+            try:
+                release_session(session_id=session_id)
+            except Exception as exc:
+                self.logger.warning(
+                    "realtime_speech.screenshot_session_release_failed",
+                    extra={"sessionId": session_id, "errorCode": exc.__class__.__name__},
+                )
 
     def _asr_timeout_seconds(self, frame: AudioFrame) -> float:
         configured = max(1.0, float(self.settings.realtime_asr_frame_timeout_seconds))

@@ -190,6 +190,8 @@ class ScreenshotUploadPort(Protocol):
 
     def release_image_bytes(self, *, image: ConfirmedScreenshotUpload) -> None: ...
 
+    def release_session(self, *, session_id: str) -> int: ...
+
 
 class VisionGatewayPort(Protocol):
     def analyze(

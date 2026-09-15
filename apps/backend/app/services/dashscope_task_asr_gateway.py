@@ -75,6 +75,7 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
         self._connection_create_counts: dict[str, int] = {}
         self._connection_reconnect_counts: dict[str, int] = {}
         self._connection_closed_counts: dict[str, int] = {}
+        self._closure_failures: dict[str, int] = {}
         self._connection_lifetime_total_ms: dict[str, int] = {}
         self._connection_lifetime_max_ms: dict[str, int] = {}
         self._task_start_counts: dict[str, int] = {}
@@ -158,6 +159,7 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
             ),
             "asr_connection_completed_lifetime_max_ms": self._connection_lifetime_max_ms.get(source_kind, 0),
             "active_provider_sessions": len(active),
+            "closure_failures": self._closure_failures.get(source_kind, 0),
             "task_start_count": self._task_start_counts.get(source_kind, 0),
             "task_finish_count": self._task_finish_counts.get(source_kind, 0),
             "task_failure_count": self._task_failure_counts.get(source_kind, 0),
@@ -196,6 +198,12 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
         for key in keys:
             self._close_source_session(key)
         return len(keys)
+
+    def close_all_sessions(self) -> int:
+        """Close every provider source session during application shutdown."""
+        with self._source_sessions_lock:
+            session_ids = {key.split(":", 1)[0] for key in self._source_sessions}
+        return sum(self.close_session(session_id=session_id) for session_id in session_ids)
 
     def _roundtrip(self, frame: AudioFrame) -> TranscriptResult:
         session = self._get_or_create_source_session(frame)
@@ -733,7 +741,7 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
         try:
             session.connection.close()
         except Exception:
-            pass
+            self._closure_failures[source_kind] = self._closure_failures.get(source_kind, 0) + 1
 
     def _connect_url(self) -> str:
         return (

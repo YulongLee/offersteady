@@ -7,6 +7,7 @@ import inspect
 import json
 import logging
 import re
+import threading
 from collections.abc import Callable
 from json import JSONDecodeError
 from dataclasses import replace
@@ -167,9 +168,61 @@ class InMemoryScreenshotUploadPort(ScreenshotUploadPort):
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        self._lock = threading.RLock()
+        self._sweep_stop = threading.Event()
         self.issued_intents: dict[str, ScreenshotUploadIntent] = {}
         self.uploaded_images: dict[str, bytes] = {}
         self.pending_upload_payloads: dict[str, bytes] = {}
+        self._uploaded_image_expiry_ms: dict[str, int] = {}
+        self._uploaded_image_sessions: dict[str, str] = {}
+        self._expired_sweep_count = 0
+        self._sweep_thread = threading.Thread(
+            target=self._expiry_sweep_loop,
+            name="screenshot-upload-expiry",
+            daemon=True,
+        )
+        self._sweep_thread.start()
+
+    def _expiry_sweep_loop(self) -> None:
+        interval_seconds = max(
+            1.0,
+            min(float(self.settings.oss_upload_intent_ttl_seconds), 60.0),
+        )
+        while not self._sweep_stop.wait(interval_seconds):
+            self._sweep_expired()
+
+    def _sweep_expired(self, *, now_ms: int | None = None) -> int:
+        now = _now_ms() if now_ms is None else now_ms
+        with self._lock:
+            expired_intents = {
+                intent_id: reservation
+                for intent_id, reservation in self.issued_intents.items()
+                if reservation.expires_at_ms <= now
+            }
+            removed = 0
+            for intent_id, reservation in expired_intents.items():
+                self.issued_intents.pop(intent_id, None)
+                self.pending_upload_payloads.pop(intent_id, None)
+                removed += 1
+                for image_id, session_id in list(self._uploaded_image_sessions.items()):
+                    if session_id == reservation.session_id and image_id in self.uploaded_images:
+                        if self._uploaded_image_expiry_ms.get(image_id, now + 1) <= now:
+                            self.uploaded_images.pop(image_id, None)
+                            self._uploaded_image_expiry_ms.pop(image_id, None)
+                            self._uploaded_image_sessions.pop(image_id, None)
+                            removed += 1
+            expired_images = [
+                image_id
+                for image_id, expiry_ms in self._uploaded_image_expiry_ms.items()
+                if expiry_ms <= now
+            ]
+            for image_id in expired_images:
+                self.uploaded_images.pop(image_id, None)
+                self._uploaded_image_expiry_ms.pop(image_id, None)
+                self._uploaded_image_sessions.pop(image_id, None)
+                removed += 1
+            self._expired_sweep_count += removed
+            return removed
 
     def create_upload_intent(
         self,
@@ -179,6 +232,7 @@ class InMemoryScreenshotUploadPort(ScreenshotUploadPort):
         filename: str,
         content_type: str,
     ) -> ScreenshotUploadIntent:
+        self._sweep_expired()
         issued_at_ms = _now_ms()
         expires_at_ms = issued_at_ms + self.settings.oss_upload_intent_ttl_seconds * 1000
         object_key = f"screenshots/{user_id}/{session_id}/{uuid4().hex}/{self._sanitize_filename(filename)}"
@@ -194,7 +248,8 @@ class InMemoryScreenshotUploadPort(ScreenshotUploadPort):
             issued_at_ms=issued_at_ms,
             expires_at_ms=expires_at_ms,
         )
-        self.issued_intents[reservation.intent_id] = reservation
+        with self._lock:
+            self.issued_intents[reservation.intent_id] = reservation
         return reservation
 
     def confirm_uploaded_image(
@@ -208,7 +263,9 @@ class InMemoryScreenshotUploadPort(ScreenshotUploadPort):
         size_bytes: int,
         etag: str | None = None,
     ) -> ConfirmedScreenshotUpload:
-        reservation = self.issued_intents.get(intent_id)
+        self._sweep_expired()
+        with self._lock:
+            reservation = self.issued_intents.get(intent_id)
         if reservation is None:
             raise DomainRequestError("screenshot-answer", "confirm-upload", "截图上传意图不存在或已失效。", 404)
         now_ms = _now_ms()
@@ -218,12 +275,16 @@ class InMemoryScreenshotUploadPort(ScreenshotUploadPort):
             raise DomainRequestError("screenshot-answer", "confirm-upload", "截图上传意图已过期，请重新上传。", 410)
         if reservation.content_type != content_type:
             raise DomainRequestError("screenshot-answer", "confirm-upload", "截图内容类型与上传意图不一致。", 409)
-        payload = self.pending_upload_payloads.get(intent_id)
+        with self._lock:
+            payload = self.pending_upload_payloads.get(intent_id)
         if payload is None:
             payload = self._placeholder_image_bytes(filename=reservation.filename, content_type=reservation.content_type)
         image_id = f"shot-{uuid4().hex}"
-        self.uploaded_images[image_id] = payload
-        self.pending_upload_payloads.pop(intent_id, None)
+        with self._lock:
+            self.uploaded_images[image_id] = payload
+            self._uploaded_image_expiry_ms[image_id] = reservation.expires_at_ms
+            self._uploaded_image_sessions[image_id] = session_id
+            self.pending_upload_payloads.pop(intent_id, None)
         return ConfirmedScreenshotUpload(
             image_id=image_id,
             session_id=session_id,
@@ -243,30 +304,72 @@ class InMemoryScreenshotUploadPort(ScreenshotUploadPort):
         intent_id: str,
         payload: bytes,
     ) -> None:
-        reservation = self.issued_intents.get(intent_id)
+        self._sweep_expired()
+        with self._lock:
+            reservation = self.issued_intents.get(intent_id)
         if reservation is None:
             raise DomainRequestError("screenshot-answer", "upload", "截图上传意图不存在或已失效。", 404)
-        self.pending_upload_payloads[intent_id] = payload
+        with self._lock:
+            self.pending_upload_payloads[intent_id] = payload
 
     def _placeholder_image_bytes(self, *, filename: str, content_type: str) -> bytes:
         return f"OfferSteady screenshot placeholder\nfilename={filename}\ncontentType={content_type}\n".encode("utf-8")
 
     def load_image_bytes(self, *, image: ConfirmedScreenshotUpload) -> bytes:
-        payload = self.uploaded_images.get(image.image_id)
+        self._sweep_expired()
+        with self._lock:
+            payload = self.uploaded_images.get(image.image_id)
         if payload is None:
             raise DomainRequestError("screenshot-answer", "load-image", "截图对象不存在或尚未可读。", 404)
         return payload
 
     def release_image_bytes(self, *, image: ConfirmedScreenshotUpload) -> None:
-        self.uploaded_images.pop(image.image_id, None)
-        matching_intents = [
-            intent_id
-            for intent_id, reservation in self.issued_intents.items()
-            if reservation.object_key == image.object_key
-        ]
-        for intent_id in matching_intents:
-            self.pending_upload_payloads.pop(intent_id, None)
-            self.issued_intents.pop(intent_id, None)
+        with self._lock:
+            self.uploaded_images.pop(image.image_id, None)
+            self._uploaded_image_expiry_ms.pop(image.image_id, None)
+            self._uploaded_image_sessions.pop(image.image_id, None)
+            matching_intents = [
+                intent_id
+                for intent_id, reservation in self.issued_intents.items()
+                if reservation.object_key == image.object_key
+            ]
+            for intent_id in matching_intents:
+                self.pending_upload_payloads.pop(intent_id, None)
+                self.issued_intents.pop(intent_id, None)
+
+    def release_session(self, *, session_id: str) -> int:
+        self._sweep_expired()
+        with self._lock:
+            intent_ids = [
+                intent_id
+                for intent_id, reservation in self.issued_intents.items()
+                if reservation.session_id == session_id
+            ]
+            image_ids = [
+                image_id
+                for image_id, image_session_id in self._uploaded_image_sessions.items()
+                if image_session_id == session_id
+            ]
+            for intent_id in intent_ids:
+                self.issued_intents.pop(intent_id, None)
+                self.pending_upload_payloads.pop(intent_id, None)
+            for image_id in image_ids:
+                self.uploaded_images.pop(image_id, None)
+                self._uploaded_image_expiry_ms.pop(image_id, None)
+                self._uploaded_image_sessions.pop(image_id, None)
+            return len(intent_ids) + len(image_ids)
+
+    def operational_diagnostics(self) -> dict[str, int]:
+        self._sweep_expired()
+        with self._lock:
+            return {
+                "issuedIntents": len(self.issued_intents),
+                "pendingPayloads": len(self.pending_upload_payloads),
+                "uploadedImages": len(self.uploaded_images),
+                "bufferedBytes": sum(len(payload) for payload in self.pending_upload_payloads.values())
+                + sum(len(payload) for payload in self.uploaded_images.values()),
+                "expiredSweeps": self._expired_sweep_count,
+            }
 
     @classmethod
     def _sanitize_filename(cls, filename: str) -> str:

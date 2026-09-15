@@ -18,7 +18,7 @@ import type { WebAppState } from "./domain";
 import { routes } from "./routes";
 import { Link } from "react-router-dom";
 import {
-  displayedContextSourceStatus,
+  contextSourceStatusLabel,
   managedLibrarySources,
 } from "./context-selection";
 import { runAdapterOperation } from "./api-client";
@@ -50,10 +50,6 @@ const documentStatus: Record<KnowledgeDocumentVersion["status"], string> = {
   disabled: "已停用",
   deleted: "已删除",
 };
-const displayedDocumentStatus = (document: KnowledgeDocumentVersion) =>
-  document.status === "failed" && document.safeSummary?.startsWith("上传失败")
-    ? "上传失败"
-    : documentStatus[document.status];
 const syncStatusLabel = {
   synced: "OSS已同步",
   processing: "同步中",
@@ -967,7 +963,7 @@ export function LibraryManager({ state, setState }: Props) {
                           <small>
                             v{document.version} ·{" "}
                             {Math.max(1, Math.round(document.sizeBytes / 1024))}{" "}
-                            KB · {displayedDocumentStatus(document)} ·{" "}
+                            KB · {documentStatus[document.status]} ·{" "}
                             {syncStatusLabel[document.syncStatus ?? "unknown"]}
                           </small>
                           <p>
@@ -984,7 +980,7 @@ export function LibraryManager({ state, setState }: Props) {
                           >
                             {document.syncStatus === "missing_artifacts"
                               ? "OSS缺失"
-                              : displayedDocumentStatus(document)}
+                              : documentStatus[document.status]}
                           </span>
                           {document.status === "pending" ? (
                             <small>未开始索引</small>
@@ -1092,7 +1088,7 @@ export function LibraryManager({ state, setState }: Props) {
                     <strong>{source.displayName}</strong>
                     <small>
                       {source.version} ·{" "}
-                      {displayedContextSourceStatus(source)} ·{" "}
+                      {contextSourceStatusLabel[source.status]} ·{" "}
                       {syncStatusLabel[source.syncStatus ?? "unknown"]} ·{" "}
                       {new Date(source.updatedAtMs).toLocaleDateString("zh-CN")}
                     </small>
@@ -1113,7 +1109,7 @@ export function LibraryManager({ state, setState }: Props) {
                     >
                       {source.syncStatus === "missing_artifacts"
                         ? "OSS缺失"
-                          : displayedContextSourceStatus(source)}
+                        : contextSourceStatusLabel[source.status]}
                     </span>
                     {source.status === "processing" ? (
                       <small>正在构建中</small>

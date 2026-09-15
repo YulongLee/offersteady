@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, Request
@@ -36,6 +37,8 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(application: FastAPI):
         task: asyncio.Task[None] | None = None
+        reaper_task: asyncio.Task[None] | None = None
+        realtime_service_instance = None
         realtime_event_wait_executor = RealtimeEventWaitExecutor(
             max_workers=settings.realtime_event_wait_workers,
         )
@@ -58,6 +61,31 @@ def create_app() -> FastAPI:
         application.state.screenshot_stream_admission = screenshot_stream_admission
         application.state.realtime_control_executor = realtime_control_executor
         application.state.live_answer_stream_executor = live_answer_stream_executor
+        if settings.realtime_resource_reaper_enabled:
+            try:
+                from app.deps import realtime_speech_service
+
+                realtime_service_instance = realtime_speech_service()
+
+                async def reap_realtime_resources() -> None:
+                    while True:
+                        try:
+                            await asyncio.to_thread(realtime_service_instance.reap_idle_sessions)
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as exc:
+                            logger.warning(
+                                "realtime_resource_reaper_failed",
+                                extra={"errorCode": exc.__class__.__name__},
+                            )
+                        await asyncio.sleep(max(5, settings.realtime_resource_reaper_interval_seconds))
+
+                reaper_task = asyncio.create_task(reap_realtime_resources())
+            except Exception as exc:
+                logger.warning(
+                    "realtime_resource_reaper_unavailable",
+                    extra={"errorCode": exc.__class__.__name__},
+                )
         if settings.admin_enabled and settings.database_url:
             try:
                 monitor = AdminCapacityMonitor(settings, admin_service().repository)
@@ -81,6 +109,15 @@ def create_app() -> FastAPI:
                 task.cancel()
                 with suppress(asyncio.CancelledError):
                     await task
+            if reaper_task is not None:
+                reaper_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await reaper_task
+            # Test clients may create multiple application lifespans while
+            # sharing the dependency singleton; keep that singleton reusable
+            # during pytest and close it for the real process shutdown.
+            if realtime_service_instance is not None and not os.environ.get("PYTEST_CURRENT_TEST"):
+                await asyncio.to_thread(realtime_service_instance.shutdown)
             realtime_event_wait_executor.shutdown()
             screenshot_event_wait_executor.shutdown()
             screenshot_stream_admission.shutdown()

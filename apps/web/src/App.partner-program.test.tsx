@@ -1,0 +1,92 @@
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { App } from "./App";
+import { interviewAppAdapter } from "./app-adapter";
+import { syntheticState } from "./test-state";
+
+
+describe("partner program", () => {
+  beforeEach(() => {
+    window.history.replaceState({}, "", "/");
+    vi.restoreAllMocks();
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Network access is disabled in component tests"));
+  });
+
+  it("exposes the homepage entry without enrolling the visitor", async () => {
+    const join = vi.spyOn(interviewAppAdapter, "joinPartnerProgram");
+    vi.spyOn(interviewAppAdapter, "getPartnerProgramConfig").mockResolvedValue({ enabled: true, configVersion: 1, commissionRateBps: 2000, eligibleOrderDays: 90, refundHoldDays: 7, minimumPayoutCents: 10000, agreementVersion: "2026-09-v1", settlementMode: "manual-monthly" });
+    render(<App initialAuthenticated={false} initialState={syntheticState} />);
+    expect(await screen.findByRole("link", { name: /了解合作伙伴计划/ })).toHaveAttribute("href", "/app/partner-program");
+    expect(screen.getByText("分享面试稳，获得 20% 推广佣金。")).toBeInTheDocument();
+    expect(screen.queryByText(/净实收/)).toBeNull();
+    expect(join).not.toHaveBeenCalled();
+  });
+
+  it("keeps permanent navigation while hiding homepage promotion when the activity is paused", async () => {
+    const join = vi.spyOn(interviewAppAdapter, "joinPartnerProgram");
+    vi.spyOn(interviewAppAdapter, "getPartnerProgramConfig").mockResolvedValue({ enabled: false, configVersion: 2, commissionRateBps: 2000, eligibleOrderDays: 90, refundHoldDays: 7, minimumPayoutCents: 10000, agreementVersion: "2026-09-v1", settlementMode: "manual-monthly" });
+    await act(async () => { render(<App initialAuthenticated={false} initialState={syntheticState} />); });
+    expect(interviewAppAdapter.getPartnerProgramConfig).toHaveBeenCalledWith(expect.any(AbortSignal));
+    expect(within(screen.getByRole("navigation", { name: "公开导航" })).getByRole("link", { name: "合作伙伴计划" })).toHaveAttribute("href", "/app/partner-program");
+    expect(screen.queryByRole("link", { name: /了解合作伙伴计划/ })).toBeNull();
+    expect(screen.queryByText(/获得 20% 推广佣金/)).toBeNull();
+    expect(join).not.toHaveBeenCalled();
+  });
+
+  it("provides partner access in both workbench navigations without enrolling the account", async () => {
+    const join = vi.spyOn(interviewAppAdapter, "joinPartnerProgram");
+    window.history.replaceState({}, "", "/app");
+    render(<App initialAuthenticated initialState={syntheticState} />);
+    expect(await screen.findByRole("heading", { name: "继续这场面试" })).toBeInTheDocument();
+    for (const name of ["应用导航", "移动端应用导航"]) {
+      expect(within(screen.getByRole("navigation", { name })).getByRole("link", { name: "合作伙伴计划" })).toHaveAttribute("href", "/app/partner-program");
+    }
+    expect(join).not.toHaveBeenCalled();
+  });
+
+  it("does not allow enrollment from the dashboard while the activity is paused", async () => {
+    window.history.replaceState({}, "", "/app/partner-program");
+    const join = vi.spyOn(interviewAppAdapter, "joinPartnerProgram");
+    vi.spyOn(interviewAppAdapter, "getPartnerProgram").mockResolvedValue({ joined: false, config: { enabled: false, commissionRateBps: 2000, eligibleOrderDays: 90, refundHoldDays: 7, minimumPayoutCents: 10000, agreementVersion: "2026-09-v1", settlementMode: "manual-monthly" } });
+    render(<App initialAuthenticated initialState={syntheticState} />);
+    expect(await screen.findByRole("heading", { name: "活动正在筹备" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "加入合作伙伴计划" })).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(join).not.toHaveBeenCalled();
+  });
+
+  it("requires explicit agreement before joining", async () => {
+    window.history.replaceState({}, "", "/app/partner-program");
+    vi.spyOn(interviewAppAdapter, "getPartnerProgram").mockResolvedValue({ joined: false, config: { enabled: true, commissionRateBps: 2000, eligibleOrderDays: 90, refundHoldDays: 7, minimumPayoutCents: 10000, agreementVersion: "2026-09-v1", settlementMode: "manual-monthly" } });
+    const join = vi.spyOn(interviewAppAdapter, "joinPartnerProgram").mockResolvedValue({ joined: true, shareUrl: "https://example.test/r/safePartnerSlug", config: { enabled: true, commissionRateBps: 2000, eligibleOrderDays: 90, refundHoldDays: 7, minimumPayoutCents: 10000, agreementVersion: "2026-09-v1", settlementMode: "manual-monthly" }, profile: { status: "active", joinedAtMs: 1, agreementVersion: "2026-09-v1" }, metrics: { validVisitors: 0, registrations: 0, payingUsers: 0, attributedReceiptsCents: 0 }, balances: { pendingCents: 0, availableCents: 0, reservedCents: 0, settledCents: 0, refreshedAtMs: null }, payouts: [] });
+    render(<App initialAuthenticated initialState={syntheticState} />);
+    const button = await screen.findByRole("button", { name: "加入合作伙伴计划" });
+    expect(button).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(button);
+    await waitFor(() => expect(join).toHaveBeenCalledWith("2026-09-v1"));
+    expect(await screen.findByText("你的专属推广链接")).toBeInTheDocument();
+  });
+
+  it("does not hide a negative carry-forward after a post-settlement refund", async () => {
+    window.history.replaceState({}, "", "/app/partner-program");
+    vi.spyOn(interviewAppAdapter, "getPartnerProgram").mockResolvedValue({ joined: true, shareUrl: "https://example.test/r/safePartnerSlug", config: { enabled: true, commissionRateBps: 2000, eligibleOrderDays: 90, refundHoldDays: 7, minimumPayoutCents: 10000, agreementVersion: "2026-09-v1", settlementMode: "manual-monthly" }, profile: { status: "active", joinedAtMs: 1, agreementVersion: "2026-09-v1" }, metrics: { validVisitors: 1, registrations: 1, payingUsers: 1, attributedReceiptsCents: 1000 }, balances: { pendingCents: 0, availableCents: -100, reservedCents: 0, settledCents: 2000, refreshedAtMs: 1 }, payouts: [] });
+    render(<App initialAuthenticated initialState={syntheticState} />);
+    expect(await screen.findByText("-¥1.00")).toBeInTheDocument();
+  });
+
+  it("collects only manual payout details and keeps them masked after saving", async () => {
+    window.history.replaceState({}, "", "/app/partner-program");
+    const base = { joined: true, shareUrl: "https://example.test/r/safePartnerSlug", config: { enabled: true, commissionRateBps: 2000, eligibleOrderDays: 90, refundHoldDays: 7, minimumPayoutCents: 10000, agreementVersion: "2026-09-v1", settlementMode: "manual-monthly" as const, payoutProfileEnabled: true }, profile: { status: "active" as const, joinedAtMs: 1, agreementVersion: "2026-09-v1" }, metrics: { validVisitors: 0, registrations: 0, payingUsers: 0, attributedReceiptsCents: 0 }, balances: { pendingCents: 0, availableCents: 0, reservedCents: 0, settledCents: 0, refreshedAtMs: 1 }, payouts: [] };
+    vi.spyOn(interviewAppAdapter, "getPartnerProgram").mockResolvedValue(base);
+    const save = vi.spyOn(interviewAppAdapter, "savePartnerPayoutProfile").mockResolvedValue({ payoutProfileId: "profile-1", version: 1, payoutMethod: "alipay", maskedAccountName: "测*", maskedAccountIdentifier: "****1234", updatedAtMs: 1 });
+    render(<App initialAuthenticated initialState={syntheticState} />);
+    await screen.findByText("人工结算收款信息");
+    fireEvent.change(screen.getByLabelText("实名姓名"), { target: { value: "测试用户" } });
+    fireEvent.change(screen.getByLabelText("收款账号"), { target: { value: "test-account-1234" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存收款信息" }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith({ payoutMethod: "alipay", accountName: "测试用户", accountIdentifier: "test-account-1234" }));
+    expect(screen.getByText(/不会自动发起支付宝或微信转账/)).toBeInTheDocument();
+  });
+});

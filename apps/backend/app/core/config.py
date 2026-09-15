@@ -178,6 +178,8 @@ class Settings(BaseSettings):
     interview_idle_timeout_seconds: int = 20 * 60
     interview_activity_touch_interval_seconds: int = 15
     interview_idle_reaper_batch_size: int = 100
+    realtime_resource_reaper_enabled: bool = True
+    realtime_resource_reaper_interval_seconds: int = 30
     realtime_asr_frame_timeout_seconds: float = 12.0
     realtime_asr_partial_timeout_seconds: float = 0.03
     realtime_asr_finalize_timeout_seconds: float = 2.0

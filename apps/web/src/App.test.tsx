@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App, interviewContinuationRoute } from "./App";
 import { interviewAppAdapter } from "./app-adapter";
 import { authClient } from "./auth-client";
-import { syntheticState } from "./test-state";
+import { fixtureAdapter, syntheticState } from "./test-state";
 
 const clonedState = () => structuredClone(syntheticState);
 
@@ -27,6 +27,8 @@ describe("OfferSteady web application", () => {
   beforeEach(() => {
     window.history.pushState({}, "", "/");
     vi.restoreAllMocks();
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Network access is disabled in component tests"));
+    vi.spyOn(interviewAppAdapter, "getPartnerProgramConfig").mockImplementation(signal => fixtureAdapter.getPartnerProgramConfig(signal));
     vi.spyOn(interviewAppAdapter, "startInterviewSession").mockImplementation(async id => ({
       ...(syntheticState.interviews.find(item => item.id === id) ?? syntheticState.interviews[0]!),
       id,
@@ -152,11 +154,17 @@ describe("OfferSteady web application", () => {
 
   it("leads with product value and keeps boundaries secondary", () => {
     openAt("/");
-    expect(screen.getByRole("heading", { name: /更从容地冲刺 Offer/ })).toBeInTheDocument();
-    expect(screen.getByText(/结合你的简历、岗位要求和个人资料/)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "从听懂问题，到组织答案，现场更从容。" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "实时抓住问题重点" })).toBeInTheDocument();
-    expect(screen.getByText(/AI 内容为回答建议/)).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    const heading = screen.getByRole("heading", { level: 1 });
+    expect(heading).toHaveTextContent("AI 面试助手，让你的经历更好表达。");
+    const hero = heading.closest("section")!;
+    expect(hero).toHaveTextContent(/面向求职者的AI面试助手/);
+    expect(hero).toHaveTextContent(/结合你的简历与目标岗位/);
+    expect(within(hero).getByRole("link", { name: /免费使用/ })).toHaveAttribute("href", "/login");
+    expect(screen.getByRole("heading", { name: "从听清问题，到讲清自己" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "跟上每一个问题" })).toBeInTheDocument();
+    expect(hero).toHaveTextContent(/AI 建议仅供参考.*真实经历/);
+    expect(heading).not.toHaveTextContent(/建议仅供参考|隐私|边界/);
     expect(screen.queryByText("CLEAR BOUNDARIES")).not.toBeInTheDocument();
   });
 
