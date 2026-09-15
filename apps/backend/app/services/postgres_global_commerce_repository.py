@@ -62,11 +62,11 @@ class PostgresGlobalCommerceRepository:
                 cursor.execute(
                     """INSERT INTO global_commerce_plan_versions (
                       offer_code,plan_version,display_name,description,currency,price_cents,billing_mode,duration_days,
-                      copilot_minutes,screen_assist_uses,resume_jd_enabled,knowledge_base_enabled,written_exam_enabled,
+                      copilot_minutes,screen_assist_uses,knowledge_tokens,resume_jd_enabled,knowledge_base_enabled,written_exam_enabled,
                       full_product_enabled,status,featured,display_order,created_at_ms
-                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s,%s)""",
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s,%s)""",
                     (plan.offer_code, plan.version, plan.display_name, plan.description, plan.currency, plan.price_cents,
-                     plan.billing_mode, plan.duration_days, plan.copilot_minutes, plan.screen_assist_uses,
+                     plan.billing_mode, plan.duration_days, plan.copilot_minutes, plan.screen_assist_uses, plan.knowledge_tokens,
                      plan.resume_jd_enabled, plan.knowledge_base_enabled, plan.written_exam_enabled,
                      plan.full_product_enabled, plan.featured, plan.display_order, plan.created_at_ms),
                 )
@@ -99,8 +99,8 @@ class PostgresGlobalCommerceRepository:
                   entitlement_id,user_id,offer_code,plan_version,source_kind,source_id,status,starts_at_ms,ends_at_ms,
                   copilot_minutes_granted,copilot_minutes_used,copilot_minutes_locked,screen_assist_uses_granted,
                   screen_assist_uses_used,screen_assist_uses_locked,resume_jd_enabled,knowledge_base_enabled,
-                  written_exam_enabled,full_product_enabled,created_at_ms,updated_at_ms
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                  written_exam_enabled,full_product_enabled,knowledge_tokens_granted,knowledge_tokens_used,knowledge_tokens_locked,created_at_ms,updated_at_ms
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT (source_kind,source_id) DO UPDATE SET source_id=EXCLUDED.source_id RETURNING *""",
                 self._entitlement_values(entitlement),
             )
@@ -127,8 +127,8 @@ class PostgresGlobalCommerceRepository:
                   entitlement_id,user_id,offer_code,plan_version,source_kind,source_id,status,starts_at_ms,ends_at_ms,
                   copilot_minutes_granted,copilot_minutes_used,copilot_minutes_locked,screen_assist_uses_granted,
                   screen_assist_uses_used,screen_assist_uses_locked,resume_jd_enabled,knowledge_base_enabled,
-                  written_exam_enabled,full_product_enabled,created_at_ms,updated_at_ms
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
+                  written_exam_enabled,full_product_enabled,knowledge_tokens_granted,knowledge_tokens_used,knowledge_tokens_locked,created_at_ms,updated_at_ms
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
                 self._entitlement_values(entitlement),
             )
             stored = self._entitlement(cursor.fetchone())
@@ -146,9 +146,12 @@ class PostgresGlobalCommerceRepository:
         return self.reserve_usage_atomic(user_id=reservation.user_id, usage_kind=reservation.usage_kind, amount=reservation.amount, operation_id=reservation.operation_id, created_at_ms=reservation.created_at_ms)
 
     def reserve_usage_atomic(self, *, user_id: str, usage_kind: UsageKind, amount: int, operation_id: str, created_at_ms: int) -> UsageReservation:
-        limit_column = "copilot_minutes_granted" if usage_kind == "copilot_minute" else "screen_assist_uses_granted"
-        used_column = "copilot_minutes_used" if usage_kind == "copilot_minute" else "screen_assist_uses_used"
-        locked_column = "copilot_minutes_locked" if usage_kind == "copilot_minute" else "screen_assist_uses_locked"
+        if usage_kind == "copilot_minute":
+            limit_column, used_column, locked_column = "copilot_minutes_granted", "copilot_minutes_used", "copilot_minutes_locked"
+        elif usage_kind == "screen_assist":
+            limit_column, used_column, locked_column = "screen_assist_uses_granted", "screen_assist_uses_used", "screen_assist_uses_locked"
+        else:
+            limit_column, used_column, locked_column = "knowledge_tokens_granted", "knowledge_tokens_used", "knowledge_tokens_locked"
         with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
             cursor.execute("SELECT * FROM global_commerce_usage_reservations WHERE operation_id=%s FOR UPDATE", (operation_id,))
             existing = cursor.fetchone()
@@ -191,8 +194,12 @@ class PostgresGlobalCommerceRepository:
             if not row: raise KeyError(operation_id)
             reservation = self._reservation(row)
             if reservation.status != "reserved": return reservation
-            locked_column = "copilot_minutes_locked" if reservation.usage_kind == "copilot_minute" else "screen_assist_uses_locked"
-            used_column = "copilot_minutes_used" if reservation.usage_kind == "copilot_minute" else "screen_assist_uses_used"
+            if reservation.usage_kind == "copilot_minute":
+                locked_column, used_column = "copilot_minutes_locked", "copilot_minutes_used"
+            elif reservation.usage_kind == "screen_assist":
+                locked_column, used_column = "screen_assist_uses_locked", "screen_assist_uses_used"
+            else:
+                locked_column, used_column = "knowledge_tokens_locked", "knowledge_tokens_used"
             used = reservation.amount if actual_amount is None else max(0, actual_amount)
             used_delta = used if outcome == "settled" else 0
             cursor.execute(f"UPDATE global_commerce_entitlements SET {locked_column}=GREATEST(0,{locked_column}-%s),{used_column}={used_column}+%s,updated_at_ms=%s WHERE entitlement_id=%s", (reservation.amount,used_delta,finalized_at_ms,reservation.entitlement_id))
@@ -203,7 +210,7 @@ class PostgresGlobalCommerceRepository:
 
     def update_entitlement(self, entitlement: GlobalEntitlement) -> GlobalEntitlement:
         with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
-            cursor.execute("""UPDATE global_commerce_entitlements SET status=%s,copilot_minutes_used=%s,copilot_minutes_locked=%s,screen_assist_uses_used=%s,screen_assist_uses_locked=%s,updated_at_ms=%s WHERE entitlement_id=%s RETURNING *""", (entitlement.status, entitlement.copilot_minutes_used, entitlement.copilot_minutes_locked, entitlement.screen_assist_uses_used, entitlement.screen_assist_uses_locked, max(entitlement.starts_at_ms, entitlement.ends_at_ms or 0), entitlement.entitlement_id))
+            cursor.execute("""UPDATE global_commerce_entitlements SET status=%s,copilot_minutes_used=%s,copilot_minutes_locked=%s,screen_assist_uses_used=%s,screen_assist_uses_locked=%s,knowledge_tokens_used=%s,knowledge_tokens_locked=%s,updated_at_ms=%s WHERE entitlement_id=%s RETURNING *""", (entitlement.status, entitlement.copilot_minutes_used, entitlement.copilot_minutes_locked, entitlement.screen_assist_uses_used, entitlement.screen_assist_uses_locked, entitlement.knowledge_tokens_used, entitlement.knowledge_tokens_locked, max(entitlement.starts_at_ms, entitlement.ends_at_ms or 0), entitlement.entitlement_id))
             row = cursor.fetchone()
             if not row:
                 raise KeyError(entitlement.entitlement_id)
@@ -424,20 +431,21 @@ class PostgresGlobalCommerceRepository:
                 Path(REPO_ROOT / "apps/backend/migrations/versions/0042_global_creem_lifecycle_hardening.sql"),
                 Path(REPO_ROOT / "apps/backend/migrations/versions/0043_global_creem_admin_configuration.sql"),
                 Path(REPO_ROOT / "apps/backend/migrations/versions/0045_global_commerce_catalog_v2.sql"),
+                Path(REPO_ROOT / "apps/backend/migrations/versions/0046_global_knowledge_token_entitlements.sql"),
             ))
             connection.commit()
 
     @staticmethod
     def _plan(row) -> GlobalPlan:
-        return GlobalPlan(row["offer_code"], int(row["plan_version"]), row["display_name"], row["description"], int(row["price_cents"]), row["billing_mode"], row["duration_days"], row["copilot_minutes"], row["screen_assist_uses"], bool(row["resume_jd_enabled"]), bool(row["knowledge_base_enabled"]), bool(row["written_exam_enabled"]), bool(row["full_product_enabled"]), row["status"], bool(row["featured"]), int(row["display_order"]), row["currency"], int(row["created_at_ms"]))
+        return GlobalPlan(row["offer_code"], int(row["plan_version"]), row["display_name"], row["description"], int(row["price_cents"]), row["billing_mode"], row["duration_days"], row["copilot_minutes"], row["screen_assist_uses"], bool(row["resume_jd_enabled"]), bool(row["knowledge_base_enabled"]), bool(row["written_exam_enabled"]), bool(row["full_product_enabled"]), row["status"], bool(row["featured"]), int(row["display_order"]), row["currency"], int(row["created_at_ms"]), int(row.get("knowledge_tokens", 0)))
 
     @staticmethod
     def _entitlement(row) -> GlobalEntitlement:
-        return GlobalEntitlement(row["entitlement_id"], row["user_id"], row["offer_code"], int(row["plan_version"]), row["source_kind"], row["source_id"], int(row["starts_at_ms"]), row["ends_at_ms"], row["copilot_minutes_granted"], row["screen_assist_uses_granted"], bool(row["resume_jd_enabled"]), bool(row["knowledge_base_enabled"]), bool(row["written_exam_enabled"]), bool(row["full_product_enabled"]), row["status"], int(row["copilot_minutes_used"]), int(row["copilot_minutes_locked"]), int(row["screen_assist_uses_used"]), int(row["screen_assist_uses_locked"]))
+        return GlobalEntitlement(row["entitlement_id"], row["user_id"], row["offer_code"], int(row["plan_version"]), row["source_kind"], row["source_id"], int(row["starts_at_ms"]), row["ends_at_ms"], row["copilot_minutes_granted"], row["screen_assist_uses_granted"], bool(row["resume_jd_enabled"]), bool(row["knowledge_base_enabled"]), bool(row["written_exam_enabled"]), bool(row["full_product_enabled"]), row["status"], int(row["copilot_minutes_used"]), int(row["copilot_minutes_locked"]), int(row["screen_assist_uses_used"]), int(row["screen_assist_uses_locked"]), int(row.get("knowledge_tokens_granted", 0)), int(row.get("knowledge_tokens_used", 0)), int(row.get("knowledge_tokens_locked", 0)))
 
     @staticmethod
     def _entitlement_values(item: GlobalEntitlement) -> tuple[object, ...]:
-        return (item.entitlement_id,item.user_id,item.offer_code,item.plan_version,item.source_kind,item.source_id,item.status,item.starts_at_ms,item.ends_at_ms,item.copilot_minutes_granted,item.copilot_minutes_used,item.copilot_minutes_locked,item.screen_assist_uses_granted,item.screen_assist_uses_used,item.screen_assist_uses_locked,item.resume_jd_enabled,item.knowledge_base_enabled,item.written_exam_enabled,item.full_product_enabled,item.starts_at_ms,item.starts_at_ms)
+        return (item.entitlement_id,item.user_id,item.offer_code,item.plan_version,item.source_kind,item.source_id,item.status,item.starts_at_ms,item.ends_at_ms,item.copilot_minutes_granted,item.copilot_minutes_used,item.copilot_minutes_locked,item.screen_assist_uses_granted,item.screen_assist_uses_used,item.screen_assist_uses_locked,item.resume_jd_enabled,item.knowledge_base_enabled,item.written_exam_enabled,item.full_product_enabled,item.knowledge_tokens_granted,item.knowledge_tokens_used,item.knowledge_tokens_locked,item.starts_at_ms,item.starts_at_ms)
 
     @staticmethod
     def _reservation(row) -> UsageReservation:

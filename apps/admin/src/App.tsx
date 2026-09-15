@@ -16,7 +16,7 @@ import {
   saveRememberedAdminPhone,
 } from "./login-preferences";
 
-export type View = "dashboard" | "server" | "promotion" | "users" | "orders" | "payments" | "globalCommerce" | "globalMembers" | "growth" | "pricing" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
+export type View = "dashboard" | "server" | "seo" | "promotion" | "users" | "orders" | "payments" | "globalCommerce" | "globalMembers" | "growth" | "pricing" | "redemptions" | "materials" | "interviews" | "audit" | "admins";
 type Row = Record<string, unknown>;
 const globalEdition = import.meta.env.VITE_PRODUCT_EDITION === "global";
 
@@ -25,6 +25,7 @@ export type AdminViewDefinition = { id: View; label: string; eyebrow: string; pe
 const commonCoreViews: AdminViewDefinition[] = [
   { id: "dashboard", label: "运营总览", eyebrow: "OVERVIEW", permission: "observability.read" },
   { id: "server", label: "服务器监控", eyebrow: "SERVER", permission: "observability.read" },
+  { id: "seo", label: "搜索排名", eyebrow: "SEO", permission: "seo.read" },
   { id: "users", label: "用户与权益", eyebrow: "CUSTOMERS", permission: "users.read" },
 ];
 
@@ -47,8 +48,8 @@ const chinaViews: AdminViewDefinition[] = [
 ];
 
 const globalViews: AdminViewDefinition[] = [
-  ...commonCoreViews,
-  { id: "globalMembers", label: "国际会员", eyebrow: "MEMBERS", permission: "users.read" },
+  ...commonCoreViews.slice(0, 2),
+  { id: "globalMembers", label: "用户与会员", eyebrow: "CUSTOMERS", permission: "users.read" },
   { id: "globalCommerce", label: "国际商业化", eyebrow: "CREEM", permission: "payments.manage" },
   ...commonOperationsViews,
 ];
@@ -77,7 +78,7 @@ const display = (value: unknown) => {
 };
 
 export function GlobalCommercePanel({ row }: { row: Row | undefined; onChanged: () => void }) {
-  const [mode, setMode] = useState<"test" | "live">("test");
+  const mode = "live" as const;
   const [data, setData] = useState<Row | undefined>(row);
   const [products, setProducts] = useState<Row[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -86,16 +87,10 @@ export function GlobalCommercePanel({ row }: { row: Row | undefined; onChanged: 
   const [reason, setReason] = useState("配置 Creem 支付环境");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
-  useEffect(() => { if (row && mode === "test") setData(row); }, [row, mode]);
+  useEffect(() => { if (row) setData(row); }, [row]);
   const reload = async (selectedMode = mode) => {
     const [overview, operations] = await Promise.all([adminApi.globalCommerceOverview(selectedMode), adminApi.globalCommerceOperations(selectedMode)]);
     setData({ ...overview, operations });
-  };
-  const selectMode = async (selectedMode: "test" | "live") => {
-    setMode(selectedMode); setProducts([]); setDrafts({}); setMessage(""); setBusy("mode");
-    try { await reload(selectedMode); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "环境配置读取失败"); }
-    finally { setBusy(""); }
   };
   if (!data) return <div className="loading">国际商业化配置暂不可用</div>;
   const blockers = Array.isArray(data.blockers) ? data.blockers.map(String) : [];
@@ -117,7 +112,7 @@ export function GlobalCommercePanel({ row }: { row: Row | undefined; onChanged: 
   };
   const syncProducts = async () => {
     setBusy("products"); setMessage("");
-    try { const result = await adminApi.globalCommerceProducts(mode); setProducts(result.items); setMessage(`Creem ${mode === "test" ? "测试" : "正式"}环境连接成功，读取到 ${result.items.length} 个商品。`); await reload(); }
+    try { const result = await adminApi.globalCommerceProducts(mode); setProducts(result.items); setMessage(`Creem 正式环境连接成功，读取到 ${result.items.length} 个商品。`); await reload(); }
     catch (error) { setMessage(error instanceof Error ? error.message : "Creem 商品读取失败"); }
     finally { setBusy(""); }
   };
@@ -131,7 +126,7 @@ export function GlobalCommercePanel({ row }: { row: Row | undefined; onChanged: 
   };
   const activate = async (enabled: boolean) => {
     setBusy("activation"); setMessage("");
-    try { await adminApi.activateGlobalCommerce(mode, enabled, reason); await reload(); setMessage(enabled ? `${mode === "test" ? "测试" : "正式"}环境的新结账已启用。` : "新结账已关闭，历史回调不受影响。"); }
+    try { await adminApi.activateGlobalCommerce(mode, enabled, reason); await reload(); setMessage(enabled ? "正式环境的新结账已启用。" : "新结账已关闭，历史回调不受影响。"); }
     catch (error) { setMessage(error instanceof Error ? error.message : "启用检查失败"); }
     finally { setBusy(""); }
   };
@@ -142,15 +137,16 @@ export function GlobalCommercePanel({ row }: { row: Row | undefined; onChanged: 
     finally { setBusy(""); }
   };
   const reconcilableOrders = orders.filter(order => ["checkout_created", "confirming"].includes(String(order.status)) && order.id && order.providerCheckoutId);
-  const runtimeMode = String(data.runtimeMode || "test");
   const active = Boolean(data.providerActivated);
-  const activationAllowed = Boolean(data.configurationReady) && Boolean(data.masterSwitchEnabled) && runtimeMode === mode;
+  // A mode can only become the runtime mode by being enabled. Requiring the
+  // selected mode to already be active made the Live switch impossible to use.
+  const activationAllowed = Boolean(data.configurationReady) && Boolean(data.masterSwitchEnabled);
   return <div className="global-commerce-admin">
-    <section className="signal-panel"><div><p className="eyebrow">CREEM PAYMENT</p><h3>{mode === "test" ? "测试环境配置" : "正式环境配置"}</h3></div><div className="page-actions"><button className={mode === "test" ? "primary" : "secondary"} disabled={Boolean(busy)} onClick={() => void selectMode("test")}>Test 测试</button><button className={mode === "live" ? "primary" : "secondary"} disabled={Boolean(busy)} onClick={() => void selectMode("live")}>Live 正式</button></div></section>
-    <section className={active ? "signal-panel" : "alert"}><strong>{active ? "当前环境已允许创建结账" : "当前环境支付未启用"}</strong><span>服务器当前运行：{runtimeMode === "test" ? "Test 测试" : "Live 正式"}；{mode === "test" ? "测试支付不会产生真实扣款。" : "正式支付需在审核通过后启用。"}</span></section>
+    <section className="signal-panel"><div><p className="eyebrow">CREEM PAYMENT</p><h3>正式环境配置</h3></div><span className="status-badge ready">LIVE · 正式</span></section>
+    <section className={active ? "signal-panel" : "alert"}><strong>{active ? "正式支付已允许创建结账" : "正式支付尚未启用"}</strong><span>服务器当前运行：Live 正式；正式支付需完成配置校验后启用。</span></section>
     {message ? <section className="alert">{message}</section> : null}
-    <section className="panel"><p className="eyebrow">01 · CONNECTION</p><h2>连接 Creem {mode === "test" ? "测试环境" : "正式环境"}</h2><p>已保存的密钥不会回显；留空表示保留原值。保存新密钥会自动关闭该环境支付。</p>
-      <div className="payment-grid"><label>API Key <small>{credentials?.apiKey?.configured ? `已配置 · 指纹 ${display(credentials.apiKey.fingerprint)}` : "未配置"}</small><input type="password" autoComplete="new-password" value={apiKey} placeholder={credentials?.apiKey?.configured ? "留空保留原 API Key" : mode === "test" ? "creem_test_…" : "creem_…"} onChange={event => setApiKey(event.target.value)} /></label><label>Webhook Secret <small>{credentials?.webhookSecret?.configured ? `已配置 · 指纹 ${display(credentials.webhookSecret.fingerprint)}` : "未配置"}</small><input type="password" autoComplete="new-password" value={webhookSecret} placeholder={credentials?.webhookSecret?.configured ? "留空保留原 Webhook Secret" : "填写 Creem Webhook Secret"} onChange={event => setWebhookSecret(event.target.value)} /></label></div>
+    <section className="panel"><p className="eyebrow">01 · CONNECTION</p><h2>连接 Creem 正式环境</h2><p>已保存的密钥不会回显；留空表示保留原值。保存新密钥会自动关闭正式支付。</p>
+      <div className="payment-grid"><label>API Key <small>{credentials?.apiKey?.configured ? `已配置 · 指纹 ${display(credentials.apiKey.fingerprint)}` : "未配置"}</small><input type="password" autoComplete="new-password" value={apiKey} placeholder={credentials?.apiKey?.configured ? "留空保留原 API Key" : "creem_…"} onChange={event => setApiKey(event.target.value)} /></label><label>Webhook Secret <small>{credentials?.webhookSecret?.configured ? `已配置 · 指纹 ${display(credentials.webhookSecret.fingerprint)}` : "未配置"}</small><input type="password" autoComplete="new-password" value={webhookSecret} placeholder={credentials?.webhookSecret?.configured ? "留空保留原 Webhook Secret" : "填写 Creem Webhook Secret"} onChange={event => setWebhookSecret(event.target.value)} /></label></div>
       <label>操作说明<input value={reason} onChange={event => setReason(event.target.value)} /></label>
       <div className="page-actions"><button className="secondary" disabled={Boolean(busy)} onClick={() => void saveCredentials()}>{busy === "credentials" ? "加密保存中…" : "保存密钥"}</button><button className="primary" disabled={Boolean(busy) || !credentials?.apiKey?.configured} onClick={() => void syncProducts()}>{busy === "products" ? "连接中…" : "测试连接并读取商品"}</button></div>
       <div className="signal-panel"><div><strong>Webhook URL</strong><p>{display(urls?.webhookUrl)}</p></div><button className="secondary" onClick={() => void navigator.clipboard.writeText(String(urls?.webhookUrl ?? ""))}>复制地址</button></div>
@@ -160,8 +156,8 @@ export function GlobalCommercePanel({ row }: { row: Row | undefined; onChanged: 
       <div className="payment-grid">{mappings.map(mapping => { const code = String(mapping.offerCode); const selected = drafts[code] ?? String(mapping.providerProductId ?? ""); return <article className="payment-card" key={code}><strong>{display(mapping.displayName)}</strong><small>${(Number(mapping.priceCents ?? 0) / 100).toFixed(2)} {display(mapping.currency)} · {mapping.billingMode === "recurring" ? "每月订阅" : "一次性购买"} · {mapping.validationStatus === "ready" ? "已匹配" : "待匹配"}</small><label>对应的 Creem 商品<select value={selected} disabled={!products.length || Boolean(busy)} onChange={event => setDrafts(current => ({ ...current, [code]: event.target.value }))}><option value="">请选择 Creem 商品</option>{products.map(product => <option key={String(product.id)} value={String(product.id)}>{formatProduct(product)}</option>)}</select></label><button className="payment-save" disabled={Boolean(busy) || !selected} onClick={() => void saveMapping(code)}>{busy === code ? "校验中…" : "保存并校验"}</button></article>; })}</div>
     </section>
     {blockers.length ? <section className="alert"><strong>启用前还需完成：</strong> {blockers.join("；")}</section> : <section className="signal-panel"><strong>配置校验已完成</strong><span>仍需手动点击启用，不会自动开放支付。</span></section>}
-    <div className="page-actions"><button className="secondary" disabled={Boolean(busy) || !active} onClick={() => void activate(false)}>关闭当前环境支付</button><button className="primary" disabled={Boolean(busy) || active || !activationAllowed} onClick={() => void activate(true)}>{busy === "activation" ? "最终检查中…" : mode === "test" ? "启用 Test 测试支付" : "启用 Live 正式支付"}</button></div>
-    <div className="metric-grid"><article className="metric"><span>01</span><strong>{display(metrics?.paidOrders ?? 0)}</strong><p>{mode === "test" ? "测试" : "正式"}已支付订单</p></article><article className="metric"><span>02</span><strong>${(Number(metrics?.grossRevenueCents ?? 0) / 100).toFixed(2)}</strong><p>确认收入</p></article><article className="metric"><span>03</span><strong>${(Number(metrics?.estimatedNetBeforeServiceCostCents ?? 0) / 100).toFixed(2)}</strong><p>估算渠道费后收入</p></article></div>
+    <div className="page-actions"><button className="secondary" disabled={Boolean(busy) || !active} onClick={() => void activate(false)}>关闭正式支付</button><button className="primary" disabled={Boolean(busy) || active || !activationAllowed} onClick={() => void activate(true)}>{busy === "activation" ? "最终检查中…" : "启用 Live 正式支付"}</button></div>
+    <div className="metric-grid"><article className="metric"><span>01</span><strong>{display(metrics?.paidOrders ?? 0)}</strong><p>正式已支付订单</p></article><article className="metric"><span>02</span><strong>${(Number(metrics?.grossRevenueCents ?? 0) / 100).toFixed(2)}</strong><p>确认收入</p></article><article className="metric"><span>03</span><strong>${(Number(metrics?.estimatedNetBeforeServiceCostCents ?? 0) / 100).toFixed(2)}</strong><p>估算渠道费后收入</p></article></div>
     <section><p className="eyebrow">ORDERS</p><h2>最近订单</h2><Table rows={orders} />{reconcilableOrders.length ? <div className="page-actions">{reconcilableOrders.slice(0, 8).map(order => { const orderId = String(order.id); return <button className="secondary" key={orderId} disabled={Boolean(busy)} onClick={() => void reconcile(orderId)}>{busy === `reconcile:${orderId}` ? "对账中…" : `对账 ${orderId}`}</button>; })}</div> : null}</section>
     <section><p className="eyebrow">SUBSCRIPTIONS</p><h2>订阅状态</h2><Table rows={subscriptions} /></section>
     <section><p className="eyebrow">WEBHOOKS</p><h2>回调记录</h2><Table rows={events} /></section>
@@ -189,6 +185,7 @@ export function GlobalMembersPanel() {
     catch (error) { setMessage(error instanceof Error ? error.message : "用户搜索失败"); }
     finally { setBusy(""); }
   };
+  useEffect(() => { void runSearch(); }, []);
   const openMember = async (userId: string) => {
     setBusy(`member:${userId}`); setMessage("");
     try { setDetail(await adminApi.globalMember(userId)); }
@@ -225,7 +222,7 @@ export function GlobalMembersPanel() {
   const orders = Array.isArray(detail?.orders) ? detail.orders as Row[] : [];
   const subscriptions = Array.isArray(detail?.subscriptions) ? detail.subscriptions as Row[] : [];
   return <div className="global-members-admin">
-    <section className="member-search"><div><p className="eyebrow">GLOBAL MEMBER SEARCH</p><h2>查找国际版用户</h2><p>支持邮箱、昵称或用户 ID；查询有分页与数量限制，不扫描面试内容。</p></div><div><input aria-label="搜索国际版用户" value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === "Enter") void runSearch(); }} placeholder="输入邮箱、昵称或用户 ID" /><button className="primary" disabled={busy === "search"} onClick={() => void runSearch()}>{busy === "search" ? "查询中…" : "搜索用户"}</button></div></section>
+    <section className="member-search"><div><p className="eyebrow">GLOBAL MEMBER SEARCH</p><h2>查找国际版用户</h2><p>支持邮箱、昵称或用户 ID；查询有分页与数量限制，不扫描面试内容。</p><p>国际版后台只管理会员套餐与会员权益；国服的积分和增加时长操作不适用于这里。</p></div><div><input aria-label="搜索国际版用户" value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === "Enter") void runSearch(); }} placeholder="输入邮箱、昵称或用户 ID" /><button className="primary" disabled={busy === "search"} onClick={() => void runSearch()}>{busy === "search" ? "查询中…" : "搜索用户"}</button></div></section>
     {message ? <section className="alert" role="status">{message}</section> : null}
     <div className="member-layout"><section className="member-results"><h3>搜索结果</h3>{members.length ? members.map(member => <button key={String(member.user_id)} onClick={() => void openMember(String(member.user_id))} className={identity?.user_id === member.user_id ? "active" : ""}><strong>{display(member.email)}</strong><span>{display(member.display_name)} · {display(member.current_plan_name || "Free / 未激活")}</span><small>{member.current_ends_at_ms ? `有效至 ${display(member.current_ends_at_ms)}` : "无固定到期时间"}</small></button>) : <div className="empty">输入邮箱或用户信息开始查询</div>}</section>
       <section className="member-detail">{identity ? <><div className="member-identity"><div><p className="eyebrow">MEMBER DETAIL</p><h2>{display(identity.email)}</h2><p>{display(identity.display_name)} · 注册于 {display(identity.created_at_ms)}</p></div><span className="status-badge active">国际版账号</span></div>
@@ -1021,6 +1018,17 @@ function GrowthPanel({ row, onChanged, onAuthenticationExpired }: { row: Row | u
   return <section className="growth-settings-card"><div className="growth-settings-head"><div><p className="eyebrow">REFERRAL PROGRAM</p><h3>邀请拉新奖励</h3><p>新用户仅可在注册后 3 天内激活好友链接；成功后分享者与新用户分别获得积分。每个账号只能激活一次，禁止自邀。</p></div><span className={`status-badge ${enabled ? "active" : "inactive"}`}>{enabled ? "当前已启用" : "当前已关闭"}</span></div><div className="growth-setting-grid"><label><span>允许新邀请激活</span><small>固定注册后 3 天内可激活；关闭后仅停止新的激活和奖励</small><input type="checkbox" role="switch" aria-label="允许新邀请激活" checked={enabled} onChange={event => setEnabled(event.target.checked)} /></label><label><span>分享者奖励</span><small>好友在有效期内激活后发放</small><div className="points-input"><input aria-label="分享者奖励积分" type="number" min="1" max="100000" step="1" value={rewardPoints} onChange={event => setRewardPoints(event.target.value)} /><b>积分</b></div></label><label><span>新用户奖励</span><small>新用户成功激活后同步发放</small><div className="points-input"><input aria-label="新用户奖励积分" type="number" min="1" max="100000" step="1" value={inviteeRewardPoints} onChange={event => setInviteeRewardPoints(event.target.value)} /><b>积分</b></div></label></div><label className="growth-reason">配置变更原因<input value={reason} onChange={event => setReason(event.target.value)} placeholder="例如：上线双向邀请奖励" /></label><div className="growth-settings-footer"><div><strong>配置版本 v{String(row?.configVersion ?? 1)}</strong><small>{Number(row?.updatedAtMs) > 0 ? `最近更新：${new Date(Number(row?.updatedAtMs)).toLocaleString("zh-CN")}` : "尚未进行运营配置"}</small></div><button className="primary" disabled={busy} onClick={() => void save()}>{busy ? "保存中…" : "保存并立即生效"}</button></div>{message ? <div className="form-message" role="status">{message}</div> : null}</section>;
 }
 
+function BaiduRankingPanel({ data, onChanged }: { data: Row; onChanged: () => void }) {
+  const [reason, setReason] = useState("查看百度关键词排名");
+  const [keyword, setKeyword] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const items = Array.isArray(data.items) ? data.items as Row[] : [];
+  const refresh = async () => { if (reason.trim().length < 3) { setMessage("请填写刷新原因。"); return; } setBusy(true); try { await adminApi.refreshBaiduRanking(reason.trim()); setMessage("排名已刷新。"); onChanged(); } catch (error) { setMessage(error instanceof Error ? error.message : "刷新失败"); } finally { setBusy(false); } };
+  const add = async () => { if (!keyword.trim() || reason.trim().length < 3) { setMessage("请输入关键词并填写原因。"); return; } setBusy(true); try { await adminApi.addBaiduKeyword(keyword.trim(), reason.trim()); setKeyword(""); setMessage("关键词已添加。"); onChanged(); } catch (error) { setMessage(error instanceof Error ? error.message : "添加失败"); } finally { setBusy(false); } };
+  return <div className="seo-ranking"><section className="signal-panel"><div><p className="eyebrow">BAIDU PC RANKING</p><h2>{display(data.domain)}</h2><span>每日同步一次 · 最近同步 {display(data.lastSyncAtMs)}</span></div><button className="primary" disabled={busy} onClick={() => void refresh()}>{busy ? "处理中…" : "立即刷新"}</button></section><section className="panel"><div className="page-actions"><input aria-label="新增关键词" placeholder="新增关键词" value={keyword} onChange={event => setKeyword(event.target.value)} /><input aria-label="排名操作原因" value={reason} onChange={event => setReason(event.target.value)} /><button className="secondary" disabled={busy} onClick={() => void add()}>添加关键词</button></div>{message ? <div className="form-message" role="status">{message}</div> : null}</section>{items.map(item => { const latest = item.latest as Row | undefined; const results = Array.isArray(latest?.results_json) ? latest.results_json as Row[] : []; return <section className="panel" key={String(item.keyword_id)}><div className="payment-card-head"><div><h3>{display(item.keyword)}</h3><small>{item.status === "active" ? "监控中" : "已停用"} · 观察日 {display(latest?.observed_date)}</small></div><strong>{latest?.status === "ranked" ? `第 ${display(latest.top_rank)} 名` : latest?.status === "not_found" ? "未进入前 50" : display(latest?.status || "尚未同步")}</strong></div>{results.length ? <div className="table-wrap"><table><thead><tr><th>排名</th><th>标题</th><th>链接</th></tr></thead><tbody>{results.slice(0, 50).map((result, index) => <tr key={`${String(result.url)}-${index}`}><td>{display(result.rank)}</td><td>{display(result.title)}</td><td>{display(result.url)}</td></tr>)}</tbody></table></div> : <div className="empty">暂无今日结果</div>}</section>; })}</div>;
+}
+
 export function App() {
   const [authenticated, setAuthenticated] = useState(Boolean(adminApi.token()));
   const [view, setView] = useState<View>("dashboard");
@@ -1070,6 +1078,9 @@ export function App() {
         if (sequence === loadSequence.current) setRows([{ ...overview, operations }]);
       } else if (target === "globalMembers") {
         if (sequence === loadSequence.current) setRows([]);
+      } else if (target === "seo") {
+        const result = await adminApi.baiduRanking();
+        if (sequence === loadSequence.current) setRows([result]);
       } else if (target !== "server" && target !== "promotion") {
         const resource = target === "redemptions" ? "redemption-batches" : target === "pricing" ? "catalog-products" : target === "payments" ? "payment-channels" : target;
         const nextRows = (await adminApi.list(resource, offset)).items;
@@ -1103,7 +1114,7 @@ export function App() {
       <main className="workspace">
         <header><div><p className="eyebrow">{current.eyebrow}</p><h1>{current.label}</h1></div><div className="header-actions"><span>{new Date().toLocaleDateString("zh-CN")}</span><button onClick={() => void load(view)}>刷新</button><button onClick={() => adminApi.logout().then(() => { sessionRequest.current = null; setAuthenticated(false); })}>退出</button></div></header>
         {error && <div className="alert">{error}</div>}
-        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} onAuthenticationExpired={requireNewAdminLogin} /> : view === "server" ? <ServerMonitor onAuthenticationExpired={requireNewAdminLogin} /> : view === "promotion" ? <PromotionCenter permissions={permissions} onAuthenticationExpired={requireNewAdminLogin} /> : view === "globalMembers" ? <GlobalMembersPanel /> : view === "globalCommerce" ? <GlobalCommercePanel row={rows[0]} onChanged={() => void load(view, true)} /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "pricing" ? <PricingPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "payments" ? <PaymentPanel rows={rows} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "growth" ? <GrowthPanel row={rows[0]} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "orders" ? <OrdersPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : <>
+        {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} onAuthenticationExpired={requireNewAdminLogin} /> : view === "server" ? <ServerMonitor onAuthenticationExpired={requireNewAdminLogin} /> : view === "seo" ? <BaiduRankingPanel data={rows[0] || {}} onChanged={() => void load(view, true)} /> : view === "promotion" ? <PromotionCenter permissions={permissions} onAuthenticationExpired={requireNewAdminLogin} /> : view === "globalMembers" ? <GlobalMembersPanel /> : view === "globalCommerce" ? <GlobalCommercePanel row={rows[0]} onChanged={() => void load(view, true)} /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "pricing" ? <PricingPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "payments" ? <PaymentPanel rows={rows} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "growth" ? <GrowthPanel row={rows[0]} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "orders" ? <OrdersPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : <>
           <Table rows={rows} />
           <div className="pagination"><button disabled={offset === 0} onClick={() => setOffset(value => Math.max(0, value - 50))}>上一页</button><span>第 {offset / 50 + 1} 页</span><button disabled={rows.length < 50} onClick={() => setOffset(value => value + 50)}>下一页</button></div>
           <ActionPanel view={view} rows={rows} permissions={permissions} onChanged={() => void load(view, true)} />

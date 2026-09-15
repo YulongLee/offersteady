@@ -278,7 +278,7 @@ describe("Global English product", () => {
     expect(screen.getByRole("heading", { name: "Page not found" })).toBeInTheDocument();
   });
 
-  it("shows merchant-review pricing without opening a payment flow", () => {
+  it("shows live pricing with sign-in links without opening a payment flow", () => {
     window.history.replaceState({}, "", "/pricing");
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     render(<App initialAuthenticated={false} initialState={structuredClone(syntheticState) as unknown as WebAppState} />);
@@ -288,12 +288,9 @@ describe("Global English product", () => {
     expect(screen.getByRole("heading", { name: "Pro Weekly" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Pro Monthly" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Job Hunt" })).toBeInTheDocument();
-    const checkoutButtons = screen.getAllByRole("button", { name: "Checkout requires provider approval" });
-    expect(checkoutButtons).toHaveLength(4);
-    for (const button of checkoutButtons) {
-      expect(button).toBeDisabled();
-      fireEvent.click(button);
-    }
+    const checkoutLinks = screen.getAllByRole("link", { name: "Sign in to choose plan" });
+    expect(checkoutLinks).toHaveLength(4);
+    for (const link of checkoutLinks) expect(link).toHaveAttribute("href", "/login");
     expect(screen.getByText(/Monthly subscription · renews automatically until cancelled/)).toBeInTheDocument();
     expect(screen.getAllByText(/One-time payment · no automatic renewal/)).toHaveLength(3);
     expect(screen.getByText(/24 consecutive hours from confirmed payment/)).toBeInTheDocument();

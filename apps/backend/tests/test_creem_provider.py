@@ -107,6 +107,16 @@ def test_product_catalogue_uses_search_endpoint_and_safe_metadata() -> None:
     assert products[0].status == "active"
 
 
+def test_live_product_mode_prod_is_normalized() -> None:
+    client = httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200, json={
+        "items": [{"id": "prod_live_1", "name": "OfferSteady Pro", "mode": "prod", "price": 4999, "currency": "USD", "billing_type": "onetime", "status": "active"}],
+        "pagination": {"next_page": None},
+    })))
+    settings = configured_settings(creem_live_api_key="creem_live_secret_value", creem_live_webhook_secret="webhook_live_secret_value")
+    products = CreemProvider(settings, client=client, mode="live").list_products(max_pages=1)
+    assert products[0].mode == "live"
+
+
 def test_product_catalogue_rejects_invalid_response_shape() -> None:
     with pytest.raises(CreemRequestError, match="provider_product_list_shape_invalid"):
         provider(lambda _: httpx.Response(200, json={"items": "not-a-list"})).list_products()

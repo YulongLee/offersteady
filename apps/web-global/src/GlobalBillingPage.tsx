@@ -1,6 +1,6 @@
 import { CheckCircleIcon, CreditCardIcon, ShieldCheckIcon, SparkleIcon } from "@phosphor-icons/react";
 import type { GlobalPlanVersion } from "@offersteady/protocol";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { authClient } from "./auth-client";
 import { createJsonClient } from "./api-client";
@@ -9,22 +9,30 @@ import { readRuntimeConfig } from "./runtime-config";
 
 interface Props { readonly state: WebAppState }
 interface AccountCommerceState {
-  readonly entitlement: { readonly offerCode: string; readonly endsAtMs: number | null } | null;
-  readonly usage: { readonly copilotMinutesRemaining: number | null; readonly screenAssistUsesRemaining: number | null; readonly copilotUnlimited: boolean; readonly screenAssistUnlimited: boolean };
+  readonly entitlement: { readonly offerCode: string; readonly endsAtMs: number | null; readonly knowledgeTokensRemaining: number; readonly benefits: { readonly knowledgeTokens: number } } | null;
+  readonly usage: { readonly copilotMinutesRemaining: number | null; readonly screenAssistUsesRemaining: number | null; readonly copilotUnlimited: boolean; readonly screenAssistUnlimited: boolean; readonly knowledgeTokensRemaining: number; readonly knowledgeTokensUnlimited: boolean };
+  readonly knowledge: { readonly remaining: number; readonly unlimited: boolean };
   readonly orders: readonly { readonly id: string; readonly offerCode: string; readonly status: string; readonly amountCents: number; readonly createdAtMs: number }[];
   readonly subscription: { readonly status: "active" | "canceling" | "canceled" | "paused" | "expired"; readonly currentPeriodEndMs: number; readonly canceledAtMs?: number | null } | null;
 }
 
 const fallbackPlans: readonly GlobalPlanVersion[] = [
-  { offerCode: "global-free", version: 1, displayName: "Free", description: "Try the live interview copilot before you buy.", currency: "USD", priceCents: 0, billingMode: "free", durationDays: null, benefits: { copilotMinutes: 15, screenAssistUses: 3, resumeAndJobDescription: false, knowledgeBase: false, writtenExam: false, fullProduct: false }, published: true, featured: false, displayOrder: 0, createdAtMs: 0 },
-  { offerCode: "global-interview-pass", version: 2, displayName: "Interview Day Pass", description: "Focused access for your interview day.", currency: "USD", priceCents: 999, billingMode: "one_time", durationDays: 1, benefits: { copilotMinutes: 180, screenAssistUses: null, resumeAndJobDescription: true, knowledgeBase: false, writtenExam: true, fullProduct: false }, published: true, featured: false, displayOrder: 1, createdAtMs: 0 },
-  { offerCode: "global-pro-weekly", version: 2, displayName: "Pro Weekly", description: "Unlimited full-product access for interview week.", currency: "USD", priceCents: 4999, billingMode: "one_time", durationDays: 7, benefits: { copilotMinutes: null, screenAssistUses: null, resumeAndJobDescription: true, knowledgeBase: true, writtenExam: true, fullProduct: true }, published: true, featured: true, displayOrder: 2, createdAtMs: 0 },
-  { offerCode: "global-pro-monthly", version: 2, displayName: "Pro Monthly", description: "Unlimited access throughout your job search.", currency: "USD", priceCents: 9999, billingMode: "recurring", durationDays: 30, benefits: { copilotMinutes: null, screenAssistUses: null, resumeAndJobDescription: true, knowledgeBase: true, writtenExam: true, fullProduct: true }, published: true, featured: false, displayOrder: 3, createdAtMs: 0 },
-  { offerCode: "global-job-hunt", version: 2, displayName: "Job Hunt", description: "Unlimited access for a focused three-month search.", currency: "USD", priceCents: 19999, billingMode: "one_time", durationDays: 90, benefits: { copilotMinutes: null, screenAssistUses: null, resumeAndJobDescription: true, knowledgeBase: true, writtenExam: true, fullProduct: true }, published: true, featured: false, displayOrder: 4, createdAtMs: 0 },
+  { offerCode: "global-free", version: 1, displayName: "Free", description: "Try the live interview copilot before you buy.", currency: "USD", priceCents: 0, billingMode: "free", durationDays: null, benefits: { copilotMinutes: 15, screenAssistUses: 3, resumeAndJobDescription: false, knowledgeBase: false, knowledgeTokens: 0, writtenExam: false, fullProduct: false }, published: true, featured: false, displayOrder: 0, createdAtMs: 0 },
+  { offerCode: "global-interview-pass", version: 2, displayName: "Interview Day Pass", description: "Focused access for your interview day.", currency: "USD", priceCents: 999, billingMode: "one_time", durationDays: 1, benefits: { copilotMinutes: 180, screenAssistUses: null, resumeAndJobDescription: true, knowledgeBase: false, knowledgeTokens: 0, writtenExam: true, fullProduct: false }, published: true, featured: false, displayOrder: 1, createdAtMs: 0 },
+  { offerCode: "global-pro-weekly", version: 2, displayName: "Pro Weekly", description: "Unlimited full-product access for interview week.", currency: "USD", priceCents: 4999, billingMode: "one_time", durationDays: 7, benefits: { copilotMinutes: null, screenAssistUses: null, resumeAndJobDescription: true, knowledgeBase: true, knowledgeTokens: 50000, writtenExam: true, fullProduct: true }, published: true, featured: true, displayOrder: 2, createdAtMs: 0 },
+  { offerCode: "global-pro-monthly", version: 2, displayName: "Pro Monthly", description: "Unlimited access throughout your job search.", currency: "USD", priceCents: 9999, billingMode: "recurring", durationDays: 30, benefits: { copilotMinutes: null, screenAssistUses: null, resumeAndJobDescription: true, knowledgeBase: true, knowledgeTokens: 200000, writtenExam: true, fullProduct: true }, published: true, featured: false, displayOrder: 3, createdAtMs: 0 },
+  { offerCode: "global-job-hunt", version: 2, displayName: "Job Hunt", description: "Unlimited access for a focused three-month search.", currency: "USD", priceCents: 19999, billingMode: "one_time", durationDays: 90, benefits: { copilotMinutes: null, screenAssistUses: null, resumeAndJobDescription: true, knowledgeBase: true, knowledgeTokens: 1000000, writtenExam: true, fullProduct: true }, published: true, featured: false, displayOrder: 4, createdAtMs: 0 },
 ];
 
 const money = (cents: number) => cents === 0 ? "$0" : `$${(cents / 100).toFixed(2)}`;
 const pendingOrderKey = "offersteady.global.checkout.pending_order";
+const formatRemaining = (endsAtMs: number, nowMs: number) => {
+  const remainingMs = Math.max(0, endsAtMs - nowMs);
+  const totalHours = Math.ceil(remainingMs / 3_600_000);
+  if (totalHours < 24) return `${totalHours} hour${totalHours === 1 ? "" : "s"} remaining`;
+  const days = Math.ceil(totalHours / 24);
+  return `${days} day${days === 1 ? "" : "s"} remaining`;
+};
 const term = (plan: GlobalPlanVersion) => plan.billingMode === "recurring" ? "/ month" : plan.durationDays === 1 ? "/ 24 hours" : plan.durationDays ? `/ ${plan.durationDays} days` : "forever";
 const benefits = (plan: GlobalPlanVersion) => {
   const items = [
@@ -33,6 +41,8 @@ const benefits = (plan: GlobalPlanVersion) => {
   ];
   if (plan.benefits.resumeAndJobDescription) items.push("Resume and job-description context");
   if (plan.benefits.knowledgeBase) items.push("Knowledge base");
+  const knowledgeTokens = plan.benefits.knowledgeTokens ?? 0;
+  if (knowledgeTokens > 0) items.push(`${knowledgeTokens.toLocaleString()} knowledge-base tokens`);
   if (plan.benefits.writtenExam) items.push("Written-exam mode");
   return items;
 };
@@ -44,6 +54,14 @@ export function BillingPage({ state: _state }: Props) {
   const [checkoutMessage, setCheckoutMessage] = useState("");
   const [checkoutBusy, setCheckoutBusy] = useState<string | null>(null);
   const [account, setAccount] = useState<AccountCommerceState | null>(null);
+  const [accountStatus, setAccountStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [accountError, setAccountError] = useState("");
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -52,6 +70,28 @@ export function BillingPage({ state: _state }: Props) {
       .then(result => { setPlans(result.plans); setCatalogueStatus("ready"); })
       .catch(() => setCatalogueStatus("fallback"));
     return () => controller.abort();
+  }, [runtime.apiBaseUrl]);
+
+  const loadAccount = useCallback(async (signal?: AbortSignal) => {
+    const session = authClient.readStoredSession();
+    if (!session) {
+      setAccount(null);
+      setAccountStatus("idle");
+      return;
+    }
+    setAccountStatus("loading");
+    setAccountError("");
+    try {
+      const client = createJsonClient({ baseUrl: runtime.apiBaseUrl });
+      const result = await client.request<AccountCommerceState>("/api/v1/global-commerce/state", { headers: { Authorization: `Bearer ${session.accessToken}` } }, signal);
+      if (signal?.aborted) return;
+      setAccount(result);
+      setAccountStatus("ready");
+    } catch (error) {
+      if (signal?.aborted) return;
+      setAccountStatus("error");
+      setAccountError(error instanceof Error ? error.message : "Current access could not be loaded.");
+    }
   }, [runtime.apiBaseUrl]);
 
   useEffect(() => {
@@ -67,7 +107,7 @@ export function BillingPage({ state: _state }: Props) {
         const client = createJsonClient({ baseUrl: runtime.apiBaseUrl });
         const order = await client.request<{ status: string }>(`/api/v1/global-commerce/orders/${encodeURIComponent(orderId)}`, { headers: { Authorization: `Bearer ${session.accessToken}` } });
         if (stopped) return;
-        if (order.status === "paid") { window.localStorage.removeItem(pendingOrderKey); setCheckoutMessage("Payment confirmed. Your access is now active."); return; }
+        if (order.status === "paid") { window.localStorage.removeItem(pendingOrderKey); setCheckoutMessage("Payment confirmed. Your access is now active."); void loadAccount(); return; }
         if (["failed", "expired", "refunded", "disputed"].includes(order.status)) { window.localStorage.removeItem(pendingOrderKey); setCheckoutMessage("This payment was not completed. No new entitlement was granted."); return; }
       } catch { /* Retry only within the bounded return window. */ }
       if (!stopped && attempt < 12) timer = window.setTimeout(() => void poll(), 1_500);
@@ -75,16 +115,31 @@ export function BillingPage({ state: _state }: Props) {
     };
     void poll();
     return () => { stopped = true; window.clearTimeout(timer); };
-  }, [runtime.apiBaseUrl]);
+  }, [loadAccount, runtime.apiBaseUrl]);
 
   useEffect(() => {
-    const session = authClient.readStoredSession();
-    if (!session) return;
     const controller = new AbortController();
-    const client = createJsonClient({ baseUrl: runtime.apiBaseUrl });
-    void client.request<AccountCommerceState>("/api/v1/global-commerce/state", { headers: { Authorization: `Bearer ${session.accessToken}` } }, controller.signal).then(setAccount).catch(() => undefined);
+    void loadAccount(controller.signal);
     return () => controller.abort();
-  }, [runtime.apiBaseUrl]);
+  }, [loadAccount]);
+
+  useEffect(() => {
+    const endsAtMs = account?.entitlement?.endsAtMs;
+    if (!endsAtMs) return;
+    const refreshDelay = Math.max(1_000, endsAtMs - Date.now() + 1_000);
+    const timer = window.setTimeout(() => void loadAccount(), refreshDelay);
+    return () => window.clearTimeout(timer);
+  }, [account?.entitlement?.endsAtMs, loadAccount]);
+
+  useEffect(() => {
+    const refreshWhenVisible = () => { if (!document.hidden) void loadAccount(); };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    window.addEventListener("focus", refreshWhenVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.removeEventListener("focus", refreshWhenVisible);
+    };
+  }, [loadAccount]);
 
   const beginCheckout = async (plan: GlobalPlanVersion) => {
     if (plan.offerCode === "global-free") {
@@ -137,9 +192,14 @@ export function BillingPage({ state: _state }: Props) {
     finally { setCheckoutBusy(null); }
   };
 
+  const activePlan = account?.entitlement ? plans.find(plan => plan.offerCode === account.entitlement?.offerCode) : null;
+  const accessSummary = account?.entitlement?.endsAtMs
+    ? `Access through ${new Date(account.entitlement.endsAtMs).toLocaleString("en-US")} · ${formatRemaining(account.entitlement.endsAtMs, nowMs)}`
+    : "Your one-time Free allowance stays available until used.";
+
   return <main className="app-page global-billing-page">
     <header className="global-pricing-hero"><span className="kicker">PLANS &amp; BILLING</span><h1>Choose access that matches your interview schedule.</h1><p>Start free without a card. Short passes are one-time purchases; only Pro Monthly renews automatically.</p></header>
-    {account ? <section className="global-current-access panel"><div><span className="kicker">CURRENT ACCESS</span><h2>{account.entitlement?.offerCode ?? "Free"}</h2><p>{account.entitlement?.endsAtMs ? `Access through ${new Date(account.entitlement.endsAtMs).toLocaleDateString("en-US")}` : "Your one-time Free allowance stays available until used."}</p>{account.subscription ? <p className="global-subscription-state">Subscription: {account.subscription.status}{account.subscription.status === "canceling" || account.subscription.status === "canceled" ? ` · access through ${new Date(account.subscription.currentPeriodEndMs).toLocaleDateString("en-US")}` : ""}</p> : null}{account.entitlement?.offerCode === "global-pro-monthly" ? <button className="text-link" type="button" disabled={checkoutBusy !== null} onClick={() => void openBillingPortal()}>Manage subscription and billing</button> : null}</div><div><strong>{account.usage.copilotUnlimited ? "Unlimited" : account.usage.copilotMinutesRemaining ?? 0}</strong><span>Copilot minutes</span></div><div><strong>{account.usage.screenAssistUnlimited ? "Unlimited" : account.usage.screenAssistUsesRemaining ?? 0}</strong><span>Screen Assist uses</span></div></section> : null}
+    {accountStatus !== "idle" ? <section className="global-current-access panel" aria-live="polite"><div>{accountStatus === "loading" ? <><span className="kicker">CURRENT ACCESS</span><h2>Loading your access…</h2><p>Checking your latest membership and usage.</p></> : accountStatus === "error" ? <><span className="kicker">CURRENT ACCESS</span><h2>Access status unavailable</h2><p>{accountError || "We could not load your current membership."}</p><button className="text-link" type="button" onClick={() => void loadAccount()}>Refresh access status</button></> : <><span className="kicker">CURRENT ACCESS</span><h2>{activePlan?.displayName ?? account?.entitlement?.offerCode ?? "Free"}</h2><p>{accessSummary}</p>{account?.subscription ? <p className="global-subscription-state">Subscription: {account.subscription.status}{account.subscription.status === "canceling" || account.subscription.status === "canceled" ? ` · access through ${new Date(account.subscription.currentPeriodEndMs).toLocaleDateString("en-US")}` : account.subscription.status === "active" ? ` · next renewal ${new Date(account.subscription.currentPeriodEndMs).toLocaleDateString("en-US")}` : ""}</p> : null}{account?.entitlement?.offerCode === "global-pro-monthly" ? <button className="text-link" type="button" disabled={checkoutBusy !== null} onClick={() => void openBillingPortal()}>Manage subscription and billing</button> : null}</>}</div>{accountStatus === "ready" && account ? <><div><strong>{account.usage.copilotUnlimited ? "Unlimited" : account.usage.copilotMinutesRemaining ?? 0}</strong><span>Copilot minutes</span></div><div><strong>{account.usage.screenAssistUnlimited ? "Unlimited" : account.usage.screenAssistUsesRemaining ?? 0}</strong><span>Screen Assist uses</span></div><div><strong>{account.knowledge.remaining.toLocaleString()}</strong><span>Knowledge tokens remaining</span></div></> : null}</section> : null}
     {checkoutMessage ? <div className="global-checkout-message" role="status"><ShieldCheckIcon size={18} /><span>{checkoutMessage}</span><button type="button" onClick={() => setCheckoutMessage("")}>Dismiss</button></div> : null}
     <section className="global-pricing-grid" aria-label="OfferSteady plans" aria-busy={catalogueStatus === "loading"}>
       {plans.map(plan => <article key={`${plan.offerCode}:${plan.version}`} className={`global-plan-card${plan.featured ? " featured" : ""}`}>

@@ -31,6 +31,7 @@ class PlanDraftRequest(BaseModel):
     duration_days: int | None = Field(default=None, ge=1, le=366, alias="durationDays")
     copilot_minutes: int | None = Field(default=None, ge=1, alias="copilotMinutes")
     screen_assist_uses: int | None = Field(default=None, ge=1, alias="screenAssistUses")
+    knowledge_tokens: int = Field(default=0, ge=0, alias="knowledgeTokens")
     resume_jd_enabled: bool = Field(alias="resumeJdEnabled")
     knowledge_base_enabled: bool = Field(alias="knowledgeBaseEnabled")
     written_exam_enabled: bool = Field(alias="writtenExamEnabled")
@@ -99,6 +100,11 @@ def _guard_global(settings: Settings) -> None:
         raise HTTPException(status_code=404, detail="Not found")
 
 
+def _require_live_mode(mode: CreemMode) -> None:
+    if mode != "live":
+        raise HTTPException(status_code=409, detail="国际版仅支持 Creem 正式环境")
+
+
 def _fingerprint(secret: str | None) -> str | None:
     return sha256(secret.encode()).hexdigest()[:12] if secret else None
 
@@ -133,7 +139,8 @@ def _entitlement_row(item) -> dict[str, object]:
             "copilotMinutesUsed": item.copilot_minutes_used, "screenAssistUsesGranted": item.screen_assist_uses_granted,
             "screenAssistUsesUsed": item.screen_assist_uses_used, "resumeJdEnabled": item.resume_jd_enabled,
             "knowledgeBaseEnabled": item.knowledge_base_enabled, "writtenExamEnabled": item.written_exam_enabled,
-            "fullProductEnabled": item.full_product_enabled}
+            "fullProductEnabled": item.full_product_enabled, "knowledgeTokensGranted": item.knowledge_tokens_granted,
+            "knowledgeTokensUsed": item.knowledge_tokens_used}
 
 
 def _provider_product(product) -> dict[str, object]:
@@ -147,9 +154,10 @@ def _provider_for_mode(configuration: GlobalCreemConfigurationService, mode: Cre
 
 
 @admin_global_commerce_router.get("/overview")
-def overview(principal: Annotated[AdminPrincipal, Depends(permission("payments.manage"))], mode: CreemMode = Query(default="test"), service: GlobalCommerceService = Depends(global_commerce_service), configuration: GlobalCreemConfigurationService = Depends(global_creem_configuration_service)):
+def overview(principal: Annotated[AdminPrincipal, Depends(permission("payments.manage"))], mode: CreemMode = Query(default="live"), service: GlobalCommerceService = Depends(global_commerce_service), configuration: GlobalCreemConfigurationService = Depends(global_creem_configuration_service)):
     settings = get_settings()
     _guard_global(settings)
+    _require_live_mode(mode)
     credentials = configuration.effective_credentials(mode)
     public_base = settings.public_web_base_url.rstrip("/")
     checkout_success_url = settings.creem_checkout_success_url or (f"{public_base}/billing/success" if public_base else "")
@@ -181,14 +189,15 @@ def overview(principal: Annotated[AdminPrincipal, Depends(permission("payments.m
         if mapping is None or mapping.validation_status != "ready" or mapping.plan_version != plan.version:
             blockers.append(f"{plan.display_name} 的 Creem Product 映射未通过")
     provider_config = service.repository.provider_config(mode)
+    active_mode = configuration.active_mode()
     orders = [item for item in service.repository.recent_orders(limit=500) if item.mode == mode]
     paid = [item for item in orders if item.status == "paid"]
     gross_cents = sum(item.expected_amount_cents for item in paid)
     estimated_provider_fee_cents = sum(round(item.expected_amount_cents * 0.039) + 40 for item in paid)
-    return {"data": {"edition": "global", "mode": mode, "runtimeMode": settings.global_commerce_provider_mode,
+    return {"data": {"edition": "global", "mode": mode, "runtimeMode": active_mode,
                      "masterSwitchEnabled": settings.global_commerce_enabled,
                      "providerActivated": bool(provider_config.get("enabled")),
-                     "ready": mode == settings.global_commerce_provider_mode and settings.global_commerce_enabled and bool(provider_config.get("enabled")) and not blockers,
+                     "ready": mode == active_mode and settings.global_commerce_enabled and bool(provider_config.get("enabled")) and not blockers,
                      "configurationReady": not blockers, "blockers": blockers,
                      "credentials": configuration.masked(mode),
                      "urls": {"checkoutSuccessUrl": checkout_success_url, "webhookUrl": webhook_url,
@@ -203,9 +212,10 @@ def overview(principal: Annotated[AdminPrincipal, Depends(permission("payments.m
 
 
 @admin_global_commerce_router.put("/credentials")
-def save_credentials(payload: ProviderCredentialRequest, request: Request, principal: Annotated[AdminPrincipal, Depends(permission("payments.manage"))], mode: CreemMode = Query(default="test"), configuration: GlobalCreemConfigurationService = Depends(global_creem_configuration_service)):
+def save_credentials(payload: ProviderCredentialRequest, request: Request, principal: Annotated[AdminPrincipal, Depends(permission("payments.manage"))], mode: CreemMode = Query(default="live"), configuration: GlobalCreemConfigurationService = Depends(global_creem_configuration_service)):
     settings = get_settings()
     _guard_global(settings)
+    _require_live_mode(mode)
     if not (payload.api_key or "").strip() and not (payload.webhook_secret or "").strip():
         raise HTTPException(status_code=422, detail="请至少填写一项需要更新的密钥")
     try:
@@ -218,9 +228,10 @@ def save_credentials(payload: ProviderCredentialRequest, request: Request, princ
 
 
 @admin_global_commerce_router.get("/products")
-def list_provider_products(request: Request, principal: Annotated[AdminPrincipal, Depends(permission("payments.manage"))], mode: CreemMode = Query(default="test"), service: GlobalCommerceService = Depends(global_commerce_service), configuration: GlobalCreemConfigurationService = Depends(global_creem_configuration_service)):
+def list_provider_products(request: Request, principal: Annotated[AdminPrincipal, Depends(permission("payments.manage"))], mode: CreemMode = Query(default="live"), service: GlobalCommerceService = Depends(global_commerce_service), configuration: GlobalCreemConfigurationService = Depends(global_creem_configuration_service)):
     settings = get_settings()
     _guard_global(settings)
+    _require_live_mode(mode)
     now = int(time() * 1000)
     try:
         products = _provider_for_mode(configuration, mode).list_products()
@@ -237,7 +248,7 @@ def list_provider_products(request: Request, principal: Annotated[AdminPrincipal
 
 
 @admin_global_commerce_router.get("/operations")
-def operations(principal: Annotated[AdminPrincipal, Depends(permission("payments.manage"))], mode: CreemMode = Query(default="test"), service: GlobalCommerceService = Depends(global_commerce_service)):
+def operations(principal: Annotated[AdminPrincipal, Depends(permission("payments.manage"))], mode: CreemMode = Query(default="live"), service: GlobalCommerceService = Depends(global_commerce_service)):
     settings = get_settings()
     _guard_global(settings)
     events = service.repository.recent_provider_events(mode=mode, limit=100)
@@ -388,7 +399,7 @@ def create_plan_draft(payload: PlanDraftRequest, request: Request, principal: An
     if (billing_mode == "free") != (payload.price_cents == 0):
         raise HTTPException(status_code=422, detail="Free 必须为 $0，付费套餐价格必须大于 $0")
     version = max((plan.version for plan in service.repository.active_plans() if plan.offer_code == payload.offer_code), default=current.version) + 1
-    draft = GlobalPlan(payload.offer_code, version, payload.display_name, payload.description, payload.price_cents, billing_mode, payload.duration_days, payload.copilot_minutes, payload.screen_assist_uses, payload.resume_jd_enabled, payload.knowledge_base_enabled, payload.written_exam_enabled, payload.full_product_enabled, "draft", payload.featured, payload.display_order, created_at_ms=int(time() * 1000))
+    draft = GlobalPlan(payload.offer_code, version, payload.display_name, payload.description, payload.price_cents, billing_mode, payload.duration_days, payload.copilot_minutes, payload.screen_assist_uses, payload.resume_jd_enabled, payload.knowledge_base_enabled, payload.written_exam_enabled, payload.full_product_enabled, "draft", payload.featured, payload.display_order, created_at_ms=int(time() * 1000), knowledge_tokens=payload.knowledge_tokens)
     try:
         stored = service.repository.save_draft(draft)
     except ValueError as exc:
@@ -412,9 +423,10 @@ def publish_plan(offer_code: str, version: int, payload: PublishRequest, request
 
 
 @admin_global_commerce_router.put("/mappings/{offer_code}")
-def validate_mapping(offer_code: str, payload: ProductMappingRequest, request: Request, principal: Annotated[AdminPrincipal, Depends(permission("payments.manage"))], mode: CreemMode = Query(default="test"), service: GlobalCommerceService = Depends(global_commerce_service), configuration: GlobalCreemConfigurationService = Depends(global_creem_configuration_service)):
+def validate_mapping(offer_code: str, payload: ProductMappingRequest, request: Request, principal: Annotated[AdminPrincipal, Depends(permission("payments.manage"))], mode: CreemMode = Query(default="live"), service: GlobalCommerceService = Depends(global_commerce_service), configuration: GlobalCreemConfigurationService = Depends(global_creem_configuration_service)):
     settings = get_settings()
     _guard_global(settings)
+    _require_live_mode(mode)
     plan = service.repository.plan(offer_code)
     if plan is None or plan.billing_mode == "free":
         raise HTTPException(status_code=404, detail="付费套餐不存在")
@@ -437,15 +449,15 @@ def validate_mapping(offer_code: str, payload: ProductMappingRequest, request: R
 
 
 @admin_global_commerce_router.post("/activation")
-def activate_provider(payload: ProviderActivationRequest, request: Request, principal: Annotated[AdminPrincipal, Depends(permission("payments.manage"))], mode: CreemMode = Query(default="test"), service: GlobalCommerceService = Depends(global_commerce_service), configuration: GlobalCreemConfigurationService = Depends(global_creem_configuration_service)):
+def activate_provider(payload: ProviderActivationRequest, request: Request, principal: Annotated[AdminPrincipal, Depends(permission("payments.manage"))], mode: CreemMode = Query(default="live"), service: GlobalCommerceService = Depends(global_commerce_service), configuration: GlobalCreemConfigurationService = Depends(global_creem_configuration_service)):
     settings = get_settings()
     _guard_global(settings)
+    _require_live_mode(mode)
     _confirmed(payload.confirmed)
     blockers: list[str] = []
     credentials = configuration.effective_credentials(mode)
     public_base = settings.public_web_base_url.rstrip("/")
     if payload.enabled:
-        if mode != settings.global_commerce_provider_mode: blockers.append(f"当前服务运行环境为 {settings.global_commerce_provider_mode}，不能启用 {mode} 结账")
         if not settings.global_commerce_enabled: blockers.append("服务端商业化总开关未开启")
         if not credentials.api_key or not credentials.webhook_secret: blockers.append("Creem 密钥或 Webhook Secret 未配置")
         if not (settings.creem_checkout_success_url or public_base): blockers.append("支付返回地址未配置")
@@ -457,7 +469,12 @@ def activate_provider(payload: ProviderActivationRequest, request: Request, prin
     if blockers:
         service.repository.set_provider_enabled(mode=mode,enabled=False,validation_status="error",validation_errors=blockers,updated_by_user_id=principal.user_id,updated_at_ms=int(time()*1000))
         raise HTTPException(status_code=409, detail="；".join(blockers))
-    result = service.repository.set_provider_enabled(mode=mode,enabled=payload.enabled,validation_status="ready" if payload.enabled else "draft",validation_errors=[],updated_by_user_id=principal.user_id,updated_at_ms=int(time()*1000))
+    now_ms = int(time()*1000)
+    if payload.enabled:
+        for other_mode in ("test", "live"):
+            if other_mode != mode:
+                service.repository.set_provider_enabled(mode=other_mode, enabled=False, validation_status="draft", validation_errors=[], updated_by_user_id=principal.user_id, updated_at_ms=now_ms)
+    result = service.repository.set_provider_enabled(mode=mode,enabled=payload.enabled,validation_status="ready" if payload.enabled else "draft",validation_errors=[],updated_by_user_id=principal.user_id,updated_at_ms=now_ms)
     ip_hash, user_agent_hash = _client_hashes(request)
     admin_service().audit(principal=principal, action="global_commerce.activate" if payload.enabled else "global_commerce.deactivate", resource_type="global_provider_config", resource_id=mode, reason=payload.reason, request_id=_request_id(request), result="success", ip_hash=ip_hash, user_agent_hash=user_agent_hash, details={"enabled": payload.enabled})
     return {"data": {"mode": mode, "enabled": bool(result.get("enabled")), "validationStatus": result.get("validation_status")}}

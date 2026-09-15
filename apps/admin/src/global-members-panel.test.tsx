@@ -26,6 +26,7 @@ describe("GlobalMembersPanel", () => {
 
     render(<GlobalMembersPanel />);
     fireEvent.change(screen.getByLabelText("搜索国际版用户"), { target: { value: "candidate@example.com" } });
+    await waitFor(() => expect((screen.getByRole("button", { name: "搜索用户" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "搜索用户" }));
     await screen.findByText("candidate@example.com");
     fireEvent.click(screen.getByRole("button", { name: /candidate@example.com/i }));

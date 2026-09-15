@@ -16,6 +16,7 @@ from app.core.logging import log_event
 from app.ports.interview_session import InterviewLanguage
 from app.ports.realtime_speech import AsrUsageReport, AudioFrame, RealtimeAsrGatewayPort, TranscriptResult
 from app.services.realtime_speech_service import NonRetryableAsrError, RetryableAsrError
+from app.interview_languages import asr_language_code
 
 
 @dataclass
@@ -404,7 +405,7 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
                 "parameters": {
                     "format": "pcm",
                     "sample_rate": session.sample_rate_hz,
-                    "language_hints": ["en" if session.interview_language == "en-US" else "zh"],
+                    "language_hints": [asr_language_code(session.interview_language)],
                     "semantic_punctuation_enabled": False,
                     "max_sentence_silence": max(
                         200, min(6000, int(self.settings.realtime_asr_max_sentence_silence_ms))

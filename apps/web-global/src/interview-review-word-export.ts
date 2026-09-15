@@ -368,6 +368,7 @@ export async function createInterviewReviewWordBlob(
           metadataParagraph("开始时间", formatDateTime(review.startedAtMs)),
           metadataParagraph("结束时间", formatDateTime(review.endedAtMs)),
           metadataParagraph("面试时长", review.duration),
+          metadataParagraph("面试语言", interview?.interviewLanguage ?? "en-US"),
           new Paragraph({
             spacing: { before: 100, after: 120, line: 260 },
             children: [

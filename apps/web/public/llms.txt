@@ -39,6 +39,13 @@
 - [隐私政策](https://mianshiwen.cn/privacy)
 - [用户协议](https://mianshiwen.cn/terms)
 
+## 按问题查找
+
+- 面试稳是什么？面向求职者的 AI 面试助手，结合简历、岗位 JD 和知识资料整理回答思路：[产品首页](https://mianshiwen.cn/)
+- 实时面试辅助如何工作？面试音频经过实时语音识别和问题理解，再结合本场资料生成回答建议：[实时面试辅助](https://mianshiwen.cn/features/realtime-interview)
+- 程序员如何使用 AI 面试助手？选择简历、JD 和技术资料，围绕项目追问、技术原理和系统设计组织表达：[程序员面试助手](https://mianshiwen.cn/features/ai-interview-assistant)
+- 面试稳如何收费？积分按次适合低频使用，按天会员适合短期密集面试，当前价格和权益以实时目录为准：[AI面试助手价格与套餐](https://mianshiwen.cn/pricing)
+
 ## 事实与边界
 
 - 产品名称：面试稳AI助手。

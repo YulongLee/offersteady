@@ -12,6 +12,7 @@ from app.ports.authentication import (
     UserRecord,
     WechatAuthorizationSessionRecord,
 )
+from app.interview_languages import InterviewLanguage
 
 
 class InMemoryAuthenticationRepository(AuthenticationRepository):
@@ -50,6 +51,12 @@ class InMemoryAuthenticationRepository(AuthenticationRepository):
     def get_user(self, user_id: str) -> UserRecord | None:
         record = self.users_by_id.get(user_id)
         return replace(record) if record else None
+
+    def update_default_interview_language(self, *, user_id: str, interview_language: InterviewLanguage, updated_at_ms: int) -> UserRecord | None:
+        record = self.users_by_id.get(user_id)
+        if record is None:
+            return None
+        return self.save_user(replace(record, default_interview_language=interview_language, updated_at_ms=max(updated_at_ms, record.updated_at_ms)))
 
     def get_user_by_provider_subject(self, *, provider: IdentityProviderKind, provider_subject: str) -> UserRecord | None:
         user_id = self.users_by_provider_subject.get((provider, provider_subject))

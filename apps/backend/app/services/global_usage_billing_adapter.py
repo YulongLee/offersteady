@@ -63,10 +63,10 @@ class GlobalUsageBillingAdapter:
         return {"catalogVersion": 1, "tokenizerVersion": "global-entitlement-v1", "knowledgeIndexMinimumPoints": 0, "knowledgeIndexPointsPer1000Tokens": 0}
 
     def quote_knowledge_index(self, *, user_id: str, document_version_id: str, token_estimate: int, idempotency_key: str) -> KnowledgeIndexQuoteRecord:
-        if not bool(self.commerce.state(user_id)["features"]["knowledgeBase"]):
-            quote = KnowledgeIndexQuoteRecord(f"global-quote:{idempotency_key}", user_id, document_version_id, max(1, token_estimate), 1, "global-entitlement-v1", 1, 0, int(time() * 1000))
-        else:
-            quote = KnowledgeIndexQuoteRecord(f"global-quote:{idempotency_key}", user_id, document_version_id, max(1, token_estimate), 1, "global-entitlement-v1", 0, 0, int(time() * 1000))
+        estimate = max(1, token_estimate)
+        state = self.commerce.state(user_id)
+        allowed = bool(state["features"]["knowledgeBase"])
+        quote = KnowledgeIndexQuoteRecord(f"global-quote:{idempotency_key}", user_id, document_version_id, estimate, 1, "global-entitlement-v1", 0 if allowed else 1, 0, int(time() * 1000))
         with self._lock: self._quotes[quote.quote_id] = quote
         return quote
 
@@ -77,8 +77,12 @@ class GlobalUsageBillingAdapter:
 
     def reserve_knowledge_index_for_quote(self, *, user_id: str, quote_id: str, document_version_id: str) -> KnowledgeIndexReservationRecord:
         quote = self.knowledge_index_quote(user_id=user_id, quote_id=quote_id, document_version_id=document_version_id)
-        allowed = bool(self.commerce.state(user_id)["features"]["knowledgeBase"])
-        reservation = KnowledgeIndexReservationRecord(f"global-index:{quote_id}", quote_id, user_id, document_version_id, 0, "reserved" if allowed else "insufficient_balance", int(time() * 1000), "global_entitlement")
+        operation_id = f"global-index:{quote_id}"
+        try:
+            usage = self.commerce.reserve(user_id=user_id, kind="knowledge_token", amount=quote.token_estimate, operation_id=operation_id)
+            reservation = KnowledgeIndexReservationRecord(operation_id, quote_id, user_id, document_version_id, 0, usage.status, int(time() * 1000), "global_entitlement", usage.entitlement_id, quote.token_estimate)
+        except GlobalEntitlementDenied:
+            reservation = KnowledgeIndexReservationRecord(operation_id, quote_id, user_id, document_version_id, 0, "insufficient_balance", int(time() * 1000), "global_entitlement")
         with self._lock: self._index_reservations[quote_id] = reservation
         return reservation
 
@@ -86,6 +90,8 @@ class GlobalUsageBillingAdapter:
         with self._lock:
             found = next((item for item in self._index_reservations.values() if item.user_id == user_id and item.document_version_id == document_version_id), None)
             if found is None: return None
+            if found.status != "reserved": return found
+            self.commerce.settle(operation_id=found.reservation_id)
             settled = replace(found, status="settled", settled_at_ms=int(time() * 1000))
             self._index_reservations[found.quote_id] = settled
             return settled
@@ -94,6 +100,8 @@ class GlobalUsageBillingAdapter:
         with self._lock:
             found = next((item for item in self._index_reservations.values() if item.user_id == user_id and item.document_version_id == document_version_id), None)
             if found is None: return None
+            if found.status != "reserved": return found
+            self.commerce.release(operation_id=found.reservation_id)
             released = replace(found, status="released", released_at_ms=int(time() * 1000))
             self._index_reservations[found.quote_id] = released
             return released
@@ -102,11 +110,23 @@ class GlobalUsageBillingAdapter:
         with self._lock:
             found = self._index_reservations.get(quote_id)
             if found is None: return None
+            if found.status != "reserved": return found
+            self.commerce.release(operation_id=found.reservation_id)
             released = replace(found, status="released", released_at_ms=int(time() * 1000))
             self._index_reservations[quote_id] = released
             return released
 
     def state_for_user(self, *, user_id: str) -> BillingStateRecord:
         state = self.commerce.state(user_id)
-        active_pass = {"knowledgeAllowanceGranted": 1, "knowledgeAllowanceUsed": 0, "knowledgeAllowanceLocked": 0} if state["features"]["knowledgeBase"] else None
+        knowledge = state["knowledge"]
+        active_pass = {"knowledgeAllowanceGranted": knowledge["remaining"], "knowledgeAllowanceUsed": 0, "knowledgeAllowanceLocked": 0} if state["features"]["knowledgeBase"] else None
         return BillingStateRecord([], self.rates(), 0, [], active_pass, [], [], [], {"email": "contact@oneshowailab.com"})
+
+    @staticmethod
+    def state_payload(state: BillingStateRecord) -> dict[str, object]:
+        """Expose the legacy web-state shape without reintroducing a points wallet."""
+        return {
+            "catalog": [], "rates": state.rates, "balance": 0, "ledger": [],
+            "activePass": state.active_pass, "queuedPasses": [], "orders": [],
+            "officialOrders": [], "support": state.support,
+        }

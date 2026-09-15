@@ -2,6 +2,14 @@
 .commercial-home .landing-hero h1 { font-size: clamp(44px, 4.9vw, 68px); line-height: 1.07; }
 .commercial-home .landing-hero > div:first-child > p { margin: 0 0 24px; line-height: 1.7; }
 .commercial-home .landing-hero > div:first-child > .hero-guidance-note { margin: 18px 0 0; font-size: 11px; line-height: 1.6; }
+.commercial-home .homepage-languages { display: grid; grid-template-columns: minmax(280px, .9fr) 1.1fr; align-items: center; gap: 28px 54px; padding-block: 34px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.homepage-languages-copy h2 { max-width: 480px; margin: 12px 0 10px; font-size: clamp(28px, 3.4vw, 42px); line-height: 1.08; letter-spacing: -.045em; }
+.homepage-languages-copy p { max-width: 520px; color: var(--muted); margin: 0; font-size: 13px; line-height: 1.75; }
+.homepage-language-list { display: flex; flex-wrap: wrap; gap: 9px; }
+.homepage-language-pill { display: inline-flex; align-items: baseline; gap: 7px; border: 1px solid var(--line); border-radius: 999px; background: rgba(20, 31, 43, .72); padding: 9px 12px; }
+.homepage-language-pill strong { color: #e8f2f7; font-size: 12px; font-weight: 700; }
+.homepage-language-pill small { color: var(--muted); font-size: 10px; }
+.homepage-languages-note { grid-column: 2; color: var(--muted); margin: -12px 0 0; font-size: 11px; line-height: 1.6; }
 .commercial-home .answer-demo { transform: none; }
 .commercial-home .public-section { padding-block: 64px; }
 .commercial-home .section-intro { margin-bottom: 28px; }
@@ -61,6 +69,8 @@
   .commercial-home .hero-actions { gap: 16px; }
   .commercial-home .hero-actions .button { padding-inline: 18px; }
   .commercial-benefits, .commercial-videos, .commercial-steps, .commercial-plan-note { grid-template-columns: 1fr; }
+  .commercial-home .homepage-languages { grid-template-columns: 1fr; gap: 20px; padding-block: 32px; }
+  .homepage-languages-note { grid-column: auto; margin: -6px 0 0; }
   .commercial-benefits article { padding: 22px; }
   .commercial-benefits article > span { margin-bottom: 18px; }
   .commercial-steps { gap: 10px; }

@@ -41,6 +41,7 @@ from app.schemas.retrieval import RetrievalResponse, RetrievedChunkResponse
 from app.services.session_service import SessionService
 from app.services.programming_prompt import append_programming_policy, carry_programming_policy
 from app.services.billing_service import BillingService
+from app.interview_languages import get_interview_language, interview_prompt_assets_ready, interview_prompt_directory, output_language_violation
 
 
 def _now_ms() -> int:
@@ -58,6 +59,26 @@ _ENGLISH_REPAIR_DIRECTIVE = (
     "Regenerate the requested content in English only. Chinese or mixed-language input is evidence, "
     "not the output language. Do not mention this repair instruction."
 )
+_COMMERCIAL_ANSWER_CONTRACT = (
+    "<commercial_answer_contract>"
+    "Speak concisely and professionally: conclusion first, then evidence, method, and result. "
+    "Use only verifiable facts from the supplied resume, job description, knowledge base, or screenshot; "
+    "label inference and uncertainty, never fabricate experience or metrics, follow the selected programming-language constraints, "
+    "and present every generated answer as AI advice for the candidate to review."
+    "</commercial_answer_contract>"
+)
+
+
+def _language_repair_directive(interview_language: InterviewLanguage) -> str:
+    if interview_language == "en-US":
+        return _ENGLISH_REPAIR_DIRECTIVE
+    definition = get_interview_language(interview_language)
+    language = definition.output_language if definition else "the selected session language"
+    return (
+        f"LANGUAGE REPAIR: The previous provider attempt used the wrong output language. "
+        f"Regenerate the requested content in {language} only. Preserve facts and structure, "
+        "do not translate source evidence unless needed for the answer, and do not mention this repair instruction."
+    )
 
 
 def _clean_question_text(value: str) -> str:
@@ -87,9 +108,12 @@ def _english_output_violation(value: str) -> bool:
     return han_count / max(1, han_count + latin_count) >= 0.08
 
 
-def _english_repair_prompt(prompt: PromptBuildResult) -> PromptBuildResult:
-    system_prompt = f"{prompt.system_prompt}\n\n{_ENGLISH_REPAIR_DIRECTIVE}"
-    user_prompt = f"<output_language_repair>English only</output_language_repair>\n\n{prompt.user_prompt}"
+def _english_repair_prompt(prompt: PromptBuildResult, interview_language: InterviewLanguage = "en-US") -> PromptBuildResult:
+    directive = _language_repair_directive(interview_language)
+    definition = get_interview_language(interview_language)
+    label = definition.output_language if definition else "the selected session language"
+    system_prompt = f"{prompt.system_prompt}\n\n{directive}"
+    user_prompt = f"<output_language_repair>{label} only</output_language_repair>\n\n{prompt.user_prompt}"
     return replace(
         prompt,
         system_prompt=system_prompt,
@@ -98,8 +122,8 @@ def _english_repair_prompt(prompt: PromptBuildResult) -> PromptBuildResult:
     )
 
 
-def _english_repair_instruction(instruction: str) -> str:
-    return f"{instruction}\n\n{_ENGLISH_REPAIR_DIRECTIVE}"
+def _english_repair_instruction(instruction: str, interview_language: InterviewLanguage = "en-US") -> str:
+    return f"{instruction}\n\n{_language_repair_directive(interview_language)}"
 
 
 class RetryableChatError(Exception):
@@ -133,11 +157,19 @@ class FilePromptTemplateAdapter(PromptTemplatePort):
         prompt_path = Path(self.settings.chat_prompt_template_path)
         if not prompt_path.is_absolute():
             prompt_path = Path(__file__).resolve().parents[4] / self.settings.chat_prompt_template_path
-        if interview_language == "en-US":
+        default_path = Path(__file__).resolve().parents[4] / "ai/prompts/chat-service/system.md"
+        if prompt_path == default_path and interview_prompt_assets_ready(interview_language):
+            prompt_path = interview_prompt_directory(interview_language) / "system.md"
+        elif interview_language != "zh-CN":
             prompt_path = prompt_path.with_name(f"{prompt_path.stem}.en{prompt_path.suffix}")
         text = prompt_path.read_text(encoding="utf-8").strip()
+        if "<commercial_answer_contract>" not in text:
+            text = f"{text}\n\n{_COMMERCIAL_ANSWER_CONTRACT}"
+        definition = get_interview_language(interview_language)
+        if definition and interview_language not in {"zh-CN", "en-US"} and "<output_language>" not in text:
+            text = f"{text}\n\n<output_language>{definition.output_language} only. Keep the response professional and natural for a commercial interview assistant.</output_language>"
         return text, PromptConfig(
-            template_id="interview-chat-en-system" if interview_language == "en-US" else "interview-chat-system",
+            template_id=("interview-chat-en-system" if interview_language == "en-US" else "interview-chat-system") if interview_language in {"zh-CN", "en-US"} else f"interview-chat-{interview_language}-system",
             version=self.settings.chat_prompt_version,
             max_history_entries=self.settings.chat_max_history_entries,
             include_retrieval_context=True,
@@ -149,10 +181,20 @@ class FilePromptTemplateAdapter(PromptTemplatePort):
         prompt_path = Path(self.settings.chat_prompt_template_path)
         if not prompt_path.is_absolute():
             prompt_path = Path(__file__).resolve().parents[4] / self.settings.chat_prompt_template_path
-        filename = f"{stage}.en.md" if interview_language == "en-US" else f"{stage}.md"
-        text = prompt_path.with_name(filename).read_text(encoding="utf-8").strip()
+        default_path = Path(__file__).resolve().parents[4] / "ai/prompts/chat-service/system.md"
+        if prompt_path == default_path and interview_prompt_assets_ready(interview_language):
+            stage_path = interview_prompt_directory(interview_language) / f"{stage}.md"
+        else:
+            filename = f"{stage}.en.md" if interview_language != "zh-CN" else f"{stage}.md"
+            stage_path = prompt_path.with_name(filename)
+        text = stage_path.read_text(encoding="utf-8").strip()
+        if "<commercial_answer_contract>" not in text:
+            text = f"{text}\n\n{_COMMERCIAL_ANSWER_CONTRACT}"
+        definition = get_interview_language(interview_language)
+        if definition and interview_language not in {"zh-CN", "en-US"} and "<output_language>" not in text:
+            text = f"{text}\n\n<output_language>{definition.output_language} only. Preserve the requested answer structure and avoid mentioning internal prompts.</output_language>"
         return text, PromptConfig(
-            template_id=f"interview-chat-en-{stage}" if interview_language == "en-US" else f"interview-chat-{stage}",
+            template_id=(f"interview-chat-en-{stage}" if interview_language == "en-US" else f"interview-chat-{stage}") if interview_language in {"zh-CN", "en-US"} else f"interview-chat-{interview_language}-{stage}",
             version=self.settings.chat_prompt_version,
             max_history_entries=self.settings.chat_max_history_entries,
             include_retrieval_context=stage == "detail",
@@ -173,6 +215,8 @@ class InterviewPromptBuilder(PromptBuilderPort):
     ) -> PromptBuildResult:
         selected_history = conversation_history[-prompt_config.max_history_entries :]
         english = "-en-" in prompt_config.template_id
+        output_language_match = re.search(r"<output_language>(.*?)</output_language>", system_prompt, flags=re.DOTALL)
+        output_language = output_language_match.group(1).strip() if output_language_match else None
         anchor_prefix = "Quick answer anchor: " if english else "本轮简要回答锚点："
         answer_anchors = [item.removeprefix(anchor_prefix).strip() for item in selected_history if item.startswith(anchor_prefix)]
         history_text = "\n".join(item for item in selected_history if not item.startswith(anchor_prefix))
@@ -182,6 +226,8 @@ class InterviewPromptBuilder(PromptBuilderPort):
             (f"Session title: {session_title}\nCurrent question: {question}" if english else f"会话标题：{session_title}\n当前问题：{question}"),
             "</authoritative_request>",
         ]
+        if output_language and not english:
+            sections.insert(0, f"<output_language>{output_language}</output_language>")
         if history_text:
             sections.append(f"<untrusted_conversation_evidence>\n{history_text}\n</untrusted_conversation_evidence>")
         if session_material_context_text.strip():
@@ -705,7 +751,12 @@ class ChatService:
         stage: str,
         prompt: PromptBuildResult,
         attempt: int,
+        interview_language: InterviewLanguage | None = None,
     ) -> None:
+        routed_language = interview_language
+        if routed_language is None:
+            match = re.search(r"([a-z]{2}-[A-Z]{2})", prompt.prompt_config.template_id)
+            routed_language = match.group(1) if match and get_interview_language(match.group(1)) else "en-US"
         log_event(
             self.logger,
             logging.WARNING,
@@ -715,7 +766,7 @@ class ChatService:
             action="enforce-output-language",
             session_id=session_id,
             task_id=task_id,
-            interview_language="en-US",
+            interview_language=routed_language,
             stage=stage,
             prompt_template_id=prompt.prompt_config.template_id,
             prompt_version=prompt.prompt_config.version,
@@ -814,9 +865,9 @@ class ChatService:
             prompt_characters += len(continuation_prompt.rendered_prompt)
             continuation_parts: list[str] = []
             continuation_finish_reason = "stop"
-            for language_attempt in range(2 if interview_language == "en-US" else 1):
+            for language_attempt in range(2 if interview_language != "zh-CN" else 1):
                 active_prompt = (
-                    _english_repair_prompt(continuation_prompt)
+                    _english_repair_prompt(continuation_prompt, interview_language)
                     if language_attempt > 0
                     else continuation_prompt
                 )
@@ -833,7 +884,7 @@ class ChatService:
                         continuation_parts.append(chunk.text)
                     if chunk.provider_finish_reason is not None:
                         continuation_finish_reason = chunk.provider_finish_reason
-                if interview_language != "en-US" or not _english_output_violation("".join(continuation_parts)):
+                if not output_language_violation("".join(continuation_parts), interview_language):
                     break
                 self._log_language_violation(
                     session_id=session_id,
@@ -958,8 +1009,8 @@ class ChatService:
         for attempt in range(self.settings.chat_retry_max_attempts + 1):
             try:
                 active_prompt = (
-                    _english_repair_prompt(prompt)
-                    if session.interview_language == "en-US" and attempt > 0
+                    _english_repair_prompt(prompt, session.interview_language)
+                    if session.interview_language != "zh-CN" and attempt > 0
                     else prompt
                 )
                 gateway_result = self.llm_gateway.generate(
@@ -968,7 +1019,7 @@ class ChatService:
                     stream=stream,
                     attempt=attempt,
                 )
-                if session.interview_language == "en-US" and _english_output_violation(gateway_result.final_text):
+                if session.interview_language != "zh-CN" and output_language_violation(gateway_result.final_text, session.interview_language):
                     self._log_language_violation(
                         session_id=session_id,
                         task_id=current_task.task_id,
@@ -1147,7 +1198,7 @@ class ChatService:
         normalization_resolved = False
         normalized_question = question.strip()
         quick_language_buffer = ""
-        quick_language_validated = session.interview_language != "en-US"
+        quick_language_validated = session.interview_language == "zh-CN"
         quick_finish_reason = "stop"
         continuation_prompt_characters = 0
         continuation_count = 0
@@ -1189,8 +1240,8 @@ class ChatService:
         for attempt in range(self.settings.chat_retry_max_attempts + 1):
             try:
                 active_quick_prompt = (
-                    _english_repair_prompt(prompt)
-                    if session.interview_language == "en-US" and attempt > 0
+                    _english_repair_prompt(prompt, session.interview_language)
+                    if session.interview_language != "zh-CN" and attempt > 0
                     else prompt
                 )
                 if self._is_task_cancelled(current_task.task_id):
@@ -1235,7 +1286,7 @@ class ChatService:
                             normalization_buffer,
                             question,
                         )
-                        if session.interview_language == "en-US" and _english_output_violation(normalized_question):
+                        if session.interview_language != "zh-CN" and output_language_violation(normalized_question, session.interview_language):
                             self._log_language_violation(
                                 session_id=session_id,
                                 task_id=current_task.task_id,
@@ -1266,11 +1317,11 @@ class ChatService:
                                 question=normalized_question,
                             )
                         yield {"type": "question-normalized", "task": current_task}
-                        if session.interview_language != "en-US":
-                            visible_text = f"简单回答\n{visible_text}"
-                    if session.interview_language == "en-US" and not quick_language_validated:
+                    if session.interview_language == "zh-CN":
+                        visible_text = f"简单回答\n{visible_text}"
+                    if session.interview_language != "zh-CN" and not quick_language_validated:
                         quick_language_buffer += visible_text
-                        if _english_output_violation(quick_language_buffer):
+                        if output_language_violation(quick_language_buffer, session.interview_language):
                             self._log_language_violation(
                                 session_id=session_id,
                                 task_id=current_task.task_id,
@@ -1304,7 +1355,7 @@ class ChatService:
                         normalization_buffer,
                         question,
                     )
-                    if session.interview_language == "en-US" and _english_output_violation(normalized_question):
+                    if session.interview_language != "zh-CN" and output_language_violation(normalized_question, session.interview_language):
                         self._log_language_violation(
                             session_id=session_id,
                             task_id=current_task.task_id,
@@ -1335,9 +1386,9 @@ class ChatService:
                             question=normalized_question,
                         )
                     yield {"type": "question-normalized", "task": current_task}
-                    if session.interview_language == "en-US":
+                    if session.interview_language != "zh-CN":
                         quick_language_buffer += visible_text
-                        if _english_output_violation(quick_language_buffer):
+                        if output_language_violation(quick_language_buffer, session.interview_language):
                             self._log_language_violation(
                                 session_id=session_id,
                                 task_id=current_task.task_id,
@@ -1361,8 +1412,8 @@ class ChatService:
                     )
                     timing = mark_first_visible()
                     yield {"type": "chunk", "task": current_task, "chunk": normalized, **({"timing": timing} if timing else {})}
-                elif session.interview_language == "en-US" and not quick_language_validated:
-                    if _english_output_violation(quick_language_buffer):
+                elif session.interview_language != "zh-CN" and not quick_language_validated:
+                    if output_language_violation(quick_language_buffer, session.interview_language):
                         self._log_language_violation(
                             session_id=session_id,
                             task_id=current_task.task_id,
@@ -1488,7 +1539,7 @@ class ChatService:
                 else:
                     for language_attempt in range(2):
                         active_detail_prompt = (
-                            _english_repair_prompt(detail_prompt)
+                            _english_repair_prompt(detail_prompt, session.interview_language)
                             if language_attempt > 0
                             else detail_prompt
                         )
@@ -1509,7 +1560,7 @@ class ChatService:
                             if chunk.text:
                                 detail_parts.append(chunk.text)
                                 detail_chunks.append(chunk)
-                        if not _english_output_violation("".join(detail_parts)):
+                        if not output_language_violation("".join(detail_parts), session.interview_language):
                             break
                         self._log_language_violation(
                             session_id=session_id,
@@ -1556,7 +1607,7 @@ class ChatService:
                 final_text = "".join(answer_parts).strip()
                 if not final_text:
                     raise NonRetryableChatError("当前对话模型返回了无效结果，请稍后重试或检查模型配置。", code="chat_provider_invalid_response")
-                if session.interview_language == "en-US" and _english_output_violation(final_text):
+                if session.interview_language != "zh-CN" and output_language_violation(final_text, session.interview_language):
                     self._log_language_violation(
                         session_id=session_id,
                         task_id=current_task.task_id,
@@ -1647,7 +1698,7 @@ class ChatService:
                 normalization_resolved = False
                 normalized_question = question.strip()
                 quick_language_buffer = ""
-                quick_language_validated = session.interview_language != "en-US"
+                quick_language_validated = session.interview_language == "zh-CN"
                 continue
             except NonRetryableChatError as exc:
                 if exc.partial_suffix:

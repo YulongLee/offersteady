@@ -36,9 +36,11 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
         "http://127.0.0.1:5175",
+        "http://127.0.0.1:5187",
         "http://localhost:5173",
         "http://localhost:5174",
         "http://localhost:5175",
+        "http://localhost:5187",
         "null",
     ])
 
@@ -186,6 +188,10 @@ class Settings(BaseSettings):
     realtime_asr_commit_silence_ms: int = 0
     realtime_asr_retry_max_attempts: int = 1
     realtime_asr_persistent_sessions_enabled: bool = True
+    realtime_session_reclamation_enabled: bool = True
+    realtime_session_reclamation_dry_run: bool = False
+    realtime_session_reclamation_interval_seconds: float = 30.0
+    realtime_session_reclamation_grace_seconds: int = 120
     realtime_asr_nonblocking_partials_enabled: bool = True
     realtime_asr_prewarm_enabled: bool = True
     realtime_asr_prewarm_wait_seconds: float = 2.5
@@ -233,6 +239,9 @@ class Settings(BaseSettings):
     auth_sms_verify_attempt_limit: int = 5
     auth_sms_fake_code: str = "123456"
     auth_sms_test_phone_number: str | None = None
+    alipay_review_login_enabled: bool = False
+    alipay_review_phone: str | None = None
+    alipay_review_code: str | None = None
     auth_email_enabled: bool = False
     auth_email_provider_mode: Literal["fake", "smtp"] = "fake"
     auth_email_code_pepper: str | None = None
@@ -273,6 +282,23 @@ class Settings(BaseSettings):
     admin_capacity_api_p95_critical_ms: float = 1500.0
     admin_capacity_error_rate_warning_percent: float = 2.0
     admin_capacity_error_rate_critical_percent: float = 5.0
+
+    # Baidu PC ranking is an opt-in, server-side SEO observation path.
+    baidu_ranking_enabled: bool = False
+    baidu_ranking_endpoint: str = "https://seozbbdpcpm.api.bdymkt.com/seo/baidu/pc/ranking"
+    baidu_ranking_access_key: str | None = None
+    baidu_ranking_secret_key: str | None = None
+    baidu_ranking_app_code: str | None = None
+    baidu_ranking_domain: str = "mianshiwen.cn"
+    baidu_ranking_keywords: list[str] = Field(default_factory=lambda: [
+        "AI面试助手", "面试助手", "AI面试辅助", "实时面试辅助", "面试AI",
+        "AI面试工具", "AI面试实时回答", "程序员面试助手", "AI面试助手哪个好", "AI面试助手价格",
+    ])
+    baidu_ranking_timezone: str = "Asia/Shanghai"
+    baidu_ranking_timeout_seconds: float = 15.0
+    baidu_ranking_retry_attempts: int = 1
+    baidu_ranking_manual_refresh_enabled: bool = True
+    baidu_ranking_manual_refresh_limit_per_hour: int = 3
 
     # Promotion analytics is an isolated, opt-in side path. Keeping collection
     # disabled by default prevents unfinished/local builds from changing live traffic.

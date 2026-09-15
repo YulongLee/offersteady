@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from app.core.config import Settings, get_settings
 from app.main import create_app
 from app.modules.realtime_speech import should_validate_realtime_session
-from app.deps import realtime_speech_service
+from app.deps import authentication_service, realtime_speech_service
 from app.ports.authentication import SmsChallengeRecord
 from app.ports.realtime_speech import AudioFrame, QuestionCandidateRecord, RealtimeEvent, TranscriptResult
 from app.core.errors import DomainRequestError
@@ -1024,6 +1024,16 @@ def test_wechat_authorization_session_expires_and_requires_refresh() -> None:
 
     authorize = client.post(f"/api/v1/auth/wechat/authorization-sessions/{created['authRequestId']}/authorize")
     assert authorize.status_code == 401
+
+
+def test_wechat_compatible_login_is_disabled_in_production(monkeypatch) -> None:
+    service = authentication_service()
+    monkeypatch.setattr(service, "settings", Settings(_env_file=None, environment="production"))
+
+    created = client.post("/api/v1/auth/wechat/authorization-sessions", json={"clientLabel": "web"})
+
+    assert created.status_code == 404
+    assert created.json()["error"]["code"] == "wechat-production-disabled"
 
 
 def test_resume_upload_intent_and_completion_flow() -> None:

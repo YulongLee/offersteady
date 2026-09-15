@@ -443,12 +443,15 @@ def global_creem_configuration_service() -> GlobalCreemConfigurationService:
 
 def creem_provider() -> CreemProvider:
     settings = get_settings()
-    mode = settings.global_commerce_provider_mode
-    return CreemProvider(global_creem_configuration_service().configured_settings(mode), mode=mode)
+    configuration = global_creem_configuration_service()
+    mode = configuration.active_mode()
+    return CreemProvider(configuration.configured_settings(mode), mode=mode)
 
 
 def global_checkout_service() -> GlobalCheckoutService:
-    return GlobalCheckoutService(settings=get_settings(), repository=global_commerce_repository(), provider=creem_provider(), entitlements=global_commerce_service())
+    settings = get_settings()
+    mode = global_creem_configuration_service().active_mode()
+    return GlobalCheckoutService(settings=settings.model_copy(update={"global_commerce_provider_mode": mode}), repository=global_commerce_repository(), provider=creem_provider(), entitlements=global_commerce_service())
 
 
 @lru_cache(maxsize=1)

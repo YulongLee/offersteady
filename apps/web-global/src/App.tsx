@@ -1,6 +1,7 @@
 import { createContext, Suspense, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { BrowserRouter, Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import type { AnswerTaskSnapshot, CaptureState, ContextLibrarySource } from "@offersteady/protocol";
+import { INTERVIEW_LANGUAGE_REGISTRY, interviewLanguageDefinition } from "@offersteady/protocol";
 import { BriefcaseIcon, CaretDownIcon, ChartLineUpIcon, ChatCircleTextIcon, ClipboardTextIcon, CodeIcon, DatabaseIcon, DevicesIcon, GraduationCapIcon, IdentificationCardIcon, PaletteIcon, ScanIcon, UserFocusIcon } from "@phosphor-icons/react";
 
 import type { IdleInterviewStatus, InterviewQuestion, LiveActionState, ProgrammingLanguage, QuestionStatus, RealtimeSessionUpdate, ScreenshotTask, SessionMode, SessionStatus, WebAppState } from "./domain";
@@ -35,6 +36,7 @@ import globalScreenshotInstruction from "../../../ai/prompts/global-screenshot-i
 import "./styles.css";
 import { HomepageAdvantages } from "./HomepageAdvantages";
 import { HomepageDownloads } from "./HomepageDownloads";
+import { HomepageLanguages } from "./HomepageLanguages";
 import homeCopy from "./homepage-commercial.json";
 import "./homepage-commercial.css";
 
@@ -173,6 +175,7 @@ function LandingPage() {
         <div className="demo-answer"><span className="advice-label">A place to start</span><ol><li>Set the context and goal in one sentence.</li><li>Focus on your decisions, actions, and trade-offs.</li><li>Close with a result you can verify.</li></ol><div className="source-pills"><span>Resume</span><span>Job description</span><span>Your experience</span></div></div>
       </div>
     </section>
+    <HomepageLanguages />
     <section id="benefits" className="public-section" aria-labelledby="commercial-benefits-title">
       <div className="section-intro"><span className="kicker">BUILT FOR THE CONVERSATION</span><h2 id="commercial-benefits-title">{homeCopy.benefitsTitle}</h2><p>{homeCopy.benefitsIntro}</p></div>
       <div className="commercial-benefits">{homeCopy.benefits.map((benefit, index) => {
@@ -490,7 +493,7 @@ function NewInterviewPage() {
     setError("");
     setSaving(true);
     try {
-      const draft = await runAdapterOperation(signal => interviewAppAdapter.createDraft({ ...form, interviewLanguage: "en-US" }, signal));
+      const draft = await runAdapterOperation(signal => interviewAppAdapter.createDraft({ ...form, interviewLanguage: state.account.defaultInterviewLanguage ?? "en-US" }, signal));
       setState(current => {
         const reset = resetTransientInterviewState(current);
         return {
@@ -522,7 +525,7 @@ function NewWrittenExamPage() {
     setError("");
     setSaving(true);
     try {
-      const draft = await runAdapterOperation(signal => interviewAppAdapter.createDraft({ ...form, sessionMode: "written", interviewLanguage: "en-US" }, signal));
+      const draft = await runAdapterOperation(signal => interviewAppAdapter.createDraft({ ...form, sessionMode: "written", interviewLanguage: state.account.defaultInterviewLanguage ?? "en-US" }, signal));
       setState(current => {
         const reset = resetTransientInterviewState(current);
         return {
@@ -538,7 +541,7 @@ function NewWrittenExamPage() {
       setSaving(false);
     }
   };
-  return <main className="app-page narrow"><Link className="back-link" to={routes.writtenExams}>← 返回笔试模式</Link><PageHeader eyebrow="NEW WRITTEN EXAM" title="创建一场笔试" detail="笔试模式只使用截屏回答，不启用收音和实时转写。" /><form className="form-panel" onSubmit={submit}><label>笔试名称<input value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} placeholder="例如：算法笔试" /></label><label>目标岗位<input value={form.role} onChange={event => setForm({ ...form, role: event.target.value })} placeholder="例如：算法工程师" /></label><label>公司（可选）<input value={form.company} onChange={event => setForm({ ...form, company: event.target.value })} placeholder="例如：示例科技" /></label>{error ? <div className="inline-error" role="alert">{error}</div> : null}<div className="form-actions"><Link className="button ghost" to={routes.writtenExams}>取消</Link><button className="button primary" type="submit" disabled={saving}>{saving ? "创建中…" : "保存并准备 →"}</button></div><small className="saved-note">成功进入笔试固定扣除 30 积分，每次截屏回答按现有规则计费。</small></form></main>;
+  return <main className="app-page narrow"><Link className="back-link" to={routes.writtenExams}>← Back to written exams</Link><PageHeader eyebrow="NEW WRITTEN EXAM" title="Create a written exam" detail="Written mode uses screenshot answers only; audio capture and live transcription stay off." /><form className="form-panel" onSubmit={submit}><label>Exam name<input value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} placeholder="e.g. Algorithms assessment" /></label><label>Target role<input value={form.role} onChange={event => setForm({ ...form, role: event.target.value })} placeholder="e.g. Software Engineer" /></label><label>Company (optional)<input value={form.company} onChange={event => setForm({ ...form, company: event.target.value })} placeholder="e.g. Example Inc." /></label>{error ? <div className="inline-error" role="alert">{error}</div> : null}<div className="form-actions"><Link className="button ghost" to={routes.writtenExams}>Cancel</Link><button className="button primary" type="submit" disabled={saving}>{saving ? "Creating…" : "Save and prepare →"}</button></div><small className="saved-note">Written exam access follows your selected membership plan.</small></form></main>;
 }
 
 function CompanionUpdateReminder({ update, onContinue }: { readonly update: CompanionUpdate; readonly onContinue: () => void }) {
@@ -547,6 +550,20 @@ function CompanionUpdateReminder({ update, onContinue }: { readonly update: Comp
     <div><strong>发现新版伴随程序 {update.release.version}</strong><small>当前版本 {update.currentVersion}，建议更新到与你设备匹配的最新版；本次也可以继续使用。</small></div>
     <div className="companion-update-actions"><a className="button primary" href={update.release.downloadUrl} download>立即下载</a><button className="button ghost" type="button" onClick={onContinue}>继续使用</button></div>
   </section>;
+}
+
+function CompanionUpdateRequired({ message }: { readonly message: string }) {
+  return <div className="inline-error companion-update-required" role="alert"><span>{message}</span><Link className="button ghost" to={routes.devices}>Download latest companion</Link></div>;
+}
+
+export function LanguagePicker({ value, saving, onChange, error = "" }: { readonly value: import("@offersteady/protocol").InterviewLanguage; readonly saving: boolean; readonly onChange: (value: import("@offersteady/protocol").InterviewLanguage) => void; readonly error?: string }) {
+  return <fieldset className="interview-language-picker" disabled={saving}>
+    <legend>Interview language</legend>
+    <p>Choose the language used for transcription, question detection, and AI answers in this session.</p>
+    <div className="interview-language-options">{INTERVIEW_LANGUAGE_REGISTRY.map(language => <label key={language.locale} className={`${value === language.locale ? "selected" : ""} ${language.locale === "en-US" ? "preferred" : ""}`}><input type="radio" name="interview-language" value={language.locale} checked={value === language.locale} onChange={() => onChange(language.locale)} /><span><strong>{language.nativeLabel} <small>{language.label}</small></strong><small className={language.locale === "en-US" ? "interview-language-tier preferred" : "interview-language-tier"}>{language.locale === "en-US" ? "Default · Production" : language.tier === "production" ? "Production support" : "Beta · quality validation in progress"}</small></span></label>)}</div>
+    {saving ? <small role="status">Saving interview language…</small> : null}
+    {error ? <div className="inline-error" role="alert">{error}</div> : null}
+  </fieldset>;
 }
 
 function PreparationPage() {
@@ -615,7 +632,7 @@ function PreparationPage() {
       setConfirmingMaterials(false);
     }
   };
-  const saveInterviewLanguage = async (nextLanguage: "zh-CN" | "en-US") => {
+  const saveInterviewLanguage = async (nextLanguage: import("@offersteady/protocol").InterviewLanguage) => {
     if (savingLanguage || nextLanguage === interviewLanguage) return;
     setSavingLanguage(true);
     setLanguageError("");
@@ -659,10 +676,6 @@ function PreparationPage() {
     }
   };
   useEffect(() => {
-    if (!interview || interview.interviewLanguage === "en-US" || savingLanguage) return;
-    void saveInterviewLanguage("en-US");
-  }, [interview?.id, interview?.interviewLanguage]);
-  useEffect(() => {
     const controller = new AbortController();
     void Promise.all([
       runAdapterOperation(signal => interviewAppAdapter.getDesktopDeviceBinding(id, signal), controller.signal).catch(() => null),
@@ -702,6 +715,35 @@ function PreparationPage() {
       window.clearInterval(timer);
     };
   }, [id, deviceBinding?.bindingId]);
+  useEffect(() => {
+    // Keep the preparation page in sync when the Companion starts after the
+    // page was opened. Previously the binding was fetched only once, leaving
+    // a valid online Companion displayed as "待连接" until a manual refresh.
+    let stopped = false;
+    let inFlight = false;
+    const refreshBinding = async () => {
+      if (stopped || inFlight) return;
+      inFlight = true;
+      try {
+        const next = await runAdapterOperation(signal => interviewAppAdapter.getDesktopDeviceBinding(id, signal));
+        if (stopped) return;
+        setDeviceBinding(next);
+        if (next) {
+          setMachineCode(next.manualCode);
+          setBindingError("");
+        }
+      } catch (error) {
+        if (!stopped) setBindingError(error instanceof Error ? error.message : "无法确认桌面助手连接状态，请稍后重试。");
+      } finally {
+        inFlight = false;
+      }
+    };
+    const timer = window.setInterval(() => void refreshBinding(), 5_000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [id]);
   const connectDesktopDevice = async (reuseLastDevice = false) => {
     if (!conflictResolved) {
       setBindingError(activeConflict ? "请先处理正在进行中的面试。" : "正在确认账号的面试状态，请稍候。");
@@ -774,31 +816,31 @@ function PreparationPage() {
         <label><span>机器码</span><input inputMode="numeric" maxLength={6} value={machineCode} onChange={event => setMachineCode(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="输入 6 位机器码" /></label>
         <button className="button ghost" disabled={!conflictResolved || binding || machineReady && machineCode === deviceBinding?.manualCode} onClick={() => void connectDesktopDevice(false)}>{binding ? "连接中…" : "验证连接"}</button>
         {lastDevice ? <button className="button primary" disabled={!conflictResolved || binding || !lastDevice.online || deviceBinding?.deviceId === lastDevice.deviceId} onClick={() => void connectDesktopDevice(true)}>{deviceBinding?.deviceId === lastDevice.deviceId ? "上次设备已连接" : "连接上次设备"}</button> : null}
-        {bindingError ? <div className="inline-error" role="alert">{bindingError}</div> : null}
+        {bindingError ? (bindingError.includes("Companion version") ? <CompanionUpdateRequired message={bindingError} /> : <div className="inline-error" role="alert">{bindingError}</div>) : null}
       </div>
       {visibleUpdate ? <CompanionUpdateReminder update={visibleUpdate} onContinue={() => setDismissedUpdateKey(updateKey)} /> : null}
       {startError ? <div className="inline-error written-start-error" role="alert">{startError}</div> : null}
       <div className="written-start-row">
-        <small>开始时扣除 30 积分</small>
+        <small>Written exam access follows your membership plan</small>
         <button className="button primary" disabled={!canStart || starting} onClick={() => void startInterview()}>{starting ? "正在进入…" : "开始笔试 →"}</button>
       </div>
     </section>
   </main>;
   return <main className="app-page"><Link className="back-link" to={routes.app}>← 返回面试首页</Link><PageHeader eyebrow="PREPARATION" title={interviewTitle} detail="资料与“面试资料”页面保持一致，为本场按需选择。" action={<div className="completion"><strong>{complete}/2</strong><span>{canStart ? "可进入" : "准备中"}</span></div>} />
-    <div className="prepare-grid"><section className="panel"><fieldset className="interview-language-picker" disabled><legend>Interview language</legend><p>English transcription, question detection, and AI answers are enabled for Global sessions.</p><div><label className="selected"><input type="radio" name="interview-language" value="en-US" checked readOnly /><span><strong>English Interview</strong><small>Supports US, UK, Australian, and Canadian English profiles</small></span></label></div>{savingLanguage ? <small role="status">Saving interview language…</small> : null}{languageError ? <div className="inline-error" role="alert">{languageError}</div> : null}</fieldset><fieldset className="programming-preference" disabled={savingProgramming}><legend>编程设置</legend><div className="programming-toggle-row"><span><strong>需要编程</strong><small>开启后，代码题会统一使用你选择的编程语言</small></span><label className="switch-control"><input type="checkbox" role="switch" checked={programmingRequired} onChange={event => void saveInterviewProgramming(event.target.checked, event.target.checked ? programmingLanguage : null)} /><span aria-hidden="true" /></label></div>{programmingRequired ? <div className="programming-language-options" role="radiogroup" aria-label="编程语言">{([['python', 'Python'], ['java', 'Java'], ['cpp', 'C++'], ['javascript', 'JavaScript'], ['typescript', 'TypeScript'], ['go', 'Go']] as const).map(([value, label]) => <label key={value} className={programmingLanguage === value ? "selected" : ""}><input type="radio" name="programming-language" value={value} checked={programmingLanguage === value} onChange={() => void saveInterviewProgramming(true, value)} /><span>{label}</span></label>)}</div> : null}{savingProgramming ? <small role="status">正在保存编程设置…</small> : null}{programmingError ? <div className="inline-error" role="alert">{programmingError}</div> : null}</fieldset><ContextPicker sources={managedSources} selection={selection} onSave={saveSelection} onDownload={downloadMaterial} />{confirmingMaterials ? <div className="context-warning" role="status">正在提交后端校验并保存本场资料…</div> : null}{materialConfirmError ? <div className="context-warning" role="alert">{materialConfirmError}</div> : null}</section>
+    <div className="prepare-grid"><section className="panel"><LanguagePicker value={interviewLanguage} saving={savingLanguage} onChange={saveInterviewLanguage} error={languageError} /><fieldset className="programming-preference" disabled={savingProgramming}><legend>编程设置</legend><div className="programming-toggle-row"><span><strong>需要编程</strong><small>开启后，代码题会统一使用你选择的编程语言</small></span><label className="switch-control"><input type="checkbox" role="switch" checked={programmingRequired} onChange={event => void saveInterviewProgramming(event.target.checked, event.target.checked ? programmingLanguage : null)} /><span aria-hidden="true" /></label></div>{programmingRequired ? <div className="programming-language-options" role="radiogroup" aria-label="编程语言">{([['python', 'Python'], ['java', 'Java'], ['cpp', 'C++'], ['javascript', 'JavaScript'], ['typescript', 'TypeScript'], ['go', 'Go']] as const).map(([value, label]) => <label key={value} className={programmingLanguage === value ? "selected" : ""}><input type="radio" name="programming-language" value={value} checked={programmingLanguage === value} onChange={() => void saveInterviewProgramming(true, value)} /><span>{label}</span></label>)}</div> : null}{savingProgramming ? <small role="status">正在保存编程设置…</small> : null}{programmingError ? <div className="inline-error" role="alert">{programmingError}</div> : null}</fieldset><ContextPicker sources={managedSources} selection={selection} onSave={saveSelection} onDownload={downloadMaterial} />{confirmingMaterials ? <div className="context-warning" role="status">正在提交后端校验并保存本场资料…</div> : null}{materialConfirmError ? <div className="context-warning" role="alert">{materialConfirmError}</div> : null}</section>
       <aside className="panel check-panel"><div className="panel-heading"><h2>开始前检查</h2><span>{canStart ? "可进入" : !selectionReady ? "待确认资料" : "待绑定机器"}</span></div><ul className="check-list"><li className={selectionReady ? "done" : ""}><i>{selectionReady ? "✓" : "1"}</i><div><strong>本场资料</strong><span>{validity === "unconfirmed" ? "请选择资料或确认不使用资料" : validity === "attention-required" ? "所选资料已失效，请处理" : level === "none" ? "已确认不使用个人资料" : level === "personalized" ? "简历与 JD 已选择" : "已确认使用部分资料"}</span></div></li><li className={machineReady ? "done" : ""}><i>{machineReady ? "✓" : "2"}</i><div><strong>收音机器</strong><span>{deviceBinding ? `${deviceBinding.displayName} connected. Preparing the live session.` : inputDiagnostic}</span></div></li></ul>
         <div className="machine-code-panel">
           <strong className="connection-choice-title">连接桌面助手</strong>
           <label><span>{newlyCreatedInterview ? "输入机器码连接本场" : "重新输入机器码"}</span><input inputMode="numeric" maxLength={6} value={machineCode} onChange={event => setMachineCode(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="输入 6 位机器码" /></label>
           <button className="button ghost" disabled={!conflictResolved || binding || machineReady && machineCode === deviceBinding?.manualCode} onClick={() => void connectDesktopDevice(false)}>{binding ? "连接中…" : "验证并连接"}</button>
           <small>{deviceBinding ? `Connected for this session: ${deviceBinding.displayName}` : "输入助手显示的固定机器码，或直接连接当前账号上次使用的设备。"}</small>
-          {bindingError ? <div className="inline-error" role="alert">{bindingError}</div> : null}
+          {bindingError ? (bindingError.includes("Companion version") ? <CompanionUpdateRequired message={bindingError} /> : <div className="inline-error" role="alert">{bindingError}</div>) : null}
           {lastDevice ? <><div className="connection-divider"><span>或使用上次设备</span></div><div className={`last-device-choice ${lastDevice.online ? "online" : "offline"}`}><span><b>{lastDevice.displayName}</b><small>{lastDevice.online ? `Device online · ${lastDevice.maskedManualCode}` : "设备离线，请先打开助手"}</small></span><button className="button primary" disabled={!conflictResolved || binding || !lastDevice.online || deviceBinding?.deviceId === lastDevice.deviceId} onClick={() => void connectDesktopDevice(true)}>{deviceBinding?.deviceId === lastDevice.deviceId ? "已连接本场" : "一键连接上次设备"}</button></div></> : null}
         </div>
         {visibleUpdate ? <CompanionUpdateReminder update={visibleUpdate} onContinue={() => setDismissedUpdateKey(updateKey)} /> : null}
         <div className="device-mini"><span className="device-glyph">⌘</span><div><strong>{deviceBinding?.displayName ?? state.preparation.device?.displayName ?? "电脑伴随程序"}</strong><small>{deviceBinding ? "本场设备已连接；系统权限沿用助手首次授权结果" : "当前仅缺少本场设备连接，不代表助手系统权限失效"}</small></div><Link to={routes.devices}>管理</Link></div>
         <div className="privacy-confirm preparation-disclosure"><span><strong>本场数据说明</strong><small>已选资料和转录仅用于生成回答建议；原始音频默认不保存，会话记录可在复盘中删除。麦克风和屏幕权限只由桌面助手首次申请，网页不会再次申请。</small></span></div>
-        <div className="points-mini"><strong>{state.billing.balance} 点</strong><span>回答 5 点 · 截图 15 点</span><Link to={routes.billing}>查看收费说明</Link><Link to={`${routes.guide}#quick-start`}>准备流程说明</Link></div>
+        <div className="points-mini"><strong>Membership access</strong><span>Live Copilot and Screen Assist usage follows your selected plan.</span><Link to={routes.billing}>View plans and billing</Link><Link to={`${routes.guide}#quick-start`}>Preparation guide</Link></div>
         {startError ? <div className="inline-error" role="alert">{startError}</div> : null}<button className="button primary full" disabled={!canStart || starting} onClick={() => void startInterview()}>{starting ? "正在开始面试…" : "开始面试 →"}</button>{!selectionReady ? <small className="blocked-help">确认本场资料选择（可以为空）后继续。</small> : !machineReady ? <small className="blocked-help">请选择上次设备或输入机器码，为本场建立设备连接。</small> : level === "none" ? <small className="blocked-help context-disclosure">本场未使用个人资料。伴随程序会在后台准备音频，开始后直接切换到实时链路。</small> : <small className="blocked-help context-disclosure">伴随程序正在后台准备麦克风、电脑输出和识别服务；无需播放测试音或提前说话。</small>}
       </aside></div>
     {activeConflict ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="active-interview-conflict-title"><section className="sheet active-interview-conflict-sheet"><span className="conflict-kicker">单设备 · 单场面试</span><h2 id="active-interview-conflict-title">已有一场面试正在进行</h2><p>为避免旧页面和新页面同时占用语音链路，请先选择如何继续。</p><div className="active-interview-card"><span>进行中</span><strong>{activeConflict.title}</strong><small>结束上一场只会停止实时连接，历史记录和资料不会删除。</small></div>{conflictError ? <div className="inline-error" role="alert">{conflictError}</div> : null}<div className="sheet-actions conflict-actions"><button className="button primary" disabled={resolvingConflict} onClick={() => navigate(routes.live(activeConflict.id))}>继续上一场面试</button><button className="button ghost" disabled={resolvingConflict} onClick={() => void supersedePreviousInterview()}>{resolvingConflict ? "正在切换…" : "结束上一场，准备当前面试"}</button></div><Link className="conflict-return" to={routes.app}>暂不进入，返回面试首页</Link></section></div> : null}
@@ -840,7 +882,8 @@ function LivePage() {
   const liveInterview = state.interviews.find(item => item.id === id);
   const isWritten = liveInterview?.sessionMode === "written";
   const interviewTitle = liveInterview?.title ?? "本场面试";
-  const interviewLanguageLabel = "English Interview";
+  const interviewLanguage = liveInterview?.interviewLanguage ?? "en-US";
+  const interviewLanguageLabel = interviewLanguageDefinition(interviewLanguage)?.nativeLabel ?? interviewLanguage;
   const active = state.questions[0] ?? emptyLiveQuestion;
   const screenshot = actionState.screenshotTask;
   const setScreenshot = (next: ScreenshotTask | null) => setActionState(current => ({
@@ -1793,7 +1836,7 @@ function LivePage() {
     if (value.trim() && notice === QUICK_ANSWER_MISSING_QUESTION_NOTICE) setNotice("");
   };
   const conversationPanel = <ConversationMonitor state={state} onConfirmQuestion={pageLeaseStatus === "replaced" ? dismissPending : confirmPending} onDismissQuestion={dismissPending} />;
-  const answerPanel = <AnswerWorkspace answers={state.questions} viewingAnswerId={view.viewingAnswerId} newAnswerAvailable={view.newAnswerAvailable} activeTask={state.activeAnswerTask} cancelling={cancellingAnswer} cancelError={cancelAnswerError} interviewLanguage="en-US" onStop={() => void stopAnswer()} onView={answerId => setView(current => ({ ...current, viewingAnswerId: answerId, newAnswerAvailable: answerId ? current.newAnswerAvailable : false }))} onRetry={updateQuestionStatus} />;
+  const answerPanel = <AnswerWorkspace answers={state.questions} viewingAnswerId={view.viewingAnswerId} newAnswerAvailable={view.newAnswerAvailable} activeTask={state.activeAnswerTask} cancelling={cancellingAnswer} cancelError={cancelAnswerError} interviewLanguage={interviewLanguage} onStop={() => void stopAnswer()} onView={answerId => setView(current => ({ ...current, viewingAnswerId: answerId, newAnswerAvailable: answerId ? current.newAnswerAvailable : false }))} onRetry={updateQuestionStatus} />;
 
   if (isWritten) return <main className={`live-page focused-live-page${desktopLayout ? " desktop-live-page" : " mobile-live-page"}`}><header className="live-top"><Link to={routes.writtenExams} aria-label="返回笔试模式"><Logo /></Link><div className="live-session-heading"><strong>{interviewTitle}</strong><span><i className="online-dot" /> 桌面助手已连接 · 截屏回答可用</span><small className="live-language-badge">笔试模式</small></div><div className="live-top-actions"><Link className="live-balance" to={routes.billing}>积分与会员</Link><AccountMenu compact /><button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束笔试</button></div></header>{notice ? <div className="global-live-alert" role="alert"><strong>{notice}</strong><button type="button" onClick={() => setNotice("")}>关闭</button></div> : null}{pageLeaseStatus === "replaced" ? <div className="global-live-alert replaced-page-alert" role="status"><strong>本场笔试已在其他页面继续</strong><Link className="button primary" to={routes.writtenExams}>返回笔试模式</Link></div> : null}<div className="written-exam-workspace"><section className="answer-column">{answerPanel}<AnswerActionBar manualDraft="" screenshotTask={actionState.screenshotTask} screenshotOnly screenshotAnswerStatus={actionState.screenshotAnswerStatus ?? "idle"} disabled={pageLeaseStatus === "replaced"} onQuickAnswer={() => undefined} onScreenshot={beginInstantScreenshot} /></section></div>{screenshot && pageLeaseStatus !== "replaced" ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="screenshot-dialog-title"><section className="sheet"><h2 id="screenshot-dialog-title">{screenshotStageTitle(screenshot)}</h2>{screenshotStageDetail(screenshot) ? <p>{screenshotStageDetail(screenshot)}</p> : null}{screenshot.stage === "failed" ? <div className="sheet-actions split-actions"><button className="button ghost full" onClick={dismissScreenshotFailure}>删除本次失败</button><button className="button primary full" onClick={beginInstantScreenshot}>重新截屏</button></div> : <button className="button primary full" onClick={() => void cancelScreenshot()}>取消</button>}</section></div> : null}<footer className="session-bar"><div><i className="online-dot" /><strong>笔试进行中</strong></div><div><small>仅在你主动发起时截屏并生成回答</small></div></footer></main>;
 
@@ -1826,6 +1869,8 @@ function ReviewPage() {
   const [wordExportState, setWordExportState] = useState<"idle" | "generating" | "success" | "error">("idle");
   const interview = state.interviews.find(item => item.id === id);
   const isWritten = interview?.sessionMode === "written";
+  const reviewInterviewLanguage = interview?.interviewLanguage ?? "en-US";
+  const reviewInterviewLanguageLabel = interviewLanguageDefinition(reviewInterviewLanguage)?.nativeLabel ?? reviewInterviewLanguage;
   useEffect(() => {
     const controller = new AbortController();
     setReviewLoading(true);
@@ -1873,7 +1918,7 @@ function ReviewPage() {
     const writtenQuestions = state.questions.filter(question => question.input === "screenshot");
     return <main className="app-page narrow written-result-page">
       <Link className="back-link" to={routes.writtenExams}>← 返回笔试模式</Link>
-      <PageHeader eyebrow="WRITTEN EXAM RESULT" title={interview.title} detail="本场答题记录已保留，可随时从最近笔试重新查看。" action={<Link className="button primary" to={routes.writtenExams}>完成</Link>} />
+      <PageHeader eyebrow="WRITTEN EXAM RESULT" title={interview.title} detail={`${reviewInterviewLanguageLabel} · 本场答题记录已保留，可随时从最近笔试重新查看。`} action={<Link className="button primary" to={routes.writtenExams}>完成</Link>} />
       {reviewLoadError ? <div className="inline-error" role="status">{reviewLoadError}</div> : null}
       <section className="panel written-result-card">
         <div className="panel-heading"><h2>本场答题记录</h2><span>{writtenQuestions.length} 题</span></div>
@@ -1885,7 +1930,7 @@ function ReviewPage() {
       </div>
     </main>;
   }
-  return <main className="app-page"><Link className="back-link" to={routes.app}>← 返回面试首页</Link><PageHeader eyebrow="INTERVIEW REVIEW" title="本场面试复盘" detail="整理语音转写与 AI 回答建议，不对你的能力作自动评分。" action={<div className="review-header-actions"><button type="button" className="button primary" onClick={() => void downloadReview()} disabled={reviewLoading || wordExportState === "generating"}>{wordExportState === "generating" ? "正在生成 Word…" : "下载 Word"}</button><div className="review-meta"><strong>{state.review.duration}</strong><span>{state.review.transcripts.length} 条对话 · {state.questions.length} 个问题</span></div></div>} />
+  return <main className="app-page"><Link className="back-link" to={routes.app}>← 返回面试首页</Link><PageHeader eyebrow="INTERVIEW REVIEW" title="本场面试复盘" detail={`${reviewInterviewLanguageLabel} · 整理语音转写与 AI 回答建议，不对你的能力作自动评分。`} action={<div className="review-header-actions"><button type="button" className="button primary" onClick={() => void downloadReview()} disabled={reviewLoading || wordExportState === "generating"}>{wordExportState === "generating" ? "正在生成 Word…" : "下载 Word"}</button><div className="review-meta"><strong>{state.review.duration}</strong><span>{state.review.transcripts.length} 条对话 · {state.questions.length} 个问题</span></div></div>} />
     <p className={`review-download-note${wordExportState === "error" ? " error-text" : ""}`} role={wordExportState === "error" ? "alert" : undefined}>{wordExportState === "error" ? "Word 生成失败，请重试。当前复盘内容不会丢失。" : wordExportState === "success" ? "Word 已生成并开始下载，请妥善保管本场面试对话。" : "Word 文件包含本场面试对话，仅在你的浏览器本地生成，请妥善保管。"}</p>{reviewLoadError ? <div className="inline-error" role="status">{reviewLoadError}</div> : null}
     <div className="review-grid"><div className="review-main"><section className="panel"><div className="panel-heading"><h2>真实对话记录</h2><span>语音转写</span></div>{reviewLoading ? <p className="review-loading">正在加载本场对话…</p> : state.review.transcripts.length ? <div className="review-transcript-list">{state.review.transcripts.map(item => <article key={item.id} className={`review-transcript ${item.role}`}><header><strong>{item.speakerLabel}</strong><time dateTime={new Date(item.occurredAtMs).toISOString()}>{new Date(item.occurredAtMs).toLocaleTimeString(globalEditionMetadata().locale, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}</time></header><p>{item.text}</p></article>)}</div> : <EmptyState title="没有可用的对话转写" detail="旧场次或未成功收音的场次可能没有持久语音转写，已有问题与 AI 建议仍可查看。" />}</section><section className="panel"><div className="panel-heading"><h2>问题与 AI 回答建议</h2><span>生成建议，不代表实际作答</span></div>{state.questions.length ? <div className="review-timeline">{[...state.questions].reverse().map((question, index) => <article key={question.id}><i>{index + 1}</i><div><small>{question.askedAt} · {question.input === "screenshot" ? "截图题" : question.input === "manual" ? "手动输入" : "音频转写"}</small><h3>{question.text}</h3><p>{question.advice.outline.join("; ")}</p><div className="source-pills"><small>资料 v{question.advice.provenance.selectionRevision}</small>{question.advice.provenance.usedSources.map(source => <span key={source.sourceId}>{source.displayName}</span>)}</div></div></article>)}</div> : <EmptyState title="没有可复盘的问题" detail="本场面试没有已确认的问题记录。" />}</section></div>
       <aside><section className="panel review-summary"><div className="panel-heading"><h2>AI 整理摘要</h2><span className={reviewStatus}>{reviewStatus === "complete" ? "已生成" : reviewStatus === "failed" ? "生成失败" : "处理中"}</span></div>{reviewStatus === "complete" ? <><p>{state.review.summary}</p><div className="evidence-box"><span>说明</span><p>这是基于本场记录的生成建议，与原始问题记录分开保存。</p></div></> : reviewStatus === "failed" ? <div className="inline-error">摘要生成失败，原始记录仍可查看。<button onClick={() => setReviewStatus("complete")}>重试</button></div> : <p>正在整理本场已确认问题…</p>}</section><section className="panel data-panel"><div className="panel-heading"><h2>数据与附件</h2><span>可删除</span></div>{deleteError ? <div className="inline-error" role="alert">{deleteError}</div> : null}<ul className="compact-list"><li><span>简历与知识库</span><b>作为可复用资料保留</b></li><li><span>对话转写</span><b>随会话保存并删除</b></li><li><span>问题与 AI 建议</span><b>随会话保存</b></li>{state.review.screenshots.map(shot => <li key={shot.id}><span>{shot.name}</span><button disabled={deletingShotId === shot.id} onClick={() => void deleteShot(shot.id)}>{deletingShotId === shot.id ? "删除中…" : "删除截图"}</button></li>)}</ul><button className="button danger full" disabled={deletingInterview} onClick={() => void deleteInterview()}>{deletingInterview ? "正在删除…" : "删除整场面试"}</button></section></aside></div>
@@ -1924,14 +1969,28 @@ function PasswordSettingsCard() {
 }
 
 function SettingsPage() {
+  const { state, setState } = usePrototype();
   const [appearance, setAppearance] = useState<AppearancePreferences>(() => readAppearancePreferences());
+  const [language, setLanguage] = useState<import("@offersteady/protocol").InterviewLanguage>(state.account.defaultInterviewLanguage ?? "en-US");
+  const [languageSaving, setLanguageSaving] = useState(false);
+  const [languageError, setLanguageError] = useState("");
   const updateAppearance = (patch: Partial<AppearancePreferences>) => {
     const next = { ...appearance, ...patch };
     setAppearance(next);
     applyAppearancePreferences(next);
     persistAppearancePreferences(next);
   };
-  return <main className="app-page"><PageHeader eyebrow="SETTINGS" title="设置" detail="查看真实的数据行为和辅助功能。" /><div className="settings-list"><PasswordSettingsCard /><section className="panel"><h2>数据与隐私</h2><div className="setting-row"><span><strong>原始音频</strong><small>完成当前转写后不保留</small></span><b>默认不保存</b></div><div className="setting-row"><span><strong>面试记录</strong><small>请在对应复盘页查看、管理和删除记录。</small></span><Link to={`${routes.guide}#privacy-support`}>查看数据说明</Link></div></section><section className="panel"><h2>辅助功能</h2><label className="setting-row"><span><strong>减少动态效果</strong><small>减少波形与状态动画</small></span><input type="checkbox" /></label><label className="setting-row"><span><strong>回答字号</strong><small>只影响实时回答区域</small></span><select aria-label="回答字号" value={appearance.answerFontSize} onChange={event => updateAppearance({ answerFontSize: event.target.value as AppearancePreferences["answerFontSize"] })}><option value="normal">标准</option><option value="large">较大</option></select></label><label className="setting-row"><span><strong>页面主题</strong><small>明亮模式提高页面整体亮度，适合光线充足的环境</small></span><select aria-label="页面主题" value={appearance.theme} onChange={event => updateAppearance({ theme: event.target.value as AppearancePreferences["theme"] })}><option value="dark">深色</option><option value="bright">明亮</option></select></label></section></div></main>;
+  const saveLanguage = async (next: import("@offersteady/protocol").InterviewLanguage) => {
+    const previous = language;
+    setLanguage(next); setLanguageSaving(true); setLanguageError("");
+    try {
+      const account = await runAdapterOperation(signal => interviewAppAdapter.updateDefaultInterviewLanguage(next, signal));
+      setState(current => ({ ...current, account }));
+    } catch (error) {
+      setLanguage(previous); setLanguageError(error instanceof Error ? error.message : "Could not save your interview language.");
+    } finally { setLanguageSaving(false); }
+  };
+  return <main className="app-page"><PageHeader eyebrow="SETTINGS" title="设置" detail="查看真实的数据行为和辅助功能。" /><div className="settings-list"><PasswordSettingsCard /><section className="panel"><h2>Interview language</h2><p className="panel-empty-copy">Choose the default language for new Global interview sessions. You can still change a draft before it starts.</p><label className="setting-row"><span><strong>Default interview language</strong><small>Used for transcription, question detection, and AI answers</small></span><select aria-label="Default interview language" value={language} disabled={languageSaving} onChange={event => void saveLanguage(event.target.value as import("@offersteady/protocol").InterviewLanguage)}>{INTERVIEW_LANGUAGE_REGISTRY.map(item => <option key={item.locale} value={item.locale}>{item.nativeLabel} · {item.label}{item.tier === "beta" ? " (Beta)" : ""}</option>)}</select></label>{languageError ? <div className="inline-error" role="alert">{languageError}</div> : null}</section><section className="panel"><h2>数据与隐私</h2><div className="setting-row"><span><strong>原始音频</strong><small>完成当前转写后不保留</small></span><b>默认不保存</b></div><div className="setting-row"><span><strong>面试记录</strong><small>请在对应复盘页查看、管理和删除记录。</small></span><Link to={`${routes.guide}#privacy-support`}>查看数据说明</Link></div></section><section className="panel"><h2>辅助功能</h2><label className="setting-row"><span><strong>减少动态效果</strong><small>减少波形与状态动画</small></span><input type="checkbox" /></label><label className="setting-row"><span><strong>回答字号</strong><small>只影响实时回答区域</small></span><select aria-label="回答字号" value={appearance.answerFontSize} onChange={event => updateAppearance({ answerFontSize: event.target.value as AppearancePreferences["answerFontSize"] })}><option value="normal">标准</option><option value="large">较大</option></select></label><label className="setting-row"><span><strong>页面主题</strong><small>明亮模式提高页面整体亮度，适合光线充足的环境</small></span><select aria-label="页面主题" value={appearance.theme} onChange={event => updateAppearance({ theme: event.target.value as AppearancePreferences["theme"] })}><option value="dark">深色</option><option value="bright">明亮</option></select></label></section></div></main>;
 }
 
 function RouteErrorPage() { return <main className="center-page"><EmptyState title="页面暂时无法加载" detail="没有输出任何敏感内容。请返回应用首页重试。" action={<Link className="button primary" to={routes.app}>返回首页</Link>} /></main>; }

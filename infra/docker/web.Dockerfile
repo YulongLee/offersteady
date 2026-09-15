@@ -16,7 +16,10 @@ COPY packages /app/packages
 RUN npm install
 RUN npm run build -w @offersteady/config
 RUN npm run build -w @offersteady/protocol
-RUN npm run build -w @offersteady/web
+RUN VITE_APP_ENV="production" \
+    VITE_API_BASE_URL="/" \
+    VITE_PUBLIC_APP_VERSION="${VITE_PUBLIC_APP_VERSION:-0.1.0}" \
+    npm run build -w @offersteady/web
 
 FROM nginx:1.27-alpine AS runtime
 

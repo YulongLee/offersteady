@@ -22,6 +22,7 @@ export interface SafeAccountSummary {
   readonly displayName: string;
   readonly bindings: readonly SafeIdentityBinding[];
   readonly createdAtMs: number;
+  readonly defaultInterviewLanguage?: import("./interview-language.js").InterviewLanguage;
 }
 
 export interface WechatAuthorizationResult {

@@ -43,6 +43,7 @@ const downloadsHtml = homepage.match(/<!-- homepage-downloads:start -->[\s\S]*?<
 if (!downloadsHtml) throw new Error("Homepage download marker is missing");
 homepage = homepage.replace(/<main class="seo-prerender">[\s\S]*?<\/main>/, () => renderCommercialHomepage({ catalogue, home, downloadsHtml }));
 const pricingPage = catalogue.pages.find(page => page.slug === "pricing");
+const checkoutActive = Boolean(pricingPage?.plans?.filter(plan => plan.name !== "Free").every(plan => plan.href === "/login"));
 homepage = homepage.replace(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/, (_, source) => {
   const schema = JSON.parse(source);
   for (const item of schema["@graph"]) {
@@ -50,7 +51,7 @@ homepage = homepage.replace(/<script type="application\/ld\+json">([\s\S]*?)<\/s
     if (item["@type"] === "SoftwareApplication") item.offers = pricingPage.plans.map(plan => ({
       "@type": "Offer", name: plan.name, price: plan.price.replace("$", ""), priceCurrency: "USD",
       url: `${catalogue.siteUrl}/pricing`,
-      description: `${plan.billing}. ${plan.accessStarts} ${plan.href ? "Available through Start Free." : catalogue.checkoutNotice}`,
+      description: `${plan.billing}. ${plan.accessStarts} ${plan.href ? "Available after sign-in through secure checkout." : catalogue.checkoutNotice}`,
     }));
   }
   return `<script type="application/ld+json">${JSON.stringify(schema, null, 2).replaceAll("<", "\\u003c")}</script>`;
@@ -99,7 +100,7 @@ function pageSchema(page, canonical) {
         price: plan.price.replace("$", ""),
         priceCurrency: "USD",
         url: canonical,
-        description: `${plan.description} ${plan.billing}. ${plan.accessStarts} ${plan.href ? "Available through Start Free." : catalogue.checkoutNotice}`,
+        description: `${plan.description} ${plan.billing}. ${plan.accessStarts} ${plan.href ? "Available after sign-in through secure checkout." : catalogue.checkoutNotice}`,
       })),
     });
   }
@@ -148,11 +149,11 @@ const publicFacts = {
   },
   pricing: {
     currency: "USD",
-    checkoutActive: false,
+    checkoutActive,
     paymentNotice: catalogue.checkoutNotice,
     plans: catalogue.pages.find(page => page.slug === "pricing").plans.map(plan => ({
       name: plan.name, price: Number(plan.price.replace("$", "")), term: plan.term.trim() || null,
-      status: plan.href ? "available" : "approval-required",
+      status: checkoutActive && plan.href ? "available" : "unavailable",
       billing: plan.billing, accessStarts: plan.accessStarts, features: plan.features,
     })),
   },

@@ -112,6 +112,9 @@ class UsageReservationRecord:
     billing_source: str
     status: str
     created_at_ms: int
+    # Whether this reservation must draw only from the points wallet.  Older
+    # persisted rows omit the field, so the default keeps them compatible.
+    wallet_only: bool = False
     settled_at_ms: int | None = None
     released_at_ms: int | None = None
 
@@ -983,6 +986,7 @@ class BillingService:
             "user_id": user_id,
             "usage_kind": usage_kind,
             "points_reserved": points,
+            "wallet_only": wallet_only,
         }
         if self.billing_repository is not None:
             return UsageReservationRecord(**self.billing_repository.reserve_usage(usage={**usage, "wallet_only": wallet_only}, created_at_ms=created_at_ms))

@@ -40,6 +40,10 @@ class GlobalCreemConfigurationService:
             return CreemCredentials(values.get("apiKey") or None, values.get("webhookSecret") or None)
         return self.environment_credentials(mode)
 
+    def active_mode(self) -> CreemMode:
+        """Return the only provider mode supported by international commerce."""
+        return "live"
+
     def environment_credentials(self, mode: CreemMode) -> CreemCredentials:
         if mode == "test":
             return CreemCredentials(self.settings.creem_test_api_key, self.settings.creem_test_webhook_secret)

@@ -603,15 +603,25 @@ h1, h2, h3, p { margin-top: 0; }
 .state-mark.processing { color: var(--warning); }
 .check-panel { position: sticky; top: 24px; }
 .interview-language-picker { border: 0; border-bottom: 1px solid var(--line); margin: 0 0 20px; padding: 0 0 20px; }
+.interview-language-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-height: 360px; overflow: auto; padding-right: 2px; }
+.interview-language-options label { display: flex; align-items: flex-start; gap: 9px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.02); padding: 12px; cursor: pointer; }
+.interview-language-options label.selected { border-color: rgba(110,231,189,.55); background: rgba(110,231,189,.08); }
+.interview-language-options input { margin-top: 2px; accent-color: var(--brand); }
+.interview-language-options label span { display: grid; gap: 4px; }
+.interview-language-options strong { font-size: 10px; }
+.interview-language-options small { color: var(--muted); font-size: 8px; line-height: 1.45; }
+.legacy-language-picker { display: none; }
 .interview-language-picker legend { padding: 0; font-size: 12px; font-weight: 800; }
 .interview-language-picker > p { margin: 6px 0 12px; color: var(--muted); font-size: 9px; line-height: 1.55; }
 .interview-language-picker > div:first-of-type { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .interview-language-picker label { display: flex; align-items: flex-start; gap: 9px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.02); padding: 12px; cursor: pointer; }
 .interview-language-picker label.selected { border-color: rgba(110,231,189,.55); background: rgba(110,231,189,.08); }
+.interview-language-picker label.preferred { border-color: rgba(110,231,189,.72); background: rgba(110,231,189,.11); }
 .interview-language-picker input { margin-top: 2px; accent-color: var(--brand); }
 .interview-language-picker label span { display: grid; gap: 4px; }
 .interview-language-picker strong { font-size: 10px; }
 .interview-language-picker small { color: var(--muted); font-size: 8px; line-height: 1.45; }
+.interview-language-tier.preferred { color: var(--brand); font-weight: 700; }
 .programming-preference { border: 0; border-bottom: 1px solid var(--line); margin: 0 0 20px; padding: 0 0 20px; }
 .programming-preference legend { padding: 0; font-size: 12px; font-weight: 800; }
 .programming-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 10px; }

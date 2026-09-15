@@ -69,13 +69,13 @@ export const createJsonClient = ({ baseUrl, fetchImpl = defaultFetch }: JsonClie
     const payload = response.headers.get("content-type")?.includes("application/json") ? await response.json() : null;
     if (!response.ok) {
       if (isEnvelope<unknown>(payload) && payload.error?.message) {
-        throw new AppError("validation", globalApiErrorMessage(payload.error.code, response.status, payload.error.message));
+        throw new AppError("validation", globalApiErrorMessage(payload.error.code, response.status, payload.error.message), response.status);
       }
       throw new ApiResponseError(response.status, payload);
     }
     if (isEnvelope<T>(payload)) {
       if (!payload.success || payload.data == null) {
-        throw new AppError("validation", globalApiErrorMessage(payload.error?.code, response.status, payload.error?.message));
+        throw new AppError("validation", globalApiErrorMessage(payload.error?.code, response.status, payload.error?.message), response.status);
       }
       return payload.data;
     }

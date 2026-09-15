@@ -103,15 +103,15 @@ def test_language_route_validates_values_and_locks_after_start() -> None:
 
     invalid = client.patch(
         f"/api/v1/sessions/{session_id}/language",
-        json={"userId": user_id, "interviewLanguage": "fr-FR"},
+        json={"userId": user_id, "interviewLanguage": "xx-XX"},
     )
     assert invalid.status_code == 422
 
     updated = unwrap(client.patch(
         f"/api/v1/sessions/{session_id}/language",
-        json={"userId": user_id, "interviewLanguage": "en-US"},
+        json={"userId": user_id, "interviewLanguage": "fr-FR"},
     ))
-    assert updated["interviewLanguage"] == "en-US"
+    assert updated["interviewLanguage"] == "fr-FR"
 
     unwrap(client.post(f"/api/v1/sessions/{session_id}/start", json={"userId": user_id}))
     locked = client.patch(

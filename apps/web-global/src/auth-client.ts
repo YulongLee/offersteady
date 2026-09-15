@@ -71,6 +71,7 @@ interface CurrentUserResponse {
   readonly userId: string;
   readonly displayName: string;
   readonly createdAtMs: number;
+  readonly defaultInterviewLanguage?: import("@offersteady/protocol").InterviewLanguage;
   readonly bindings: readonly {
     readonly bindingId: string;
     readonly provider: "wechat" | "sms" | "email" | "password" | "prototype" | "other";
@@ -118,6 +119,7 @@ const toSafeAccountSummary = (user: CurrentUserResponse): SafeAccountSummary => 
   id: user.userId,
   displayName: user.displayName,
   createdAtMs: user.createdAtMs,
+  defaultInterviewLanguage: user.defaultInterviewLanguage ?? "en-US",
   bindings: user.bindings.map(item => ({
     id: item.bindingId,
     provider: item.provider === "wechat" ? "wechat" : item.provider === "sms" ? "sms" : item.provider === "email" ? "email" : "prototype",

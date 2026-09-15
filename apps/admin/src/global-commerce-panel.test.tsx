@@ -9,8 +9,8 @@ import { GlobalCommercePanel } from "./App";
 describe("GlobalCommercePanel", () => {
   it("shows customer-facing paid plans instead of internal offer codes", () => {
     render(<GlobalCommercePanel row={{
-      mode: "test",
-      runtimeMode: "test",
+      mode: "live",
+      runtimeMode: "live",
       masterSwitchEnabled: true,
       providerActivated: false,
       configurationReady: false,
@@ -31,6 +31,7 @@ describe("GlobalCommercePanel", () => {
     expect(screen.getByText("Pro Weekly")).toBeTruthy();
     expect(screen.getByText(/Free 是免费权益/)).toBeTruthy();
     expect(screen.queryByText("global-pro-weekly")).toBeNull();
-    expect(screen.getByRole("button", { name: "启用 Test 测试支付" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.queryByRole("button", { name: /Test 测试/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "启用 Live 正式支付" }).hasAttribute("disabled")).toBe(true);
   });
 });

@@ -32,6 +32,7 @@ def _plan_payload(plan) -> dict[str, object]:
         "billingMode": plan.billing_mode, "durationDays": plan.duration_days,
         "benefits": {"copilotMinutes": plan.copilot_minutes, "screenAssistUses": plan.screen_assist_uses,
                      "resumeAndJobDescription": plan.resume_jd_enabled, "knowledgeBase": plan.knowledge_base_enabled,
+                     "knowledgeTokens": plan.knowledge_tokens,
                      "writtenExam": plan.written_exam_enabled, "fullProduct": plan.full_product_enabled},
         "published": plan.status == "active", "featured": plan.featured,
         "displayOrder": plan.display_order, "createdAtMs": plan.created_at_ms,
@@ -53,11 +54,12 @@ async def catalogue(request: Request, service: GlobalCommerceService = Depends(g
 async def state(request: Request, auth_context: AuthenticatedRequestContext = Depends(require_authenticated_context), service: GlobalCommerceService = Depends(global_commerce_service), settings: Settings = Depends(settings_dependency)) -> ApiEnvelope[dict[str, object]]:
     _require_global(settings)
     resolved = service.state(auth_context.user_id)
-    provider_activated = bool(service.repository.provider_config(settings.global_commerce_provider_mode).get("enabled"))
+    mode = global_creem_configuration_service().active_mode()
+    provider_activated = bool(service.repository.provider_config(mode).get("enabled"))
     resolved.update({
         "enabled": settings.global_commerce_enabled and provider_activated,
         "provider": "creem" if settings.global_commerce_enabled and provider_activated else "none",
-        "mode": settings.global_commerce_provider_mode,
+        "mode": mode,
         "plans": [_plan_payload(plan) for plan in service.catalogue()],
         "fairUsePolicyUrl": settings.global_fair_use_policy_url or "",
         "refundPolicyUrl": settings.global_refund_policy_url or "",
@@ -71,7 +73,7 @@ async def state(request: Request, auth_context: AuthenticatedRequestContext = De
 @router.get("/readiness", response_model=ApiEnvelope[dict[str, object]])
 async def readiness(request: Request, settings: Settings = Depends(settings_dependency), service: GlobalCommerceService = Depends(global_commerce_service), configuration: GlobalCreemConfigurationService = Depends(global_creem_configuration_service)) -> ApiEnvelope[dict[str, object]]:
     _require_global(settings)
-    mode = settings.global_commerce_provider_mode
+    mode = configuration.active_mode()
     credentials = configuration.effective_credentials(mode)
     public_base = settings.public_web_base_url.rstrip("/")
     checkout_success_url = settings.creem_checkout_success_url or (f"{public_base}/billing/success" if public_base else "")

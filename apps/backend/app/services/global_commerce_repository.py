@@ -12,11 +12,11 @@ from app.ports.global_commerce import FairUseDecision, GlobalCommerceRepository,
 def seeded_global_plans(now_ms: int | None = None) -> list[GlobalPlan]:
     created = now_ms or int(time() * 1000)
     return [
-        GlobalPlan("global-free", 1, "Free", "Try OfferSteady without a card.", 0, "free", None, 15, 3, False, False, False, False, display_order=0, created_at_ms=created),
-        GlobalPlan("global-interview-pass", 2, "Interview Day Pass", "Focused access for your interview day.", 999, "one_time", 1, 180, None, True, False, True, False, display_order=1, created_at_ms=created),
-        GlobalPlan("global-pro-weekly", 2, "Pro Weekly", "Unlimited full-product access for interview week.", 4999, "one_time", 7, None, None, True, True, True, True, featured=True, display_order=2, created_at_ms=created),
-        GlobalPlan("global-pro-monthly", 2, "Pro Monthly", "Unlimited full-product access with monthly renewal.", 9999, "recurring", 30, None, None, True, True, True, True, display_order=3, created_at_ms=created),
-        GlobalPlan("global-job-hunt", 2, "Job Hunt", "Unlimited full-product access for a focused job search.", 19999, "one_time", 90, None, None, True, True, True, True, display_order=4, created_at_ms=created),
+        GlobalPlan("global-free", 1, "Free", "Try OfferSteady without a card.", 0, "free", None, 15, 3, False, False, False, False, display_order=0, created_at_ms=created, knowledge_tokens=0),
+        GlobalPlan("global-interview-pass", 2, "Interview Day Pass", "Focused access for your interview day.", 999, "one_time", 1, 180, None, True, False, True, False, display_order=1, created_at_ms=created, knowledge_tokens=0),
+        GlobalPlan("global-pro-weekly", 2, "Pro Weekly", "Unlimited full-product access for interview week.", 4999, "one_time", 7, None, None, True, True, True, True, featured=True, display_order=2, created_at_ms=created, knowledge_tokens=50_000),
+        GlobalPlan("global-pro-monthly", 2, "Pro Monthly", "Unlimited full-product access with monthly renewal.", 9999, "recurring", 30, None, None, True, True, True, True, display_order=3, created_at_ms=created, knowledge_tokens=200_000),
+        GlobalPlan("global-job-hunt", 2, "Job Hunt", "Unlimited full-product access for a focused job search.", 19999, "one_time", 90, None, None, True, True, True, True, display_order=4, created_at_ms=created, knowledge_tokens=1_000_000),
     ]
 
 
@@ -137,9 +137,12 @@ class InMemoryGlobalCommerceRepository(GlobalCommerceRepository):
                 key=lambda entitlement: (entitlement.ends_at_ms is None, entitlement.ends_at_ms or 2**63, -entitlement.starts_at_ms),
             )
             for entitlement in candidates:
-                limit = entitlement.copilot_minutes_granted if usage_kind == "copilot_minute" else entitlement.screen_assist_uses_granted
-                used = entitlement.copilot_minutes_used if usage_kind == "copilot_minute" else entitlement.screen_assist_uses_used
-                locked = entitlement.copilot_minutes_locked if usage_kind == "copilot_minute" else entitlement.screen_assist_uses_locked
+                if usage_kind == "copilot_minute":
+                    limit, used, locked = entitlement.copilot_minutes_granted, entitlement.copilot_minutes_used, entitlement.copilot_minutes_locked
+                elif usage_kind == "screen_assist":
+                    limit, used, locked = entitlement.screen_assist_uses_granted, entitlement.screen_assist_uses_used, entitlement.screen_assist_uses_locked
+                else:
+                    limit, used, locked = entitlement.knowledge_tokens_granted, entitlement.knowledge_tokens_used, entitlement.knowledge_tokens_locked
                 if limit is not None and limit - used - locked < amount:
                     continue
                 self._entitlements[entitlement.entitlement_id] = entitlement.with_usage(kind=usage_kind, locked_delta=amount)

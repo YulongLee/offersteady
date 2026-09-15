@@ -17,6 +17,7 @@ from app.ports.authentication import (
     UserRecord,
     WechatAuthorizationSessionRecord,
 )
+from app.interview_languages import InterviewLanguage
 from app.services.authentication_repository import InMemoryAuthenticationRepository
 from app.services.postgres_migrations import apply_sql_migrations
 
@@ -40,15 +41,15 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
                 INSERT INTO auth_users (
                   user_id, login_id, password_hash, display_name, avatar_url,
                   last_login_provider, last_login_at_ms, created_at_ms, updated_at_ms,
-                  membership_anchor_ref
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                  membership_anchor_ref, default_interview_language
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT (login_id) DO NOTHING
                 RETURNING user_id
                 """,
                 (
                     user.user_id, user.login_id, user.password_hash, user.display_name,
                     user.avatar_url, user.last_login_provider, user.last_login_at_ms,
-                    user.created_at_ms, user.updated_at_ms, user.membership_anchor_ref,
+                    user.created_at_ms, user.updated_at_ms, user.membership_anchor_ref, user.default_interview_language,
                 ),
             )
             row = cursor.fetchone()
@@ -64,8 +65,8 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
                 INSERT INTO auth_users (
                   user_id, login_id, password_hash, display_name, avatar_url,
                   last_login_provider, last_login_at_ms, created_at_ms, updated_at_ms,
-                  membership_anchor_ref
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                  membership_anchor_ref, default_interview_language
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT (login_id) DO UPDATE SET
                   password_hash = EXCLUDED.password_hash,
                   display_name = EXCLUDED.display_name,
@@ -74,6 +75,7 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
                   last_login_at_ms = EXCLUDED.last_login_at_ms,
                   updated_at_ms = EXCLUDED.updated_at_ms,
                   membership_anchor_ref = COALESCE(EXCLUDED.membership_anchor_ref, auth_users.membership_anchor_ref)
+                  , default_interview_language = EXCLUDED.default_interview_language
                 RETURNING user_id
                 """,
                 (
@@ -86,7 +88,7 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
                     user.last_login_at_ms,
                     user.created_at_ms,
                     user.updated_at_ms,
-                    user.membership_anchor_ref,
+                    user.membership_anchor_ref, user.default_interview_language,
                 ),
             )
             stored_user_id = str(cursor.fetchone()["user_id"])
@@ -357,7 +359,17 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
             updated_at_ms=int(row["updated_at_ms"]),
             bindings=[self._binding_from_row(item) for item in binding_rows],
             membership_anchor_ref=row["membership_anchor_ref"],
+            default_interview_language=row.get("default_interview_language") or "en-US",
         )
+
+    def update_default_interview_language(self, *, user_id: str, interview_language: InterviewLanguage, updated_at_ms: int) -> UserRecord | None:
+        with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute("UPDATE auth_users SET default_interview_language = %s, updated_at_ms = %s WHERE user_id = %s", (interview_language, updated_at_ms, user_id))
+            if cursor.rowcount == 0:
+                connection.rollback()
+                return None
+            connection.commit()
+        return self.get_user(user_id)
 
     @staticmethod
     def _binding_from_row(row: dict[str, Any]) -> ExternalIdentityBindingRecord:
@@ -453,6 +465,7 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
                     REPO_ROOT / "apps/backend/migrations/versions/0030_dysmsapi_code_digest.sql",
                     REPO_ROOT / "apps/backend/migrations/versions/0039_global_email_authentication.sql",
                     REPO_ROOT / "apps/backend/migrations/versions/0041_global_password_authentication.sql",
+                    REPO_ROOT / "apps/backend/migrations/versions/0048_global_interview_language_preferences.sql",
                 ])
             connection.commit()
 

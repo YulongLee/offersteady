@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 
 from app.core.config import REPO_ROOT, Settings
 from app.services.postgres_migrations import apply_sql_migrations
@@ -544,6 +545,58 @@ class AdminRepository:
             (),
         )
         return int(row["earliest"]) if row and row["earliest"] is not None else None
+
+    def list_baidu_keywords(self, *, domain: str, include_inactive: bool = True) -> list[dict[str, Any]]:
+        where = "" if include_inactive else " AND status = 'active'"
+        return self._all(
+            f"SELECT keyword_id, domain, keyword, status, created_at_ms, updated_at_ms FROM baidu_ranking_keywords WHERE domain = %s{where} ORDER BY status, keyword",
+            (domain,),
+        )
+
+    def upsert_baidu_keyword(self, *, domain: str, keyword: str, status: str = "active") -> dict[str, Any]:
+        current = now_ms()
+        keyword_id = f"baidu-keyword-{uuid4().hex}"
+        with self.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """INSERT INTO baidu_ranking_keywords (keyword_id, domain, keyword, status, created_at_ms, updated_at_ms)
+                VALUES (%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (domain, keyword) DO UPDATE SET status = EXCLUDED.status, updated_at_ms = EXCLUDED.updated_at_ms
+                RETURNING keyword_id, domain, keyword, status, created_at_ms, updated_at_ms""",
+                (keyword_id, domain, keyword, status, current, current),
+            )
+            row = cursor.fetchone(); connection.commit()
+        return dict(row)
+
+    def set_baidu_keyword_status(self, *, keyword_id: str, status: str) -> dict[str, Any] | None:
+        with self.connect() as connection, connection.cursor() as cursor:
+            cursor.execute("UPDATE baidu_ranking_keywords SET status=%s, updated_at_ms=%s WHERE keyword_id=%s RETURNING keyword_id, domain, keyword, status, created_at_ms, updated_at_ms", (status, now_ms(), keyword_id))
+            row = cursor.fetchone(); connection.commit()
+        return dict(row) if row else None
+
+    def upsert_baidu_snapshot(self, payload: dict[str, Any]) -> dict[str, Any]:
+        with self.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """INSERT INTO baidu_ranking_snapshots (snapshot_id, keyword_id, domain, keyword, observed_date, observed_at_ms, status, results_json, top_rank, matched_url, matched_title, duration_ms, safe_error_code, created_at_ms)
+                VALUES (%(snapshot_id)s,%(keyword_id)s,%(domain)s,%(keyword)s,%(observed_date)s,%(observed_at_ms)s,%(status)s,%(results_json)s,%(top_rank)s,%(matched_url)s,%(matched_title)s,%(duration_ms)s,%(safe_error_code)s,%(created_at_ms)s)
+                ON CONFLICT (keyword_id, observed_date) DO UPDATE SET observed_at_ms=EXCLUDED.observed_at_ms,status=EXCLUDED.status,results_json=EXCLUDED.results_json,top_rank=EXCLUDED.top_rank,matched_url=EXCLUDED.matched_url,matched_title=EXCLUDED.matched_title,duration_ms=EXCLUDED.duration_ms,safe_error_code=EXCLUDED.safe_error_code
+                RETURNING *""",
+                {**payload, "results_json": Jsonb(payload.get("results_json", []))},
+            )
+            row = cursor.fetchone(); connection.commit()
+        return dict(row)
+
+    def baidu_ranking_overview(self, *, domain: str) -> dict[str, Any]:
+        keywords = self.list_baidu_keywords(domain=domain)
+        items: list[dict[str, Any]] = []
+        with self.connect(readonly=True) as connection, connection.cursor() as cursor:
+            for keyword in keywords:
+                cursor.execute("SELECT * FROM baidu_ranking_snapshots WHERE keyword_id=%s ORDER BY observed_date DESC LIMIT 2", (keyword["keyword_id"],))
+                snapshots = [dict(row) for row in cursor.fetchall()]
+                latest = snapshots[0] if snapshots else None
+                previous = snapshots[1] if len(snapshots) > 1 else None
+                item = {**keyword, "latest": latest, "previousRank": previous.get("top_rank") if previous else None, "rankDelta": (int(latest["top_rank"]) - int(previous["top_rank"])) if latest and latest.get("top_rank") is not None and previous and previous.get("top_rank") is not None else None}
+                items.append(item)
+        return {"domain": domain, "items": items, "lastSyncAtMs": max((int(i["latest"]["observed_at_ms"]) for i in items if i.get("latest")), default=None)}
 
     def cleanup_hourly_analytics(self, *, before_ms: int) -> int:
         with self.connect() as connection, connection.cursor() as cursor:
@@ -1094,6 +1147,7 @@ class AdminRepository:
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0025_referral_ledger_constraint_repair_v2.sql",
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0029_early_referral_mutual_rewards.sql",
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0031_capacity_metric_granularity.sql",
+            Path(REPO_ROOT) / "apps/backend/migrations/versions/0047_baidu_ranking_monitoring.sql",
         ]
         if self.settings.product_edition == "global":
             migrations.extend([

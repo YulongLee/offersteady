@@ -14,6 +14,7 @@ export interface GlobalPlanBenefits {
   readonly screenAssistUses: number | null;
   readonly resumeAndJobDescription: boolean;
   readonly knowledgeBase: boolean;
+  readonly knowledgeTokens?: number;
   readonly writtenExam: boolean;
   readonly fullProduct: boolean;
 }
@@ -45,6 +46,7 @@ export interface GlobalEntitlement {
   readonly endsAtMs: number | null;
   readonly copilotMinutesRemaining: number | null;
   readonly screenAssistUsesRemaining: number | null;
+  readonly knowledgeTokensRemaining?: number;
   readonly benefits: GlobalPlanBenefits;
   readonly subscriptionId?: string;
   readonly cancelsAtMs?: number;
@@ -89,6 +91,8 @@ export interface GlobalUsageSummary {
   readonly screenAssistUsesRemaining: number | null;
   readonly copilotUnlimited: boolean;
   readonly screenAssistUnlimited: boolean;
+  readonly knowledgeTokensRemaining: number;
+  readonly knowledgeTokensUnlimited: boolean;
 }
 
 export interface GlobalCommerceState {

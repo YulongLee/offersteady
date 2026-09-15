@@ -33,6 +33,7 @@ offersteady-screenshot-perf = "app.services.screenshot_answer_performance:main"
 offersteady-admin-bootstrap = "app.services.admin_bootstrap:main"
 offersteady-admin-analytics = "app.services.admin_analytics_job:main"
 offersteady-promotion-analytics = "app.services.promotion_analytics_job:main"
+offersteady-baidu-ranking = "app.services.baidu_ranking:main"
 
 [build-system]
 requires = ["hatchling"]
