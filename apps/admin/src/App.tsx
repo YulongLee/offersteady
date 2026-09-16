@@ -461,7 +461,7 @@ function Dashboard({ data, onAuthenticationExpired }: { data: Row; onAuthenticat
             <small>更新于 {new Date(capacity.generatedAtMs).toLocaleString("zh-CN")}</small>
           </div>
           <div className="capacity-grid">{capacity.metrics.map(metric => <CapacityCard metric={metric} key={metric.key} />)}</div>
-          {hasRequestBreakdownData(capacity.supporting.requestBreakdown) && <RequestBreakdownPanel breakdown={capacity.supporting.requestBreakdown} />}
+          <RequestBreakdownPanel breakdown={capacity.supporting.requestBreakdown ?? { classes: {}, slowRoutes: [], series: [] }} />
         </> : <div className="trend-state">正在读取实时容量...</div>}
       </section>
       <section className="trend-section">
