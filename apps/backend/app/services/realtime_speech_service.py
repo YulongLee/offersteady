@@ -1126,6 +1126,9 @@ class RealtimeSpeechService:
             "sourceGenerationKeys": len(self._latest_source_generations),
             "languageCacheEntries": len(self._session_language_cache),
             "captureControlEntries": len(self._capture_control_cache),
+            "sessionCleanupLockEntries": len(self._session_cleanup_locks),
+            "sessionActivityEntries": len(self._session_last_activity_ms),
+            "publisherStatusCacheEntries": len(self._publisher_status_cache),
             "stableQuestionEntries": len(self._stable_question_state),
             "retiredSessionIds": len(self._retired_session_ids),
         }
@@ -4669,6 +4672,23 @@ class RealtimeSpeechService:
         self._capture_control_cache.pop(session_id, None)
         self._session_language_cache.pop(session_id, None)
         self._auto_answer_active_candidates.pop(session_id, None)
+        activity_lock = getattr(self, "_session_activity_lock", None)
+        if activity_lock is not None:
+            with activity_lock:
+                getattr(self, "_session_last_activity_ms", {}).pop(session_id, None)
+                getattr(self, "_session_owners", {}).pop(session_id, None)
+                getattr(self, "_session_cleanup_locks", {}).pop(session_id, None)
+        publisher_cache = getattr(self, "_publisher_status_cache", None)
+        list_publishers = getattr(getattr(self, "repository", None), "list_publishers_for_session", None)
+        if isinstance(publisher_cache, dict) and callable(list_publishers):
+            try:
+                for publisher in list_publishers(session_id=session_id):
+                    publisher_cache.pop(publisher.publisher_id, None)
+            except Exception as exc:
+                self.logger.warning(
+                    "realtime_speech.publisher_cache_cleanup_failed",
+                    extra={"sessionId": session_id, "errorCode": exc.__class__.__name__},
+                )
         self._stable_question_state = {
             key: value for key, value in self._stable_question_state.items() if key[0] != session_id
         }

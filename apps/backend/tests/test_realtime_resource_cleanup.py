@@ -80,6 +80,22 @@ def test_realtime_session_cleanup_drops_short_lived_indexes_and_keeps_other_sess
     service._capture_control_cache = {"session-ended": "capturing", "session-live": "capturing"}
     service._session_language_cache = {"session-ended": "en-US", "session-live": "zh-CN"}
     service._auto_answer_active_candidates = {"session-ended": "candidate-1", "session-live": "candidate-2"}
+    service._session_activity_lock = threading.Lock()
+    service._session_last_activity_ms = {"session-ended": 100, "session-live": 200}
+    service._session_owners = {"session-ended": "user-1", "session-live": "user-2"}
+    service._session_cleanup_locks = {
+        "session-ended": threading.Lock(),
+        "session-live": threading.Lock(),
+    }
+    service._publisher_status_cache = {
+        "publisher-ended": "closed",
+        "publisher-live": "connected",
+    }
+    service.repository = SimpleNamespace(
+        list_publishers_for_session=lambda *, session_id: (
+            [SimpleNamespace(publisher_id="publisher-ended")] if session_id == "session-ended" else []
+        )
+    )
     service._stable_question_state = {
         ("session-ended", "question-1"): {"text": "old"},
         ("session-live", "question-2"): {"text": "live"},
@@ -101,6 +117,12 @@ def test_realtime_session_cleanup_drops_short_lived_indexes_and_keeps_other_sess
     assert "session-ended" not in service._capture_control_cache
     assert "session-ended" not in service._session_language_cache
     assert "session-ended" not in service._auto_answer_active_candidates
+    assert "session-ended" not in service._session_last_activity_ms
+    assert "session-ended" not in service._session_owners
+    assert "session-ended" not in service._session_cleanup_locks
+    assert "session-live" in service._session_cleanup_locks
+    assert "publisher-ended" not in service._publisher_status_cache
+    assert "publisher-live" in service._publisher_status_cache
     assert all(key[0] != "session-ended" for key in service._stable_question_state)
     assert "trace-ended" not in service._trace_records
     assert list(service._trace_order) == ["trace-live"]
