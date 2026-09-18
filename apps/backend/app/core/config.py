@@ -163,7 +163,10 @@ class Settings(BaseSettings):
     screenshot_stream_retry_after_seconds: int = 5
     realtime_control_worker_count: int = 8
     realtime_control_queue_max: int = 64
-    realtime_control_cache_ms: int = 900
+    # Pairing/active-connection is a control-plane query. Keep the result
+    # cached for the same 10-second budget used by clients; binding mutations
+    # invalidate this cache immediately.
+    realtime_control_cache_ms: int = 10_000
     realtime_runtime_ttl_seconds: int = 7200
     live_task_runtime_ttl_seconds: int = 7200
     live_task_stale_seconds: int = 180
@@ -365,7 +368,7 @@ class Settings(BaseSettings):
     redemption_code_points: dict[str, int] = Field(default_factory=dict)
     redemption_code_pepper: str | None = None
     billing_usage_reservation_ttl_seconds: int = 30 * 60
-    support_wechat_id: str = "mianshiwen-cn"
+    support_wechat_id: str = "mianshiwen_01"
     support_email: str = "contact@oneshowailab.com"
     realtime_speech_state_file: str = "artifacts/runtime/realtime-speech-state.json"
 

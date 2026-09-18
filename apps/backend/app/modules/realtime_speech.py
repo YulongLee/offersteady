@@ -1178,6 +1178,16 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                     },
                 })
             except DomainRequestError as exc:
+                if exc.error_code in {"session_not_live", "publisher_closed", "publisher_token_revoked"}:
+                    try:
+                        service.disconnect_publisher(token=token)
+                    except DomainRequestError:
+                        pass
+                    try:
+                        await websocket.close(code=1008, reason=exc.error_code or "session-not-live")
+                    except RuntimeError:
+                        pass
+                    return
                 await websocket.send_json({
                     "kind": "degraded",
                     "payload": {

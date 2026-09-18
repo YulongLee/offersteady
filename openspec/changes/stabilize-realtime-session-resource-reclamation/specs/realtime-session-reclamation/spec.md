@@ -29,6 +29,17 @@
 - **WHEN** 网页和桌面伴随程序同时停止发送心跳
 - **THEN** watchdog MUST 在 TTL 与宽限期后回收会话资源，即使没有新的用户请求。
 
+### Requirement: Control-plane polling budget
+客户端 SHALL 限制准备页绑定状态与网页心跳的控制面轮询频率，并合并同一资源的并发请求；媒体传输链路不得依赖该轮询频率。
+
+#### Scenario: Normal preparation polling is bounded
+- **WHEN** 用户停留在面试准备页且连接状态稳定
+- **THEN** 客户端 MUST 以不高于每 10 秒一次的频率刷新绑定状态和网页心跳，并保持音频传输不受影响。
+
+#### Scenario: Polling failure backs off
+- **WHEN** 绑定状态或心跳请求连续失败
+- **THEN** 客户端 MUST 使用有界退避且不得并发发起重复请求；页面重新可见时可以立即刷新一次。
+
 ### Requirement: Observability and rollout safety
 系统 SHALL 暴露回收原因、回收耗时、释放资源数量、活动连接数和回收前后 RSS，并支持 dry-run/开关控制。
 

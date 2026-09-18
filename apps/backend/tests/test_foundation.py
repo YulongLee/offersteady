@@ -3286,7 +3286,7 @@ def test_desktop_machine_code_registers_and_binds_to_interview_session() -> None
     assert active_connection["authoritative"] is True
     assert active_connection["binding"]["sessionId"] == session_id
     assert active_connection["leaseVersion"].startswith(binding["bindingId"])
-    assert active_connection["refreshAfterMs"] == 1000
+    assert active_connection["refreshAfterMs"] == 10000
 
     status = unwrap(client.post(f"/api/v1/realtime-speech/sessions/{session_id}/device-status", json={
         "deviceId": "device-new-generation",

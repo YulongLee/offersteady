@@ -25,6 +25,9 @@ import { HomepagePricing } from "./HomepagePricing";
 import type { PublicStartupSnapshot } from "./public-startup";
 import { PrototypeContext, usePrototype } from "./app-context";
 
+// Web heartbeat leases last 60 seconds; a 10-second cadence keeps the lease
+// fresh while avoiding a control-plane request every few seconds per tab.
+export const PREPARATION_HEARTBEAT_INTERVAL_MS = 10_000;
 
 function PrototypeProvider({ children, initialAuthenticated, initialState, publicStartup }: { readonly children: ReactNode; readonly initialAuthenticated?: boolean | undefined; readonly initialState?: WebAppState | undefined; readonly publicStartup?: PublicStartupSnapshot | undefined }) {
   const { pathname } = useLocation();
@@ -684,7 +687,7 @@ function PreparationPage() {
       }
     };
     void heartbeat();
-    const timer = window.setInterval(() => void heartbeat(), 3000);
+    const timer = window.setInterval(() => void heartbeat(), PREPARATION_HEARTBEAT_INTERVAL_MS);
     return () => {
       stopped = true;
       window.clearInterval(timer);

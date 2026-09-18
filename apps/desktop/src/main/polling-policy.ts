@@ -1,7 +1,12 @@
 export const SCREENSHOT_LIVE_POLL_MS = 1_200;
-export const BINDING_LIVE_POLL_MS = 2_000;
-export const BINDING_WAITING_POLL_MS = 1_000;
-export const BINDING_WAITING_MAX_POLL_MS = 5_000;
+// Binding state is a control-plane signal, not the media transport itself.
+// Keep the normal path low-frequency; failures still use the bounded backoff
+// below and visibility changes can trigger an immediate refresh.
+export const BINDING_LIVE_POLL_MS = 10_000;
+// Waiting for a binding is still a control-plane state. The first check runs
+// immediately; subsequent checks use the same 10-second budget as live state.
+export const BINDING_WAITING_POLL_MS = 10_000;
+export const BINDING_WAITING_MAX_POLL_MS = 10_000;
 export const DESKTOP_IDLE_POLL_MS = 10_000;
 export const DESKTOP_FAILURE_MIN_POLL_MS = 5_000;
 export const DESKTOP_FAILURE_MAX_POLL_MS = 30_000;

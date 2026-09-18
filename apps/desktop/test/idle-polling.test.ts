@@ -17,8 +17,8 @@ describe("desktop idle polling policy", () => {
     expect(desktopPollDelayMs("live", 0, "binding")).toBe(BINDING_LIVE_POLL_MS);
     expect(desktopPollDelayMs("idle", 0, "screenshot")).toBe(DESKTOP_IDLE_POLL_MS);
     expect(desktopPollDelayMs("idle", 0, "binding")).toBe(BINDING_WAITING_POLL_MS);
-    expect(BINDING_WAITING_POLL_MS).toBe(1_000);
-    expect(BINDING_LIVE_POLL_MS).toBe(2_000);
+    expect(BINDING_WAITING_POLL_MS).toBe(10_000);
+    expect(BINDING_LIVE_POLL_MS).toBe(10_000);
     expect(DESKTOP_IDLE_POLL_MS).toBeGreaterThanOrEqual(10_000);
   });
 
@@ -48,7 +48,7 @@ describe("desktop idle polling policy", () => {
 
   it("honors bounded server refresh suggestions while waiting", () => {
     expect(desktopPollDelayMs("idle", 0, "binding", 250)).toBe(BINDING_WAITING_POLL_MS);
-    expect(desktopPollDelayMs("idle", 0, "binding", 2_500)).toBe(2_500);
+    expect(desktopPollDelayMs("idle", 0, "binding", 2_500)).toBe(BINDING_WAITING_POLL_MS);
     expect(desktopPollDelayMs("idle", 0, "binding", 20_000)).toBe(BINDING_WAITING_MAX_POLL_MS);
   });
 

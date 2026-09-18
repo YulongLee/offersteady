@@ -255,6 +255,8 @@ class RealtimeSpeechService:
         self._control_query_singleflight_waits = 0
         self._session_language_cache: dict[str, InterviewLanguage] = {}
         self._publisher_status_cache: dict[str, str] = {}
+        self._publisher_liveness_lock = threading.Lock()
+        self._publisher_liveness_checked_at_ms: dict[str, int] = {}
         self._stable_question_state: dict[tuple[str, str], dict[str, object]] = {}
         self._auto_answer_claim_lock = threading.Lock()
         self._auto_answer_active_candidates: dict[str, str] = {}
@@ -308,6 +310,7 @@ class RealtimeSpeechService:
             "closedAsrSessions": 0,
             "clearedQueues": 0,
             "clearedBufferedSegments": 0,
+            "clearedFrameReceipts": 0,
         }
         partial_listener_setter = getattr(self.asr_gateway, "set_partial_listener", None)
         if callable(partial_listener_setter):
@@ -1878,6 +1881,7 @@ class RealtimeSpeechService:
                     "closedAsrSessions": int(resources.get("closed_asr_sessions", 0)),
                     "clearedQueues": int(resources.get("cleared_queues", 0)),
                     "clearedBufferedSegments": int(resources.get("cleared_buffered_segments", 0)),
+                    "clearedFrameReceipts": int(resources.get("cleared_frame_receipts", 0)),
                 })
             return result
 
@@ -2141,7 +2145,7 @@ class RealtimeSpeechService:
                 pinned_session_id=pinned_session_id,
                 pinned_binding_id=pinned_binding_id,
             )
-            expires_at_ms = _now_ms() + max(50, min(900, self.settings.realtime_control_cache_ms))
+            expires_at_ms = _now_ms() + max(50, min(10_000, self.settings.realtime_control_cache_ms))
             with self._control_query_cache_lock:
                 if (
                     cache_generation == self._control_query_cache_generation
@@ -2396,7 +2400,7 @@ class RealtimeSpeechService:
             **status,
             "authoritative": True,
             "leaseVersion": lease_version,
-            "refreshAfterMs": 1_000,
+            "refreshAfterMs": 10_000,
         }
 
     def _desktop_device_fresh(self, device: DesktopDeviceRecord) -> bool:
@@ -2553,10 +2557,17 @@ class RealtimeSpeechService:
 
     def connect_publisher(self, *, token: str) -> RealtimePublisherRecord:
         publisher = self._require_publisher_token(token)
+        if publisher.status in {"closed", "failed"}:
+            raise DomainRequestError("realtime-speech", "connect", "实时语音发布者已关闭，请重新创建连接。", 409, "publisher_closed")
+        session = self.session_service.get_session(user_id=publisher.owner_user_id, session_id=publisher.session_id)
+        if session.status != "live":
+            raise DomainRequestError("realtime-speech", "connect", "面试会话已结束，不能继续上传音频。", 409, "session_not_live")
         if _now_ms() > publisher.expires_at_ms:
             raise DomainRequestError("realtime-speech", "connect", "实时语音发布令牌已过期。", 410)
         connected = self.repository.save_publisher(replace(publisher, connected_at_ms=_now_ms(), status="connected"))
         self._publisher_status_cache[connected.publisher_id] = connected.status
+        with self._publisher_liveness_lock:
+            self._publisher_liveness_checked_at_ms[connected.publisher_id] = _now_ms()
         self._save_event(
             session_id=connected.session_id,
             owner_user_id=connected.owner_user_id,
@@ -2568,7 +2579,7 @@ class RealtimeSpeechService:
 
     def _cleanup_source_resources(self, *, session_id: str, source_kind: RealtimeSourceKind) -> dict[str, int]:
         """Release one disconnected source without terminating the other channel."""
-        resources = {"closed_asr_sessions": 0, "cleared_queues": 0, "cleared_buffered_segments": 0}
+        resources = {"closed_asr_sessions": 0, "cleared_queues": 0, "cleared_buffered_segments": 0, "cleared_frame_receipts": 0}
         close_source = getattr(self.asr_gateway, "close_source", None)
         try:
             resources["closed_asr_sessions"] = int(close_source(session_id=session_id, source_kind=source_kind)) if callable(close_source) else int(self.asr_gateway.close_session(session_id=session_id))
@@ -2609,6 +2620,8 @@ class RealtimeSpeechService:
             return publisher
         updated = self.repository.save_publisher(replace(publisher, disconnected_at_ms=_now_ms(), status=final_state))  # type: ignore[arg-type]
         self._publisher_status_cache.pop(updated.publisher_id, None)
+        with self._publisher_liveness_lock:
+            self._publisher_liveness_checked_at_ms.pop(updated.publisher_id, None)
         # A replacement publisher for the same source may already be active;
         # only release source resources when this was the last live owner.
         source_still_active = any(
@@ -3163,10 +3176,16 @@ class RealtimeSpeechService:
         authenticated_publisher: RealtimePublisherRecord | None = None,
     ) -> dict[str, object]:
         publisher = authenticated_publisher or self._require_publisher_token(token)
+        if not self._publisher_can_ingest(publisher):
+            raise DomainRequestError(
+                "realtime-speech",
+                "ingest",
+                "面试会话已结束，不能继续上传音频。",
+                409,
+                "session_not_live",
+            )
         if authenticated_publisher is None:
             session = self.session_service.get_session(user_id=publisher.owner_user_id, session_id=publisher.session_id)
-            if session.status != "live":
-                return {"early_events": []}
             self._session_language_cache[publisher.session_id] = session.interview_language
         interview_language = self._session_language_cache.get(publisher.session_id, "zh-CN")
         if self.capture_control_state(session_id=publisher.session_id) == "paused":
@@ -3309,6 +3328,23 @@ class RealtimeSpeechService:
             "sent_at_ms": sent_at_ms,
             "source_kind": source_kind,
         }
+
+    def _publisher_can_ingest(self, publisher: RealtimePublisherRecord) -> bool:
+        """Reject frames from revoked publishers without a per-frame DB query."""
+        if publisher.status in {"closed", "failed"} or publisher.session_id in self._retired_session_ids:
+            return False
+        now_ms = _now_ms()
+        with self._publisher_liveness_lock:
+            checked_at = self._publisher_liveness_checked_at_ms.get(publisher.publisher_id, 0)
+            cached_status = self._publisher_status_cache.get(publisher.publisher_id, publisher.status)
+            if now_ms - checked_at < 1_000:
+                return cached_status not in {"closed", "failed"}
+        current = self.repository.get_publisher(publisher.publisher_id)
+        current_status = current.status if current is not None else "closed"
+        with self._publisher_liveness_lock:
+            self._publisher_liveness_checked_at_ms[publisher.publisher_id] = now_ms
+            self._publisher_status_cache[publisher.publisher_id] = current_status
+        return current_status not in {"closed", "failed"}
 
     def _buffer_segment_audio(self, frame: AudioFrame) -> None:
         """Retain a bounded rolling PCM tail for source-local provider replay."""
@@ -4591,6 +4627,7 @@ class RealtimeSpeechService:
             "closed_asr_sessions": 0,
             "cleared_queues": 0,
             "cleared_buffered_segments": 0,
+            "cleared_frame_receipts": 0,
         }
         if retired:
             self._stop_realtime_metering(session_id=session_id)
@@ -4653,6 +4690,18 @@ class RealtimeSpeechService:
             resources["cleared_buffered_segments"] = sum(
                 1 for key in self._segment_audio_buffers if key[0] == session_id
             )
+            self._segment_audio_buffers = {
+                key: value for key, value in self._segment_audio_buffers.items() if key[0] != session_id
+            }
+        try:
+            resources["cleared_frame_receipts"] = int(
+                self.repository.delete_frame_receipts_for_session(session_id=session_id)
+            )
+        except Exception as exc:
+            self.logger.warning(
+                "realtime_session_receipt_cleanup_failed",
+                extra={"sessionId": session_id, "safeErrorCode": exc.__class__.__name__},
+            )
         self._clear_session_state_indexes(session_id=session_id, release_screenshot=retired)
         return resources
 
@@ -4679,6 +4728,7 @@ class RealtimeSpeechService:
                 getattr(self, "_session_owners", {}).pop(session_id, None)
                 getattr(self, "_session_cleanup_locks", {}).pop(session_id, None)
         publisher_cache = getattr(self, "_publisher_status_cache", None)
+        publisher_liveness_checked = getattr(self, "_publisher_liveness_checked_at_ms", None)
         list_publishers = getattr(getattr(self, "repository", None), "list_publishers_for_session", None)
         if isinstance(publisher_cache, dict) and callable(list_publishers):
             try:
@@ -4689,6 +4739,12 @@ class RealtimeSpeechService:
                     "realtime_speech.publisher_cache_cleanup_failed",
                     extra={"sessionId": session_id, "errorCode": exc.__class__.__name__},
                 )
+        if isinstance(publisher_liveness_checked, dict) and callable(list_publishers):
+            try:
+                for publisher in list_publishers(session_id=session_id):
+                    publisher_liveness_checked.pop(publisher.publisher_id, None)
+            except Exception:
+                pass
         self._stable_question_state = {
             key: value for key, value in self._stable_question_state.items() if key[0] != session_id
         }
@@ -5047,7 +5103,13 @@ class RealtimeSpeechService:
         if publisher is None:
             raise DomainRequestError("realtime-speech", "publisher-token", "实时语音发布令牌无效。", 404)
         if publisher.status in {"closed", "failed"}:
-            raise DomainRequestError("realtime-speech", "publisher-token", "该发布通道已被新的面试会话替换。", 410)
+            raise DomainRequestError(
+                "realtime-speech",
+                "publisher-token",
+                "该发布通道已关闭，请重新创建连接。",
+                410,
+                "publisher_closed",
+            )
         return publisher
 
     def _require_candidate(self, *, user_id: str, candidate_id: str) -> QuestionCandidateRecord:

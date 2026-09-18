@@ -3,6 +3,10 @@ import { BillingError, BillingService, defaultBillingProducts } from "../src/bil
 import { knowledgeEconomicsFixtures } from "./fixtures/knowledge-economics.js";
 
 describe("BillingService", () => {
+  it("uses the current domestic support contact by default", () => {
+    expect(new BillingService().support.wechatId).toBe("mianshiwen_01");
+  });
+
   it("grants welcome points exactly once", () => {
     const service = new BillingService();
     service.grantWelcome("u1", true, 1); service.grantWelcome("u1", true, 2);

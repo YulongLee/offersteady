@@ -15,6 +15,7 @@ from starlette.websockets import WebSocketDisconnect
 from app.main import create_app
 from app.deps import realtime_speech_service
 from app.ports.realtime_speech import AudioFrame, TranscriptResult
+from app.core.errors import DomainRequestError
 from app.services.realtime_speech_service import (
     RealtimeSpeechService,
     RetryableAsrError,
@@ -587,6 +588,58 @@ def test_authenticated_audio_hot_path_does_not_reload_session_from_database():
     finally:
         service.session_service.get_session = original_get_session  # type: ignore[method-assign]
         service.disconnect_publisher(token=publisher.token)
+
+
+def test_authenticated_publisher_cannot_ingest_after_session_termination():
+    user_id, session_id, device_id, publisher_payload = create_live_binding()
+    service = realtime_speech_service()
+    publisher = service.connect_publisher(token=publisher_payload["token"])
+
+    release = service.terminate_session_for_admin(
+        user_id=user_id,
+        session_id=session_id,
+        reason="test-termination",
+    )
+    assert release["status"] == "ended"
+    with pytest.raises(DomainRequestError) as raised:
+        service._prepare_audio_frame(
+            token=publisher.token,
+            device_id=device_id,
+            source_id="post-termination",
+            sequence=0,
+            source_kind="system",
+            segment_id="post-termination-segment",
+            revision=1,
+            captured_at_ms=1_000,
+            started_at_ms=1_000,
+            ended_at_ms=1_020,
+            duration_ms=20,
+            codec="pcm-s16le",
+            sample_rate_hz=16_000,
+            channels=1,
+            is_final=False,
+            turn_state=None,
+            finalization_reason=None,
+            source_generation=None,
+            terminal_id=None,
+            trace_id="post-termination-trace",
+            sent_at_ms=1_010,
+            audio_bytes=b"must-not-ingest",
+            authenticated_publisher=publisher,
+        )
+    assert raised.value.error_code == "session_not_live"
+
+
+def test_connect_publisher_rejects_closed_publisher():
+    _user_id, _session_id, _device_id, publisher_payload = create_live_binding()
+    service = realtime_speech_service()
+    publisher = service.repository.get_publisher(publisher_payload["publisherId"])
+    assert publisher is not None
+    service.repository.save_publisher(replace(publisher, status="closed"))
+
+    with pytest.raises(DomainRequestError) as raised:
+        service.connect_publisher(token=publisher.token)
+    assert raised.value.error_code == "publisher_closed"
 
 
 def test_terminal_is_acknowledged_idempotently_and_stale_generation_is_rejected():

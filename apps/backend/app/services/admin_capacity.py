@@ -198,6 +198,8 @@ class AdminCapacityMonitor:
         self._previous_cpu: tuple[int, float] | None = None
         self._server_cache: dict[str, Any] | None = None
         self._server_cache_at_ms = 0
+        self._live_session_cache: set[str] | None = None
+        self._live_session_cache_at_ms = 0
         self._last_peak_persistence_warning_at_ms = 0
         self._redis = (
             redis.Redis.from_url(
@@ -262,7 +264,9 @@ class AdminCapacityMonitor:
             ("diskPercent", "服务器磁盘", "%", 75, 90, "应用所在文件系统的整体使用率，不扫描文件内容。"),
             ("loadAverage1m", "系统 1 分钟负载", "load", None, None, "Linux 系统一分钟平均负载。"),
             ("uptimeSeconds", "服务器运行时长", "s", None, None, "Linux 主机或容器可见的运行时长。"),
-            ("apiP95Ms", "API P95", "ms", self.settings.admin_capacity_api_p95_warning_ms, self.settings.admin_capacity_api_p95_critical_ms, "最近 5 分钟后端请求耗时 P95。"),
+            ("apiP95Ms", "API P95（综合）", "ms", self.settings.admin_capacity_api_p95_warning_ms, self.settings.admin_capacity_api_p95_critical_ms, "最近 5 分钟所有普通后端请求的综合 P95；请结合分类指标判断用户请求是否变慢。"),
+            ("userApiP95Ms", "用户请求 P95", "ms", self.settings.admin_capacity_api_p95_warning_ms, self.settings.admin_capacity_api_p95_critical_ms, "最近 5 分钟用户业务请求耗时 P95，不包含后台遥测和实时流。"),
+            ("telemetryP95Ms", "后台遥测 P95", "ms", None, None, "最近 5 分钟设备连接、heartbeat 等后台遥测请求耗时 P95。"),
             ("apiErrorRate", "API 5xx 错误率", "%", self.settings.admin_capacity_error_rate_warning_percent, self.settings.admin_capacity_error_rate_critical_percent, "最近 5 分钟服务端错误占比。"),
             ("databaseConnections", "数据库连接", "条", database_limit * 0.7 if database_limit else None, database_limit * 0.9 if database_limit else None, "当前数据库连接数及其最大连接配额。"),
         ]
@@ -388,6 +392,13 @@ class AdminCapacityMonitor:
             devices = payload.get("devices", [])
             heartbeats = payload.get("heartbeats", [])
             receipts = [json.loads(item) for item in self._redis.hvals("offersteady:realtime:runtime:v2:receipts")]
+            live_session_ids = self._live_session_ids(current)
+            publisher_statuses = {
+                str(item.get("publisher_id")): item.get("status")
+                for raw_publisher in self._redis.hvals("offersteady:realtime:runtime:v2:publishers")
+                for item in [json.loads(raw_publisher)]
+                if item.get("publisher_id")
+            }
             online_devices = {
                 str(item.get("device_id"))
                 for item in devices
@@ -404,6 +415,11 @@ class AdminCapacityMonitor:
                 (str(item.get("session_id")), str(item.get("source_kind")), str(item.get("source_id")))
                 for item in receipts
                 if item.get("source_id") != "diagnostic-pcm-probe"
+                and (live_session_ids is None or str(item.get("session_id")) in live_session_ids)
+                and (
+                    not publisher_statuses
+                    or publisher_statuses.get(str(item.get("publisher_id"))) not in {"closed", "failed"}
+                )
                 and int(item.get("frame_count") or 0) > 0
                 and int(item.get("received_at_ms") or 0) >= current - 30_000
                 and item.get("asr_status") in {"pending", "accepted"}
@@ -415,6 +431,28 @@ class AdminCapacityMonitor:
             }
         except Exception:
             return {"activeWebSessions": None, "onlineDevices": None, "activeAudioStreams": None}
+
+    def _live_session_ids(self, current: int) -> set[str] | None:
+        """Return live interview ids so stale receipts cannot inflate capacity cards."""
+        with self._lock:
+            if self._live_session_cache is not None and current - self._live_session_cache_at_ms < 10_000:
+                return set(self._live_session_cache)
+        list_sessions = getattr(self.repository, "list_sessions", None)
+        if not callable(list_sessions):
+            return None
+        try:
+            rows = list_sessions(limit=5_000, offset=0)
+            live = {
+                str(row.get("session_id"))
+                for row in rows
+                if isinstance(row, dict) and row.get("status") == "live" and row.get("session_id")
+            }
+        except Exception:
+            return None
+        with self._lock:
+            self._live_session_cache = live
+            self._live_session_cache_at_ms = current
+        return set(live)
 
     def _resource_counts(self) -> dict[str, Any]:
         memory = self._memory_stats()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
 from app.core.config import Settings
 from app.services.admin_capacity import AdminCapacityMonitor, RequestWindow, capacity_level, percentile
@@ -82,6 +83,17 @@ def test_request_window_breakdown_is_bounded_and_empty_safe() -> None:
     for index in range(12):
         window.record(path=f"/api/v1/interviews/{index}", elapsed_ms=float(index + 1), status_code=200)
     assert len(window.summary()["requestBreakdown"]["slowRoutes"]) <= 8
+
+
+def test_capacity_report_exposes_user_and_telemetry_p95_cards() -> None:
+    monitor = AdminCapacityMonitor(Settings(redis_url=None), HealthRepository())
+    report = monitor.report()
+    metric_keys = {item["key"] for item in report["metrics"]}
+    assert {"apiP95Ms", "userApiP95Ms", "telemetryP95Ms"} <= metric_keys
+    labels = {item["key"]: item["label"] for item in report["metrics"]}
+    assert labels["apiP95Ms"] == "API P95（综合）"
+    assert labels["userApiP95Ms"] == "用户请求 P95"
+    assert labels["telemetryP95Ms"] == "后台遥测 P95"
 
 
 class HealthRepository:
@@ -205,3 +217,56 @@ def test_capacity_granularity_migration_is_wired_and_idempotent() -> None:
     assert "NOT VALID" in migration
     assert "VALIDATE CONSTRAINT" in migration
     assert "0031_capacity_metric_granularity.sql" in repository_source
+
+
+def test_active_audio_streams_excludes_receipts_from_ended_sessions(monkeypatch) -> None:
+    now_ms = 1_000_000
+
+    class FakeRedis:
+        def get(self, key):
+            assert key == "offersteady:realtime:runtime:v2"
+            return json.dumps({"devices": [], "heartbeats": []})
+
+        def hvals(self, key):
+            if key.endswith(":receipts"):
+                return [
+                    json.dumps({
+                        "session_id": "ended-session",
+                        "publisher_id": "ended-publisher",
+                        "source_kind": "microphone",
+                        "source_id": "mic",
+                        "frame_count": 3,
+                        "received_at_ms": now_ms - 1_000,
+                        "asr_status": "pending",
+                    }),
+                    json.dumps({
+                        "session_id": "live-session",
+                        "publisher_id": "live-publisher",
+                        "source_kind": "microphone",
+                        "source_id": "mic",
+                        "frame_count": 4,
+                        "received_at_ms": now_ms - 1_000,
+                        "asr_status": "pending",
+                    }),
+                ]
+            if key.endswith(":publishers"):
+                return [
+                    json.dumps({"publisher_id": "ended-publisher", "status": "closed"}),
+                    json.dumps({"publisher_id": "live-publisher", "status": "connected"}),
+                ]
+            raise AssertionError(key)
+
+    class SessionRepository(HealthRepository):
+        def list_sessions(self, *, limit: int, offset: int):
+            assert limit == 5_000
+            assert offset == 0
+            return [
+                {"session_id": "ended-session", "status": "ended"},
+                {"session_id": "live-session", "status": "live"},
+            ]
+
+    monkeypatch.setattr("app.services.admin_capacity.redis.Redis.from_url", lambda *args, **kwargs: FakeRedis())
+    monkeypatch.setattr("app.services.admin_capacity._now_ms", lambda: now_ms)
+    monitor = AdminCapacityMonitor(Settings(redis_url="redis://synthetic"), SessionRepository())
+
+    assert monitor._safe_runtime_counts(now_ms)["activeAudioStreams"] == 1

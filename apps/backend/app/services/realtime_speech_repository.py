@@ -188,6 +188,20 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
         items = list(self.frame_receipts.get(session_id, {}).values())
         return [replace(item) for item in sorted(items, key=lambda item: (item.source_kind, item.source_id))]
 
+    def delete_frame_receipts_for_session(self, *, session_id: str, source_kind: str | None = None) -> int:
+        receipts = self.frame_receipts.get(session_id)
+        if not receipts:
+            return 0
+        removable = [
+            key for key, item in receipts.items()
+            if source_kind is None or item.source_kind == source_kind
+        ]
+        for key in removable:
+            receipts.pop(key, None)
+        if not receipts:
+            self.frame_receipts.pop(session_id, None)
+        return len(removable)
+
     def save_transcript(self, segment: TranscriptSegmentRecord) -> TranscriptSegmentRecord:
         stored = replace(segment)
         self.transcripts.setdefault(stored.session_id, {})[stored.segment_id] = stored

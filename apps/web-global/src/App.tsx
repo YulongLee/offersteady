@@ -40,6 +40,10 @@ import { HomepageLanguages } from "./HomepageLanguages";
 import homeCopy from "./homepage-commercial.json";
 import "./homepage-commercial.css";
 
+// Web heartbeat leases last 60 seconds; a 10-second cadence keeps the lease
+// fresh while avoiding a control-plane request every few seconds per tab.
+export const PREPARATION_HEARTBEAT_INTERVAL_MS = 10_000;
+export const PREPARATION_BINDING_REFRESH_INTERVAL_MS = 10_000;
 
 interface PrototypeContextValue {
   authenticated: boolean;
@@ -709,7 +713,7 @@ function PreparationPage() {
       }
     };
     void heartbeat();
-    const timer = window.setInterval(() => void heartbeat(), 3000);
+    const timer = window.setInterval(() => void heartbeat(), PREPARATION_HEARTBEAT_INTERVAL_MS);
     return () => {
       stopped = true;
       window.clearInterval(timer);
@@ -738,7 +742,7 @@ function PreparationPage() {
         inFlight = false;
       }
     };
-    const timer = window.setInterval(() => void refreshBinding(), 5_000);
+    const timer = window.setInterval(() => void refreshBinding(), PREPARATION_BINDING_REFRESH_INTERVAL_MS);
     return () => {
       stopped = true;
       window.clearInterval(timer);

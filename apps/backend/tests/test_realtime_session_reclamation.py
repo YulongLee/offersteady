@@ -4,6 +4,7 @@ import queue
 from collections import deque
 
 from app.deps import realtime_speech_service
+from app.ports.realtime_speech import RealtimeFrameReceiptRecord
 
 
 def test_session_reset_is_idempotent_and_releases_ephemeral_state() -> None:
@@ -26,6 +27,18 @@ def test_session_reset_is_idempotent_and_releases_ephemeral_state() -> None:
         service._segment_audio_buffers[segment_key] = {"audioBytes": 128}
     with service._watchdog_lock:
         service._active_source_turns[source_key] = {"turnId": "turn-1"}
+    service.repository.save_frame_receipt(RealtimeFrameReceiptRecord(
+        session_id=session_id,
+        owner_user_id="reclamation-owner",
+        publisher_id="reclamation-publisher",
+        device_id="reclamation-device",
+        source_id="microphone",
+        source_kind=source_kind,
+        sequence=1,
+        frame_count=1,
+        captured_at_ms=1,
+        received_at_ms=1,
+    ))
 
     first = service._reset_realtime_session(session_id=session_id, retired=True)
     second = service._reset_realtime_session(session_id=session_id, retired=True)
@@ -37,6 +50,9 @@ def test_session_reset_is_idempotent_and_releases_ephemeral_state() -> None:
     assert source_key not in service._frame_queues
     assert source_key not in service._active_source_turns
     assert segment_key not in service._segment_audio_buffers
+    assert service.repository.list_frame_receipts_for_session(session_id=session_id) == []
+    assert first["cleared_frame_receipts"] == 1
+    assert second["cleared_frame_receipts"] == 0
 
 
 def test_reclamation_metrics_are_safe_and_expose_resource_counts() -> None:
@@ -53,6 +69,7 @@ def test_reclamation_metrics_are_safe_and_expose_resource_counts() -> None:
             "closedAsrSessions": 1,
             "clearedQueues": 1,
             "clearedBufferedSegments": 3,
+            "clearedFrameReceipts": 4,
         },
     )
 
@@ -63,3 +80,4 @@ def test_reclamation_metrics_are_safe_and_expose_resource_counts() -> None:
     assert after["lastDurationMs"] == 7
     assert after["releasedBindings"] == before["releasedBindings"] + 1
     assert after["clearedBufferedSegments"] == before["clearedBufferedSegments"] + 3
+    assert after["clearedFrameReceipts"] == before["clearedFrameReceipts"] + 4

@@ -608,6 +608,23 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         ]
         return sorted(records, key=lambda item: (item.source_kind, item.source_id))
 
+    def delete_frame_receipts_for_session(self, *, session_id, source_kind=None):
+        prefix = f"{session_id}:"
+        fields = []
+        for field, raw in self._redis.hscan_iter(self._receipt_key, match=f"{prefix}*"):
+            if source_kind is None:
+                fields.append(field)
+                continue
+            try:
+                payload = json.loads(raw)
+            except Exception:
+                continue
+            if payload.get("source_kind") == source_kind:
+                fields.append(field)
+        if not fields:
+            return 0
+        return int(self._redis.hdel(self._receipt_key, *fields))
+
     def save_transcript(self, segment):
         with self._runtime_lock:
             persisted_version = self._redis.hget(self._activity_key, segment.session_id)
