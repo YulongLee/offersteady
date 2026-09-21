@@ -138,6 +138,15 @@ describe("focused live interview workspace", () => {
     await waitFor(() => expect(toggle).toBeChecked());
   });
 
+  it("keeps the web-answer switch in the live header instead of the answer action tiles", () => {
+    openLive();
+
+    const toggle = screen.getByRole("switch", { name: "联网回答" });
+    expect(toggle).not.toBeChecked();
+    expect(toggle.closest(".live-top-actions")).not.toBeNull();
+    expect(within(screen.getByRole("region", { name: "面试操作" })).queryByRole("switch", { name: "联网回答" })).not.toBeInTheDocument();
+  });
+
   it("submits one future confirmed interviewer candidate through the existing stream", async () => {
     vi.spyOn(interviewAppAdapter, "sendDesktopSessionHeartbeat").mockImplementation(async command => ({
       pageInstanceId: command.pageInstanceId ?? null,

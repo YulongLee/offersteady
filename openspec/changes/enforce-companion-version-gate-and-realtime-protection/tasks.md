@@ -1,5 +1,5 @@
-- [ ] 1.1 Add edition-aware companion release version resolver and comparison helper.
-- [ ] 1.2 Enforce the version gate at desktop binding and interview start with a stable error code.
-- [ ] 1.3 Remove per-heartbeat binding enumeration and preserve session reclamation activity tracking.
-- [ ] 1.4 Add regression tests for gate and heartbeat behavior.
-- [ ] 1.5 Run validation, build and deploy international release only.
+- [x] 1.1 Add edition-aware companion release version resolver and strict CN comparison helper.
+- [x] 1.2 Enforce the version gate at desktop binding and interview start with a stable error code and blocking preparation UI.
+- [x] 1.3 Preserve low-overhead heartbeat behavior and the 10-second control-plane polling/cache budget.
+- [x] 1.4 Add regression tests for gate, preparation guidance and polling behavior.
+- [x] 1.5 Run validation, tests and builds; deploy CN only after the live-capacity gate confirms no active interview, web session or ASR stream.

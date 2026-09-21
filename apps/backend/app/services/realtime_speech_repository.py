@@ -202,6 +202,52 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
             self.frame_receipts.pop(session_id, None)
         return len(removable)
 
+    def clear_session_runtime(self, *, session_id: str, preserve_transcripts: bool = True) -> dict[str, int]:
+        """Drop process-local realtime state that is not needed for review."""
+        publishers = [
+            item for item in self.publishers_by_id.values()
+            if item.session_id == session_id
+        ]
+        for item in publishers:
+            self.publishers_by_id.pop(item.publisher_id, None)
+            self.publishers_by_token.pop(item.token, None)
+        receipts = self.frame_receipts.pop(session_id, {})
+        events = self.events.pop(session_id, [])
+        event_cursors = self.event_cursors.pop(session_id, {})
+        self.session_activity_versions.pop(session_id, None)
+        self.web_session_heartbeats = {
+            key: value
+            for key, value in self.web_session_heartbeats.items()
+            if key[1] != session_id
+        }
+        if not preserve_transcripts:
+            self.transcripts.pop(session_id, None)
+        return {
+            "cleared_publishers": len(publishers),
+            "cleared_frame_receipts": len(receipts),
+            "cleared_events": len(events),
+            "cleared_event_cursors": len(event_cursors),
+            "cleared_transcripts": 0 if preserve_transcripts else 1,
+        }
+
+    def list_runtime_session_owners(self, *, limit: int = 128) -> dict[str, str]:
+        """Return a bounded index of sessions that still own ephemeral state."""
+        bounded_limit = max(1, limit)
+        owners: dict[str, str] = {}
+        runtime_records = (
+            list(self.publishers_by_id.values())
+            + [item for records in self.frame_receipts.values() for item in records.values()]
+            + list(self.web_session_heartbeats.values())
+        )
+        for record in runtime_records:
+            session_id = getattr(record, "session_id", "")
+            owner_user_id = getattr(record, "owner_user_id", "")
+            if session_id and owner_user_id:
+                owners.setdefault(session_id, owner_user_id)
+            if len(owners) >= bounded_limit:
+                break
+        return owners
+
     def save_transcript(self, segment: TranscriptSegmentRecord) -> TranscriptSegmentRecord:
         stored = replace(segment)
         self.transcripts.setdefault(stored.session_id, {})[stored.segment_id] = stored

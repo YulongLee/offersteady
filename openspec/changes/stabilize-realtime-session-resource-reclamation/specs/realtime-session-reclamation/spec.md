@@ -22,12 +22,28 @@
 - **WHEN** 断线处理和 watchdog 同时或重复请求清理同一 session
 - **THEN** 系统 MUST 不抛出重复关闭错误，且最终资源计数为零。
 
+#### Scenario: Ended session runtime data is reclaimed
+- **WHEN** 用户正常结束面试或 watchdog 终止失活面试
+- **THEN** 系统 MUST 删除该 session 的实时事件流、游标、最新事件缓存、发布器和帧回执，并保留已有转写与复盘数据
+
+#### Scenario: Late callbacks cannot recreate ended runtime
+- **WHEN** ASR 回调或音频 worker 在 session 进入 closing/closed 后才返回
+- **THEN** 系统 MUST 丢弃该迟到结果，且不得重新创建发布器、帧回执、实时事件或会话级内存索引。
+
+#### Scenario: Cleanup locking remains serialized
+- **WHEN** 显式结束、断线处理和 watchdog 并发清理同一 session
+- **THEN** 系统 MUST 在所有调用者退出前复用同一把 session 清理锁，不得因提前移除锁索引而出现并行清理。
+
 ### Requirement: Background reclamation
 系统 SHALL 运行有界的后台 watchdog 定期扫描失活 live 会话，不得依赖后续 API 请求才能完成回收。
 
 #### Scenario: Browser and companion disappear
 - **WHEN** 网页和桌面伴随程序同时停止发送心跳
 - **THEN** watchdog MUST 在 TTL 与宽限期后回收会话资源，即使没有新的用户请求。
+
+#### Scenario: Ended-session orphan state is swept
+- **WHEN** Redis 中仍存在属于数据库 ended session 的发布器、帧回执或网页租约
+- **THEN** watchdog MUST 在有界批次内清除这些孤儿运行时状态，且不得修改已保存的转写与复盘数据。
 
 ### Requirement: Control-plane polling budget
 客户端 SHALL 限制准备页绑定状态与网页心跳的控制面轮询频率，并合并同一资源的并发请求；媒体传输链路不得依赖该轮询频率。
@@ -39,6 +55,10 @@
 #### Scenario: Polling failure backs off
 - **WHEN** 绑定状态或心跳请求连续失败
 - **THEN** 客户端 MUST 使用有界退避且不得并发发起重复请求；页面重新可见时可以立即刷新一次。
+
+#### Scenario: Duplicate control traffic is cheap on the server
+- **WHEN** 旧版客户端在服务端缓存窗口内重复查询连接状态或上报相同设备心跳
+- **THEN** 服务端 MUST 合并重复查询并限制持久化写入频率，同时维持设备在线租约的正确性。
 
 ### Requirement: Observability and rollout safety
 系统 SHALL 暴露回收原因、回收耗时、释放资源数量、活动连接数和回收前后 RSS，并支持 dry-run/开关控制。

@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 import logging
 from types import MethodType, SimpleNamespace
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -22,6 +23,54 @@ from app.services.realtime_control_executor import RealtimeControlExecutor
 from app.services.realtime_speech_service import RealtimeSpeechService
 
 
+def _companion_device(capabilities: dict[str, object]) -> DesktopDeviceRecord:
+    return DesktopDeviceRecord(
+        device_id="device-version-gate",
+        manual_code="123456",
+        display_name="Synthetic companion",
+        capabilities=capabilities,
+        registered_at_ms=1,
+        last_seen_at_ms=1,
+    )
+
+
+def test_cn_production_gate_requires_current_companion_metadata() -> None:
+    service = object.__new__(RealtimeSpeechService)
+    service.settings = Settings(environment="production", product_edition="cn")
+
+    with pytest.raises(DomainRequestError) as outdated:
+        service._assert_companion_current(
+            device=_companion_device({"appVersion": "1.2.15", "platform": "windows", "architecture": "x64"}),
+            action="bind-device",
+        )
+    assert outdated.value.status_code == 409
+    assert outdated.value.error_code == "companion_update_required"
+
+    with pytest.raises(DomainRequestError) as unknown:
+        service._assert_companion_current(
+            device=_companion_device({"microphone": True}),
+            action="start-interview",
+        )
+    assert unknown.value.status_code == 409
+    assert unknown.value.error_code == "companion_update_required"
+
+
+def test_cn_production_gate_allows_current_companion() -> None:
+    service = object.__new__(RealtimeSpeechService)
+    service.settings = Settings(environment="production", product_edition="cn")
+    current_version = service._latest_companion_version(platform="windows", architecture="x64")
+    assert current_version is not None
+
+    service._assert_companion_current(
+        device=_companion_device({
+            "appVersion": current_version,
+            "platform": "windows",
+            "architecture": "x64",
+        }),
+        action="bind-device",
+    )
+
+
 def _control_cache_service() -> RealtimeSpeechService:
     service = object.__new__(RealtimeSpeechService)
     service.settings = Settings(realtime_control_cache_ms=750)
@@ -32,6 +81,10 @@ def _control_cache_service() -> RealtimeSpeechService:
     service._control_query_cache_hits = 0
     service._control_query_cache_misses = 0
     service._control_query_singleflight_waits = 0
+    service._desktop_heartbeat_lock = threading.Lock()
+    service._desktop_heartbeat_last_persisted_ms = {}
+    service._desktop_heartbeat_persisted = 0
+    service._desktop_heartbeat_coalesced = 0
     return service
 
 
@@ -217,6 +270,96 @@ def test_ordinary_device_heartbeat_does_not_discard_safe_short_cache() -> None:
 
     assert first == after_heartbeat == {"revision": 1}
     assert calls == 1
+
+
+def test_unchanged_device_heartbeats_are_coalesced_before_storage() -> None:
+    service = _control_cache_service()
+    service.settings = Settings(
+        _env_file=None,
+        realtime_desktop_heartbeat_ttl_seconds=30,
+        realtime_desktop_heartbeat_write_min_interval_seconds=10,
+    )
+    current = [DesktopDeviceRecord(
+        device_id="device-heartbeat",
+        manual_code="123456",
+        display_name="Synthetic device",
+        capabilities={"microphone": True},
+        registered_at_ms=1,
+        last_seen_at_ms=1,
+    )]
+    saves: list[DesktopDeviceRecord] = []
+
+    def save_device(stored: DesktopDeviceRecord) -> DesktopDeviceRecord:
+        current[0] = stored
+        saves.append(stored)
+        return stored
+
+    service.repository = SimpleNamespace(
+        get_desktop_device_by_code=lambda _code: current[0],
+        save_desktop_device=save_device,
+    )
+
+    first = service.record_desktop_device_heartbeat(
+        device_id=current[0].device_id,
+        manual_code=current[0].manual_code,
+        display_name=current[0].display_name,
+        capabilities={"microphone": True},
+    )
+    second = service.record_desktop_device_heartbeat(
+        device_id=current[0].device_id,
+        manual_code=current[0].manual_code,
+        display_name=current[0].display_name,
+        capabilities={"microphone": True},
+    )
+
+    assert first.last_seen_at_ms <= second.last_seen_at_ms
+    assert len(saves) == 1
+    assert service._desktop_heartbeat_persisted == 1
+    assert service._desktop_heartbeat_coalesced == 1
+
+
+def test_device_capability_change_bypasses_heartbeat_coalescing() -> None:
+    service = _control_cache_service()
+    service.settings = Settings(
+        _env_file=None,
+        realtime_desktop_heartbeat_ttl_seconds=30,
+        realtime_desktop_heartbeat_write_min_interval_seconds=10,
+    )
+    current = [DesktopDeviceRecord(
+        device_id="device-heartbeat",
+        manual_code="123456",
+        display_name="Synthetic device",
+        capabilities={"microphone": True},
+        registered_at_ms=1,
+        last_seen_at_ms=1,
+    )]
+    saves: list[DesktopDeviceRecord] = []
+
+    def save_device(stored: DesktopDeviceRecord) -> DesktopDeviceRecord:
+        current[0] = stored
+        saves.append(stored)
+        return stored
+
+    service.repository = SimpleNamespace(
+        get_desktop_device_by_code=lambda _code: current[0],
+        save_desktop_device=save_device,
+    )
+
+    service.record_desktop_device_heartbeat(
+        device_id=current[0].device_id,
+        manual_code=current[0].manual_code,
+        display_name=current[0].display_name,
+        capabilities={"microphone": True},
+    )
+    service.record_desktop_device_heartbeat(
+        device_id=current[0].device_id,
+        manual_code=current[0].manual_code,
+        display_name=current[0].display_name,
+        capabilities={"microphone": True, "systemAudio": True},
+    )
+
+    assert len(saves) == 2
+    assert saves[-1].capabilities["systemAudio"] is True
 
 
 def test_pairing_status_reads_bound_session_only_once_per_cache_miss() -> None:

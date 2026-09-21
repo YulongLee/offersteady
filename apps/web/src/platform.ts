@@ -10,6 +10,12 @@ export interface CompanionUpdate {
   readonly release: DesktopReleaseEntry;
 }
 
+export interface CompanionVersionRequirement {
+  readonly status: "current" | "update-required";
+  readonly currentVersion: string | null;
+  readonly release: DesktopReleaseEntry | null;
+}
+
 const parseVersion = (value: unknown): ParsedVersion | null => {
   if (typeof value !== "string") return null;
   const match = value.trim().match(/^v?(\d+(?:\.\d+)*)([a-z][0-9a-z.-]*)?$/i);
@@ -80,13 +86,20 @@ export const companionUpdate = (
   capabilities: Record<string, unknown> | null | undefined,
   manifest: DesktopReleaseManifest,
 ): CompanionUpdate | null => {
-  if (!capabilities) return null;
-  const currentVersion = typeof capabilities.appVersion === "string" ? capabilities.appVersion.trim() : "";
-  const platform = normalizedPlatform(capabilities.platform);
-  const architecture = normalizedArchitecture(capabilities.architecture);
-  if (!currentVersion || !platform || !architecture || !parseVersion(currentVersion)) return null;
+  const requirement = companionVersionRequirement(capabilities, manifest);
+  if (requirement.status !== "update-required" || !requirement.currentVersion || !requirement.release) return null;
+  if (compareDesktopVersions(requirement.currentVersion, requirement.release.version) !== -1) return null;
+  return { currentVersion: requirement.currentVersion, release: requirement.release };
+};
 
-  const release = manifest.entries
+export const companionVersionRequirement = (
+  capabilities: Record<string, unknown> | null | undefined,
+  manifest: DesktopReleaseManifest,
+): CompanionVersionRequirement => {
+  const currentVersion = typeof capabilities?.appVersion === "string" ? capabilities.appVersion.trim() : "";
+  const platform = normalizedPlatform(capabilities?.platform);
+  const architecture = normalizedArchitecture(capabilities?.architecture);
+  const release = platform && architecture ? manifest.entries
     .filter(entry => entry.platform === platform && entry.architecture === architecture && downloadableRelease(entry) && parseVersion(entry.version))
     .reduce<DesktopReleaseEntry | null>((latest, entry) => {
       if (!latest) return entry;
@@ -94,7 +107,11 @@ export const companionUpdate = (
       if (comparison === null || comparison < 0) return latest;
       if (comparison > 0) return entry;
       return entry.publishedAtMs > latest.publishedAtMs ? entry : latest;
-    }, null);
-  if (!release || compareDesktopVersions(currentVersion, release.version) !== -1) return null;
-  return { currentVersion, release };
+    }, null) : null;
+  const comparison = release ? compareDesktopVersions(currentVersion, release.version) : null;
+  return {
+    status: comparison !== null && comparison >= 0 ? "current" : "update-required",
+    currentVersion: currentVersion || null,
+    release,
+  };
 };

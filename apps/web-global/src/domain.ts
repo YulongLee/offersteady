@@ -5,6 +5,7 @@ export type ResourceStatus = "missing" | "processing" | "ready" | "error" | "del
 export type SessionStatus = "preparing" | "ready" | "active" | "paused" | "ended" | "error";
 export type { InterviewLanguage } from "@offersteady/protocol";
 export type SessionMode = "interview" | "written";
+export type InterviewAudioMode = "computer" | "mobile";
 export type ProgrammingLanguage = "python" | "java" | "cpp" | "javascript" | "typescript" | "go";
 export type QuestionStatus = "listening" | "transcribing" | "confirmed" | "generating" | "streaming" | "uncertain" | "failed" | "offline" | "cancelled";
 export type ReviewStatus = "waiting" | "generating" | "complete" | "failed";
@@ -22,6 +23,7 @@ export interface InterviewSummary {
   readonly id: string;
   readonly title: string;
   readonly sessionMode?: SessionMode;
+  readonly interviewAudioMode?: InterviewAudioMode;
   readonly interviewLanguage?: InterviewLanguage;
   readonly programmingRequired?: boolean;
   readonly programmingLanguage?: ProgrammingLanguage | null;
@@ -61,6 +63,7 @@ export interface InterviewReview {
   readonly screenshots: readonly { id: string; name: string }[];
   readonly sessionId?: string;
   readonly title?: string;
+  readonly interviewAudioMode?: InterviewAudioMode;
   readonly startedAtMs?: number | null;
   readonly endedAtMs?: number | null;
   readonly transcripts: readonly InterviewReviewTranscript[];
@@ -69,7 +72,7 @@ export interface InterviewReview {
 export interface InterviewReviewTranscript {
   readonly id: string;
   readonly role: "interviewer" | "candidate";
-  readonly speakerLabel: "面试官" | "我";
+  readonly speakerLabel: "面试官" | "我" | "现场声音";
   readonly text: string;
   readonly occurredAtMs: number;
   readonly ordering: number;
@@ -246,7 +249,8 @@ export type RealtimeSessionUpdate = Pick<WebAppState, "speaker"> & Partial<Pick<
 export interface InterviewAppAdapter {
   loadState(signal?: AbortSignal, options?: { readonly auth?: boolean }): Promise<WebAppState>;
   getBillingState(signal?: AbortSignal): Promise<BillingPresentationState>;
-  createDraft(input: { title: string; role: string; company?: string; sessionMode?: SessionMode; interviewLanguage?: InterviewLanguage }, signal?: AbortSignal): Promise<InterviewSummary>;
+  createDraft(input: { title: string; role: string; company?: string; sessionMode?: SessionMode; interviewLanguage?: InterviewLanguage; interviewAudioMode?: InterviewAudioMode }, signal?: AbortSignal): Promise<InterviewSummary>;
+  updateInterviewAudioMode?(id: string, interviewAudioMode: InterviewAudioMode, signal?: AbortSignal): Promise<InterviewSummary>;
   updateInterviewLanguage(id: string, interviewLanguage: InterviewLanguage, signal?: AbortSignal): Promise<InterviewSummary>;
   updateDefaultInterviewLanguage(interviewLanguage: InterviewLanguage, signal?: AbortSignal): Promise<SafeAccountSummary>;
   updateInterviewProgramming(id: string, programmingRequired: boolean, programmingLanguage: ProgrammingLanguage | null, signal?: AbortSignal): Promise<InterviewSummary>;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DesktopReleaseEntry, DesktopReleaseManifest } from "@offersteady/protocol";
 
-import { companionUpdate, compareDesktopVersions } from "./platform";
+import { companionUpdate, companionVersionRequirement, compareDesktopVersions } from "./platform";
 
 const release = (overrides: Partial<DesktopReleaseEntry> = {}): DesktopReleaseEntry => ({
   id: "mac-arm64-1-2-13",
@@ -58,5 +58,21 @@ describe("companion update selection", () => {
   it("ignores releases that are not downloadable", () => {
     const unavailable = release({ signingStatus: "withdrawn", distributionStatus: "withdrawn" });
     expect(companionUpdate({ appVersion: "1.0.0", platform: "macos", architecture: "arm64" }, manifest([unavailable]))).toBeNull();
+  });
+
+  it("marks older and unverifiable companions as update-required for the CN preparation gate", () => {
+    const releases = manifest([release()]);
+    expect(companionVersionRequirement(
+      { appVersion: "1.2.12", platform: "macos", architecture: "arm64" },
+      releases,
+    )).toMatchObject({ status: "update-required", currentVersion: "1.2.12", release: { version: "1.2.13" } });
+    expect(companionVersionRequirement(
+      { platform: "macos", architecture: "arm64" },
+      releases,
+    )).toMatchObject({ status: "update-required", currentVersion: null, release: { version: "1.2.13" } });
+    expect(companionVersionRequirement(
+      { appVersion: "1.2.13", platform: "macos", architecture: "arm64" },
+      releases,
+    ).status).toBe("current");
   });
 });

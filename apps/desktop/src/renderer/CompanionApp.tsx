@@ -67,6 +67,11 @@ export const BINDING_STATUS_POLL_MS = BINDING_LIVE_POLL_MS;
 const diagnosticAudioChannels = import.meta.env.VITE_REALTIME_DIAGNOSTIC_AUDIO_CHANNELS === "system"
   ? (["system"] as const)
   : undefined;
+export type InterviewAudioMode = "computer" | "mobile";
+export const audioChannelsForInterviewMode = (
+  mode: InterviewAudioMode,
+  diagnosticChannels?: readonly ("microphone" | "system")[],
+) => mode === "mobile" ? (["microphone"] as const) : diagnosticChannels;
 
 interface ApiEnvelope<T> {
   readonly data: T;
@@ -95,6 +100,7 @@ interface DesktopPairingStatus {
   readonly bound: boolean;
   readonly sessionStatus?: "preparing" | "live" | "ended" | "missing" | "unknown" | string;
   readonly sessionMode?: "interview" | "written" | string;
+  readonly interviewAudioMode?: InterviewAudioMode | string;
   readonly captureState?: "capturing" | "paused" | "ready" | string;
   readonly message: string;
   readonly staleReason?: string | null;
@@ -478,6 +484,7 @@ export function CompanionApp() {
   const [activeBinding, setActiveBinding] = useState<DesktopActiveBinding | null>(null);
   const [bindingSessionStatus, setBindingSessionStatus] = useState<string | null>(null);
   const [bindingCaptureState, setBindingCaptureState] = useState<string | null>(null);
+  const [bindingInterviewAudioMode, setBindingInterviewAudioMode] = useState<InterviewAudioMode>("computer");
   const [nativeRuntimeHealth, setNativeRuntimeHealth] = useState<DesktopNativeRuntimeHealth | null>(null);
   const [liveSourceHealthState, setLiveSourceHealthState] = useState<readonly AudioSourceHealth[]>([]);
   const [monitorSourceHealthState, setMonitorSourceHealthState] = useState<readonly AudioSourceHealth[]>([]);
@@ -507,6 +514,7 @@ export function CompanionApp() {
   const activeBindingRef = useRef<DesktopActiveBinding | null>(null);
   const bindingSessionStatusRef = useRef<string | null>(null);
   const bindingCaptureStateRef = useRef<string | null>(null);
+  const bindingInterviewAudioModeRef = useRef<InterviewAudioMode>("computer");
   const deviceStatusPublishGateRef = useRef(new DeviceStatusPublishGate());
   const [webOpenNotice, setWebOpenNotice] = useState("");
 
@@ -911,9 +919,11 @@ export function CompanionApp() {
             activeBindingRef.current = staleBinding;
             bindingSessionStatusRef.current = null;
             bindingCaptureStateRef.current = null;
+            bindingInterviewAudioModeRef.current = "computer";
             setActiveBinding(staleBinding);
             setBindingSessionStatus(null);
             setBindingCaptureState(null);
+            setBindingInterviewAudioMode("computer");
             setState(displayState);
             const staleCopy = pairingStatus.staleReason === "web-heartbeat-missing"
               ? "网页端绑定已存在，但当前面试页心跳暂未到达；请保持线上实时面试页面打开。"
@@ -931,22 +941,29 @@ export function CompanionApp() {
         const sessionStatus = runtimeStatus?.sessionStatus ?? pairingStatus.sessionStatus ?? "unknown";
         const live = sessionStatus === "live";
         const writtenExam = pairingStatus.sessionMode === "written";
+        const interviewAudioMode: InterviewAudioMode = pairingStatus.interviewAudioMode === "mobile"
+          ? "mobile"
+          : pairingStatus.interviewAudioMode === "computer"
+          ? "computer"
+          : bindingInterviewAudioModeRef.current;
         const captureState = writtenExam || pairingStatus.captureState === "paused" ? "paused" : live ? "capturing" : "ready";
         nextDelayMs = desktopPollDelayMs(live ? "live" : "idle", 0, "binding");
         if (stopped) return;
         activeBindingRef.current = binding;
         bindingSessionStatusRef.current = sessionStatus;
         bindingCaptureStateRef.current = captureState;
+        bindingInterviewAudioModeRef.current = interviewAudioMode;
         setActiveBinding(binding);
         setBindingSessionStatus(sessionStatus);
         setBindingCaptureState(captureState);
+        setBindingInterviewAudioMode(interviewAudioMode);
         if (lastBindingSessionIdRef.current !== binding.sessionId) {
           lastBindingSessionIdRef.current = binding.sessionId;
           setDesktopNotice(writtenExam ? "网页笔试已绑定这台电脑，仅启用截屏回答。" : "网页面试已绑定这台电脑。");
         }
         if (live && lastLiveSessionIdRef.current !== binding.sessionId) {
           lastLiveSessionIdRef.current = binding.sessionId;
-          setDesktopNotice("面试已开始，本地助手正在启动麦克风、电脑输出和屏幕能力。");
+          setDesktopNotice(interviewAudioMode === "mobile" ? "手机面试已开始，本地助手仅使用 Mac 麦克风收听现场声音。" : "面试已开始，本地助手正在启动麦克风、电脑输出和屏幕能力。");
         }
         const provisionalCaptureState: CaptureState = captureState === "paused"
           ? "paused"
@@ -1059,7 +1076,7 @@ export function CompanionApp() {
   }, [config, pairingIdentity]);
 
   useEffect(() => {
-    if (bindingCaptureState === "paused" || captureEnabled || publisherHasTakenOver || !selectedSystemAudioId) {
+    if (bindingCaptureState === "paused" || captureEnabled || publisherHasTakenOver || (bindingInterviewAudioMode === "computer" && !selectedSystemAudioId)) {
       void localMonitorRef.current?.stop();
       localMonitorRef.current = null;
       if (bindingCaptureState === "paused" || captureEnabled || publisherHasTakenOver) setMonitorSourceHealthState([]);
@@ -1069,6 +1086,7 @@ export function CompanionApp() {
     const monitor = new LocalSourceMonitor({
       microphoneId: effectiveMicrophoneId,
       systemAudioId: selectedSystemAudioId,
+      enabledChannels: bindingInterviewAudioMode === "mobile" ? ["microphone"] : ["microphone", "system"],
       onHealth: (health) => {
         if (cancelled) return;
         monitorSourceHealthRef.current = health;
@@ -1105,7 +1123,7 @@ export function CompanionApp() {
         void monitor.stop();
       }
     };
-  }, [bindingCaptureState, captureEnabled, publisherHasTakenOver, effectiveMicrophoneId, selectedSystemAudioId]);
+  }, [bindingCaptureState, bindingInterviewAudioMode, captureEnabled, publisherHasTakenOver, effectiveMicrophoneId, selectedSystemAudioId]);
 
   useEffect(() => {
     if (!config || !pairingIdentity || !activeBinding || !captureEnabled) {
@@ -1124,6 +1142,7 @@ export function CompanionApp() {
     const warmSources = warmSourceHandoffRef.current ?? localMonitorRef.current?.takeWarmSources() ?? undefined;
     warmSourceHandoffRef.current = null;
     localMonitorRef.current = null;
+    const publisherAudioChannels = audioChannelsForInterviewMode(bindingInterviewAudioMode, diagnosticAudioChannels);
     const publisher = new DesktopRealtimePublisher({
       apiBaseUrl: config.apiBaseUrl,
       binding: {
@@ -1138,7 +1157,7 @@ export function CompanionApp() {
       endpointingMode: config.realtimeEndpointing.mode,
       ...(warmSources ? { warmSources } : {}),
       ...(liveObservedAtMsRef.current !== null ? { liveObservedAtMs: liveObservedAtMsRef.current } : {}),
-      ...(diagnosticAudioChannels ? { diagnosticAudioChannels } : {}),
+      ...(publisherAudioChannels ? { diagnosticAudioChannels: publisherAudioChannels } : {}),
       fetchImpl: (input, init) => desktopBackendFetch(config, String(input), init),
       onHealth: (health) => {
         if (cancelled) return;
@@ -1237,6 +1256,7 @@ export function CompanionApp() {
     activeBinding?.manualCode,
     bindingSessionStatus,
     bindingCaptureState,
+    bindingInterviewAudioMode,
     config?.apiBaseUrl,
     pairingIdentity?.deviceId,
     pairingIdentity?.displayName,
@@ -1408,11 +1428,11 @@ export function CompanionApp() {
         <div className="terminal-rows">
           <TerminalRow
             title="麦克风"
-            subtitle="识别你的声音"
-            statusLabel="我的声音"
+            subtitle={bindingInterviewAudioMode === "mobile" ? "收听手机扬声器与现场声音" : "识别你的声音"}
+            statusLabel={bindingInterviewAudioMode === "mobile" ? "现场声音" : "我的声音"}
             presentationHealth={microphonePresentationHealth}
             meterLevel={microphoneMeterLevel}
-            meterCopy={healthCopy(microphoneHealth, "我的声音", microphoneMeterLevel)}
+            meterCopy={healthCopy(microphoneHealth, bindingInterviewAudioMode === "mobile" ? "现场声音" : "我的声音", microphoneMeterLevel)}
           >
             <select
               aria-label="选择麦克风"
@@ -1432,7 +1452,13 @@ export function CompanionApp() {
             </select>
           </TerminalRow>
 
-          <TerminalRow
+          {bindingInterviewAudioMode === "mobile" ? <TerminalRow
+            title="电脑输出"
+            subtitle="手机面试不采集电脑系统音频"
+            statusLabel="本场停用"
+            presentationHealth="healthy"
+            meterCopy="仅使用 Mac 麦克风"
+          ><span>无需设置</span></TerminalRow> : <TerminalRow
             title="电脑输出"
             subtitle="识别你能听到的面试官声音"
             statusLabel="面试官声音"
@@ -1451,7 +1477,7 @@ export function CompanionApp() {
                 ))}
               </select>
             </div>
-          </TerminalRow>
+          </TerminalRow>}
 
           <TerminalRow title="屏幕捕捉" subtitle="选择要捕捉的屏幕" statusLabel="捕捉屏幕" presentationHealth={screenPresentationHealth}>
             <div className="screen-control">

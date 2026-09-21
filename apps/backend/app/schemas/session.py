@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.material_formats import MaterialKind
-from app.ports.interview_session import ConversationRole, ConversationVisibility, InterviewLanguage, InterviewSessionMode, InterviewSessionState, ProgrammingLanguage, SessionContinueTarget, SessionUsageKind
+from app.ports.interview_session import ConversationRole, ConversationVisibility, InterviewAudioMode, InterviewLanguage, InterviewSessionMode, InterviewSessionState, ProgrammingLanguage, SessionContinueTarget, SessionUsageKind
 
 
 class SessionDocumentSnapshotResponse(BaseModel):
@@ -73,7 +73,7 @@ class InterviewReviewTranscriptResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
     id: str
     role: Literal["interviewer", "candidate"]
-    speaker_label: Literal["面试官", "我"] = Field(alias="speakerLabel")
+    speaker_label: Literal["面试官", "我", "现场声音"] = Field(alias="speakerLabel")
     text: str
     occurred_at_ms: int = Field(alias="occurredAtMs")
     ordering: int
@@ -84,6 +84,7 @@ class InterviewReviewSnapshotResponse(BaseModel):
     session_id: str = Field(alias="sessionId")
     title: str
     session_mode: InterviewSessionMode = Field(default="interview", alias="sessionMode")
+    interview_audio_mode: InterviewAudioMode = Field(default="computer", alias="interviewAudioMode")
     status: InterviewSessionState
     started_at_ms: int | None = Field(default=None, alias="startedAtMs")
     ended_at_ms: int | None = Field(default=None, alias="endedAtMs")
@@ -110,6 +111,7 @@ class InterviewSessionResponse(BaseModel):
     owner_user_id: str = Field(alias="ownerUserId")
     title: str
     session_mode: InterviewSessionMode = Field(default="interview", alias="sessionMode")
+    interview_audio_mode: InterviewAudioMode = Field(default="computer", alias="interviewAudioMode")
     interview_language: InterviewLanguage = Field(alias="interviewLanguage")
     programming_required: bool = Field(default=False, alias="programmingRequired")
     programming_language: ProgrammingLanguage | None = Field(default=None, alias="programmingLanguage")
@@ -134,6 +136,7 @@ class CreateInterviewSessionRequest(BaseModel):
     user_id: str = Field(min_length=1, alias="userId")
     title: str = Field(min_length=1, max_length=120)
     session_mode: InterviewSessionMode = Field(default="interview", alias="sessionMode")
+    interview_audio_mode: InterviewAudioMode = Field(default="computer", alias="interviewAudioMode")
     interview_language: InterviewLanguage = Field(default="zh-CN", alias="interviewLanguage")
     programming_required: bool = Field(default=False, alias="programmingRequired")
     programming_language: ProgrammingLanguage | None = Field(default=None, alias="programmingLanguage")
@@ -151,6 +154,12 @@ class UpdateInterviewLanguageRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
     user_id: str = Field(min_length=1, alias="userId")
     interview_language: InterviewLanguage = Field(alias="interviewLanguage")
+
+
+class UpdateInterviewAudioModeRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    user_id: str = Field(min_length=1, alias="userId")
+    interview_audio_mode: InterviewAudioMode = Field(alias="interviewAudioMode")
 
 
 class UpdateInterviewProgrammingRequest(BaseModel):

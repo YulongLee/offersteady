@@ -2060,6 +2060,12 @@ def test_live_answer_prefetches_detail_retrieval_during_quick_generation(monkeyp
     assert events[-1]["type"] == "completed"
     assert timeline["retrieval_started"] < timeline["quick_completed"]
     assert timeline["retrieval_completed"] <= timeline["quick_completed"]
+    quick_chunks = [
+        event["chunk"].text
+        for event in events
+        if event["type"] == "chunk" and event["chunk"].text.startswith(("简单回答", "Quick Answer"))
+    ]
+    assert "".join(quick_chunks).count("简单回答") == 1
 
 
 def test_live_answer_stream_failure_preserves_partial_output() -> None:
@@ -3373,7 +3379,12 @@ def test_new_device_binding_becomes_the_users_only_active_realtime_interview() -
         f"/api/v1/realtime-speech/sessions/{first['sessionId']}/runtime",
         params={"userId": "single-live-user"},
     ))
-    assert next(item for item in previous_runtime["publishers"] if item["publisherId"] == first_publisher["publisherId"])["status"] == "closed"
+    # Ended-session publisher state is ephemeral and is removed immediately;
+    # the stale binding and persisted session history remain available.
+    assert all(
+        item["publisherId"] != first_publisher["publisherId"]
+        for item in previous_runtime["publishers"]
+    )
     recent = unwrap(client.get(
         "/api/v1/realtime-speech/desktop-devices/last-used",
         params={"userId": "single-live-user"},

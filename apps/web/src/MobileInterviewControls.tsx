@@ -11,8 +11,6 @@ interface Props {
   readonly onChange: (value: string) => void;
   readonly onQuickAnswer: () => void;
   readonly onScreenshot: () => void;
-  readonly webSearchEnabled?: boolean;
-  readonly onToggleWebSearch?: () => void;
 }
 
 export function MobileInterviewControls({
@@ -25,8 +23,6 @@ export function MobileInterviewControls({
   onChange,
   onQuickAnswer,
   onScreenshot,
-  webSearchEnabled = false,
-  onToggleWebSearch = () => undefined,
 }: Props) {
   const quickBusy = quickAnswerStatus === "processing";
   const screenshotBusy = screenshotAnswerStatus === "processing" || Boolean(screenshotTask && !["completed", "failed", "cancelled"].includes(screenshotTask.stage));
@@ -48,9 +44,6 @@ export function MobileInterviewControls({
       </button>
       <button className="button ghost" aria-label="截屏回答" disabled={disabled || screenshotBusy} onClick={onScreenshot}>
         截屏回答
-      </button>
-      <button className={`button ${webSearchEnabled ? "primary" : "ghost"}`} aria-label="联网回答" aria-pressed={webSearchEnabled} disabled={disabled || quickBusy} onClick={onToggleWebSearch}>
-        联网回答
       </button>
     </div>
   </section>;

@@ -87,6 +87,7 @@ def test_realtime_session_cleanup_drops_short_lived_indexes_and_keeps_other_sess
         "session-ended": threading.Lock(),
         "session-live": threading.Lock(),
     }
+    service._session_cleanup_lock_users = {"session-ended": 1, "session-live": 1}
     service._publisher_status_cache = {
         "publisher-ended": "closed",
         "publisher-live": "connected",
@@ -119,7 +120,9 @@ def test_realtime_session_cleanup_drops_short_lived_indexes_and_keeps_other_sess
     assert "session-ended" not in service._auto_answer_active_candidates
     assert "session-ended" not in service._session_last_activity_ms
     assert "session-ended" not in service._session_owners
-    assert "session-ended" not in service._session_cleanup_locks
+    # The lock is owned by the outer cleanup transaction and must remain
+    # stable until that caller releases its final reference.
+    assert "session-ended" in service._session_cleanup_locks
     assert "session-live" in service._session_cleanup_locks
     assert "publisher-ended" not in service._publisher_status_cache
     assert "publisher-live" in service._publisher_status_cache

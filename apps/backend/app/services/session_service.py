@@ -9,6 +9,7 @@ from app.ports.document_repository import DocumentRepository
 from app.ports.interview_session import (
     ConversationContextEntry,
     IntegrationReference,
+    InterviewAudioMode,
     InterviewLanguage,
     InterviewSessionMode,
     InterviewSessionRecord,
@@ -51,6 +52,7 @@ class SessionService:
         title: str,
         interview_language: InterviewLanguage = "zh-CN",
         session_mode: InterviewSessionMode = "interview",
+        interview_audio_mode: InterviewAudioMode = "computer",
         programming_required: bool = False,
         programming_language: ProgrammingLanguage | None = None,
         restart_of_session_id: str | None = None,
@@ -76,6 +78,7 @@ class SessionService:
             title=title.strip(),
             interview_language=interview_language,
             session_mode=session_mode,
+            interview_audio_mode=interview_audio_mode,
             programming_required=programming_required,
             programming_language=(programming_language or "python") if programming_required else None,
             status="preparing",
@@ -129,6 +132,36 @@ class SessionService:
                 error_code="interview_language_locked",
             )
         raise DomainRequestError("session", "update-language", "面试语言保存失败，请重试。", 409)
+
+    def update_interview_audio_mode(
+        self, *, user_id: str, session_id: str, interview_audio_mode: InterviewAudioMode
+    ) -> InterviewSessionRecord:
+        session = self.get_session(user_id=user_id, session_id=session_id)
+        if session.session_mode == "written":
+            raise DomainRequestError(
+                "session", "update-audio-mode", "笔试模式不启用实时收音。", 409,
+                error_code="written_exam_audio_disabled",
+            )
+        if session.status != "preparing":
+            raise DomainRequestError(
+                "session", "update-audio-mode", "面试开始后不能修改面试设备模式。", 409,
+                error_code="interview_audio_mode_locked",
+            )
+        updated = self.repository.update_audio_mode_if_preparing(
+            user_id=user_id,
+            session_id=session_id,
+            interview_audio_mode=interview_audio_mode,
+            updated_at_ms=_now_ms(),
+        )
+        if updated is not None:
+            return updated
+        latest = self.get_session(user_id=user_id, session_id=session_id)
+        if latest.status != "preparing":
+            raise DomainRequestError(
+                "session", "update-audio-mode", "面试开始后不能修改面试设备模式。", 409,
+                error_code="interview_audio_mode_locked",
+            )
+        raise DomainRequestError("session", "update-audio-mode", "面试设备模式保存失败，请重试。", 409)
 
     def update_interview_programming(
         self, *, user_id: str, session_id: str, programming_required: bool,
@@ -368,6 +401,7 @@ class SessionService:
             title=f"{session.title} · 重新开始",
             interview_language=session.interview_language,
             session_mode=session.session_mode,
+            interview_audio_mode=session.interview_audio_mode,
             programming_required=session.programming_required,
             programming_language=session.programming_language,
             restart_of_session_id=session.session_id,
@@ -634,6 +668,7 @@ class SessionService:
             title=updates.get("title", session.title),
             interview_language=updates.get("interview_language", session.interview_language),
             session_mode=updates.get("session_mode", session.session_mode),
+            interview_audio_mode=updates.get("interview_audio_mode", session.interview_audio_mode),
             programming_required=updates.get("programming_required", session.programming_required),
             programming_language=updates.get("programming_language", session.programming_language),
             auto_answer_enabled=updates.get("auto_answer_enabled", session.auto_answer_enabled),

@@ -98,6 +98,16 @@ class RuntimePerformanceAckCompatibilityTest(unittest.TestCase):
                     trace = self.service._trace_snapshot("synthetic-trace")
                     self.assertFalse(ENTRY_TIMING.keys() & trace.keys())
 
+    def test_transcript_render_reuses_short_lived_session_ownership_check(self):
+        first = self.post(stage="transcript-render")
+        second = self.post(stage="transcript-render")
+        self.assertEqual(first.status_code, 200, first.text)
+        self.assertEqual(second.status_code, 200, second.text)
+        self.assertEqual(self.checked_sessions, [(self.owner, self.session_id)])
+        diagnostics = self.service._performance_ack_diagnostics()
+        self.assertEqual(diagnostics["accessCacheMisses"], 1)
+        self.assertEqual(diagnostics["accessCacheHits"], 1)
+
     def test_rejects_non_owned_session_before_recording(self):
         response = self.post(session_id="synthetic-other-session", fields=ENTRY_TIMING)
         self.assertEqual(response.status_code, 404)

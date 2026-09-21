@@ -2,7 +2,7 @@ import type { CaptureState, FoundationIndexResponse } from "@offersteady/protoco
 
 import type { AnswerProvenance, AnswerSourceReference, AnswerTaskSnapshot, CancelAnswerResult, OfficialCheckoutOrder, PointsRedemptionResult } from "@offersteady/protocol";
 import { AppError } from "./domain";
-import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, DesktopDeviceBinding, DesktopShortcutScreenshotUpdate, IdleInterviewStatus, InterviewAppAdapter, InterviewLanguage, InterviewQuestion, InterviewReview, InterviewSummary, InterviewWorkspaceSnapshot, PreparationAudioReadiness, ProgrammingLanguage, ScreenshotTask, SessionMode, SubmitManualAnswerResult, WebAppState } from "./domain";
+import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, DesktopDeviceBinding, DesktopShortcutScreenshotUpdate, IdleInterviewStatus, InterviewAppAdapter, InterviewAudioMode, InterviewLanguage, InterviewQuestion, InterviewReview, InterviewSummary, InterviewWorkspaceSnapshot, PreparationAudioReadiness, ProgrammingLanguage, ScreenshotTask, SessionMode, SubmitManualAnswerResult, WebAppState } from "./domain";
 import { createJsonClient, withBaseUrl } from "./api-client";
 import { authClient } from "./auth-client";
 import { createSseParser, type LiveAnswerStreamEvent, type ManualAnswerStreamUpdate } from "./live-answer-stream";
@@ -18,6 +18,7 @@ interface BackendSessionResponse {
   readonly sessionId: string;
   readonly title: string;
   readonly sessionMode?: SessionMode;
+  readonly interviewAudioMode?: InterviewAudioMode;
   readonly interviewLanguage?: InterviewLanguage;
   readonly programmingRequired?: boolean;
   readonly programmingLanguage?: ProgrammingLanguage | null;
@@ -35,7 +36,10 @@ interface BackendSessionResponse {
 }
 
 const MAX_PENDING_PERFORMANCE_ACKS = 16;
-const TRANSCRIPT_ACK_INTERVAL_MS = 1_000;
+// Rendering telemetry is diagnostic-only. Keep one non-final sample per
+// session window and always retain final revisions, so a long interview does
+// not turn every subtitle update into a synchronous API request.
+const TRANSCRIPT_ACK_INTERVAL_MS = 5_000;
 // A healthy backend normally answers in milliseconds. This deadline is only a
 // circuit breaker for a half-open transport; keeping it above short production
 // scheduling spikes prevents destructive reconnect churn during page entry.
@@ -50,6 +54,7 @@ interface BackendActiveSessionConflictResponse {
 interface BackendInterviewReviewResponse {
   readonly sessionId: string;
   readonly title: string;
+  readonly interviewAudioMode?: InterviewAudioMode;
   readonly status: "ended";
   readonly startedAtMs: number | null;
   readonly endedAtMs: number | null;
@@ -57,7 +62,7 @@ interface BackendInterviewReviewResponse {
   readonly transcripts: readonly {
     readonly id: string;
     readonly role: "interviewer" | "candidate";
-    readonly speakerLabel: "面试官" | "我";
+    readonly speakerLabel: "面试官" | "我" | "现场声音";
     readonly text: string;
     readonly occurredAtMs: number;
     readonly ordering: number;
@@ -577,6 +582,7 @@ const toInterviewSummary = (session: BackendSessionResponse, fallback?: { title?
   id: session.sessionId,
   title: session.title || fallback?.title || "新的面试",
   sessionMode: session.sessionMode ?? "interview",
+  interviewAudioMode: session.interviewAudioMode ?? "computer",
   interviewLanguage: session.interviewLanguage ?? "en-US",
   programmingRequired: session.programmingRequired ?? false,
   programmingLanguage: session.programmingRequired ? session.programmingLanguage ?? "python" : null,
@@ -618,7 +624,12 @@ export const toPreparationAudioReadiness = (
   runtime: BackendRealtimeRuntimeResponse,
   nowMs = Date.now(),
 ): PreparationAudioReadiness => {
-  const sources = (["microphone", "system"] as const).map(sourceKind => {
+  const requiredSources = runtime.sourceReadiness
+    && "microphone" in runtime.sourceReadiness
+    && !("system" in runtime.sourceReadiness)
+    ? (["microphone"] as const)
+    : (["microphone", "system"] as const);
+  const sources = requiredSources.map(sourceKind => {
     const health = runtime.sourceHealth.find(item => item.sourceKind === sourceKind);
     const backendState = runtime.sourceReadiness?.[sourceKind];
     const signalFresh = Boolean(
@@ -1027,6 +1038,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   private readonly acknowledgedPerformanceTraceOrder: string[] = [];
   private readonly pendingPerformanceAcks: Array<{ readonly key: string; readonly send: () => Promise<unknown> }> = [];
   private readonly lastTranscriptAckAtBySegment = new Map<string, number>();
+  private readonly lastTranscriptAckAtBySession = new Map<string, number>();
   private performanceAckInFlight = false;
 
   private drainPerformanceAcks() {
@@ -1108,8 +1120,20 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     if (stage === "transcript-delivery" && delivery?.eventId && !subtitleRevisionDiagnosticsEnabled()) return;
     if (stage === "transcript-render" && delivery?.segmentId && !subtitleRevisionDiagnosticsEnabled()) {
       const lastAcknowledgedAtMs = this.lastTranscriptAckAtBySegment.get(delivery.segmentId);
-      if (!delivery.isFinal && lastAcknowledgedAtMs !== undefined && observedAtMs - lastAcknowledgedAtMs < TRANSCRIPT_ACK_INTERVAL_MS) return;
+      const lastSessionAckAtMs = this.lastTranscriptAckAtBySession.get(interviewId);
+      if (!delivery.isFinal && (
+        (lastAcknowledgedAtMs !== undefined && observedAtMs - lastAcknowledgedAtMs < TRANSCRIPT_ACK_INTERVAL_MS)
+        || (lastSessionAckAtMs !== undefined && observedAtMs - lastSessionAckAtMs < TRANSCRIPT_ACK_INTERVAL_MS)
+      )) return;
       this.lastTranscriptAckAtBySegment.set(delivery.segmentId, observedAtMs);
+      if (!delivery.isFinal) {
+        this.lastTranscriptAckAtBySession.set(interviewId, observedAtMs);
+        while (this.lastTranscriptAckAtBySession.size > 128) {
+          const oldest = this.lastTranscriptAckAtBySession.keys().next().value;
+          if (typeof oldest !== "string") break;
+          this.lastTranscriptAckAtBySession.delete(oldest);
+        }
+      }
       if (this.lastTranscriptAckAtBySegment.size > 256) {
         const oldest = this.lastTranscriptAckAtBySegment.keys().next().value;
         if (oldest) this.lastTranscriptAckAtBySegment.delete(oldest);
@@ -1271,7 +1295,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     return this.client.request<BillingPresentationState>("/api/v1/billing/state", { headers: authHeaders() }, signal);
   }
 
-  async createDraft(input: { title: string; role: string; company?: string; sessionMode?: SessionMode; interviewLanguage?: InterviewLanguage }, signal?: AbortSignal) {
+  async createDraft(input: { title: string; role: string; company?: string; sessionMode?: SessionMode; interviewLanguage?: InterviewLanguage; interviewAudioMode?: InterviewAudioMode }, signal?: AbortSignal) {
     const persistedTitle = deriveInterviewTitle(input);
     const created = await this.client.request<BackendSessionResponse>("/api/v1/sessions", {
       method: "POST",
@@ -1281,9 +1305,19 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         title: persistedTitle,
         sessionMode: input.sessionMode ?? "interview",
         interviewLanguage: input.interviewLanguage ?? "en-US",
+        interviewAudioMode: input.interviewAudioMode ?? "computer",
       }),
     }, signal);
     return toInterviewSummary(created, { ...input, title: persistedTitle });
+  }
+
+  async updateInterviewAudioMode(id: string, interviewAudioMode: InterviewAudioMode, signal?: AbortSignal) {
+    const updated = await this.client.request<BackendSessionResponse>(`/api/v1/sessions/${id}/audio-mode`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ userId: requireUserId(), interviewAudioMode }),
+    }, signal);
+    return toInterviewSummary(updated);
   }
 
   async updateInterviewLanguage(id: string, interviewLanguage: InterviewLanguage, signal?: AbortSignal) {
@@ -1516,6 +1550,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       screenshots: [],
       sessionId: review.sessionId,
       title: review.title,
+      interviewAudioMode: review.interviewAudioMode ?? "computer",
       startedAtMs: review.startedAtMs,
       endedAtMs: review.endedAtMs,
       transcripts: review.transcripts,

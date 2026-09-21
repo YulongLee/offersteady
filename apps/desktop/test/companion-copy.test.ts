@@ -37,8 +37,8 @@ describe("companion interview wording", () => {
   it("keeps the accepted audio-row layout independent from permission state", () => {
     const source = readFileSync(new URL("../src/renderer/CompanionApp.tsx", import.meta.url), "utf8");
 
-    expect(source).toContain('subtitle="识别你的声音"');
-    expect(source).toContain('statusLabel="我的声音"');
+    expect(source).toContain('bindingInterviewAudioMode === "mobile" ? "收听手机扬声器与现场声音" : "识别你的声音"');
+    expect(source).toContain('statusLabel={bindingInterviewAudioMode === "mobile" ? "现场声音" : "我的声音"}');
     expect(source).toContain('subtitle="识别你能听到的面试官声音"');
     expect(source).toContain('statusLabel="面试官声音"');
     expect(source).not.toContain("开启电脑音频权限");

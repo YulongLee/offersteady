@@ -1,14 +1,16 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import type { SpeakerTranscriptSegment } from "@offersteady/protocol";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  ConversationMonitor,
   ImmediateTranscriptText,
   splitImmediateTranscriptRevision,
   transcriptPresentationLabel,
   transcriptPresentationState,
 } from "./ConversationMonitor";
+import { syntheticState } from "./test-state";
 
 describe("immediate realtime transcript", () => {
   const segment = (overrides: Partial<SpeakerTranscriptSegment> = {}): SpeakerTranscriptSegment => ({
@@ -70,6 +72,24 @@ describe("immediate realtime transcript", () => {
     const view = render(createElement(ImmediateTranscriptText, { segment: segment(), active: true }));
     expect(view.container.querySelector("p")).toHaveTextContent("请介绍你的项目");
     expect(requestAnimationFrame).not.toHaveBeenCalled();
+  });
+
+  it("labels mobile microphone transcripts honestly as room audio", () => {
+    const state = structuredClone(syntheticState);
+    state.speaker = {
+      ...state.speaker,
+      transcripts: [segment({ sourceKind: "microphone", role: "interviewer", isFinal: true })],
+      pendingQuestion: null,
+    };
+    render(createElement(ConversationMonitor, {
+      state,
+      interviewAudioMode: "mobile",
+      onConfirmQuestion: () => undefined,
+      onDismissQuestion: () => undefined,
+    }));
+    expect(screen.getByText("单麦克风 · 现场声音")).toBeInTheDocument();
+    expect(screen.getAllByText("现场声音").length).toBeGreaterThan(0);
+    expect(screen.queryByText("我")).not.toBeInTheDocument();
   });
 
   it("renders a growing revision immediately without a reservoir or animation", () => {

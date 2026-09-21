@@ -519,6 +519,280 @@ class OpenAICompatibleChatVerifier(BaseVerifier):
         return recorder.finalize(status="passed", attempts=1, summary="Qwen chat verification passed.")
 
 
+class QuickAnswerModelVerifier(BaseVerifier):
+    item_id = "qwen_chat_quick"
+    title = "Quick Answer Model Test"
+    provider_name = "qwen-compatible"
+
+    def verify(self, context: VerificationContext) -> VerificationItemResult:
+        from app.services.chat_service import (
+            FilePromptTemplateAdapter,
+            InterviewPromptBuilder,
+            QwenCompatibleGateway,
+            _quick_model_name,
+            _resolve_normalized_question,
+        )
+        from app.interview_languages import output_language_violation
+        from app.ports.interview_session import InterviewLanguage
+
+        recorder = VerificationItemRecorder(
+            context=context,
+            item_id=self.item_id,
+            title=self.title,
+            provider_name=self.provider_name,
+        )
+        settings = context.settings
+        self._require(
+            settings.chat_qwen_base_url and settings.chat_qwen_api_key,
+            code="chat_config_missing",
+            message="Qwen chat base URL or API key is not configured.",
+        )
+
+        def request_quick_answer(
+            *,
+            interview_language: InterviewLanguage,
+            synthetic_question: str,
+            synthetic_material: str,
+        ) -> tuple[dict[str, Any], str]:
+            system_prompt, prompt_config = FilePromptTemplateAdapter(settings).load_stage_prompt("quick", interview_language)
+            prompt = InterviewPromptBuilder().build(
+                question=synthetic_question,
+                session_title="合成后端工程师面试",
+                system_prompt=system_prompt,
+                conversation_history=[],
+                session_material_context_text=synthetic_material,
+                retrieval_context_text="",
+                prompt_config=prompt_config,
+            )
+            gateway = QwenCompatibleGateway(settings)
+            started_at = perf_counter()
+            first_token_ms: int | None = None
+            chunks: list[str] = []
+            try:
+                for chunk in gateway._stream_with_remote(prompt=prompt):
+                    if chunk.text and first_token_ms is None:
+                        first_token_ms = int((perf_counter() - started_at) * 1000)
+                    if chunk.text:
+                        chunks.append(chunk.text)
+            finally:
+                gateway.close()
+            duration_ms = int((perf_counter() - started_at) * 1000)
+            raw_answer = "".join(chunks)
+            normalized_question, visible_answer, normalization_status = _resolve_normalized_question(
+                raw_answer,
+                synthetic_question,
+            )
+            if normalization_status != "completed":
+                raise VerificationError(
+                    "quick_model_normalization_missing",
+                    "Quick answer did not return the required normalized-question envelope.",
+                )
+            if not visible_answer.strip():
+                raise VerificationError("quick_model_answer_missing", "Quick answer did not return visible answer text.")
+            if output_language_violation(f"{normalized_question}\n{visible_answer}", interview_language):
+                raise VerificationError(
+                    "quick_model_language_violation",
+                    "Quick answer did not use the requested interview language.",
+                )
+            return {
+                "model": _quick_model_name(settings),
+                "firstVisibleChunkMs": first_token_ms,
+                "durationMs": duration_ms,
+                "normalizationStatus": normalization_status,
+                "normalizedQuestionHash": _digest_text(normalized_question),
+                "normalizedQuestionLength": len(normalized_question),
+                "answerLength": len(visible_answer),
+                "answerWordCount": len(visible_answer.split()),
+                "chunkCount": len(chunks),
+            }, visible_answer
+
+        def request_chinese_quick_answer() -> dict[str, Any]:
+            metrics, answer = request_quick_answer(
+                interview_language="zh-CN",
+                synthetic_question="请说明如何在订单服务流量突增时保证稳定性？",
+                synthetic_material="[合成简历] 负责订单服务的超时治理与分级降级。",
+            )
+            if not any(keyword in answer for keyword in ("超时", "降级")):
+                raise VerificationError(
+                    "quick_model_grounding_missing",
+                    "Quick answer did not use the relevant synthetic evidence.",
+                )
+            if not 40 <= len(answer) <= 220:
+                raise VerificationError(
+                    "quick_model_length_out_of_range",
+                    "Chinese quick answer length is outside the release-check range.",
+                )
+            return metrics
+
+        def request_english_quick_answer() -> dict[str, Any]:
+            metrics, answer = request_quick_answer(
+                interview_language="en-US",
+                synthetic_question="请用英文说明如何治理订单服务超时？",
+                synthetic_material="[Synthetic resume evidence] 负责订单服务的超时治理与分级降级。",
+            )
+            if "timeout" not in answer.lower():
+                raise VerificationError(
+                    "quick_model_english_grounding_missing",
+                    "English quick answer did not use the relevant synthetic timeout evidence.",
+                )
+            if not 20 <= len(answer.split()) <= 120:
+                raise VerificationError(
+                    "quick_model_length_out_of_range",
+                    "English quick answer length is outside the release-check range.",
+                )
+            return metrics
+
+        recorder.run_step(
+            "quick_answer_stream_zh",
+            request_chinese_quick_answer,
+            success_summary="Streamed a grounded synthetic Chinese quick answer and validated its normalized-question envelope.",
+        )
+        recorder.run_step(
+            "quick_answer_stream_en",
+            request_english_quick_answer,
+            success_summary="Streamed a grounded synthetic English quick answer from mixed-language evidence.",
+        )
+        return recorder.finalize(status="passed", attempts=1, summary="Quick answer model verification passed.")
+
+
+class DetailedAnswerModelVerifier(BaseVerifier):
+    item_id = "qwen_chat_detail"
+    title = "Detailed Answer Model Test"
+    provider_name = "qwen-compatible"
+
+    def verify(self, context: VerificationContext) -> VerificationItemResult:
+        from app.interview_languages import output_language_violation
+        from app.ports.interview_session import InterviewLanguage
+        from app.services.chat_service import (
+            FilePromptTemplateAdapter,
+            InterviewPromptBuilder,
+            QwenCompatibleGateway,
+            _detail_model_name,
+        )
+
+        recorder = VerificationItemRecorder(
+            context=context,
+            item_id=self.item_id,
+            title=self.title,
+            provider_name=self.provider_name,
+        )
+        settings = context.settings
+        self._require(
+            settings.chat_qwen_base_url and settings.chat_qwen_api_key,
+            code="chat_config_missing",
+            message="Qwen chat base URL or API key is not configured.",
+        )
+
+        def request_detail_answer(
+            *,
+            interview_language: InterviewLanguage,
+            synthetic_question: str,
+            synthetic_material: str,
+            synthetic_retrieval: str,
+            quick_anchor: str,
+        ) -> tuple[dict[str, Any], str]:
+            system_prompt, prompt_config = FilePromptTemplateAdapter(settings).load_stage_prompt(
+                "detail",
+                interview_language,
+            )
+            anchor_prefix = "Quick answer anchor: " if interview_language == "en-US" else "本轮简要回答锚点："
+            prompt = InterviewPromptBuilder().build(
+                question=synthetic_question,
+                session_title="Synthetic backend engineering interview",
+                system_prompt=system_prompt,
+                conversation_history=[f"{anchor_prefix}{quick_anchor}"],
+                session_material_context_text=synthetic_material,
+                retrieval_context_text=synthetic_retrieval,
+                prompt_config=prompt_config,
+            )
+            gateway = QwenCompatibleGateway(settings)
+            started_at = perf_counter()
+            first_visible_chunk_ms: int | None = None
+            chunks: list[str] = []
+            try:
+                for chunk in gateway._stream_with_remote(prompt=prompt):
+                    if chunk.text and first_visible_chunk_ms is None:
+                        first_visible_chunk_ms = int((perf_counter() - started_at) * 1000)
+                    if chunk.text:
+                        chunks.append(chunk.text)
+            finally:
+                gateway.close()
+            duration_ms = int((perf_counter() - started_at) * 1000)
+            answer = "".join(chunks).strip()
+            if not answer:
+                raise VerificationError(
+                    "detail_model_answer_missing",
+                    "Detailed answer did not return visible answer text.",
+                )
+            if output_language_violation(answer, interview_language):
+                raise VerificationError(
+                    "detail_model_language_violation",
+                    "Detailed answer did not use the requested interview language.",
+                )
+            return {
+                "model": _detail_model_name(settings),
+                "firstVisibleChunkMs": first_visible_chunk_ms,
+                "durationMs": duration_ms,
+                "answerHash": _digest_text(answer),
+                "answerLength": len(answer),
+                "answerWordCount": len(answer.split()),
+                "chunkCount": len(chunks),
+            }, answer
+
+        def request_chinese_detail_answer() -> dict[str, Any]:
+            metrics, answer = request_detail_answer(
+                interview_language="zh-CN",
+                synthetic_question="请详细说明如何在订单服务流量突增时保证稳定性？",
+                synthetic_material="[合成简历] 负责订单服务的超时治理与分级降级。",
+                synthetic_retrieval="[合成知识库] 网关超时预算为800毫秒；依赖异常时按非核心功能分级降级。",
+                quick_anchor="先设置明确的超时预算，并对非核心功能实施分级降级。",
+            )
+            if not all(keyword in answer for keyword in ("超时", "降级")):
+                raise VerificationError(
+                    "detail_model_grounding_missing",
+                    "Detailed answer did not preserve the synthetic quick anchor and retrieval evidence.",
+                )
+            if not 100 <= len(answer) <= 1800:
+                raise VerificationError(
+                    "detail_model_length_out_of_range",
+                    "Chinese detailed answer length is outside the release-check range.",
+                )
+            return metrics
+
+        def request_english_detail_answer() -> dict[str, Any]:
+            metrics, answer = request_detail_answer(
+                interview_language="en-US",
+                synthetic_question="Please explain in detail how you would control order-service timeouts during a traffic spike.",
+                synthetic_material="[Synthetic resume] Owned timeout governance and tiered degradation for an order service.",
+                synthetic_retrieval="[Synthetic knowledge base] The gateway timeout budget is 800 ms; non-critical features degrade when dependencies fail.",
+                quick_anchor="Set an explicit timeout budget and degrade non-critical features first.",
+            )
+            lowered = answer.lower()
+            if "timeout" not in lowered or "degrad" not in lowered:
+                raise VerificationError(
+                    "detail_model_english_grounding_missing",
+                    "English detailed answer did not preserve the synthetic quick anchor and retrieval evidence.",
+                )
+            if not 60 <= len(answer.split()) <= 400:
+                raise VerificationError(
+                    "detail_model_length_out_of_range",
+                    "English detailed answer length is outside the release-check range.",
+                )
+            return metrics
+
+        recorder.run_step(
+            "detail_answer_stream_zh",
+            request_chinese_detail_answer,
+            success_summary="Streamed a grounded synthetic Chinese detailed answer that preserved the quick-answer anchor.",
+        )
+        recorder.run_step(
+            "detail_answer_stream_en",
+            request_english_detail_answer,
+            success_summary="Streamed a grounded synthetic English detailed answer that preserved the quick-answer anchor.",
+        )
+        return recorder.finalize(status="passed", attempts=1, summary="Detailed answer model verification passed.")
+
+
 class OpenAICompatibleVisionVerifier(BaseVerifier):
     item_id = "qwen_vision"
     title = "Qwen Vision Test"
@@ -1147,6 +1421,8 @@ def build_default_verifiers() -> dict[str, IntegrationVerifier]:
         SmsAuthenticationVerifier(),
         MineruVerifier(),
         OpenAICompatibleChatVerifier(),
+        QuickAnswerModelVerifier(),
+        DetailedAnswerModelVerifier(),
         OpenAICompatibleVisionVerifier(),
         EmbeddingVerifier(),
         RerankVerifier(),

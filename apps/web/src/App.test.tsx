@@ -62,7 +62,7 @@ describe("OfferSteady web application", () => {
       deviceId: "fixture-last-device",
       displayName: "上次使用的 Mac",
       maskedManualCode: "••••56",
-      capabilities: { microphone: true, systemAudio: true },
+      capabilities: { appVersion: "0.1.0", platform: "macos", architecture: "arm64", microphone: true, systemAudio: true },
       online: true,
       lastSeenAtMs: Date.now(),
     });
@@ -72,7 +72,7 @@ describe("OfferSteady web application", () => {
       deviceId: `fixture-device-${command.manualCode}`,
       manualCode: command.manualCode ?? "••••56",
       displayName: "面试稳伴随程序 · Mac",
-      capabilities: { microphone: true, systemAudio: true, screenCapture: true },
+      capabilities: { appVersion: "0.1.0", platform: "macos", architecture: "arm64", microphone: true, systemAudio: true, screenCapture: true },
       status: "bound",
       boundAtMs: Date.now(),
       lastSeenAtMs: Date.now(),
@@ -274,9 +274,10 @@ describe("OfferSteady web application", () => {
   });
 
   it("validates and creates an interview draft", async () => {
-    vi.spyOn(interviewAppAdapter, "createDraft").mockResolvedValue({
+    const createDraft = vi.spyOn(interviewAppAdapter, "createDraft").mockResolvedValue({
       id: "draft",
       title: "前端架构师终面",
+      interviewAudioMode: "mobile",
       role: "前端架构师",
       status: "preparing",
       updatedAt: "刚刚",
@@ -288,12 +289,18 @@ describe("OfferSteady web application", () => {
     expect(screen.getByLabelText("面试名称")).toHaveValue("");
     expect(screen.getByLabelText("目标岗位")).toHaveValue("");
     expect(screen.getByLabelText("公司（可选）")).toHaveValue("");
+    expect(screen.getByRole("radio", { name: /电脑面试/ })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: /手机面试/ }));
     fireEvent.click(screen.getByRole("button", { name: /保存并准备/ }));
     expect(screen.getByRole("alert")).toHaveTextContent("请填写面试名称和目标岗位");
     fireEvent.change(screen.getByLabelText("面试名称"), { target: { value: "前端架构师终面" } });
     fireEvent.change(screen.getByLabelText("目标岗位"), { target: { value: "前端架构师" } });
     fireEvent.click(screen.getByRole("button", { name: /保存并准备/ }));
+    await waitFor(() => expect(createDraft).toHaveBeenCalledWith(expect.objectContaining({
+      interviewAudioMode: "mobile",
+    }), expect.any(AbortSignal)));
     expect(await screen.findByRole("heading", { name: "前端架构师终面" })).toBeInTheDocument();
+    expect(screen.getByText("让 Mac 麦克风听清手机外放")).toBeInTheDocument();
     expect(screen.getByText("输入机器码连接本场")).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "一键连接上次设备" }, { timeout: 3_000 }));
     await waitFor(() => expect(interviewAppAdapter.bindDesktopDevice).toHaveBeenCalledWith({
@@ -331,6 +338,7 @@ describe("OfferSteady web application", () => {
       title: "算法工程师终面",
       role: "算法工程师",
       company: "新公司",
+      interviewAudioMode: "computer",
     }, expect.any(AbortSignal)));
     expect(screen.queryByRole("radio", { name: /笔试模式/ })).not.toBeInTheDocument();
   });
@@ -384,7 +392,7 @@ describe("OfferSteady web application", () => {
     expect(screen.queryByText("0/1")).not.toBeInTheDocument();
   });
 
-  it("shows and dismisses a non-blocking update reminder for an already connected interview companion", async () => {
+  it("blocks an already connected outdated interview companion and directs the user to update", async () => {
     const state = clonedState();
     state.releaseManifest = {
       ...state.releaseManifest,
@@ -406,16 +414,12 @@ describe("OfferSteady web application", () => {
 
     openAtWithState("/app/interviews/demo/prepare", state, true);
 
-    const reminder = await screen.findByRole("region", { name: "伴随程序更新提醒" });
-    expect(within(reminder).getByText("发现新版伴随程序 1.2.13")).toBeInTheDocument();
+    const reminder = await screen.findByRole("region", { name: "伴随程序必须更新" });
+    expect(within(reminder).getByText("需要更新伴随程序至 1.2.13")).toBeInTheDocument();
     expect(within(reminder).getByText(/当前版本 1.2.10a/)).toBeInTheDocument();
-    expect(within(reminder).getByRole("link", { name: "立即下载" })).toHaveAttribute("href", "/api/v1/web/downloads/desktop/mac-arm64-1213");
-    expect(await screen.findByRole("button", { name: /开始面试/ })).toBeEnabled();
-    expect(interviewAppAdapter.bindDesktopDevice).not.toHaveBeenCalled();
-
-    fireEvent.click(within(reminder).getByRole("button", { name: "继续使用" }));
-    expect(screen.queryByRole("region", { name: "伴随程序更新提醒" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /开始面试/ })).toBeEnabled();
+    expect(within(reminder).getByRole("link", { name: "下载最新版" })).toHaveAttribute("href", "/api/v1/web/downloads/desktop/mac-arm64-1213");
+    expect(await screen.findByRole("button", { name: /开始面试/ })).toBeDisabled();
+    expect(screen.getByText("进入面试前请确认助手为最新版")).toBeInTheDocument();
     expect(interviewAppAdapter.bindDesktopDevice).not.toHaveBeenCalled();
   });
 
@@ -451,12 +455,12 @@ describe("OfferSteady web application", () => {
     openAtWithState("/app/interviews/written-update/prepare", state, true);
     fireEvent.click(await screen.findByRole("button", { name: "连接上次设备" }));
 
-    expect(await screen.findByRole("region", { name: "伴随程序更新提醒" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /开始笔试/ })).toBeEnabled();
+    expect(await screen.findByRole("region", { name: "伴随程序必须更新" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /开始笔试/ })).toBeDisabled();
     expect(interviewAppAdapter.bindDesktopDevice).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps preparation unchanged when connected device version metadata is unavailable", async () => {
+  it("blocks preparation when connected device version metadata is unavailable", async () => {
     vi.mocked(interviewAppAdapter.getDesktopDeviceBinding).mockResolvedValueOnce({
       bindingId: "legacy-binding",
       sessionId: "demo",
@@ -471,8 +475,9 @@ describe("OfferSteady web application", () => {
 
     openAtWithState("/app/interviews/demo/prepare", clonedState(), true);
 
-    expect(await screen.findByRole("button", { name: /开始面试/ })).toBeEnabled();
-    expect(screen.queryByRole("region", { name: "伴随程序更新提醒" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /开始面试/ })).toBeDisabled();
+    expect(screen.getByRole("region", { name: "伴随程序必须更新" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "前往下载中心" })).toHaveAttribute("href", "/app/devices");
     expect(interviewAppAdapter.bindDesktopDevice).not.toHaveBeenCalled();
   });
 

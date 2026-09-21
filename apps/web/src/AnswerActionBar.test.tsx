@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AnswerActionBar } from "./AnswerActionBar";
 import { MobileInterviewControls } from "./MobileInterviewControls";
+import { WebSearchToggle } from "./WebSearchToggle";
 
 describe("quiet live answer actions", () => {
   it("lets desktop users request quick-answer guidance before a question is available", () => {
@@ -20,31 +21,17 @@ describe("quiet live answer actions", () => {
     expect(onQuickAnswer).toHaveBeenCalledOnce();
   });
 
-  it("toggles the optional web-grounded detailed answer mode", () => {
+  it("toggles the optional web-grounded detailed answer mode from the live header control", () => {
     const onToggleWebSearch = vi.fn();
-    const { rerender } = render(<AnswerActionBar
-      manualDraft=""
-      screenshotTask={null}
-      onQuickAnswer={vi.fn()}
-      onScreenshot={vi.fn()}
-      onToggleWebSearch={onToggleWebSearch}
-    />);
+    const { rerender } = render(<WebSearchToggle enabled={false} onToggle={onToggleWebSearch} />);
 
-    const button = screen.getByRole("button", { name: "联网回答" });
-    expect(button).toHaveAttribute("aria-pressed", "false");
-    fireEvent.click(button);
+    const toggle = screen.getByRole("switch", { name: "联网回答" });
+    expect(toggle).not.toBeChecked();
+    fireEvent.click(toggle);
     expect(onToggleWebSearch).toHaveBeenCalledOnce();
 
-    rerender(<AnswerActionBar
-      manualDraft=""
-      screenshotTask={null}
-      onQuickAnswer={vi.fn()}
-      onScreenshot={vi.fn()}
-      webSearchEnabled
-      onToggleWebSearch={onToggleWebSearch}
-    />);
-    expect(screen.getByRole("button", { name: "联网回答" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText(/实时网页资料/)).toBeInTheDocument();
+    rerender(<WebSearchToggle enabled onToggle={onToggleWebSearch} />);
+    expect(screen.getByRole("switch", { name: "联网回答" })).toBeChecked();
   });
 
   it("lets mobile users request quick-answer guidance before a question is available", () => {

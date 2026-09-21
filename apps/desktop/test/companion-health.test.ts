@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { audioSourcePresentationHealth, BINDING_STATUS_POLL_MS, captureStateForReliability, captureStateForSourceHealth, companionPresentationHealth, desktopActiveConnectionQuery, desktopBindingLeaseIdentity, hasPublisherTakenOver, mergeDisplayedSourceHealth, permissionPresentationHealth } from "../src/renderer/CompanionApp";
+import { audioChannelsForInterviewMode, audioSourcePresentationHealth, BINDING_STATUS_POLL_MS, captureStateForReliability, captureStateForSourceHealth, companionPresentationHealth, desktopActiveConnectionQuery, desktopBindingLeaseIdentity, hasPublisherTakenOver, mergeDisplayedSourceHealth, permissionPresentationHealth } from "../src/renderer/CompanionApp";
 import { AUDIO_READINESS_TTL_MS, readinessFields, signalEvidenceIsFresh, sourceHealthIsAudioReady } from "../src/renderer/audio/audio-readiness";
-import { productionAudioTransportPolicy, publisherCaptureStateForTransport, publisherFailureDiagnostic, publisherFailureIsTerminal } from "../src/renderer/audio/realtime-publisher";
+import { productionAudioTransportPolicy, publisherCaptureStateForTransport, publisherFailureDiagnostic, publisherFailureIsTerminal, transportPublisherSourceKind } from "../src/renderer/audio/realtime-publisher";
 
 describe("companion displayed source health", () => {
   it("keeps normal idle, live silence, and transient recovery green", () => {
@@ -187,5 +187,17 @@ describe("companion displayed source health", () => {
       boundAtMs: 1,
       lastSeenAtMs: 1,
     })).toBe("binding-new:4");
+  });
+
+  it("uses only the Mac microphone for mobile interviews and preserves computer defaults", () => {
+    expect(audioChannelsForInterviewMode("mobile")).toEqual(["microphone"]);
+    expect(audioChannelsForInterviewMode("computer")).toBeUndefined();
+    expect(audioChannelsForInterviewMode("mobile", ["system"])).toEqual(["microphone"]);
+  });
+
+  it("creates a microphone transport for mobile mode without changing the computer mixed transport", () => {
+    expect(transportPublisherSourceKind(audioChannelsForInterviewMode("mobile"))).toBe("microphone");
+    expect(transportPublisherSourceKind(audioChannelsForInterviewMode("computer"))).toBe("mixed");
+    expect(transportPublisherSourceKind(["microphone", "system"])).toBe("mixed");
   });
 });

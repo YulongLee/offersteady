@@ -12,6 +12,7 @@ from app.services.integration_verification import (
     VerificationError,
     VerificationItemResult,
     VerificationItemRecorder,
+    build_default_verifiers,
 )
 
 
@@ -126,3 +127,7 @@ def test_runner_preserves_completed_steps_on_failure(tmp_path: Path) -> None:
     assert [step.name for step in report.results[0].steps] == ["first", "second"]
     assert report.results[0].steps[0].status == "passed"
     assert report.results[0].steps[1].status == "failed"
+
+
+def test_default_verifiers_include_dedicated_live_answer_model_probes() -> None:
+    assert {"qwen_chat_quick", "qwen_chat_detail"} <= build_default_verifiers().keys()

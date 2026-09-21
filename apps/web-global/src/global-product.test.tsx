@@ -164,6 +164,17 @@ describe("Global English product", () => {
     expect(document.body).not.toHaveTextContent("Continue the interview workflow and use AI output only as guidance based on your real experience.");
   });
 
+  it("offers computer and mobile interview modes with computer selected by default", () => {
+    window.history.replaceState({}, "", "/app/interviews/new");
+    const state = structuredClone(syntheticState) as unknown as WebAppState;
+
+    render(<App initialAuthenticated initialState={state} />);
+
+    expect(screen.getByRole("radio", { name: /Computer interview/ })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /Mobile interview/ })).not.toBeChecked();
+    expect(screen.getByText(/phone speaker through the Mac microphone/i)).toBeInTheDocument();
+  });
+
   it("shows the approved international pricing without domestic payment methods", () => {
     window.history.replaceState({}, "", "/app/billing");
     const fetchSpy = vi.spyOn(globalThis, "fetch");

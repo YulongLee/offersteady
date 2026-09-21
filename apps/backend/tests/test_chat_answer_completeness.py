@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 import logging
 
 import pytest
 
 from app.core.config import get_settings
 from app.ports.chat import ChatAnswerChunk, PromptBuildResult, PromptConfig
-from app.services.chat_service import ChatService, FilePromptTemplateAdapter, NonRetryableChatError, QwenCompatibleGateway
+from app.services.chat_service import ChatService, FilePromptTemplateAdapter, InterviewPromptBuilder, NonRetryableChatError, QwenCompatibleGateway
 
 
 def _prompt(template_id: str) -> PromptBuildResult:
@@ -39,6 +40,145 @@ def test_gateway_uses_stage_specific_token_budgets() -> None:
     assert gateway._max_tokens_for_prompt(_prompt("interview-chat-quick")) == 321
     assert gateway._max_tokens_for_prompt(_prompt("interview-chat-detail")) == 987
     assert gateway._max_tokens_for_prompt(_prompt("interview-chat-continuation-detail")) == 654
+
+
+def test_gateway_routes_quick_and_detail_stages_to_their_dedicated_models() -> None:
+    settings = get_settings().model_copy(update={
+        "chat_qwen_model": "shared-model",
+        "chat_quick_model": "quick-model",
+        "chat_detail_model": "detail-model",
+    })
+    gateway = QwenCompatibleGateway(settings)
+
+    assert gateway._model_for_prompt(_prompt("interview-chat-quick")) == "quick-model"
+    assert gateway._model_for_prompt(_prompt("interview-chat-en-quick")) == "quick-model"
+    assert gateway._model_for_prompt(_prompt("interview-chat-continuation-quick")) == "quick-model"
+    assert gateway._model_for_prompt(_prompt("interview-chat-detail")) == "detail-model"
+    assert gateway._model_for_prompt(_prompt("interview-chat-continuation-detail")) == "detail-model"
+    assert gateway._model_for_prompt(_prompt("interview-chat-generic")) == "shared-model"
+
+
+def test_prompt_builder_repeats_machine_readable_protocol_only_for_quick_stage() -> None:
+    builder = InterviewPromptBuilder()
+    quick = builder.build(
+        question="如何保证服务稳定？",
+        session_title="合成面试",
+        system_prompt="policy",
+        conversation_history=[],
+        session_material_context_text="",
+        retrieval_context_text="",
+        prompt_config=_prompt("interview-chat-quick").prompt_config,
+    )
+    detail = builder.build(
+        question="如何保证服务稳定？",
+        session_title="合成面试",
+        system_prompt="policy",
+        conversation_history=[],
+        session_material_context_text="",
+        retrieval_context_text="",
+        prompt_config=_prompt("interview-chat-detail").prompt_config,
+    )
+
+    assert quick.user_prompt.endswith("</required_output_protocol>")
+    assert "你的第一个字符必须是<normalized_question>" in quick.user_prompt
+    assert "<required_output_protocol>" not in detail.user_prompt
+
+
+@pytest.mark.parametrize("quick_model", [None, "", "   "])
+def test_gateway_quick_model_falls_back_to_shared_model(quick_model: str | None) -> None:
+    settings = get_settings().model_copy(update={
+        "chat_qwen_model": "shared-model",
+        "chat_quick_model": quick_model,
+    })
+    gateway = QwenCompatibleGateway(settings)
+
+    assert gateway._model_for_prompt(_prompt("interview-chat-quick")) == "shared-model"
+
+
+@pytest.mark.parametrize("detail_model", [None, "", "   "])
+def test_gateway_detail_model_falls_back_to_shared_model(detail_model: str | None) -> None:
+    settings = get_settings().model_copy(update={
+        "chat_qwen_model": "shared-model",
+        "chat_detail_model": detail_model,
+    })
+    gateway = QwenCompatibleGateway(settings)
+
+    assert gateway._model_for_prompt(_prompt("interview-chat-detail")) == "shared-model"
+    assert gateway._model_for_prompt(_prompt("interview-chat-continuation-detail")) == "shared-model"
+
+
+def test_gateway_sends_and_logs_actual_stage_models_without_prompt_content(caplog: pytest.LogCaptureFixture) -> None:
+    class FakeResponse:
+        status_code = 200
+
+    class FakeHttpClient:
+        def __init__(self) -> None:
+            self.payloads: list[dict] = []
+
+        def post(self, _url, *, headers, json):
+            self.payloads.append(json)
+            return FakeResponse()
+
+        def close(self) -> None:
+            return None
+
+    settings = get_settings().model_copy(update={
+        "chat_qwen_base_url": "https://provider.example/v1",
+        "chat_qwen_api_key": "synthetic-test-key",
+        "chat_qwen_model": "shared-model",
+        "chat_quick_model": "deepseek-v4.1-flash",
+        "chat_detail_model": "deepseek-v4.1-flash",
+    })
+    client = FakeHttpClient()
+    gateway = QwenCompatibleGateway(settings, http_client=client)  # type: ignore[arg-type]
+
+    with caplog.at_level(logging.INFO):
+        gateway._post_completion(prompt=_prompt("interview-chat-quick"), stream=False)
+        gateway._post_completion(prompt=_prompt("interview-chat-detail"), stream=False)
+
+    assert [payload["model"] for payload in client.payloads] == ["deepseek-v4.1-flash", "deepseek-v4.1-flash"]
+    events = [json.loads(record.message) for record in caplog.records if '"event": "chat.provider_request_finished"' in record.message]
+    assert [(event["stage"], event["model"]) for event in events[-2:]] == [
+        ("quick", "deepseek-v4.1-flash"),
+        ("detail", "deepseek-v4.1-flash"),
+    ]
+    assert all("system" not in record.message and "user" not in record.message for record in caplog.records)
+
+
+@pytest.mark.parametrize(
+    ("template_id", "expected_model"),
+    [
+        ("interview-chat-quick", "quick-model"),
+        ("interview-chat-detail", "detail-model"),
+    ],
+)
+def test_remote_gateway_result_reports_actual_stage_model(
+    monkeypatch: pytest.MonkeyPatch,
+    template_id: str,
+    expected_model: str,
+) -> None:
+    settings = get_settings().model_copy(update={
+        "chat_qwen_base_url": "https://provider.example/v1",
+        "chat_qwen_api_key": "synthetic-test-key",
+        "chat_qwen_model": "shared-model",
+        "chat_quick_model": "quick-model",
+        "chat_detail_model": "detail-model",
+    })
+    gateway = QwenCompatibleGateway(settings)
+    monkeypatch.setattr(gateway, "_request_completion", lambda *, prompt: {
+        "choices": [{"message": {"content": "合成回答。"}}],
+        "usage": {"prompt_tokens": 4, "completion_tokens": 3, "total_tokens": 7},
+    })
+
+    result = gateway._generate_with_remote(
+        question="合成问题",
+        prompt=_prompt(template_id),
+        stream=False,
+    )
+
+    assert result.model_name == expected_model
+    assert result.usage is not None
+    assert result.usage.model_name == expected_model
 
 
 def test_gateway_reuses_and_closes_one_injected_http_client() -> None:

@@ -16,7 +16,7 @@ import { authClient } from "./auth-client";
 import { materialUploadAdapter, saveMaterialDownload } from "./material-upload-adapter";
 import { applyAppearancePreferences, persistAppearancePreferences, readAppearancePreferences, type AppearancePreferences } from "./appearance-preferences";
 import { officialSocialContacts } from "./social-contacts";
-import { companionUpdate, type CompanionUpdate } from "./platform";
+import { companionVersionRequirement, type CompanionVersionRequirement } from "./platform";
 import "./styles.css";
 import "./homepage-commercial.css";
 import { HomepageDownloads } from "./HomepageDownloads";
@@ -473,8 +473,8 @@ function NewInterviewPage() {
   const [form, setForm] = useState(() => {
     const latest = state.interviews.find(item => item.sessionMode !== "written");
     return latest
-      ? { title: latest.title, role: latest.role, company: latest.company ?? "" }
-      : { title: "", role: "", company: "" };
+      ? { title: latest.title, role: latest.role, company: latest.company ?? "", interviewAudioMode: latest.interviewAudioMode ?? "computer" as const }
+      : { title: "", role: "", company: "", interviewAudioMode: "computer" as const };
   });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -500,7 +500,7 @@ function NewInterviewPage() {
       setSaving(false);
     }
   };
-  return <main className="app-page narrow"><Link className="back-link" to={routes.app}>← 返回面试首页</Link><PageHeader eyebrow="NEW INTERVIEW" title="创建一场面试" detail="先给这场面试一个清晰目标，资料可以在下一步补充。" /><form className="form-panel" onSubmit={submit}><label>面试名称<input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="例如：高级前端工程师一面" /></label><label>目标岗位<input value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} placeholder="例如：高级前端工程师" /></label><label>公司（可选）<input value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} placeholder="例如：示例科技" /></label>{error ? <div className="inline-error" role="alert">{error}</div> : null}<div className="form-actions"><Link className="button ghost" to={routes.app}>取消</Link><button className="button primary" type="submit" disabled={saving}>{saving ? "创建中…" : "保存并准备 →"}</button></div><small className="saved-note">草稿只在你确认提交后保存。</small></form></main>;
+  return <main className="app-page narrow"><Link className="back-link" to={routes.app}>← 返回面试首页</Link><PageHeader eyebrow="NEW INTERVIEW" title="创建一场面试" detail="先选择面试设备，再补充这场面试的目标。" /><form className="form-panel" onSubmit={submit}><fieldset className="interview-audio-mode-picker"><legend>面试设备</legend><p>电脑面试沿用双通道收音；手机面试通过 Mac 麦克风听取手机外放。</p><div><label className={form.interviewAudioMode === "computer" ? "selected" : ""}><input type="radio" name="interview-audio-mode" value="computer" checked={form.interviewAudioMode === "computer"} onChange={() => setForm({ ...form, interviewAudioMode: "computer" })} /><span><strong>电脑面试</strong><small>面试在 Mac 上进行，分别识别面试官与我的声音</small></span></label><label className={form.interviewAudioMode === "mobile" ? "selected" : ""}><input type="radio" name="interview-audio-mode" value="mobile" checked={form.interviewAudioMode === "mobile"} onChange={() => setForm({ ...form, interviewAudioMode: "mobile" })} /><span><strong>手机面试</strong><small>手机开启扬声器，Mac 麦克风收听现场声音</small></span></label></div></fieldset><label>面试名称<input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="例如：高级前端工程师一面" /></label><label>目标岗位<input value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} placeholder="例如：高级前端工程师" /></label><label>公司（可选）<input value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} placeholder="例如：示例科技" /></label>{error ? <div className="inline-error" role="alert">{error}</div> : null}<div className="form-actions"><Link className="button ghost" to={routes.app}>取消</Link><button className="button primary" type="submit" disabled={saving}>{saving ? "创建中…" : "保存并准备 →"}</button></div><small className="saved-note">草稿只在你确认提交后保存。</small></form></main>;
 }
 
 function NewWrittenExamPage() {
@@ -535,12 +535,16 @@ function NewWrittenExamPage() {
   return <main className="app-page narrow"><Link className="back-link" to={routes.writtenExams}>← 返回笔试模式</Link><PageHeader eyebrow="NEW WRITTEN EXAM" title="创建一场笔试" detail="笔试模式只使用截屏回答，不启用收音和实时转写。" /><form className="form-panel" onSubmit={submit}><label>笔试名称<input value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} placeholder="例如：算法笔试" /></label><label>目标岗位<input value={form.role} onChange={event => setForm({ ...form, role: event.target.value })} placeholder="例如：算法工程师" /></label><label>公司（可选）<input value={form.company} onChange={event => setForm({ ...form, company: event.target.value })} placeholder="例如：示例科技" /></label>{error ? <div className="inline-error" role="alert">{error}</div> : null}<div className="form-actions"><Link className="button ghost" to={routes.writtenExams}>取消</Link><button className="button primary" type="submit" disabled={saving}>{saving ? "创建中…" : "保存并准备 →"}</button></div><small className="saved-note">成功进入笔试固定扣除 30 积分，每次截屏回答按现有规则计费。</small></form></main>;
 }
 
-function CompanionUpdateReminder({ update, onContinue }: { readonly update: CompanionUpdate; readonly onContinue: () => void }) {
-  return <section className="companion-update-reminder" aria-label="伴随程序更新提醒">
-    <span aria-hidden="true">↑</span>
-    <div><strong>发现新版伴随程序 {update.release.version}</strong><small>当前版本 {update.currentVersion}，建议更新到与你设备匹配的最新版；本次也可以继续使用。</small></div>
-    <div className="companion-update-actions"><a className="button primary" href={update.release.downloadUrl} download>立即下载</a><button className="button ghost" type="button" onClick={onContinue}>继续使用</button></div>
+function CompanionUpdateRequired({ requirement }: { readonly requirement: CompanionVersionRequirement }) {
+  return <section className="companion-update-reminder companion-update-required" aria-label="伴随程序必须更新">
+    <span aria-hidden="true">!</span>
+    <div><strong>{requirement.release ? `需要更新伴随程序至 ${requirement.release.version}` : "需要安装最新版伴随程序"}</strong><small>{requirement.currentVersion ? `当前版本 ${requirement.currentVersion} 已无法用于新面试。` : "当前助手版本信息无法验证。"} 更新完成并重新打开助手后，再验证机器码。</small></div>
+    <div className="companion-update-actions">{requirement.release ? <a className="button primary" href={requirement.release.downloadUrl} download>下载最新版</a> : <Link className="button primary" to={routes.devices}>前往下载中心</Link>}</div>
   </section>;
+}
+
+function CompanionVersionNotice() {
+  return <div className="companion-version-notice" role="note"><strong>进入面试前请确认助手为最新版</strong><span>旧版或无法识别版本的助手不能通过验证。</span><Link to={routes.devices}>检查并更新助手 →</Link></div>;
 }
 
 function PreparationPage() {
@@ -559,7 +563,6 @@ function PreparationPage() {
   const [lastDevice, setLastDevice] = useState<Awaited<ReturnType<NonNullable<typeof interviewAppAdapter.getLastDesktopDevice>>> | null>(null);
   const [binding, setBinding] = useState(false);
   const [bindingError, setBindingError] = useState("");
-  const [dismissedUpdateKey, setDismissedUpdateKey] = useState("");
   const [activeConflict, setActiveConflict] = useState<Awaited<ReturnType<typeof interviewAppAdapter.getActiveInterviewConflict>>["activeInterview"] | undefined>(undefined);
   const [conflictError, setConflictError] = useState("");
   const [resolvingConflict, setResolvingConflict] = useState(false);
@@ -570,6 +573,8 @@ function PreparationPage() {
   const interview = state.interviews.find(item => item.id === id);
   const interviewTitle = interview?.title ?? "本场面试";
   const isWritten = interview?.sessionMode === "written";
+  const interviewAudioMode = interview?.interviewAudioMode ?? "computer";
+  const isMobileInterview = interviewAudioMode === "mobile";
   const interviewLanguage = interview?.interviewLanguage ?? "zh-CN";
   const programmingRequired = interview?.programmingRequired ?? false;
   const programmingLanguage = interview?.programmingLanguage ?? "python";
@@ -580,18 +585,24 @@ function PreparationPage() {
   const selectionReady = isWritten || validity === "valid";
   const machineReady = Boolean(deviceBinding);
   const conflictResolved = activeConflict === null;
-  const canStart = selectionReady && machineReady && conflictResolved;
-  const availableUpdate = useMemo(
-    () => deviceBinding ? companionUpdate(deviceBinding.capabilities, state.releaseManifest) : null,
+  const versionRequirement = useMemo(
+    () => deviceBinding ? companionVersionRequirement(deviceBinding.capabilities, state.releaseManifest) : null,
     [deviceBinding, state.releaseManifest],
   );
-  const updateKey = availableUpdate && deviceBinding ? `${deviceBinding.bindingId}:${availableUpdate.release.id}` : "";
-  const visibleUpdate = availableUpdate && updateKey !== dismissedUpdateKey ? availableUpdate : null;
-  const complete = isWritten ? Number(machineReady) : Number(selectionReady) + Number(machineReady);
-  const inputDiagnostic = machineReady
-      ? "伴随程序已连接，正在后台准备音频与实时识别"
+  const companionCurrent = !versionRequirement || versionRequirement.status === "current";
+  const machineVerified = machineReady && companionCurrent;
+  const canStart = selectionReady && machineVerified && conflictResolved;
+  const complete = isWritten ? Number(machineVerified) : Number(selectionReady) + Number(machineVerified);
+  const inputDiagnostic = machineReady && !companionCurrent
+      ? "当前助手不是可验证的最新版，请先更新"
+      : machineReady
+      ? isMobileInterview
+      ? "伴随程序已连接，正在准备 Mac 麦克风与实时识别"
+      : "伴随程序已连接，正在后台准备音频与实时识别"
       : state.preparation.device?.connected
-      ? "本地端会继续检查收音、系统音频和问题检测"
+      ? isMobileInterview
+      ? "本地端会继续检查 Mac 麦克风和问题检测"
+      : "本地端会继续检查收音、系统音频和问题检测"
       : "请输入桌面伴随程序中的 6 位机器码，绑定本场收音机器";
   const saveSelection = async (next: typeof selection) => {
     if (confirmingMaterials) return;
@@ -757,17 +768,18 @@ function PreparationPage() {
     <section className="panel written-preparation-card">
       <div className="panel-heading">
         <h2>连接伴随助手</h2>
-        <span className={machineReady ? "written-connection-ready" : ""}>{machineReady ? "已连接" : "待连接"}</span>
+        <span className={machineVerified ? "written-connection-ready" : ""}>{machineVerified ? "已连接" : machineReady ? "待更新" : "待连接"}</span>
       </div>
-      {deviceBinding ? <div className="written-connected-device"><i>✓</i><span><strong>{deviceBinding.displayName}</strong><small>助手连接正常</small></span></div> : null}
+      {deviceBinding ? <div className="written-connected-device"><i>{companionCurrent ? "✓" : "!"}</i><span><strong>{deviceBinding.displayName}</strong><small>{companionCurrent ? "助手连接正常" : "请更新助手后重新验证"}</small></span></div> : null}
       {activeConflict ? <div className="inline-error" role="alert">上一场会话仍在进行，请先结束上一场。<button className="button ghost" disabled={resolvingConflict} onClick={() => void supersedePreviousInterview()}>{resolvingConflict ? "正在切换…" : "结束上一场"}</button></div> : null}
       <div className="machine-code-panel written-machine-code-panel">
         <label><span>机器码</span><input inputMode="numeric" maxLength={6} value={machineCode} onChange={event => setMachineCode(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="输入 6 位机器码" /></label>
-        <button className="button ghost" disabled={!conflictResolved || binding || machineReady && machineCode === deviceBinding?.manualCode} onClick={() => void connectDesktopDevice(false)}>{binding ? "连接中…" : "验证连接"}</button>
-        {lastDevice ? <button className="button primary" disabled={!conflictResolved || binding || !lastDevice.online || deviceBinding?.deviceId === lastDevice.deviceId} onClick={() => void connectDesktopDevice(true)}>{deviceBinding?.deviceId === lastDevice.deviceId ? "上次设备已连接" : "连接上次设备"}</button> : null}
+        <button className="button ghost" disabled={!conflictResolved || binding || machineVerified && machineCode === deviceBinding?.manualCode} onClick={() => void connectDesktopDevice(false)}>{binding ? "连接中…" : machineReady && !companionCurrent ? "更新后重新验证" : "验证连接"}</button>
+        <CompanionVersionNotice />
+        {lastDevice ? <button className="button primary" disabled={!conflictResolved || binding || !lastDevice.online || machineVerified && deviceBinding?.deviceId === lastDevice.deviceId} onClick={() => void connectDesktopDevice(true)}>{machineVerified && deviceBinding?.deviceId === lastDevice.deviceId ? "上次设备已连接" : machineReady && !companionCurrent ? "更新后重新验证" : "连接上次设备"}</button> : null}
         {bindingError ? <div className="inline-error" role="alert">{bindingError}</div> : null}
       </div>
-      {visibleUpdate ? <CompanionUpdateReminder update={visibleUpdate} onContinue={() => setDismissedUpdateKey(updateKey)} /> : null}
+      {versionRequirement?.status === "update-required" ? <CompanionUpdateRequired requirement={versionRequirement} /> : null}
       {startError ? <div className="inline-error written-start-error" role="alert">{startError}</div> : null}
       <div className="written-start-row">
         <small>开始时扣除 30 积分</small>
@@ -776,21 +788,23 @@ function PreparationPage() {
     </section>
   </main>;
   return <main className="app-page"><Link className="back-link" to={routes.app}>← 返回面试首页</Link><PageHeader eyebrow="PREPARATION" title={interviewTitle} detail="资料与“面试资料”页面保持一致，为本场按需选择。" action={<div className="completion"><strong>{complete}/2</strong><span>{canStart ? "可进入" : "准备中"}</span></div>} />
+    {isMobileInterview ? <div className="mobile-interview-guidance" role="note"><span>手机面试</span><strong>让 Mac 麦克风听清手机外放</strong><ul><li>手机开启扬声器，并放在 Mac 麦克风附近</li><li>不要佩戴耳机，否则 Mac 无法听到面试官</li><li>尽量保持环境安静；转录统一显示为“现场声音”</li></ul></div> : null}
     <div className="prepare-grid"><section className="panel"><fieldset className="interview-language-picker" disabled={savingLanguage}><legend>面试语言</legend><p>用于本场实时识别、问题判断和 AI 回答；开始面试后将锁定。</p><div><label className={interviewLanguage === "zh-CN" ? "selected" : ""}><input type="radio" name="interview-language" value="zh-CN" checked={interviewLanguage === "zh-CN"} onChange={() => void saveInterviewLanguage("zh-CN")} /><span><strong>中文面试</strong><small>沿用当前中文识别与回答链路</small></span></label><label className={interviewLanguage === "en-US" ? "selected" : ""}><input type="radio" name="interview-language" value="en-US" checked={interviewLanguage === "en-US"} onChange={() => void saveInterviewLanguage("en-US")} /><span><strong>English Interview</strong><small>English transcription and AI answers</small></span></label></div>{savingLanguage ? <small role="status">正在保存面试语言…</small> : null}{languageError ? <div className="inline-error" role="alert">{languageError}</div> : null}</fieldset><fieldset className="programming-preference" disabled={savingProgramming}><legend>编程设置</legend><div className="programming-toggle-row"><span><strong>需要编程</strong><small>开启后，代码题会统一使用你选择的编程语言</small></span><label className="switch-control"><input type="checkbox" role="switch" checked={programmingRequired} onChange={event => void saveInterviewProgramming(event.target.checked, event.target.checked ? programmingLanguage : null)} /><span aria-hidden="true" /></label></div>{programmingRequired ? <div className="programming-language-options" role="radiogroup" aria-label="编程语言">{([['python', 'Python'], ['java', 'Java'], ['cpp', 'C++'], ['javascript', 'JavaScript'], ['typescript', 'TypeScript'], ['go', 'Go']] as const).map(([value, label]) => <label key={value} className={programmingLanguage === value ? "selected" : ""}><input type="radio" name="programming-language" value={value} checked={programmingLanguage === value} onChange={() => void saveInterviewProgramming(true, value)} /><span>{label}</span></label>)}</div> : null}{savingProgramming ? <small role="status">正在保存编程设置…</small> : null}{programmingError ? <div className="inline-error" role="alert">{programmingError}</div> : null}</fieldset><ContextPicker sources={managedSources} selection={selection} onSave={saveSelection} onDownload={downloadMaterial} />{confirmingMaterials ? <div className="context-warning" role="status">正在提交后端校验并保存本场资料…</div> : null}{materialConfirmError ? <div className="context-warning" role="alert">{materialConfirmError}</div> : null}</section>
-      <aside className="panel check-panel"><div className="panel-heading"><h2>开始前检查</h2><span>{canStart ? "可进入" : !selectionReady ? "待确认资料" : "待绑定机器"}</span></div><ul className="check-list"><li className={selectionReady ? "done" : ""}><i>{selectionReady ? "✓" : "1"}</i><div><strong>本场资料</strong><span>{validity === "unconfirmed" ? "请选择资料或确认不使用资料" : validity === "attention-required" ? "所选资料已失效，请处理" : level === "none" ? "已确认不使用个人资料" : level === "personalized" ? "简历与 JD 已选择" : "已确认使用部分资料"}</span></div></li><li className={machineReady ? "done" : ""}><i>{machineReady ? "✓" : "2"}</i><div><strong>收音机器</strong><span>{deviceBinding ? `${deviceBinding.displayName} 已连接，后台正在预热实时链路` : inputDiagnostic}</span></div></li></ul>
+      <aside className="panel check-panel"><div className="panel-heading"><h2>开始前检查</h2><span>{canStart ? "可进入" : !selectionReady ? "待确认资料" : machineReady && !companionCurrent ? "待更新助手" : "待绑定机器"}</span></div><ul className="check-list"><li className={selectionReady ? "done" : ""}><i>{selectionReady ? "✓" : "1"}</i><div><strong>本场资料</strong><span>{validity === "unconfirmed" ? "请选择资料或确认不使用资料" : validity === "attention-required" ? "所选资料已失效，请处理" : level === "none" ? "已确认不使用个人资料" : level === "personalized" ? "简历与 JD 已选择" : "已确认使用部分资料"}</span></div></li><li className={machineVerified ? "done" : ""}><i>{machineVerified ? "✓" : "2"}</i><div><strong>收音机器</strong><span>{deviceBinding && companionCurrent ? `${deviceBinding.displayName} 已连接，后台正在预热实时链路` : inputDiagnostic}</span></div></li></ul>
         <div className="machine-code-panel">
           <strong className="connection-choice-title">连接桌面助手</strong>
           <label><span>{newlyCreatedInterview ? "输入机器码连接本场" : "重新输入机器码"}</span><input inputMode="numeric" maxLength={6} value={machineCode} onChange={event => setMachineCode(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="输入 6 位机器码" /></label>
-          <button className="button ghost" disabled={!conflictResolved || binding || machineReady && machineCode === deviceBinding?.manualCode} onClick={() => void connectDesktopDevice(false)}>{binding ? "连接中…" : "验证并连接"}</button>
+          <button className="button ghost" disabled={!conflictResolved || binding || machineVerified && machineCode === deviceBinding?.manualCode} onClick={() => void connectDesktopDevice(false)}>{binding ? "连接中…" : machineReady && !companionCurrent ? "更新后重新验证" : "验证并连接"}</button>
+          <CompanionVersionNotice />
           <small>{deviceBinding ? `本场已连接：${deviceBinding.displayName}` : "输入助手显示的固定机器码，或直接连接当前账号上次使用的设备。"}</small>
           {bindingError ? <div className="inline-error" role="alert">{bindingError}</div> : null}
-          {lastDevice ? <><div className="connection-divider"><span>或使用上次设备</span></div><div className={`last-device-choice ${lastDevice.online ? "online" : "offline"}`}><span><b>{lastDevice.displayName}</b><small>{lastDevice.online ? `设备在线 · ${lastDevice.maskedManualCode}` : "设备离线，请先打开助手"}</small></span><button className="button primary" disabled={!conflictResolved || binding || !lastDevice.online || deviceBinding?.deviceId === lastDevice.deviceId} onClick={() => void connectDesktopDevice(true)}>{deviceBinding?.deviceId === lastDevice.deviceId ? "已连接本场" : "一键连接上次设备"}</button></div></> : null}
+          {lastDevice ? <><div className="connection-divider"><span>或使用上次设备</span></div><div className={`last-device-choice ${lastDevice.online ? "online" : "offline"}`}><span><b>{lastDevice.displayName}</b><small>{lastDevice.online ? `设备在线 · ${lastDevice.maskedManualCode}` : "设备离线，请先打开助手"}</small></span><button className="button primary" disabled={!conflictResolved || binding || !lastDevice.online || machineVerified && deviceBinding?.deviceId === lastDevice.deviceId} onClick={() => void connectDesktopDevice(true)}>{machineVerified && deviceBinding?.deviceId === lastDevice.deviceId ? "已连接本场" : machineReady && !companionCurrent ? "更新后重新验证" : "一键连接上次设备"}</button></div></> : null}
         </div>
-        {visibleUpdate ? <CompanionUpdateReminder update={visibleUpdate} onContinue={() => setDismissedUpdateKey(updateKey)} /> : null}
+        {versionRequirement?.status === "update-required" ? <CompanionUpdateRequired requirement={versionRequirement} /> : null}
         <div className="device-mini"><span className="device-glyph">⌘</span><div><strong>{deviceBinding?.displayName ?? state.preparation.device?.displayName ?? "电脑伴随程序"}</strong><small>{deviceBinding ? "本场设备已连接；系统权限沿用助手首次授权结果" : "当前仅缺少本场设备连接，不代表助手系统权限失效"}</small></div><Link to={routes.devices}>管理</Link></div>
         <div className="privacy-confirm preparation-disclosure"><span><strong>本场数据说明</strong><small>已选资料和转录仅用于生成回答建议；原始音频默认不保存，会话记录可在复盘中删除。麦克风和屏幕权限只由桌面助手首次申请，网页不会再次申请。</small></span></div>
         <div className="points-mini"><strong>{state.billing.balance} 点</strong><span>回答 5 点 · 截图 15 点</span><Link to={routes.billing}>查看收费说明</Link><Link to={`${routes.guide}#quick-start`}>准备流程说明</Link></div>
-        {startError ? <div className="inline-error" role="alert">{startError}</div> : null}<button className="button primary full" disabled={!canStart || starting} onClick={() => void startInterview()}>{starting ? "正在开始面试…" : "开始面试 →"}</button>{!selectionReady ? <small className="blocked-help">确认本场资料选择（可以为空）后继续。</small> : !machineReady ? <small className="blocked-help">请选择上次设备或输入机器码，为本场建立设备连接。</small> : level === "none" ? <small className="blocked-help context-disclosure">本场未使用个人资料。伴随程序会在后台准备音频，开始后直接切换到实时链路。</small> : <small className="blocked-help context-disclosure">伴随程序正在后台准备麦克风、电脑输出和识别服务；无需播放测试音或提前说话。</small>}
+        {startError ? <div className="inline-error" role="alert">{startError}</div> : null}<button className="button primary full" disabled={!canStart || starting} onClick={() => void startInterview()}>{starting ? "正在开始面试…" : "开始面试 →"}</button>{!selectionReady ? <small className="blocked-help">确认本场资料选择（可以为空）后继续。</small> : !machineReady ? <small className="blocked-help">请选择上次设备或输入机器码，为本场建立设备连接。</small> : !companionCurrent ? <small className="blocked-help">请先更新并重新打开最新版助手，然后重新验证机器码。</small> : level === "none" ? <small className="blocked-help context-disclosure">本场未使用个人资料。伴随程序会在后台准备音频，开始后直接切换到实时链路。</small> : <small className="blocked-help context-disclosure">伴随程序正在后台准备麦克风、电脑输出和识别服务；无需播放测试音或提前说话。</small>}
       </aside></div>
     {activeConflict ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="active-interview-conflict-title"><section className="sheet active-interview-conflict-sheet"><span className="conflict-kicker">单设备 · 单场面试</span><h2 id="active-interview-conflict-title">已有一场面试正在进行</h2><p>为避免旧页面和新页面同时占用语音链路，请先选择如何继续。</p><div className="active-interview-card"><span>进行中</span><strong>{activeConflict.title}</strong><small>结束上一场只会停止实时连接，历史记录和资料不会删除。</small></div>{conflictError ? <div className="inline-error" role="alert">{conflictError}</div> : null}<div className="sheet-actions conflict-actions"><button className="button primary" disabled={resolvingConflict} onClick={() => navigate(routes.live(activeConflict.id))}>继续上一场面试</button><button className="button ghost" disabled={resolvingConflict} onClick={() => void supersedePreviousInterview()}>{resolvingConflict ? "正在切换…" : "结束上一场，准备当前面试"}</button></div><Link className="conflict-return" to={routes.app}>暂不进入，返回面试首页</Link></section></div> : null}
   </main>;

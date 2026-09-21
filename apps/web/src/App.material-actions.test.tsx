@@ -38,7 +38,7 @@ const open = (path: string, mutate?: (state: WebAppState) => void) => {
     deviceId: "fixture-last-device",
     displayName: "上次使用的 Mac",
     maskedManualCode: "••••56",
-    capabilities: { microphone: true, systemAudio: true },
+    capabilities: { appVersion: "0.1.0", platform: "macos", architecture: "arm64", microphone: true, systemAudio: true },
     online: true,
     lastSeenAtMs: Date.now(),
   });
@@ -49,7 +49,7 @@ const open = (path: string, mutate?: (state: WebAppState) => void) => {
       deviceId: `fixture-device-${command.manualCode}`,
       manualCode: command.manualCode ?? "••••56",
       displayName: "面试稳伴随程序 · Mac",
-      capabilities: { microphone: true, systemAudio: true, screenCapture: true },
+      capabilities: { appVersion: "0.1.0", platform: "macos", architecture: "arm64", microphone: true, systemAudio: true, screenCapture: true },
       status: "bound",
       boundAtMs: Date.now(),
       lastSeenAtMs: Date.now(),

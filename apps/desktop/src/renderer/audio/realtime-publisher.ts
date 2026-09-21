@@ -79,6 +79,13 @@ export const productionAudioTransportPolicy = {
   automaticLegacyHttpFallback: false,
 } as const;
 
+export const transportPublisherSourceKind = (
+  enabledChannels?: readonly AudioSourceKind[],
+): AudioSourceKind | "mixed" => {
+  const uniqueChannels = [...new Set(enabledChannels ?? [])];
+  return uniqueChannels.length === 1 ? uniqueChannels[0] ?? "mixed" : "mixed";
+};
+
 interface RuntimeHandle {
   readonly stop: () => Promise<void>;
 }
@@ -917,7 +924,9 @@ export class DesktopRealtimePublisher {
       return;
     }
     this.options.onCaptureState("error");
-    this.options.onFailure("麦克风和电脑输出都没有成功启动，请检查系统授权和设备选择。");
+    this.options.onFailure(enabledChannels.size === 1 && enabledChannels.has("microphone")
+      ? "Mac 麦克风没有成功启动，请检查麦克风授权和设备选择。"
+      : "麦克风和电脑输出都没有成功启动，请检查系统授权和设备选择。");
     throw new Error("all_audio_sources_failed");
   }
 
@@ -1428,7 +1437,9 @@ export class DesktopRealtimePublisher {
   }
 
   private async openTransport(pending: readonly Record<string, unknown>[] = []): Promise<MultiplexedRealtimeTransport> {
-    const transportPublisher = await this.createPublisher("mixed");
+    const transportPublisher = await this.createPublisher(
+      transportPublisherSourceKind(this.options.diagnosticAudioChannels),
+    );
     let transport: MultiplexedRealtimeTransport;
     transport = new MultiplexedRealtimeTransport({
       apiBaseUrl: this.options.apiBaseUrl,

@@ -253,7 +253,12 @@ class RealtimeSpeechService:
         self._control_query_cache_hits = 0
         self._control_query_cache_misses = 0
         self._control_query_singleflight_waits = 0
+        self._desktop_heartbeat_lock = threading.Lock()
+        self._desktop_heartbeat_last_persisted_ms: dict[str, int] = {}
+        self._desktop_heartbeat_persisted = 0
+        self._desktop_heartbeat_coalesced = 0
         self._session_language_cache: dict[str, InterviewLanguage] = {}
+        self._session_audio_mode_cache: dict[str, str] = {}
         self._publisher_status_cache: dict[str, str] = {}
         self._publisher_liveness_lock = threading.Lock()
         self._publisher_liveness_checked_at_ms: dict[str, int] = {}
@@ -263,6 +268,10 @@ class RealtimeSpeechService:
         self._trace_lock = threading.Lock()
         self._trace_records: dict[str, dict[str, object]] = {}
         self._trace_order: deque[str] = deque(maxlen=4096)
+        self._performance_ack_access_lock = threading.Lock()
+        self._performance_ack_access_cache: dict[str, tuple[str, float]] = {}
+        self._performance_ack_access_hits = 0
+        self._performance_ack_access_misses = 0
         self._queue_wait_samples: dict[tuple[str, RealtimeSourceKind], deque[int]] = {}
         # Provider receive pumps run independently per source/session. Striped
         # locks preserve monotonic publication for one source without making an
@@ -293,6 +302,7 @@ class RealtimeSpeechService:
         # watchdogs, and explicit end actions. Keep the coordinator
         # session-scoped so unrelated interviews never block each other.
         self._session_cleanup_locks: dict[str, threading.Lock] = {}
+        self._session_cleanup_lock_users: dict[str, int] = {}
         self._reclamation_stop = threading.Event()
         self._reclamation_thread: threading.Thread | None = None
         self._reclamation_metrics_lock = threading.Lock()
@@ -311,6 +321,8 @@ class RealtimeSpeechService:
             "clearedQueues": 0,
             "clearedBufferedSegments": 0,
             "clearedFrameReceipts": 0,
+            "clearedRealtimeEvents": 0,
+            "clearedRuntimePublishers": 0,
         }
         partial_listener_setter = getattr(self.asr_gateway, "set_partial_listener", None)
         if callable(partial_listener_setter):
@@ -327,6 +339,61 @@ class RealtimeSpeechService:
         with self._session_activity_lock:
             self._session_last_activity_ms[session_id] = at_ms or _now_ms()
             self._session_owners[session_id] = user_id
+
+    def _acquire_session_cleanup_lock(self, session_id: str) -> threading.Lock:
+        """Keep one lock identity alive while any cleanup caller references it."""
+        with self._session_activity_lock:
+            cleanup_lock = self._session_cleanup_locks.setdefault(session_id, threading.Lock())
+            self._session_cleanup_lock_users[session_id] = self._session_cleanup_lock_users.get(session_id, 0) + 1
+            return cleanup_lock
+
+    def _release_session_cleanup_lock(self, session_id: str, cleanup_lock: threading.Lock) -> None:
+        with self._session_activity_lock:
+            remaining = max(0, self._session_cleanup_lock_users.get(session_id, 1) - 1)
+            if remaining:
+                self._session_cleanup_lock_users[session_id] = remaining
+                return
+            self._session_cleanup_lock_users.pop(session_id, None)
+            if self._session_cleanup_locks.get(session_id) is cleanup_lock:
+                self._session_cleanup_locks.pop(session_id, None)
+
+    def _retire_session_id(self, session_id: str) -> None:
+        frame_worker_lock = getattr(self, "_frame_worker_lock", None)
+        if frame_worker_lock is None:
+            frame_worker_lock = self._frame_worker_lock = threading.Lock()
+        with frame_worker_lock:
+            retired_session_ids = getattr(self, "_retired_session_ids", None)
+            if retired_session_ids is None:
+                retired_session_ids = self._retired_session_ids = set()
+            retired_session_order = getattr(self, "_retired_session_order", None)
+            if retired_session_order is None:
+                retired_session_order = self._retired_session_order = deque(maxlen=4096)
+            if session_id in retired_session_ids:
+                return
+            maxlen = retired_session_order.maxlen or 4096
+            if len(retired_session_order) >= maxlen:
+                expired = retired_session_order.popleft()
+                retired_session_ids.discard(expired)
+            retired_session_order.append(session_id)
+            retired_session_ids.add(session_id)
+
+    def _unretire_session_id(self, session_id: str) -> None:
+        frame_worker_lock = getattr(self, "_frame_worker_lock", None)
+        if frame_worker_lock is None:
+            return
+        with frame_worker_lock:
+            getattr(self, "_retired_session_ids", set()).discard(session_id)
+            try:
+                getattr(self, "_retired_session_order", deque()).remove(session_id)
+            except ValueError:
+                pass
+
+    def _session_is_retired(self, session_id: str) -> bool:
+        frame_worker_lock = getattr(self, "_frame_worker_lock", None)
+        if frame_worker_lock is None:
+            return session_id in getattr(self, "_retired_session_ids", set())
+        with frame_worker_lock:
+            return session_id in getattr(self, "_retired_session_ids", set())
 
     def stop_reclamation(self) -> None:
         self._reclamation_stop.set()
@@ -407,6 +474,106 @@ class RealtimeSpeechService:
                         with self._session_activity_lock:
                             self._session_last_activity_ms.pop(session_id, None)
                             self._session_owners.pop(session_id, None)
+            self._sweep_ended_runtime_orphans()
+
+    def _sweep_ended_runtime_orphans(self) -> int:
+        """Reclaim Redis runtime left behind after a session already ended."""
+        list_runtime_owners = getattr(self.repository, "list_runtime_session_owners", None)
+        if not callable(list_runtime_owners):
+            return 0
+        try:
+            runtime_owners = list_runtime_owners(
+                limit=max(1, int(self.settings.interview_idle_reaper_batch_size))
+            )
+        except Exception as exc:
+            self.logger.warning(
+                "realtime_session_orphan_scan_failed",
+                extra={"safeErrorCode": exc.__class__.__name__},
+            )
+            return 0
+        reclaimed = 0
+        for session_id, user_id in runtime_owners.items():
+            try:
+                session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+            except DomainRequestError as exc:
+                # Ended sessions are soft-deleted from the session table. A
+                # stale Redis publisher/receipt can therefore outlive the row
+                # that normally authorizes terminate_session_for_admin. It is
+                # safe to reclaim only a missing/soft-deleted session; an
+                # ownership mismatch must remain untouched.
+                if exc.status_code == 404:
+                    self._clear_runtime_orphan(session_id=session_id, reason="ended-runtime-orphan")
+                    reclaimed += 1
+                else:
+                    self.logger.warning(
+                        "realtime_session_orphan_owner_mismatch",
+                        extra={"sessionId": session_id, "safeErrorCode": exc.__class__.__name__},
+                    )
+                continue
+            if session.status != "ended":
+                continue
+            if self.settings.realtime_session_reclamation_dry_run:
+                self._record_reclamation(
+                    reason="ended-runtime-orphan-dry-run",
+                    session_id=session_id,
+                    duration_ms=0,
+                    resources={},
+                    dry_run=True,
+                )
+                continue
+            try:
+                self.terminate_session_for_admin(
+                    user_id=user_id,
+                    session_id=session_id,
+                    reason="ended-runtime-orphan",
+                )
+                reclaimed += 1
+            except Exception as exc:
+                self._record_reclamation(
+                    reason="ended-runtime-orphan",
+                    session_id=session_id,
+                    duration_ms=0,
+                    resources={},
+                    failed=True,
+                )
+                self.logger.warning(
+                    "realtime_session_orphan_reclamation_failed",
+                    extra={"sessionId": session_id, "safeErrorCode": exc.__class__.__name__},
+                )
+        return reclaimed
+
+    def _clear_runtime_orphan(self, *, session_id: str, reason: str) -> dict[str, object]:
+        """Clear runtime state when the owning session row is already gone."""
+        started = monotonic()
+        cleanup_lock = self._acquire_session_cleanup_lock(session_id)
+        try:
+            with cleanup_lock:
+                self._retire_session_id(session_id)
+                resources = self._reset_realtime_session(session_id=session_id, retired=True)
+                runtime_cleanup = self.repository.clear_session_runtime(
+                    session_id=session_id,
+                    preserve_transcripts=True,
+                )
+                with self._session_activity_lock:
+                    self._session_last_activity_ms.pop(session_id, None)
+                    self._session_owners.pop(session_id, None)
+                self._record_reclamation(
+                    reason=reason,
+                    session_id=session_id,
+                    duration_ms=int((monotonic() - started) * 1000),
+                    resources={
+                        "closedAsrSessions": int(resources.get("closed_asr_sessions", 0)),
+                        "clearedQueues": int(resources.get("cleared_queues", 0)),
+                        "clearedBufferedSegments": int(resources.get("cleared_buffered_segments", 0)),
+                        "clearedFrameReceipts": int(resources.get("cleared_frame_receipts", 0)),
+                        "clearedRealtimeEvents": int(runtime_cleanup.get("cleared_events", 0)),
+                        "clearedRuntimePublishers": int(runtime_cleanup.get("cleared_publishers", 0)),
+                    },
+                )
+                self._log(logging.INFO, "realtime_speech.session_reclaimed", session_id=session_id, publisher_id=None, state=reason)
+                return {**resources, **runtime_cleanup}
+        finally:
+            self._release_session_cleanup_lock(session_id, cleanup_lock)
 
     def start_live_session(self, *, user_id: str, session_id: str) -> InterviewSessionRecord:
         """Start one commercial interview, charge its first minute and prewarm ASR."""
@@ -467,12 +634,14 @@ class RealtimeSpeechService:
         self._capture_control_cache[session_id] = "capturing"
         self._touch_session_activity(session_id=session_id, user_id=user_id)
         self._session_language_cache[session_id] = session.interview_language
+        self._session_audio_mode_cache[session_id] = getattr(session, "interview_audio_mode", "computer")
         self._ensure_realtime_metering(user_id=user_id, session_id=session_id)
         # Prewarm remains best-effort and asynchronous. Interview entry must not
         # wait for a provider timeout; the first real frame is authoritative.
         self._prewarm_asr_session(
             session_id=session_id,
             interview_language=session.interview_language,
+            interview_audio_mode=getattr(session, "interview_audio_mode", "computer"),
         )
         self._invalidate_control_query_cache()
         return session
@@ -592,7 +761,8 @@ class RealtimeSpeechService:
             stop_event.set()
 
     def _prewarm_asr_session(
-        self, *, session_id: str, interview_language: InterviewLanguage | None = None
+        self, *, session_id: str, interview_language: InterviewLanguage | None = None,
+        interview_audio_mode: str | None = None,
     ) -> tuple[tuple[str, concurrent.futures.Future[object]], ...]:
         if not self.settings.realtime_asr_prewarm_enabled:
             return ()
@@ -609,7 +779,9 @@ class RealtimeSpeechService:
                 for source_kind in self._prewarm_ready_by_session.get(session_id, set())
                 if now_ms - ready_at.get(source_kind, 0) < PREPARATION_PREWARM_FRESH_MS
             }
-        for source_kind in ("microphone", "system"):
+        resolved_audio_mode = interview_audio_mode or getattr(self, "_session_audio_mode_cache", {}).get(session_id, "computer")
+        source_kinds = ("microphone",) if resolved_audio_mode == "mobile" else ("microphone", "system")
+        for source_kind in source_kinds:
             if source_kind in already_ready:
                 continue
             scheduled_at_ms = _now_ms()
@@ -729,6 +901,11 @@ class RealtimeSpeechService:
             hash((frame.session_id, frame.source_kind)) % len(self._provider_partial_publish_locks)
         ]
         with publication_lock:
+            # Cleanup can win while the provider receive pump is waiting for
+            # this lock. Never let that late partial recreate a transcript or
+            # event for an ended interview.
+            if self._session_is_retired(frame.session_id):
+                return
             suppression_reason = self._suppression_reason(result.text, frame=frame)
             if suppression_reason is not None:
                 return
@@ -825,7 +1002,7 @@ class RealtimeSpeechService:
                 owner_user_id=publisher.owner_user_id,
                 source_id=frame.source_id,
                 source_kind=frame.source_kind,
-                role="candidate" if frame.source_kind == "microphone" else "interviewer",
+                role=self._role_for_audio_source(session_id=frame.session_id, source_kind=frame.source_kind),
                 revision=max(frame.revision, current.revision + 1 if current is not None else frame.revision),
                 text=visible_text,
                 transcript_confidence=result.confidence,
@@ -1035,7 +1212,8 @@ class RealtimeSpeechService:
             self._active_requests_by_session_source.pop(key, None)
         else:
             self._active_requests_by_session_source[key] = remaining
-        self._counter_bucket(session_id=session_id, source_kind=source_kind)["queueDepth"] = max(0, remaining - 1)
+        if not self._session_is_retired(session_id):
+            self._counter_bucket(session_id=session_id, source_kind=source_kind)["queueDepth"] = max(0, remaining - 1)
 
     def _gateway_diagnostics(self, *, source_kind: RealtimeSourceKind) -> dict[str, int | float]:
         diagnostics = getattr(self.asr_gateway, "diagnostics", None)
@@ -1172,6 +1350,7 @@ class RealtimeSpeechService:
             },
             "eventStore": repository_diagnostics() if callable(repository_diagnostics) else {},
             "controlPlane": self._control_query_diagnostics(),
+            "performanceAck": self._performance_ack_diagnostics(),
             "sessionReclamation": {
                 "enabled": self.settings.realtime_session_reclamation_enabled,
                 "dryRun": self.settings.realtime_session_reclamation_dry_run,
@@ -1183,12 +1362,39 @@ class RealtimeSpeechService:
 
     def _control_query_diagnostics(self) -> dict[str, int]:
         with self._control_query_cache_lock:
-            return {
+            diagnostics = {
                 "cacheHits": self._control_query_cache_hits,
                 "cacheMisses": self._control_query_cache_misses,
                 "cacheEntries": len(self._control_query_cache),
                 "singleflightWaits": self._control_query_singleflight_waits,
                 "inflight": len(self._control_query_inflight),
+            }
+        heartbeat_lock = getattr(self, "_desktop_heartbeat_lock", None)
+        if heartbeat_lock is None:
+            diagnostics.update({
+                "desktopHeartbeatPersisted": 0,
+                "desktopHeartbeatCoalesced": 0,
+                "desktopHeartbeatTrackedDevices": 0,
+            })
+            return diagnostics
+        with heartbeat_lock:
+            diagnostics.update({
+                "desktopHeartbeatPersisted": getattr(self, "_desktop_heartbeat_persisted", 0),
+                "desktopHeartbeatCoalesced": getattr(self, "_desktop_heartbeat_coalesced", 0),
+                "desktopHeartbeatTrackedDevices": len(getattr(self, "_desktop_heartbeat_last_persisted_ms", {})),
+            })
+        return diagnostics
+
+    def _performance_ack_diagnostics(self) -> dict[str, int]:
+        lock = getattr(self, "_performance_ack_access_lock", None)
+        if lock is None:
+            return {"accessCacheHits": 0, "accessCacheMisses": 0, "accessCacheEntries": 0}
+        with lock:
+            cache = getattr(self, "_performance_ack_access_cache", {})
+            return {
+                "accessCacheHits": getattr(self, "_performance_ack_access_hits", 0),
+                "accessCacheMisses": getattr(self, "_performance_ack_access_misses", 0),
+                "accessCacheEntries": len(cache),
             }
 
     def _invalidate_control_query_cache(
@@ -1556,11 +1762,16 @@ class RealtimeSpeechService:
         current = capabilities.get("appVersion")
         latest = self._latest_companion_version(platform=capabilities.get("platform"), architecture=capabilities.get("architecture"))
         comparison = _compare_companion_versions(current, latest) if latest is not None else None
-        if comparison == -1:
+        strict_cn_gate = self.settings.product_edition == "cn" and self.settings.environment in {"staging", "production"}
+        if comparison == -1 or (strict_cn_gate and comparison is None):
             message = (
                 f"Companion version {current} is outdated. Please download the latest version {latest} from the companion downloads page before continuing."
                 if self.settings.product_edition == "global"
-                else f"电脑伴随程序版本 {current} 已过期，请先在下载中心安装最新版 {latest} 后再继续。"
+                else (
+                    f"电脑伴随程序版本 {current} 已过期，请先在下载中心安装最新版 {latest} 后再继续。"
+                    if current and latest
+                    else "无法确认电脑伴随程序版本，请先在下载中心安装最新版后再继续。"
+                )
             )
             raise DomainRequestError(
                 "realtime-speech",
@@ -1664,8 +1875,7 @@ class RealtimeSpeechService:
                 409,
                 error_code="active_interview_conflict",
             )
-        with self._frame_worker_lock:
-            self._retired_session_ids.discard(session_id)
+        self._unretire_session_id(session_id)
         if reuse_last_device:
             association = self.repository.get_last_account_desktop_device(user_id=user_id)
             if association is None:
@@ -1712,9 +1922,17 @@ class RealtimeSpeechService:
         ))
         current_binding = self.repository.get_session_desktop_binding(user_id=user_id, session_id=session_id)
         if current_binding is not None and current_binding.device_id == device.device_id and self._binding_is_active(binding=current_binding, device=device):
+            refreshed_binding = self.repository.save_session_desktop_binding(replace(
+                current_binding,
+                display_name=device.display_name,
+                capabilities=dict(device.capabilities),
+                last_seen_at_ms=device.last_seen_at_ms,
+                binding_generation=device.generation,
+            ))
             if session.status == "preparing" and session.session_mode == "interview":
-                self._prewarm_asr_session(session_id=session_id, interview_language=session.interview_language)
-            return current_binding
+                self._session_audio_mode_cache[session_id] = getattr(session, "interview_audio_mode", "computer")
+                self._prewarm_asr_session(session_id=session_id, interview_language=session.interview_language, interview_audio_mode=getattr(session, "interview_audio_mode", "computer"))
+            return refreshed_binding
         previous_bindings = {
             (item.owner_user_id, item.session_id): item
             for item in self.repository.list_session_desktop_bindings_for_user(user_id=user_id)
@@ -1774,7 +1992,8 @@ class RealtimeSpeechService:
         self._log(logging.INFO, "realtime_speech.desktop_device_bound", session_id=session_id, publisher_id=binding.device_id, state=binding.status)
         if session.status == "preparing" and session.session_mode == "interview":
             self._session_language_cache[session_id] = session.interview_language
-            self._prewarm_asr_session(session_id=session_id, interview_language=session.interview_language)
+            self._session_audio_mode_cache[session_id] = getattr(session, "interview_audio_mode", "computer")
+            self._prewarm_asr_session(session_id=session_id, interview_language=session.interview_language, interview_audio_mode=getattr(session, "interview_audio_mode", "computer"))
         return binding
 
     def get_active_interview_conflict(self, *, user_id: str, session_id: str) -> InterviewSessionRecord | None:
@@ -1813,77 +2032,88 @@ class RealtimeSpeechService:
                 409,
                 error_code="active_interview_changed",
             )
-        now_ms = _now_ms()
         for conflict in conflicts:
-            self.session_service.end_session(user_id=user_id, session_id=conflict.session_id)
-            for binding in self.repository.list_session_desktop_bindings_for_user(user_id=user_id):
-                if binding.session_id == conflict.session_id and binding.status == "bound":
-                    self.repository.save_session_desktop_binding(replace(binding, status="stale"))
-            for publisher in self.repository.list_publishers_for_session(session_id=conflict.session_id):
-                if publisher.status not in {"closed", "failed"}:
-                    self.repository.save_publisher(replace(publisher, disconnected_at_ms=now_ms, status="closed"))
-            self._reset_realtime_session(session_id=conflict.session_id, retired=True)
-            self._save_event(
+            self.terminate_session_for_admin(
+                user_id=user_id,
                 session_id=conflict.session_id,
-                owner_user_id=user_id,
-                kind="connection-state",
-                payload={"status": "superseded", "replacementSessionId": session_id},
+                reason="superseded",
             )
         self._invalidate_control_query_cache()
         return sorted(conflict_ids)
 
     def terminate_session_for_admin(self, *, user_id: str, session_id: str, reason: str = "explicit-end") -> dict[str, object]:
         started = monotonic()
-        with self._session_activity_lock:
-            cleanup_lock = self._session_cleanup_locks.setdefault(session_id, threading.Lock())
-        with cleanup_lock:
-            session = self.session_service.get_session(user_id=user_id, session_id=session_id)
-            already_ended = session.status == "ended"
-            if not already_ended:
-                session = self.session_service.end_session(user_id=user_id, session_id=session_id)
-            now_ms = _now_ms()
-            released_bindings = 0
-            closed_publishers = 0
-            for binding in self.repository.list_session_desktop_bindings_for_user(user_id=user_id):
-                if binding.session_id == session_id and binding.status == "bound":
-                    self.repository.save_session_desktop_binding(replace(binding, status="stale"))
-                    released_bindings += 1
-            for publisher in self.repository.list_publishers_for_session(session_id=session_id):
-                if publisher.status not in {"closed", "failed"}:
-                    self.repository.save_publisher(
-                        replace(publisher, disconnected_at_ms=now_ms, status="closed")
-                    )
-                    closed_publishers += 1
-            self._stop_realtime_metering(session_id=session_id)
-            resources = self._reset_realtime_session(session_id=session_id, retired=True)
-            self._save_event(
-                session_id=session_id,
-                owner_user_id=user_id,
-                kind="connection-state",
-                payload={"status": "terminated-by-admin", "reason": reason},
-            )
-            with self._session_activity_lock:
-                self._session_last_activity_ms.pop(session_id, None)
-                self._session_owners.pop(session_id, None)
-            self._invalidate_control_query_cache()
-            result = {
-                "session_id": session_id,
-                "status": session.status,
-                "already_ended": already_ended,
-                "released_bindings": released_bindings,
-                "closed_publishers": closed_publishers,
-                **resources,
-            }
-            if reason != "heartbeat-expired":
-                self._record_reclamation(reason=reason, session_id=session_id, duration_ms=int((monotonic() - started) * 1000), resources={
-                    "releasedBindings": released_bindings,
-                    "closedPublishers": closed_publishers,
-                    "closedAsrSessions": int(resources.get("closed_asr_sessions", 0)),
-                    "clearedQueues": int(resources.get("cleared_queues", 0)),
-                    "clearedBufferedSegments": int(resources.get("cleared_buffered_segments", 0)),
-                    "clearedFrameReceipts": int(resources.get("cleared_frame_receipts", 0)),
-                })
-            return result
+        cleanup_lock = self._acquire_session_cleanup_lock(session_id)
+        try:
+            with cleanup_lock:
+                session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+                already_ended = session.status == "ended"
+                # Fence callbacks before closing external resources. Provider
+                # receive pumps and frame workers may return while cleanup is
+                # in progress; they must not recreate runtime state.
+                self._retire_session_id(session_id)
+                try:
+                    if not already_ended:
+                        session = self.session_service.end_session(user_id=user_id, session_id=session_id)
+                except Exception:
+                    # The session is still live when persistence failed, so
+                    # allow its existing workers to continue serving it.
+                    if not already_ended:
+                        self._unretire_session_id(session_id)
+                    raise
+                now_ms = _now_ms()
+                released_bindings = 0
+                closed_publishers = 0
+                for binding in self.repository.list_session_desktop_bindings_for_user(user_id=user_id):
+                    if binding.session_id == session_id and binding.status == "bound":
+                        self.repository.save_session_desktop_binding(replace(binding, status="stale"))
+                        released_bindings += 1
+                for publisher in self.repository.list_publishers_for_session(session_id=session_id):
+                    if publisher.status not in {"closed", "failed"}:
+                        self.repository.save_publisher(
+                            replace(publisher, disconnected_at_ms=now_ms, status="closed")
+                        )
+                        closed_publishers += 1
+                self._stop_realtime_metering(session_id=session_id)
+                resources = self._reset_realtime_session(session_id=session_id, retired=True)
+                runtime_cleanup = self.repository.clear_session_runtime(
+                    session_id=session_id,
+                    preserve_transcripts=True,
+                )
+                with self._session_activity_lock:
+                    self._session_last_activity_ms.pop(session_id, None)
+                    self._session_owners.pop(session_id, None)
+                self._invalidate_control_query_cache()
+                result = {
+                    "session_id": session_id,
+                    "status": session.status,
+                    "already_ended": already_ended,
+                    "released_bindings": released_bindings,
+                    "closed_publishers": closed_publishers,
+                    **resources,
+                    **runtime_cleanup,
+                }
+                if reason != "heartbeat-expired":
+                    self._record_reclamation(reason=reason, session_id=session_id, duration_ms=int((monotonic() - started) * 1000), resources={
+                        "releasedBindings": released_bindings,
+                        "closedPublishers": closed_publishers,
+                        "closedAsrSessions": int(resources.get("closed_asr_sessions", 0)),
+                        "clearedQueues": int(resources.get("cleared_queues", 0)),
+                        "clearedBufferedSegments": int(resources.get("cleared_buffered_segments", 0)),
+                        "clearedFrameReceipts": int(resources.get("cleared_frame_receipts", 0)),
+                        "clearedRealtimeEvents": int(runtime_cleanup.get("cleared_events", 0)),
+                        "clearedRuntimePublishers": int(runtime_cleanup.get("cleared_publishers", 0)),
+                    })
+                self._log(
+                    logging.INFO,
+                    "realtime_speech.session_reclaimed",
+                    session_id=session_id,
+                    publisher_id=None,
+                    state=reason,
+                )
+                return result
+        finally:
+            self._release_session_cleanup_lock(session_id, cleanup_lock)
 
     def reconcile_idle_session(self, *, user_id: str, session_id: str) -> dict[str, object]:
         status = self.session_service.idle_status(user_id=user_id, session_id=session_id)
@@ -2023,21 +2253,53 @@ class RealtimeSpeechService:
     def record_desktop_device_heartbeat(self, *, device_id: str, manual_code: str, display_name: str | None, capabilities: dict[str, object]) -> DesktopDeviceRecord:
         device = self.repository.get_desktop_device_by_code(manual_code.strip())
         if device is None or device.device_id != device_id.strip():
-            return self.register_desktop_device(
+            stored = self.register_desktop_device(
                 device_id=device_id,
                 manual_code=manual_code,
                 display_name=display_name or "面试稳伴随程序",
                 capabilities=capabilities,
             )
+            with self._desktop_heartbeat_lock:
+                self._desktop_heartbeat_last_persisted_ms[stored.device_id] = stored.last_seen_at_ms
+                self._desktop_heartbeat_persisted += 1
+            return stored
         now_ms = _now_ms()
-        stored = self.repository.save_desktop_device(replace(
-            device,
-            display_name=(display_name.strip() if display_name else device.display_name),
-            capabilities={**device.capabilities, **dict(capabilities)},
-            last_seen_at_ms=now_ms,
-            status="online",
-        ))
-        return stored
+        next_display_name = display_name.strip() if display_name else device.display_name
+        next_capabilities = {**device.capabilities, **dict(capabilities)}
+        min_interval_seconds = min(
+            max(1.0, float(self.settings.realtime_desktop_heartbeat_write_min_interval_seconds)),
+            max(1.0, float(self.settings.realtime_desktop_heartbeat_ttl_seconds) / 2.0),
+        )
+        min_interval_ms = int(min_interval_seconds * 1_000)
+        material_change = (
+            next_display_name != device.display_name
+            or next_capabilities != device.capabilities
+            or device.status != "online"
+        )
+        with self._desktop_heartbeat_lock:
+            last_persisted_at_ms = self._desktop_heartbeat_last_persisted_ms.get(
+                device.device_id,
+                device.last_seen_at_ms,
+            )
+            if not material_change and now_ms - last_persisted_at_ms < min_interval_ms:
+                self._desktop_heartbeat_coalesced += 1
+                return replace(
+                    device,
+                    display_name=next_display_name,
+                    capabilities=next_capabilities,
+                    last_seen_at_ms=now_ms,
+                    status="online",
+                )
+            stored = self.repository.save_desktop_device(replace(
+                device,
+                display_name=next_display_name,
+                capabilities=next_capabilities,
+                last_seen_at_ms=now_ms,
+                status="online",
+            ))
+            self._desktop_heartbeat_last_persisted_ms[stored.device_id] = stored.last_seen_at_ms
+            self._desktop_heartbeat_persisted += 1
+            return stored
 
     def get_desktop_binding(self, *, user_id: str, session_id: str) -> SessionDesktopBindingRecord:
         self.session_service.get_session(user_id=user_id, session_id=session_id)
@@ -2187,9 +2449,9 @@ class RealtimeSpeechService:
         device = self.repository.get_desktop_device_by_code(code)
         device_presence = "online" if device is not None and self._desktop_device_fresh(device) else "offline"
         permission_status = self._permission_status(device)
-        session_states: dict[tuple[str, str], tuple[str, str]] = {}
+        session_states: dict[tuple[str, str], tuple[str, str, str]] = {}
 
-        def session_state(candidate: SessionDesktopBindingRecord) -> tuple[str, str]:
+        def session_state(candidate: SessionDesktopBindingRecord) -> tuple[str, str, str]:
             state_key = (candidate.owner_user_id, candidate.session_id)
             cached_state = session_states.get(state_key)
             if cached_state is not None:
@@ -2199,9 +2461,9 @@ class RealtimeSpeechService:
                     user_id=candidate.owner_user_id,
                     session_id=candidate.session_id,
                 )
-                resolved = (bound_session.status, bound_session.session_mode)
+                resolved = (bound_session.status, bound_session.session_mode, getattr(bound_session, "interview_audio_mode", "computer"))
             except DomainRequestError:
-                resolved = ("missing", "interview")
+                resolved = ("missing", "interview", "computer")
             session_states[state_key] = resolved
             return resolved
 
@@ -2249,14 +2511,14 @@ class RealtimeSpeechService:
                     if item.session_id == pinned_session_id and item.binding_id == pinned_binding_id
                 ), None)
                 if pinned_binding is not None:
-                    pinned_status, _pinned_mode = session_state(pinned_binding)
+                    pinned_status, _pinned_mode, _pinned_audio_mode = session_state(pinned_binding)
                     if binding_active(pinned_binding, session_status=pinned_status):
                         binding = pinned_binding
                         binding_lock_state = "held"
         if binding is None:
             binding = self.repository.get_latest_session_desktop_binding_by_code(manual_code=code)
         if binding is not None:
-            session_status, session_mode = session_state(binding)
+            session_status, session_mode, interview_audio_mode = session_state(binding)
             active = binding_active(binding, session_status=session_status)
             if not active:
                 resolved_stale_reason = stale_reason(
@@ -2275,6 +2537,7 @@ class RealtimeSpeechService:
                     "sessionConnection": "disconnected",
                     "sessionStatus": session_status,
                     "sessionMode": session_mode,
+                    "interviewAudioMode": interview_audio_mode,
                     "staleReason": resolved_stale_reason,
                     "bindingLockState": binding_lock_state,
                     "message": self._stale_binding_message(resolved_stale_reason),
@@ -2292,6 +2555,7 @@ class RealtimeSpeechService:
                 "sessionConnection": "connected",
                 "sessionStatus": session_status,
                 "sessionMode": session_mode,
+                "interviewAudioMode": interview_audio_mode,
                 "captureState": ("paused" if session_mode == "written" else self.capture_control_state(session_id=binding.session_id)) if session_status == "live" else "ready",
                 "bindingLockState": binding_lock_state,
                 "message": "网页端已绑定本机。",
@@ -2374,7 +2638,8 @@ class RealtimeSpeechService:
         else:
             self._ensure_realtime_metering(user_id=user_id, session_id=session_id)
             self._session_language_cache[session_id] = session.interview_language
-            self._prewarm_asr_session(session_id=session_id, interview_language=session.interview_language)
+            self._session_audio_mode_cache[session_id] = getattr(session, "interview_audio_mode", "computer")
+            self._prewarm_asr_session(session_id=session_id, interview_language=session.interview_language, interview_audio_mode=getattr(session, "interview_audio_mode", "computer"))
         self.session_service.touch_activity(user_id=user_id, session_id=session_id, force=True)
         return {"sessionId": session_id, "captureState": capture_state}
 
@@ -2509,12 +2774,19 @@ class RealtimeSpeechService:
             raise DomainRequestError("realtime-speech", "create-publisher", "当前面试已暂停收音，请先在网页端恢复收音。", 409, "capture_paused")
         self._ensure_realtime_metering(user_id=user_id, session_id=session_id)
         self._session_language_cache[session_id] = session.interview_language
+        self._session_audio_mode_cache[session_id] = getattr(session, "interview_audio_mode", "computer")
+        if self._session_audio_mode_cache[session_id] == "mobile" and source_kind != "microphone":
+            raise DomainRequestError(
+                "realtime-speech", "create-publisher", "手机面试只使用 Mac 麦克风。", 409,
+                "mobile_interview_system_audio_disabled",
+            )
         if self.settings.realtime_asr_attachment_prewarm_enabled:
             # Provider WebSockets are process-local. Reconstruct them when a
             # desktop attaches to an already-live interview after a restart.
             self._prewarm_asr_session(
                 session_id=session_id,
                 interview_language=session.interview_language,
+                interview_audio_mode=getattr(session, "interview_audio_mode", "computer"),
             )
         now_ms = _now_ms()
         safe_client_name = client_name.strip()
@@ -2562,6 +2834,13 @@ class RealtimeSpeechService:
         session = self.session_service.get_session(user_id=publisher.owner_user_id, session_id=publisher.session_id)
         if session.status != "live":
             raise DomainRequestError("realtime-speech", "connect", "面试会话已结束，不能继续上传音频。", 409, "session_not_live")
+        self._session_language_cache[publisher.session_id] = session.interview_language
+        self._session_audio_mode_cache[publisher.session_id] = getattr(session, "interview_audio_mode", "computer")
+        if self._session_audio_mode_cache[publisher.session_id] == "mobile" and publisher.source_kind != "microphone":
+            raise DomainRequestError(
+                "realtime-speech", "connect", "手机面试不接收电脑系统音频。", 409,
+                "mobile_interview_system_audio_disabled",
+            )
         if _now_ms() > publisher.expires_at_ms:
             raise DomainRequestError("realtime-speech", "connect", "实时语音发布令牌已过期。", 410)
         connected = self.repository.save_publisher(replace(publisher, connected_at_ms=_now_ms(), status="connected"))
@@ -2925,6 +3204,8 @@ class RealtimeSpeechService:
         frame = active.get("frame")
         if not isinstance(publisher, RealtimePublisherRecord) or not isinstance(frame, AudioFrame):
             return
+        if self._session_is_retired(frame.session_id):
+            return
         # The watchdog removes an expired snapshot before performing provider
         # recovery. A fresh frame can arrive in that small gap and establish a
         # newer active turn for the same source. Never let the stale watchdog
@@ -3091,6 +3372,15 @@ class RealtimeSpeechService:
             finally:
                 for _ in jobs:
                     work_queue.task_done()
+                with self._frame_worker_lock:
+                    retired = key[0] in self._retired_session_ids
+                if retired:
+                    with self._frame_worker_lock:
+                        if self._frame_workers.get(key) is threading.current_thread():
+                            self._frame_workers.pop(key, None)
+                        if self._frame_queues.get(key) is work_queue:
+                            self._frame_queues.pop(key, None)
+                    return
                 self._counter_bucket(session_id=key[0], source_kind=key[1])["queueDepth"] = work_queue.qsize()
 
     @staticmethod
@@ -3187,7 +3477,15 @@ class RealtimeSpeechService:
         if authenticated_publisher is None:
             session = self.session_service.get_session(user_id=publisher.owner_user_id, session_id=publisher.session_id)
             self._session_language_cache[publisher.session_id] = session.interview_language
+            self._session_audio_mode_cache[publisher.session_id] = getattr(session, "interview_audio_mode", "computer")
         interview_language = self._session_language_cache.get(publisher.session_id, "zh-CN")
+        interview_audio_mode = self._session_audio_mode_cache.get(publisher.session_id)
+        if interview_audio_mode is None:
+            session = self.session_service.get_session(user_id=publisher.owner_user_id, session_id=publisher.session_id)
+            interview_audio_mode = getattr(session, "interview_audio_mode", "computer")
+            self._session_audio_mode_cache[publisher.session_id] = interview_audio_mode
+        if interview_audio_mode == "mobile" and source_kind != "microphone":
+            return {"early_events": []}
         if self.capture_control_state(session_id=publisher.session_id) == "paused":
             return {"early_events": []}
         ingest_received_at_ms = _now_ms()
@@ -3233,6 +3531,14 @@ class RealtimeSpeechService:
                     "duplicate": True,
                 }}]}
         decoded_audio = audio_bytes if audio_bytes is not None else base64.b64decode(audio_base64.encode("utf-8"))
+        if self._session_is_retired(publisher.session_id):
+            raise DomainRequestError(
+                "realtime-speech",
+                "ingest",
+                "面试会话已结束，不能继续上传音频。",
+                409,
+                "session_not_live",
+            )
         frame = AudioFrame(
             publisher_id=publisher.publisher_id,
             session_id=publisher.session_id,
@@ -3515,6 +3821,8 @@ class RealtimeSpeechService:
         assert isinstance(counter_bucket, dict)
         assert isinstance(source_kind, str)
         events: list[dict[str, object]] = []
+        if self._session_is_retired(publisher.session_id):
+            return events
         existing_terminal = self.repository.get_transcript(frame.session_id, frame.segment_id)
         visible_text_length_before_final = len(existing_terminal.text) if existing_terminal is not None else 0
         if existing_terminal is not None and existing_terminal.is_final:
@@ -3545,6 +3853,8 @@ class RealtimeSpeechService:
         asr_started_at_ms = worker_dequeued_at_ms
         try:
             transcript, transcript_result = self._transcribe_frame(publisher=publisher, frame=frame)
+            if self._session_is_retired(publisher.session_id):
+                return events
             self.repository.save_frame_receipt(replace(pending_receipt, asr_status="accepted"))
             with self._prewarm_metrics_lock:
                 self._prewarm_ready_by_session.setdefault(frame.session_id, set()).add(frame.source_kind)
@@ -3553,6 +3863,8 @@ class RealtimeSpeechService:
                 self._complete_source_turn(frame)
                 self._clear_segment_audio(frame)
         except DomainRequestError as exc:
+            if self._session_is_retired(publisher.session_id):
+                return events
             if frame.is_final:
                 self._terminalize_visible_partial(
                     publisher=publisher,
@@ -3593,7 +3905,10 @@ class RealtimeSpeechService:
             return events
         finally:
             self._active_request_leave(session_id=publisher.session_id, source_kind=source_kind)
-            self._counter_bucket(session_id=publisher.session_id, source_kind=source_kind)["queueDepth"] = max(0, queue_depth - 1)
+            if not self._session_is_retired(publisher.session_id):
+                self._counter_bucket(session_id=publisher.session_id, source_kind=source_kind)["queueDepth"] = max(0, queue_depth - 1)
+        if self._session_is_retired(publisher.session_id):
+            return events
         published_at_ms = _now_ms()
         timing = {
             **{
@@ -4029,7 +4344,9 @@ class RealtimeSpeechService:
         ready_capture_states = {"silent", "receiving"}
         degraded_capture_states = {"unavailable", "error", "failed"}
         readiness_now_ms = _now_ms()
-        for source_kind in ("microphone", "system"):
+        interview_audio_mode = getattr(session, "interview_audio_mode", "computer")
+        required_source_kinds = ("microphone",) if interview_audio_mode == "mobile" else ("microphone", "system")
+        for source_kind in required_source_kinds:
             health = source_health_by_kind.get(source_kind)
             signal_fresh = health is not None and preparation_signal_is_fresh(
                 last_signal_at_ms=health.last_signal_at_ms,
@@ -4393,8 +4710,13 @@ class RealtimeSpeechService:
         )
         return RealtimeEventResponse(eventId=event.event_id, kind=event.kind, payload=event.payload, createdAtMs=event.created_at_ms)
 
+    def _role_for_audio_source(self, *, session_id: str, source_kind: RealtimeSourceKind) -> str:
+        if getattr(self, "_session_audio_mode_cache", {}).get(session_id, "computer") == "mobile" and source_kind == "microphone":
+            return "interviewer"
+        return "candidate" if source_kind == "microphone" else "interviewer"
+
     def _transcribe_frame(self, *, publisher: RealtimePublisherRecord, frame: AudioFrame) -> tuple[TranscriptSegmentRecord | None, TranscriptResult]:
-        role = "candidate" if frame.source_kind == "microphone" else "interviewer"
+        role = self._role_for_audio_source(session_id=frame.session_id, source_kind=frame.source_kind)
         last_error: Exception | None = None
         asr_timeout_seconds = self._asr_timeout_seconds(frame)
         for attempt in range(self.settings.realtime_asr_retry_max_attempts + 1):
@@ -4630,7 +4952,10 @@ class RealtimeSpeechService:
             "cleared_frame_receipts": 0,
         }
         if retired:
+            self._retire_session_id(session_id)
             self._stop_realtime_metering(session_id=session_id)
+        else:
+            self._unretire_session_id(session_id)
         try:
             resources["closed_asr_sessions"] = int(self.asr_gateway.close_session(session_id=session_id))
         except Exception as exc:
@@ -4639,13 +4964,6 @@ class RealtimeSpeechService:
             self._prewarm_ready_by_session.pop(session_id, None)
             self._prewarm_ready_at_by_session.pop(session_id, None)
         with self._frame_worker_lock:
-            if retired:
-                self._retired_session_ids.add(session_id)
-                self._retired_session_order.append(session_id)
-                while len(self._retired_session_ids) > self._retired_session_order.maxlen:
-                    self._retired_session_ids.discard(self._retired_session_order.popleft())
-            else:
-                self._retired_session_ids.discard(session_id)
             queues = [
                 (key, work_queue)
                 for key, work_queue in self._frame_queues.items()
@@ -4720,13 +5038,13 @@ class RealtimeSpeechService:
         self._clear_session_audio(session_id)
         self._capture_control_cache.pop(session_id, None)
         self._session_language_cache.pop(session_id, None)
+        getattr(self, "_session_audio_mode_cache", {}).pop(session_id, None)
         self._auto_answer_active_candidates.pop(session_id, None)
         activity_lock = getattr(self, "_session_activity_lock", None)
         if activity_lock is not None:
             with activity_lock:
                 getattr(self, "_session_last_activity_ms", {}).pop(session_id, None)
                 getattr(self, "_session_owners", {}).pop(session_id, None)
-                getattr(self, "_session_cleanup_locks", {}).pop(session_id, None)
         publisher_cache = getattr(self, "_publisher_status_cache", None)
         publisher_liveness_checked = getattr(self, "_publisher_liveness_checked_at_ms", None)
         list_publishers = getattr(getattr(self, "repository", None), "list_publishers_for_session", None)
@@ -4761,8 +5079,6 @@ class RealtimeSpeechService:
                     (trace_id for trace_id in self._trace_order if trace_id not in stale_trace_ids),
                     maxlen=self._trace_order.maxlen,
                 )
-        if len(self._retired_session_ids) > 4096:
-            self._retired_session_ids = set(list(self._retired_session_ids)[-2048:])
         release_session = getattr(self.screenshot_upload_port, "release_session", None)
         if release_screenshot and callable(release_session):
             try:
@@ -4954,23 +5270,33 @@ class RealtimeSpeechService:
         )
 
     def _maybe_detect_question(self, *, transcript: TranscriptSegmentRecord) -> QuestionCandidateRecord | None:
-        if transcript.source_kind != "system":
-            return None
-        text, source_segment_ids, confidence = self._assemble_interviewer_question_turn(transcript=transcript)
         language_cache = getattr(self, "_session_language_cache", None)
         if language_cache is None:
             language_cache = self._session_language_cache = {}
         interview_language = language_cache.get(transcript.session_id)
-        if interview_language is None:
+        audio_mode_cache = getattr(self, "_session_audio_mode_cache", None)
+        if audio_mode_cache is None:
+            audio_mode_cache = self._session_audio_mode_cache = {}
+        interview_audio_mode = audio_mode_cache.get(transcript.session_id)
+        if interview_language is None or interview_audio_mode is None:
             session_service = getattr(self, "session_service", None)
-            interview_language = (
+            session = (
                 session_service.get_session(
                     user_id=transcript.owner_user_id, session_id=transcript.session_id
-                ).interview_language
+                )
                 if session_service is not None
-                else "zh-CN"
+                else None
             )
+            interview_language = interview_language or (session.interview_language if session is not None else "zh-CN")
+            interview_audio_mode = interview_audio_mode or (getattr(session, "interview_audio_mode", "computer") if session is not None else "computer")
             language_cache[transcript.session_id] = interview_language
+            audio_mode_cache[transcript.session_id] = interview_audio_mode
+        expected_source = "microphone" if interview_audio_mode == "mobile" else "system"
+        if transcript.source_kind != expected_source or not transcript.is_final or transcript.overlap:
+            return None
+        text, source_segment_ids, confidence = self._assemble_interviewer_question_turn(transcript=transcript)
+        if interview_audio_mode == "mobile" and len(self._compact_transcript_for_dedup(text)) < 4:
+            return None
         if not self._looks_like_question(text, interview_language=interview_language):
             return None
         source_segment_id_set = set(source_segment_ids)
@@ -5032,7 +5358,11 @@ class RealtimeSpeechService:
         *,
         transcript: TranscriptSegmentRecord,
     ) -> tuple[str, list[str], float]:
-        if transcript.source_kind != "system" or not transcript.is_final or transcript.overlap:
+        interview_audio_mode = getattr(self, "_session_audio_mode_cache", {}).get(transcript.session_id, "computer")
+        expected_source = "microphone" if interview_audio_mode == "mobile" else "system"
+        if transcript.source_kind != expected_source or not transcript.is_final or transcript.overlap:
+            return transcript.text.strip(), [transcript.segment_id], transcript.transcript_confidence
+        if interview_audio_mode == "mobile":
             return transcript.text.strip(), [transcript.segment_id], transcript.transcript_confidence
         records = self.repository.list_transcripts_for_session(session_id=transcript.session_id)
         candidate_boundary = max((
@@ -5133,16 +5463,17 @@ class RealtimeSpeechService:
                 eventId=event_id,
                 redisEventXaddAtMs=created_at_ms,
             )
-        stored = self.repository.save_event(
-            RealtimeEvent(
-                event_id=event_id,
-                session_id=session_id,
-                owner_user_id=owner_user_id,
-                kind=kind,
-                payload=payload,
-                created_at_ms=created_at_ms,
-            )
+        event = RealtimeEvent(
+            event_id=event_id,
+            session_id=session_id,
+            owner_user_id=owner_user_id,
+            kind=kind,
+            payload=payload,
+            created_at_ms=created_at_ms,
         )
+        if self._session_is_retired(session_id):
+            return event
+        stored = self.repository.save_event(event)
         stored_performance = stored.payload.get("performance")
         if isinstance(stored_performance, dict):
             stored_trace_id = stored_performance.get("traceId")
@@ -5197,6 +5528,47 @@ class RealtimeSpeechService:
         )
         return current_cursor, [event for event in events if event.owner_user_id == user_id], resumable
 
+    def _verify_performance_ack_session(self, *, user_id: str, session_id: str, cacheable: bool) -> None:
+        """Authorize diagnostic acknowledgements without rereading full session state.
+
+        Answer and screenshot acknowledgements keep the original full session
+        lookup. Subtitle render/delivery acknowledgements are content-free
+        diagnostics and may reuse a short-lived positive ownership check. A
+        cache hit never changes the product session state and is bounded to the
+        current process, so a restart naturally clears it.
+        """
+        if not cacheable:
+            self.session_service.get_session(user_id=user_id, session_id=session_id)
+            return
+
+        lock = getattr(self, "_performance_ack_access_lock", None)
+        if lock is None:
+            lock = threading.Lock()
+            self._performance_ack_access_lock = lock
+        cache = getattr(self, "_performance_ack_access_cache", None)
+        if cache is None:
+            cache = {}
+            self._performance_ack_access_cache = cache
+        now = monotonic()
+        ttl = max(1.0, float(getattr(self.settings, "runtime_performance_ack_session_cache_seconds", 60.0)))
+        with lock:
+            cached = cache.get(session_id)
+            if cached is not None:
+                cached_user_id, expires_at = cached
+                if expires_at > now and cached_user_id == user_id:
+                    self._performance_ack_access_hits = getattr(self, "_performance_ack_access_hits", 0) + 1
+                    return
+                if expires_at > now and cached_user_id != user_id:
+                    raise DomainRequestError("session", "get", "不能查看其他用户的面试会话。", 403)
+                cache.pop(session_id, None)
+            self._performance_ack_access_misses = getattr(self, "_performance_ack_access_misses", 0) + 1
+
+        self.session_service.get_session(user_id=user_id, session_id=session_id)
+        with lock:
+            cache[session_id] = (user_id, now + ttl)
+            while len(cache) > 4096:
+                cache.pop(next(iter(cache)))
+
     def acknowledge_runtime_timing(
         self,
         *,
@@ -5229,7 +5601,11 @@ class RealtimeSpeechService:
         rendered_revision: int | None = None,
         rendered_text_length: int | None = None,
     ) -> RealtimeEvent:
-        self.session_service.get_session(user_id=user_id, session_id=session_id)
+        self._verify_performance_ack_session(
+            user_id=user_id,
+            session_id=session_id,
+            cacheable=stage == "transcript-render",
+        )
         if stage in {"transcript-delivery", "transcript-render"}:
             for source_kind in ("microphone", "system"):
                 timing = self._latest_timing(session_id=session_id, source_kind=source_kind)  # type: ignore[arg-type]
@@ -5273,7 +5649,7 @@ class RealtimeSpeechService:
         })
         log_event(
             self.logger,
-            logging.INFO,
+            logging.DEBUG,
             settings=self.settings,
             event="runtime.performance_acknowledged",
             feature="runtime-performance",

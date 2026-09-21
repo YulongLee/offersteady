@@ -8,6 +8,7 @@ import { readinessFields, sourceSignalVerificationThreshold } from "./audio-read
 interface LocalSourceMonitorOptions {
   readonly microphoneId: string;
   readonly systemAudioId: string;
+  readonly enabledChannels?: readonly AudioSourceKind[];
   readonly onHealth: (health: readonly AudioSourceHealth[]) => void;
   readonly onFailure?: (message: string) => void;
 }
@@ -69,18 +70,19 @@ export class LocalSourceMonitor {
 
   async start() {
     this.stopped = false;
-    const microphoneRuntime = await this.startSource({
+    const enabledChannels = new Set(this.options.enabledChannels ?? ["microphone", "system"]);
+    const microphoneRuntime = enabledChannels.has("microphone") ? await this.startSource({
       sourceKind: "microphone",
       sourceId: this.options.microphoneId,
       fallbackLabel: "麦克风",
       open: () => this.microphoneAdapter.open(this.options.microphoneId),
-    });
-    const systemRuntime = await this.startSource({
+    }) : null;
+    const systemRuntime = enabledChannels.has("system") ? await this.startSource({
       sourceKind: "system",
       sourceId: this.options.systemAudioId,
       fallbackLabel: "电脑输出",
       open: () => this.systemAudioAdapter.open(),
-    });
+    }) : null;
     this.runtimes = [microphoneRuntime, systemRuntime].filter((runtime): runtime is SourceRuntime => runtime !== null);
   }
 

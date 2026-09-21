@@ -1371,6 +1371,21 @@ class ChatService:
             )
             return timing
 
+        def add_quick_heading(text: str) -> str:
+            """Add the Chinese quick-answer heading once for the whole stream.
+
+            The provider emits multiple content chunks.  Prefixing every chunk
+            makes the persisted answer and the live UI repeat the heading (for
+            example, ``简单回答\n第一段简单回答\n第二段``).  Keeping the
+            decision here, before chunks are persisted, preserves the existing
+            stream contract while ensuring the heading is emitted once.
+            """
+            if session.interview_language != "zh-CN":
+                return text
+            if any(part.startswith("简单回答\n") for part in answer_parts):
+                return text
+            return f"简单回答\n{text}"
+
         for attempt in range(self.settings.chat_retry_max_attempts + 1):
             try:
                 active_quick_prompt = (
@@ -1452,7 +1467,7 @@ class ChatService:
                             )
                         yield {"type": "question-normalized", "task": current_task}
                     if session.interview_language == "zh-CN":
-                        visible_text = f"简单回答\n{visible_text}"
+                        visible_text = add_quick_heading(visible_text)
                     if session.interview_language != "zh-CN" and not quick_language_validated:
                         quick_language_buffer += visible_text
                         if output_language_violation(quick_language_buffer, session.interview_language):
@@ -1537,7 +1552,7 @@ class ChatService:
                         visible_text = f"Quick Answer\n{quick_language_buffer}"
                         quick_language_validated = True
                     else:
-                        visible_text = f"简单回答\n{visible_text}"
+                        visible_text = add_quick_heading(visible_text)
                     normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=visible_text, is_final=False)
                     chunks.append(normalized)
                     answer_parts.append(normalized.text)

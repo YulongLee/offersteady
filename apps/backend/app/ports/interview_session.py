@@ -8,6 +8,7 @@ from app.material_formats import MaterialKind
 
 InterviewSessionState = Literal["preparing", "live", "ended"]
 InterviewSessionMode = Literal["interview", "written"]
+InterviewAudioMode = Literal["computer", "mobile"]
 from app.interview_languages import InterviewLanguage
 ProgrammingLanguage = Literal["python", "java", "cpp", "javascript", "typescript", "go"]
 SessionContinueTarget = Literal["preparing", "live", "history"]
@@ -108,6 +109,7 @@ class InterviewSessionRecord:
     config_snapshot: SessionConfigSnapshot
     usage_totals: SessionUsageTotals
     session_mode: InterviewSessionMode = "interview"
+    interview_audio_mode: InterviewAudioMode = "computer"
     programming_required: bool = False
     programming_language: ProgrammingLanguage | None = None
     auto_answer_enabled: bool = False
@@ -132,6 +134,10 @@ class InterviewSessionRepository(Protocol):
 
     def update_language_if_preparing(
         self, *, user_id: str, session_id: str, interview_language: InterviewLanguage, updated_at_ms: int
+    ) -> InterviewSessionRecord | None: ...
+
+    def update_audio_mode_if_preparing(
+        self, *, user_id: str, session_id: str, interview_audio_mode: InterviewAudioMode, updated_at_ms: int
     ) -> InterviewSessionRecord | None: ...
 
     def update_programming_if_preparing(

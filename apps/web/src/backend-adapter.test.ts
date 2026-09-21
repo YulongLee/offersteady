@@ -54,6 +54,13 @@ describe("backend preview adapter", () => {
       sourceHealth: runtime.sourceHealth.map(item => ({ ...item, lastSignalAtMs: nowMs - 1_000 })),
     }, nowMs);
     expect(ready.state).toBe("ready");
+
+    const mobileReady = toPreparationAudioReadiness({
+      ...runtime,
+      sourceReadiness: { microphone: "ready" },
+    }, nowMs);
+    expect(mobileReady.state).toBe("ready");
+    expect(mobileReady.sources.map(item => item.sourceKind)).toEqual(["microphone"]);
   });
 
   it("hydrates realtime state with one aggregated snapshot request and carries the page lease", async () => {
@@ -234,6 +241,9 @@ describe("backend preview adapter", () => {
     });
     acknowledge("session-1", "trace-2", "transcript-render", now, undefined, {
       eventId: "event-2", segmentId: "segment-1", isFinal: false, browserRenderAtMs: now,
+    });
+    acknowledge("session-1", "trace-2b", "transcript-render", now, undefined, {
+      eventId: "event-2b", segmentId: "segment-2", isFinal: false, browserRenderAtMs: now,
     });
     acknowledge("session-1", "trace-3", "transcript-render", now, undefined, {
       eventId: "event-3", segmentId: "segment-1", isFinal: true, browserRenderAtMs: now,
