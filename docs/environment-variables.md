@@ -161,11 +161,15 @@
 - `OFFERSTEADY_REALTIME_COLD_PATH_QUEUE_MAX`：冷路径待处理任务上限，默认 `256`；达到上限时丢弃非关键异步工作，不能反压音频热路径
 - `OFFERSTEADY_REALTIME_EVENT_BLOCK_MS`：Redis 会话事件阻塞等待上限，默认 `1000` 毫秒
 - `OFFERSTEADY_REALTIME_EVENT_WAIT_WORKERS`：隔离 Redis 阻塞事件等待的专用线程数，默认 `32`；避免实时长连接占满普通 API 使用的通用执行器
+- `OFFERSTEADY_REALTIME_DESKTOP_HEARTBEAT_TTL_SECONDS`：桌面助手在线租约时长，默认 `15` 秒
+- `OFFERSTEADY_REALTIME_DESKTOP_HEARTBEAT_WRITE_MIN_INTERVAL_SECONDS`：设备信息未变化时写入心跳存储的最小间隔，默认 `10` 秒；实际间隔自动限制在 TTL 的一半以内，连续心跳仍立即返回最新在线状态
+- `OFFERSTEADY_REALTIME_WEB_HEARTBEAT_TTL_SECONDS`：面试网页在线租约时长，默认 `15` 秒
 - `OFFERSTEADY_LIVE_TASK_RUNTIME_TTL_SECONDS`：临时回答和截图任务 Redis 保留时间，默认 `7200` 秒
 - `OFFERSTEADY_LIVE_TASK_STALE_SECONDS`：活跃任务无更新后的中断判定时间，默认 `180` 秒
 - `OFFERSTEADY_RUNTIME_PERFORMANCE_TELEMETRY_ENABLED`：记录不含内容的全链路耗时阶段
 - `OFFERSTEADY_RUNTIME_PERFORMANCE_TELEMETRY_TTL_SECONDS`：性能阶段记录保留时间，默认 7 天
 - `OFFERSTEADY_RUNTIME_PERFORMANCE_TELEMETRY_SAMPLE_RATE`：性能记录采样率，范围 `0` 到 `1`
+- `OFFERSTEADY_RUNTIME_PERFORMANCE_ACK_SESSION_CACHE_SECONDS`：字幕渲染性能确认的会话归属短缓存时长，默认 60 秒；仅用于无内容遥测授权校验
 - `OFFERSTEADY_MZFPAY_BASE_URL`
 - `OFFERSTEADY_MZFPAY_SUBMIT_PATH`
 - `OFFERSTEADY_MZFPAY_NOTIFY_URL`
@@ -383,5 +387,13 @@ VITE_API_BASE_URL=http://127.0.0.1:8000 npm run dev:web
 - `OFFERSTEADY_CHAT_QWEN_BASE_URL` 应填写 OpenAI-compatible 根地址，例如 `https://dashscope.aliyuncs.com/compatible-mode/v1`。
 - `OFFERSTEADY_CHAT_QWEN_API_KEY` 只放在服务端 `.env`，不要放进任何 `VITE_` 前端变量。
 - `OFFERSTEADY_CHAT_QWEN_MODEL` 与当前百炼 / DashScope 控制台可用模型名保持一致。
+- `OFFERSTEADY_CHAT_QUICK_MODEL` 可选；配置后仅实时快答、问题规范化与快答续写使用该模型。留空即可回退到共享模型。当前候选值为 `deepseek-v4.1-flash`。
+- `OFFERSTEADY_CHAT_DETAIL_MODEL` 可选；配置后仅实时详细回答、详细回答语言修复与详细续写使用该模型。留空即可回退到 `OFFERSTEADY_CHAT_QWEN_MODEL`。文档摘要、通用非实时对话及其他 AI 链路不受影响。当前候选值为 `deepseek-v4.1-flash`。
+- `OFFERSTEADY_WEB_SEARCH_ENABLED` 默认关闭；仅在服务端配置并验证 Responses API 后开启联网详细回答。
+- `OFFERSTEADY_WEB_SEARCH_RESPONSES_BASE_URL` 应填写百炼业务空间的 Responses API 根地址（北京或新加坡地域），不得暴露到前端。
+- `OFFERSTEADY_WEB_SEARCH_API_KEY` 可单独配置联网密钥；留空时回退使用服务端聊天密钥。
+- `OFFERSTEADY_WEB_SEARCH_TIMEOUT_SECONDS` 默认 2.5 秒；联网超时会回退到本地知识库，不阻断普通回答。
+- `OFFERSTEADY_WEB_SEARCH_MAX_SOURCES`、`OFFERSTEADY_WEB_SEARCH_MAX_CONTEXT_CHARACTERS` 分别限制来源数和证据上下文长度。
+- `OFFERSTEADY_WEB_SEARCH_POINTS` 默认 20，仅由服务端计费逻辑读取。
 - `VITE_API_BASE_URL` 推荐填写后端根地址 `http://127.0.0.1:8000`；如果本地误写成 `http://127.0.0.1:8000/api/v1`，前端运行时会归一化为后端根地址，避免请求被拼成重复 `/api/v1/api/v1/...`。
 - 后端配置读取会优先使用仓库根目录 `.env` / `.env.local`，因此从项目根目录或 `apps/backend` 目录启动后端联调脚本都能读取同一份本地配置。

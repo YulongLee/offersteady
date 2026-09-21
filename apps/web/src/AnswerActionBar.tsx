@@ -6,6 +6,8 @@ interface Props {
   readonly screenshotTask: ScreenshotTask | null;
   readonly onQuickAnswer: () => void;
   readonly onScreenshot: () => void;
+  readonly webSearchEnabled?: boolean;
+  readonly onToggleWebSearch?: () => void;
   readonly disabled?: boolean;
   readonly quickAnswerStatus?: "idle" | "processing" | "success" | "failed" | "cancelled";
   readonly quickAnswerMessage?: string;
@@ -13,7 +15,7 @@ interface Props {
   readonly screenshotOnly?: boolean;
 }
 
-export function AnswerActionBar({ manualDraft, latestInterviewerQuestion = "", screenshotTask, onQuickAnswer, onScreenshot, disabled = false, quickAnswerStatus = "idle", screenshotAnswerStatus = "idle", screenshotOnly = false }: Props) {
+export function AnswerActionBar({ manualDraft, latestInterviewerQuestion = "", screenshotTask, onQuickAnswer, onScreenshot, webSearchEnabled = false, onToggleWebSearch = () => undefined, disabled = false, quickAnswerStatus = "idle", screenshotAnswerStatus = "idle", screenshotOnly = false }: Props) {
   const quickBusy = quickAnswerStatus === "processing";
   const screenshotBusy = screenshotAnswerStatus === "processing" || Boolean(screenshotTask && !["completed", "failed", "cancelled"].includes(screenshotTask.stage));
   return <section className="answer-action-bar" aria-label="面试操作">
@@ -27,6 +29,17 @@ export function AnswerActionBar({ manualDraft, latestInterviewerQuestion = "", s
       >
         <strong>快答</strong>
         <small>{manualDraft.trim() ? "根据左侧问题直接生成回答" : "根据最近面试官问题回答"}</small>
+      </button> : null}
+      {!screenshotOnly ? <button
+        className={`button ${webSearchEnabled ? "primary" : "ghost"} action-tile web-search-action-tile`}
+        aria-label="联网回答"
+        aria-pressed={webSearchEnabled}
+        disabled={disabled || quickBusy}
+        title="开启后，详细回答会检索公开网页信息并显示来源"
+        onClick={onToggleWebSearch}
+      >
+        <strong>{webSearchEnabled ? "联网回答已开启" : "联网回答"}</strong>
+        <small>{webSearchEnabled ? "详细回答会结合实时网页资料" : "详细回答使用实时网页资料 · 20积分 / 7天会员免费"}</small>
       </button> : null}
       <button
         className="button ghost action-tile"

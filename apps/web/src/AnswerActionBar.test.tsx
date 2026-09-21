@@ -20,6 +20,33 @@ describe("quiet live answer actions", () => {
     expect(onQuickAnswer).toHaveBeenCalledOnce();
   });
 
+  it("toggles the optional web-grounded detailed answer mode", () => {
+    const onToggleWebSearch = vi.fn();
+    const { rerender } = render(<AnswerActionBar
+      manualDraft=""
+      screenshotTask={null}
+      onQuickAnswer={vi.fn()}
+      onScreenshot={vi.fn()}
+      onToggleWebSearch={onToggleWebSearch}
+    />);
+
+    const button = screen.getByRole("button", { name: "联网回答" });
+    expect(button).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(button);
+    expect(onToggleWebSearch).toHaveBeenCalledOnce();
+
+    rerender(<AnswerActionBar
+      manualDraft=""
+      screenshotTask={null}
+      onQuickAnswer={vi.fn()}
+      onScreenshot={vi.fn()}
+      webSearchEnabled
+      onToggleWebSearch={onToggleWebSearch}
+    />);
+    expect(screen.getByRole("button", { name: "联网回答" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText(/实时网页资料/)).toBeInTheDocument();
+  });
+
   it("lets mobile users request quick-answer guidance before a question is available", () => {
     const onQuickAnswer = vi.fn();
     render(<MobileInterviewControls

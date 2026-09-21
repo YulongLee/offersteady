@@ -52,6 +52,70 @@ def test_screenshot_failure_releases_without_charging() -> None:
     assert service.state_for_user(user_id=user_id).balance == 200
 
 
+def test_web_answer_charges_20_points_and_is_idempotent() -> None:
+    service = BillingService()
+    user_id = "synthetic-web-answer-user"
+    first = service.reserve_usage(
+        user_id=user_id,
+        usage_id="web-answer-command-1",
+        usage_kind="web_answer",
+        minimum_pass_duration_days=7,
+    )
+    replay = service.reserve_usage(
+        user_id=user_id,
+        usage_id="web-answer-command-1",
+        usage_kind="web_answer",
+        minimum_pass_duration_days=7,
+    )
+    assert first.reservation_id == replay.reservation_id
+    assert first.points_reserved == 20
+    service.settle_usage(usage_id=first.usage_id)
+    service.settle_usage(usage_id=first.usage_id)
+    assert service.state_for_user(user_id=user_id).balance == 180
+
+
+def test_web_answer_only_waives_for_seven_day_pass() -> None:
+    service = BillingService()
+    now_ms = service.now_ms_provider()
+    short_user = "synthetic-web-answer-short-pass"
+    service.pass_entitlements_by_user[short_user] = [TimePassEntitlementRecord(
+        id="short-pass-entitlement",
+        user_id=short_user,
+        product_id="pass-3",
+        starts_at_ms=now_ms - 1_000,
+        ends_at_ms=now_ms + 60_000,
+        order_id="short-pass-order",
+        knowledge_allowance_granted=0,
+    )]
+    short = service.reserve_usage(
+        user_id=short_user,
+        usage_id="web-answer-short-pass",
+        usage_kind="web_answer",
+        minimum_pass_duration_days=7,
+    )
+    assert short.billing_source == "points"
+    assert short.points_reserved == 20
+
+    long_user = "synthetic-web-answer-long-pass"
+    service.pass_entitlements_by_user[long_user] = [TimePassEntitlementRecord(
+        id="long-pass-entitlement",
+        user_id=long_user,
+        product_id="pass-7",
+        starts_at_ms=now_ms - 1_000,
+        ends_at_ms=now_ms + 60_000,
+        order_id="long-pass-order",
+        knowledge_allowance_granted=0,
+    )]
+    long = service.reserve_usage(
+        user_id=long_user,
+        usage_id="web-answer-long-pass",
+        usage_kind="web_answer",
+        minimum_pass_duration_days=7,
+    )
+    assert long.billing_source == "time_pass"
+    assert long.points_reserved == 0
+
+
 def test_realtime_minute_settles_once_per_stable_usage_id() -> None:
     service = BillingService()
     user_id = "synthetic-realtime-minute-user"

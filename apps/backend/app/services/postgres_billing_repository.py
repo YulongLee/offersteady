@@ -714,14 +714,30 @@ class PostgresBillingRepository:
                 if str(existing["user_id"]) != user_id or str(existing["usage_kind"]) != str(usage["usage_kind"]):
                     raise PermissionError("Billing usage id belongs to a different operation.")
                 return self._usage_reservation(existing)
-            cursor.execute(
-                """
-                SELECT 1 FROM billing_time_pass_entitlements
-                WHERE user_id = %s AND starts_at_ms <= %s AND ends_at_ms > %s
-                LIMIT 1
-                """,
-                (user_id, created_at_ms, created_at_ms),
-            )
+            minimum_pass_duration_days = usage.get("minimum_pass_duration_days")
+            if minimum_pass_duration_days is None:
+                cursor.execute(
+                    """
+                    SELECT 1 FROM billing_time_pass_entitlements
+                    WHERE user_id = %s AND starts_at_ms <= %s AND ends_at_ms > %s
+                    LIMIT 1
+                    """,
+                    (user_id, created_at_ms, created_at_ms),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT 1
+                    FROM billing_time_pass_entitlements AS entitlement
+                    JOIN billing_catalog_products AS product ON product.product_id = entitlement.product_id
+                    WHERE entitlement.user_id = %s
+                      AND entitlement.starts_at_ms <= %s
+                      AND entitlement.ends_at_ms > %s
+                      AND product.duration_days >= %s
+                    LIMIT 1
+                    """,
+                    (user_id, created_at_ms, created_at_ms, int(minimum_pass_duration_days)),
+                )
             has_active_pass = cursor.fetchone() is not None and not bool(usage.get("wallet_only", False))
             points_reserved = 0 if has_active_pass else int(usage["points_reserved"])
             if points_reserved:
@@ -766,7 +782,13 @@ class PostgresBillingRepository:
                 return None
             if row["status"] != "reserved":
                 return self._usage_reservation(row)
-            ledger_kind = "pass_usage" if row["billing_source"] == "time_pass" else f"{row['usage_kind']}_settlement"
+            ledger_kind = (
+                "pass_usage"
+                if row["billing_source"] == "time_pass"
+                else "answer_settlement"
+                if row["usage_kind"] == "web_answer"
+                else f"{row['usage_kind']}_settlement"
+            )
             description = (
                 "会员权益实时面试使用"
                 if row["billing_source"] == "time_pass" and row["usage_kind"] == "realtime_minute"
@@ -778,6 +800,8 @@ class PostgresBillingRepository:
                 if row["usage_kind"] == "screenshot_answer"
                 else "笔试模式入场积分结算"
                 if row["usage_kind"] == "written_exam_entry"
+                else "联网详细回答积分结算"
+                if row["usage_kind"] == "web_answer"
                 else "面试回答积分结算"
             )
             cursor.execute(
@@ -1050,6 +1074,7 @@ class PostgresBillingRepository:
             Path(REPO_ROOT / "apps/backend/migrations/versions/0029_early_referral_mutual_rewards.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0032_realtime_minute_billing.sql"),
             Path(REPO_ROOT / "apps/backend/migrations/versions/0037_written_exam_billing_constraints.sql"),
+            Path(REPO_ROOT / "apps/backend/migrations/versions/0050_web_answer_billing.sql"),
         )
         with self._connect() as connection, connection.cursor() as cursor:
             apply_sql_migrations(cursor, migrations)

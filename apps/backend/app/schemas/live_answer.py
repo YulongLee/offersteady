@@ -20,6 +20,7 @@ class LiveAnswerQuestionRequest(BaseModel):
     clicked_at_ms: int | None = Field(default=None, ge=1, alias="clickedAtMs")
     prefetch_revision: int | None = Field(default=None, ge=1, alias="prefetchRevision")
     trigger_mode: Literal["manual", "auto"] = Field(default="manual", alias="triggerMode")
+    web_search_enabled: bool = Field(default=False, alias="webSearchEnabled")
 
     @model_validator(mode="after")
     def require_candidate_for_auto(self):
@@ -61,6 +62,9 @@ class LiveAnswerTaskResponse(BaseModel):
     retrieved_source_count: int = Field(default=0, alias="retrievedSourceCount")
     material_provenance: dict[str, object] = Field(default_factory=dict, alias="materialProvenance")
     unavailable_material_sources: list[dict[str, object]] = Field(default_factory=list, alias="unavailableMaterialSources")
+    web_search_enabled: bool = Field(default=False, alias="webSearchEnabled")
+    web_search_status: str = Field(default="disabled", alias="webSearchStatus")
+    web_sources: list[dict[str, object]] = Field(default_factory=list, alias="webSources")
     retry_count: int = Field(alias="retryCount")
     error_code: str | None = Field(default=None, alias="errorCode")
     error_message: str | None = Field(default=None, alias="errorMessage")

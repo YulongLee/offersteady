@@ -37,6 +37,7 @@ from app.ports.retrieval import RetrievalContext, RetrievalFilter, RetrievalPort
 from app.ports.interview_session import InterviewLanguage
 from app.ports.commercial_hardening import AiUsageRecord, CommercialHardeningRepository
 from app.ports.storage import FileStoragePort
+from app.ports.web_search import WebSearchAnswer, WebSearchGatewayPort
 from app.schemas.retrieval import RetrievalResponse, RetrievedChunkResponse
 from app.services.session_service import SessionService
 from app.services.programming_prompt import append_programming_policy, carry_programming_policy
@@ -46,6 +47,14 @@ from app.interview_languages import get_interview_language, interview_prompt_ass
 
 def _now_ms() -> int:
     return int(time() * 1000)
+
+
+def _quick_model_name(settings: Settings) -> str:
+    return (settings.chat_quick_model or "").strip() or settings.chat_qwen_model
+
+
+def _detail_model_name(settings: Settings) -> str:
+    return (settings.chat_detail_model or "").strip() or settings.chat_qwen_model
 
 
 _NORMALIZED_QUESTION_OPEN = "<normalized_question>"
@@ -66,6 +75,17 @@ _COMMERCIAL_ANSWER_CONTRACT = (
     "label inference and uncertainty, never fabricate experience or metrics, follow the selected programming-language constraints, "
     "and present every generated answer as AI advice for the candidate to review."
     "</commercial_answer_contract>"
+)
+_QUICK_PROTOCOL_REMINDER_ZH = (
+    "<required_output_protocol>你的第一个字符必须是<normalized_question>。"
+    "先完整输出<normalized_question>整理后的问题</normalized_question>，随后直接输出回答正文。"
+    "不得省略、改写或嵌套标签。</required_output_protocol>"
+)
+_QUICK_PROTOCOL_REMINDER = (
+    "<required_output_protocol>Your first output character must be the opening angle bracket of "
+    "<normalized_question>. First emit <normalized_question>the complete normalized question</normalized_question>, "
+    "then immediately emit the answer body. Do not omit, rename, or nest the tags. Keep both parts in the required "
+    "output language.</required_output_protocol>"
 )
 
 
@@ -238,6 +258,8 @@ class InterviewPromptBuilder(PromptBuilderPort):
             sections.append("<knowledge_status>No confirmed knowledge-base evidence matched this request.</knowledge_status>" if english else "<knowledge_status>本次未命中已确认知识库。</knowledge_status>")
         if answer_anchors:
             sections.append(f"<authoritative_answer_anchor>\n{answer_anchors[-1]}\n</authoritative_answer_anchor>")
+        if prompt_config.template_id.endswith("-quick"):
+            sections.append(_QUICK_PROTOCOL_REMINDER_ZH if not output_language and not english else _QUICK_PROTOCOL_REMINDER)
         user_prompt = "\n\n".join(sections)
         return PromptBuildResult(
             system_prompt=system_prompt,
@@ -305,16 +327,17 @@ class QwenCompatibleGateway(LLMGatewayPort):
         if chunks:
             last = chunks[-1]
             chunks[-1] = ChatAnswerChunk(sequence=last.sequence, text=last.text, is_final=True)
+        model_name = self._model_for_prompt(prompt)
         usage = UsageReport(
             prompt_tokens=max(1, len(prompt.rendered_prompt) // 4),
             completion_tokens=max(1, len(answer) // 4),
             total_tokens=max(1, len(prompt.rendered_prompt) // 4) + max(1, len(answer) // 4),
             provider_name="qwen-compatible",
-            model_name=self.settings.chat_qwen_model,
+            model_name=model_name,
         )
         return GatewayAnswerResult(
             provider_name="qwen-compatible",
-            model_name=self.settings.chat_qwen_model,
+            model_name=model_name,
             chunks=chunks if stream else [ChatAnswerChunk(sequence=1, text=answer, is_final=True)],
             final_text=answer,
             finish_reason="completed",
@@ -365,16 +388,17 @@ class QwenCompatibleGateway(LLMGatewayPort):
         if not answer:
             raise NonRetryableChatError("当前对话模型返回了无效结果，请稍后重试或检查模型配置。", code="chat_provider_invalid_response")
         usage_payload = body.get("usage", {}) if isinstance(body, dict) else {}
+        model_name = self._model_for_prompt(prompt)
         usage = UsageReport(
             prompt_tokens=max(1, int(usage_payload.get("prompt_tokens", 0) or max(1, len(prompt.rendered_prompt) // 4))),
             completion_tokens=max(1, int(usage_payload.get("completion_tokens", 0) or max(1, len(answer) // 4))),
             total_tokens=max(1, int(usage_payload.get("total_tokens", 0) or (max(1, len(prompt.rendered_prompt) // 4) + max(1, len(answer) // 4)))),
             provider_name="qwen-compatible",
-            model_name=self.settings.chat_qwen_model,
+            model_name=model_name,
         )
         return GatewayAnswerResult(
             provider_name="qwen-compatible",
-            model_name=self.settings.chat_qwen_model,
+            model_name=model_name,
             chunks=self._chunk_answer(answer) if stream else [ChatAnswerChunk(sequence=1, text=answer, is_final=True)],
             final_text=answer,
             finish_reason="completed",
@@ -394,8 +418,9 @@ class QwenCompatibleGateway(LLMGatewayPort):
     def _post_completion(self, *, prompt: PromptBuildResult, stream: bool) -> httpx.Response:
         base_url = self.settings.chat_qwen_base_url.rstrip("/")
         url = f"{base_url}/chat/completions"
+        model_name = self._model_for_prompt(prompt)
         payload = {
-            "model": self.settings.chat_qwen_model,
+            "model": model_name,
             "stream": stream,
             "temperature": 0.2,
             "max_tokens": self._max_tokens_for_prompt(prompt),
@@ -420,7 +445,8 @@ class QwenCompatibleGateway(LLMGatewayPort):
                 action="provider-request",
                 duration_ms=_now_ms() - started_at,
                 stream=stream,
-                model=self.settings.chat_qwen_model,
+                model=model_name,
+                stage=self._stage_for_prompt(prompt),
             )
         self._raise_for_provider_status(response.status_code)
         return response
@@ -440,8 +466,9 @@ class QwenCompatibleGateway(LLMGatewayPort):
             raise NonRetryableChatError("当前对话模型未配置完成，请检查服务端 .env 配置。", code="chat_config_missing")
         base_url = self.settings.chat_qwen_base_url.rstrip("/")
         url = f"{base_url}/chat/completions"
+        model_name = self._model_for_prompt(prompt)
         payload = {
-            "model": self.settings.chat_qwen_model,
+            "model": model_name,
             "stream": True,
             "temperature": 0.2,
             "max_tokens": self._max_tokens_for_prompt(prompt),
@@ -478,9 +505,27 @@ class QwenCompatibleGateway(LLMGatewayPort):
                 feature="live-answer",
                 action="provider-stream",
                 duration_ms=_now_ms() - started_at,
-                model=self.settings.chat_qwen_model,
+                model=model_name,
+                stage=self._stage_for_prompt(prompt),
                 chunk_count=sequence,
             )
+
+    def _model_for_prompt(self, prompt: PromptBuildResult) -> str:
+        stage = self._stage_for_prompt(prompt)
+        if stage == "quick":
+            return _quick_model_name(self.settings)
+        if stage == "detail":
+            return _detail_model_name(self.settings)
+        return self.settings.chat_qwen_model
+
+    @staticmethod
+    def _stage_for_prompt(prompt: PromptBuildResult) -> str:
+        template_id = prompt.prompt_config.template_id
+        if template_id.endswith("-quick"):
+            return "quick"
+        if template_id.endswith("-detail"):
+            return "detail"
+        return "chat"
 
     def _max_tokens_for_prompt(self, prompt: PromptBuildResult) -> int:
         template_id = prompt.prompt_config.template_id
@@ -607,6 +652,7 @@ class ChatService:
         llm_gateway: LLMGatewayPort,
         billing_service: BillingService | None = None,
         commercial_repository: CommercialHardeningRepository | None = None,
+        web_search_gateway: WebSearchGatewayPort | None = None,
     ) -> None:
         self.settings = settings
         self.logger = logger
@@ -619,6 +665,7 @@ class ChatService:
         self.llm_gateway = llm_gateway
         self.billing_service = billing_service
         self.commercial_repository = commercial_repository
+        self.web_search_gateway = web_search_gateway
         self.billing_usage_by_task: dict[str, str] = {}
         self._prepared_context_lock = threading.Lock()
         self._prepared_context: dict[tuple[str, str, int], dict[str, object]] = {}
@@ -681,12 +728,47 @@ class ChatService:
         retrieval = prepared.get("retrieval")
         return retrieval if isinstance(retrieval, RetrievalContext) else None
 
-    def _reserve_answer_usage(self, *, user_id: str, usage_id: str) -> None:
+    def _ensure_web_search_allowed(self, *, enabled: bool) -> None:
+        if not enabled:
+            return
+        if self.settings.product_edition != "cn":
+            raise DomainRequestError(
+                "live-answer",
+                "web-search",
+                "联网详细回答当前仅支持国服。",
+                409,
+                error_code="web_search_not_available",
+            )
+
+    @staticmethod
+    def _web_sources_payload(result: WebSearchAnswer) -> list[dict[str, object]]:
+        return [
+            {
+                "title": source.title,
+                "url": source.url,
+                "snippet": source.snippet,
+                "retrievedAtMs": source.retrieved_at_ms,
+            }
+            for source in result.sources
+        ]
+
+    def _reserve_answer_usage(self, *, user_id: str, usage_id: str, web_search_enabled: bool = False) -> None:
         if self.billing_service is None:
             return
-        reservation = self.billing_service.reserve_usage(user_id=user_id, usage_id=usage_id, usage_kind="answer")
+        reservation = self.billing_service.reserve_usage(
+            user_id=user_id,
+            usage_id=usage_id,
+            usage_kind="web_answer" if web_search_enabled else "answer",
+            minimum_pass_duration_days=7 if web_search_enabled else None,
+        )
         if reservation.status == "insufficient_balance":
-            raise DomainRequestError("billing", "reserve-answer", "积分不足，请先购买积分或开通会员。", 409)
+            raise DomainRequestError(
+                "billing",
+                "reserve-web-answer" if web_search_enabled else "reserve-answer",
+                "联网详细回答需要 20 积分，或开通 7 天及以上会员。" if web_search_enabled else "积分不足，请先购买积分或开通会员。",
+                409,
+                error_code="web_search_points_insufficient" if web_search_enabled else None,
+            )
 
     def _record_ai_usage(
         self,
@@ -934,22 +1016,30 @@ class ChatService:
             finish_reason=finish_reason,
             continuation_attempt=continuation_attempt,
             answer_size_bucket=self._size_bucket(len(text)),
-            model=self.settings.chat_qwen_model,
+            model=(
+                _quick_model_name(self.settings)
+                if stage.startswith("quick")
+                else _detail_model_name(self.settings)
+                if stage.startswith("detail")
+                else self.settings.chat_qwen_model
+            ),
         )
 
     def answer_question(
-        self, *, user_id: str, session_id: str, question: str, stream: bool, usage_id: str | None = None
+        self, *, user_id: str, session_id: str, question: str, stream: bool, usage_id: str | None = None,
+        web_search_enabled: bool = False,
     ) -> tuple[ChatAnswerTaskRecord, RetrievalResponse]:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         if session.session_mode == "written":
             raise DomainRequestError("live-answer", "start", "笔试模式仅支持截屏回答。", 409, error_code="written_exam_mode_mismatch")
         if session.status != "live":
             raise DomainRequestError("live-answer", "start", "只有进行中的面试会话才能发起实时回答。", 400)
+        self._ensure_web_search_allowed(enabled=web_search_enabled)
         self.session_service.touch_activity(user_id=user_id, session_id=session_id, force=True)
         now_ms = _now_ms()
         task_id = f"answer-{uuid4().hex}"
         billing_usage_id = usage_id or f"live-answer:{task_id}"
-        self._reserve_answer_usage(user_id=user_id, usage_id=billing_usage_id)
+        self._reserve_answer_usage(user_id=user_id, usage_id=billing_usage_id, web_search_enabled=web_search_enabled)
         self.billing_usage_by_task[task_id] = billing_usage_id
         task = self.repository.save_task(
             ChatAnswerTaskRecord(
@@ -960,6 +1050,8 @@ class ChatService:
                 answer_text="",
                 status="queued",
                 stream_mode=stream,
+                web_search_enabled=web_search_enabled,
+                web_search_status="pending" if web_search_enabled else "disabled",
                 created_at_ms=now_ms,
                 updated_at_ms=now_ms,
             )
@@ -1013,11 +1105,32 @@ class ChatService:
                     if session.interview_language != "zh-CN" and attempt > 0
                     else prompt
                 )
-                gateway_result = self.llm_gateway.generate(
+                web_result = WebSearchAnswer(answer_text="", status="unavailable", safe_error_code="web_search_not_used")
+                if web_search_enabled and self.web_search_gateway is not None:
+                    web_result = self.web_search_gateway.answer(
+                        question=question,
+                        system_prompt=prompt.system_prompt,
+                        user_prompt=f"<interview_question>{question.strip()}</interview_question>",
+                        model=_detail_model_name(self.settings),
+                        max_tokens=self.settings.chat_detail_max_tokens,
+                        language=get_interview_language(session.interview_language).output_language,
+                    )
+                gateway_result = (
+                    GatewayAnswerResult(
+                        provider_name=web_result.provider,
+                        model_name=_detail_model_name(self.settings),
+                        chunks=[ChatAnswerChunk(sequence=1, text=web_result.answer_text, is_final=True)],
+                        final_text=web_result.answer_text,
+                        finish_reason="completed",
+                        usage=None,
+                    )
+                    if web_result.status == "succeeded" and web_result.answer_text
+                    else self.llm_gateway.generate(
                     question=question,
                     prompt=active_prompt,
                     stream=stream,
                     attempt=attempt,
+                    )
                 )
                 if session.interview_language != "zh-CN" and output_language_violation(gateway_result.final_text, session.interview_language):
                     self._log_language_violation(
@@ -1031,6 +1144,16 @@ class ChatService:
                         "The answer model returned the wrong language.",
                         code="chat_output_language_violation",
                     )
+                current_task = replace(
+                    current_task,
+                    web_search_status=web_result.status if web_search_enabled else "disabled",
+                    web_sources=self._web_sources_payload(web_result) if web_search_enabled else [],
+                    material_provenance={
+                        **current_task.material_provenance,
+                        **({"webSearchStatus": web_result.status, "webSources": self._web_sources_payload(web_result)} if web_search_enabled else {}),
+                    },
+                    updated_at_ms=_now_ms(),
+                )
                 completed = self._complete_task(task=current_task, gateway_result=gateway_result, retry_count=attempt)
                 self.session_service.append_context(
                     user_id=user_id,
@@ -1059,7 +1182,10 @@ class ChatService:
                 )
                 self._log(logging.INFO, "chat.completed", task=completed, session_id=session_id, question=question, retry_count=attempt)
                 if self.billing_service is not None:
-                    self.billing_service.settle_usage(usage_id=billing_usage_id)
+                    if web_search_enabled and web_result.status != "succeeded":
+                        self.billing_service.release_usage(usage_id=billing_usage_id)
+                    else:
+                        self.billing_service.settle_usage(usage_id=billing_usage_id)
                 return completed, self._to_retrieval_response(retrieval)
             except RetryableChatError as exc:
                 last_error = exc
@@ -1093,6 +1219,7 @@ class ChatService:
         self, *, user_id: str, session_id: str, question: str, usage_id: str | None = None,
         question_id: str | None = None, question_revision: int | None = None,
         clicked_at_ms: int | None = None, prefetch_revision: int | None = None,
+        web_search_enabled: bool = False,
         route_received_at_ms: int | None = None, executor_admitted_at_ms: int | None = None,
         answer_generator_started_at_ms: int | None = None,
     ) -> Iterator[dict]:
@@ -1102,11 +1229,12 @@ class ChatService:
             raise DomainRequestError("live-answer", "start-stream", "笔试模式仅支持截屏回答。", 409, error_code="written_exam_mode_mismatch")
         if session.status != "live":
             raise DomainRequestError("live-answer", "start-stream", "只有进行中的面试会话才能发起实时回答。", 400)
+        self._ensure_web_search_allowed(enabled=web_search_enabled)
         self.session_service.touch_activity(user_id=user_id, session_id=session_id, force=True)
         now_ms = _now_ms()
         task_id = f"answer-{uuid4().hex}"
         billing_usage_id = usage_id or f"live-answer:{task_id}"
-        self._reserve_answer_usage(user_id=user_id, usage_id=billing_usage_id)
+        self._reserve_answer_usage(user_id=user_id, usage_id=billing_usage_id, web_search_enabled=web_search_enabled)
         self.billing_usage_by_task[task_id] = billing_usage_id
         task = self.repository.save_task(
             ChatAnswerTaskRecord(
@@ -1123,6 +1251,8 @@ class ChatService:
                 question_revision=question_revision,
                 clicked_at_ms=clicked_at_ms or now_ms,
                 prefetch_revision=prefetch_revision,
+                web_search_enabled=web_search_enabled,
+                web_search_status="pending" if web_search_enabled else "disabled",
                 created_at_ms=now_ms,
                 updated_at_ms=now_ms,
             )
@@ -1176,17 +1306,20 @@ class ChatService:
                 task,
                 status="streaming",
                 provider_name="qwen-compatible",
-                model_name=self.settings.chat_qwen_model,
+                model_name=_quick_model_name(self.settings),
                 prompt_template_id=prompt.prompt_config.template_id,
                 prompt_version=prompt.prompt_config.version,
                 retrieval_excerpt_count=quick_retrieval.final_count,
                 material_context_status=material_assembly.status,
                 fixed_source_count=material_assembly.fixed_source_count,
                 retrieved_source_count=material_assembly.retrieved_source_count,
-                material_provenance=self._prompt_metadata(
-                    material_provenance,
-                    stages={"quick": f"{prompt.prompt_config.template_id}:{prompt.prompt_config.version}"},
-                ),
+                material_provenance={
+                    **self._prompt_metadata(
+                        material_provenance,
+                        stages={"quick": f"{prompt.prompt_config.template_id}:{prompt.prompt_config.version}"},
+                    ),
+                    "modelStages": {"quick": _quick_model_name(self.settings)},
+                },
                 unavailable_material_sources=[self._material_source_payload(item) for item in material_assembly.unavailable_sources],
                 updated_at_ms=_now_ms(),
             )
@@ -1208,6 +1341,7 @@ class ChatService:
         first_token_at_ms: int | None = None
         first_visible_at_ms: int | None = None
         detail_retrieval_future: Future[RetrievalContext] | None = None
+        web_search_succeeded = not web_search_enabled
 
         def mark_first_visible() -> dict[str, int] | None:
             nonlocal first_visible_at_ms
@@ -1492,14 +1626,49 @@ class ChatService:
                         material_context_status=material_assembly.status,
                         fixed_source_count=material_assembly.fixed_source_count,
                         retrieved_source_count=material_assembly.retrieved_source_count,
-                        material_provenance=self._prompt_metadata(
-                            material_provenance,
-                            stages={
-                                "quick": f"{prompt.prompt_config.template_id}:{prompt.prompt_config.version}",
-                                "detail": f"{detail_prompt.prompt_config.template_id}:{detail_prompt.prompt_config.version}",
+                        material_provenance={
+                            **self._prompt_metadata(
+                                material_provenance,
+                                stages={
+                                    "quick": f"{prompt.prompt_config.template_id}:{prompt.prompt_config.version}",
+                                    "detail": f"{detail_prompt.prompt_config.template_id}:{detail_prompt.prompt_config.version}",
+                                },
+                            ),
+                            "modelStages": {
+                                "quick": _quick_model_name(self.settings),
+                                "detail": _detail_model_name(self.settings),
                             },
-                        ),
+                        },
                         unavailable_material_sources=[self._material_source_payload(item) for item in material_assembly.unavailable_sources],
+                        web_search_status="pending" if web_search_enabled else "disabled",
+                        updated_at_ms=_now_ms(),
+                    )
+                )
+                web_result = WebSearchAnswer(answer_text="", status="unavailable", safe_error_code="web_search_not_used")
+                if web_search_enabled and self.web_search_gateway is not None:
+                    web_result = self.web_search_gateway.answer(
+                        question=normalized_question,
+                        system_prompt=detail_prompt.system_prompt,
+                        user_prompt=(
+                            f"<interview_question>{normalized_question}</interview_question>\n"
+                            "Use current public web information only to strengthen the detailed answer. "
+                            "Do not include private resume text or raw interview history."
+                        ),
+                        model=_detail_model_name(self.settings),
+                        max_tokens=self.settings.chat_detail_max_tokens,
+                        language=get_interview_language(session.interview_language).output_language,
+                    )
+                    if web_result.status == "succeeded" and web_result.answer_text:
+                        web_search_succeeded = True
+                current_task = self.repository.save_task(
+                    replace(
+                        current_task,
+                        web_search_status=web_result.status if web_search_enabled else "disabled",
+                        web_sources=self._web_sources_payload(web_result) if web_search_enabled else [],
+                        material_provenance={
+                            **current_task.material_provenance,
+                            **({"webSearchStatus": web_result.status, "webSources": self._web_sources_payload(web_result)} if web_search_enabled else {}),
+                        },
                         updated_at_ms=_now_ms(),
                     )
                 )
@@ -1514,7 +1683,18 @@ class ChatService:
                 detail_parts: list[str] = []
                 detail_finish_reason = "stop"
                 detail_chunks: list[ChatAnswerChunk] = []
-                if session.interview_language != "en-US":
+                if web_result.status == "succeeded" and web_result.answer_text:
+                    detail_parts = [web_result.answer_text]
+                    detail_chunks = [ChatAnswerChunk(sequence=1, text=web_result.answer_text, is_final=False)]
+                    for web_chunk in detail_chunks:
+                        normalized = ChatAnswerChunk(sequence=len(chunks) + 1, text=web_chunk.text, is_final=False)
+                        chunks.append(normalized)
+                        answer_parts.append(normalized.text)
+                        current_task = self.repository.save_task(
+                            replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
+                        )
+                        yield {"type": "chunk", "task": current_task, "chunk": normalized}
+                elif session.interview_language != "en-US":
                     for chunk in self.llm_gateway.stream_generate(
                         question=normalized_question,
                         prompt=detail_prompt,
@@ -1627,13 +1807,13 @@ class ChatService:
                     completion_tokens=max(1, len(final_text) // 4),
                     total_tokens=max(1, (len(prompt.rendered_prompt) + len(detail_prompt.rendered_prompt) + continuation_prompt_characters) // 4) + max(1, len(final_text) // 4),
                     provider_name="qwen-compatible",
-                    model_name=self.settings.chat_qwen_model,
+                    model_name=_detail_model_name(self.settings),
                 )
                 completed = self._complete_task(
                     task=current_task,
                     gateway_result=GatewayAnswerResult(
                         provider_name="qwen-compatible",
-                        model_name=self.settings.chat_qwen_model,
+                        model_name=_detail_model_name(self.settings),
                         chunks=chunks.copy(),
                         final_text=final_text,
                         finish_reason="completed",
@@ -1682,7 +1862,10 @@ class ChatService:
                 )
                 self._log(logging.INFO, "chat.stream_completed", task=completed, session_id=session_id, question=question, retry_count=attempt)
                 if self.billing_service is not None:
-                    self.billing_service.settle_usage(usage_id=billing_usage_id)
+                    if web_search_enabled and not web_search_succeeded:
+                        self.billing_service.release_usage(usage_id=billing_usage_id)
+                    else:
+                        self.billing_service.settle_usage(usage_id=billing_usage_id)
                 yield {"type": "completed", "task": completed, "retrieval": self._to_retrieval_response(retrieval)}
                 return
             except ChatTaskCancelled:

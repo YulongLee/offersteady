@@ -5,6 +5,7 @@ export type ResourceStatus = "missing" | "processing" | "ready" | "error" | "del
 export type SessionStatus = "preparing" | "ready" | "active" | "paused" | "ended" | "error";
 export type InterviewLanguage = "zh-CN" | "en-US";
 export type SessionMode = "interview" | "written";
+export type InterviewAudioMode = "computer" | "mobile";
 export type ProgrammingLanguage = "python" | "java" | "cpp" | "javascript" | "typescript" | "go";
 export type QuestionStatus = "listening" | "transcribing" | "confirmed" | "generating" | "streaming" | "uncertain" | "failed" | "offline" | "cancelled";
 export type ReviewStatus = "waiting" | "generating" | "complete" | "failed";
@@ -22,6 +23,7 @@ export interface InterviewSummary {
   readonly id: string;
   readonly title: string;
   readonly sessionMode?: SessionMode;
+  readonly interviewAudioMode?: InterviewAudioMode;
   readonly interviewLanguage?: InterviewLanguage;
   readonly programmingRequired?: boolean;
   readonly programmingLanguage?: ProgrammingLanguage | null;
@@ -61,6 +63,7 @@ export interface InterviewReview {
   readonly screenshots: readonly { id: string; name: string }[];
   readonly sessionId?: string;
   readonly title?: string;
+  readonly interviewAudioMode?: InterviewAudioMode;
   readonly startedAtMs?: number | null;
   readonly endedAtMs?: number | null;
   readonly transcripts: readonly InterviewReviewTranscript[];
@@ -69,7 +72,7 @@ export interface InterviewReview {
 export interface InterviewReviewTranscript {
   readonly id: string;
   readonly role: "interviewer" | "candidate";
-  readonly speakerLabel: "面试官" | "我";
+  readonly speakerLabel: "面试官" | "我" | "现场声音";
   readonly text: string;
   readonly occurredAtMs: number;
   readonly ordering: number;
@@ -241,6 +244,7 @@ export interface LiveActionState {
   readonly quickAnswerStatus?: "idle" | "processing" | "success" | "failed" | "cancelled";
   readonly quickAnswerMessage?: string;
   readonly screenshotAnswerStatus?: "idle" | "processing" | "success" | "failed" | "cancelled";
+  readonly webSearchEnabled?: boolean;
 }
 
 export interface LiveWorkspaceViewState {
@@ -258,6 +262,7 @@ export interface SubmitManualAnswerCommand {
   readonly clickedAtMs?: number;
   readonly prefetchRevision?: number;
   readonly triggerMode?: "manual" | "auto";
+  readonly webSearchEnabled?: boolean;
 }
 
 export interface SubmitScreenshotAnswerCommand {
@@ -310,7 +315,8 @@ export interface InterviewAppAdapter {
   joinPartnerProgram(agreementVersion: string, signal?: AbortSignal): Promise<PartnerProgramState>;
   requestPartnerPayout(signal?: AbortSignal): Promise<{ readonly payoutRequestId: string; readonly amountCents: number; readonly status: string }>;
   savePartnerPayoutProfile(input: { readonly payoutMethod: "alipay" | "wechat"; readonly accountName: string; readonly accountIdentifier: string }, signal?: AbortSignal): Promise<NonNullable<PartnerProgramState["payoutProfile"]>>;
-  createDraft(input: { title: string; role: string; company?: string; sessionMode?: SessionMode }, signal?: AbortSignal): Promise<InterviewSummary>;
+  createDraft(input: { title: string; role: string; company?: string; sessionMode?: SessionMode; interviewAudioMode?: InterviewAudioMode }, signal?: AbortSignal): Promise<InterviewSummary>;
+  updateInterviewAudioMode?(id: string, interviewAudioMode: InterviewAudioMode, signal?: AbortSignal): Promise<InterviewSummary>;
   updateInterviewLanguage(id: string, interviewLanguage: InterviewLanguage, signal?: AbortSignal): Promise<InterviewSummary>;
   updateInterviewProgramming(id: string, programmingRequired: boolean, programmingLanguage: ProgrammingLanguage | null, signal?: AbortSignal): Promise<InterviewSummary>;
   updateInterviewAutoAnswer(id: string, enabled: boolean, signal?: AbortSignal): Promise<InterviewSummary>;

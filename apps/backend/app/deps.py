@@ -45,6 +45,7 @@ from .services.document_processing_repository import InMemoryProcessingTaskRepos
 from .services.upload_intent_repository import InMemoryUploadIntentRepository, PostgresUploadIntentRepository
 from .services.chat_repository import InMemoryChatRepository
 from .services.chat_service import ChatService, FilePromptTemplateAdapter, InterviewPromptBuilder, QwenCompatibleGateway
+from .services.web_search_gateway import DashScopeWebSearchGateway
 from .services.authentication_repository import InMemoryAuthenticationRepository
 from .services.postgres_authentication_repository import PostgresAuthenticationRepository
 from .services.authentication_service import AuthenticationService, CompatibleWechatLoginProvider, JWTAccessTokenCodec, PBKDF2PasswordHasher
@@ -293,6 +294,11 @@ def llm_gateway_port() -> LLMGatewayPort:
 
 
 @lru_cache(maxsize=1)
+def web_search_gateway_port():
+    return DashScopeWebSearchGateway(get_settings(), logger=logger())
+
+
+@lru_cache(maxsize=1)
 def chat_service() -> ChatService:
     return ChatService(
         settings=get_settings(),
@@ -304,6 +310,7 @@ def chat_service() -> ChatService:
         prompt_template=prompt_template_port(),
         prompt_builder=prompt_builder_port(),
         llm_gateway=llm_gateway_port(),
+        web_search_gateway=web_search_gateway_port(),
         billing_service=usage_billing_service(),
         commercial_repository=commercial_hardening_repository(),
     )

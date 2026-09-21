@@ -67,6 +67,13 @@ export interface AnswerSourceReference {
   readonly deleted?: boolean;
 }
 
+export interface WebAnswerSourceReference {
+  readonly title: string;
+  readonly url: string;
+  readonly snippet?: string;
+  readonly retrievedAtMs?: number;
+}
+
 export interface AnswerProvenance {
   readonly selectionRevision: number;
   readonly usedSources: readonly AnswerSourceReference[];
@@ -75,6 +82,8 @@ export interface AnswerProvenance {
   readonly retrievedSourceCount?: number;
   readonly noPersonalMaterialUsed?: boolean;
   readonly retrievalTraceId?: string;
+  readonly webSearchStatus?: "disabled" | "pending" | "succeeded" | "fallback" | "unavailable";
+  readonly webSources?: readonly WebAnswerSourceReference[];
 }
 
 export interface ConfirmContextSelectionRequest {

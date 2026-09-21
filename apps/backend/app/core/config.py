@@ -111,8 +111,17 @@ class Settings(BaseSettings):
     chat_detail_retrieval_prefetch_enabled: bool = True
     chat_provider: str = "qwen-compatible"
     chat_qwen_model: str = "qwen-plus"
+    chat_quick_model: str | None = None
+    chat_detail_model: str | None = None
     chat_qwen_api_key: str | None = None
     chat_qwen_base_url: str | None = None
+    web_search_enabled: bool = False
+    web_search_responses_base_url: str | None = None
+    web_search_api_key: str | None = None
+    web_search_timeout_seconds: float = 2.5
+    web_search_max_sources: int = 5
+    web_search_max_context_characters: int = 3000
+    web_search_points: int = 20
     chat_http_max_connections: int = 32
     chat_http_max_keepalive_connections: int = 16
     chat_http_keepalive_expiry_seconds: float = 30.0
@@ -178,6 +187,9 @@ class Settings(BaseSettings):
     redis_realtime_required: bool = False
     realtime_redis_snapshot_reload_on_access: bool = False
     realtime_desktop_heartbeat_ttl_seconds: int = 45
+    # Older companions may heartbeat more frequently than the server needs to
+    # persist. Keep the in-process lease fresh while bounding Redis writes.
+    realtime_desktop_heartbeat_write_min_interval_seconds: float = 10.0
     realtime_web_heartbeat_ttl_seconds: int = 60
     interview_idle_warning_seconds: int = 18 * 60
     interview_idle_timeout_seconds: int = 20 * 60
@@ -214,6 +226,10 @@ class Settings(BaseSettings):
     runtime_performance_telemetry_enabled: bool = True
     runtime_performance_telemetry_ttl_seconds: int = 7 * 24 * 60 * 60
     runtime_performance_telemetry_sample_rate: float = 1.0
+    # Performance acknowledgements are diagnostic-only. Cache the ownership
+    # check briefly so repeated subtitle render samples do not reread the full
+    # interview row and its bound materials on every request.
+    runtime_performance_ack_session_cache_seconds: float = 60.0
     auth_jwt_secret: str = "offersteady-dev-jwt-secret"
     auth_jwt_issuer: str = "offersteady-backend"
     auth_access_token_ttl_seconds: int = 900

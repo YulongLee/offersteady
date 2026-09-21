@@ -2,7 +2,7 @@ export type BillingProductKind = "points_pack" | "time_pass";
 export type PaymentChannel = "wechat" | "alipay";
 export type BillingOrderStatus = "awaiting_payment" | "proof_submitted" | "under_review" | "paid" | "rejected" | "expired" | "refund_pending" | "refunded";
 export type LedgerEntryKind = "welcome_grant" | "purchase_credit" | "redemption_credit" | "redemption_reversal" | "usage_reserve" | "usage_settle" | "usage_release" | "refund_debit" | "support_adjustment" | "written_exam_entry_settlement";
-export type BillableOperationKind = "answer" | "screenshot_answer" | "knowledge_index" | "realtime_minute" | "written_exam_entry";
+export type BillableOperationKind = "answer" | "web_answer" | "screenshot_answer" | "knowledge_index" | "realtime_minute" | "written_exam_entry";
 
 export interface BillingProduct {
   readonly id: string;
@@ -22,6 +22,7 @@ export interface UsageRates {
   readonly screenshotAnswerPoints: number;
   readonly writtenExamPoints: number;
   readonly realtimeMinutePoints: number;
+  readonly webSearchAnswerPoints?: number;
   readonly knowledgeIndexMinimumPoints: number;
   readonly knowledgeIndexPointsPer1000Tokens: number;
   readonly tokenizerVersion: string;

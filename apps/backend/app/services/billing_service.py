@@ -765,6 +765,10 @@ class BillingService:
         return {
             "catalogVersion": max((item.catalog_version for item in catalog), default=5),
             "answerPoints": 5,
+            "webSearchAnswerPoints": max(
+                1,
+                int(self.settings.web_search_points) if self.settings is not None else 20,
+            ),
             "screenshotAnswerPoints": 15,
             "writtenExamPoints": 30,
             "realtimeMinutePoints": max(
@@ -967,13 +971,22 @@ class BillingService:
             return None
         return self.release_knowledge_index(quote_id=reservation.quote_id)
 
-    def reserve_usage(self, *, user_id: str, usage_id: str, usage_kind: str, wallet_only: bool = False) -> UsageReservationRecord:
-        if usage_kind not in {"answer", "screenshot_answer", "realtime_minute", "written_exam_entry"}:
+    def reserve_usage(
+        self,
+        *,
+        user_id: str,
+        usage_id: str,
+        usage_kind: str,
+        wallet_only: bool = False,
+        minimum_pass_duration_days: int | None = None,
+    ) -> UsageReservationRecord:
+        if usage_kind not in {"answer", "web_answer", "screenshot_answer", "realtime_minute", "written_exam_entry"}:
             raise ValueError(f"Unsupported billable usage kind: {usage_kind}")
         self._release_stale_usage_reservations(user_id=user_id)
         self._ensure_welcome_grant(user_id=user_id)
         rate_key = {
             "answer": "answerPoints",
+            "web_answer": "webSearchAnswerPoints",
             "screenshot_answer": "screenshotAnswerPoints",
             "realtime_minute": "realtimeMinutePoints",
             "written_exam_entry": "writtenExamPoints",
@@ -989,13 +1002,24 @@ class BillingService:
             "wallet_only": wallet_only,
         }
         if self.billing_repository is not None:
-            return UsageReservationRecord(**self.billing_repository.reserve_usage(usage={**usage, "wallet_only": wallet_only}, created_at_ms=created_at_ms))
+            return UsageReservationRecord(**self.billing_repository.reserve_usage(
+                usage={
+                    **usage,
+                    "wallet_only": wallet_only,
+                    "minimum_pass_duration_days": minimum_pass_duration_days,
+                },
+                created_at_ms=created_at_ms,
+            ))
         existing = self.usage_reservations_by_id.get(usage_id)
         if existing is not None:
             if existing.user_id != user_id or existing.usage_kind != usage_kind:
                 raise PermissionError("Billing usage id belongs to a different operation.")
             return existing
         active_pass = None if wallet_only else self._active_pass_payload(user_id=user_id)
+        if active_pass is not None and minimum_pass_duration_days is not None:
+            active_pass_duration_days = int(active_pass.get("durationDays") or 0)
+            if active_pass_duration_days < minimum_pass_duration_days:
+                active_pass = None
         points_reserved = 0 if active_pass is not None else points
         reserved_points = sum(
             item.points_reserved
@@ -1051,6 +1075,8 @@ class BillingService:
                         if reservation.usage_kind == "screenshot_answer"
                         else "笔试模式入场积分结算"
                         if reservation.usage_kind == "written_exam_entry"
+                        else "联网详细回答积分结算"
+                        if reservation.usage_kind == "web_answer"
                         else "面试回答积分结算"
                     ),
                 )
@@ -1205,10 +1231,12 @@ class BillingService:
         )
 
     def _pass_payload(self, item: TimePassEntitlementRecord) -> dict[str, object]:
+        product = next((candidate for candidate in self.catalog() if candidate.id == item.product_id), None)
         return {
             "id": item.id,
             "userId": item.user_id,
             "productId": item.product_id,
+            "durationDays": product.duration_days if product is not None else None,
             "startsAtMs": item.starts_at_ms,
             "endsAtMs": item.ends_at_ms,
             "orderId": item.order_id,

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 
 from app.core.errors import DomainRequestError
+from app.core.config import get_settings
 from app.core.logging import utc_now_iso
 from app.core.responses import success_response
 from app.deps import chat_service, optional_authenticated_context, realtime_speech_service, resolve_owned_user_id
@@ -55,6 +56,9 @@ def _to_task_response(task) -> LiveAnswerTaskResponse:
         retrievedSourceCount=task.retrieved_source_count,
         materialProvenance=task.material_provenance,
         unavailableMaterialSources=task.unavailable_material_sources,
+        webSearchEnabled=task.web_search_enabled,
+        webSearchStatus=task.web_search_status,
+        webSources=task.web_sources,
         retryCount=task.retry_count,
         errorCode=task.error_code,
         errorMessage=task.error_message,
@@ -111,11 +115,25 @@ def _publish_answer_task_event(
     )
 
 
-@router.get("/status", response_model=ApiEnvelope[dict[str, str]])
-async def status(request: Request) -> ApiEnvelope[dict[str, str]]:
+@router.get("/status", response_model=ApiEnvelope[dict[str, object]])
+async def status(request: Request) -> ApiEnvelope[dict[str, object]]:
+    settings = get_settings()
+    web_search_enabled = bool(getattr(settings, "web_search_enabled", False))
+    web_search_configured = bool(
+        web_search_enabled
+        and str(getattr(settings, "web_search_responses_base_url", "") or "").strip()
+        and str(getattr(settings, "web_search_api_key", "") or getattr(settings, "chat_qwen_api_key", "") or "").strip()
+    )
     return success_response(
         request=request,
-        data={"status": "active", "feature": "live-answer", "message": "Chat Service is available for session-grounded real-time interview answers."},
+        data={
+            "status": "active",
+            "feature": "live-answer",
+            "message": "Chat Service is available for session-grounded real-time interview answers.",
+            "webSearchEnabled": web_search_enabled,
+            "webSearchAvailable": web_search_configured,
+            "webSearchPoints": int(getattr(settings, "web_search_points", 20) or 20),
+        },
         timestamp=utc_now_iso(),
     )
 
@@ -142,6 +160,7 @@ async def start_live_answer(
             question=request.question,
             stream=request.stream,
             usage_id=request.idempotency_key,
+            web_search_enabled=request.web_search_enabled,
         )
         if claim is not None:
             realtime.bind_auto_answer_candidate(
@@ -222,6 +241,7 @@ async def stream_live_answer(
                 question_revision=request.question_revision,
                 clicked_at_ms=request.clicked_at_ms,
                 prefetch_revision=request.prefetch_revision,
+                web_search_enabled=request.web_search_enabled,
                 route_received_at_ms=route_received_at_ms,
                 executor_admitted_at_ms=lease.admitted_at_ms,
                 answer_generator_started_at_ms=answer_generator_started_at_ms,
