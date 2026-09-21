@@ -31,4 +31,4 @@
 - [x] 5.4 Add frontend tests for default-off toggle, status states, sources, and old response compatibility.
 - [x] 5.5 Add synthetic `ai/evals/` cases for source grounding, privacy minimization, and language routing.
 - [x] 5.6 Run OpenSpec validation, backend/frontend tests, build, and production smoke checks.
-- [ ] 5.7 Deploy to CN only after confirming no active interview, with feature flag initially disabled and rollback instructions.
+- [x] 5.7 Deploy to CN only after confirming no active interview, with feature flag initially disabled and rollback instructions.
