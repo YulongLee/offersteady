@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useRef,
   useState,
   type Dispatch,
@@ -14,7 +15,7 @@ import {
   type KnowledgeDocumentVersion,
   type KnowledgeFileKind,
 } from "@offersteady/protocol";
-import type { WebAppState } from "./domain";
+import { AppError, type WebAppState } from "./domain";
 import { routes } from "./routes";
 import { Link } from "react-router-dom";
 import {
@@ -25,6 +26,7 @@ import { runAdapterOperation } from "./api-client";
 import { materialUploadAdapter, saveMaterialDownload } from "./material-upload-adapter";
 import type { PreparedKnowledgeUpload } from "./material-upload-adapter";
 import { interviewAppAdapter } from "./app-adapter";
+import { pollLibraryDocumentUntilSettled } from "./library-processing-polling";
 
 interface Props {
   readonly state: WebAppState;
@@ -99,6 +101,14 @@ export function LibraryManager({ state, setState }: Props) {
   const [operation, setOperation] = useState<LibraryOperation>(null);
   const [submittingUpload, setSubmittingUpload] = useState(false);
   const refreshGenerationRef = useRef(0);
+  const pollControllersRef = useRef<Set<AbortController>>(new Set());
+  useEffect(
+    () => () => {
+      for (const controller of pollControllersRef.current) controller.abort();
+      pollControllersRef.current.clear();
+    },
+    [],
+  );
   const selected =
     state.knowledgeCollections.find((item) => item.id === selectedId) ?? null;
   const documents = state.knowledgeDocuments.filter(
@@ -114,10 +124,11 @@ export function LibraryManager({ state, setState }: Props) {
     state.billing.rates.knowledgeIndexPointsPer1000Tokens * 5;
   const quotedPoints = serviceQuote?.pointCost ?? 0;
   const quoteSource = serviceQuote?.entitlementSource ?? "points";
-  const refreshFromBackend = async () => {
+  const refreshFromBackend = async (signal?: AbortSignal) => {
     const generation = ++refreshGenerationRef.current;
-    const next = await runAdapterOperation((signal) =>
-      interviewAppAdapter.loadState(signal),
+    const next = await runAdapterOperation(
+      (requestSignal) => interviewAppAdapter.loadState(requestSignal),
+      signal,
     );
     if (generation === refreshGenerationRef.current) setState(next);
     return next;
@@ -126,34 +137,27 @@ export function LibraryManager({ state, setState }: Props) {
     refreshGenerationRef.current += 1;
   };
   const pollDocumentUntilSettled = (documentId: string) => {
+    const controller = new AbortController();
+    pollControllersRef.current.add(controller);
     void (async () => {
-      for (let attempt = 0; attempt < 12; attempt += 1) {
-        await new Promise((resolve) =>
-          window.setTimeout(resolve, attempt === 0 ? 800 : 1500),
-        );
-        const next = await refreshFromBackend();
-        const source = next.librarySources.find(
-          (item) => item.id === documentId,
-        );
-        const document = next.knowledgeDocuments.find(
-          (item) => item.id === documentId,
-        );
-        const status = source?.status ?? document?.status;
-        if (
-          status === "ready" ||
-          status === "failed" ||
-          status === "deleted" ||
-          status === "disabled"
-        )
-          return;
+      const result = await pollLibraryDocumentUntilSettled({
+        documentId,
+        signal: controller.signal,
+        loadState: (signal) => refreshFromBackend(signal),
+      });
+      if (result.kind === "timeout" && !controller.signal.aborted) {
+        setNotice("资料仍在后台解析，稍后刷新页面即可查看结果；完成后才会用于新面试");
       }
-    })().catch((error) =>
-      setError(
-        error instanceof Error
-          ? error.message
-          : "资料状态刷新失败，请手动刷新页面",
-      ),
-    );
+    })()
+      .catch((error) => {
+        if (error instanceof AppError && error.code === "aborted") return;
+        setError(
+          error instanceof Error
+            ? error.message
+            : "资料状态刷新失败，请手动刷新页面",
+        );
+      })
+      .finally(() => pollControllersRef.current.delete(controller));
   };
 
   const retryDocument = async (documentId: string) => {

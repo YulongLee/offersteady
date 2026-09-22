@@ -51,6 +51,7 @@ export interface InterviewQuestion {
   readonly text: string;
   readonly rawText?: string;
   readonly questionNormalizationStatus?: "pending" | "completed" | "fallback" | "not-requested";
+  readonly quickAnswerCompleted?: boolean;
   readonly input: "desktop-audio" | "manual" | "screenshot";
   readonly status: QuestionStatus;
   readonly advice: AnswerAdvice;

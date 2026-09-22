@@ -10,6 +10,9 @@ class InMemoryChatRepository(ChatRepository):
         self.tasks: dict[str, ChatAnswerTaskRecord] = {}
 
     def save_task(self, task: ChatAnswerTaskRecord) -> ChatAnswerTaskRecord:
+        existing = self.tasks.get(task.task_id)
+        if existing is not None and existing.status == "cancelled":
+            return replace(existing)
         stored = replace(task)
         self.tasks[stored.task_id] = stored
         return replace(stored)

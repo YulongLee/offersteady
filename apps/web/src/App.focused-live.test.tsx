@@ -4,7 +4,7 @@ import { App } from "./App";
 import { interviewAppAdapter } from "./app-adapter";
 import { authClient } from "./auth-client";
 import { syntheticState } from "./test-state";
-import { AppError, type RealtimeSessionUpdate, type WebAppState } from "./domain";
+import { AppError, type RealtimeSessionUpdate, type WebAppState, type SubmitManualAnswerResult } from "./domain";
 
 const openLive = (mutate?: (state: WebAppState) => void) => {
   if (interviewAppAdapter.acknowledgeAnswerFirstRender && !vi.isMockFunction(interviewAppAdapter.acknowledgeAnswerFirstRender)) {
@@ -145,6 +145,243 @@ describe("focused live interview workspace", () => {
     expect(toggle).not.toBeChecked();
     expect(toggle.closest(".live-top-actions")).not.toBeNull();
     expect(within(screen.getByRole("region", { name: "面试操作" })).queryByRole("switch", { name: "联网回答" })).not.toBeInTheDocument();
+  });
+
+  const syntheticAnswer = (tag: string, status: "generating" | "completed" | "failed" = "completed"): SubmitManualAnswerResult => ({
+    question: {
+      id: `answer-${tag}`, text: "如何设计缓存？", askedAt: "刚刚", input: "manual",
+      status: status === "completed" ? "confirmed" : status,
+      advice: { outline: [], detail: `合成回答-${tag}`, sourceTypes: [], inference: "", uncertain: false, provenance: { selectionRevision: 0, usedSources: [] } },
+    },
+    task: {
+      id: `answer-${tag}`, interviewId: "demo", userId: "prototype-user", questionId: `answer-${tag}`,
+      question: "如何设计缓存？", billingUsageId: `live-answer:answer-${tag}`, revision: 1, status,
+      partialText: `合成回答-${tag}`, updatedAtMs: Date.now(),
+    },
+  });
+
+  const askSameQuestion = () => {
+    fireEvent.change(screen.getByRole("textbox", { name: "手动输入面试官的问题" }), { target: { value: "如何设计缓存？" } });
+    fireEvent.click(screen.getByRole("button", { name: "快答" }));
+  };
+
+  it.each([1280, 390])("renders completed quick text while web detail is still pending at %s px", async width => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+    let finish!: (result: SubmitManualAnswerResult) => void;
+    const base = syntheticAnswer("quick-complete", "generating");
+    const quick: SubmitManualAnswerResult = {
+      question: { ...base.question, quickAnswerCompleted: true, advice: { ...base.question.advice, detail: "简单回答\n**独立完成的结论**", provenance: { ...base.question.advice.provenance, webSearchStatus: "pending" } } },
+      task: { ...base.task, quickAnswerCompleted: true, partialText: "简单回答\n**独立完成的结论**" },
+    };
+    const submit = vi.spyOn(interviewAppAdapter, "submitManualAnswer").mockImplementation((_command, _signal, update) => {
+      update?.({ result: quick, event: { type: "quick-completed" } });
+      return new Promise(resolve => { finish = resolve; });
+    });
+    const { container } = openLive();
+    fireEvent.click(screen.getByRole("switch", { name: "联网回答" }));
+    askSameQuestion();
+    expect(container.querySelector(".simple-answer .answer-markdown strong")).toHaveTextContent("独立完成的结论");
+    expect(container.querySelector(".simple-answer")).toHaveAttribute("aria-busy", "false");
+    expect(container.querySelector(".detailed-answer")).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByText("正在生成联网详细回答…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "终止回答" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "快答" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "快答" }));
+    expect(submit).toHaveBeenCalledOnce();
+    const finalText = `${quick.question.advice.detail}\n\n---\n\n详细回答\n联网详细结果。`;
+    await act(async () => finish({
+      question: { ...quick.question, status: "confirmed", advice: { ...quick.question.advice, detail: finalText, provenance: { ...quick.question.advice.provenance, webSearchStatus: "succeeded" } } },
+      task: { ...quick.task, status: "completed", completedText: finalText, updatedAtMs: Date.now() + 1 },
+    }));
+    expect(container.querySelector(".simple-answer .answer-markdown strong")).toHaveTextContent("独立完成的结论");
+    expect(container.querySelector(".detailed-answer")).toHaveAttribute("aria-busy", "false");
+    expect(screen.getByText("联网详细结果。")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "快答" })).toBeEnabled();
+  });
+
+  it("retains completed quick text when the detail stream disconnects", async () => {
+    const base = syntheticAnswer("quick-before-disconnect", "generating");
+    vi.spyOn(interviewAppAdapter, "submitManualAnswer").mockImplementation(async (_command, _signal, update) => {
+      update?.({ result: {
+        question: { ...base.question, quickAnswerCompleted: true, advice: { ...base.question.advice, detail: "简单回答\n**保留的结论**", provenance: { ...base.question.advice.provenance, webSearchStatus: "pending" } } },
+        task: { ...base.task, quickAnswerCompleted: true, partialText: "简单回答\n**保留的结论**" },
+      }, event: { type: "quick-completed" } });
+      throw new Error("合成详细连接中断");
+    });
+    const { container } = openLive();
+    fireEvent.click(screen.getByRole("switch", { name: "联网回答" }));
+    askSameQuestion();
+    await screen.findByText("详细回答生成失败，简单回答已保留");
+    expect(container.querySelector(".simple-answer .answer-markdown strong")).toHaveTextContent("保留的结论");
+    expect(container.querySelector('.answer-workspace [aria-busy="true"]')).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "快答" })).toBeEnabled();
+  });
+
+  it.each(["completed", "failed"] as const)("isolates request IDs when switching modes after a %s web answer", async status => {
+    const submit = vi.spyOn(interviewAppAdapter, "submitManualAnswer").mockResolvedValue(syntheticAnswer("web", status));
+    openLive();
+    const toggle = screen.getByRole("switch", { name: "联网回答" });
+    fireEvent.click(toggle);
+    askSameQuestion();
+    await waitFor(() => expect(screen.getByRole("button", { name: "快答" })).toBeEnabled());
+    fireEvent.click(toggle);
+    submit.mockResolvedValue(syntheticAnswer("local"));
+    askSameQuestion();
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(2));
+    const web = submit.mock.calls[0]![0];
+    const local = submit.mock.calls[1]![0];
+    expect(web.webSearchEnabled).toBe(true);
+    expect(local.webSearchEnabled).toBe(false);
+    expect(web.idempotencyKey).toContain(":web:");
+    expect(local.idempotencyKey).toContain(":local:");
+    expect(local.idempotencyKey).not.toBe(web.idempotencyKey);
+    expect(local.idempotencyKey).not.toContain(local.question);
+    await waitFor(() => expect(screen.getByRole("button", { name: "快答" })).toBeEnabled());
+    askSameQuestion();
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(3));
+    expect(submit.mock.calls[2]![0].idempotencyKey).not.toBe(local.idempotencyKey);
+  });
+
+  it.each([1280, 390])("unlocks quick answer immediately when web mode is disabled before task acknowledgement at %s px", async width => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+    const submit = vi.spyOn(interviewAppAdapter, "submitManualAnswer").mockImplementation(() => new Promise(() => {}));
+    openLive();
+    fireEvent.click(screen.getByRole("switch", { name: "联网回答" }));
+    fireEvent.click(screen.getByRole("button", { name: "快答" }));
+    expect(screen.getByRole("button", { name: "快答" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "快答" }));
+    expect(submit).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("switch", { name: "联网回答" }));
+    expect(submit.mock.calls[0]![1]!.aborted).toBe(true);
+    expect(screen.getByRole("button", { name: "快答" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "快答" }));
+    expect(submit).toHaveBeenCalledTimes(2);
+    expect(submit.mock.calls[1]![0].webSearchEnabled).toBe(false);
+    expect(interviewAppAdapter.cancelAnswer).not.toHaveBeenCalled();
+  });
+
+  it("preserves quick text, cancels the web task, and ignores its late callback and finally after a new answer starts", async () => {
+    let finishOld!: (result: SubmitManualAnswerResult) => void;
+    let finishNew!: (result: SubmitManualAnswerResult) => void;
+    const web = syntheticAnswer("web-pending", "generating");
+    const local = syntheticAnswer("local-pending", "generating");
+    const submit = vi.spyOn(interviewAppAdapter, "submitManualAnswer")
+      .mockImplementationOnce((_command, _signal, update) => {
+        update?.({ result: web, event: { type: "chunk" } });
+        return new Promise(resolve => { finishOld = resolve; });
+      })
+      .mockImplementationOnce((_command, _signal, update) => {
+        update?.({ result: local, event: { type: "chunk" } });
+        return new Promise(resolve => { finishNew = resolve; });
+      });
+    openLive();
+    fireEvent.click(screen.getByRole("switch", { name: "联网回答" }));
+    askSameQuestion();
+    await screen.findByText("合成回答-web-pending");
+    fireEvent.click(screen.getByRole("switch", { name: "联网回答" }));
+    expect(screen.getByText("合成回答-web-pending")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "快答" })).toBeEnabled();
+    expect(interviewAppAdapter.cancelAnswer).toHaveBeenCalledWith(
+      expect.objectContaining({ answerTaskId: web.task.id, expectedRevision: 1 }), web.task, expect.any(AbortSignal),
+    );
+    askSameQuestion();
+    await screen.findByText("合成回答-local-pending");
+    await act(async () => {
+      submit.mock.calls[0]![2]?.({ result: { ...web, question: { ...web.question, quickAnswerCompleted: true }, task: { ...web.task, quickAnswerCompleted: true } }, event: { type: "quick-completed" } });
+      submit.mock.calls[0]![2]?.({ result: syntheticAnswer("obsolete-web-result"), event: { type: "completed" } });
+      finishOld(syntheticAnswer("obsolete-web-result"));
+    });
+    expect(screen.queryByText("合成回答-obsolete-web-result")).not.toBeInTheDocument();
+    expect(screen.getByText("合成回答-local-pending")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "快答" })).toBeDisabled();
+    expect(submit.mock.calls[1]![1]!.aborted).toBe(false);
+    await act(async () => finishNew(syntheticAnswer("local-completed")));
+    expect(screen.getByRole("button", { name: "快答" })).toBeEnabled();
+  });
+
+  it("does not cancel an ordinary answer when the web switch is turned on then off", () => {
+    const submit = vi.spyOn(interviewAppAdapter, "submitManualAnswer").mockImplementation(() => new Promise(() => {}));
+    openLive();
+    askSameQuestion();
+    const toggle = screen.getByRole("switch", { name: "联网回答" });
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+    expect(submit.mock.calls[0]![1]!.aborted).toBe(false);
+    expect(interviewAppAdapter.cancelAnswer).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "快答" })).toBeDisabled();
+  });
+
+  it("ignores a cancelled web task arriving through realtime after a local answer", async () => {
+    vi.spyOn(interviewAppAdapter, "sendDesktopSessionHeartbeat").mockImplementation(async command => ({
+      pageInstanceId: command.pageInstanceId ?? null, leaseGeneration: 1, leaseExpiresAtMs: Date.now() + 30_000,
+    }));
+    let publish!: (update: RealtimeSessionUpdate) => void;
+    vi.spyOn(interviewAppAdapter, "subscribeRealtimeSession").mockImplementation(async (_id, onUpdate, signal) => {
+      publish = onUpdate;
+      await new Promise<void>((_resolve, reject) => signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true }));
+    });
+    const web = syntheticAnswer("web-realtime", "generating");
+    vi.spyOn(interviewAppAdapter, "submitManualAnswer")
+      .mockImplementationOnce((_command, _signal, update) => {
+        update?.({ result: web, event: { type: "chunk" } });
+        return new Promise(() => {});
+      })
+      .mockResolvedValueOnce(syntheticAnswer("local-realtime"));
+    openLive();
+    await waitFor(() => expect(publish).toBeDefined());
+    fireEvent.click(screen.getByRole("switch", { name: "联网回答" }));
+    askSameQuestion();
+    await screen.findByText("合成回答-web-realtime");
+    fireEvent.click(screen.getByRole("switch", { name: "联网回答" }));
+    askSameQuestion();
+    await screen.findByText("合成回答-local-realtime");
+    act(() => publish({ speaker: structuredClone(syntheticState.speaker), answerUpdate: {
+      ...web, task: { ...web.task, status: "completed", updatedAtMs: Date.now() + 100_000 },
+    } }));
+    expect(screen.getByText("合成回答-local-realtime")).toBeInTheDocument();
+    expect(screen.queryByText("合成回答-web-realtime")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "快答" })).toBeEnabled();
+  });
+
+  it("retries a failed web answer in local mode with a fresh request instead of only changing its label", async () => {
+    const submit = vi.spyOn(interviewAppAdapter, "submitManualAnswer").mockResolvedValueOnce(syntheticAnswer("web-failed", "failed"))
+      .mockResolvedValueOnce(syntheticAnswer("local-retry"));
+    openLive();
+    fireEvent.click(screen.getByRole("switch", { name: "联网回答" }));
+    askSameQuestion();
+    const retry = await screen.findByRole("button", { name: "重试" });
+    fireEvent.click(screen.getByRole("switch", { name: "联网回答" }));
+    fireEvent.click(retry);
+    await screen.findByText("合成回答-local-retry");
+    expect(submit).toHaveBeenCalledTimes(2);
+    expect(submit.mock.calls[1]![0].webSearchEnabled).toBe(false);
+    expect(submit.mock.calls[1]![0].idempotencyKey).not.toBe(submit.mock.calls[0]![0].idempotencyKey);
+  });
+
+  it("ignores realtime from a cancelled request even before its task ID was acknowledged", async () => {
+    vi.spyOn(interviewAppAdapter, "sendDesktopSessionHeartbeat").mockImplementation(async command => ({
+      pageInstanceId: command.pageInstanceId ?? null, leaseGeneration: 1, leaseExpiresAtMs: Date.now() + 30_000,
+    }));
+    let publish!: (update: RealtimeSessionUpdate) => void;
+    vi.spyOn(interviewAppAdapter, "subscribeRealtimeSession").mockImplementation(async (_id, onUpdate, signal) => {
+      publish = onUpdate;
+      await new Promise<void>((_resolve, reject) => signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true }));
+    });
+    const submit = vi.spyOn(interviewAppAdapter, "submitManualAnswer").mockImplementationOnce(() => new Promise(() => {}))
+      .mockResolvedValueOnce(syntheticAnswer("local-after-pending"));
+    openLive();
+    await waitFor(() => expect(publish).toBeDefined());
+    fireEvent.click(screen.getByRole("switch", { name: "联网回答" }));
+    askSameQuestion();
+    fireEvent.click(screen.getByRole("switch", { name: "联网回答" }));
+    askSameQuestion();
+    await screen.findByText("合成回答-local-after-pending");
+    const old = syntheticAnswer("unknown-web-task");
+    act(() => publish({ speaker: structuredClone(syntheticState.speaker), answerUpdate: {
+      ...old, task: { ...old.task, clickedAtMs: submit.mock.calls[0]![0].clickedAtMs!, updatedAtMs: Date.now() + 100_000 },
+    } }));
+    expect(screen.queryByText("合成回答-unknown-web-task")).not.toBeInTheDocument();
+    expect(screen.getByText("合成回答-local-after-pending")).toBeInTheDocument();
   });
 
   it("submits one future confirmed interviewer candidate through the existing stream", async () => {

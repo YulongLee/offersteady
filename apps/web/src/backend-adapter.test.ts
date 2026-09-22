@@ -499,6 +499,27 @@ describe("backend preview adapter", () => {
     }
   });
 
+  it.each(["chunk", "quick-completed"] as const)("rejects an interrupted %s stream instead of leaving quick answer processing forever", async type => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "合成用户", createdAtMs: 1, bindings: [] }));
+    const frame = `data: ${JSON.stringify({ type, task: {
+      taskId: "synthetic-interrupted-task", sessionId: "session-1", ownerUserId: "user-1",
+      question: "合成问题", answerText: "已生成的简答", status: "streaming", updatedAtMs: 1, chunks: [],
+      quickAnswerCompleted: type === "quick-completed",
+    } })}\n\n`;
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", vi.fn(async () => new Response(frame, {
+      status: 200, headers: { "Content-Type": "text/event-stream" },
+    })));
+    const update = vi.fn();
+    await expect(adapter.submitManualAnswer({ interviewId: "session-1", question: "合成问题", idempotencyKey: "manual:local:synthetic-interrupted" }, undefined, update))
+      .rejects.toThrow("回答连接已中断，请重新发起快答。");
+    expect(update).toHaveBeenCalledOnce();
+    expect(update.mock.calls[0]![0].result.question.quickAnswerCompleted).toBe(type === "quick-completed");
+    expect(update.mock.calls[0]![0].result.task.quickAnswerCompleted).toBe(type === "quick-completed");
+    expect(update.mock.calls[0]![0].result.task.status).toBe("generating");
+  });
+
   it("subscribes to realtime conversation snapshots through the backend stream API", async () => {
     window.localStorage.setItem("offersteady.auth.access_token", "access-token");
     window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");

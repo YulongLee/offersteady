@@ -57,6 +57,7 @@ def _to_task_response(task) -> LiveAnswerTaskResponse:
         materialProvenance=task.material_provenance,
         unavailableMaterialSources=task.unavailable_material_sources,
         webSearchEnabled=task.web_search_enabled,
+        quickAnswerCompleted=task.quick_answer_completed,
         webSearchStatus=task.web_search_status,
         webSources=task.web_sources,
         retryCount=task.retry_count,
@@ -231,8 +232,11 @@ async def stream_live_answer(
         answer_generator_started_at_ms = int(time() * 1_000)
         first_visible_sent = False
         claim_bound = False
+        last_task = None
+        terminal = False
+        answer_iterator = None
         try:
-            for payload in service.stream_answer_question(
+            answer_iterator = service.stream_answer_question(
                 user_id=user_id,
                 session_id=request.session_id,
                 question=request.question,
@@ -245,16 +249,20 @@ async def stream_live_answer(
                 route_received_at_ms=route_received_at_ms,
                 executor_admitted_at_ms=lease.admitted_at_ms,
                 answer_generator_started_at_ms=answer_generator_started_at_ms,
-            ):
+            )
+            for payload in answer_iterator:
                 phase = str(payload.get("type") or "update")
                 task = payload.get("task")
+                if task is not None:
+                    last_task = task
+                terminal = phase in {"complete", "completed", "error", "failed", "cancelled"}
                 if claim is not None and not claim_bound and task is not None:
                     realtime.bind_auto_answer_candidate(
                         user_id=user_id, candidate_id=claim.candidate_id,
                         claim_id=claim.answer_task_id or "", task_id=task.task_id,
                     )
                     claim_bound = True
-                if phase in {"task-started", "retrieval", "complete", "completed", "error", "failed", "cancelled"}:
+                if phase in {"task-started", "quick-completed", "retrieval", "complete", "completed", "error", "failed", "cancelled"}:
                     _publish_answer_task_event(
                         realtime,
                         user_id=user_id,
@@ -270,14 +278,27 @@ async def stream_live_answer(
                     payload = {**payload, "timing": timing}
                 yield _sse_frame(_to_stream_event(payload))
         finally:
-            if claim is not None:
-                if claim_bound:
-                    realtime.finish_auto_answer_candidate(user_id=user_id, candidate_id=claim.candidate_id)
-                else:
-                    realtime.release_auto_answer_candidate(
-                        user_id=user_id, candidate_id=claim.candidate_id,
-                        claim_id=claim.answer_task_id or "",
-                    )
+            try:
+                if answer_iterator is not None:
+                    answer_iterator.close()
+                # A browser can abort before receiving task-started. It cannot
+                # call cancel by ID then, so the stream owns this cleanup.
+                if not terminal and last_task is not None:
+                    outcome, cancelled = service.cancel_task(user_id=user_id, task_id=last_task.task_id)
+                    if outcome in {"cancelled", "already-cancelled"}:
+                        _publish_answer_task_event(
+                            realtime, user_id=user_id, session_id=request.session_id,
+                            phase="cancelled", task=cancelled, trigger=request.trigger_mode,
+                        )
+            finally:
+                if claim is not None:
+                    if claim_bound:
+                        realtime.finish_auto_answer_candidate(user_id=user_id, candidate_id=claim.candidate_id)
+                    else:
+                        realtime.release_auto_answer_candidate(
+                            user_id=user_id, candidate_id=claim.candidate_id,
+                            claim_id=claim.answer_task_id or "",
+                        )
 
     return StreamingResponse(
         executor.stream(lease, events),

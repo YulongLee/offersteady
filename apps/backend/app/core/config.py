@@ -118,7 +118,9 @@ class Settings(BaseSettings):
     web_search_enabled: bool = False
     web_search_responses_base_url: str | None = None
     web_search_api_key: str | None = None
-    web_search_timeout_seconds: float = 2.5
+    # Search providers may need several seconds to fan out to live sources;
+    # keep this bounded without turning normal provider latency into fallback.
+    web_search_timeout_seconds: float = 20.0
     web_search_max_sources: int = 5
     web_search_max_context_characters: int = 3000
     web_search_points: int = 20

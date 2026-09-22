@@ -13,6 +13,7 @@ export interface AnswerTaskSnapshot {
   readonly question: string;
   readonly partialText?: string;
   readonly completedText?: string;
+  readonly quickAnswerCompleted?: boolean;
   readonly provenance?: AnswerProvenance;
   readonly materialContextStatus?: "not-assembled" | "ready" | "degraded" | "no-context" | string;
   readonly clickedAtMs?: number;

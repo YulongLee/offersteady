@@ -1959,6 +1959,12 @@ def test_live_answer_stream_emits_ordered_events_and_persists_completion() -> No
         assert response.headers["content-type"].startswith("text/event-stream")
         events = parse_sse_events(response.read().decode("utf-8"))
     assert [event["type"] for event in events][0] == "task-started"
+    quick_events = [event for event in events if event["type"] == "quick-completed"]
+    assert len(quick_events) == 1
+    assert quick_events[0]["task"]["quickAnswerCompleted"] is True
+    assert quick_events[0]["task"]["status"] == "streaming"
+    assert quick_events[0]["task"].get("completedAtMs") is None
+    assert "详细回答" not in quick_events[0]["task"]["answerText"]
     chunk_events = [event for event in events if event["type"] == "chunk"]
     assert len(chunk_events) >= 2
     assert set(chunk_events[0]["timing"]) == {

@@ -56,6 +56,8 @@ class RedisChatRepository(_RedisRuntimeStore, ChatRepository):
             payload = self._load(key)
             existing = self._decode(payload) if payload else None
             if existing is not None:
+                if existing.status == "cancelled":
+                    return existing
                 if existing.status in {"completed", "failed", "cancelled"} and task.status not in {"completed", "failed", "cancelled"}:
                     return existing
                 if task.updated_at_ms < existing.updated_at_ms:

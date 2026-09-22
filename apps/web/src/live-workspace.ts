@@ -81,6 +81,7 @@ export const mergeAnswerTask = (current: AnswerTaskSnapshot | null, incoming: An
   const completedText = longerText(current.completedText, incoming.completedText);
   return {
     ...chosen,
+    ...(current.quickAnswerCompleted || incoming.quickAnswerCompleted ? { quickAnswerCompleted: true } : {}),
     ...(partialText ? { partialText } : {}),
     ...(completedText ? { completedText } : {}),
     updatedAtMs: Math.max(current.updatedAtMs, incoming.updatedAtMs),
@@ -93,6 +94,7 @@ const mergeQuestion = (current: InterviewQuestion, incoming: InterviewQuestion, 
   return {
     ...other,
     ...chosen,
+    ...(current.quickAnswerCompleted || incoming.quickAnswerCompleted ? { quickAnswerCompleted: true } : {}),
     advice: {
       ...other.advice,
       ...chosen.advice,

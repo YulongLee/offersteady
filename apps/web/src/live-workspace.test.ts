@@ -5,6 +5,18 @@ import { DEFAULT_SPLIT_RATIO, answerPage, clampSplitRatio, initialLiveWorkspaceV
 describe("live workspace answer pagination", () => {
   const answers = syntheticState.questions;
 
+  it("keeps quick completion monotonic for the same task but not the next task", () => {
+    const question = { ...syntheticState.questions[0]!, status: "streaming" as const, quickAnswerCompleted: true };
+    const task = { id: "synthetic-stage", interviewId: "demo", userId: "synthetic", billingUsageId: "usage", questionId: question.id, question: question.text, revision: 1, status: "generating" as const, quickAnswerCompleted: true, updatedAtMs: 100 };
+    const merged = reconcileAnswerWorkspace(
+      { questions: [question], activeAnswerTask: task },
+      { questions: [{ ...question, quickAnswerCompleted: false }], activeAnswerTask: { ...task, quickAnswerCompleted: false } },
+    );
+    expect(merged.activeAnswerTask?.quickAnswerCompleted).toBe(true);
+    expect(merged.questions[0]?.quickAnswerCompleted).toBe(true);
+    expect(mergeAnswerTask(task, { ...task, id: "synthetic-next", questionId: "next", quickAnswerCompleted: false, updatedAtMs: 101 })?.quickAnswerCompleted).toBe(false);
+  });
+
   it("moves through stable answer ids and disables boundary directions", () => {
     const latest = answerPage(answers, null)!;
     expect(latest.answer.id).toBe("q-current");

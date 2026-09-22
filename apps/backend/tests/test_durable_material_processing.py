@@ -12,12 +12,12 @@ from app.adapters.oss_storage import AliyunOssStorageAdapter
 from app.core.config import Settings
 from app.core.logging import configure_logging
 from app.ports.commercial_hardening import CommercialJobRecord
-from app.ports.document_processing import ProcessingTaskEvent, ProcessingTaskRecord
+from app.ports.document_processing import ParserFailure, ProcessingTaskEvent, ProcessingTaskRecord
 from app.ports.document_repository import DocumentRecord
 from app.ports.storage import UploadIntentReservation
 from app.services.commercial_hardening import InMemoryCommercialHardeningRepository, PostgresCommercialHardeningRepository
 from app.services.commercial_worker import CommercialWorkerService
-from app.services.document_parser import DocumentParserService, ProcessingTaskParserStatusReporter
+from app.services.document_parser import DocumentParserService, ParserExecutionError, ProcessingTaskParserStatusReporter
 from app.services.document_processing import DocumentProcessingService
 from app.services.document_processing_adapters import (
     ChunkMetadataBuilderAdapter,
@@ -268,6 +268,247 @@ def test_worker_reconstructs_legacy_task_from_durable_job() -> None:
     assert recovered.current_stage == "COMPLETED"
     assert any(event.event_name == "task_recovered_from_durable_job" for event in tasks.list_events_for_task(recovered.task_id))
     assert jobs.jobs["processing-legacy-shadow"].status == "succeeded"
+
+
+def test_worker_keeps_retryable_parser_failure_claimable() -> None:
+    """A task requeued by the processing service must not be made terminal by the worker."""
+    settings = Settings(_env_file=None, environment="test", document_processing_inline_worker_enabled=False)
+    storage = AliyunOssStorageAdapter(settings)
+    jobs = InMemoryCommercialHardeningRepository()
+    now_ms = _now_ms()
+    task = ProcessingTaskRecord(
+        task_id="task-parser-retry",
+        document_id="document-parser-retry",
+        owner_user_id="parser-retry-user",
+        document_kind="resume",
+        current_stage="QUEUED",
+        retry_count=0,
+        max_retries=2,
+        parser_provider="mineru",
+        embedding_provider="text-embedding-v3",
+        error_code=None,
+        created_at_ms=now_ms,
+        updated_at_ms=now_ms,
+        queued_at_ms=now_ms,
+    )
+    jobs.enqueue_processing_job(
+        CommercialJobRecord(
+            job_id="processing-task-parser-retry",
+            owner_user_id=task.owner_user_id,
+            job_kind="processing",
+            status="queued",
+            stage="QUEUED",
+            document_id=task.document_id,
+            related_task_id=task.task_id,
+            retry_count=0,
+            max_retries=2,
+            created_at_ms=now_ms,
+            updated_at_ms=now_ms,
+            scheduled_after_ms=now_ms,
+        )
+    )
+
+    class RetryScheduledProcessingService:
+        def recover_task_for_job(self, _job: CommercialJobRecord) -> ProcessingTaskRecord:
+            return task
+
+        def process_task(self, task_id: str) -> ProcessingTaskRecord:
+            assert task_id == task.task_id
+            jobs.mark_job_failed(
+                job_id="processing-task-parser-retry",
+                now_ms=_now_ms(),
+                safe_error_code="parser_invalid_result",
+                retryable=True,
+            )
+            return replace(
+                task,
+                current_stage="QUEUED",
+                retry_count=1,
+                error_code="parser_invalid_result",
+                updated_at_ms=_now_ms(),
+            )
+
+    worker = CommercialWorkerService(
+        repository=jobs,
+        storage=storage,
+        logger=configure_logging(settings),
+        processing_service=RetryScheduledProcessingService(),  # type: ignore[arg-type]
+    )
+
+    result = worker.run_once()
+
+    assert result.processed == 1
+    assert result.succeeded == 0
+    assert result.failed == 0
+    assert jobs.jobs["processing-task-parser-retry"].status == "retrying"
+    assert jobs.jobs["processing-task-parser-retry"].safe_error_code == "parser_invalid_result"
+
+
+def test_parser_invalid_result_requeues_task_and_durable_job() -> None:
+    settings = Settings(_env_file=None, environment="test", document_processing_inline_worker_enabled=False)
+    storage = AliyunOssStorageAdapter(settings)
+    documents = InMemoryDocumentRepository()
+    tasks = InMemoryProcessingTaskRepository()
+    jobs = InMemoryCommercialHardeningRepository()
+    now_ms = _now_ms()
+    document = documents.save(
+        DocumentRecord(
+            document_id="document-parser-invalid",
+            owner_user_id="parser-invalid-user",
+            document_kind="resume",
+            display_name="resume.pdf",
+            file_kind="pdf",
+            content_type="application/pdf",
+            size_bytes=128,
+            object_key="materials/test/parser-invalid/resume.pdf",
+            status="processing_requested",
+            knowledge_collection_id=None,
+            processing_requested_at_ms=now_ms,
+            deleted_at_ms=None,
+            created_at_ms=now_ms,
+            updated_at_ms=now_ms,
+            summary="等待处理",
+            document_version_id="version-parser-invalid",
+        )
+    )
+    task = ProcessingTaskRecord(
+        task_id="task-parser-invalid",
+        document_id=document.document_id,
+        owner_user_id=document.owner_user_id,
+        document_kind=document.document_kind,
+        current_stage="QUEUED",
+        retry_count=0,
+        max_retries=2,
+        parser_provider="mineru",
+        embedding_provider="text-embedding-v3",
+        created_at_ms=now_ms,
+        updated_at_ms=now_ms,
+        queued_at_ms=now_ms,
+    )
+    tasks.save_task(task)
+    jobs.enqueue_processing_job(
+        CommercialJobRecord(
+            job_id=f"processing-{task.task_id}",
+            owner_user_id=document.owner_user_id,
+            job_kind="processing",
+            status="queued",
+            stage="QUEUED",
+            document_id=document.document_id,
+            document_version_id=document.document_version_id,
+            related_task_id=task.task_id,
+            retry_count=0,
+            max_retries=2,
+            created_at_ms=now_ms,
+            updated_at_ms=now_ms,
+            scheduled_after_ms=now_ms,
+        )
+    )
+    service = _service(settings=settings, storage=storage, documents=documents, tasks=tasks, jobs=jobs)
+
+    def invalid_result(*, task: ProcessingTaskRecord, **_kwargs: object) -> tuple[ProcessingTaskRecord, object]:
+        raise ParserExecutionError(
+            task=task,
+            failure=ParserFailure(
+                error_code="parser_invalid_result",
+                error_type="recoverable",
+                retryable=True,
+                provider_name="mineru",
+                message_safe_for_log="解析服务返回的结果不可用。",
+            ),
+        )
+
+    service.parser_service.parse_document = invalid_result  # type: ignore[method-assign]
+
+    result = service.process_task(task.task_id)
+
+    assert result is not None
+    assert result.current_stage == "QUEUED"
+    assert result.error_code == "parser_invalid_result"
+    assert jobs.jobs[f"processing-{task.task_id}"].status == "retrying"
+    assert documents.get_by_id(document.document_id).status == "processing"  # type: ignore[union-attr]
+
+
+def test_parser_retry_exhaustion_marks_task_job_and_document_failed() -> None:
+    settings = Settings(_env_file=None, environment="test", document_processing_inline_worker_enabled=False)
+    storage = AliyunOssStorageAdapter(settings)
+    documents = InMemoryDocumentRepository()
+    tasks = InMemoryProcessingTaskRepository()
+    jobs = InMemoryCommercialHardeningRepository()
+    now_ms = _now_ms()
+    document = documents.save(
+        DocumentRecord(
+            document_id="document-parser-exhausted",
+            owner_user_id="parser-exhausted-user",
+            document_kind="resume",
+            display_name="resume.pdf",
+            file_kind="pdf",
+            content_type="application/pdf",
+            size_bytes=128,
+            object_key="materials/test/parser-exhausted/resume.pdf",
+            status="processing_requested",
+            knowledge_collection_id=None,
+            processing_requested_at_ms=now_ms,
+            deleted_at_ms=None,
+            created_at_ms=now_ms,
+            updated_at_ms=now_ms,
+            summary="等待处理",
+            document_version_id="version-parser-exhausted",
+        )
+    )
+    task = ProcessingTaskRecord(
+        task_id="task-parser-exhausted",
+        document_id=document.document_id,
+        owner_user_id=document.owner_user_id,
+        document_kind=document.document_kind,
+        current_stage="QUEUED",
+        retry_count=2,
+        max_retries=2,
+        parser_provider="mineru",
+        embedding_provider="text-embedding-v3",
+        created_at_ms=now_ms,
+        updated_at_ms=now_ms,
+        queued_at_ms=now_ms,
+    )
+    tasks.save_task(task)
+    jobs.enqueue_processing_job(
+        CommercialJobRecord(
+            job_id=f"processing-{task.task_id}",
+            owner_user_id=document.owner_user_id,
+            job_kind="processing",
+            status="running",
+            stage="PARSING",
+            document_id=document.document_id,
+            document_version_id=document.document_version_id,
+            related_task_id=task.task_id,
+            retry_count=2,
+            max_retries=2,
+            created_at_ms=now_ms,
+            updated_at_ms=now_ms,
+            scheduled_after_ms=now_ms,
+        )
+    )
+    service = _service(settings=settings, storage=storage, documents=documents, tasks=tasks, jobs=jobs)
+
+    def invalid_result(*, task: ProcessingTaskRecord, **_kwargs: object) -> tuple[ProcessingTaskRecord, object]:
+        raise ParserExecutionError(
+            task=task,
+            failure=ParserFailure(
+                error_code="parser_invalid_result",
+                error_type="recoverable",
+                retryable=True,
+                provider_name="mineru",
+                message_safe_for_log="解析服务返回的结果不可用。",
+            ),
+        )
+
+    service.parser_service.parse_document = invalid_result  # type: ignore[method-assign]
+
+    result = service.process_task(task.task_id)
+
+    assert result is not None
+    assert result.current_stage == "FAILED"
+    assert jobs.jobs[f"processing-{task.task_id}"].status == "failed"
+    assert documents.get_by_id(document.document_id).status == "failed"  # type: ignore[union-attr]
 
 
 def test_mineru_timeout_is_reduced_to_safe_actionable_code(monkeypatch: pytest.MonkeyPatch) -> None:

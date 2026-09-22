@@ -109,6 +109,7 @@ class ChatAnswerTaskRecord:
     material_provenance: dict[str, object] = field(default_factory=dict)
     unavailable_material_sources: list[dict[str, object]] = field(default_factory=list)
     web_search_enabled: bool = False
+    quick_answer_completed: bool = False
     web_search_status: str = "disabled"
     web_sources: list[dict[str, object]] = field(default_factory=list)
     retry_count: int = 0

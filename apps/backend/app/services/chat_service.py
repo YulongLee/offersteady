@@ -1610,6 +1610,21 @@ class ChatService:
                         replace(current_task, chunks=chunks.copy(), answer_text="".join(answer_parts), retry_count=attempt, updated_at_ms=_now_ms())
                     )
                     yield {"type": "chunk", "task": current_task, "chunk": normalized}
+                # End the quick presentation stage before any blocking detail
+                # retrieval/search. This is not whole-task completion or billing.
+                if self._is_task_cancelled(current_task.task_id):
+                    yield {"type": "cancelled", "task": self.repository.get_task(current_task.task_id) or current_task}
+                    return
+                current_task = self.repository.save_task(
+                    replace(current_task, quick_answer_completed=True, updated_at_ms=_now_ms())
+                )
+                if current_task.status == "cancelled":
+                    yield {"type": "cancelled", "task": current_task}
+                    return
+                yield {"type": "quick-completed", "task": current_task}
+                if self._is_task_cancelled(current_task.task_id):
+                    yield {"type": "cancelled", "task": self.repository.get_task(current_task.task_id) or current_task}
+                    return
                 retrieval = (
                     detail_retrieval_future.result()
                     if detail_retrieval_future is not None
@@ -1675,6 +1690,13 @@ class ChatService:
                     )
                     if web_result.status == "succeeded" and web_result.answer_text:
                         web_search_succeeded = True
+                # The external search is synchronous and may finish after the
+                # user turned web mode off. Never overwrite cancellation with
+                # the pre-search streaming snapshot or settle its reservation.
+                if self._is_task_cancelled(current_task.task_id):
+                    cancelled = self.repository.get_task(current_task.task_id) or current_task
+                    yield {"type": "cancelled", "task": cancelled}
+                    return
                 current_task = self.repository.save_task(
                     replace(
                         current_task,
@@ -1698,6 +1720,10 @@ class ChatService:
                 detail_parts: list[str] = []
                 detail_finish_reason = "stop"
                 detail_chunks: list[ChatAnswerChunk] = []
+                if self._is_task_cancelled(current_task.task_id):
+                    cancelled = self.repository.get_task(current_task.task_id) or current_task
+                    yield {"type": "cancelled", "task": cancelled}
+                    return
                 if web_result.status == "succeeded" and web_result.answer_text:
                     detail_parts = [web_result.answer_text]
                     detail_chunks = [ChatAnswerChunk(sequence=1, text=web_result.answer_text, is_final=False)]
@@ -1800,6 +1826,10 @@ class ChatService:
                     )
                     yield {"type": "chunk", "task": current_task, "chunk": normalized}
                 final_text = "".join(answer_parts).strip()
+                if self._is_task_cancelled(current_task.task_id):
+                    cancelled = self.repository.get_task(current_task.task_id) or current_task
+                    yield {"type": "cancelled", "task": cancelled}
+                    return
                 if not final_text:
                     raise NonRetryableChatError("当前对话模型返回了无效结果，请稍后重试或检查模型配置。", code="chat_provider_invalid_response")
                 if session.interview_language != "zh-CN" and output_language_violation(final_text, session.interview_language):
@@ -1836,6 +1866,9 @@ class ChatService:
                     ),
                     retry_count=attempt,
                 )
+                if completed.status == "cancelled":
+                    yield {"type": "cancelled", "task": completed}
+                    return
                 self.session_service.append_context(
                     user_id=user_id,
                     session_id=session_id,

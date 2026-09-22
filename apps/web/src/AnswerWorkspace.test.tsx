@@ -4,6 +4,47 @@ import { AnswerWorkspace } from "./AnswerWorkspace";
 import { syntheticState } from "./test-state";
 
 describe("AnswerWorkspace", () => {
+  it.each(["pending", "fallback"] as const)("finishes simple rendering independently while detail is %s", (webSearchStatus) => {
+    const base = syntheticState.questions[0]!;
+    const question = {
+      ...base, status: "streaming" as const, quickAnswerCompleted: true,
+      advice: { ...base.advice, detail: "简单回答\n**先给结论**", provenance: { ...base.advice.provenance, webSearchStatus } },
+    };
+    const { container } = render(<AnswerWorkspace answers={[question]} viewingAnswerId={null} newAnswerAvailable={false} activeTask={null} cancelling={false} cancelError="" onView={() => undefined} onRetry={() => undefined} onStop={() => undefined} />);
+    expect(container.querySelector(".simple-answer")).toHaveAttribute("aria-busy", "false");
+    expect(container.querySelector(".simple-answer .answer-markdown strong")).toHaveTextContent("先给结论");
+    expect(container.querySelector(".simple-answer .answer-stream-text")).not.toBeInTheDocument();
+    expect(screen.getByText("简单回答已完成")).toBeInTheDocument();
+    expect(container.querySelector(".detailed-answer")).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("does not imply web search or quick completion before the quick stage finishes", () => {
+    const base = syntheticState.questions[0]!;
+    const question = { ...base, status: "streaming" as const, advice: { ...base.advice, detail: "**尚未完成", provenance: { ...base.advice.provenance, webSearchStatus: "pending" as const } } };
+    const { container } = render(<AnswerWorkspace answers={[question]} viewingAnswerId={null} newAnswerAvailable={false} activeTask={null} cancelling={false} cancelError="" onView={() => undefined} onRetry={() => undefined} onStop={() => undefined} />);
+    expect(container.querySelector(".simple-answer")).toHaveAttribute("aria-busy", "true");
+    expect(screen.queryByText("简单回答已完成")).not.toBeInTheDocument();
+    expect(screen.queryByText("正在查询公开资料…")).not.toBeInTheDocument();
+  });
+
+  it("uses the legacy detail separator as a quick-stage boundary", () => {
+    const base = syntheticState.questions[0]!;
+    const question = { ...base, status: "streaming" as const, advice: { ...base.advice, detail: "简单回答\n**已完成**\n\n---\n\n详细回答\n正在补充" } };
+    const { container } = render(<AnswerWorkspace answers={[question]} viewingAnswerId={null} newAnswerAvailable={false} activeTask={null} cancelling={false} cancelError="" onView={() => undefined} onRetry={() => undefined} onStop={() => undefined} />);
+    expect(container.querySelector(".simple-answer .answer-markdown strong")).toHaveTextContent("已完成");
+    expect(container.querySelector(".detailed-answer .answer-stream-text")).toHaveTextContent("正在补充");
+  });
+
+  it("keeps a completed quick answer and stops the web spinner after detail failure", () => {
+    const base = syntheticState.questions[0]!;
+    const question = { ...base, status: "failed" as const, quickAnswerCompleted: true, advice: { ...base.advice, detail: "简单回答\n**已完成的结论**", provenance: { ...base.advice.provenance, webSearchStatus: "pending" as const } } };
+    const { container } = render(<AnswerWorkspace answers={[question]} viewingAnswerId={null} newAnswerAvailable={false} activeTask={null} cancelling={false} cancelError="" onView={() => undefined} onRetry={() => undefined} onStop={() => undefined} />);
+    expect(container.querySelector(".simple-answer .answer-markdown strong")).toHaveTextContent("已完成的结论");
+    expect(screen.getByText("详细回答生成失败，简单回答已保留")).toBeInTheDocument();
+    expect(screen.queryByText("正在查询公开资料…")).not.toBeInTheDocument();
+    expect(container.querySelector('[aria-busy="true"]')).not.toBeInTheDocument();
+  });
+
   it("keeps question normalization metadata internal while the answer streams", () => {
     const question = {
       ...syntheticState.questions[0]!,

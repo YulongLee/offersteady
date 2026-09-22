@@ -81,6 +81,20 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
   const previousLatestId = useRef(state.questions[0]?.id);
   const screenshotController = useRef<AbortController | null>(null);
   const manualAnswerController = useRef<AbortController | null>(null);
+  const manualAnswerRequest = useRef<{
+    controller: AbortController;
+    command: string;
+    webSearchEnabled: boolean;
+    task: AnswerTaskSnapshot;
+    question: InterviewQuestion;
+    pendingId: string;
+  } | null>(null);
+  const cancelledManualTaskIds = useRef(new Set<string>());
+  const preservedWebAnswerIds = useRef(new Set<string>());
+  const cancelledManualClicks = useRef(new Set<number>());
+  const lastManualClick = useRef(0);
+  const isCancelledManualTask = (task: AnswerTaskSnapshot) => cancelledManualTaskIds.current.has(task.id)
+    || (task.clickedAtMs !== undefined && cancelledManualClicks.current.has(task.clickedAtMs));
   const beginInstantScreenshotRef = useRef<() => void>(() => undefined);
   const activeShortcutScreenshotRequest = useRef<string | null>(null);
   const terminalShortcutScreenshotRequests = useRef(new Set<string>());
@@ -136,11 +150,17 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
       try {
         const snapshot = await runAdapterOperation(signal => interviewAppAdapter.loadInterviewWorkspace(id, signal), controller.signal);
         if (stopped) return;
+        if (snapshot.activeAnswerTask && isCancelledManualTask(snapshot.activeAnswerTask)) {
+          cancelledManualTaskIds.current.add(snapshot.activeAnswerTask.questionId);
+        }
         setState(current => ({
           ...current,
           ...reconcileAnswerWorkspace(
             { questions: current.questions, activeAnswerTask: current.activeAnswerTask },
-            snapshot,
+            {
+              questions: snapshot.questions.filter(question => !cancelledManualTaskIds.current.has(question.id)),
+              activeAnswerTask: snapshot.activeAnswerTask && !isCancelledManualTask(snapshot.activeAnswerTask) ? snapshot.activeAnswerTask : null,
+            },
           ),
         }));
       } catch {
@@ -313,7 +333,7 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
         }
       }
       setState(current => {
-        const answerResults = [realtime.answerUpdate, shortcut?.result].filter((result): result is NonNullable<typeof result> => Boolean(result));
+        const answerResults = [realtime.answerUpdate, shortcut?.result].filter((result): result is NonNullable<typeof result> => Boolean(result && !isCancelledManualTask(result.task)));
         const newestAnswer = answerResults.length > 0
           ? answerResults.reduce((latest, result) => result.task.updatedAtMs > latest.task.updatedAtMs ? result : latest)
           : null;
@@ -551,7 +571,7 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
     advice: {
       ...question.advice,
       outline: [],
-      detail: message,
+      detail: question.quickAnswerCompleted ? question.advice.detail : message,
       inference: "",
       uncertain: true,
     },
@@ -562,20 +582,37 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
     frozenQuestion?: { readonly questionId: string; readonly questionRevision: number; readonly clickedAtMs: number; readonly prefetchRevision: number; readonly triggerMode?: "manual" | "auto" },
   ) => {
     const trimmed = text.trim(); if (!trimmed) return;
-    const clickedAtMs = frozenQuestion?.clickedAtMs ?? Date.now();
-    const command = frozenQuestion?.triggerMode === "auto" ? `auto:${id}:${frozenQuestion.questionId}` : `manual:${id}:${trimmed}`; if (submittedCommands.current.has(command)) return;
+    const clickedAtMs = Math.max(frozenQuestion?.clickedAtMs ?? Date.now(), lastManualClick.current + 1);
+    const webSearchEnabled = actionState.webSearchEnabled === true;
+    const mode = webSearchEnabled ? "web" : "local";
+    const trigger = frozenQuestion?.triggerMode === "auto" ? "auto" : "manual";
+    // Dedupe active clicks separately from billing. A new intentional attempt
+    // must not reuse a released reservation or collide with the other mode.
+    const command = `${trigger}:${id}:${mode}:${frozenQuestion?.triggerMode === "auto" ? frozenQuestion.questionId : trimmed}`;
+    if (submittedCommands.current.has(command)) return;
+    lastManualClick.current = clickedAtMs;
+    const requestId = `${trigger}:${id}:${mode}:${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
     submittedCommands.current.add(command); setNotice("");
     setActionState(current => ({ ...current, quickAnswerStatus: "processing", quickAnswerMessage: "" }));
-    const pendingId = replaceQuestionId ?? `manual-pending-${Date.now()}`;
+    const pendingId = replaceQuestionId ?? `manual-pending-${requestId}`;
     const pendingQuestion = pendingManualQuestion(trimmed, pendingId, frozenQuestion?.triggerMode === "auto" ? "desktop-audio" : "manual");
     const pendingTask: AnswerTaskSnapshot = { id: `pending:${pendingId}`, interviewId: id, userId: state.account.id, billingUsageId: `pending:${pendingId}`, questionId: pendingId, question: trimmed, revision: 1, status: "generating", partialText: "正在调用当前对话模型生成回答…", clickedAtMs, updatedAtMs: Date.now() };
+    manualAnswerController.current?.abort();
+    if (manualAnswerRequest.current) submittedCommands.current.delete(manualAnswerRequest.current.command);
+    const controller = new AbortController();
+    const request = { controller, command, webSearchEnabled, task: pendingTask, question: pendingQuestion, pendingId };
+    manualAnswerController.current = controller;
+    manualAnswerRequest.current = request;
+    const isCurrentRequest = () => manualAnswerRequest.current === request && !controller.signal.aborted;
     setState(current => ({ ...current, questions: replaceQuestionId ? current.questions.map(item => item.id === replaceQuestionId ? pendingQuestion : item) : [pendingQuestion, ...current.questions], activeAnswerTask: pendingTask }));
     setActionState(current => ({ ...current, manualDraft: "" }));
     setView(current => ({ ...current, viewingAnswerId: null, newAnswerAvailable: false }));
     let pendingStreamUpdate: Parameters<NonNullable<Parameters<typeof interviewAppAdapter.submitManualAnswer>[2]>>[0] | null = null;
     let firstAnswerTiming: LiveAnswerStreamEvent["timing"];
+    let firstAnswerChunkReceived = false;
     let streamRenderTimer: number | null = null;
     const applyStreamUpdate = (update: NonNullable<typeof pendingStreamUpdate>) => {
+      if (!isCurrentRequest()) return;
       setState(current => ({
         ...current,
         ...reconcileAnswerWorkspace(
@@ -616,17 +653,21 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
       applyStreamUpdate(update);
     };
     try {
-      manualAnswerController.current?.abort();
-      const controller = new AbortController();
-      manualAnswerController.current = controller;
-      const result = await runAdapterOperation(signal => interviewAppAdapter.submitManualAnswer({ interviewId: id, question: trimmed, idempotencyKey: command, ...frozenQuestion, clickedAtMs, webSearchEnabled: actionState.webSearchEnabled === true }, signal, update => {
+      const result = await runAdapterOperation(signal => interviewAppAdapter.submitManualAnswer({ interviewId: id, question: trimmed, idempotencyKey: requestId, ...frozenQuestion, clickedAtMs, webSearchEnabled }, signal, update => {
+        if (!isCurrentRequest()) return;
+        if (update.event.type === "quick-completed") flushStreamUpdate();
+        request.task = update.result.task;
+        request.question = update.result.question;
         firstAnswerTiming ??= update.event.timing;
         pendingStreamUpdate = firstAnswerTiming && !update.event.timing
           ? { ...update, event: { ...update.event, timing: firstAnswerTiming } }
           : update;
-        if (["completed", "failed", "cancelled"].includes(update.event.type)) flushStreamUpdate();
+        const firstChunk = update.event.type === "chunk" && !firstAnswerChunkReceived;
+        if (update.event.type === "chunk") firstAnswerChunkReceived = true;
+        if (firstChunk || ["quick-completed", "completed", "failed", "cancelled"].includes(update.event.type)) flushStreamUpdate();
         else if (streamRenderTimer === null) streamRenderTimer = window.setTimeout(flushStreamUpdate, 16);
       }), controller.signal);
+      if (!isCurrentRequest()) return;
       flushStreamUpdate();
       setState(current => ({
         ...current,
@@ -636,19 +677,64 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
           { preferIncomingTask: true },
         ),
       }));
-      setActionState(current => ({ ...current, quickAnswerStatus: result.task.status === "failed" ? "failed" : result.task.status === "completed" ? "success" : "processing", quickAnswerMessage: result.task.status === "failed" ? result.task.partialText ?? "快答失败，可重试" : "" }));
+      setActionState(current => ({ ...current, quickAnswerStatus: result.task.status === "failed" ? "failed" : result.task.status === "completed" ? "success" : result.task.status === "cancelled" ? "cancelled" : "processing", quickAnswerMessage: result.task.status === "failed" ? result.task.partialText ?? "快答失败，可重试" : "" }));
       if (result.task.status === "completed") void syncBilling();
     } catch (error) {
+      if (!isCurrentRequest()) return;
       if (error instanceof DOMException && error.name === "AbortError") return;
       if (error instanceof Error && error.message === "请求已取消") return;
       const message = error instanceof Error ? error.message : "回答生成失败，请稍后重试。";
+      flushStreamUpdate();
       setNotice(message);
       setActionState(current => ({ ...current, quickAnswerStatus: "failed", quickAnswerMessage: message }));
-      setState(current => ({ ...current, questions: current.questions.map(item => item.id === pendingId ? failedManualQuestion(item, message) : item), activeAnswerTask: current.activeAnswerTask?.questionId === pendingId ? { ...current.activeAnswerTask, status: "failed", partialText: message, updatedAtMs: Date.now() } : current.activeAnswerTask }));
+      setState(current => ({ ...current, questions: current.questions.map(item => item.id === pendingId || item.id === request.task.questionId ? failedManualQuestion(item, message) : item), activeAnswerTask: current.activeAnswerTask?.questionId === pendingId || current.activeAnswerTask?.id === request.task.id ? { ...current.activeAnswerTask!, status: "failed", partialText: request.task.quickAnswerCompleted ? request.task.partialText ?? request.question.advice.detail : message, updatedAtMs: Date.now() } : current.activeAnswerTask }));
     } finally {
       if (streamRenderTimer !== null) window.clearTimeout(streamRenderTimer);
-      manualAnswerController.current = null;
-      submittedCommands.current.delete(command);
+      if (manualAnswerController.current === controller) manualAnswerController.current = null;
+      if (manualAnswerRequest.current === request) {
+        manualAnswerRequest.current = null;
+        submittedCommands.current.delete(command);
+      }
+    }
+  };
+  const toggleWebSearch = () => {
+    const enabled = !actionState.webSearchEnabled;
+    setActionState(current => ({ ...current, webSearchEnabled: enabled }));
+    const request = manualAnswerRequest.current;
+    if (enabled || !request?.webSearchEnabled || ["completed", "failed", "cancelled"].includes(request.task.status)) return;
+
+    // Detach first: abort handlers and late stream/finally callbacks must not
+    // mutate the next answer or hold its button disabled.
+    manualAnswerRequest.current = null;
+    manualAnswerController.current = null;
+    submittedCommands.current.delete(request.command);
+    cancelledManualTaskIds.current.add(request.task.id);
+    cancelledManualTaskIds.current.add(request.task.questionId);
+    cancelledManualTaskIds.current.add(request.pendingId);
+    if (!request.task.billingUsageId.startsWith("pending:") && request.task.partialText?.trim()) {
+      preservedWebAnswerIds.current.add(request.task.questionId);
+    }
+    if (request.task.clickedAtMs !== undefined) cancelledManualClicks.current.add(request.task.clickedAtMs);
+    request.controller.abort();
+    setActionState(current => ({ ...current, quickAnswerStatus: "idle", quickAnswerMessage: "" }));
+    setNotice("联网已关闭，可继续使用普通快答。");
+    setState(current => ({
+      ...current,
+      activeAnswerTask: current.activeAnswerTask?.id === request.task.id || current.activeAnswerTask?.questionId === request.pendingId
+        ? { ...request.task, status: "cancelled", updatedAtMs: Date.now() }
+        : current.activeAnswerTask,
+      questions: current.questions.map(question => question.id === request.task.questionId || question.id === request.pendingId
+        ? { ...request.question, status: "cancelled" }
+        : question),
+    }));
+    if (!request.task.billingUsageId.startsWith("pending:")) {
+      void runAdapterOperation(signal => interviewAppAdapter.cancelAnswer({
+        interviewId: id, answerTaskId: request.task.id,
+        // Revision 1 is the API's unconditional, owner-checked cancellation.
+        expectedRevision: 1, idempotencyKey: `cancel-web:${request.task.id}`,
+      }, request.task, signal)).then(() => syncBilling()).catch(() => {
+        if (!manualAnswerRequest.current) setNotice("联网已关闭，旧任务取消确认失败，请稍后核对回答状态。");
+      });
     }
   };
   useEffect(() => {
@@ -772,8 +858,8 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
   const updateQuestionStatus = (questionId: string, status: QuestionStatus) => {
     const question = state.questions.find(item => item.id === questionId);
     if (!question) return;
-    if (question.status === "cancelled" && status === "generating") {
-      if (question.input === "manual") { void submitManualText(question.text, questionId); return; }
+    if ((question.status === "cancelled" || question.status === "failed") && status === "generating") {
+      if (question.input === "manual" || question.input === "desktop-audio") { void submitManualText(question.text, questionId); return; }
       const usageId = `retry:${questionId}:${Date.now()}`;
       const task: AnswerTaskSnapshot = { id: `answer:${questionId}:${Date.now()}`, interviewId: id, userId: state.account.id, billingUsageId: usageId, questionId, question: question.text, revision: 1, status: "generating", partialText: "正在重新整理回答…", updatedAtMs: Date.now() };
       setState(current => ({ ...current, questions: current.questions.map(item => item.id === questionId ? { ...item, status } : item), activeAnswerTask: task }));
@@ -1048,7 +1134,7 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
     if (value.trim() && notice === QUICK_ANSWER_MISSING_QUESTION_NOTICE) setNotice("");
   };
   const conversationPanel = <ConversationMonitor state={state} interviewAudioMode={liveInterview?.interviewAudioMode ?? "computer"} onConfirmQuestion={pageLeaseStatus === "replaced" ? dismissPending : confirmPending} onDismissQuestion={dismissPending} />;
-  const answerPanel = <AnswerWorkspace answers={state.questions} viewingAnswerId={view.viewingAnswerId} newAnswerAvailable={view.newAnswerAvailable} activeTask={state.activeAnswerTask} cancelling={cancellingAnswer} cancelError={cancelAnswerError} interviewLanguage={liveInterview?.interviewLanguage ?? "zh-CN"} onStop={() => void stopAnswer()} onView={answerId => setView(current => ({ ...current, viewingAnswerId: answerId, newAnswerAvailable: answerId ? current.newAnswerAvailable : false }))} onRetry={updateQuestionStatus} />;
+  const answerPanel = <AnswerWorkspace answers={state.questions} cancelledWebAnswerIds={preservedWebAnswerIds.current} viewingAnswerId={view.viewingAnswerId} newAnswerAvailable={view.newAnswerAvailable} activeTask={state.activeAnswerTask} cancelling={cancellingAnswer} cancelError={cancelAnswerError} interviewLanguage={liveInterview?.interviewLanguage ?? "zh-CN"} onStop={() => void stopAnswer()} onView={answerId => setView(current => ({ ...current, viewingAnswerId: answerId, newAnswerAvailable: answerId ? current.newAnswerAvailable : false }))} onRetry={updateQuestionStatus} />;
 
   if (isWritten) return <main className={`live-page focused-live-page${desktopLayout ? " desktop-live-page" : " mobile-live-page"}`}><header className="live-top"><Link to={routes.writtenExams} aria-label="返回笔试模式">{brand}</Link><div className="live-session-heading"><strong>{interviewTitle}</strong><span><i className="online-dot" /> 桌面助手已连接 · 截屏回答可用</span><small className="live-language-badge">笔试模式</small></div><div className="live-top-actions"><Link className="live-balance" to={routes.billing}>积分与会员</Link>{accountMenu}<button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束笔试</button></div></header>{notice ? <div className="global-live-alert" role="alert"><strong>{notice}</strong><button type="button" onClick={() => setNotice("")}>关闭</button></div> : null}{pageLeaseStatus === "replaced" ? <div className="global-live-alert replaced-page-alert" role="status"><strong>本场笔试已在其他页面继续</strong><Link className="button primary" to={routes.writtenExams}>返回笔试模式</Link></div> : null}<div className="written-exam-workspace"><section className="answer-column">{answerPanel}<AnswerActionBar manualDraft="" screenshotTask={actionState.screenshotTask} screenshotOnly screenshotAnswerStatus={actionState.screenshotAnswerStatus ?? "idle"} disabled={pageLeaseStatus === "replaced"} onQuickAnswer={() => undefined} onScreenshot={beginInstantScreenshot} /></section></div>{screenshot && pageLeaseStatus !== "replaced" ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="screenshot-dialog-title"><section className="sheet"><h2 id="screenshot-dialog-title">{screenshotStageTitle(screenshot)}</h2>{screenshotStageDetail(screenshot) ? <p>{screenshotStageDetail(screenshot)}</p> : null}{screenshot.stage === "failed" ? <div className="sheet-actions split-actions"><button className="button ghost full" onClick={dismissScreenshotFailure}>删除本次失败</button><button className="button primary full" onClick={beginInstantScreenshot}>重新截屏</button></div> : <button className="button primary full" onClick={() => void cancelScreenshot()}>取消</button>}</section></div> : null}<footer className="session-bar"><div><i className="online-dot" /><strong>笔试进行中</strong></div><div><small>仅在你主动发起时截屏并生成回答</small></div></footer></main>;
 
@@ -1056,7 +1142,7 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
     <header className="live-top">
       <Link to={routes.app} aria-label="返回面试首页">{brand}</Link>
       <div className="live-session-heading"><strong>{interviewTitle}</strong><span><i className={captureActive ? "recording-dot" : "online-dot"} /> {desktopLayout ? `这台设备 · ${captureStatus}` : captureStatus}</span><small className="live-language-badge">{interviewLanguageLabel}</small></div>
-      {desktopLayout ? <div className="live-top-actions"><div className="live-auto-answer"><span>自动回答</span><label className="switch-control"><input type="checkbox" role="switch" aria-label="自动回答" checked={liveInterview?.autoAnswerEnabled ?? false} disabled={autoAnswerSaving || pageLeaseStatus === "replaced"} onChange={event => void toggleAutoAnswer(event.target.checked)} /><span aria-hidden="true" /></label></div><WebSearchToggle enabled={actionState.webSearchEnabled === true} disabled={pageLeaseStatus === "replaced"} onToggle={() => setActionState(current => ({ ...current, webSearchEnabled: !current.webSearchEnabled }))} /><Link className="live-balance" to={routes.billing}>积分与会员</Link><details className="live-contact-menu"><summary>联系我们</summary><div className="live-contact-popover" aria-label="官方社交账号">{officialSocialContacts.map(contact => <p key={contact.id}><small>{contact.label}</small><strong>{contact.account}</strong></p>)}</div></details><span>18:24</span>{accountMenu}{captureButton}<button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束面试</button></div> : <div className="mobile-live-top-actions"><div className="live-auto-answer mobile"><span>自动</span><label className="switch-control"><input type="checkbox" role="switch" aria-label="自动回答" checked={liveInterview?.autoAnswerEnabled ?? false} disabled={autoAnswerSaving || pageLeaseStatus === "replaced"} onChange={event => void toggleAutoAnswer(event.target.checked)} /><span aria-hidden="true" /></label></div><WebSearchToggle mobile enabled={actionState.webSearchEnabled === true} disabled={pageLeaseStatus === "replaced"} onToggle={() => setActionState(current => ({ ...current, webSearchEnabled: !current.webSearchEnabled }))} />{captureButton}<details className="mobile-live-more"><summary aria-label="更多面试操作">•••</summary><div><Link to={routes.billing}>积分与会员</Link><Link to={routes.settings}>用户设置</Link><section className="mobile-live-contact-list" aria-label="官方社交账号">{officialSocialContacts.map(contact => <p key={contact.id}><small>{contact.label}</small><strong>{contact.account}</strong></p>)}</section><button className="danger" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束面试</button></div></details></div>}
+      {desktopLayout ? <div className="live-top-actions"><div className="live-auto-answer"><span>自动回答</span><label className="switch-control"><input type="checkbox" role="switch" aria-label="自动回答" checked={liveInterview?.autoAnswerEnabled ?? false} disabled={autoAnswerSaving || pageLeaseStatus === "replaced"} onChange={event => void toggleAutoAnswer(event.target.checked)} /><span aria-hidden="true" /></label></div><WebSearchToggle enabled={actionState.webSearchEnabled === true} disabled={pageLeaseStatus === "replaced"} onToggle={toggleWebSearch} /><Link className="live-balance" to={routes.billing}>积分与会员</Link><details className="live-contact-menu"><summary>联系我们</summary><div className="live-contact-popover" aria-label="官方社交账号">{officialSocialContacts.map(contact => <p key={contact.id}><small>{contact.label}</small><strong>{contact.account}</strong></p>)}</div></details><span>18:24</span>{accountMenu}{captureButton}<button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束面试</button></div> : <div className="mobile-live-top-actions"><div className="live-auto-answer mobile"><span>自动</span><label className="switch-control"><input type="checkbox" role="switch" aria-label="自动回答" checked={liveInterview?.autoAnswerEnabled ?? false} disabled={autoAnswerSaving || pageLeaseStatus === "replaced"} onChange={event => void toggleAutoAnswer(event.target.checked)} /><span aria-hidden="true" /></label></div><WebSearchToggle mobile enabled={actionState.webSearchEnabled === true} disabled={pageLeaseStatus === "replaced"} onToggle={toggleWebSearch} />{captureButton}<details className="mobile-live-more"><summary aria-label="更多面试操作">•••</summary><div><Link to={routes.billing}>积分与会员</Link><Link to={routes.settings}>用户设置</Link><section className="mobile-live-contact-list" aria-label="官方社交账号">{officialSocialContacts.map(contact => <p key={contact.id}><small>{contact.label}</small><strong>{contact.account}</strong></p>)}</section><button className="danger" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束面试</button></div></details></div>}
     </header>
     {idleStatus?.state === "warning" ? <div className="global-live-alert" role="status"><strong>本场面试即将因空闲自动结束</strong><span>连续 20 分钟没有音频、回答或截图活动会释放当前设备连接，历史记录仍会保留。</span><button className="button primary" disabled={continuingInterview} onClick={() => void continueIdleInterview()}>{continuingInterview ? "正在继续…" : "继续本场面试"}</button></div> : null}
     {pageLeaseStatus === "replaced" ? <div className="global-live-alert replaced-page-alert" role="status"><strong>本场面试已在其他页面继续</strong><span>当前页面已停止收音同步、实时订阅和回答请求；已显示内容仍可查看。关闭此页或返回面试首页即可。</span><Link className="button primary" to={routes.app}>返回面试首页</Link></div> : null}

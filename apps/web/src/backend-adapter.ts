@@ -99,6 +99,7 @@ interface BackendLiveAnswerTaskResponse {
   };
   readonly unavailableMaterialSources?: readonly BackendAnswerSourceReference[];
   readonly webSearchEnabled?: boolean;
+  readonly quickAnswerCompleted?: boolean;
   readonly webSearchStatus?: "disabled" | "pending" | "succeeded" | "fallback" | "unavailable";
   readonly webSources?: readonly WebAnswerSourceReference[];
   readonly updatedAtMs: number;
@@ -930,6 +931,7 @@ const toSubmitManualAnswerResult = (
     ...(task.questionNormalizationStatus ? { questionNormalizationStatus: task.questionNormalizationStatus } : {}),
     input,
     status: questionStatusFromTask(task),
+    ...(task.quickAnswerCompleted === undefined ? {} : { quickAnswerCompleted: task.quickAnswerCompleted }),
     advice: adviceFromLiveAnswerTask(task),
   },
   task: {
@@ -940,6 +942,7 @@ const toSubmitManualAnswerResult = (
     questionId: task.taskId,
     revision: 1,
     status: taskStatus(task),
+    ...(task.quickAnswerCompleted === undefined ? {} : { quickAnswerCompleted: task.quickAnswerCompleted }),
     question: task.normalizedQuestion?.trim() || task.question,
     ...(task.status === "completed" ? { completedText: answerTextFromTask(task) } : { partialText: answerTextFromTask(task) || "正在调用当前对话模型生成回答…" }),
     provenance: provenanceFromTask(task),
@@ -1911,8 +1914,10 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   private async submitManualAnswerStream(command: Parameters<InterviewAppAdapter["submitManualAnswer"]>[0], signal: AbortSignal | undefined, onStreamUpdate: (update: ManualAnswerStreamUpdate) => void): Promise<SubmitManualAnswerResult> {
     let latest: SubmitManualAnswerResult | null = null;
     let failureMessage = "回答生成失败，请稍后重试。";
+    let terminalReceived = false;
     const emit = (event: LiveAnswerStreamEvent) => {
       if (!event.task) return;
+      terminalReceived ||= ["completed", "failed", "cancelled"].includes(event.type);
       const result = toSubmitManualAnswerResult(event.task as BackendLiveAnswerTaskResponse, command.triggerMode === "auto" ? "desktop-audio" : "manual");
       latest = result;
       if (event.type === "failed" && (event.errorMessage || event.partialText)) {
@@ -1956,6 +1961,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     parser.push(decoder.decode());
     parser.flush();
     if (!latest) throw new AppError("validation", failureMessage);
+    if (!terminalReceived) throw new AppError("network", "回答连接已中断，请重新发起快答。");
     return latest;
   }
 

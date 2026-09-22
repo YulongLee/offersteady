@@ -92,6 +92,8 @@ class DashScopeWebSearchGateway(WebSearchGatewayPort):
                 {"role": "user", "content": prompt[:max_context_characters]},
             ],
             "tools": [{"type": "web_search"}],
+            # Avoid provider-default deep thinking consuming the search deadline.
+            "reasoning": {"effort": "none"},
             "max_output_tokens": max(256, min(max_tokens, 4096)),
             "temperature": 0.2,
         }
@@ -153,6 +155,22 @@ class DashScopeWebSearchGateway(WebSearchGatewayPort):
             for item in output:
                 if not isinstance(item, dict):
                     continue
+                if item.get("type") == "web_search_call":
+                    action = item.get("action")
+                    provider_sources = action.get("sources") if isinstance(action, dict) else None
+                    if isinstance(provider_sources, list):
+                        for provider_source in provider_sources:
+                            if not isinstance(provider_source, dict):
+                                continue
+                            url = _safe_url(provider_source.get("url"))
+                            if not url:
+                                continue
+                            sources.append(WebSearchSource(
+                                title=str(provider_source.get("title") or urlparse(url).netloc)[:240],
+                                url=url,
+                                snippet=str(provider_source.get("snippet") or "")[:800],
+                                retrieved_at_ms=retrieved_at_ms,
+                            ))
                 for content in item.get("content", []) if isinstance(item.get("content"), list) else []:
                     if not isinstance(content, dict):
                         continue

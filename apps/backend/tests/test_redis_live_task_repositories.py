@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import time
 from contextlib import nullcontext
-from dataclasses import replace
+from dataclasses import asdict, replace
 
 from app.core.config import Settings
 from app.ports.chat import ChatAnswerTaskRecord
 from app.ports.screenshot_answer import RemoteScreenshotCaptureRequest, ScreenshotAnswerTaskRecord
 from app.services.redis_live_task_repositories import RedisChatRepository, RedisScreenshotAnswerRepository
+from app.services.chat_repository import InMemoryChatRepository
 
 
 class _Pipeline:
@@ -44,6 +45,22 @@ def _settings() -> Settings:
     return Settings(_env_file=None, redis_url="redis://unused", live_task_stale_seconds=30)
 
 
+def test_quick_stage_survives_recovery_and_older_records_default_to_false() -> None:
+    redis = FakeRedis()
+    repository = RedisChatRepository(_settings(), redis_client=redis)
+    now = int(time.time() * 1000)
+    task = ChatAnswerTaskRecord(
+        task_id="synthetic-quick-stage", session_id="synthetic-session", owner_user_id="synthetic-user",
+        question="合成问题", answer_text="完成的简单回答", status="streaming", stream_mode=True,
+        quick_answer_completed=True, created_at_ms=now, updated_at_ms=now,
+    )
+    repository.save_task(task)
+    assert RedisChatRepository(_settings(), redis_client=redis).get_task(task.task_id).quick_answer_completed
+    older = asdict(task)
+    del older["quick_answer_completed"]
+    assert RedisChatRepository._decode(older).quick_answer_completed is False
+
+
 def test_chat_tasks_survive_repository_recreation_and_terminal_state_wins() -> None:
     redis = FakeRedis()
     first = RedisChatRepository(_settings(), redis_client=redis)
@@ -74,6 +91,21 @@ def test_stale_chat_task_recovers_as_safe_failure() -> None:
     assert recovered is not None
     assert recovered.status == "failed"
     assert recovered.error_code == "runtime_task_interrupted"
+
+
+def test_cancelled_chat_cannot_be_overwritten_by_late_search_or_completion() -> None:
+    for repository in (InMemoryChatRepository(), RedisChatRepository(_settings(), redis_client=FakeRedis())):
+        now = int(time.time() * 1000)
+        cancelled = ChatAnswerTaskRecord(
+            task_id="synthetic-cancelled-web", session_id="synthetic-session", owner_user_id="synthetic-user",
+            question="合成问题", answer_text="已生成的简答", status="cancelled", stream_mode=True,
+            created_at_ms=now, updated_at_ms=now, completed_at_ms=now, web_search_enabled=True,
+        )
+        repository.save_task(cancelled)
+        for late_status in ("streaming", "completed", "failed"):
+            late = replace(cancelled, status=late_status, answer_text="迟到的结果", updated_at_ms=now + 10)
+            assert repository.save_task(late) == cancelled
+            assert repository.get_task(cancelled.task_id) == cancelled
 
 
 def test_screenshot_runtime_persists_tasks_requests_and_no_media_bytes() -> None:

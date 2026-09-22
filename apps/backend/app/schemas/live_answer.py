@@ -64,6 +64,7 @@ class LiveAnswerTaskResponse(BaseModel):
     unavailable_material_sources: list[dict[str, object]] = Field(default_factory=list, alias="unavailableMaterialSources")
     web_search_enabled: bool = Field(default=False, alias="webSearchEnabled")
     web_search_status: str = Field(default="disabled", alias="webSearchStatus")
+    quick_answer_completed: bool = Field(default=False, alias="quickAnswerCompleted")
     web_sources: list[dict[str, object]] = Field(default_factory=list, alias="webSources")
     retry_count: int = Field(alias="retryCount")
     error_code: str | None = Field(default=None, alias="errorCode")
@@ -80,7 +81,7 @@ class LiveAnswerResponse(BaseModel):
     retrieval: RetrievalResponse
 
 
-LiveAnswerStreamEventType = Literal["task-started", "question-normalized", "chunk", "completed", "failed", "cancelled"]
+LiveAnswerStreamEventType = Literal["task-started", "question-normalized", "chunk", "quick-completed", "completed", "failed", "cancelled"]
 
 
 class LiveAnswerStreamEvent(BaseModel):

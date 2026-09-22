@@ -11,6 +11,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
 
   postgres:
     image: pgvector/pgvector:pg16
@@ -28,6 +29,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   backend:
     build:
@@ -72,6 +74,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   material-worker:
     build:
@@ -177,6 +180,7 @@ services:
         condition: service_healthy
     ports:
       - "${WEB_PORT:-8080}:80"
+    restart: unless-stopped
 
   admin:
     profiles: ["admin"]
@@ -190,6 +194,7 @@ services:
         condition: service_healthy
     ports:
       - "${ADMIN_PORT:-8081}:80"
+    restart: unless-stopped
 
 volumes:
   postgres-data:

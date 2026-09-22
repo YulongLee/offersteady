@@ -24,6 +24,31 @@ When web answer is enabled and the request is eligible, the service SHALL keep t
 - **WHEN** the search gateway returns valid sources within the configured timeout
 - **THEN** the detailed prompt SHALL contain a bounded web-source section and the completed task SHALL expose the source metadata
 
+### Requirement: Quick-stage completion signal
+
+After valid quick text and any required quick continuation finish, the server SHALL persist `quickAnswerCompleted=true` and emit a non-terminal `quick-completed` event before waiting for detailed retrieval or web search. The event SHALL carry the accumulated quick text. Whole-task status SHALL remain streaming, and billing SHALL NOT settle at this stage. Old stored tasks without this field SHALL remain readable.
+
+#### Scenario: Slow detailed work
+- **WHEN** detailed retrieval or web search is delayed after the quick stage finishes
+- **THEN** the consumer SHALL already have received quick text and its completion event
+
+#### Scenario: Cancel between stages
+- **WHEN** the task is cancelled after quick completion but before detailed processing resumes
+- **THEN** the server SHALL emit cancellation without starting web search or marking the whole task completed
+
+### Requirement: Explicit non-thinking web requests
+
+The web-search Responses adapter SHALL explicitly set `reasoning.effort=none` for web-grounded detailed answers instead of relying on the provider's default reasoning mode. This setting SHALL NOT change the ordinary quick-answer or local detailed-answer request parameters, the selected model, timeout, or billing rules.
+
+#### Scenario: Web request disables deep thinking
+- **WHEN** an eligible detailed answer invokes the web-search provider
+- **THEN** the outgoing request SHALL include `reasoning={"effort":"none"}` and retain the `web_search` tool
+- **AND** it SHALL NOT include a conflicting reasoning or thinking setting
+
+#### Scenario: Provider failure still falls back
+- **WHEN** a non-thinking web request times out or is rejected by the provider
+- **THEN** it SHALL retain the existing fallback behavior without retrying in a thinking mode
+
 ### Requirement: Source-grounded response
 
 The detailed prompt SHALL require the model to distinguish web-source facts from user materials and model suggestions, and the API SHALL return source title, URL, short snippet, and retrieval timestamp without storing full web pages.

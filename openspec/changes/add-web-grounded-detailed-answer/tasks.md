@@ -32,3 +32,40 @@
 - [x] 5.5 Add synthetic `ai/evals/` cases for source grounding, privacy minimization, and language routing.
 - [x] 5.6 Run OpenSpec validation, backend/frontend tests, build, and production smoke checks.
 - [x] 5.7 Deploy to CN only after confirming no active interview, with feature flag initially disabled and rollback instructions.
+
+## 6. Web-mode switching regression fix
+
+- [x] 6.1 Give each intentional manual answer attempt a mode-aware unique request ID, retaining in-flight duplicate protection.
+- [x] 6.2 On disabling web mode, cancel only the in-flight web answer, preserve visible text, unlock quick answer, and ignore obsolete stream/realtime updates.
+- [x] 6.3 Preserve backend cancellation across a delayed search result and release reservations when a stream disconnects.
+- [x] 6.4 Test completed, failed, cancelled, pending, and late-result web-to-local transitions, plus ordinary answers and billing; validate and build locally without deployment. See [verification.md](verification.md).
+
+## 7. CN switching-fix release (authorized 2026-09-23)
+
+- [x] 7.1 Reconcile the seven runtime-file changes against the current CN release and verify the release candidate without unrelated workspace changes.
+- [x] 7.2 Retain rollback images and release directory, confirm no live interviews, and switch only Backend and Web.
+- [x] 7.3 Verify public endpoints, deployed artifacts, container health, and post-release errors; record release and rollback details. See [CN release record](../../../docs/releases/cn-web-mode-switching-fix-20260923.1.md).
+
+## 8. Explicit non-thinking web answers (authorized 2026-09-23; local only)
+
+- [x] 8.1 Send `reasoning.effort=none` on web-search Responses requests without changing ordinary answer requests, models, timeouts, or billing.
+- [x] 8.2 Add request-payload regression coverage and a synthetic AI evaluation case for non-thinking web answers and unchanged failure fallback.
+- [x] 8.3 Run focused backend regressions and strict OpenSpec validation; record local results without deploying or changing production configuration. See [non-thinking-verification.md](non-thinking-verification.md).
+
+## 9. CN non-thinking release (authorized 2026-09-23)
+
+- [x] 9.1 Reconcile the gateway-only change with the current CN image and verify the isolated candidate; retain rollback artifacts.
+- [x] 9.2 Confirm no live interviews, live page leases, active audio or answer tasks immediately before switching only the backend.
+- [x] 9.3 Verify health, public endpoints, deployed request parameters, and a synthetic web search; record the release and rollback path. See [CN non-thinking release](../../../docs/releases/cn-web-non-thinking-20260923.1.md).
+
+## 10. Independent quick-answer completion (local development)
+
+- [x] 10.1 Persist and emit quick-stage completion before awaiting detailed retrieval or web search, without completing or settling the whole task.
+- [x] 10.2 Map stage progress to desktop/mobile answer cards and immediately flush quick text/completion; keep detailed loading, cancellation, and duplicate-submit protection independent.
+- [x] 10.3 Add regressions for delayed search, local fallback, stage cancellation, late updates, older responses, and retained simple text; validate, test, and build locally without deployment. See [quick-stage-verification.md](quick-stage-verification.md).
+
+## 11. CN independent quick-stage release (authorized 2026-09-23)
+
+- [x] 11.1 Assemble only the quick-stage changes against the running CN baseline; verify the isolated candidate and prepare a task-record-compatible rollback image.
+- [x] 11.2 Retain release artifacts, confirm no live interviews/pages/audio/unfinished answers, and switch only Backend and Web.
+- [x] 11.3 Verify deployed code, public endpoints, health and stage behavior; record release and rollback details without changing Global or companion software. See [CN quick-stage release](../../../docs/releases/cn-quick-stage-completion-20260923.1.md).

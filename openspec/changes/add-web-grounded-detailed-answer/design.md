@@ -33,7 +33,7 @@
 
 流式回答先照常生成快答并立即发送。详细阶段在构建详细提示词前调用搜索网关；结果限制为最多 5 个来源、每个摘要最多 800 字符、总上下文最多 3,000 字符。搜索超时使用 2.5 秒上限，超时或空结果时不重试多次，直接使用本地检索上下文。
 
-详细提示词使用明确的“联网资料”分区，要求区分来源事实、候选人材料和模型建议，并在答案末尾输出简洁来源列表。来源元数据写入任务的 `material_provenance.webSources`，不保存原始网页全文。
+详细提示词使用明确的“联网资料”分区，要求区分来源事实、候选人材料和模型建议，并在答案末尾输出简洁来源列表。来源元数据写入任务的 `material_provenance.webSources`，不保存原始网页全文。搜索超时使用 20 秒上限，以覆盖百炼联网工具在高峰期约 4–12 秒的响应，同时仍限制最慢请求。
 
 ### 3. 计费沿用现有幂等预留模型
 
@@ -49,9 +49,31 @@
 
 搜索查询只使用规范化问题和经过长度限制的非敏感上下文，不上传原始材料。记录搜索耗时、结果数量、失败原因和计费来源，不记录问题正文或网页正文。前端明确展示“联网资料会发送给第三方搜索服务”的提示。
 
+### 6. 开关切换缺陷修复
+
+本轮用户批准修复联网关闭后普通快答失败。前端将正在处理的重复点击判定与计费请求编号分离：每次用户主动发起的请求使用包含模式和随机标识的新编号，不含问题正文；同一请求内保持编号不变。计费后端仍保留跨操作类型校验，不放松所有权校验或更改价格。
+
+关闭联网时仅取消当前页面发起的未完成联网回答，保留已显示文字，立即恢复快答按钮；使用请求实例身份保护回调、渲染队列和 finally 清理，过滤已取消任务的迟到推送。通过现有取消接口通知服务器，不伪造前端退款。服务器在搜索返回后再次检查取消状态，流断开时收尾未完成任务并释放预留。已经发给供应商的同步搜索可能持续至返回或既有超时，但不得再写入答案或扣费。普通回答、截屏、模型配置和伴随程序不变。
+
+本轮仅本地实现与自测，部署另行执行。
+
+### 7. Explicit non-thinking web requests (2026-09-23)
+
+The user approved disabling deep thinking for web-grounded detailed answers. Set `reasoning: {"effort": "none"}` in the DashScope Responses adapter only. Keep `tools=[{"type":"web_search"}]`, the configured model, output budget, timeout, fallback, and billing unchanged. Do not add an environment toggle or modify the ordinary Chat Completions gateway. This scoped change does not introduce streaming, retries, or a longer timeout and does not guarantee every search will finish within the existing deadline.
+
+The provider documents `high` as the default for `deepseek-v4.1-flash`, and `none` as a supported explicit setting: [Responses API reasoning parameter](https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-responses). Verification is local; deployment requires a separate request.
+
+### 8. Independent simple-answer completion
+
+Add a backward-compatible `quick_answer_completed` task flag (default false), expose it as `quickAnswerCompleted`, and emit `quick-completed` through the existing answer SSE and task-update channel after the quick stage and its continuation finish. Publish this before waiting for detailed retrieval/search. It is not a task terminal event or a billing settlement. Persisting the flag lets snapshot/realtime recovery retain the section state; existing stored tasks need no migration.
+
+Map this optional flag to answer questions/tasks. Immediately flush first visible quick text and the stage boundary on the client; render completed simple text with final Markdown while detailed text remains loading. Keep whole-request action-button locking and cancellation unchanged to avoid concurrent duplicate requests/charges. The card names the active stage; a detail failure cannot turn the completed simple section back into a loading section. Older responses fall back to the existing detailed-section delimiter. Preserve cancelled-request identity guards.
+
+This change does not alter prompts, models, retrieval/search order, provider timeout, or desktop software. It does not claim to fix provider first-token latency or proxy buffering. Add mocked slow-provider regressions and local desktop/mobile verification; no production deployment in this development task.
+
 ## Risks / Trade-offs
 
-- [额外网络请求增加详细回答耗时] → 快答先流式显示；搜索限制 2.5 秒；失败快速回退本地上下文。
+- [额外网络请求增加详细回答耗时] → 快答先流式显示；搜索限制 20 秒且只发生在详细阶段；失败快速回退本地上下文。
 - [模型引用不准确] → 保存来源 URL、提示词要求引用、来源区域可展开，评测加入来源一致性案例。
 - [搜索服务地域/权限不支持] → 启动时健康检查和配置开关；不可用时不显示可点击开关或明确提示并回退。
 - [20 点与会员权益判断不一致] → 会员资格在服务端按商品天数判定，不能由前端决定。

@@ -35,3 +35,11 @@ The service SHALL settle a web-answer reservation only after a usable detailed a
 #### Scenario: Failed completion
 - **WHEN** search or model processing fails and no usable detailed answer is delivered
 - **THEN** the reservation SHALL become released and points SHALL remain available
+
+#### Scenario: Cancellation during search
+- **WHEN** a user cancels a web answer while the external search is in progress
+- **THEN** the reservation SHALL be released and a late search result SHALL NOT revive the cancelled task or settle the released reservation
+
+#### Scenario: Stream disconnects before completion
+- **WHEN** an answer stream disconnects before a terminal event and the server observes the disconnect
+- **THEN** an unfinished task SHALL be cancelled and its reservation released, without cancelling an already completed answer
