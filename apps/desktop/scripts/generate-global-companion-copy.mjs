@@ -185,7 +185,7 @@ const exact = new Map(Object.entries({
   "麦克风授权": "Microphone permission",
   "正在检查麦克风权限…": "Checking microphone permission…",
   "等待你在 macOS 弹窗中允许麦克风，请留意其他窗口后方。等待不会被判定为拒绝。": "Waiting for microphone approval in the macOS prompt. Check behind other windows. Waiting is not treated as denial.",
-  "尚未授权麦克风。请点击申请授权；若没有弹窗，可打开系统设置检查。": "Microphone permission has not been requested. Request access, or check System Settings if no prompt appears.",
+  "尚未授权麦克风。点击麦克风选择框可重新检查；若没有弹窗，可打开系统设置检查。": "Microphone permission has not been requested. Click the microphone selector to check again, or check System Settings if no prompt appears.",
   "麦克风权限已允许。权限检查不会录音。": "Microphone permission is allowed. Checking permission does not record audio.",
   "麦克风权限已拒绝。请在系统设置中允许面试稳伴随程序，再返回检查；若仍无法收音，请完全退出并重新打开助手。": "Microphone permission is denied. Allow OfferSteady Companion in System Settings, then check again. If capture still fails, fully quit and reopen the companion.",
   "麦克风访问受系统或管理员限制。请检查设备管理策略，或联系管理员。": "Microphone access is restricted by the system or administrator. Check device management policies or contact your administrator.",

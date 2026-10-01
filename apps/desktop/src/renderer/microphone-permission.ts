@@ -66,7 +66,7 @@ export class MicrophonePermissionController {
 export const microphonePermissionCopy: Record<MicrophonePermissionState, string> = {
   checking: "正在检查麦克风权限…",
   pending: "等待你在 macOS 弹窗中允许麦克风，请留意其他窗口后方。等待不会被判定为拒绝。",
-  "not-determined": "尚未授权麦克风。请点击申请授权；若没有弹窗，可打开系统设置检查。",
+  "not-determined": "尚未授权麦克风。点击麦克风选择框可重新检查；若没有弹窗，可打开系统设置检查。",
   granted: "麦克风权限已允许。权限检查不会录音。",
   denied: "麦克风权限已拒绝。请在系统设置中允许面试稳伴随程序，再返回检查；若仍无法收音，请完全退出并重新打开助手。",
   restricted: "麦克风访问受系统或管理员限制。请检查设备管理策略，或联系管理员。",

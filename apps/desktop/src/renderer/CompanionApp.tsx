@@ -10,8 +10,8 @@ import { createDebouncedDeviceRefresh, reconcileMicrophoneSelection } from "./au
 import appIconUrl from "./assets/app-icon.png";
 import { BINDING_LIVE_POLL_MS, desktopPollDelayMs } from "../main/polling-policy";
 import { DeviceStatusPublishGate } from "./device-status-publish-gate";
-import { MicrophonePermissionPanel } from "./MicrophonePermissionPanel";
-import type { MicrophonePermissionState } from "./microphone-permission";
+import { useMicrophonePermission } from "./use-microphone-permission";
+import { microphonePermissionCopy, type MicrophonePermissionState } from "./microphone-permission";
 
 export const companionStatusCopy: Record<CaptureState, { title: string; detail: string }> = {
   "not-connected": { title: "设备离线", detail: "助手尚未完成服务登记，请检查网络后重试。" },
@@ -682,6 +682,15 @@ export function CompanionApp() {
   const currentScreenLabel = screenSources.find(source => source.id === selectedScreenId)?.label ?? "显示器 1";
   const activeScreenshotShortcutLabel = screenshotShortcut.options.find(option => option.accelerator === screenshotShortcut.accelerator)?.label ?? "快捷键设置";
   const microphoneHealth = sourceHealthState.find(item => item.sourceKind === "microphone");
+  const microphonePermission = useMicrophonePermission(config?.platform === "macos", next => {
+    const newlyGranted = next === "granted" && microphonePermissionState !== "granted";
+    setMicrophonePermissionState(next);
+    setPermissions(current => ({ ...current, microphone: next === "granted" ? "granted" : next === "denied" || next === "restricted" ? "denied" : "unknown" }));
+    if (newlyGranted) {
+      void refreshMicrophoneSources();
+      if (captureEnabled && !isCaptureSourceReady(microphoneHealth?.state)) setPublisherRetryNonce(value => value + 1);
+    }
+  });
   const systemAudioHealth = sourceHealthState.find(item => item.sourceKind === "system");
   const microphoneMeterLevel = useSmoothedMeterPercent(microphoneHealth?.level);
   const systemAudioMeterLevel = useSmoothedMeterPercent(systemAudioHealth?.level);
@@ -1402,13 +1411,17 @@ export function CompanionApp() {
           >
             <select
               aria-label="选择麦克风"
+              title={config?.platform === "macos" ? microphonePermissionCopy[microphonePermissionState] : undefined}
               value={selectedMicrophoneId}
               onChange={event => {
                 const nextId = event.target.value;
                 setSelectedMicrophoneId(nextId);
                 void refreshMicrophoneSources(nextId);
               }}
-              onClick={() => { void refreshMicrophoneSources(selectedMicrophoneId); }}
+              onClick={() => {
+                void microphonePermission.refresh();
+                void refreshMicrophoneSources(selectedMicrophoneId);
+              }}
             >
               {microphoneSources.length === 0 ? (
                 <option value={DEFAULT_MICROPHONE_ID}>{currentMicrophoneLabel}</option>
@@ -1417,16 +1430,6 @@ export function CompanionApp() {
               ))}
             </select>
           </TerminalRow>
-
-          {config?.platform === "macos" && <MicrophonePermissionPanel onPermission={next => {
-            const newlyGranted = next === "granted" && microphonePermissionState !== "granted";
-            setMicrophonePermissionState(next);
-            setPermissions(current => ({ ...current, microphone: next === "granted" ? "granted" : next === "denied" || next === "restricted" ? "denied" : "unknown" }));
-            if (newlyGranted) {
-              void refreshMicrophoneSources();
-              if (captureEnabled && !isCaptureSourceReady(microphoneHealth?.state)) setPublisherRetryNonce(value => value + 1);
-            }
-          }} />}
 
           {bindingInterviewAudioMode === "mobile" ? <TerminalRow
             title="电脑输出"
