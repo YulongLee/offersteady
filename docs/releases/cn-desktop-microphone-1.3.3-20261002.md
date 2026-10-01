@@ -21,22 +21,43 @@
 - `npm run test -w @offersteady/desktop`：38 个文件、219 项通过（包含文案生成校验）。
 - `npm run typecheck -w @offersteady/desktop`：通过。
 - `npm run build -w @offersteady/desktop`：通过；正式打包再次构建。
+- `npm run test -w @offersteady/web -- src/platform.test.ts`：5 项通过，版本选择按平台与架构隔离。
+- 禁用数据库和 Redis 的本地合成测试：`test_desktop_release_publication.py`、`test_desktop_download.py` 共 8 项通过，覆盖两份 Mac 发布清单合并、保留 Windows 和下载重定向。
 - `git diff --check`、`openspec validate fix-macos-microphone-permissions --strict`：通过。
 - 本地隔离浏览器检查：合成 Electron 桥、禁止真实网络和媒体采集；拒绝提示、设置按钮、焦点返回后更新为已允许通过，无页面脚本异常和横向溢出。
 - 回归覆盖：延迟 10 秒授权、重复请求、拒绝、受限、IPC 失败、失败重试、过期刷新、卸载后异步返回、旧请求失败晚于新授权结果。
 - 缺少反馈用户的 macOS 版本、TCC 日志和实体 Intel 测试机：没有宣称复现其全部本机原因，也没有宣称完成 Intel 首装系统弹窗实机验收。
+- 最终 arm64 / x64 主程序与原生辅助程序架构匹配，Bundle ID 保持 `com.offersteady.companion`，最低 macOS 保持 14.2。
+- 两份最终包包含同一前端产物 `index-DPgzM7TH.js` 和主进程权限模块，不含 `.env`。各包 16 个 Mach-O 组件签名、真实音频输入权限、Gatekeeper、App/DMG 公证票据和磁盘镜像完整性校验均通过。
+- 最终 DMG 公证记录：arm64 `02a1c38a-02cb-4257-b9db-5851e567f0ca`；x64 `f5655423-65ca-4aec-9039-8ac8953db2b0`，均为 Accepted。
+
+| 安装包 | SHA-256 |
+| --- | --- |
+| OfferSteady-Companion-1.3.3-macOS-arm64.dmg | `4ea06cc4f0969d0c555a70490571e6c671b02b28a84b03e2210ee5df5fdaa673` |
+| OfferSteady-Companion-1.3.3-macOS-x64.dmg | `ea63f2f4ad471f63312a152b1e418c0b48b6798215e47403ff21e532dd5fbc7d` |
 
 ## 发布与回滚
 
-发布状态待最终安装包验证及国服下载入口核验后填写。
+2026-10-02（北京时间）已发布至国服。修复源码提交 `1d20273`，发布标签 `release-cn-companion-1.3.3`。
 
-计划只热更新国服下载清单，不重启服务；从当前运行镜像添加同一清单层，保持后续容器重建时的下载版本一致。不使用旧源码重建业务后端。
+只热更新国服下载清单，未重启服务；从当前运行镜像添加同一清单层，保持后续容器重建时的下载版本一致。没有使用旧源码重建业务后端。
+
+- 发布前 SQL 只读核验所有未删除 `live` 面试为 0（含模拟面试）。
+- 两份 OSS 安装包重新完整下载计算 SHA-256，大小与上述哈希全部匹配。
+- 公网 `/api/v1/web/state` 两份 Mac 均为 1.3.3，下载入口 307 和 OSS 分段下载 206 通过；Windows 仍为原 1.3.2，哈希不变。
+- 国际服公网三个下载条目的版本及哈希与发布前相同，均为 1.3.2。
+- 国服 `/healthz` 返回正常。运行容器 ID 仍为 `80130794f437135837bd6d7365c7ddbc466dbd1394c827e207cbf541a8f1574a`；启动时间仍为 `2026-09-30T09:38:05.619824709Z`。
+- 清单 SHA-256：`c4dbfc3c0320525d7d7f69846884317a6319e15f52cd050a340b104919d5f667`，运行容器、活动发布源码、备用源码目录和新镜像中的清单一致。
+- 后续重建使用的镜像 `offersteady-backend:companion-133-20261002` / `compose-backend`：`sha256:9c3382044ca89c7c828d98cc2cf9a0e931b1732c75657024e83c056a86b3c094`。只在原镜像之上增加清单文件。
 
 发布备份目录：`/opt/offersteady/releases/20261002-cn-companion-1.3.3-metadata/backups/`，包含运行容器和两份服务器源码清单。回滚恢复运行容器的 `runtime-manifest.json` 及各自源码清单，并将 `compose-backend` 恢复到 `offersteady-backend:pre-companion-133-20261002`。不得为回滚下载列表重启正在面试的服务。OSS 的旧版本安装包保留不删除。
+
+同目录上级提供带容器/清单版本检查的 `rollback.sh`（未执行）。备份目录另保存 OSS 原 `arm64-latest.json` / `x64-latest.json`，需要完全撤回发布时可恢复相应 OSS latest 指针。若已有后续部署，先核查当前版本，不可直接套用旧回滚脚本。
 
 ## 用户验收
 
 1. 在没有正在进行的面试时完全退出旧助手，下载安装与 Mac 架构相符的 1.3.3，拖入“应用程序”覆盖旧版，再从“应用程序”打开。
+   现有国服版本门禁会要求 Mac 用户在绑定设备和开始新面试前升级到 1.3.3；Windows 仍以本平台的 1.3.2 为准。未新增正在采集链路的版本拦截。
 2. 未决定过权限时应出现麦克风请求；等待超过 2.5 秒不应被判为拒绝。已授权机器可能不会再次弹窗，应显示已允许。
 3. 若显示拒绝，打开系统设置允许该应用，返回检查；必要时完全退出并重新打开助手。无需删除已有机器码。
 4. 验证麦克风音量、电脑输出、机器码绑定、普通面试、手机面试和截图仍符合原来的产品流程。

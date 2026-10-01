@@ -14,10 +14,10 @@
 
 - [x] 3.1 Add and run regressions for delayed grant, denial, restriction, duplicate requests, failures, focus refresh and stale/unmounted callbacks
 - [x] 3.2 Run full desktop tests, typecheck, build and scope review
-- [ ] 3.3 Build and verify signed/notarized Intel and Apple Silicon DMGs; document physical-device coverage limitations
+- [x] 3.3 Build and verify signed/notarized Intel and Apple Silicon DMGs; document physical-device coverage limitations
 
 ## 4. CN publication
 
-- [ ] 4.1 Publish immutable Mac artifacts to OSS and back up the current CN manifest
-- [ ] 4.2 Update CN download metadata only; verify versions, hashes, health and unchanged Windows/international entries
-- [ ] 4.3 Commit and push the repair, update release notes and hand off user acceptance steps
+- [x] 4.1 Publish immutable Mac artifacts to OSS and back up the current CN manifest
+- [x] 4.2 Update CN download metadata only; verify versions, hashes, health and unchanged Windows/international entries
+- [x] 4.3 Commit and push the repair, update release notes and hand off user acceptance steps
