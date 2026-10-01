@@ -16,6 +16,8 @@ export const routes = {
   invite: (code = ":code") => `/invite/${code}`,
   app: "/app",
   writtenExams: "/app/written-exams",
+  mockInterviews: "/app/mock-interviews",
+  mockInterview: (id = ":id") => `/app/mock-interviews/${id}`,
   newInterview: "/app/interviews/new",
   newWrittenExam: "/app/written-exams/new",
   prepare: (id = ":id") => `/app/interviews/${id}/prepare`,

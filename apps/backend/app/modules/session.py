@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.services.session_mode_guard import require_standard_session
+
 from fastapi import APIRouter, Depends, Query, Request
 from starlette.concurrency import run_in_threadpool
 
@@ -147,6 +149,7 @@ async def list_sessions(
     service: SessionService = Depends(session_service),
 ) -> ApiEnvelope[list[InterviewSessionResponse]]:
     sessions = service.list_sessions(user_id=resolve_owned_user_id(explicit_user_id=user_id, auth_context=auth_context), status=status)
+    sessions = [session for session in sessions if session.session_mode != "mock"]
     return success_response(request=request, data=[_to_session_response(session) for session in sessions], timestamp=utc_now_iso())
 
 
@@ -393,6 +396,7 @@ async def end_session(
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[InterviewSessionResponse]:
     user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
+    require_standard_session(service.session_service.get_session(user_id=user_id, session_id=session_id))
     service.terminate_session_for_admin(user_id=user_id, session_id=session_id)
     session = service.session_service.get_session(user_id=user_id, session_id=session_id)
     return success_response(request=request_context, data=_to_session_response(session), timestamp=utc_now_iso())

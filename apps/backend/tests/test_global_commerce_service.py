@@ -69,7 +69,7 @@ def test_free_exhaustion_release_and_paid_unlimited() -> None:
 
     global_service.grant_purchase(user_id="user-2", offer_code="global-pro-weekly", source_kind="order", source_id="order-paid", starts_at_ms=1_000)
     assert global_service.state("user-2", now_ms=2_000)["screenAssist"] == {"unlimited": True, "remaining": None}
-    assert global_service.state("user-2", now_ms=2_000)["features"] == {"resumeJd": True, "knowledgeBase": True, "writtenExam": True}
+    assert global_service.state("user-2", now_ms=2_000)["features"] == {"resumeJd": True, "knowledgeBase": True, "writtenExam": True, "webAnswer": True, "mockInterview": True}
     paid_reservation = global_service.reserve(user_id="user-2", kind="copilot_minute", amount=1, operation_id="paid-minute", now_ms=2_000)
     assert next(item for item in global_service.active_entitlements("user-2", 2_000) if item.entitlement_id == paid_reservation.entitlement_id).offer_code == "global-pro-weekly"
 

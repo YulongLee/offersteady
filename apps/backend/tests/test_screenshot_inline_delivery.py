@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import time
 from types import SimpleNamespace
@@ -128,6 +129,69 @@ def build_service(*, delivery_mode: str, fail_vision: bool = False, interview_la
         llm_gateway=SimpleNamespace(),  # type: ignore[arg-type]
     )
     return service, storage, repository, upload_port, vision
+
+
+@pytest.mark.parametrize("recovery_failure", [None, "lookup", "save", "callback"])
+def test_remote_capture_failure_logging_preserves_original_error(monkeypatch, caplog, recovery_failure):
+    service, _, repository, _, _ = build_service(delivery_mode="inline")
+    request = service.create_remote_capture_request(
+        user_id="synthetic-user", session_id="synthetic-session", device_id="synthetic-device",
+        manual_code="654321", instruction="Synthetic capture",
+    )
+
+    def fail_original(**kwargs):
+        raise DomainRequestError("screenshot-answer", "save-object", "private-synthetic-error-body", 503,
+                                 error_code="synthetic_storage_failure")
+
+    def fail_recovery(*args, **kwargs):
+        raise LookupError("private-synthetic-recovery-body")
+
+    monkeypatch.setattr(service, "complete_remote_capture_request", fail_original)
+    if recovery_failure == "lookup":
+        monkeypatch.setattr(repository, "get_remote_capture_request", fail_recovery)
+    elif recovery_failure == "save":
+        monkeypatch.setattr(repository, "save_remote_capture_request", fail_recovery)
+    caplog.set_level(logging.WARNING, logger=service.logger.name)
+    service.complete_remote_capture_request_safely(
+        request_id=request.request_id, device_id=request.device_id, manual_code=request.manual_code,
+        filename="synthetic.png", content_type="image/png", payload=SYNTHETIC_PNG,
+        on_transition=fail_recovery if recovery_failure == "callback" else None,
+    )
+    events = [json.loads(item.getMessage()) for item in caplog.records if item.name == service.logger.name]
+    assert events[0]["event"] == "screenshot_answer.remote_background_error"
+    assert events[0]["error_code"] == "synthetic_storage_failure"
+    assert events[0]["image_count"] == 1
+    if recovery_failure is not None:
+        assert events[-1]["event"] == "screenshot_answer.remote_background_failed"
+        assert events[-1]["error_code"] == "LookupError"
+    else:
+        failed = repository.get_remote_capture_request(request.request_id)
+        assert failed.status == "failed"
+        assert failed.stage == "upload-failed"
+        assert failed.telemetry.failed_phase == "oss-write"
+        assert failed.telemetry.error_code == "synthetic_storage_failure"
+    assert "private-synthetic" not in caplog.text
+    assert request.manual_code not in caplog.text
+    assert "synthetic.png" not in caplog.text
+
+
+def test_cancelled_capture_does_not_raise_secondary_logging_error(caplog):
+    service, _, repository, _, _ = build_service(delivery_mode="inline")
+    request = service.create_remote_capture_request(
+        user_id="synthetic-user", session_id="synthetic-session", device_id="synthetic-device",
+        manual_code="654321", instruction="Synthetic capture",
+    )
+    service.cancel_remote_capture_request(user_id=request.owner_user_id, request_id=request.request_id)
+    caplog.set_level(logging.WARNING, logger=service.logger.name)
+    service.complete_remote_capture_request_safely(
+        request_id=request.request_id, device_id=request.device_id, manual_code=request.manual_code,
+        filename="synthetic.png", content_type="image/png", payload=SYNTHETIC_PNG,
+    )
+    assert repository.get_remote_capture_request(request.request_id).status == "cancelled"
+    events = [json.loads(item.getMessage()) for item in caplog.records if item.name == service.logger.name]
+    assert [item["event"] for item in events] == [
+        "screenshot_answer.remote_background_error", "screenshot_answer.remote_background_failed",
+    ]
 
 
 class EnglishVisionGateway(CapturingVisionGateway):

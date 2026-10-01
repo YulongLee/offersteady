@@ -151,14 +151,16 @@ describe("homepage feedback", () => {
     expect(mediaChanges.size).toBe(0);
   });
 
-  it("exposes the same quotes in static HTML without review schema", () => {
+  it("keeps the current static landing page focused on benefits and plans without testimonials", () => {
     const html = homepageHtml;
     const parsed = new DOMParser().parseFromString(html, "text/html");
-    const section = parsed.getElementById("user-feedback")!;
-    expect(section).not.toBeNull();
-    expect(section.querySelectorAll("blockquote")).toHaveLength(20);
-    expect(section.textContent).toContain(feedback.note);
-    for (const entry of feedback.entries) expect(section.textContent).toContain(entry.quote);
+    const benefits = parsed.getElementById("benefits")!;
+    expect(benefits).not.toBeNull();
+    expect(benefits.querySelectorAll("article")).toHaveLength(4);
+    expect(benefits.nextElementSibling?.id).toBe("plans");
+    expect(parsed.querySelectorAll("#plans article")).toHaveLength(5);
+    expect(parsed.getElementById("user-feedback")).toBeNull();
+    expect(parsed.querySelector("blockquote")).toBeNull();
     expect(html).not.toContain('"aggregateRating"');
     expect(html).not.toContain('"@type": "Review"');
   });

@@ -78,3 +78,9 @@
   .commercial-comparison .advantages-table tbody tr { padding: 16px; }
   .commercial-closing { padding: 28px 24px; flex-direction: column; align-items: flex-start; }
 }
+.deferred-video { position: relative; aspect-ratio: 16 / 9; }
+.deferred-video-play { position: absolute; inset: 0; display: flex; gap: 12px; align-items: center; justify-content: center; width: 100%; border: 0; border-radius: inherit; background: linear-gradient(transparent, rgba(5,8,13,.6)); color: #eef4f8; font: inherit; font-weight: 700; cursor: pointer; }
+.deferred-video-play span { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: #6ee7bd; color: #07111a; }
+.deferred-video-play:focus-visible { outline: 3px solid #6ee7bd; outline-offset: -4px; }
+.deferred-video-notice { position: absolute; inset: auto 12px 40px; padding: 10px; background: #0b111b; color: #eef4f8; font-size: 12px; }
+.deferred-video-notice a { color: #6ee7bd; }

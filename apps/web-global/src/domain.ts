@@ -47,6 +47,7 @@ export interface AnswerAdvice {
 
 export interface InterviewQuestion {
   readonly id: string;
+  readonly quickAnswerCompleted?: boolean;
   readonly askedAt: string;
   readonly text: string;
   readonly rawText?: string;
@@ -197,6 +198,7 @@ export interface LiveWorkspaceViewState {
 }
 
 export interface SubmitManualAnswerCommand {
+  readonly webSearchEnabled?: boolean;
   readonly interviewId: string;
   readonly question: string;
   readonly idempotencyKey: string;

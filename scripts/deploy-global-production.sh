@@ -10,6 +10,14 @@ DEPLOYED_COMMIT_FILE=".offersteady-global-deployed-commit"
 log() { printf '\n[offersteady-global] %s\n' "$*"; }
 fail() { printf '\n[offersteady-global] ERROR: %s\n' "$*" >&2; exit 1; }
 
+# Fail before chmod/build/restart. The current mixed development tree is not a
+# reviewed Global source release. Incremental releases use their own idle-gated
+# switch/rollback workflow and must not enter this legacy full-build path.
+[ -n "${OFFERSTEADY_GLOBAL_RELEASE_MANIFEST:-}" ] || fail "A reviewed Global release manifest is required; do not deploy a mixed working tree"
+command -v python3 >/dev/null || fail "python3 is required for release validation"
+python3 scripts/global_release_validation.py --root . --manifest "$OFFERSTEADY_GLOBAL_RELEASE_MANIFEST" --mode legacy-compose \
+  || fail "Global release validation failed"
+
 command -v docker >/dev/null || fail "docker is not installed"
 docker compose version >/dev/null || fail "docker compose plugin is unavailable"
 [ -f "$COMPOSE_FILE" ] || fail "Missing $COMPOSE_FILE"

@@ -31,38 +31,50 @@ describe("Global English product", () => {
     render(<App initialAuthenticated={false} initialState={structuredClone(syntheticState) as unknown as WebAppState} />);
 
     expect(screen.getByRole("heading", { name: "A look inside OfferSteady" })).toBeInTheDocument();
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
     const video = screen.getByLabelText("OfferSteady product film") as HTMLVideoElement;
-    expect(video).toHaveAttribute("controls");
     expect(video.muted).toBe(true);
     expect(video.playsInline).toBe(true);
-    expect(video).toHaveAttribute("preload", "metadata");
+    expect(video).toHaveAttribute("preload", "none");
     expect(video).not.toHaveAttribute("autoplay");
+    expect(video).not.toHaveAttribute("src");
+    expect(video).not.toHaveAttribute("poster");
+    fireEvent.click(screen.getByRole("button", { name: "Play OfferSteady product film" }));
+    expect(video).toHaveAttribute("controls");
     expect(video).toHaveAttribute("poster", "/media/offersteady-global-commercial-poster-20260907.jpg");
-    expect(video.querySelector("source")).toHaveAttribute("src", "/media/offersteady-global-commercial-20260907.mp4");
-    expect(video.querySelector("source")).toHaveAttribute("type", "video/mp4");
+    expect(video).toHaveAttribute("src", "/media/offersteady-global-commercial-20260907.mp4");
+    expect(play).toHaveBeenCalledOnce();
+    play.mockRestore();
   });
 
-  it("places translated anonymous feedback between benefits and pricing", () => {
+  it("matches the deployed benefits and pricing layout without a feedback section", () => {
     render(<App initialAuthenticated={false} initialState={structuredClone(syntheticState) as unknown as WebAppState} />);
-    const feedback = screen.getByRole("region", { name: /What our users say/ });
-    expect(feedback.previousElementSibling).toHaveAttribute("id", "benefits");
-    expect(feedback.nextElementSibling).toHaveAttribute("id", "plans");
-    expect(within(feedback).getByRole("button", { name: "Next feedback" })).toBeInTheDocument();
+    const benefits = screen.getByRole("region", { name: "More context. A clearer place to start." });
+    expect(within(benefits).getAllByRole("article")).toHaveLength(4);
+    expect(benefits.nextElementSibling).toHaveAttribute("id", "plans");
+    const plans = screen.getByRole("region", { name: "Pay for the time you need." });
+    expect(within(plans).getAllByRole("article")).toHaveLength(5);
+    expect(screen.queryByRole("region", { name: /What our users say/ })).not.toBeInTheDocument();
   });
 
   it("adds a narrated usage guide without replacing the product film", () => {
     render(<App initialAuthenticated={false} initialState={structuredClone(syntheticState) as unknown as WebAppState} />);
     expect(screen.getByLabelText("OfferSteady product film")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Your first session, step by step" })).toBeInTheDocument();
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
     const video = screen.getByLabelText("OfferSteady getting started guide") as HTMLVideoElement;
-    expect(video).toHaveAttribute("controls");
     expect(video.muted).toBe(true);
     expect(video.playsInline).toBe(true);
-    expect(video).toHaveAttribute("preload", "metadata");
+    expect(video).toHaveAttribute("preload", "none");
     expect(video).not.toHaveAttribute("autoplay");
+    expect(video).not.toHaveAttribute("src");
+    expect(video).not.toHaveAttribute("poster");
+    fireEvent.click(screen.getByRole("button", { name: "Play OfferSteady getting started guide" }));
+    expect(video).toHaveAttribute("controls");
     expect(video).toHaveAttribute("poster", "/media/offersteady-global-usage-poster-20260907.jpg");
-    expect(video.querySelector("source")).toHaveAttribute("src", "/media/offersteady-global-usage-20260907.mp4");
-    expect(video.querySelector("source")).toHaveAttribute("type", "video/mp4");
+    expect(video).toHaveAttribute("src", "/media/offersteady-global-usage-20260907.mp4");
+    expect(play).toHaveBeenCalledOnce();
+    play.mockRestore();
   });
 
   it("shows canonical time-based pricing on the homepage without starting checkout", () => {

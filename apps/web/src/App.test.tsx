@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App, interviewContinuationRoute } from "./App";
 import { interviewAppAdapter } from "./app-adapter";
 import { authClient } from "./auth-client";
+import * as mockInterviewClient from "./mock-interview-client";
 import { fixtureAdapter, syntheticState } from "./test-state";
 
 const clonedState = () => structuredClone(syntheticState);
@@ -233,6 +234,16 @@ describe("OfferSteady web application", () => {
     expect(screen.getAllByText("笔试独立场次").length).toBeGreaterThan(0);
     expect(screen.queryByText("面试独立场次")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /新建笔试/ })).toHaveAttribute("href", "/app/written-exams/new");
+  });
+
+  it("uses 模拟面试 on both navigation surfaces when the feature is enabled", async () => {
+    vi.spyOn(mockInterviewClient, "mockRequest").mockResolvedValue({ enabled: true });
+    openAt("/app", true);
+    for (const name of ["应用导航", "移动端应用导航"]) {
+      const navigation = within(screen.getByRole("navigation", { name }));
+      expect(await navigation.findByRole("link", { name: "模拟面试" })).toHaveAttribute("href", "/app/mock-interviews");
+      expect(navigation.queryByRole("link", { name: "AI 模拟面试" })).not.toBeInTheDocument();
+    }
   });
 
   it("links both workbench navigation surfaces to the maintained user manual", async () => {

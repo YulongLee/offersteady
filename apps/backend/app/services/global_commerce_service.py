@@ -102,6 +102,7 @@ class GlobalCommerceService:
         copilot = self._remaining(active, "copilot_minute")
         screen = self._remaining(active, "screen_assist")
         knowledge = self._remaining(active, "knowledge_token")
+        practice_enabled = self.practice_access(user_id, now_ms, active=active)
         subscriptions = self.repository.subscriptions_for_user(user_id)
         return {
             "entitlements": [self._entitlement_payload(item) for item in active],
@@ -114,10 +115,21 @@ class GlobalCommerceService:
                 "resumeJd": any(e.resume_jd_enabled or e.full_product_enabled for e in active),
                 "knowledgeBase": any(e.knowledge_base_enabled or e.full_product_enabled for e in active),
                 "writtenExam": any(e.written_exam_enabled or e.full_product_enabled for e in active),
+                "webAnswer": practice_enabled,
+                "mockInterview": practice_enabled,
             },
             "subscription": self._subscription_payload(subscriptions[0]) if subscriptions else None,
             "orders": [self._order_payload(item) for item in self.repository.orders_for_user(user_id)],
         }
+
+    def practice_access(self, user_id: str, now_ms: int | None = None, *, active=None) -> bool:
+        """Purchased plan duration, not remaining time or a browser claim."""
+        self._require_global()
+        for entitlement in self.active_entitlements(user_id, now_ms) if active is None else active:
+            plan = self.repository.plan(entitlement.offer_code, entitlement.plan_version)
+            if plan and plan.billing_mode != "free" and (plan.duration_days or 0) >= 7:
+                return True
+        return False
 
     def reserve_copilot_elapsed(self, *, user_id: str, elapsed_seconds: int, operation_id: str) -> UsageReservation:
         return self.reserve(user_id=user_id, kind="copilot_minute", amount=max(1, ceil(elapsed_seconds / 60)), operation_id=operation_id)

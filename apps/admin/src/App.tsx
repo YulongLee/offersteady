@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { adminApi, isAdminAuthenticationError } from "./api";
+import { ChinaUsersPanel } from "./ChinaUsersPanel";
 import { buildLinePath, chartDomain, formatTrendChange, formatTrendValue, type TrendMetric, type TrendResponse } from "./analytics";
 import { capacityLevelLabel, formatCapacityValue, hasRequestBreakdownData, requestClassLabels, type CapacityMetric, type CapacityResponse, type RequestBreakdown } from "./capacity";
 import { paymentAcceptanceOutcomeLabel, paymentChannelStatus } from "./payment-channel-status";
@@ -8,6 +9,7 @@ import { diagnosticLabel, formatCny, type PaymentRevenueSummary } from "./paymen
 import { formatUptime, type ServerHealthResponse } from "./server-health";
 import { validateGrowthSettings } from "./growth-settings";
 import { PromotionCenter } from "./PromotionCenter";
+import { GlobalMembersContent } from "./GlobalMembersPanel";
 import {
   clearRememberedAdminPhone,
   isValidAdminPhone,
@@ -164,73 +166,8 @@ export function GlobalCommercePanel({ row }: { row: Row | undefined; onChanged: 
   </div>;
 }
 
-const globalMemberOffers = [
-  ["global-interview-pass", "Interview Day Pass · 24 小时 / 180 分钟"],
-  ["global-pro-weekly", "Pro Weekly · 7 天无限使用"],
-  ["global-pro-monthly", "Pro Monthly · 人工赠送 30 天（不自动续费）"],
-  ["global-job-hunt", "Job Hunt · 90 天无限使用"],
-] as const;
-
 export function GlobalMembersPanel() {
-  const [search, setSearch] = useState("");
-  const [members, setMembers] = useState<Row[]>([]);
-  const [detail, setDetail] = useState<Row | null>(null);
-  const [offerCode, setOfferCode] = useState(globalMemberOffers[0][0]);
-  const [reason, setReason] = useState("");
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState("");
-  const runSearch = async () => {
-    setBusy("search"); setMessage("");
-    try { const result = await adminApi.globalMembers(search.trim()); setMembers(result.items); if (!result.items.length) setMessage("没有找到匹配的国际版用户。"); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "用户搜索失败"); }
-    finally { setBusy(""); }
-  };
-  useEffect(() => { void runSearch(); }, []);
-  const openMember = async (userId: string) => {
-    setBusy(`member:${userId}`); setMessage("");
-    try { setDetail(await adminApi.globalMember(userId)); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "会员详情读取失败"); }
-    finally { setBusy(""); }
-  };
-  const refreshDetail = async () => {
-    const userId = String((detail?.identity as Row | undefined)?.user_id ?? "");
-    if (userId) setDetail(await adminApi.globalMember(userId));
-  };
-  const grant = async () => {
-    const identity = detail?.identity as Row | undefined; const userId = String(identity?.user_id ?? "");
-    if (!userId || reason.trim().length < 3) { setMessage("请选择用户并填写操作原因。"); return; }
-    if (!window.confirm("确认人工赠送该套餐？本操作不会创建 Creem 订单或自动续费。")) return;
-    setBusy("grant"); setMessage("");
-    try { await adminApi.grantGlobalMemberPlan(userId, offerCode, reason.trim(), crypto.randomUUID()); await refreshDetail(); setMessage("会员权益已赠送并记录审计日志。"); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "会员赠送失败"); }
-    finally { setBusy(""); }
-  };
-  const revoke = async (entitlementId: string) => {
-    const identity = detail?.identity as Row | undefined; const userId = String(identity?.user_id ?? "");
-    if (!userId || reason.trim().length < 3) { setMessage("撤销前请填写操作原因。"); return; }
-    if (!window.confirm("确认仅撤销这条会员权益？订单与订阅历史会保留。")) return;
-    setBusy(`revoke:${entitlementId}`); setMessage("");
-    try { await adminApi.revokeGlobalMemberEntitlement(userId, entitlementId, reason.trim(), crypto.randomUUID()); await refreshDetail(); setMessage("指定会员权益已撤销，其他有效权益不受影响。"); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "会员撤销失败"); }
-    finally { setBusy(""); }
-  };
-  const identity = detail?.identity as Row | undefined;
-  const state = detail?.state as Row | undefined;
-  const usage = state?.usage as Row | undefined;
-  const features = state?.features as Row | undefined;
-  const entitlements = Array.isArray(detail?.entitlements) ? detail.entitlements as Row[] : [];
-  const orders = Array.isArray(detail?.orders) ? detail.orders as Row[] : [];
-  const subscriptions = Array.isArray(detail?.subscriptions) ? detail.subscriptions as Row[] : [];
-  return <div className="global-members-admin">
-    <section className="member-search"><div><p className="eyebrow">GLOBAL MEMBER SEARCH</p><h2>查找国际版用户</h2><p>支持邮箱、昵称或用户 ID；查询有分页与数量限制，不扫描面试内容。</p><p>国际版后台只管理会员套餐与会员权益；国服的积分和增加时长操作不适用于这里。</p></div><div><input aria-label="搜索国际版用户" value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === "Enter") void runSearch(); }} placeholder="输入邮箱、昵称或用户 ID" /><button className="primary" disabled={busy === "search"} onClick={() => void runSearch()}>{busy === "search" ? "查询中…" : "搜索用户"}</button></div></section>
-    {message ? <section className="alert" role="status">{message}</section> : null}
-    <div className="member-layout"><section className="member-results"><h3>搜索结果</h3>{members.length ? members.map(member => <button key={String(member.user_id)} onClick={() => void openMember(String(member.user_id))} className={identity?.user_id === member.user_id ? "active" : ""}><strong>{display(member.email)}</strong><span>{display(member.display_name)} · {display(member.current_plan_name || "Free / 未激活")}</span><small>{member.current_ends_at_ms ? `有效至 ${display(member.current_ends_at_ms)}` : "无固定到期时间"}</small></button>) : <div className="empty">输入邮箱或用户信息开始查询</div>}</section>
-      <section className="member-detail">{identity ? <><div className="member-identity"><div><p className="eyebrow">MEMBER DETAIL</p><h2>{display(identity.email)}</h2><p>{display(identity.display_name)} · 注册于 {display(identity.created_at_ms)}</p></div><span className="status-badge active">国际版账号</span></div>
-        <div className="member-usage"><article><small>Copilot</small><strong>{usage?.copilotUnlimited ? "Unlimited" : `${display(usage?.copilotMinutesRemaining ?? 0)} 分钟`}</strong></article><article><small>Screen Assist</small><strong>{usage?.screenAssistUnlimited ? "Unlimited" : `${display(usage?.screenAssistUsesRemaining ?? 0)} 次`}</strong></article><article><small>资料能力</small><strong>{features?.resumeJd ? "Resume / JD" : "未包含"}</strong></article><article><small>知识库 / 笔试</small><strong>{features?.knowledgeBase || features?.writtenExam ? "已包含" : "未包含"}</strong></article></div>
-        <section className="member-adjust"><div><h3>人工会员管理</h3><p>按当前套餐权益与期限赠送；不会生成支付订单，Pro Monthly 人工赠送也不会自动续费。</p></div><select aria-label="选择赠送套餐" value={offerCode} onChange={event => setOfferCode(event.target.value as typeof offerCode)}>{globalMemberOffers.map(([code, label]) => <option value={code} key={code}>{label}</option>)}</select><input aria-label="会员操作原因" value={reason} onChange={event => setReason(event.target.value)} placeholder="填写赠送或撤销原因" /><button className="primary" disabled={Boolean(busy)} onClick={() => void grant()}>{busy === "grant" ? "处理中…" : "确认赠送"}</button></section>
-        <section><p className="eyebrow">ENTITLEMENTS</p><h3>会员权益记录</h3>{entitlements.length ? <div className="entitlement-list">{entitlements.map(item => <article key={String(item.id)}><div><strong>{globalMemberOffers.find(([code]) => code === item.offerCode)?.[1] ?? (item.offerCode === "global-free" ? "Free" : display(item.offerCode))}</strong><span>{display(item.status)} · {display(item.sourceKind)} · {item.endsAtMs ? `至 ${display(item.endsAtMs)}` : "长期 / 用完为止"}</span></div>{item.status === "active" && item.sourceKind !== "free_grant" ? <button disabled={Boolean(busy)} onClick={() => void revoke(String(item.id))}>{busy === `revoke:${item.id}` ? "撤销中…" : "撤销此权益"}</button> : null}</article>)}</div> : <div className="empty">暂无权益记录</div>}</section>
-        <section><p className="eyebrow">ORDERS & SUBSCRIPTIONS</p><h3>订单与订阅</h3><Table rows={orders} /><Table rows={subscriptions} /></section></> : <div className="empty">从左侧搜索结果选择一名用户查看详情</div>}</section></div>
-  </div>;
+  return <GlobalMembersContent renderTable={rows => <Table rows={rows} />} />;
 }
 
 type AdminLoginMode = "phone" | "email";
@@ -1030,6 +967,7 @@ function BaiduRankingPanel({ data, onChanged }: { data: Row; onChanged: () => vo
 }
 
 export function App() {
+  const [userRefreshKey, setUserRefreshKey] = useState(0);
   const [authenticated, setAuthenticated] = useState(Boolean(adminApi.token()));
   const [view, setView] = useState<View>("dashboard");
   const [role, setRole] = useState("");
@@ -1076,7 +1014,7 @@ export function App() {
       } else if (target === "globalCommerce") {
         const [overview, operations] = await Promise.all([adminApi.globalCommerceOverview(), adminApi.globalCommerceOperations()]);
         if (sequence === loadSequence.current) setRows([{ ...overview, operations }]);
-      } else if (target === "globalMembers") {
+      } else if (target === "globalMembers" || target === "users") {
         if (sequence === loadSequence.current) setRows([]);
       } else if (target === "seo") {
         const result = await adminApi.baiduRanking();
@@ -1112,12 +1050,14 @@ export function App() {
         <div className="operator"><span className="online" /><div><small>当前角色</small><strong>{role || "验证中"}</strong></div></div>
       </aside>
       <main className="workspace">
-        <header><div><p className="eyebrow">{current.eyebrow}</p><h1>{current.label}</h1></div><div className="header-actions"><span>{new Date().toLocaleDateString("zh-CN")}</span><button onClick={() => void load(view)}>刷新</button><button onClick={() => adminApi.logout().then(() => { sessionRequest.current = null; setAuthenticated(false); })}>退出</button></div></header>
+        <header><div><p className="eyebrow">{current.eyebrow}</p><h1>{current.label}</h1></div><div className="header-actions"><span>{new Date().toLocaleDateString("zh-CN")}</span><button onClick={() => view === "users" ? setUserRefreshKey(value => value + 1) : void load(view)}>刷新</button><button onClick={() => adminApi.logout().then(() => { sessionRequest.current = null; setAuthenticated(false); })}>退出</button></div></header>
         {error && <div className="alert">{error}</div>}
         {loading ? <div className="loading">正在读取生产运营数据...</div> : view === "dashboard" ? <Dashboard data={dashboardData} onAuthenticationExpired={requireNewAdminLogin} /> : view === "server" ? <ServerMonitor onAuthenticationExpired={requireNewAdminLogin} /> : view === "seo" ? <BaiduRankingPanel data={rows[0] || {}} onChanged={() => void load(view, true)} /> : view === "promotion" ? <PromotionCenter permissions={permissions} onAuthenticationExpired={requireNewAdminLogin} /> : view === "globalMembers" ? <GlobalMembersPanel /> : view === "globalCommerce" ? <GlobalCommercePanel row={rows[0]} onChanged={() => void load(view, true)} /> : view === "admins" ? <AdminPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "redemptions" ? <RedemptionPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "pricing" ? <PricingPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : view === "payments" ? <PaymentPanel rows={rows} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "growth" ? <GrowthPanel row={rows[0]} onChanged={() => void load(view, true)} onAuthenticationExpired={requireNewAdminLogin} /> : view === "orders" ? <OrdersPanel rows={rows} permissions={permissions} onChanged={() => void load(view, true)} /> : <>
-          <Table rows={rows} />
-          <div className="pagination"><button disabled={offset === 0} onClick={() => setOffset(value => Math.max(0, value - 50))}>上一页</button><span>第 {offset / 50 + 1} 页</span><button disabled={rows.length < 50} onClick={() => setOffset(value => value + 50)}>下一页</button></div>
-          <ActionPanel view={view} rows={rows} permissions={permissions} onChanged={() => void load(view, true)} />
+          {view === "users" ? <ChinaUsersPanel permissions={permissions} refreshKey={userRefreshKey} onAuthenticationExpired={requireNewAdminLogin} /> : <>
+            <Table rows={rows} />
+            <div className="pagination"><button disabled={offset === 0} onClick={() => setOffset(value => Math.max(0, value - 50))}>上一页</button><span>第 {offset / 50 + 1} 页</span><button disabled={rows.length < 50} onClick={() => setOffset(value => value + 50)}>下一页</button></div>
+            <ActionPanel view={view} rows={rows} permissions={permissions} onChanged={() => void load(view, true)} />
+          </>}
         </>}
       </main>
     </div>

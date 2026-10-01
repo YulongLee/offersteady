@@ -754,7 +754,15 @@ class PostgresBillingRepository:
                 )
                 if balance - int(cursor.fetchone()["reserved"]) < points_reserved:
                     return {
-                        **dict(usage), "billing_source": "points", "status": "insufficient_balance",
+                        # Policy inputs (for example minimum_pass_duration_days)
+                        # are not fields of the reservation result contract.
+                        "reservation_id": str(usage["reservation_id"]),
+                        "usage_id": usage_id,
+                        "user_id": user_id,
+                        "usage_kind": str(usage["usage_kind"]),
+                        "points_reserved": points_reserved,
+                        "wallet_only": bool(usage.get("wallet_only", False)),
+                        "billing_source": "points", "status": "insufficient_balance",
                         "created_at_ms": created_at_ms, "settled_at_ms": None, "released_at_ms": None,
                     }
             cursor.execute(

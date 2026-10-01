@@ -34,6 +34,6 @@ describe("GlobalMembersPanel", () => {
     await waitFor(() => expect(screen.getAllByText("Unlimited")).toHaveLength(2));
     expect(screen.getByText("Resume / JD")).toBeTruthy();
     expect(screen.getByText("人工会员管理")).toBeTruthy();
-    expect(adminApi.globalMembers).toHaveBeenCalledWith("candidate@example.com");
+    expect(adminApi.globalMembers).toHaveBeenCalledWith("candidate@example.com", 0);
   });
 });

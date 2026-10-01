@@ -5,7 +5,7 @@ import { PublicReviewPage } from "./PublicReviewPage";
 import { publicReviewCatalogue as catalogue, publicReviewPage } from "./public-review-pages";
 
 describe("Merchant review commercial disclosures", () => {
-  it("retains the authoritative v2 catalogue and separates billing types", () => {
+  it("retains the live catalogue, sign-in checkout entry and separate billing types", () => {
     const plans = publicReviewPage("pricing")!.plans!;
     expect(plans.map(plan => [plan.name, plan.price, plan.term])).toEqual([
       ["Free", "$0", ""], ["Interview Day Pass", "$9.99", " / 24 hours"],
@@ -17,7 +17,8 @@ describe("Merchant review commercial disclosures", () => {
     expect(plans[0].features.join(" ")).toContain("Resume/JD, knowledge base and Written Exam mode not included");
     expect(plans[1].features.join(" ")).toContain("180 minutes");
     expect(plans[1].features.join(" ")).toContain("knowledge base not included");
-    expect(plans.slice(1).every(plan => plan.href === "" && plan.accessStarts.includes("confirmed"))).toBe(true);
+    expect(plans.slice(1).every(plan => plan.href === "/login" && plan.accessStarts.includes("confirmed"))).toBe(true);
+    expect(plans.slice(1).every(plan => plan.action === "Sign in to choose plan")).toBe(true);
   });
 
   it.each(["terms", "privacy", "refund-policy", "about", "contact", "security", "pricing"])("identifies the operator and support on %s", slug => {

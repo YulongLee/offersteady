@@ -1,0 +1,12 @@
+.member-search form { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.member-search form input { min-width: 0; }
+.global-members-admin .member-results > button { overflow-wrap: anywhere; }
+.global-members-admin .member-detail, .global-members-admin .member-identity > div { min-width: 0; overflow-wrap: anywhere; }
+.global-members-admin .member-pagination { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.global-members-admin .member-pagination button { width: auto; }
+.global-members-admin .member-detail .table-wrap { max-width: 100%; overflow-x: auto; }
+@media (max-width: 700px) {
+  .member-search form { flex-wrap: wrap; }
+  .member-search form input { width: 100%; }
+  .global-members-admin .member-layout { grid-template-columns: minmax(0, 1fr); }
+}

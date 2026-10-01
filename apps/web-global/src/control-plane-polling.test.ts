@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { PREPARATION_BINDING_REFRESH_INTERVAL_MS, PREPARATION_HEARTBEAT_INTERVAL_MS } from "./App";
+import { PREPARATION_BINDING_REFRESH_INTERVAL_MS, PREPARATION_HEARTBEAT_INTERVAL_MS } from "./WorkspaceApp";
 
 describe("global web control-plane polling", () => {
   it("keeps preparation heartbeat and binding refresh within the lease budget", () => {

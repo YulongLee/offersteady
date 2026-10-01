@@ -1,0 +1,29 @@
+.cn-users-panel { display: grid; gap: 20px; }
+.cn-users-panel button:not(.primary) { padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; color: #cde8dc; background: rgba(99,230,181,.04); }
+.cn-users-panel button:not(.primary):hover:not(:disabled) { border-color: var(--mint); background: rgba(99,230,181,.1); }
+.cn-users-panel .primary { width: auto; margin-top: 0; }
+.cn-users-panel table { min-width: 880px; }
+.cn-user-registration { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cn-users-search, .cn-user-editor { padding: 24px; border: 1px solid var(--line); border-radius: 16px; background: rgba(99,230,181,.035); }
+.cn-users-search { display: grid; grid-template-columns: 1fr minmax(300px, 1fr); align-items: center; gap: 24px; }
+.cn-users-search h2, .cn-user-editor h3 { margin: 0 0 10px; }
+.cn-users-search p, .cn-user-editor p { color: var(--muted); font-size: 12px; line-height: 1.7; }
+.cn-users-search label, .cn-user-editor label { display: grid; gap: 8px; font-size: 12px; }
+.cn-users-search-controls { display: flex; gap: 8px; margin-top: 8px; }
+.cn-users-search-controls input { flex: 1; min-width: 0; }
+.cn-users-search-controls button, .cn-user-actions button { white-space: nowrap; }
+.cn-users-result-meta, .cn-user-editor-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.cn-users-result-meta { color: var(--muted); font-size: 12px; }
+.cn-user-id { display: block; max-width: 320px; margin-top: 6px; color: var(--muted); overflow-wrap: anywhere; }
+.cn-user-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.cn-user-actions button { padding: 8px 12px; }
+.cn-user-actions button:first-child { color: var(--accent, #63e6b5); border-color: rgba(99,230,181,.45); }
+.cn-user-selected { background: rgba(99,230,181,.06); }
+.cn-user-identity { display: grid; gap: 8px; margin: 14px 0 22px; overflow-wrap: anywhere; }
+.cn-user-identity span { color: var(--muted); font-size: 12px; }
+.cn-user-editor form { display: grid; gap: 16px; max-width: 640px; }
+.cn-user-editor form button { justify-self: start; }
+.cn-users-notice { padding: 16px; border: 1px solid rgba(99,230,181,.4); border-radius: 10px; color: #63e6b5; overflow-wrap: anywhere; }
+.cn-users-panel .alert { display: flex; align-items: center; gap: 16px; }
+@media (max-width: 850px) { .cn-users-search { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .cn-users-search, .cn-user-editor { padding: 16px; } .cn-users-search-controls { flex-wrap: wrap; } .cn-users-search-controls input { flex-basis: 100%; } }

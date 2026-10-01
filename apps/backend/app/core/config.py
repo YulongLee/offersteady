@@ -115,6 +115,16 @@ class Settings(BaseSettings):
     chat_detail_model: str | None = None
     chat_qwen_api_key: str | None = None
     chat_qwen_base_url: str | None = None
+    mock_interview_enabled: bool = False
+    global_mock_interview_enabled: bool = False
+    global_web_answer_enabled: bool = False
+    global_mock_interview_tts_ws_url: str = "wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime"
+    mock_interview_tts_model: str = "qwen3-tts-instruct-flash-realtime"
+    mock_interview_tts_voice: str = "Cherry"
+    mock_interview_tts_ws_url: str = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
+    mock_interview_tts_api_key: str | None = None
+    mock_interview_provider_timeout_seconds: float = Field(default=45.0, ge=1, le=120)
+    mock_interview_provider_concurrency: int = Field(default=2, ge=1, le=8)
     web_search_enabled: bool = False
     web_search_responses_base_url: str | None = None
     web_search_api_key: str | None = None

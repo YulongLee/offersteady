@@ -10,7 +10,8 @@ import { ContextPicker } from "./ContextPicker";
 import { contextLevel, managedLibrarySources, selectionValidity } from "./context-selection";
 import { assetUrl } from "./assets";
 import { interviewPlatforms } from "./platform-brands";
-import { LivePage, preloadLivePage, BillingPage, DownloadCenter, GuidePage, LegalPage, LibraryManager } from "./route-components";
+import { LivePage, preloadLivePage, BillingPage, DownloadCenter, GuidePage, LegalPage, LibraryManager, MockInterviewPage } from "./route-components";
+import { mockRequest } from "./mock-interview-client";
 import { resetTransientInterviewState } from "./live-workspace";
 import { authClient } from "./auth-client";
 import { materialUploadAdapter, saveMaterialDownload } from "./material-upload-adapter";
@@ -335,6 +336,7 @@ const USER_MANUAL_URL = "https://pwksrh0z1i6.feishu.cn/drive/folder/KFlcfWorslX2
 const navItems = [
   { to: routes.app, label: "面试模式", icon: "◫", end: true },
   { to: routes.writtenExams, label: "笔试模式", icon: "◇" },
+  { to: routes.mockInterviews, label: "模拟面试", icon: "◉" },
   { to: routes.library, label: "资料", icon: "◇" },
   { to: routes.billing, label: "积分与会员", icon: "点" },
   { to: routes.partnerProgram, label: "合作伙伴计划", icon: "◇" },
@@ -345,7 +347,14 @@ const navItems = [
 ];
 
 function WorkbenchNavigationItems({ mobile = false }: { readonly mobile?: boolean }) {
-  return <>{navItems.map(item => "href" in item
+  const [mockEnabled, setMockEnabled] = useState(false);
+  useEffect(() => {
+    let disposed = false;
+    void mockRequest<{ enabled: boolean }>("/mock-interviews/capabilities")
+      .then(result => { if (!disposed) setMockEnabled(result.enabled); }).catch(() => {});
+    return () => { disposed = true; };
+  }, []);
+  return <>{navItems.filter(item => item.to !== routes.mockInterviews || mockEnabled).map(item => "href" in item
     ? <a key={item.href} href={item.href} target="_blank" rel="noopener noreferrer" aria-label={item.label}><span aria-hidden="true">{item.icon}</span>{mobile ? <small>{item.label}</small> : item.label}</a>
     : <NavLink key={item.to} to={item.to} className={({ isActive }) => isActive ? "active" : ""} {...(item.end ? { end: true } : {})}><span aria-hidden="true">{item.icon}</span>{mobile ? <small>{item.label}</small> : item.label}</NavLink>)}</>;
 }
@@ -968,7 +977,7 @@ function NotFoundPage() { return <main className="center-page"><EmptyState title
 function RouteLoadingPage() { return <main className="route-loading-page" role="status" aria-label="页面加载中" />; }
 
 export function AppRoutes() {
-  return <Routes><Route element={<PublicLayout />}><Route path={routes.landing} element={<LandingPage />} /><Route path={routes.login} element={<LoginPage />} /><Route path={routes.publicGuide} element={<GuideRoutePage />} /><Route path={routes.invite()} element={<ReferralLandingPage />} /><Route path={routes.terms} element={<LegalPage kind="terms" />} /><Route path={routes.privacy} element={<LegalPage kind="privacy" />} /></Route><Route element={<ProtectedRoute />}><Route path="/app" element={<AppLayout />}><Route index element={<HomePage />} /><Route path="written-exams" element={<WrittenExamHomePage />} /><Route path="interviews/new" element={<NewInterviewPage />} /><Route path="written-exams/new" element={<NewWrittenExamPage />} /><Route path="interviews/:id/prepare" element={<PreparationPage />} /><Route path="interviews/:id/review" element={<ReviewPage />} /><Route path="library" element={<LibraryPage />} /><Route path="billing" element={<BillingRoutePage />} /><Route path="partner-program" element={<PartnerProgramPage />} /><Route path="guide" element={<GuideRoutePage />} /><Route path="devices" element={<DevicesPage />} /><Route path="settings" element={<SettingsPage />} /></Route><Route path="/app/interviews/:id/live" element={<LivePage brand={<Logo />} accountMenu={<AccountMenu compact />} />} /></Route><Route path="/error" element={<RouteErrorPage />} /><Route path="*" element={<NotFoundPage />} /></Routes>;
+  return <Routes><Route element={<PublicLayout />}><Route path={routes.landing} element={<LandingPage />} /><Route path={routes.login} element={<LoginPage />} /><Route path={routes.publicGuide} element={<GuideRoutePage />} /><Route path={routes.invite()} element={<ReferralLandingPage />} /><Route path={routes.terms} element={<LegalPage kind="terms" />} /><Route path={routes.privacy} element={<LegalPage kind="privacy" />} /></Route><Route element={<ProtectedRoute />}><Route path="/app" element={<AppLayout />}><Route index element={<HomePage />} /><Route path="written-exams" element={<WrittenExamHomePage />} /><Route path="mock-interviews" element={<MockInterviewPage />} /><Route path="mock-interviews/:id" element={<MockInterviewPage />} /><Route path="interviews/new" element={<NewInterviewPage />} /><Route path="written-exams/new" element={<NewWrittenExamPage />} /><Route path="interviews/:id/prepare" element={<PreparationPage />} /><Route path="interviews/:id/review" element={<ReviewPage />} /><Route path="library" element={<LibraryPage />} /><Route path="billing" element={<BillingRoutePage />} /><Route path="partner-program" element={<PartnerProgramPage />} /><Route path="guide" element={<GuideRoutePage />} /><Route path="devices" element={<DevicesPage />} /><Route path="settings" element={<SettingsPage />} /></Route><Route path="/app/interviews/:id/live" element={<LivePage brand={<Logo />} accountMenu={<AccountMenu compact />} />} /></Route><Route path="/error" element={<RouteErrorPage />} /><Route path="*" element={<NotFoundPage />} /></Routes>;
 }
 
 function DocumentTitleManager() {

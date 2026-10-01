@@ -22,6 +22,8 @@ class GlobalUsageBillingAdapter:
         with self._lock:
             existing = self._records.get(usage_id)
             if existing:
+                if existing.user_id != user_id or existing.usage_kind != usage_kind:
+                    raise ValueError("idempotency key was reused with different usage")
                 return existing
         created = int(time() * 1000)
         mapped = "copilot_minute" if usage_kind == "realtime_minute" else "screen_assist" if usage_kind == "screenshot_answer" else None
@@ -31,7 +33,9 @@ class GlobalUsageBillingAdapter:
                 record = UsageReservationRecord(reservation.operation_id, usage_id, user_id, usage_kind, 0, "global_entitlement", reservation.status, created)
             else:
                 state = self.commerce.state(user_id, created)
-                allowed = bool(state["features"]["writtenExam"]) if usage_kind == "written_exam_entry" else bool(state["copilot"]["unlimited"] or (state["copilot"]["remaining"] or 0) > 0)
+                allowed = (bool(state["features"]["webAnswer"]) if usage_kind == "web_answer"
+                    else bool(state["features"]["writtenExam"]) if usage_kind == "written_exam_entry"
+                    else bool(state["copilot"]["unlimited"] or (state["copilot"]["remaining"] or 0) > 0))
                 record = UsageReservationRecord(usage_id, usage_id, user_id, usage_kind, 0, "global_entitlement", "reserved" if allowed else "insufficient_balance", created)
         except GlobalEntitlementDenied:
             record = UsageReservationRecord(usage_id, usage_id, user_id, usage_kind, 0, "global_entitlement", "insufficient_balance", created)

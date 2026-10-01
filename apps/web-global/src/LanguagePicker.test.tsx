@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { LanguagePicker } from "./App";
+import { LanguagePicker } from "./WorkspaceApp";
 
 describe("Global interview language picker", () => {
   it("renders the expanded language list with English as the green default tier", () => {

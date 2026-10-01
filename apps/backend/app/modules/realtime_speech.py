@@ -271,12 +271,20 @@ async def create_publisher(
         resolved_user_id = binding.owner_user_id
     else:
         resolved_user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
-    publisher = service.create_publisher(
-        user_id=resolved_user_id,
-        session_id=request.session_id,
-        source_kind=request.source_kind,
-        client_name=request.client_name,
-    )
+    session = await asyncio.to_thread(service.session_service.get_session,
+        user_id=resolved_user_id, session_id=request.session_id)
+    if session.session_mode == "mock":
+        from app.modules.mock_interview import require_mock_runtime
+        publisher = await require_mock_runtime().legacy.create(user_id=resolved_user_id,
+            session_id=request.session_id, device_id=request.device_id,
+            source_kind=request.source_kind, client_name=request.client_name)
+    else:
+        publisher = service.create_publisher(
+            user_id=resolved_user_id,
+            session_id=request.session_id,
+            source_kind=request.source_kind,
+            client_name=request.client_name,
+        )
     return success_response(request=request_context, data=service._publisher_response(publisher), timestamp=utc_now_iso())
 
 
@@ -950,6 +958,10 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
     requested_media = websocket.query_params.get("media", "json-base64")
     service = realtime_speech_service()
     await websocket.accept()
+    if token.startswith("rt-mock-"):
+        from app.modules.mock_interview_legacy import serve_legacy_microphone
+        await serve_legacy_microphone(websocket, token, requested_protocol, requested_media)
+        return
     if token in _active_ingest_tokens:
         await websocket.send_json({"kind": "connection-rejected", "payload": {"reason": "publisher-already-connected"}})
         await websocket.close(code=1008)

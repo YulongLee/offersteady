@@ -135,7 +135,8 @@ class CreateInterviewSessionRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
     user_id: str = Field(min_length=1, alias="userId")
     title: str = Field(min_length=1, max_length=120)
-    session_mode: InterviewSessionMode = Field(default="interview", alias="sessionMode")
+    # Mock creation is atomic with its own entry fee/quota and cannot use this API.
+    session_mode: Literal["interview", "written"] = Field(default="interview", alias="sessionMode")
     interview_audio_mode: InterviewAudioMode = Field(default="computer", alias="interviewAudioMode")
     interview_language: InterviewLanguage = Field(default="zh-CN", alias="interviewLanguage")
     programming_required: bool = Field(default=False, alias="programmingRequired")

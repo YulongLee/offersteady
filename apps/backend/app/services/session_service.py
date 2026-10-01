@@ -23,6 +23,7 @@ from app.ports.interview_session import (
     SessionUsageTotals,
 )
 from app.services.material_availability import MaterialAvailabilityValidator
+from app.services.session_mode_guard import require_standard_session
 from app.interview_languages import get_interview_language, interview_prompt_assets_ready
 
 
@@ -57,6 +58,9 @@ class SessionService:
         programming_language: ProgrammingLanguage | None = None,
         restart_of_session_id: str | None = None,
     ) -> InterviewSessionRecord:
+        if session_mode not in ("interview", "written"):
+            raise DomainRequestError("session", "create", "请通过 AI 模拟面试入口创建。", 409,
+                                     "mock_dedicated_command_required")
         if get_interview_language(interview_language) is None:
             raise DomainRequestError("session", "create", "暂不支持该面试语言，请选择其他语言。", 422, error_code="unsupported_interview_language")
         now_ms = _now_ms()
@@ -106,6 +110,7 @@ class SessionService:
         if get_interview_language(interview_language) is None:
             raise DomainRequestError("session", "update-language", "暂不支持该面试语言，请选择其他语言。", 422, error_code="unsupported_interview_language")
         session = self.get_session(user_id=user_id, session_id=session_id)
+        require_standard_session(session)
         if session.status != "preparing":
             raise DomainRequestError(
                 "session",
@@ -137,6 +142,7 @@ class SessionService:
         self, *, user_id: str, session_id: str, interview_audio_mode: InterviewAudioMode
     ) -> InterviewSessionRecord:
         session = self.get_session(user_id=user_id, session_id=session_id)
+        require_standard_session(session)
         if session.session_mode == "written":
             raise DomainRequestError(
                 "session", "update-audio-mode", "笔试模式不启用实时收音。", 409,
@@ -168,6 +174,7 @@ class SessionService:
         programming_language: ProgrammingLanguage | None
     ) -> InterviewSessionRecord:
         session = self.get_session(user_id=user_id, session_id=session_id)
+        require_standard_session(session)
         if session.status != "preparing":
             raise DomainRequestError(
                 "session", "update-programming", "面试开始后不能修改编程设置。", 409,
@@ -195,6 +202,7 @@ class SessionService:
         self, *, user_id: str, session_id: str, enabled: bool
     ) -> InterviewSessionRecord:
         session = self.get_session(user_id=user_id, session_id=session_id)
+        require_standard_session(session)
         if session.session_mode == "written":
             raise DomainRequestError("session", "update-auto-answer", "笔试模式仅支持截屏回答。", 409, error_code="written_exam_mode_mismatch")
         if session.status != "live":
@@ -224,6 +232,7 @@ class SessionService:
 
     def delete_session(self, *, user_id: str, session_id: str) -> None:
         session = self.get_session(user_id=user_id, session_id=session_id)
+        require_standard_session(session)
         deleted = self.repository.delete_session(user_id=user_id, session_id=session.session_id)
         if not deleted:
             raise DomainRequestError("session", "delete", "面试会话不存在或已被删除。", 404)
@@ -241,6 +250,7 @@ class SessionService:
 
     def continue_session(self, *, user_id: str, session_id: str) -> InterviewSessionRecord:
         session = self.get_session(user_id=user_id, session_id=session_id)
+        require_standard_session(session)
         if session.status == "live":
             return self.touch_activity(user_id=user_id, session_id=session_id, force=True)
         return session
@@ -301,6 +311,7 @@ class SessionService:
         knowledge_document_ids: list[str],
     ) -> InterviewSessionRecord:
         session = self.get_session(user_id=user_id, session_id=session_id)
+        require_standard_session(session)
         if session.session_mode == "written":
             raise DomainRequestError("session", "confirm-materials", "笔试模式不使用面试资料。", 409, error_code="written_exam_materials_disabled")
         if session.status == "ended":
@@ -338,6 +349,7 @@ class SessionService:
 
     def start_session(self, *, user_id: str, session_id: str) -> InterviewSessionRecord:
         session = self.get_session(user_id=user_id, session_id=session_id)
+        require_standard_session(session)
         language_definition = get_interview_language(session.interview_language)
         if language_definition is None or not interview_prompt_assets_ready(session.interview_language) or language_definition.tier != "production":
             raise DomainRequestError(
@@ -396,6 +408,7 @@ class SessionService:
 
     def restart_session(self, *, user_id: str, session_id: str) -> InterviewSessionRecord:
         session = self.get_session(user_id=user_id, session_id=session_id)
+        require_standard_session(session)
         restarted = self.create_session(
             user_id=user_id,
             title=f"{session.title} · 重新开始",
@@ -436,6 +449,7 @@ class SessionService:
         activity_already_touched: bool = False,
     ) -> ConversationContextEntry:
         session = validated_session or self.get_session(user_id=user_id, session_id=session_id)
+        require_standard_session(session)
         if session.session_id != session_id or session.owner_user_id != user_id:
             raise DomainRequestError("session", "append-context", "不能向其他用户的面试会话追加上下文。", 403)
         if session.status == "ended":
@@ -571,6 +585,9 @@ class SessionService:
         )
 
     def _refresh_bound_document_activity(self, session: InterviewSessionRecord) -> InterviewSessionRecord:
+        # Mock state owns the selected version; a legacy read must not rewrite it.
+        if session.session_mode == "mock":
+            return session
         refreshed_docs: list[SessionBoundDocument] = []
         changed = False
         for bound in session.material_binding.bound_documents:

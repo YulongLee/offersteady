@@ -7,6 +7,11 @@ const sourceRoots = [path.join(desktopRoot, "src/renderer"), path.join(desktopRo
 const outputPath = path.join(desktopRoot, "src/renderer/global-copy.generated.ts");
 
 const exact = new Map(Object.entries({
+  "AI 面试官提问中，麦克风不会上传。": "The AI interviewer is asking a question. Microphone upload is paused.",
+  "模拟面试收音已暂停，正在重新连接。": "Practice interview audio is paused. Reconnecting.",
+  "模拟面试收音连接异常": "Practice interview audio connection failed",
+  "模拟面试麦克风启动失败，请检查权限后在网页恢复。": "Practice microphone could not start. Check permissions and resume on the web page.",
+  "模拟面试：正在转写你的麦克风回答。": "Practice interview: transcribing your microphone answer.",
   '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" rx="8" fill="#5ee0b5"/><text x="16" y="22" text-anchor="middle" font-size="18" font-family="sans-serif" font-weight="700" fill="#07130f">稳</text></svg>': '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" rx="8" fill="#5ee0b5"/><text x="16" y="22" text-anchor="middle" font-size="18" font-family="sans-serif" font-weight="700" fill="#07130f">O</text></svg>',
   "Default - 当前默认麦克风": "Default microphone",
   "Electron 主助手统一负责麦克风、电脑输出和屏幕采集。": "The Electron companion manages microphone, system audio, and screen capture.",

@@ -7,7 +7,7 @@ from app.material_formats import MaterialKind
 
 
 InterviewSessionState = Literal["preparing", "live", "ended"]
-InterviewSessionMode = Literal["interview", "written"]
+InterviewSessionMode = Literal["interview", "written", "mock"]
 InterviewAudioMode = Literal["computer", "mobile"]
 from app.interview_languages import InterviewLanguage
 ProgrammingLanguage = Literal["python", "java", "cpp", "javascript", "typescript", "go"]

@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useRef,
   useState,
   type Dispatch,
@@ -26,6 +27,7 @@ import { materialUploadAdapter, saveMaterialDownload } from "./material-upload-a
 import type { PreparedKnowledgeUpload } from "./material-upload-adapter";
 import { interviewAppAdapter } from "./app-adapter";
 import { globalEditionMetadata } from "./product-edition";
+import { pollLibraryDocumentUntilSettled } from "./library-processing-polling";
 
 interface Props {
   readonly state: WebAppState;
@@ -120,6 +122,17 @@ export function LibraryManager({ state, setState }: Props) {
   const [operation, setOperation] = useState<LibraryOperation>(null);
   const [submittingUpload, setSubmittingUpload] = useState(false);
   const refreshGenerationRef = useRef(0);
+  const pollControllersRef = useRef(new Map<string, AbortController>());
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      refreshGenerationRef.current += 1;
+      for (const controller of pollControllersRef.current.values()) controller.abort();
+      pollControllersRef.current.clear();
+    };
+  }, []);
   const selected =
     state.knowledgeCollections.find((item) => item.id === selectedId) ?? null;
   const documents = state.knowledgeDocuments.filter(
@@ -135,46 +148,39 @@ export function LibraryManager({ state, setState }: Props) {
     state.billing.rates.knowledgeIndexPointsPer1000Tokens * 5;
   const quotedPoints = serviceQuote?.pointCost ?? 0;
   const quoteSource = serviceQuote?.entitlementSource ?? "points";
-  const refreshFromBackend = async () => {
+  const refreshFromBackend = async (signal?: AbortSignal) => {
     const generation = ++refreshGenerationRef.current;
-    const next = await runAdapterOperation((signal) =>
-      interviewAppAdapter.loadState(signal),
+    const next = await runAdapterOperation((requestSignal) =>
+      interviewAppAdapter.loadState(requestSignal), signal,
     );
-    if (generation === refreshGenerationRef.current) setState(next);
+    if (mountedRef.current && !signal?.aborted && generation === refreshGenerationRef.current) setState(next);
     return next;
   };
   const invalidatePendingRefreshes = () => {
     refreshGenerationRef.current += 1;
   };
   const pollDocumentUntilSettled = (documentId: string) => {
+    if (!mountedRef.current) return;
+    pollControllersRef.current.get(documentId)?.abort();
+    const controller = new AbortController();
+    pollControllersRef.current.set(documentId, controller);
     void (async () => {
-      for (let attempt = 0; attempt < 12; attempt += 1) {
-        await new Promise((resolve) =>
-          window.setTimeout(resolve, attempt === 0 ? 800 : 1500),
-        );
-        const next = await refreshFromBackend();
-        const source = next.librarySources.find(
-          (item) => item.id === documentId,
-        );
-        const document = next.knowledgeDocuments.find(
-          (item) => item.id === documentId,
-        );
-        const status = source?.status ?? document?.status;
-        if (
-          status === "ready" ||
-          status === "failed" ||
-          status === "deleted" ||
-          status === "disabled"
-        )
-          return;
+      const result = await pollLibraryDocumentUntilSettled({
+        documentId,
+        signal: controller.signal,
+        loadState: refreshFromBackend,
+      });
+      if (result.kind === "timeout" && !controller.signal.aborted) {
+        setNotice("Your material is still processing in the background. Refresh later to see the result; it will only be available for interviews after processing finishes.");
       }
-    })().catch((error) =>
-      setError(
-        error instanceof Error
-          ? error.message
-          : "资料状态刷新失败，请手动刷新页面",
-      ),
-    );
+    })().catch((error) => {
+      if (controller.signal.aborted) return;
+      setError(error instanceof Error ? error.message : "Could not refresh processing status. Please refresh the page.");
+    }).finally(() => {
+      if (pollControllersRef.current.get(documentId) === controller) {
+        pollControllersRef.current.delete(documentId);
+      }
+    });
   };
 
   const retryDocument = async (documentId: string) => {

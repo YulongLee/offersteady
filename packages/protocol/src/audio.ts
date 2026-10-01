@@ -67,6 +67,7 @@ export type CaptureState =
   | "error";
 
 export interface CompanionCapabilities {
+  readonly mockInterviewProtocol?: 1;
   readonly protocolVersion: string;
   readonly appVersion: string;
   readonly platform: DesktopPlatform;

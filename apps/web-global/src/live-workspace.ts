@@ -83,6 +83,7 @@ export const mergeAnswerTask = (current: AnswerTaskSnapshot | null, incoming: An
     ...chosen,
     ...(partialText ? { partialText } : {}),
     ...(completedText ? { completedText } : {}),
+    ...(current.quickAnswerCompleted || incoming.quickAnswerCompleted ? { quickAnswerCompleted: true } : {}),
     updatedAtMs: Math.max(current.updatedAtMs, incoming.updatedAtMs),
   };
 };
@@ -93,6 +94,7 @@ const mergeQuestion = (current: InterviewQuestion, incoming: InterviewQuestion, 
   return {
     ...other,
     ...chosen,
+    ...(current.quickAnswerCompleted || incoming.quickAnswerCompleted ? { quickAnswerCompleted: true } : {}),
     advice: {
       ...other.advice,
       ...chosen.advice,

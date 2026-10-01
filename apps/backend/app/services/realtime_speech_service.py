@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.services.session_mode_guard import require_standard_session
+
 import base64
 import concurrent.futures
 from copy import deepcopy
@@ -578,6 +580,7 @@ class RealtimeSpeechService:
     def start_live_session(self, *, user_id: str, session_id: str) -> InterviewSessionRecord:
         """Start one commercial interview, charge its first minute and prewarm ASR."""
         current = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        require_standard_session(current)
         bound_device = self.repository.get_session_desktop_binding(user_id=user_id, session_id=session_id)
         if bound_device is not None:
             device = self.repository.get_desktop_device_by_code(bound_device.manual_code)
@@ -2556,6 +2559,8 @@ class RealtimeSpeechService:
                 "sessionStatus": session_status,
                 "sessionMode": session_mode,
                 "interviewAudioMode": interview_audio_mode,
+                # Mock interviews own a separate per-round microphone channel;
+                # old companions must never enter the ordinary quick-answer path.
                 "captureState": ("paused" if session_mode == "written" else self.capture_control_state(session_id=binding.session_id)) if session_status == "live" else "ready",
                 "bindingLockState": binding_lock_state,
                 "message": "网页端已绑定本机。",
@@ -2606,6 +2611,7 @@ class RealtimeSpeechService:
 
     def control_capture(self, *, user_id: str, session_id: str, action: str) -> dict[str, object]:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        require_standard_session(session)
         if session.session_mode == "written":
             raise DomainRequestError("realtime-speech", "capture-control", "笔试模式不启用实时收音。", 409, "written_exam_audio_disabled")
         if session.status != "live":
@@ -2766,6 +2772,8 @@ class RealtimeSpeechService:
 
     def create_publisher(self, *, user_id: str, session_id: str, source_kind: RealtimeSourceKind, client_name: str) -> RealtimePublisherRecord:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        # Fail closed until the dedicated round-aware microphone gateway is wired.
+        require_standard_session(session)
         if session.session_mode == "written":
             raise DomainRequestError("realtime-speech", "create-publisher", "笔试模式不启用实时收音。", 409, "written_exam_audio_disabled")
         if session.status != "live":
@@ -5429,6 +5437,9 @@ class RealtimeSpeechService:
         )
 
     def _require_publisher_token(self, token: str) -> RealtimePublisherRecord:
+        if token.startswith("rt-mock-"):
+            raise DomainRequestError("mock-interview", "publisher-token",
+                "模拟面试收音只能通过专用兼容通道处理。", 403, "mock_transport_required")
         publisher = self.repository.get_publisher_by_token(token)
         if publisher is None:
             raise DomainRequestError("realtime-speech", "publisher-token", "实时语音发布令牌无效。", 404)

@@ -75,7 +75,10 @@ interface BackendSupersedeActiveSessionResponse {
 }
 
 interface BackendLiveAnswerTaskResponse {
+  readonly webSearchStatus?: AnswerProvenance["webSearchStatus"];
+  readonly webSources?: AnswerProvenance["webSources"];
   readonly taskId: string;
+  readonly quickAnswerCompleted?: boolean;
   readonly sessionId: string;
   readonly ownerUserId: string;
   readonly question: string;
@@ -696,6 +699,8 @@ const provenanceFromTask = (task: BackendLiveAnswerTaskResponse): AnswerProvenan
     fixedSourceCount: material?.fixedSourceCount ?? task.fixedSourceCount ?? 0,
     retrievedSourceCount: material?.retrievedSourceCount ?? task.retrievedSourceCount ?? 0,
     noPersonalMaterialUsed: material?.noPersonalMaterialUsed ?? !(material?.usedSources?.length),
+    ...(task.webSearchStatus ? { webSearchStatus: task.webSearchStatus } : {}),
+    ...(task.webSources ? { webSources: task.webSources } : {}),
   };
 };
 
@@ -925,6 +930,7 @@ const toSubmitManualAnswerResult = (
     ...(task.questionNormalizationStatus ? { questionNormalizationStatus: task.questionNormalizationStatus } : {}),
     input,
     status: questionStatusFromTask(task),
+    ...(task.quickAnswerCompleted === undefined ? {} : { quickAnswerCompleted: task.quickAnswerCompleted }),
     advice: adviceFromLiveAnswerTask(task),
   },
   task: {
@@ -935,6 +941,7 @@ const toSubmitManualAnswerResult = (
     questionId: task.taskId,
     revision: 1,
     status: taskStatus(task),
+    ...(task.quickAnswerCompleted === undefined ? {} : { quickAnswerCompleted: task.quickAnswerCompleted }),
     question: task.normalizedQuestion?.trim() || task.question,
     ...(task.status === "completed" ? { completedText: answerTextFromTask(task) } : { partialText: answerTextFromTask(task) || "正在调用当前对话模型生成回答…" }),
     provenance: provenanceFromTask(task),
@@ -1878,6 +1885,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         ...(command.clickedAtMs ? { clickedAtMs: command.clickedAtMs } : {}),
         ...(command.prefetchRevision ? { prefetchRevision: command.prefetchRevision } : {}),
         ...(command.triggerMode === "auto" ? { triggerMode: "auto" } : {}),
+        ...(command.webSearchEnabled ? { webSearchEnabled: true } : {}),
       }),
     }, signal);
     return toSubmitManualAnswerResult(result.task, command.triggerMode === "auto" ? "desktop-audio" : "manual");
@@ -1887,7 +1895,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     let latest: SubmitManualAnswerResult | null = null;
     let failureMessage = "回答生成失败，请稍后重试。";
     const emit = (event: LiveAnswerStreamEvent) => {
-      if (!event.task) return;
+      if (signal?.aborted || !event.task) return;
       const result = toSubmitManualAnswerResult(event.task as BackendLiveAnswerTaskResponse, command.triggerMode === "auto" ? "desktop-audio" : "manual");
       latest = result;
       if (event.type === "failed" && (event.errorMessage || event.partialText)) {
@@ -1913,6 +1921,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
         ...(command.clickedAtMs ? { clickedAtMs: command.clickedAtMs } : {}),
         ...(command.prefetchRevision ? { prefetchRevision: command.prefetchRevision } : {}),
         ...(command.triggerMode === "auto" ? { triggerMode: "auto" } : {}),
+        ...(command.webSearchEnabled ? { webSearchEnabled: true } : {}),
       }),
     };
     if (signal) requestInit.signal = signal;
@@ -1930,6 +1939,10 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     parser.push(decoder.decode());
     parser.flush();
     if (!latest) throw new AppError("validation", failureMessage);
+    const delivered = latest as SubmitManualAnswerResult;
+    if (!["completed", "failed", "cancelled"].includes(delivered.task.status)) {
+      throw new AppError("network", "The answer stream was interrupted. Text already received has been retained; please retry.");
+    }
     return latest;
   }
 

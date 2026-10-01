@@ -80,8 +80,10 @@ const escaped = value => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").
 for (const value of [catalogue.productDescription, catalogue.guidanceNotice, commercial.metaDescription, commercial.accessNote, commercial.checkoutNote, commercial.closingTitle, ...commercial.benefits.flatMap(item => [item.title, item.body]), ...commercial.faqs.flatMap(item => [item.question, item.answer])]) {
   if (!home.includes(escaped(value))) failures.push(`home: missing shared commercial copy ${value}`);
 }
-for (const video of commercial.videos) if (!home.includes(video.src) || !home.includes(video.poster)) failures.push(`home: missing video ${video.label}`);
-if ((home.match(/controls muted playsinline preload="metadata"/g) ?? []).length !== 2) failures.push("home: video control attributes changed");
+for (const video of commercial.videos) {
+  if (!home.includes(`href="${video.src}"`) || !home.includes(`aria-label="Play ${video.label}"`)) failures.push(`home: missing accessible video fallback ${video.label}`);
+  if (home.includes(`poster="${video.poster}"`) || home.includes(`src="${video.src}"`)) failures.push(`home: eager promotional media ${video.label}`);
+}
 if (home.indexOf('id="plans"') > home.indexOf('id="product-tour"')) failures.push("home: pricing must precede tour");
 for (const expected of [
   catalogue.heroTitle,

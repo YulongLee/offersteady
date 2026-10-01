@@ -56,9 +56,11 @@ export default defineConfig(({ mode }) => {
         { find: /^react\/jsx-runtime$/, replacement: fileURLToPath(new URL("./src/global-jsx-runtime.ts", import.meta.url)) },
         { find: /^react\/jsx-dev-runtime$/, replacement: fileURLToPath(new URL("./src/global-jsx-dev-runtime.ts", import.meta.url)) },
         ...(mode === "test" ? [{ find: "./route-components", replacement: fileURLToPath(new URL("./src/route-components.eager.ts", import.meta.url)) }] : []),
+        ...(mode === "test" ? [{ find: "./entry-routes", replacement: fileURLToPath(new URL("./src/entry-routes.eager.ts", import.meta.url)) }] : []),
       ],
     },
     build: {
+      manifest: true,
       target: "chrome86",
       rollupOptions: {
         input: {

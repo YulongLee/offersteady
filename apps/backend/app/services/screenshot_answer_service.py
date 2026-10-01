@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.services.session_mode_guard import require_standard_session
+
 import hashlib
 import base64
 import io
@@ -1021,6 +1023,7 @@ class ScreenshotAnswerService:
         on_task_update: Callable[[ScreenshotAnswerTaskRecord], None] | None = None,
     ) -> tuple[ScreenshotAnswerTaskRecord, RetrievalResponse]:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        require_standard_session(session)
         interview_language = getattr(session, "interview_language", "zh-CN")
         screenshot_instruction = _screenshot_only_instruction(instruction, interview_language)
         if session.status != "live":
@@ -1366,6 +1369,7 @@ class ScreenshotAnswerService:
         instruction: str,
     ) -> RemoteScreenshotCaptureRequest:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        require_standard_session(session)
         if session.status != "live":
             raise DomainRequestError("screenshot-answer", "remote-capture", "只有进行中的面试会话才能发起截屏回答。", 400)
         self.session_service.touch_activity(user_id=user_id, session_id=session_id, force=True)
@@ -1533,6 +1537,17 @@ class ScreenshotAnswerService:
                     failed_phase = "oss-write" if getattr(exc, "action", None) == "save-object" else "upload"
                 elif getattr(exc, "action", None) == "sign-object":
                     failed_phase = "signed-url"
+            # Keep the original category even if failure-state recovery fails.
+            # Do not log exception messages, which can contain private payloads.
+            self._log(
+                logging.WARNING,
+                "screenshot_answer.remote_background_error",
+                task=None,
+                session_id="unknown",
+                image_count=1,
+                retry_count=0,
+                error_code=getattr(exc, "error_code", None) or exc.__class__.__name__,
+            )
             try:
                 request = self.repository.get_remote_capture_request(request_id)
                 telemetry = self._telemetry_from_metrics({
@@ -1550,16 +1565,20 @@ class ScreenshotAnswerService:
                 failed = self.repository.save_remote_capture_request(replace(failed, telemetry=telemetry))
                 if on_transition is not None:
                     on_transition(failed, None)
-            except Exception:
+            except Exception as recovery_exc:
                 self._log(
                     logging.WARNING,
                     "screenshot_answer.remote_background_failed",
+                    task=None,
                     session_id="unknown",
-                    error_code=exc.__class__.__name__,
+                    image_count=1,
+                    retry_count=0,
+                    error_code=getattr(recovery_exc, "error_code", None) or recovery_exc.__class__.__name__,
                 )
 
     def _assert_session_uploadable(self, *, user_id: str, session_id: str):
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        require_standard_session(session)
         if session.status == "ended":
             raise DomainRequestError("screenshot-answer", "upload", "已结束的面试会话不能继续上传截图。", 400)
         return session

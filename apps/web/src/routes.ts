@@ -8,6 +8,7 @@ export const routes = {
   partnerProgram: "/app/partner-program",
   app: "/app",
   writtenExams: "/app/written-exams",
+  mockInterviews: "/app/mock-interviews",
   newInterview: "/app/interviews/new",
   newWrittenExam: "/app/written-exams/new",
   prepare: (id = ":id") => `/app/interviews/${id}/prepare`,

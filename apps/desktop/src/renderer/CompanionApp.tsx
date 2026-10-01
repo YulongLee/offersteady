@@ -3,6 +3,7 @@ import type { AudioPermission, AudioSourceDescriptor, AudioSourceHealth, Capture
 import type { DesktopNativeRuntimeHealth, DesktopPairingIdentity, DesktopRuntimeConfig, DesktopScreenSource, DesktopScreenshotShortcutSettings } from "./global";
 import { MicrophoneAudioAdapter, SystemAudioAdapter, describeMediaError } from "./audio/audio-source-adapter";
 import { LocalSourceMonitor } from "./audio/local-source-monitor";
+import { MockMicrophone } from "./audio/mock-microphone";
 import { DesktopRealtimePublisher, publisherFailureIsTerminal, type DesktopRealtimeReliabilitySnapshot } from "./audio/realtime-publisher";
 import { WarmSourceHandoff } from "./audio/warm-source-handoff";
 import { sourceHealthIsAudioReady } from "./audio/audio-readiness";
@@ -485,6 +486,7 @@ export function CompanionApp() {
   const [bindingSessionStatus, setBindingSessionStatus] = useState<string | null>(null);
   const [bindingCaptureState, setBindingCaptureState] = useState<string | null>(null);
   const [bindingInterviewAudioMode, setBindingInterviewAudioMode] = useState<InterviewAudioMode>("computer");
+  const [bindingSessionMode, setBindingSessionMode] = useState<string>("interview");
   const [nativeRuntimeHealth, setNativeRuntimeHealth] = useState<DesktopNativeRuntimeHealth | null>(null);
   const [liveSourceHealthState, setLiveSourceHealthState] = useState<readonly AudioSourceHealth[]>([]);
   const [monitorSourceHealthState, setMonitorSourceHealthState] = useState<readonly AudioSourceHealth[]>([]);
@@ -716,6 +718,7 @@ export function CompanionApp() {
   const isWindows = config?.platform === "windows";
 
   const capabilitiesFor = (runtime: DesktopRuntimeConfig): CompanionCapabilities => ({
+    mockInterviewProtocol: 1,
     protocolVersion: runtime.protocolVersion,
     appVersion: runtime.appVersion,
     platform: runtime.platform,
@@ -941,12 +944,13 @@ export function CompanionApp() {
         const sessionStatus = runtimeStatus?.sessionStatus ?? pairingStatus.sessionStatus ?? "unknown";
         const live = sessionStatus === "live";
         const writtenExam = pairingStatus.sessionMode === "written";
+        const mockInterview = pairingStatus.sessionMode === "mock";
         const interviewAudioMode: InterviewAudioMode = pairingStatus.interviewAudioMode === "mobile"
           ? "mobile"
           : pairingStatus.interviewAudioMode === "computer"
           ? "computer"
           : bindingInterviewAudioModeRef.current;
-        const captureState = writtenExam || pairingStatus.captureState === "paused" ? "paused" : live ? "capturing" : "ready";
+        const captureState = writtenExam || mockInterview || pairingStatus.captureState === "paused" ? "paused" : live ? "capturing" : "ready";
         nextDelayMs = desktopPollDelayMs(live ? "live" : "idle", 0, "binding");
         if (stopped) return;
         activeBindingRef.current = binding;
@@ -957,11 +961,12 @@ export function CompanionApp() {
         setBindingSessionStatus(sessionStatus);
         setBindingCaptureState(captureState);
         setBindingInterviewAudioMode(interviewAudioMode);
+        setBindingSessionMode(pairingStatus.sessionMode ?? "interview");
         if (lastBindingSessionIdRef.current !== binding.sessionId) {
           lastBindingSessionIdRef.current = binding.sessionId;
           setDesktopNotice(writtenExam ? "网页笔试已绑定这台电脑，仅启用截屏回答。" : "网页面试已绑定这台电脑。");
         }
-        if (live && lastLiveSessionIdRef.current !== binding.sessionId) {
+        if (live && !mockInterview && lastLiveSessionIdRef.current !== binding.sessionId) {
           lastLiveSessionIdRef.current = binding.sessionId;
           setDesktopNotice(interviewAudioMode === "mobile" ? "手机面试已开始，本地助手仅使用 Mac 麦克风收听现场声音。" : "面试已开始，本地助手正在启动麦克风、电脑输出和屏幕能力。");
         }
@@ -973,11 +978,11 @@ export function CompanionApp() {
         const nextCaptureState = live && provisionalCaptureState !== "paused"
           ? captureStateForSourceHealth(sourceHealthRef.current, provisionalCaptureState)
           : provisionalCaptureState;
-        setState(nextCaptureState);
+        if (!mockInterview) setState(nextCaptureState);
         bindingFailureCountRef.current = 0;
         applyConnectionCopy("已连接 | 网页端已绑定本机");
         const runtimeNotice = buildRuntimeCaptureNotice(live, runtimeStatus, captureDiagnostic, nativeRuntimeReady, nativeRuntimeHealth);
-        applyConnectionCopy(
+        if (!mockInterview) applyConnectionCopy(
           "已连接 | 网页端已绑定本机",
           runtimeNotice
             ? `已绑定面试：${binding.sessionId}，${runtimeNotice}`
@@ -991,6 +996,7 @@ export function CompanionApp() {
         }
         if (
           live
+          && !mockInterview
           && !publisherRef.current
           && (runtimeStatus?.publishers?.length ?? 0) === 0
           && lastPublisherKickSessionIdRef.current !== binding.sessionId
@@ -999,7 +1005,7 @@ export function CompanionApp() {
           setPublisherRetryNonce((value) => value + 1);
         }
         window.offersteady?.publishCaptureState(nextCaptureState);
-        window.offersteady?.publishScreenshotBinding?.({ sessionId: binding.sessionId, bindingId: binding.bindingId });
+        window.offersteady?.publishScreenshotBinding?.(mockInterview ? null : { sessionId: binding.sessionId, bindingId: binding.bindingId });
         const deviceStatusPayload = {
           userId: binding.ownerUserId,
           deviceId: pairingIdentity.deviceId,
@@ -1124,6 +1130,27 @@ export function CompanionApp() {
       }
     };
   }, [bindingCaptureState, bindingInterviewAudioMode, captureEnabled, publisherHasTakenOver, effectiveMicrophoneId, selectedSystemAudioId]);
+
+  const mockCaptureEligible = bindingSessionMode === "mock" && ["preparing", "live"].includes(bindingSessionStatus ?? "");
+  useEffect(() => {
+    if (!mockCaptureEligible || !activeBinding || !config || !pairingIdentity) return;
+    let disposed = false;
+    const microphone = new MockMicrophone({
+      apiBaseUrl: config.apiBaseUrl,
+      sessionId: activeBinding.sessionId,
+      deviceId: pairingIdentity.deviceId,
+      manualCode: activeBinding.manualCode,
+      microphoneId: effectiveMicrophoneId,
+      onState: (next, message) => {
+        if (disposed) return;
+        setState(next);
+        setConnectionInfo(message);
+      },
+    });
+    microphone.start();
+    return () => { disposed = true; void microphone.stop(); };
+  }, [mockCaptureEligible, activeBinding?.sessionId, activeBinding?.manualCode,
+    config?.apiBaseUrl, pairingIdentity?.deviceId, effectiveMicrophoneId]);
 
   useEffect(() => {
     if (!config || !pairingIdentity || !activeBinding || !captureEnabled) {

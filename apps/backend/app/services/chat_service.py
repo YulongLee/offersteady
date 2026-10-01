@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.services.session_mode_guard import require_standard_session
+
 import hashlib
 import json
 import logging
@@ -689,6 +691,7 @@ class ChatService:
                     return
                 self._latest_prefetch_revision[question_key] = revision
             session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+            require_standard_session(session)
             retrieval = self._retrieve_context(user_id=user_id, session=session, question=question)
             prepared = {
                 "question": question.strip(),
@@ -731,11 +734,13 @@ class ChatService:
     def _ensure_web_search_allowed(self, *, enabled: bool) -> None:
         if not enabled:
             return
-        if self.settings.product_edition != "cn":
+        if self.settings.product_edition == "global" and (
+            not self.settings.global_web_answer_enabled or not self.settings.web_search_enabled
+        ):
             raise DomainRequestError(
                 "live-answer",
                 "web-search",
-                "联网详细回答当前仅支持国服。",
+                "Web answers are not enabled for this service.",
                 409,
                 error_code="web_search_not_available",
             )
@@ -759,9 +764,14 @@ class ChatService:
             user_id=user_id,
             usage_id=usage_id,
             usage_kind="web_answer" if web_search_enabled else "answer",
-            minimum_pass_duration_days=7 if web_search_enabled else None,
+            **({"minimum_pass_duration_days": 7}
+               if web_search_enabled and self.settings.product_edition != "global" else {}),
         )
         if reservation.status == "insufficient_balance":
+            if self.settings.product_edition == "global":
+                raise DomainRequestError("billing", "reserve-answer",
+                    "An active membership of 7 days or longer is required for web answers." if web_search_enabled else "Your interview allowance is unavailable. Please check your plan.",
+                    403, error_code="global_practice_membership_required" if web_search_enabled else "global_allowance_unavailable")
             raise DomainRequestError(
                 "billing",
                 "reserve-web-answer" if web_search_enabled else "reserve-answer",
@@ -1030,6 +1040,7 @@ class ChatService:
         web_search_enabled: bool = False,
     ) -> tuple[ChatAnswerTaskRecord, RetrievalResponse]:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        require_standard_session(session)
         if session.session_mode == "written":
             raise DomainRequestError("live-answer", "start", "笔试模式仅支持截屏回答。", 409, error_code="written_exam_mode_mismatch")
         if session.status != "live":
@@ -1225,6 +1236,7 @@ class ChatService:
     ) -> Iterator[dict]:
         answer_accepted_at_ms = answer_generator_started_at_ms or _now_ms()
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        require_standard_session(session)
         if session.session_mode == "written":
             raise DomainRequestError("live-answer", "start-stream", "笔试模式仅支持截屏回答。", 409, error_code="written_exam_mode_mismatch")
         if session.status != "live":

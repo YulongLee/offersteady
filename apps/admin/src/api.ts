@@ -137,6 +137,8 @@ export const adminApi = {
   addPromotionCost: (payload: Record<string, unknown>) => request<Record<string, unknown>>("/api/v1/admin/promotion/costs", { method: "POST", body: JSON.stringify(payload) }),
   promotionCosts: () => request<{ items: Record<string, unknown>[] }>("/api/v1/admin/promotion/costs?limit=100&offset=0"),
   reversePromotionCost: (costEntryId: string, reason: string) => request<Record<string, unknown>>(`/api/v1/admin/promotion/costs/${encodeURIComponent(costEntryId)}/reverse`, { method: "POST", body: JSON.stringify({ reason }) }),
+  listUsers: (search = "", offset = 0) =>
+    request<{ items: Record<string, unknown>[] }>(`/api/v1/admin/users?limit=50&offset=${offset}&search=${encodeURIComponent(search.trim())}`),
   list: (resource: "users" | "orders" | "catalog-products" | "redemption-batches" | "payment-channels" | "materials" | "interviews" | "audit" | "admins", offset = 0) =>
     request<{ items: Record<string, unknown>[] }>(`/api/v1/admin/${resource}?limit=50&offset=${offset}`),
   listOrders: (offset = 0, status?: string) => request<{ items: Record<string, unknown>[] }>(

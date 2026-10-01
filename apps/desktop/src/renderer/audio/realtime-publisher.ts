@@ -401,7 +401,7 @@ interface AudioCaptureProcessor {
   readonly detach: () => void;
 }
 
-const createAudioCaptureProcessor = async (
+export const createAudioCaptureProcessor = async (
   context: AudioContext,
   onSamples: (samples: Float32Array, timing: CaptureBatchTiming) => void,
 ): Promise<AudioCaptureProcessor> => {
@@ -504,7 +504,7 @@ const toWebSocketEndpoint = (apiBaseUrl: string, path: string) => {
   return url.toString();
 };
 
-const downsampleToPcm16 = (input: Float32Array, inputSampleRate: number, targetSampleRate = 16_000): Uint8Array => {
+export const downsampleToPcm16 = (input: Float32Array, inputSampleRate: number, targetSampleRate = 16_000): Uint8Array => {
   if (input.length === 0) return new Uint8Array();
   const ratio = inputSampleRate / targetSampleRate;
   const outputLength = Math.max(1, Math.round(input.length / ratio));

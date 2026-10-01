@@ -10,6 +10,7 @@ from app.deps import settings_dependency
 from app.modules import authentication, billing, document_processing, document_service, global_commerce, job_description, knowledge, knowledge_retrieval, live_answer, realtime_speech, resume, screenshot_answer, session, system, web
 from app.schemas.foundation import ApiEnvelope, FoundationIndexResponse
 from app.api.promotion import promotion_router
+from app.modules import mock_interview
 
 
 module_descriptors = [
@@ -46,6 +47,7 @@ api_router.include_router(billing.router)
 api_router.include_router(global_commerce.router)
 api_router.include_router(web.router)
 api_router.include_router(promotion_router)
+api_router.include_router(mock_interview.router)
 
 
 @api_router.get("", response_model=ApiEnvelope[FoundationIndexResponse])

@@ -291,6 +291,9 @@ export const authClient = {
       method: "POST",
       body: JSON.stringify({ refreshToken: existing.refreshToken }),
     }, signal);
+    if (signal?.aborted || this.readStoredSession()?.refreshToken !== existing.refreshToken) {
+      throw new DOMException("Session restoration was cancelled", "AbortError");
+    }
     return storeSession(refreshed);
   },
 
@@ -300,6 +303,9 @@ export const authClient = {
     const user = await client.request<CurrentUserResponse>("/api/v1/auth/me", {
       headers: authorizationHeaders(existing.accessToken),
     }, signal);
+    if (signal?.aborted || this.readStoredSession()?.accessToken !== existing.accessToken) {
+      throw new DOMException("Session restoration was cancelled", "AbortError");
+    }
     const account = toSafeAccountSummary(user);
     writeStorageItem(accountKey, JSON.stringify(account));
     return account;
@@ -311,7 +317,8 @@ export const authClient = {
       const existing = this.readStoredSession();
       if (!existing) throw new AppError("validation", "当前没有登录态");
       return { ...existing, account: current };
-    } catch {
+    } catch (error) {
+      if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError")) throw error;
       return this.refresh(signal);
     }
   },

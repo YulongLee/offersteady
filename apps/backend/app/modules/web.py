@@ -580,6 +580,7 @@ async def get_web_state(
     billing_state = billing.state_for_user(user_id=user_id)
     document_items = documents.list_documents(user_id=user_id, include_deleted=False)
     session_items = sessions.list_sessions(user_id=user_id) if auth_context else []
+    session_items = [session for session in session_items if session.session_mode != "mock"]
     chat_questions: list[dict[str, object]] = []
     screenshot_questions: list[dict[str, object]] = []
     review_screenshots: list[dict[str, object]] = []

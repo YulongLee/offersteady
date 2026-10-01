@@ -1,5 +1,7 @@
 import { lazy } from "react";
 
+export const MockInterviewPage = lazy(() => import("./MockInterviewPage").then(module => ({ default: module.MockInterviewPage })));
+
 export const DownloadCenter = lazy(() => import("./DownloadCenter").then(module => ({ default: module.DownloadCenter })));
 export const LibraryManager = lazy(() => import("./LibraryManager").then(module => ({ default: module.LibraryManager })));
 export const BillingPage = lazy(() => import("./GlobalBillingPage").then(module => ({ default: module.BillingPage })));

@@ -38,6 +38,8 @@ def create_app() -> FastAPI:
     async def lifespan(application: FastAPI):
         task: asyncio.Task[None] | None = None
         reaper_task: asyncio.Task[None] | None = None
+        mock_reaper_task: asyncio.Task[None] | None = None
+        mock_runtime_instance = None
         realtime_service_instance = None
         realtime_event_wait_executor = RealtimeEventWaitExecutor(
             max_workers=settings.realtime_event_wait_workers,
@@ -102,12 +104,35 @@ def create_app() -> FastAPI:
                 task = asyncio.create_task(sample_capacity())
             except Exception:
                 logger.warning("admin_capacity_monitor_unavailable")
+        if (settings.global_mock_interview_enabled if settings.product_edition == "global" else settings.mock_interview_enabled):
+            from app.modules.mock_interview import mock_runtime
+
+            if int(os.environ.get("WEB_CONCURRENCY", "1")) != 1:
+                raise RuntimeError("Mock interview capture requires a single application worker")
+            mock_runtime_instance = await asyncio.to_thread(mock_runtime)
+
+            async def reap_mock_resources():
+                while True:
+                    try:
+                        await mock_runtime_instance.reap()
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:
+                        logger.warning("mock_resource_reaper_failed")
+                    await asyncio.sleep(0.25)
+            mock_reaper_task = asyncio.create_task(reap_mock_resources())
         try:
             yield
         finally:
             from app.deps import realtime_speech_service
 
             service = realtime_speech_service()
+            if mock_reaper_task is not None:
+                mock_reaper_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await mock_reaper_task
+            if mock_runtime_instance is not None:
+                await mock_runtime_instance.shutdown()
             stop_reclamation = getattr(service, "stop_reclamation", None)
             if callable(stop_reclamation):
                 stop_reclamation()

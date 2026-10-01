@@ -1,33 +1,7 @@
 {
   "version": 1,
-  "generatedAtMs": 1790004535400,
+  "generatedAtMs": 1790626490362,
   "entries": [
-    {
-      "id": "mac-x64-130",
-      "platform": "macos",
-      "architecture": "x64",
-      "displayName": "macOS Intel",
-      "version": "1.3.0",
-      "minimumOs": "macOS 14.2+",
-      "fileName": "OfferSteady-Companion-Global-1.3.0-macOS-x64.dmg",
-      "fileSizeBytes": 130376074,
-      "sha256": "a37febd0be85684f98369978d46321c625dc6e4ed1d315565fd2ab101a645654",
-      "signingStatus": "verified",
-      "distributionStatus": "published",
-      "notarized": true,
-      "publishedAtMs": 1789728754220,
-      "protocolVersion": "2.0",
-      "captureRuntime": "electron-single-owner",
-      "developmentOnly": false,
-      "objectKey": "global-desktop-releases/macos/x64/1.3.0/OfferSteady-Companion-Global-1.3.0-macOS-x64.dmg",
-      "capabilities": {
-        "microphone": true,
-        "systemAudio": true,
-        "screenCapture": true,
-        "manualInputFallback": true,
-        "screenshotFallback": true
-      }
-    },
     {
       "id": "win-x64-132",
       "platform": "windows",
@@ -72,6 +46,32 @@
       "captureRuntime": "electron-single-owner",
       "developmentOnly": false,
       "objectKey": "global-desktop-releases/macos/arm64/1.3.2/OfferSteady-Companion-Global-1.3.2-macOS-arm64.dmg",
+      "capabilities": {
+        "microphone": true,
+        "systemAudio": true,
+        "screenCapture": true,
+        "manualInputFallback": true,
+        "screenshotFallback": true
+      }
+    },
+    {
+      "id": "mac-x64-132",
+      "platform": "macos",
+      "architecture": "x64",
+      "displayName": "macOS Intel",
+      "version": "1.3.2",
+      "minimumOs": "macOS 14.2+",
+      "fileName": "OfferSteady-Companion-Global-1.3.2-macOS-x64.dmg",
+      "fileSizeBytes": 143346577,
+      "sha256": "01fa7d6217d90f7dcea6264f37292a73dfbf41dd02da288b4b04e2b09a490b9f",
+      "signingStatus": "verified",
+      "distributionStatus": "published",
+      "notarized": true,
+      "publishedAtMs": 1790626490362,
+      "protocolVersion": "2.0",
+      "captureRuntime": "electron-single-owner",
+      "developmentOnly": false,
+      "objectKey": "global-desktop-releases/macos/x64/1.3.2/OfferSteady-Companion-Global-1.3.2-macOS-x64.dmg",
       "capabilities": {
         "microphone": true,
         "systemAudio": true,
