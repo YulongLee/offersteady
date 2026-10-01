@@ -51,6 +51,8 @@ The previous 1.3.3 Mac artifacts remain intact under `apps/desktop/release/archi
 
 ## 7. Subsequently approved CN online update — 1.3.4
 
-- [ ] 7.1 Freeze approved source, back up current manifests and upload/verify all three OSS artifacts
-- [ ] 7.2 With no live interviews, activate the complete CN manifest and matching metadata-only image without restarting business services
-- [ ] 7.3 Verify public versions/downloads/hashes/health and unchanged international releases; record and push release
+- [x] 7.1 Freeze approved source, back up current manifests and upload/verify all three OSS artifacts
+- [x] 7.2 With no live interviews, activate the complete CN manifest and matching metadata-only image without restarting business services
+- [x] 7.3 Verify public versions/downloads/hashes/health and unchanged international releases; record and push release
+
+CN publication verified 2026-10-02 after the user's online-update authorization: all three OSS objects were streamed in full and matched their recorded sizes/hashes; all three latest manifests match the complete local manifest. Zero live interviews was checked twice immediately before activation. Public CN entries are all 1.3.4; each download returns 307 and the correct OSS object returns 206 for a range check. Runtime container ID and start time are unchanged and health is normal. Both host source manifests and the metadata-only image match manifest SHA-256 `96e8f45bb6ba380efbbb3747cd5e48be9e48f66a6097dbabf3b9a4ca5f870e43`. International entries and source remain unchanged at 1.3.2. See [release record](../../../docs/releases/cn-desktop-original-layout-1.3.4-20261002.md) for backups, release tag and physical-device acceptance limits.
