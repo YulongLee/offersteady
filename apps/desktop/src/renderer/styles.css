@@ -22,6 +22,21 @@
 
 * { box-sizing: border-box; }
 
+.microphone-permission-panel {
+  padding: 10px 16px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.microphone-permission-panel p { margin: 0 0 8px; }
+.microphone-permission-panel[data-state="granted"] p { color: var(--brand); }
+.microphone-permission-panel[data-state="denied"] p,
+.microphone-permission-panel[data-state="restricted"] p,
+.microphone-permission-panel[data-state="error"] p { color: var(--warning); }
+.microphone-permission-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.microphone-permission-actions .secondary-button { min-height: 32px; padding: 6px 12px; font-size: 12px; }
+
 body {
   margin: 0;
   min-width: 720px;

@@ -22,6 +22,7 @@ import { RealtimeTransportDiagnosticsLog } from "./realtime-transport-diagnostic
 import { canAcquireDisplaySources, resolveDisplayMediaSource, type ScreenPermissionStatus } from "./display-media-access";
 import { globalStableUserDataDirectory, legacyUserDataDirectories, migrateLegacyCompanionState, stableUserDataDirectory } from "./user-data-bootstrap";
 import { resolveDesktopProductEdition } from "./product-edition";
+import { createMicrophonePermissionRequest } from "./microphone-permission";
 
 const packagedGlobalRuntimeConfigPath = () => path.join(process.resourcesPath, "global-runtime-config.json");
 const isGlobalRelease = () => resolveDesktopProductEdition({
@@ -1476,9 +1477,13 @@ ipcMain.handle("desktop:api-request", async (_event, request: { url: string; met
   }
 });
 
+const requestMicrophonePermission = createMicrophonePermissionRequest(
+  () => systemPreferences.getMediaAccessStatus("microphone"),
+  () => systemPreferences.askForMediaAccess("microphone"),
+);
 ipcMain.handle("desktop:request-microphone-access", async () => {
   if (process.platform !== "darwin") return true;
-  return systemPreferences.askForMediaAccess("microphone");
+  return requestMicrophonePermission();
 });
 
 ipcMain.handle("desktop:request-screen-capture-access", async () => requestElectronScreenCaptureAccess());

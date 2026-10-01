@@ -1,6 +1,7 @@
 import { existsSync, lstatSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { assertAudioInputEntitlement, hasEnabledEntitlement } from "./mac-entitlement-policy.mjs";
 
 const valueAfter = flag => {
   const index = process.argv.indexOf(flag);
@@ -48,7 +49,8 @@ for (const usageKey of ["NSMicrophoneUsageDescription", "NSAudioCaptureUsageDesc
   if (!usage.trim()) throw new Error(`Missing ${usageKey} in packaged Info.plist.`);
 }
 const entitlements = execute("codesign", ["-d", "--entitlements", ":-", appPath]).output;
-if (!entitlements.includes("com.apple.security.cs.allow-jit")) throw new Error("Electron JIT entitlement is missing.");
+assertAudioInputEntitlement(entitlements, appPath);
+if (!hasEnabledEntitlement(entitlements, "com.apple.security.cs.allow-jit")) throw new Error("Electron JIT entitlement is missing.");
 for (const forbidden of ["com.apple.security.cs.allow-unsigned-executable-memory", "com.apple.security.app-sandbox"]) {
   if (entitlements.includes(forbidden)) throw new Error(`Unneeded release entitlement is present: ${forbidden}`);
 }
@@ -69,6 +71,12 @@ const machoFiles = regularFiles(join(appPath, "Contents")).filter(path => {
 });
 if (machoFiles.length === 0) throw new Error("No Mach-O components found in packaged application.");
 for (const path of machoFiles) assertDeveloperIdSignature(path);
+// Verify signed executables, not merely the source plist or notarization status.
+for (const target of machoFiles.filter(path =>
+  path.endsWith("/OfferSteadyCaptureRuntime") || path.includes(" Helper") && path.includes("/Contents/MacOS/")
+)) {
+  assertAudioInputEntitlement(execute("codesign", ["-d", "--entitlements", ":-", target]).output, target);
+}
 
 if (allowUnnotarized) {
   console.log(`codesign verification: PASS (${machoFiles.length} Mach-O components)`);

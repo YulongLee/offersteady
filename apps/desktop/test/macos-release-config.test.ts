@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { assertAudioInputEntitlement, hasEnabledEntitlement } from "../scripts/mac-entitlement-policy.mjs";
 
 const desktopRoot = path.resolve(import.meta.dirname, "..");
 const repositoryRoot = path.resolve(desktopRoot, "../..");
@@ -31,10 +32,22 @@ describe("macOS Developer ID release configuration", () => {
       expect(config).toContain(key);
     }
     for (const entitlements of [mainEntitlements, inheritedEntitlements]) {
+      expect(hasEnabledEntitlement(entitlements, "com.apple.security.device.audio-input")).toBe(true);
       expect(entitlements).toContain("com.apple.security.cs.allow-jit");
       expect(entitlements).not.toContain("com.apple.security.cs.allow-unsigned-executable-memory");
       expect(entitlements).not.toContain("com.apple.security.app-sandbox");
     }
+  });
+
+  it("rejects absent and explicitly disabled signed audio input entitlements", () => {
+    expect(() => assertAudioInputEntitlement("<dict/>", "test-app")).toThrow("audio-input");
+    expect(() => assertAudioInputEntitlement("<key>com.apple.security.device.audio-input</key><false/>", "test-app")).toThrow("audio-input");
+    expect(() => assertAudioInputEntitlement("<key>com.apple.security.device.audio-input</key>\n <true/>", "test-app")).not.toThrow();
+    expect(hasEnabledEntitlement("<key>comXappleXsecurityXdeviceXaudio-input</key><true/>", "com.apple.security.device.audio-input")).toBe(false);
+    const verifier = readDesktop("scripts/verify-release-mac.mjs");
+    expect(verifier).toContain("assertAudioInputEntitlement(entitlements, appPath)");
+    expect(verifier).toContain('path.endsWith("/OfferSteadyCaptureRuntime")');
+    expect(verifier).toContain('path.includes(" Helper")');
   });
 
   it("keeps development commands separate and makes production fail closed", () => {

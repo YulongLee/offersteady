@@ -10,6 +10,8 @@ import { createDebouncedDeviceRefresh, reconcileMicrophoneSelection } from "./au
 import appIconUrl from "./assets/app-icon.png";
 import { BINDING_LIVE_POLL_MS, desktopPollDelayMs } from "../main/polling-policy";
 import { DeviceStatusPublishGate } from "./device-status-publish-gate";
+import { MicrophonePermissionPanel } from "./MicrophonePermissionPanel";
+import type { MicrophonePermissionState } from "./microphone-permission";
 
 export const companionStatusCopy: Record<CaptureState, { title: string; detail: string }> = {
   "not-connected": { title: "设备离线", detail: "助手尚未完成服务登记，请检查网络后重试。" },
@@ -285,21 +287,6 @@ const microphonePreferenceScore = (source: AudioSourceDescriptor) => {
 const sortMicrophoneSources = (sources: readonly AudioSourceDescriptor[]) =>
   [...sources].sort((left, right) => microphonePreferenceScore(left) - microphonePreferenceScore(right) || left.label.localeCompare(right.label));
 
-const requestMicrophoneAccessInBackground = async () => {
-  if (!window.offersteady?.requestMicrophoneAccess) return false;
-  let timeoutId: number | undefined;
-  try {
-    return await Promise.race([
-      window.offersteady.requestMicrophoneAccess(),
-      new Promise<boolean>((resolve) => {
-        timeoutId = window.setTimeout(() => resolve(false), 2500);
-      }),
-    ]);
-  } finally {
-    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
-  }
-};
-
 const buildRuntimeCaptureNotice = (
   live: boolean,
   runtimeStatus: DesktopRuntimeStatus | null,
@@ -464,6 +451,7 @@ export function CompanionApp() {
   const [selectedScreenId, setSelectedScreenId] = useState(defaultScreens[0]?.id ?? "");
   const [permissions, setPermissions] = useState<{ microphone: AudioPermission; systemAudio: AudioPermission }>({ microphone: "unknown", systemAudio: "unknown" });
   const [screenPermission, setScreenPermission] = useState<AudioPermission>("unknown");
+  const [microphonePermissionState, setMicrophonePermissionState] = useState<MicrophonePermissionState>("checking");
   const [connectionNotice, setConnectionNotice] = useState("正在生成本机连接码…");
   const [connectionInfo, setConnectionInfo] = useState("暂无连接设备");
   const bindingFailureCountRef = useRef(0);
@@ -800,17 +788,17 @@ export function CompanionApp() {
           ...systemAudioOptions.map(source => ({ id: source.id, kind: source.kind, label: source.label, available: true })),
         ],
       });
-      void requestMicrophoneAccessInBackground()
-        .then(async microphoneGranted => {
+      void (async () => {
           const screenGranted = await window.offersteady?.requestScreenCaptureAccess?.().catch(() => false) ?? false;
           if (!mounted) return;
           setScreenPermission(screenGranted ? "granted" : "denied");
-          setPermissions({
-            microphone: microphoneGranted ? "granted" : "denied",
+          setPermissions(current => ({
+            ...current,
+            ...(runtime.platform === "windows" ? { microphone: "granted" as const } : {}),
             systemAudio: screenGranted ? "granted" : "denied",
-          });
+          }));
           return refreshMicrophoneSources();
-        })
+        })()
         .catch(() => undefined);
     }).catch(() => {
       if (!mounted) return;
@@ -1075,7 +1063,9 @@ export function CompanionApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config, pairingIdentity]);
 
+  const microphoneAuthorized = config?.platform !== "macos" || microphonePermissionState === "granted";
   useEffect(() => {
+    if (!config) return;
     if (bindingCaptureState === "paused" || captureEnabled || publisherHasTakenOver || (bindingInterviewAudioMode === "computer" && !selectedSystemAudioId)) {
       void localMonitorRef.current?.stop();
       localMonitorRef.current = null;
@@ -1086,7 +1076,10 @@ export function CompanionApp() {
     const monitor = new LocalSourceMonitor({
       microphoneId: effectiveMicrophoneId,
       systemAudioId: selectedSystemAudioId,
-      enabledChannels: bindingInterviewAudioMode === "mobile" ? ["microphone"] : ["microphone", "system"],
+      // Wait for OS consent before starting the microphone open timeout; system audio is independent.
+      enabledChannels: bindingInterviewAudioMode === "mobile"
+        ? microphoneAuthorized ? ["microphone"] : []
+        : microphoneAuthorized ? ["microphone", "system"] : ["system"],
       onHealth: (health) => {
         if (cancelled) return;
         monitorSourceHealthRef.current = health;
@@ -1123,7 +1116,7 @@ export function CompanionApp() {
         void monitor.stop();
       }
     };
-  }, [bindingCaptureState, bindingInterviewAudioMode, captureEnabled, publisherHasTakenOver, effectiveMicrophoneId, selectedSystemAudioId]);
+  }, [config?.platform, microphoneAuthorized, bindingCaptureState, bindingInterviewAudioMode, captureEnabled, publisherHasTakenOver, effectiveMicrophoneId, selectedSystemAudioId]);
 
   useEffect(() => {
     if (!config || !pairingIdentity || !activeBinding || !captureEnabled) {
@@ -1361,33 +1354,6 @@ export function CompanionApp() {
     setConnectionInfo("连接码已复制");
   };
 
-  const refreshAuthorization = async () => {
-    try {
-      setState("permission-required");
-      setDesktopNotice("正在检查系统权限，机器码和设备身份不会改变…");
-      const microphoneGranted = await window.offersteady?.requestMicrophoneAccess().catch(() => false) ?? false;
-      const screenGranted = await window.offersteady?.requestScreenCaptureAccess?.().catch(() => false) ?? false;
-      setScreenPermission(screenGranted ? "granted" : "denied");
-      setPermissions({
-        microphone: microphoneGranted ? "granted" : "denied",
-        systemAudio: screenGranted ? "granted" : "denied",
-      });
-      setDesktopNotice(
-        microphoneGranted && screenGranted
-          ? "麦克风和屏幕录制权限已就绪。"
-          : isWindows
-            ? "部分权限尚未开启，请在 Windows 设置 → 隐私和安全性中允许麦克风和屏幕捕捉后重试。"
-            : "部分权限尚未开启，请在 macOS 系统设置 → 隐私与安全性中允许后重新检查。",
-      );
-      setState(activeBinding ? (captureEnabled ? "capturing" : bindingCaptureState === "paused" ? "paused" : "ready") : "ready");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "权限检查失败";
-      setDesktopNotice(`权限检查失败：${message}`);
-      setConnectionInfo(`权限检查失败：${message}`);
-      setState("error");
-    }
-  };
-
   const openResolvedUrl = async (target: "home" | "workspace" | "guide") => {
     const configuredWorkspace = workspaceEntryUrl(config?.webWorkspaceUrl);
     const configuredHome = homeUrl(config?.webWorkspaceUrl);
@@ -1451,6 +1417,16 @@ export function CompanionApp() {
               ))}
             </select>
           </TerminalRow>
+
+          {config?.platform === "macos" && <MicrophonePermissionPanel onPermission={next => {
+            const newlyGranted = next === "granted" && microphonePermissionState !== "granted";
+            setMicrophonePermissionState(next);
+            setPermissions(current => ({ ...current, microphone: next === "granted" ? "granted" : next === "denied" || next === "restricted" ? "denied" : "unknown" }));
+            if (newlyGranted) {
+              void refreshMicrophoneSources();
+              if (captureEnabled && !isCaptureSourceReady(microphoneHealth?.state)) setPublisherRetryNonce(value => value + 1);
+            }
+          }} />}
 
           {bindingInterviewAudioMode === "mobile" ? <TerminalRow
             title="电脑输出"
