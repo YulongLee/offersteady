@@ -11,6 +11,11 @@ const infoPlist = join(desktopDir, "native/macos-capture/Info.plist");
 const buildDir = join(desktopDir, "native/macos-capture/build");
 const output = join(buildDir, "OfferSteadyCaptureRuntime");
 const distDir = join(desktopDir, "dist/native/macos-capture");
+const minimumSystemVersion = process.env.OFFERSTEADY_MACOS_MIN_VERSION?.trim() || "14.2";
+
+if (!/^\d+\.\d+(?:\.\d+)?$/.test(minimumSystemVersion)) {
+  throw new Error(`Invalid OFFERSTEADY_MACOS_MIN_VERSION: ${minimumSystemVersion}`);
+}
 
 if (process.platform !== "darwin") {
   console.log("Skipping macOS native capture runtime build on non-macOS host.");
@@ -33,7 +38,7 @@ mkdirSync(buildDir, { recursive: true });
 
 const result = spawnSync("swiftc", [
   source,
-  "-target", `${targetArch === "x64" ? "x86_64" : "arm64"}-apple-macos14.2`,
+  "-target", `${targetArch === "x64" ? "x86_64" : "arm64"}-apple-macos${minimumSystemVersion}`,
   "-O",
   "-framework", "AVFoundation",
   "-framework", "CoreGraphics",
@@ -53,4 +58,4 @@ rmSync(distDir, { recursive: true, force: true });
 mkdirSync(distDir, { recursive: true });
 cpSync(output, join(distDir, "OfferSteadyCaptureRuntime"));
 
-console.log(`Built ${targetArch} native capture runtime: ${output}`);
+console.log(`Built ${targetArch} native capture runtime for macOS ${minimumSystemVersion}: ${output}`);

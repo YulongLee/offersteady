@@ -228,16 +228,18 @@ describe("CN machine-readable public facts", () => {
 describe("CN discovery set and shared style budget", () => {
   const sitemap = () => new DOMParser().parseFromString(publicSource("sitemap.xml"), "application/xml");
 
-  it("keeps the exact existing set of 30 sitemap URLs", () => {
+  it("keeps the exact published set of sitemap URLs", () => {
     const doc = sitemap();
     expect(doc.querySelector("parsererror")).toBeNull();
     const paths = ["/", "/guide", "/features", "/interview-questions", "/guides", "/pricing", "/download", "/security", "/about", "/contact",
       ...["ai-interview-assistant", "realtime-interview", "screenshot-answer", "interview-review"].map(name => `/features/${name}`),
       ...["audio-troubleshooting", "interview-preparation", "macos-permissions", "feishu-audio-setup", "tencent-meeting-audio-setup", "star-interview-answer", "self-introduction", "project-experience", "technical-interview", "common-interview-questions"].map(name => `/guides/${name}`),
       ...technicalPaths.filter(path => path.startsWith("/interview-questions/")),
+      "/resources/",
+      ...["api-p95-latency-diagnosis", "container-memory-not-falling", "resume-pdf-parsing-failures", "mac-microphone-permission", "realtime-interview-polling"].map(name => `/resources/${name}/`),
     ];
     const urls = Array.from(doc.querySelectorAll("url > loc")).map(text);
-    expect(urls).toHaveLength(30);
+    expect(urls).toHaveLength(36);
     expect(urls.sort()).toEqual(paths.map(path => site + path).sort());
   });
 
@@ -245,7 +247,7 @@ describe("CN discovery set and shared style budget", () => {
     const changed = new Set(pages.map(page => site + page.path));
     for (const entry of sitemap().querySelectorAll("url")) {
       const url = text(entry.querySelector("loc"));
-      const expected = changed.has(url) ? modified : url === `${site}/` ? "2026-09-08" : "2026-08-19";
+      const expected = url.startsWith(`${site}/resources/`) ? "2026-10-12" : changed.has(url) ? modified : url === `${site}/` ? "2026-09-08" : "2026-08-19";
       expect(text(entry.querySelector("lastmod")), url).toBe(expected);
     }
   });

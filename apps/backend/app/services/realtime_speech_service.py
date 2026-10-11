@@ -598,7 +598,6 @@ class RealtimeSpeechService:
                 user_id=user_id,
                 usage_id=f"written-exam-entry:{session_id}",
                 usage_kind="written_exam_entry",
-                wallet_only=True,
             )
             if reservation is not None and reservation.status == "insufficient_balance":
                 raise DomainRequestError("billing", "written-exam-entry", "积分不足，进入笔试模式需要 30 积分。", 402, error_code="written_exam_entry_insufficient_balance")
@@ -2194,10 +2193,11 @@ class RealtimeSpeechService:
             executor.shutdown(wait=False, cancel_futures=True)
 
     def record_web_session_heartbeat(self, *, user_id: str, session_id: str, binding_id: str | None, page: str, page_instance_id: str | None = None) -> WebSessionHeartbeatRecord:
+        idle = self.session_service.heartbeat_idle_status(user_id=user_id, session_id=session_id)
         self._touch_session_activity(session_id=session_id, user_id=user_id)
-        idle = self.reconcile_idle_session(user_id=user_id, session_id=session_id)
-        session = self.session_service.get_session(user_id=user_id, session_id=session_id)
-        if session.status == "ended":
+        if idle["state"] == "expired":
+            self.terminate_session_for_admin(user_id=user_id, session_id=session_id, reason="idle-timeout")
+        if idle["state"] in {"ended", "expired"}:
             raise DomainRequestError(
                 "realtime-speech",
                 "web-heartbeat",

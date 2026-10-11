@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prebuild": "node scripts/build-resource-center.mjs",
+    "resources:build": "node scripts/build-resource-center.mjs",
     "dev": "vite",
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
     "build": "tsc -p tsconfig.json --noEmit && vite build",

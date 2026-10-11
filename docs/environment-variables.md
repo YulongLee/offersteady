@@ -387,8 +387,10 @@ VITE_API_BASE_URL=http://127.0.0.1:8000 npm run dev:web
 - `OFFERSTEADY_CHAT_QWEN_BASE_URL` 应填写 OpenAI-compatible 根地址，例如 `https://dashscope.aliyuncs.com/compatible-mode/v1`。
 - `OFFERSTEADY_CHAT_QWEN_API_KEY` 只放在服务端 `.env`，不要放进任何 `VITE_` 前端变量。
 - `OFFERSTEADY_CHAT_QWEN_MODEL` 与当前百炼 / DashScope 控制台可用模型名保持一致。
+- 国服 2026-10-08 迁移目标：共享文本模型显式设置为 `deepseek-v4.1-flash`，覆盖简历/JD 摘要、模拟面试出题和报告等读取共享模型的链路；快答与详细回答仍保留各自的同名模型覆盖。不要把已于公告中列为 2026-10-10 下线的 `deepseek-v4-flash` 作为国服共享模型或回退目标。资料摘要显式关闭深度思考，保留现有超时及提取式回退。该配置不替换 TTS、ASR、视觉、向量或重排序模型，也不自动修改国际服线上。
 - `OFFERSTEADY_CHAT_QUICK_MODEL` 可选；配置后仅实时快答、问题规范化与快答续写使用该模型。留空即可回退到共享模型。当前候选值为 `deepseek-v4.1-flash`。
 - `OFFERSTEADY_CHAT_DETAIL_MODEL` 可选；配置后仅实时详细回答、详细回答语言修复与详细续写使用该模型。留空即可回退到 `OFFERSTEADY_CHAT_QWEN_MODEL`。文档摘要、通用非实时对话及其他 AI 链路不受影响。当前候选值为 `deepseek-v4.1-flash`。
+- 国服模拟面试提问朗读 2026-10-09 迁移：同时配置 `OFFERSTEADY_MOCK_INTERVIEW_TTS_MODEL=qwen-audio-3.0-tts-plus`、`OFFERSTEADY_MOCK_INTERVIEW_TTS_VOICE=longanhuan_v3.6`（龙安欢女声）及 `OFFERSTEADY_MOCK_INTERVIEW_TTS_WS_URL=wss://dashscope.aliyuncs.com/api-ws/v1/inference`。新模型不是旧 realtime 协议，不能只换名称或沿用 Cherry。输出仍为 24 kHz 单声道 PCM，无需助手升级。`OFFERSTEADY_MOCK_INTERVIEW_TTS_API_KEY` 留空复用服务端聊天密钥；密钥需在同地域空间具备新模型权限。Settings 旧协议默认保留仅为兼容未迁移配置，不是长期可用保证；本次不修改国际服。
 - `OFFERSTEADY_WEB_SEARCH_ENABLED` 默认关闭；仅在服务端配置并验证 Responses API 后开启联网详细回答。
 - `OFFERSTEADY_WEB_SEARCH_RESPONSES_BASE_URL` 应填写百炼业务空间的 Responses API 根地址（北京或新加坡地域），不得暴露到前端。
 - `OFFERSTEADY_WEB_SEARCH_API_KEY` 可单独配置联网密钥；留空时回退使用服务端聊天密钥。

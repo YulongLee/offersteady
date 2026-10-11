@@ -25,6 +25,7 @@
     "reset-privacy-open:mac:x64": "node scripts/reset-privacy-and-open.mjs x64",
     "package:mac:builder:arm64": "node scripts/build-native-runtime.mjs arm64 && npm run build && electron-builder --mac --arm64 --config electron-builder.yml",
     "package:mac:builder:x64": "npm run package:mac:x64",
+    "package:mac:compat:ventura13.4:arm64": "node scripts/package-ventura-compat-mac.mjs",
     "package:mac:global:arm64": "node scripts/prepare-global-runtime-config.mjs && node scripts/build-native-runtime.mjs arm64 && npm run build:global && OFFERSTEADY_PRODUCT_EDITION=global electron-builder --mac --arm64 --config electron-builder.global.yml",
     "package:mac:global:x64": "node scripts/prepare-global-runtime-config.mjs && node scripts/build-native-runtime.mjs x64 && npm run build:global && OFFERSTEADY_PRODUCT_EDITION=global electron-builder --mac --x64 --config electron-builder.global.yml",
     "package:mac:dir": "npm run build && electron-builder --mac --dir --config electron-builder.yml",

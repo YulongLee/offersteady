@@ -21,6 +21,7 @@ from app.ports.interview_session import (
     SessionMaterialBinding,
     SessionUsageRecord,
     SessionUsageTotals,
+    SessionHeartbeatState,
 )
 from app.services.material_availability import MaterialAvailabilityValidator
 from app.services.session_mode_guard import require_standard_session
@@ -271,6 +272,19 @@ class SessionService:
 
     def idle_status(self, *, user_id: str, session_id: str, at_ms: int | None = None) -> dict[str, object]:
         session = self.get_session(user_id=user_id, session_id=session_id)
+        return self._idle_status_from_session(session=session, at_ms=at_ms)
+
+    def heartbeat_idle_status(self, *, user_id: str, session_id: str, at_ms: int | None = None) -> dict[str, object]:
+        session = self.repository.get_heartbeat_state(session_id)
+        if session is None:
+            raise DomainRequestError("session", "get", "面试会话不存在。", 404)
+        if session.owner_user_id != user_id:
+            raise DomainRequestError("session", "get", "不能查看其他用户的面试会话。", 403)
+        return self._idle_status_from_session(session=session, at_ms=at_ms)
+
+    def _idle_status_from_session(
+        self, *, session: InterviewSessionRecord | SessionHeartbeatState, at_ms: int | None = None
+    ) -> dict[str, object]:
         current = at_ms if at_ms is not None else _now_ms()
         warning_at_ms = session.last_activity_at_ms + self.settings.interview_idle_warning_seconds * 1000
         expires_at_ms = session.last_activity_at_ms + self.settings.interview_idle_timeout_seconds * 1000

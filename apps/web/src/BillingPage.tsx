@@ -472,14 +472,14 @@ export function BillingPage({ state, setState }: Props) {
         <article key={item.id} className="price-card">
           <span>
             {item.kind === "time_pass"
-              ? "回答与截图不限次"
+              ? `约 ¥${(item.priceCents / 100 / ((item.durationDays ?? 1) * 24)).toFixed(2)}/小时`
               : `¥${(item.priceCents / 100 / (item.points ?? 1)).toFixed(3)}/点`}
           </span>
           <h3>{item.displayName}</h3>
           <strong>{money(item.priceCents)}</strong>
           <small>
             {item.kind === "time_pass"
-              ? `约 ¥${(item.priceCents / 100 / (item.durationDays ?? 1)).toFixed(2)}/天${item.knowledgeIndexAllowance ? ` · 含 ${item.knowledgeIndexAllowance} 份知识材料` : " · 知识材料按点"}`
+              ? `回答、截图与笔试入场免费${item.knowledgeIndexAllowance ? ` · 含 ${item.knowledgeIndexAllowance} 份知识材料` : " · 知识材料按点"} · ${(item.durationDays ?? 0) >= 7 ? "联网详细回答不限次" : `联网详细回答 ${state.billing.rates.webSearchAnswerPoints ?? 20} 点/次`}`
               : `预计可回答 ${Math.floor((item.points ?? 0) / state.billing.rates.answerPoints)} 次`}
           </small>
           <button
@@ -955,6 +955,16 @@ export function BillingPage({ state, setState }: Props) {
             <p>识别失败或取消会释放预留积分。</p>
           </article>
           <article>
+            <b>{state.billing.rates.writtenExamPoints ?? 30} 点/次</b>
+            <strong>笔试入场</strong>
+            <p>有效时间会员免费；没有有效会员时，成功进入笔试后按 30 点/次结算。</p>
+          </article>
+          <article>
+            <b>{state.billing.rates.webSearchAnswerPoints ?? 20} 点/次</b>
+            <strong>联网详细回答</strong>
+            <p>仅详细回答使用联网资料；7 天及以上会员免费，1/3 天会员按次扣积分。简单回答不受联网开关影响。</p>
+          </article>
+          <article>
             <b>{state.billing.rates.knowledgeIndexMinimumPoints} 点起</b>
             <strong>知识材料索引</strong>
             <p>
@@ -1120,6 +1130,17 @@ export function BillingPage({ state, setState }: Props) {
               订单金额由服务端目录确认：
               <strong>{money(product.priceCents)}</strong>
             </p>
+            {product.kind === "time_pass" ? (
+              <p className="checkout-entitlement-note">
+                {product.durationDays && product.durationDays >= 7
+                  ? "本套餐包含普通回答、截图回答和笔试入场免费；联网详细回答不限次，知识材料按套餐额度或积分规则计算。"
+                  : `本套餐包含普通回答、截图回答和笔试入场免费；联网详细回答按 ${state.billing.rates.webSearchAnswerPoints ?? 20} 积分/次，知识材料按实际用量计费。`}
+              </p>
+            ) : (
+              <p className="checkout-entitlement-note">
+                积分可用于普通回答、截图回答、实时面试和联网详细回答，具体费率以页面消费说明为准。
+              </p>
+            )}
             {!checkout && !checkoutPending ? (
               <div className="checkout-channel-actions">
                 {state.billing.availablePaymentChannels.includes("wechat") ? (

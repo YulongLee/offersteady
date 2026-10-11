@@ -165,7 +165,7 @@ def test_realtime_minute_uses_active_pass_without_deducting_points() -> None:
     assert service.state_for_user(user_id=user_id).balance == 200
 
 
-def test_written_exam_entry_costs_30_points_even_with_active_pass() -> None:
+def test_written_exam_entry_is_free_with_active_one_day_pass() -> None:
     service = BillingService()
     user_id = "synthetic-written-exam-user"
     now_ms = service.now_ms_provider()
@@ -183,19 +183,67 @@ def test_written_exam_entry_costs_30_points_even_with_active_pass() -> None:
         user_id=user_id,
         usage_id="written-exam-entry:session-written",
         usage_kind="written_exam_entry",
-        wallet_only=True,
     )
     replay = service.reserve_usage(
         user_id=user_id,
         usage_id="written-exam-entry:session-written",
         usage_kind="written_exam_entry",
-        wallet_only=True,
+    )
+
+    assert first.reservation_id == replay.reservation_id
+    assert first.billing_source == "time_pass"
+    assert first.points_reserved == 0
+    assert first.wallet_only is False
+    service.settle_usage(usage_id=first.usage_id)
+    service.settle_usage(usage_id=first.usage_id)
+    assert service.state_for_user(user_id=user_id).balance == 200
+
+
+def test_written_exam_entry_is_free_with_active_longer_pass() -> None:
+    service = BillingService()
+    user_id = "synthetic-written-exam-long-pass-user"
+    now_ms = service.now_ms_provider()
+    service.pass_entitlements_by_user[user_id] = [TimePassEntitlementRecord(
+        id="written-long-pass-entitlement",
+        user_id=user_id,
+        product_id="pass-7",
+        starts_at_ms=now_ms - 1_000,
+        ends_at_ms=now_ms + 60_000,
+        order_id="written-long-pass-order",
+        knowledge_allowance_granted=0,
+    )]
+
+    reservation = service.reserve_usage(
+        user_id=user_id,
+        usage_id="written-exam-entry:session-written-long-pass",
+        usage_kind="written_exam_entry",
+    )
+
+    assert reservation.billing_source == "time_pass"
+    assert reservation.points_reserved == 0
+    service.settle_usage(usage_id=reservation.usage_id)
+    assert service.state_for_user(user_id=user_id).balance == 200
+
+
+def test_written_exam_entry_charges_points_without_active_pass() -> None:
+    service = BillingService()
+    user_id = "synthetic-written-exam-points-user"
+
+    first = service.reserve_usage(
+        user_id=user_id,
+        usage_id="written-exam-entry:session-written-points",
+        usage_kind="written_exam_entry",
+    )
+    replay = service.reserve_usage(
+        user_id=user_id,
+        usage_id="written-exam-entry:session-written-points",
+        usage_kind="written_exam_entry",
     )
 
     assert first.reservation_id == replay.reservation_id
     assert first.billing_source == "points"
     assert first.points_reserved == 30
-    assert first.wallet_only is True
+    assert first.wallet_only is False
     service.settle_usage(usage_id=first.usage_id)
     service.settle_usage(usage_id=first.usage_id)
     assert service.state_for_user(user_id=user_id).balance == 170

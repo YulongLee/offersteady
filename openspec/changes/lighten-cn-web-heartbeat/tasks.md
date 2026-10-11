@@ -1,0 +1,18 @@
+## 1. Implementation
+
+- [x] 1.1 Add five-field heartbeat projection to protocol, memory and PostgreSQL repositories.
+- [x] 1.2 Add authorized heartbeat idle calculation sharing existing time boundaries; remove duplicate/material-aware reads only from web heartbeat.
+
+## 2. Verification
+
+- [x] 2.1 Add regression tests for read counts, ownership, deletion, idle/ended paths, leases and material-aware operations.
+- [x] 2.2 Run isolated PostgreSQL projection tests and identical-load synthetic performance comparison; run relevant existing lifecycle/API/billing/answer/mock regressions.
+- [x] 2.3 Validate OpenSpec and fixed-scope deployment overlay guards.
+
+## 3. CN release
+
+- [x] 3.1 Prepare actual-running-image overlay and run isolated candidate verification without touching live service.
+- [x] 3.2 Repeat protected-work gates; only when idle, switch backend, verify health/models/configuration/non-target isolation and preserve rollback.
+- [x] 3.3 Record measured evidence, deployment status, scenario mapping and user acceptance boundary.
+
+Verification and release evidence: [CN release report](../../../docs/releases/cn-web-heartbeat-lightweight-20261010.1.md). Real-user end-to-end acceptance remains with the user after deployment; two pre-existing assertion failures and one timing exclusion are explicitly recorded in that report.

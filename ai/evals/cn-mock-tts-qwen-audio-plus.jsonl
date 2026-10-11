@@ -1,0 +1,2 @@
+{"id":"synthetic-project-introduction","text":"你好，欢迎参加模拟面试。请介绍一个你最近完成的项目，以及你在项目中的主要职责。","model":"qwen-audio-3.0-tts-plus","voice":"longanhuan_v3.6","sampleRate":24000,"checks":["completed","nonSilent","bounded","connectionClosed"]}
+{"id":"synthetic-technical-follow-up","text":"你刚才提到 Python、PostgreSQL 和 Redis。请解释如何避免订单接口的重复写入，并说明异常情况下的处理方法。","model":"qwen-audio-3.0-tts-plus","voice":"longanhuan_v3.6","sampleRate":24000,"checks":["completed","nonSilent","bounded","connectionClosed"]}

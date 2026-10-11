@@ -11,6 +11,7 @@ from app.ports.interview_session import (
     InterviewLanguage,
     ProgrammingLanguage,
     SessionUsageRecord,
+    SessionHeartbeatState,
 )
 
 
@@ -29,6 +30,18 @@ class InMemoryInterviewSessionRepository(InterviewSessionRepository):
     def get_session(self, session_id: str) -> InterviewSessionRecord | None:
         record = self.sessions.get(session_id)
         return replace(record) if record else None
+
+    def get_heartbeat_state(self, session_id: str) -> SessionHeartbeatState | None:
+        record = self.sessions.get(session_id)
+        if record is None:
+            return None
+        return SessionHeartbeatState(
+            session_id=record.session_id,
+            owner_user_id=record.owner_user_id,
+            status=record.status,
+            started_at_ms=record.started_at_ms,
+            last_activity_at_ms=record.last_activity_at_ms,
+        )
 
     def list_sessions_for_user(self, *, user_id: str, status=None) -> list[InterviewSessionRecord]:
         items = [session for session in self.sessions.values() if session.owner_user_id == user_id]

@@ -78,7 +78,7 @@ describe("approved four-page SEO scope", () => {
       expect(sitemap).toContain("<loc>" + canonical + "</loc>");
     }
     expect(titles.size).toBe(4);
-    expect((sitemap.match(/<loc>/g) ?? []).length).toBe(30);
+    expect((sitemap.match(/<loc>/g) ?? []).length).toBe(36);
   });
   it("keeps homepage product definition in initial and client HTML with unchanged Title/H1", () => {
     for (const path of ["index.html", "src/App.tsx"]) expect(readFileSync(path, "utf8")).toContain("面试稳是一款面向求职者的AI面试助手");

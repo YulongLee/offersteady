@@ -123,10 +123,23 @@ class InterviewSessionRecord:
     last_activity_at_ms: int = 0
 
 
+@dataclass(frozen=True)
+class SessionHeartbeatState:
+    """Authoritative lifecycle fields; never includes materials or conversation."""
+
+    session_id: str
+    owner_user_id: str
+    status: InterviewSessionState
+    started_at_ms: int | None
+    last_activity_at_ms: int
+
+
 class InterviewSessionRepository(Protocol):
     def save_session(self, session: InterviewSessionRecord) -> InterviewSessionRecord: ...
 
     def get_session(self, session_id: str) -> InterviewSessionRecord | None: ...
+
+    def get_heartbeat_state(self, session_id: str) -> SessionHeartbeatState | None: ...
 
     def list_sessions_for_user(self, *, user_id: str, status: InterviewSessionState | None = None) -> list[InterviewSessionRecord]: ...
 

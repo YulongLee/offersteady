@@ -1,0 +1,4 @@
+services:
+  backend:
+    image: offersteady-global-backend:20261011-global-performance-parity-1
+    build: !reset null

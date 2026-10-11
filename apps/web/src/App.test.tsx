@@ -234,6 +234,7 @@ describe("OfferSteady web application", () => {
     expect(screen.getAllByText("笔试独立场次").length).toBeGreaterThan(0);
     expect(screen.queryByText("面试独立场次")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /新建笔试/ })).toHaveAttribute("href", "/app/written-exams/new");
+    expect(screen.getByText("会员免费 · 非会员 30 积分 / 次")).toBeInTheDocument();
   });
 
   it("uses 模拟面试 on both navigation surfaces when the feature is enabled", async () => {
@@ -377,6 +378,7 @@ describe("OfferSteady web application", () => {
       role: "算法工程师",
       sessionMode: "written",
     }), expect.any(AbortSignal)));
+    expect(screen.getByText(/有效时间会员免费/)).toBeInTheDocument();
     expect(screen.queryByRole("radio", { name: /面试模式/ })).not.toBeInTheDocument();
   });
 
@@ -395,7 +397,7 @@ describe("OfferSteady web application", () => {
     openAtWithState("/app/interviews/written-prepare/prepare", state, true);
 
     expect(await screen.findByRole("heading", { name: "连接伴随助手" })).toBeInTheDocument();
-    expect(screen.getByText("开始时扣除 30 积分")).toBeInTheDocument();
+    expect(screen.getByText("有效时间会员免费 · 非会员开始时扣除 30 积分")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /开始笔试/ })).toBeDisabled();
     expect(screen.queryByText("本场数据说明")).not.toBeInTheDocument();
     expect(screen.queryByText(/每次截屏回答/)).not.toBeInTheDocument();
