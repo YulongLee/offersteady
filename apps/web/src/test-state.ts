@@ -173,7 +173,7 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
   private readonly cancelResults = new Map<string, CancelAnswerResult>();
   private redemption: RedemptionSuccessData | null = null;
   private readonly redemptionRequests = new Map<string, PointsRedemptionResult>();
-  async loadState(signal?: AbortSignal) {
+  async loadState(signal?: AbortSignal, _options?: { readonly auth?: boolean; readonly force?: boolean }) {
     await delay(signal);
     const state = structuredClone(syntheticState);
     if (this.redemption) state.billing = { ...state.billing, balance: this.redemption.newBalance, ledger: [this.redemption.ledgerEntry, ...state.billing.ledger] };

@@ -103,7 +103,7 @@ function PrototypeProvider({ children, initialAuthenticated, initialState, publi
   const logout = async () => {
     await authClient.logout();
     setAuthenticated(false);
-    try { setState(await interviewAppAdapter.loadState()); } catch { setState(current => current); }
+    try { setState(await interviewAppAdapter.loadState(undefined, { auth: false, force: true })); } catch { setState(current => current); }
   };
 
   if (!state && publicStartup?.pathname === pathname && /^\/(?:guide|terms|privacy)?\/?$/.test(pathname)) {
@@ -247,7 +247,7 @@ function LoginPage() {
   const enter = () => { setAuthenticated(true); navigate(destination, { replace: true }); };
   const enterWithAccount = (account: WebAppState["account"]) => {
     setState(current => ({ ...current, account }));
-    void interviewAppAdapter.loadState().then(next => setState(next)).catch(() => undefined);
+    void interviewAppAdapter.loadState(undefined, { force: true }).then(next => setState(next)).catch(() => undefined);
     enter();
   };
   useEffect(() => {
@@ -428,7 +428,7 @@ function HomePage() {
     try {
       await runAdapterOperation(signal => interviewAppAdapter.deleteInterview(interviewId, signal));
       try {
-        const next = await runAdapterOperation(signal => interviewAppAdapter.loadState(signal));
+        const next = await runAdapterOperation(signal => interviewAppAdapter.loadState(signal, { force: true }));
         setState(next);
       } catch {
         setState(current => ({ ...current, interviews: current.interviews.filter(item => item.id !== interviewId) }));
@@ -458,7 +458,7 @@ function WrittenExamHomePage() {
     try {
       await runAdapterOperation(signal => interviewAppAdapter.deleteInterview(sessionId, signal));
       try {
-        setState(await runAdapterOperation(signal => interviewAppAdapter.loadState(signal)));
+        setState(await runAdapterOperation(signal => interviewAppAdapter.loadState(signal, { force: true })));
       } catch {
         setState(current => ({ ...current, interviews: current.interviews.filter(item => item.id !== sessionId) }));
       }

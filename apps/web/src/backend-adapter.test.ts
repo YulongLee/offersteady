@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { BackendPreviewInterviewAdapter, FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS, REALTIME_TRANSPORT_STALL_TIMEOUT_MS, toPreparationAudioReadiness } from "./backend-adapter";
+import { BackendPreviewInterviewAdapter, FIRST_REALTIME_SNAPSHOT_TIMEOUT_MS, REALTIME_TRANSPORT_STALL_TIMEOUT_MS, WEB_STATE_CACHE_TTL_MS, toPreparationAudioReadiness } from "./backend-adapter";
 import { syntheticState } from "./test-state";
 
 const envelope = (data: unknown) => ({
@@ -184,6 +184,97 @@ describe("backend preview adapter", () => {
     const state = await adapter.loadState();
     expect(fetchImpl).toHaveBeenCalledWith("http://localhost:8000/api/v1/web/state", expect.any(Object));
     expect(state.interviews[0]?.id).toBe(syntheticState.interviews[0]?.id);
+  });
+
+  it("merges concurrent state reads and returns independent state values", async () => {
+    let resolveResponse!: (response: Response) => void;
+    const response = new Promise<Response>(resolve => { resolveResponse = resolve; });
+    const fetchImpl = vi.fn(async () => response);
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+
+    const first = adapter.loadState();
+    const second = adapter.loadState();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    resolveResponse(new Response(JSON.stringify(envelope(syntheticState)), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    const [firstState, secondState] = await Promise.all([first, second]);
+    firstState.interviews.length = 0;
+    expect(secondState.interviews.length).toBe(syntheticState.interviews.length);
+  });
+
+  it("keeps public and authenticated state reads isolated", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "access-token");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "refresh-token");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "user-1", displayName: "测试用户", createdAtMs: 1, bindings: [] }));
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(envelope(syntheticState)), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+
+    await Promise.all([
+      adapter.loadState(undefined, { auth: false }),
+      adapter.loadState(),
+    ]);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const headers = fetchImpl.mock.calls.map(call => new Headers(((call as unknown as [string | URL | Request, RequestInit | undefined])[1])?.headers));
+    expect(headers.some(item => item.has("Authorization"))).toBe(true);
+    expect(headers.some(item => !item.has("Authorization"))).toBe(true);
+  });
+
+  it("reuses recent success, refreshes after the TTL, and supports forced replacement", async () => {
+    vi.useFakeTimers();
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(envelope(syntheticState)), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+
+    await adapter.loadState();
+    vi.advanceTimersByTime(WEB_STATE_CACHE_TTL_MS - 1);
+    await adapter.loadState();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(1);
+    await adapter.loadState();
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+    await adapter.loadState(undefined, { force: true });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    await adapter.loadState();
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    vi.useRealTimers();
+  });
+
+  it("does not cache failed state reads", async () => {
+    const fetchImpl = vi.fn()
+      .mockRejectedValueOnce(new Error("temporary failure"))
+      .mockResolvedValueOnce(new Response(JSON.stringify(envelope(syntheticState)), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }));
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+
+    await expect(adapter.loadState()).rejects.toThrow("无法连接后端基础服务");
+    await expect(adapter.loadState()).resolves.toMatchObject({ interviews: syntheticState.interviews });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("honors an already-aborted caller without opening a state request", async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(envelope(syntheticState)), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    const adapter = new BackendPreviewInterviewAdapter("http://localhost:8000", fetchImpl as typeof fetch);
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(adapter.loadState(controller.signal)).rejects.toMatchObject({ name: "AbortError" });
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it("serializes performance acknowledgements and bounds a burst", async () => {

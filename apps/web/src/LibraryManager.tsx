@@ -127,7 +127,7 @@ export function LibraryManager({ state, setState }: Props) {
   const refreshFromBackend = async (signal?: AbortSignal) => {
     const generation = ++refreshGenerationRef.current;
     const next = await runAdapterOperation(
-      (requestSignal) => interviewAppAdapter.loadState(requestSignal),
+      (requestSignal) => interviewAppAdapter.loadState(requestSignal, { force: true }),
       signal,
     );
     if (generation === refreshGenerationRef.current) setState(next);

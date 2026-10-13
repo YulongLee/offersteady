@@ -543,7 +543,7 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
   };
   const syncBilling = async () => {
     try {
-      const refreshed = await interviewAppAdapter.loadState();
+      const refreshed = await interviewAppAdapter.loadState(undefined, { force: true });
       setState(current => ({ ...current, billing: refreshed.billing }));
     } catch {
       // The completed task remains usable; the next state refresh will reconcile billing.
