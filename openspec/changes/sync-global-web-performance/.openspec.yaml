@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-10-13
+goal: Reduce duplicate Global Web state reads and excessive transcript
+  performance acknowledgements while preserving Global client behavior

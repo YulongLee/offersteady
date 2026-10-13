@@ -269,7 +269,7 @@ function HomePage() {
     try {
       await runAdapterOperation(signal => interviewAppAdapter.deleteInterview(interviewId, signal));
       try {
-        const next = await runAdapterOperation(signal => interviewAppAdapter.loadState(signal));
+        const next = await runAdapterOperation(signal => interviewAppAdapter.loadState(signal, { force: true }));
         setState(next);
       } catch {
         setState(current => ({ ...current, interviews: current.interviews.filter(item => item.id !== interviewId) }));
@@ -299,7 +299,7 @@ function WrittenExamHomePage() {
     try {
       await runAdapterOperation(signal => interviewAppAdapter.deleteInterview(sessionId, signal));
       try {
-        setState(await runAdapterOperation(signal => interviewAppAdapter.loadState(signal)));
+        setState(await runAdapterOperation(signal => interviewAppAdapter.loadState(signal, { force: true })));
       } catch {
         setState(current => ({ ...current, interviews: current.interviews.filter(item => item.id !== sessionId) }));
       }
@@ -1166,7 +1166,7 @@ function LivePage() {
   };
   const syncBilling = async () => {
     try {
-      const refreshed = await interviewAppAdapter.loadState();
+      const refreshed = await interviewAppAdapter.loadState(undefined, { force: true });
       setState(current => ({ ...current, billing: refreshed.billing }));
     } catch {
       // The completed task remains usable; the next state refresh will reconcile billing.

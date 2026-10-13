@@ -40,6 +40,41 @@ const MAX_PENDING_PERFORMANCE_ACKS = 16;
 // session window and always retain final revisions, so a long interview does
 // not turn every subtitle update into a synchronous API request.
 const TRANSCRIPT_ACK_INTERVAL_MS = 5_000;
+export const WEB_STATE_CACHE_TTL_MS = 1_500;
+
+type WebStateCacheKey = "public" | "authenticated";
+
+interface WebStateCacheEntry {
+  readonly state: WebAppState;
+  readonly cachedAtMs: number;
+}
+
+const cloneWebState = (state: WebAppState): WebAppState => structuredClone(state);
+
+const abortError = () => new DOMException("Aborted", "AbortError");
+
+const awaitWithAbort = <T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> => {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(abortError());
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      cleanup();
+      reject(abortError());
+    };
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      value => {
+        cleanup();
+        resolve(value);
+      },
+      error => {
+        cleanup();
+        reject(error);
+      },
+    );
+  });
+};
 // A healthy backend normally answers in milliseconds. This deadline is only a
 // circuit breaker for a half-open transport; keeping it above short production
 // scheduling spikes prevents destructive reconnect churn during page entry.
@@ -1046,6 +1081,8 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   private readonly pendingPerformanceAcks: Array<{ readonly key: string; readonly send: () => Promise<unknown> }> = [];
   private readonly lastTranscriptAckAtBySegment = new Map<string, number>();
   private readonly lastTranscriptAckAtBySession = new Map<string, number>();
+  private readonly webStateCache = new Map<WebStateCacheKey, WebStateCacheEntry>();
+  private readonly webStateRequests = new Map<WebStateCacheKey, Promise<WebAppState>>();
   private performanceAckInFlight = false;
 
   private drainPerformanceAcks() {
@@ -1294,8 +1331,34 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     return this.foundation;
   }
 
-  async loadState(signal?: AbortSignal, options?: { readonly auth?: boolean }): Promise<WebAppState> {
-    return this.client.request<WebAppState>("/api/v1/web/state", { headers: options?.auth === false ? {} : authHeaders() }, signal);
+  async loadState(signal?: AbortSignal, options?: { readonly auth?: boolean; readonly force?: boolean }): Promise<WebAppState> {
+    const key: WebStateCacheKey = options?.auth === false ? "public" : "authenticated";
+    if (signal?.aborted) return Promise.reject(abortError());
+    const now = Date.now();
+    const cached = this.webStateCache.get(key);
+    if (!options?.force && cached && now - cached.cachedAtMs < WEB_STATE_CACHE_TTL_MS) {
+      return cloneWebState(cached.state);
+    }
+
+    let request = this.webStateRequests.get(key);
+    if (!request) {
+      const controller = new AbortController();
+      request = this.client.request<WebAppState>(
+        "/api/v1/web/state",
+        { headers: key === "public" ? {} : authHeaders() },
+        controller.signal,
+      )
+        .then(state => {
+          this.webStateCache.set(key, { state: cloneWebState(state), cachedAtMs: Date.now() });
+          return state;
+        })
+        .finally(() => {
+          if (this.webStateRequests.get(key) === request) this.webStateRequests.delete(key);
+        });
+      this.webStateRequests.set(key, request);
+    }
+
+    return awaitWithAbort(request, signal).then(cloneWebState);
   }
 
   async getBillingState(signal?: AbortSignal): Promise<BillingPresentationState> {
