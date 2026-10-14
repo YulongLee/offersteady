@@ -16,3 +16,10 @@
 - [x] 3.3 Record measured evidence, deployment status, scenario mapping and user acceptance boundary.
 
 Verification and release evidence: [CN release report](../../../docs/releases/cn-web-heartbeat-lightweight-20261010.1.md). Real-user end-to-end acceptance remains with the user after deployment; two pre-existing assertion failures and one timing exclusion are explicitly recorded in that report.
+
+## 4. Restore the overwritten CN heartbeat (2026-10-14)
+
+- [x] 4.1 Extract the actual running Backend source, restore only the heartbeat method in an isolated candidate, and prove unrelated AST nodes unchanged.
+- [x] 4.2 Add restoration regression/release guards and run local synthetic lifecycle, mock, billing and heartbeat checks against the actual-source candidate.
+- [ ] 4.3 Record local verification, validate OpenSpec, commit and push the approved patch/tests/release tooling to Git.
+- [ ] 4.4 Build and verify the candidate image, repeat protected-work idle gates, deploy only Backend, and verify effective source, health, mock capability, unchanged components/configuration and rollback evidence.

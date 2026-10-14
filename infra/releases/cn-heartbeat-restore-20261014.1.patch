@@ -1,0 +1,15 @@
+--- a/apps/backend/app/services/realtime_speech_service.py
++++ b/apps/backend/app/services/realtime_speech_service.py
+@@ -2179,6 +2179,9 @@
+     def record_web_session_heartbeat(self, *, user_id: str, session_id: str, binding_id: str | None, page: str, page_instance_id: str | None = None) -> WebSessionHeartbeatRecord:
++        # Keep this entry point on the authoritative projection: get_session
++        # would refresh every bound document on each repeated page heartbeat.
++        idle = self.session_service.heartbeat_idle_status(user_id=user_id, session_id=session_id)
+         self._touch_session_activity(session_id=session_id, user_id=user_id)
+-        idle = self.reconcile_idle_session(user_id=user_id, session_id=session_id)
+-        session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+-        if session.status == "ended":
++        if idle["state"] == "expired":
++            self.terminate_session_for_admin(user_id=user_id, session_id=session_id, reason="idle-timeout")
++        if idle["state"] in {"ended", "expired"}:
+             raise DomainRequestError(

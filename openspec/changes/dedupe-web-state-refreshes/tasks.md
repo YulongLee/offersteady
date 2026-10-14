@@ -15,6 +15,8 @@
 
 ## Verification notes (2026-10-14)
 
+- Current deployment status: withdrawn at 22:36 Asia/Shanghai. The candidate used stale pre-mock-interview Web source and omitted the deployed mock routes. Web was restored to the retained `pricing-copy-hourly-20261011.1` image; Backend/DB/Redis were unchanged. Local implementation remains verified, but production readiness requires rebuilding from the actual running component and checking preserved routes/features.
+
 - Passed: adapter and application initialization tests (48 tests), Web typecheck, production Web build, `openspec validate dedupe-web-state-refreshes --strict`, and `git diff --check`.
 - Full Web suite: 490 passed, 3 existing Nginx release-contract assertions failed because the current configuration does not contain the older `map`/legal-route/partner-program patterns. No new failure was introduced by this change.
 - Deployed to CN Web during an idle window at 2026-10-14 00:34 Asia/Shanghai. The release copied `/opt/offersteady/releases/20260923-cn-quick-stage-1`, overlaid only the approved Web state-refresh files, and switched `current` to `/opt/offersteady/releases/20261014-cn-web-state-dedupe-1`.

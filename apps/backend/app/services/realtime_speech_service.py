@@ -2193,6 +2193,8 @@ class RealtimeSpeechService:
             executor.shutdown(wait=False, cancel_futures=True)
 
     def record_web_session_heartbeat(self, *, user_id: str, session_id: str, binding_id: str | None, page: str, page_instance_id: str | None = None) -> WebSessionHeartbeatRecord:
+        # Keep this entry point on the authoritative projection: get_session
+        # would refresh every bound document on each repeated page heartbeat.
         idle = self.session_service.heartbeat_idle_status(user_id=user_id, session_id=session_id)
         self._touch_session_activity(session_id=session_id, user_id=user_id)
         if idle["state"] == "expired":
