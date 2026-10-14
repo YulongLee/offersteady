@@ -28,7 +28,7 @@ describe("isolated Global companion release", () => {
     const main = readDesktop("src/main/index.ts");
     expect(main).toContain("app.isPackaged && existsSync(packagedGlobalRuntimeConfigPath())");
     expect(main).toContain("isGlobalRelease() ? [] : legacyUserDataDirectories");
-    expect(main).toContain('releaseChannel: isGlobalRelease() ? "global"');
+    expect(main).toContain('releaseChannel: localTestRuntime ? "local-test" : isGlobalRelease() ? "global"');
     expect(main).toContain("global-runtime-config.json");
     expect(main).toContain('desktopCopy("稳", "O")');
     expect(main).toContain("isGlobalRelease()\n    ? defaultWebWorkspaceUrl()");

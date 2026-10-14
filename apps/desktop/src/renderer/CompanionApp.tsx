@@ -4,6 +4,7 @@ import type { DesktopNativeRuntimeHealth, DesktopPairingIdentity, DesktopRuntime
 import { MicrophoneAudioAdapter, SystemAudioAdapter, describeMediaError } from "./audio/audio-source-adapter";
 import { LocalSourceMonitor } from "./audio/local-source-monitor";
 import { MockMicrophone } from "./audio/mock-microphone";
+import { mockMicrophoneHealth, mockMicrophoneMeterCopy, type MockMicrophoneState } from "./audio/mock-microphone-presentation";
 import { DesktopRealtimePublisher, publisherFailureIsTerminal, type DesktopRealtimeReliabilitySnapshot } from "./audio/realtime-publisher";
 import { WarmSourceHandoff } from "./audio/warm-source-handoff";
 import { sourceHealthIsAudioReady } from "./audio/audio-readiness";
@@ -464,6 +465,8 @@ export function CompanionApp() {
   const [selectedSystemAudioId, setSelectedSystemAudioId] = useState(systemAudioOptions[0]?.id ?? "");
   const [selectedScreenId, setSelectedScreenId] = useState(defaultScreens[0]?.id ?? "");
   const [permissions, setPermissions] = useState<{ microphone: AudioPermission; systemAudio: AudioPermission }>({ microphone: "unknown", systemAudio: "unknown" });
+  const permissionsRef = useRef(permissions);
+  permissionsRef.current = permissions;
   const [screenPermission, setScreenPermission] = useState<AudioPermission>("unknown");
   const [connectionNotice, setConnectionNotice] = useState("正在生成本机连接码…");
   const [connectionInfo, setConnectionInfo] = useState("暂无连接设备");
@@ -491,6 +494,11 @@ export function CompanionApp() {
   const [liveSourceHealthState, setLiveSourceHealthState] = useState<readonly AudioSourceHealth[]>([]);
   const [monitorSourceHealthState, setMonitorSourceHealthState] = useState<readonly AudioSourceHealth[]>([]);
   const [publisherRetryNonce, setPublisherRetryNonce] = useState(0);
+  const [mockMicrophoneError, setMockMicrophoneError] = useState<string | null>(null);
+  const [mockMicrophoneRetryNonce, setMockMicrophoneRetryNonce] = useState(0);
+  const [mockMicrophoneRetrying, setMockMicrophoneRetrying] = useState(false);
+  const [mockMicrophoneState, setMockMicrophoneState] = useState<MockMicrophoneState>(null);
+  const [mockMicrophoneLevel, setMockMicrophoneLevel] = useState<number | null>(null);
   const reliabilityRef = useRef<DesktopRealtimeReliabilitySnapshot | null>(null);
   const reliabilityRateRef = useRef<{
     readonly atMs: number;
@@ -540,7 +548,9 @@ export function CompanionApp() {
     }
   };
   const [captureDiagnostic, setCaptureDiagnostic] = useState<string | null>(null);
-  const sourceHealthState = mergeDisplayedSourceHealth(liveSourceHealthState, monitorSourceHealthState);
+  const sourceHealthState = bindingSessionMode === "mock"
+    ? [mockMicrophoneHealth(mockMicrophoneState, mockMicrophoneLevel, selectedMicrophoneId || DEFAULT_MICROPHONE_ID)]
+    : mergeDisplayedSourceHealth(liveSourceHealthState, monitorSourceHealthState);
   const captureEnabled = captureEnabledForBinding(bindingSessionStatus, bindingCaptureState);
   activeBindingRef.current = activeBinding;
   bindingSessionStatusRef.current = bindingSessionStatus;
@@ -724,8 +734,8 @@ export function CompanionApp() {
     platform: runtime.platform,
     architecture: runtime.architecture,
     platformVersion: runtime.platformVersion,
-    microphone: microphoneReady ? "granted" : permissions.microphone,
-    systemAudio: systemAudioReady ? "granted" : permissions.systemAudio,
+    microphone: permissionsRef.current.microphone,
+    systemAudio: permissionsRef.current.systemAudio,
     availableSources: [
       ...microphoneSources.map(source => ({ id: source.id, kind: source.kind, label: source.label, available: source.available })),
       ...systemAudioOptions.map(source => ({ id: source.id, kind: source.kind, label: source.label, available: source.available })),
@@ -791,6 +801,7 @@ export function CompanionApp() {
       setSelectedScreenId((screens[0] ?? defaultScreens[0])?.id ?? "");
       setConnectionNotice("正在登记这台电脑…");
       await registerDesktopDevice(identity, runtime, {
+        mockInterviewProtocol: 1,
         protocolVersion: runtime.protocolVersion,
         appVersion: runtime.appVersion,
         platform: runtime.platform,
@@ -1133,7 +1144,15 @@ export function CompanionApp() {
 
   const mockCaptureEligible = bindingSessionMode === "mock" && ["preparing", "live"].includes(bindingSessionStatus ?? "");
   useEffect(() => {
-    if (!mockCaptureEligible || !activeBinding || !config || !pairingIdentity) return;
+    if (!mockCaptureEligible || !activeBinding || !config || !pairingIdentity) {
+      setMockMicrophoneError(null);
+      setMockMicrophoneState(null);
+      setMockMicrophoneLevel(null);
+      return;
+    }
+    setMockMicrophoneError(null);
+    setMockMicrophoneState(null);
+    setMockMicrophoneLevel(null);
     let disposed = false;
     const microphone = new MockMicrophone({
       apiBaseUrl: config.apiBaseUrl,
@@ -1145,12 +1164,23 @@ export function CompanionApp() {
         if (disposed) return;
         setState(next);
         setConnectionInfo(message);
+        setMockMicrophoneState(next);
+        if (next !== "capturing") setMockMicrophoneLevel(null);
+        if (next === "error") setMockMicrophoneError(message);
+        else if (next === "capturing") {
+          setMockMicrophoneError(null);
+          setPermissions(current => ({ ...current, microphone: "granted" }));
+        }
+      },
+      onLevel: level => { if (!disposed) setMockMicrophoneLevel(level); },
+      onPermission: granted => {
+        if (!disposed) setPermissions(current => ({ ...current, microphone: granted ? "granted" : "denied" }));
       },
     });
     microphone.start();
     return () => { disposed = true; void microphone.stop(); };
   }, [mockCaptureEligible, activeBinding?.sessionId, activeBinding?.manualCode,
-    config?.apiBaseUrl, pairingIdentity?.deviceId, effectiveMicrophoneId]);
+    config?.apiBaseUrl, pairingIdentity?.deviceId, effectiveMicrophoneId, mockMicrophoneRetryNonce]);
 
   useEffect(() => {
     if (!config || !pairingIdentity || !activeBinding || !captureEnabled) {
@@ -1415,6 +1445,23 @@ export function CompanionApp() {
     }
   };
 
+  const retryMockMicrophone = async () => {
+    if (mockMicrophoneRetrying) return;
+    setMockMicrophoneRetrying(true);
+    try {
+      const granted = await window.offersteady?.requestMicrophoneAccess().catch(() => false) ?? false;
+      setPermissions(current => ({ ...current, microphone: granted ? "granted" : "denied" }));
+      if (!granted) {
+        setMockMicrophoneError("模拟面试麦克风权限被拒绝。请在系统设置中允许麦克风，然后点击“重试麦克风”。");
+        return;
+      }
+      await refreshMicrophoneSources(selectedMicrophoneId);
+      setMockMicrophoneRetryNonce(value => value + 1);
+    } finally {
+      setMockMicrophoneRetrying(false);
+    }
+  };
+
   const openResolvedUrl = async (target: "home" | "workspace" | "guide") => {
     const configuredWorkspace = workspaceEntryUrl(config?.webWorkspaceUrl);
     const configuredHome = homeUrl(config?.webWorkspaceUrl);
@@ -1459,7 +1506,8 @@ export function CompanionApp() {
             statusLabel={bindingInterviewAudioMode === "mobile" ? "现场声音" : "我的声音"}
             presentationHealth={microphonePresentationHealth}
             meterLevel={microphoneMeterLevel}
-            meterCopy={healthCopy(microphoneHealth, bindingInterviewAudioMode === "mobile" ? "现场声音" : "我的声音", microphoneMeterLevel)}
+            meterCopy={bindingSessionMode === "mock" ? mockMicrophoneMeterCopy(mockMicrophoneState, mockMicrophoneLevel)
+              : healthCopy(microphoneHealth, bindingInterviewAudioMode === "mobile" ? "现场声音" : "我的声音", microphoneMeterLevel)}
           >
             <select
               aria-label="选择麦克风"
@@ -1478,6 +1526,16 @@ export function CompanionApp() {
               ))}
             </select>
           </TerminalRow>
+
+          {bindingSessionMode === "mock" && mockMicrophoneError ? (
+            <div className="mock-microphone-error" role="alert">
+              <p>{mockMicrophoneError}</p>
+              <button type="button" className="secondary-button" disabled={mockMicrophoneRetrying}
+                onClick={() => { void retryMockMicrophone(); }}>
+                {mockMicrophoneRetrying ? "正在检查麦克风…" : "重试麦克风"}
+              </button>
+            </div>
+          ) : null}
 
           {bindingInterviewAudioMode === "mobile" ? <TerminalRow
             title="电脑输出"

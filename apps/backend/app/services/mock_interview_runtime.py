@@ -7,11 +7,15 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import logging
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from time import time
+from time import monotonic, time
 from typing import Awaitable, Callable
 
+from app.core.config import get_settings
 from app.core.errors import DomainRequestError
+from app.core.logging import LOGGER_NAME, log_event
 from app.services.mock_interview_audio import MockInterviewAudio
 from app.services.mock_interview_legacy import MockLegacyBridge
 from app.services.mock_interview_repository import MockInterviewRepository, mock_error, round_state
@@ -44,10 +48,12 @@ class MockController:
     closed: bool = False
     draft: tuple[str, str] | None = None
     binding_released: bool = False
+    capture_closes: set[asyncio.Task] = field(default_factory=set)
 
 
 class MockInterviewRuntime:
     max_controllers = 64
+    capture_cleanup_wait_seconds = 30
 
     def __init__(self, repository, reader, jobs, tts, audio: MockInterviewAudio, realtime, *, now_ms=None):
         self.repository = repository
@@ -63,6 +69,13 @@ class MockInterviewRuntime:
         self._admission = asyncio.Lock()
         self._next_offline_scan_ms = self.now_ms() + 30_000
         self._offline_jobs: dict[str, asyncio.Task] = {}
+        # Observer tasks can be cancelled by event-loop shutdown; the actual
+        # provider futures stay tracked until their work really finishes.
+        self._capture_closes: dict[asyncio.Task, asyncio.Future] = {}
+        # Closing sockets must not occupy the default executor used by DB and
+        # resume reads, otherwise enough slow closes would delay generation
+        # again. Admission in MockInterviewAudio also bounds this work queue.
+        self._capture_close_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="mock-asr-close")
 
     async def db(self, method, **kwargs):
         return await asyncio.to_thread(method, **kwargs)
@@ -162,16 +175,64 @@ class MockInterviewRuntime:
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
 
-    async def _close_capture(self, controller):
+    async def _drain_capture_closes(self, tasks):
+        if tasks:
+            # A timeout must not cancel a to_thread close: its native thread
+            # would continue, losing our resource tracking. Keep pending tasks
+            # registered until their actual completion, including after detach.
+            futures = tuple(self._capture_closes[task] for task in tuple(tasks) if task in self._capture_closes)
+            if futures:
+                await asyncio.wait(futures, timeout=self.capture_cleanup_wait_seconds)
+
+    async def _close_capture(self, controller, *, wait=True):
         capture = self.audio.revoke(controller.session_id)
         controller.draft = None
+        if capture:
+            started = monotonic()
+            observer_cancelled = False
+            # Submit now, rather than at the observer's first scheduling turn.
+            # Even an observer cancelled before it starts must release capture.
+            future = asyncio.get_running_loop().run_in_executor(self._capture_close_executor, self.audio.close, capture)
+            async def close():
+                nonlocal observer_cancelled
+                try:
+                    await asyncio.shield(future)
+                except asyncio.CancelledError:
+                    observer_cancelled = True
+                    raise
+                except Exception:
+                    # The real work's callback owns diagnostics and tracking.
+                    pass
+            task = asyncio.create_task(close())
+            self._capture_closes[task] = future
+            controller.capture_closes.add(task)
+            def finished(actual):
+                self._capture_closes.pop(task, None)
+                controller.capture_closes.discard(task)
+                outcome = "cancelled" if observer_cancelled or task.cancelling() else "ok"
+                error_code = "asr_close_observer_cancelled" if outcome == "cancelled" else None
+                try:
+                    actual.result()
+                except asyncio.CancelledError:
+                    outcome, error_code = "cancelled", "asr_close_cancelled"
+                except Exception:
+                    outcome = "failed"
+                    error_code = "asr_close_failed"
+                # No exception body, identifiers or transcript content. Only
+                # report completion once the real close has released resources.
+                log_event(logging.getLogger(LOGGER_NAME), logging.WARNING if outcome == "failed" else logging.INFO,
+                    settings=get_settings(), event="mock_interview.capture_close", feature="mock-interview",
+                    action="capture-close", stage="asr_close", duration_ms=round((monotonic() - started) * 1000),
+                    outcome=outcome, error_code=error_code)
+            future.add_done_callback(finished)
         desktop = self.desktops.get(controller.session_id)
         if desktop:
             try:
                 await desktop[1]({"type": "capture", "epoch": None})
             except Exception:
                 pass
-        await asyncio.to_thread(self.audio.close, capture)
+        if wait:
+            await self._drain_capture_closes(controller.capture_closes)
 
     async def _open_capture(self, controller):
         binding = await asyncio.to_thread(self.validate_device, controller.user_id, controller.session_id)
@@ -285,8 +346,10 @@ class MockInterviewRuntime:
                     # Stop the interaction clock and fence old output before
                     # waiting for provider shutdown/cancellation.
                     controller.record = await self._transition(controller, move)
+                    await self._close_capture(controller, wait=False)
                     await self._cancel(controller.speech)
-                    await self._close_capture(controller)
+                    if action not in ("submit", "listen", "resume"):
+                        await self._drain_capture_closes(controller.capture_closes)
                     if action == "end":
                         await self._cancel(controller.generation)
                     if following.phase == "listening":
@@ -413,3 +476,7 @@ class MockInterviewRuntime:
     async def shutdown(self):
         await asyncio.gather(*(self.detach(c) for c in list(self.controllers.values())), return_exceptions=True)
         await asyncio.gather(*(self._cancel(task) for task in list(self._offline_jobs.values())), return_exceptions=True)
+        await self._drain_capture_closes(self._capture_closes)
+        # Pending close tasks remain registered and their threads finish; do
+        # not block the application event loop or abandon queued resources.
+        self._capture_close_executor.shutdown(wait=False)

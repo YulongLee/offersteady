@@ -22,6 +22,10 @@ import { RealtimeTransportDiagnosticsLog } from "./realtime-transport-diagnostic
 import { canAcquireDisplaySources, resolveDisplayMediaSource, type ScreenPermissionStatus } from "./display-media-access";
 import { globalStableUserDataDirectory, legacyUserDataDirectories, migrateLegacyCompanionState, stableUserDataDirectory } from "./user-data-bootstrap";
 import { resolveDesktopProductEdition } from "./product-edition";
+import { loadLocalTestRuntime, localTestUserDataDirectory } from "./local-test-runtime";
+import { DesktopCapabilitySnapshot } from "./desktop-capability-snapshot";
+
+const localTestRuntime = loadLocalTestRuntime(app.isPackaged, process.resourcesPath);
 
 const packagedGlobalRuntimeConfigPath = () => path.join(process.resourcesPath, "global-runtime-config.json");
 const isGlobalRelease = () => resolveDesktopProductEdition({
@@ -32,10 +36,10 @@ const isGlobalRelease = () => resolveDesktopProductEdition({
 const desktopCopy = (domestic: string, global: string) => isGlobalRelease() ? global : domestic;
 
 const originalUserDataDirectory = app.getPath("userData");
-const stableCompanionUserDataDirectory = isGlobalRelease()
+const stableCompanionUserDataDirectory = localTestRuntime ? localTestUserDataDirectory(app.getPath("appData")) : isGlobalRelease()
   ? globalStableUserDataDirectory(app.getPath("appData"))
   : stableUserDataDirectory(app.getPath("appData"));
-const companionLegacyUserDataDirectories = isGlobalRelease() ? [] : legacyUserDataDirectories(app.getPath("appData"), originalUserDataDirectory);
+const companionLegacyUserDataDirectories = localTestRuntime || isGlobalRelease() ? [] : legacyUserDataDirectories(app.getPath("appData"), originalUserDataDirectory);
 app.setPath("userData", stableCompanionUserDataDirectory);
 
 // Local ad-hoc builds cannot reliably retain Apple's separate Audio Capture
@@ -67,6 +71,7 @@ let screenshotRequestTimer: NodeJS.Timeout | null = null;
 let realtimeAudioInterval: NodeJS.Timeout | null = null;
 let preferredScreenSourceId: string | null = null;
 let hasRegisteredThisRun = false;
+const desktopCapabilitySnapshot = new DesktopCapabilitySnapshot();
 let processingRemoteScreenshotRequestId: string | null = null;
 const nativeAudioProcesses = new Map<string, ChildProcess>();
 let mainRealtimeBindingKey: string | null = null;
@@ -242,10 +247,12 @@ const packagedGlobalConfig = () => {
   }
 };
 const defaultWebWorkspaceUrl = () => {
+  if (localTestRuntime) return localTestRuntime.webWorkspaceUrl;
   if (isGlobalRelease()) return process.env.OFFERSTEADY_GLOBAL_WEB_URL || packagedGlobalConfig()?.webWorkspaceUrl || "";
   return isBetaRelease() ? "https://beta.mianshiwen.cn/app" : "https://mianshiwen.cn/app";
 };
 const defaultApiBaseUrl = () => {
+  if (localTestRuntime) return localTestRuntime.apiBaseUrl;
   if (isGlobalRelease()) return process.env.OFFERSTEADY_GLOBAL_API_BASE_URL || packagedGlobalConfig()?.apiBaseUrl || "";
   return isBetaRelease() ? "https://beta.mianshiwen.cn/api/v1" : "https://mianshiwen.cn/api/v1";
 };
@@ -257,11 +264,11 @@ const desktopConfig = () => ({
   platformVersion: process.getSystemVersion(),
   protocolVersion: "2.0",
   captureRuntime: "electron-single-owner",
-  releaseChannel: isGlobalRelease() ? "global" : isBetaRelease() ? "beta" : "production",
-  webWorkspaceUrl: isGlobalRelease()
+  releaseChannel: localTestRuntime ? "local-test" : isGlobalRelease() ? "global" : isBetaRelease() ? "beta" : "production",
+  webWorkspaceUrl: localTestRuntime ? localTestRuntime.webWorkspaceUrl : isGlobalRelease()
     ? defaultWebWorkspaceUrl()
     : process.env.OFFERSTEADY_DESKTOP_WEB_URL || defaultWebWorkspaceUrl(),
-  apiBaseUrl: isGlobalRelease()
+  apiBaseUrl: localTestRuntime ? localTestRuntime.apiBaseUrl : isGlobalRelease()
     ? defaultApiBaseUrl()
     : process.env.OFFERSTEADY_API_BASE_URL || defaultApiBaseUrl(),
   realtimeEndpointing: {
@@ -632,19 +639,15 @@ const assertOfferSteadyApiUrl = (url: string) => {
   return requested.toString();
 };
 
-const desktopCapabilities = () => {
+const desktopCapabilities = (deviceId: string) => {
   const config = desktopConfig();
-  return {
+  return desktopCapabilitySnapshot.forDevice(deviceId, {
     protocolVersion: config.protocolVersion,
     appVersion: config.appVersion,
     platform: config.platform,
     architecture: config.architecture,
     platformVersion: config.platformVersion,
-    microphone: "unknown",
-    systemAudio: "unknown",
-    availableSources: [],
-    screenCapture: true,
-  };
+  }, process.platform === "darwin" ? systemPreferences.getMediaAccessStatus("microphone") : undefined);
 };
 
 const syncDesktopRegistration = async () => {
@@ -662,7 +665,7 @@ const syncDesktopRegistration = async () => {
         ...(hasRegisteredThisRun ? {} : { deviceId: identity.deviceId }),
         manualCode: identity.manualCode,
         displayName: identity.displayName,
-        capabilities: desktopCapabilities(),
+        capabilities: desktopCapabilities(identity.deviceId),
       }),
     });
     if (!response.ok) {
@@ -1458,6 +1461,17 @@ ipcMain.handle("desktop:api-request", async (_event, request: { url: string; met
       headers: request.headers,
       body: request.body ?? undefined,
     }, isAudioFrame ? DESKTOP_AUDIO_REQUEST_TIMEOUT_MS : DESKTOP_CONTROL_REQUEST_TIMEOUT_MS);
+    if (response.ok && method === "POST" && request.body
+      && (new URL(url).pathname.endsWith("/desktop-devices/register") || new URL(url).pathname.endsWith("/device-status"))) {
+      try {
+        const report = JSON.parse(request.body) as { deviceId?: unknown; capabilities?: unknown };
+        if (typeof report.deviceId === "string" && report.capabilities && typeof report.capabilities === "object" && !Array.isArray(report.capabilities)) {
+          desktopCapabilitySnapshot.remember(report.deviceId, report.capabilities as Record<string, unknown>);
+        }
+      } catch {
+        // A malformed body cannot change the last successful capability snapshot.
+      }
+    }
     return {
       ok: response.ok,
       status: response.status,

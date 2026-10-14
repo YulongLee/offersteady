@@ -121,3 +121,53 @@ def test_answer_limit_stops_new_audio_and_bounds_provider_history():
     assert exc.value.error_code == "mock_answer_length_limit"
     assert gateway.transcribe.call_count == 1
     audio.close(audio.revoke(capture.session_id))
+
+
+def test_detached_resources_count_toward_admission_until_actual_close_finishes():
+    gateways = []
+    def factory():
+        gateway = Mock()
+        gateways.append(gateway)
+        return gateway
+    audio = MockInterviewAudio(gateway_factory=factory, now_ms=lambda: 1000)
+    audio.max_captures = 2
+    def open(epoch, session_id="mock-synthetic"):
+        return audio.open(session_id=session_id, owner_id="synthetic", device_id="device",
+            epoch=epoch, deadline_ms=2000, sink=lambda *_: None)
+    old = open("a"*32)
+    retired = audio.revoke(old.session_id)
+    current = open("b"*32)
+    with pytest.raises(DomainRequestError) as caught:
+        open("c"*32, "other-synthetic")
+    assert caught.value.error_code == "mock_capture_busy"
+    assert len(gateways) == 2
+    audio.close(retired)
+    assert audio._captures[current.session_id] is current
+    other = open("c"*32, "other-synthetic")
+    audio.close(audio.revoke(current.session_id))
+    audio.close(audio.revoke(other.session_id))
+    assert not audio._closing and audio.snapshot()["captures"] == 0
+
+
+def test_close_is_idempotent_and_releases_admission_even_if_provider_close_fails():
+    _, gateway, audio, capture, _ = fixture()
+    retired = audio.revoke(capture.session_id)
+    gateway.close_session.side_effect = RuntimeError("synthetic provider body")
+    with pytest.raises(RuntimeError):
+        audio.close(retired)
+    audio.close(retired)
+    assert capture.closed and not audio._closing
+    gateway.close_session.assert_called_once_with(session_id=capture.provider_id)
+    assert gateway.set_partial_listener.call_args.args[0](None, None) is None
+
+
+def test_new_capture_cannot_reuse_an_adapter_still_owned_by_a_retired_round():
+    _, gateway, audio, capture, _ = fixture()
+    retired = audio.revoke(capture.session_id)
+    with pytest.raises(DomainRequestError) as caught:
+        audio.open(session_id=capture.session_id, owner_id="synthetic", device_id="device",
+            epoch="b"*32, deadline_ms=16000, sink=lambda *_: None)
+    assert caught.value.error_code == "mock_capture_busy"
+    assert len(audio._closing) == 1
+    audio.close(retired)
+    assert gateway.close_session.call_count == 1

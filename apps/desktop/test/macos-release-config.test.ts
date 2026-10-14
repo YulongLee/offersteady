@@ -32,6 +32,7 @@ describe("macOS Developer ID release configuration", () => {
     }
     for (const entitlements of [mainEntitlements, inheritedEntitlements]) {
       expect(entitlements).toContain("com.apple.security.cs.allow-jit");
+      expect(entitlements).toContain("com.apple.security.device.audio-input");
       expect(entitlements).not.toContain("com.apple.security.cs.allow-unsigned-executable-memory");
       expect(entitlements).not.toContain("com.apple.security.app-sandbox");
     }

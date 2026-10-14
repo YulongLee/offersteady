@@ -1,5 +1,7 @@
 # 电脑伴随程序分发与兼容性
 
+国服 1.3.5 三平台发布、音频输入权限修复、实际产物校验与无需重启的清单更新记录见 [2026-10-15 发布记录](releases/companion-1.3.5-cn-20261015.md)。正式发布状态以该记录的公开下载验收为准。
+
 ## macOS Developer ID 正式发布
 
 正式的官网 macOS 包使用 Electron Builder、固定 Bundle ID `com.offersteady.companion` 和以下签名身份：

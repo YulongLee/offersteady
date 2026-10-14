@@ -33,6 +33,7 @@ class Capture:
     text: str = ""
     provider_revision: int = -1
     limit_reached: bool = False
+    closed: bool = False
 
     @property
     def provider_id(self):
@@ -54,17 +55,24 @@ class MockInterviewAudio:
         self.now_ms = now_ms or (lambda: int(time() * 1000))
         self._lock = threading.RLock()
         self._captures: dict[str, Capture] = {}
+        # Detached rounds still own an upstream resource until close finishes.
+        # Count them against admission so fast submissions/replays cannot grow
+        # provider connections while earlier close handshakes are pending.
+        self._closing: dict[str, Capture] = {}
 
     def open(self, *, session_id: str, owner_id: str, device_id: str, epoch: str,
              deadline_ms: int, sink: Callable[[str, str], None]) -> Capture:
         with self._lock:
             if session_id in self._captures:
                 raise mock_error("请先关闭上一轮收音。", "mock_capture_in_use")
-            if len(self._captures) >= self.max_captures:
+            if len(self._captures) + len(self._closing) >= self.max_captures:
                 raise mock_error("模拟面试收音繁忙，请稍后重试。", "mock_capture_busy", 503)
             if not epoch or deadline_ms <= self.now_ms():
                 raise mock_error("收音授权已过期。", "mock_capture_expired")
             gateway = self._gateway_factory()
+            if (f"{session_id}/{epoch}" in self._closing
+                    or any(retired.gateway is gateway for retired in self._closing.values())):
+                raise mock_error("上一轮收音正在关闭，请稍后重试。", "mock_capture_busy", 503)
             gateway.set_partial_listener(self._partial)
             capture = Capture(session_id, owner_id, device_id, epoch, deadline_ms, self.now_ms(), sink, gateway)
             self._captures[session_id] = capture
@@ -83,15 +91,24 @@ class MockInterviewAudio:
             if capture:
                 capture.revoked = True
                 capture.text = ""
+                self._closing[capture.provider_id] = capture
             return capture
 
     def close(self, capture: Capture | None) -> None:
         if capture:
             with capture.lock:
+                if capture.closed:
+                    return
                 try:
                     capture.gateway.close_session(session_id=capture.provider_id)
                 finally:
-                    capture.gateway.set_partial_listener(lambda *_: None)
+                    try:
+                        capture.gateway.set_partial_listener(lambda *_: None)
+                    finally:
+                        capture.closed = True
+                        with self._lock:
+                            if self._closing.get(capture.provider_id) is capture:
+                                self._closing.pop(capture.provider_id, None)
 
     def _valid(self, capture: Capture) -> bool:
         return (not capture.revoked and self._captures.get(capture.session_id) is capture

@@ -1005,6 +1005,23 @@ select {
   font-size: 9px;
 }
 
+.mock-microphone-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  color: #b42318;
+  background: #fff4f2;
+  border-radius: 8px;
+}
+
+.mock-microphone-error p {
+  flex: 1;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 @media (max-width: 660px) {
   body {
     min-width: 560px;

@@ -7,6 +7,18 @@ const sourceRoots = [path.join(desktopRoot, "src/renderer"), path.join(desktopRo
 const outputPath = path.join(desktopRoot, "src/renderer/global-copy.generated.ts");
 
 const exact = new Map(Object.entries({
+  "麦克风启动失败": "Microphone could not start",
+  "提问或暂停中，麦克风不会上传": "Microphone upload is paused during questions or pauses",
+  "正在采集你的回答": "Capturing your answer",
+  "麦克风已就绪，等待声音": "Microphone ready. Waiting for audio",
+  "等待模拟面试收音": "Waiting for practice interview audio",
+  "模拟面试：麦克风已就绪，等待你的回答。": "Practice interview: microphone ready. Waiting for your answer.",
+  "模拟面试麦克风权限被拒绝。请在系统设置中允许麦克风，然后点击“重试麦克风”。": "Microphone access was denied. Allow it in System Settings, then click Retry microphone.",
+  "模拟面试没有找到可用麦克风。请连接或选择麦克风，然后点击“重试麦克风”。": "No microphone was found. Connect or select a microphone, then click Retry microphone.",
+  "模拟面试麦克风暂时不可读，可能被其他程序占用。请检查设备，然后点击“重试麦克风”。": "The microphone is unavailable or in use by another app. Check the device, then click Retry microphone.",
+  "模拟面试麦克风启动失败。请检查麦克风和系统权限，然后点击“重试麦克风”。": "The microphone could not start. Check the device and system permissions, then click Retry microphone.",
+  "重试麦克风": "Retry microphone",
+  "正在检查麦克风…": "Checking microphone…",
   "AI 面试官提问中，麦克风不会上传。": "The AI interviewer is asking a question. Microphone upload is paused.",
   "模拟面试收音已暂停，正在重新连接。": "Practice interview audio is paused. Reconnecting.",
   "模拟面试收音连接异常": "Practice interview audio connection failed",
