@@ -4,7 +4,7 @@
 
 用户授权：开发、本地自测通过后推送 Git 并部署国服，随后由用户真实设备测试。本轮只恢复轻量页面心跳，不调整字幕预取、轮询、模型、计费或其它产品行为。
 
-本地验证已完成，候选构建/切换证据将在上线后追加。发布准备目录沿用开始工作时的日期：`/opt/offersteady/releases/20261014-cn-heartbeat-restore-1`。这不是一个全栈源码替换目录。
+已于 **2026-10-15 00:13:19（Asia/Shanghai）** 部署，仅切换 Backend；本地验证、Git 推送和候选验证均先于切换。发布准备目录沿用开始工作时的日期：`/opt/offersteady/releases/20261014-cn-heartbeat-restore-1`。这不是一个全栈源码替换目录。
 
 ## 实际运行基线与最小补丁
 
@@ -21,7 +21,7 @@
 
 1. 在未修改的运行源码上，准备/进行状态的两项“禁止完整读取”测试均失败，成功复现本轮缺陷；替换单方法后心跳专项 27 项通过，包含真实本地 PostgreSQL 投影检查。
 2. 在实际源码候选上运行心跳、空闲生命周期、计费、控制、资源回收、模拟面试 API/Postgres/准备/隔离、截图与探针回归：**196 passed / 4 deselected / 0 skipped**，16.08 秒。普通笔试会员与积分用户收费、幂等、模拟面试创建/断线/回合/结算等真实本地合成检查通过。
-3. 发布保护测试 **37 passed**；探针自身单测 9 项也通过（已包含在候选 196 项中），网络隔离候选探针要求至少 18 项检查。发布工具在独立评审发现 AST `Ellipsis`/`bytes` 哈希兼容问题后已修复，加入回归，并在真实完整源码上验证 overlay 结果逐字节匹配。
+3. 发布保护测试 **37 passed**；探针自身单测 9 项也通过（已包含在候选 196 项中），网络隔离候选镜像探针 **18 项全部通过**。发布工具在独立评审发现 AST `Ellipsis`/`bytes` 哈希兼容问题后已修复，加入回归，并在真实完整源码上验证 overlay 结果逐字节匹配。
 4. OpenSpec 严格校验、差异空白检查通过；文档链接在提交前核对。
 
 不是完整项目套件零失败的声明。扩展回归发现四项既有模拟隔离失败，在原样导出的未修复线上源码中同样复现；本轮不修改这些非心跳方法，也不将本地主工作区的其它补丁一并发布。最终排除：
@@ -53,3 +53,18 @@
 仅当本地证据绑定 Git 提交及同一源码哈希、候选镜像合成探针通过、运行镜像/环境/模型/Compose 未漂移、所有受保护任务两次检查为空时才切换 Backend。核对普通/模拟面试、准备页/页面租约、近期音频、未完成回答及资料后台任务；有活动则保持原服务。
 
 回退只恢复当前 `567ddaf…` 镜像并重建 Backend，不回滚数据库或账本；Web、Admin、Worker、Redis 和 PostgreSQL 保持原容器。生产真实面试效果与同负载整体 P95 仍需用户上线后验收。
+
+## 切换与上线检查证据
+
+- 修复/测试/发布工具 Git 提交：`48fcabc460ac4093b92615e41e0e5997223c64e2`，切换前已推送到 `origin/codex/global-international-baseline-20260914`。发布记录标签：`release-cn-heartbeat-restore-20261015.1`。
+- 实际新镜像：`offersteady-cn-backend:heartbeat-restore-20261014-1`，digest `sha256:ec510532ca598878e147c4277e6da9776924fbf056ed942ab4cc2bf110f398bb`。
+- 回退标签：`offersteady-cn-backend:heartbeat-restore-20261014-rollback`，固定为切换前 `567ddaf…`（包含现有笔试会员和模拟面试能力）。本次无需回退。
+- 独立候选镜像保留全部基线层，只新增单文件 COPY 层；只恢复一个已批准心跳方法。运行源码 SHA 与本地候选及镜像探针一致。
+- 00:12:45 和 00:12:48 两轮切换门禁均通过：普通面试、近期准备、页面租约、近期音频、未完成回答均为 0；模拟面试仅 completed 27 条；受保护资料任务和 queued/retrying/running 作业均为 0。没有主动结束用户任务。
+- 仅重建 `compose-backend-1`；模型、环境、Compose、资源限制、挂载不变，所有非目标容器的 ID/镜像/启动时间逐项不变。`current` 及旧健康版本字符串不作为新镜像标识。
+- 00:14:27 核验：Backend healthy，RestartCount=0；实际方法调用 `heartbeat_idle_status`，不再调用 `get_session`/`reconcile_idle_session`。
+- `/healthz`、`/login`、`/app`、`/app/mock-interviews`、`/api/v1/billing/status`、`/api/v1/mock-interviews/capabilities`、`/api/v1/web/state`、`/offersteady-build.json` 全部 HTTP 200。模拟面试 enabled=true；Web 仍为 `pricing-copy-hourly-20261011.1`。这里只确认可达及能力保留，不作为真人完整面试验收。
+- 上线后短观察窗口 INFO 213、WARNING 2、ERROR/CRITICAL/Traceback 为 0；保留 `prepared.json`、`local-verification.json`、`candidate-verification.json`、`deployed.json`、`post-deploy-verification.json` 在服务器权限受限目录，私有配置不下载或提交。
+- 本机专用 PostgreSQL 合成容器及 tmpfs 数据在验证后已移除，未清理生产数据或镜像。
+
+能力场景核对使用本轮已执行的心跳专项与探针：一次投影/零资料、五字段 SQL 与软删除、403/404 无副作用、空闲边界与清理失败、结束下一跳拒绝、租约接管、非心跳资料变化校验均通过；发布保护与真实门禁/镜像核验覆盖安全切换场景。同负载合成证据见上表。
