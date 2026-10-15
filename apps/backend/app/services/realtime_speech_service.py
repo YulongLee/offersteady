@@ -63,6 +63,7 @@ from app.schemas.realtime_speech import (
 from app.ports.interview_session import InterviewLanguage, InterviewSessionRecord
 from app.services.session_service import SessionService
 from app.services.billing_service import BillingService, UsageReservationRecord
+from app.services.question_prefetch_scheduler import QuestionPrefetchScheduler
 
 
 def _now_ms() -> int:
@@ -265,6 +266,12 @@ class RealtimeSpeechService:
         self._publisher_liveness_lock = threading.Lock()
         self._publisher_liveness_checked_at_ms: dict[str, int] = {}
         self._stable_question_state: dict[tuple[str, str], dict[str, object]] = {}
+        self._stable_question_state_lock = threading.Lock()
+        self._stable_question_generations: dict[str, object] = {}
+        self._question_prefetch_scheduler = (
+            QuestionPrefetchScheduler(question_prefetcher, logger=logger)
+            if question_prefetcher is not None else None
+        )
         self._auto_answer_claim_lock = threading.Lock()
         self._auto_answer_active_candidates: dict[str, str] = {}
         self._trace_lock = threading.Lock()
@@ -888,6 +895,7 @@ class RealtimeSpeechService:
         result = replace(result, text=self._merge_recovery_transcript(frame.recovery_prefix_text, result.text))
         if frame.session_id in self._retired_session_ids or not result.text.strip():
             return
+        observation_generation = self._stable_question_observation_generation(session_id=frame.session_id)
         publisher = self.repository.get_publisher(frame.publisher_id)
         if publisher is None or publisher.status in {"closed", "failed"}:
             return
@@ -1057,7 +1065,9 @@ class RealtimeSpeechService:
             # concern.  Partial publication must stay bounded to the current
             # segment, and stable-question work runs after the subtitle XADD on
             # the cold executor so it cannot delay SSE delivery.
-            self._submit_cold(self._observe_stable_interviewer_partial, transcript)
+            if observation_generation is not None:
+                self._submit_cold(self._observe_stable_interviewer_partial, transcript,
+                                  observation_generation=observation_generation)
 
     def _submit_cold(self, operation, /, *args, **kwargs) -> None:
         """Run optional persistence/metrics outside the realtime publication path."""
@@ -1079,57 +1089,103 @@ class RealtimeSpeechService:
         self._publisher_status_cache[publisher.publisher_id] = status
         return updated
 
-    def _observe_stable_interviewer_partial(self, transcript: TranscriptSegmentRecord) -> RealtimeEvent | None:
-        if transcript.source_kind != "system" or not self._is_meaningful_transcript(transcript.text):
+    def _stable_question_observation_generation(self, *, session_id: str) -> object | None:
+        """Capture a bounded lifecycle token before optional work is queued."""
+        with self._stable_question_state_lock:
+            if self._session_is_retired(session_id) or getattr(self, "_shutdown_complete", False):
+                return None
+            generation = self._stable_question_generations.get(session_id)
+            if generation is None:
+                generation = object()
+                if len(self._stable_question_generations) >= 256:
+                    self._stable_question_generations.pop(next(iter(self._stable_question_generations)))
+                self._stable_question_generations[session_id] = generation
+            return generation
+
+    def _observe_stable_interviewer_partial(
+        self,
+        transcript: TranscriptSegmentRecord,
+        *,
+        observation_generation: object | None = None,
+    ) -> RealtimeEvent | None:
+        if (transcript.source_kind != "system" or self._session_is_retired(transcript.session_id)
+                or not self._is_meaningful_transcript(transcript.text)):
             return None
         key = (transcript.session_id, transcript.segment_id)
-        previous = self._stable_question_state.get(key)
-        previous_text = str(previous.get("text", "")) if previous else ""
-        current_text = transcript.text.strip()
-        if transcript.is_final:
-            stable_text = current_text
-        elif previous_text and current_text.startswith(previous_text):
-            stable_text = previous_text
-        else:
-            prefix_length = 0
-            for left, right in zip(previous_text, current_text):
-                if left != right:
-                    break
-                prefix_length += 1
-            stable_text = current_text[:prefix_length].rstrip("，。！？、；：,.!?;: ")
-        previous_stable = str(previous.get("stableText", "")) if previous else ""
-        self._stable_question_state[key] = {
-            "text": current_text,
-            "stableText": stable_text or previous_stable,
-            "revision": transcript.revision,
-            "updatedAtMs": _now_ms(),
-        }
-        if len(self._stable_question_state) > 256:
-            oldest = min(self._stable_question_state, key=lambda item: int(self._stable_question_state[item].get("updatedAtMs", 0)))
-            self._stable_question_state.pop(oldest, None)
-        if len(stable_text) < 4 or stable_text == previous_stable:
+        if observation_generation is None:
+            observation_generation = self._stable_question_observation_generation(session_id=transcript.session_id)
+        if observation_generation is None:
+            return None
+        with self._stable_question_state_lock:
+            if (self._session_is_retired(transcript.session_id)
+                    or self._stable_question_generations.get(transcript.session_id) is not observation_generation):
+                return None
+            previous = self._stable_question_state.get(key)
+            if previous is not None and (
+                transcript.revision < int(previous.get("revision", -1))
+                or (previous.get("isFinal") and not transcript.is_final)
+                or (transcript.revision == int(previous.get("revision", -1))
+                    and (previous.get("isFinal") or not transcript.is_final))
+            ):
+                return None
+            previous_text = str(previous.get("text", "")) if previous else ""
+            current_text = transcript.text.strip()
+            if transcript.is_final:
+                stable_text = current_text
+            elif previous_text and current_text.startswith(previous_text):
+                stable_text = previous_text
+            else:
+                prefix_length = 0
+                for left, right in zip(previous_text, current_text):
+                    if left != right:
+                        break
+                    prefix_length += 1
+                stable_text = current_text[:prefix_length].rstrip("，。！？、；：,.!?;: ")
+            previous_stable = str(previous.get("stableText", "")) if previous else ""
+            marker = self._stable_question_state[key] = {
+                "text": current_text,
+                "stableText": stable_text or previous_stable,
+                "revision": transcript.revision,
+                "isFinal": transcript.is_final,
+                "updatedAtMs": _now_ms(),
+            }
+            if len(self._stable_question_state) > 256:
+                oldest = min(self._stable_question_state, key=lambda item: int(self._stable_question_state[item].get("updatedAtMs", 0)))
+                self._stable_question_state.pop(oldest, None)
+        if len(stable_text) < 4 or (stable_text == previous_stable and not transcript.is_final):
             return None
         question_id = f"question:{transcript.session_id}:{transcript.segment_id}"
-        event = self._save_event(
-            session_id=transcript.session_id,
-            owner_user_id=transcript.owner_user_id,
-            kind="question-stable",
-            payload={
-                "questionId": question_id,
-                "questionRevision": transcript.revision,
-                "questionText": stable_text,
-                "sourceSegmentId": transcript.segment_id,
-            },
-        )
-        if self.question_prefetcher is not None:
-            self._submit_cold(
-                self.question_prefetcher,
-                user_id=transcript.owner_user_id,
+        # Keep the visible event contract unchanged; an equal-text Final only
+        # promotes optional preparation and does not add duplicate UI events.
+        event = None
+        if stable_text != previous_stable:
+            event = self._save_event(
                 session_id=transcript.session_id,
-                question_id=question_id,
-                revision=transcript.revision,
-                question=stable_text,
+                owner_user_id=transcript.owner_user_id,
+                kind="question-stable",
+                payload={
+                    "questionId": question_id,
+                    "questionRevision": transcript.revision,
+                    "questionText": stable_text,
+                    "sourceSegmentId": transcript.segment_id,
+                },
             )
+        # Admission and cleanup share this short memory-only transaction.
+        # Event I/O above may finish after reset; its obsolete observer must
+        # never recreate optional work after clear_session has returned.
+        with self._stable_question_state_lock:
+            scheduler = self._question_prefetch_scheduler
+            if (scheduler is not None and not self._session_is_retired(transcript.session_id)
+                    and self._stable_question_generations.get(transcript.session_id) is observation_generation
+                    and self._stable_question_state.get(key) is marker):
+                scheduler.submit(
+                    user_id=transcript.owner_user_id,
+                    session_id=transcript.session_id,
+                    question_id=question_id,
+                    revision=transcript.revision,
+                    question=stable_text,
+                    is_final=transcript.is_final,
+                )
         return event
 
     def _record_speech_usage(
@@ -1313,6 +1369,7 @@ class RealtimeSpeechService:
             "sessionActivityEntries": len(self._session_last_activity_ms),
             "publisherStatusCacheEntries": len(self._publisher_status_cache),
             "stableQuestionEntries": len(self._stable_question_state),
+            "stableQuestionGenerationEntries": len(self._stable_question_generations),
             "retiredSessionIds": len(self._retired_session_ids),
         }
         if screenshot_state:
@@ -1353,6 +1410,8 @@ class RealtimeSpeechService:
             "eventStore": repository_diagnostics() if callable(repository_diagnostics) else {},
             "controlPlane": self._control_query_diagnostics(),
             "performanceAck": self._performance_ack_diagnostics(),
+            "questionPrefetch": (self._question_prefetch_scheduler.diagnostics()
+                                 if self._question_prefetch_scheduler is not None else {}),
             "sessionReclamation": {
                 "enabled": self.settings.realtime_session_reclamation_enabled,
                 "dryRun": self.settings.realtime_session_reclamation_dry_run,
@@ -2178,6 +2237,12 @@ class RealtimeSpeechService:
             if getattr(self, "_shutdown_complete", False):
                 return
             self._shutdown_complete = True
+        scheduler = getattr(self, "_question_prefetch_scheduler", None)
+        with self._stable_question_state_lock:
+            self._stable_question_generations.clear()
+            self._stable_question_state.clear()
+            if scheduler is not None:
+                scheduler.shutdown()
         close_all = getattr(self.asr_gateway, "close_all_sessions", None)
         if callable(close_all):
             try:
@@ -3833,6 +3898,7 @@ class RealtimeSpeechService:
         events: list[dict[str, object]] = []
         if self._session_is_retired(publisher.session_id):
             return events
+        observation_generation = self._stable_question_observation_generation(session_id=publisher.session_id)
         existing_terminal = self.repository.get_transcript(frame.session_id, frame.segment_id)
         visible_text_length_before_final = len(existing_terminal.text) if existing_terminal is not None else 0
         if existing_terminal is not None and existing_terminal.is_final:
@@ -4082,7 +4148,10 @@ class RealtimeSpeechService:
                 "performance": transcript.performance,
             },
         )))
-        stable_event = self._observe_stable_interviewer_partial(transcript)
+        stable_event = (
+            self._observe_stable_interviewer_partial(transcript, observation_generation=observation_generation)
+            if observation_generation is not None else None
+        )
         if transcript.is_final:
             self._submit_cold(self.repository.persist_transcript, transcript)
         if transcript.usage is not None:
@@ -5073,9 +5142,14 @@ class RealtimeSpeechService:
                     publisher_liveness_checked.pop(publisher.publisher_id, None)
             except Exception:
                 pass
-        self._stable_question_state = {
-            key: value for key, value in self._stable_question_state.items() if key[0] != session_id
-        }
+        with self._stable_question_state_lock:
+            self._stable_question_generations.pop(session_id, None)
+            self._stable_question_state = {
+                key: value for key, value in self._stable_question_state.items() if key[0] != session_id
+            }
+            scheduler = getattr(self, "_question_prefetch_scheduler", None)
+            if scheduler is not None:
+                scheduler.clear_session(session_id=session_id)
         with self._trace_lock:
             stale_trace_ids = {
                 trace_id

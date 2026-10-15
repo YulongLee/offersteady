@@ -101,6 +101,12 @@ def test_realtime_session_cleanup_drops_short_lived_indexes_and_keeps_other_sess
         ("session-ended", "question-1"): {"text": "old"},
         ("session-live", "question-2"): {"text": "live"},
     }
+    service._stable_question_state_lock = threading.Lock()
+    service._stable_question_generations = {"session-ended": object(), "session-live": object()}
+    cleared_prefetch_sessions: list[str] = []
+    service._question_prefetch_scheduler = SimpleNamespace(
+        clear_session=lambda *, session_id: cleared_prefetch_sessions.append(session_id),
+    )
     service._trace_lock = threading.Lock()
     service._trace_records = {
         "trace-ended": {"sessionId": "session-ended"},
@@ -127,6 +133,8 @@ def test_realtime_session_cleanup_drops_short_lived_indexes_and_keeps_other_sess
     assert "publisher-ended" not in service._publisher_status_cache
     assert "publisher-live" in service._publisher_status_cache
     assert all(key[0] != "session-ended" for key in service._stable_question_state)
+    assert cleared_prefetch_sessions == ["session-ended"]
+    assert list(service._stable_question_generations) == ["session-live"]
     assert "trace-ended" not in service._trace_records
     assert list(service._trace_order) == ["trace-live"]
     assert ("session-live", "microphone") in service._counters_by_session_source
@@ -183,6 +191,9 @@ def test_realtime_service_shutdown_closes_gateway_and_worker_pools_once() -> Non
     service.logger = logging.getLogger("resource-shutdown-test")
     service._shutdown_lock = threading.Lock()
     service._shutdown_complete = False
+    service._stable_question_state_lock = threading.Lock()
+    service._stable_question_state = {}
+    service._stable_question_generations = {}
 
     class Gateway:
         def __init__(self) -> None:
@@ -204,6 +215,8 @@ def test_realtime_service_shutdown_closes_gateway_and_worker_pools_once() -> Non
     service.asr_gateway = Gateway()
     service._asr_executor = Executor()
     service._cold_executor = Executor()
+    prefetch_shutdowns: list[bool] = []
+    service._question_prefetch_scheduler = SimpleNamespace(shutdown=lambda: prefetch_shutdowns.append(True))
 
     service.shutdown()
     service.shutdown()
@@ -211,3 +224,4 @@ def test_realtime_service_shutdown_closes_gateway_and_worker_pools_once() -> Non
     assert service.asr_gateway.closed == 1
     assert service._asr_executor.shutdowns == 1
     assert service._cold_executor.shutdowns == 1
+    assert prefetch_shutdowns == [True]

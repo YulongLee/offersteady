@@ -1,13 +1,14 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 
 const desktopRoot = resolve(import.meta.dirname, "..");
 const desktopPackage = JSON.parse(readFileSync(join(desktopRoot, "package.json"), "utf8"));
-const [platform, architecture, artifactArgument] = process.argv.slice(2);
+const [platform, architecture, artifactArgument, appArgument] = process.argv.slice(2);
 
 if (!(["macos", "windows"].includes(platform) && ["arm64", "x64"].includes(architecture))) {
-  throw new Error("Usage: generate-global-release-metadata.mjs <macos|windows> <arm64|x64> <artifact>");
+  throw new Error("Usage: generate-global-release-metadata.mjs <macos|windows> <arm64|x64> <artifact> [verified-global-app]");
 }
 if (platform === "windows" && architecture !== "x64") throw new Error("Only Windows x64 is supported.");
 
@@ -15,6 +16,25 @@ const artifact = resolve(artifactArgument || "");
 if (!existsSync(artifact)) throw new Error(`Global release artifact not found: ${artifact}`);
 if (platform === "macos" && !artifact.endsWith(".dmg")) throw new Error("Global macOS publication requires a DMG.");
 if (platform === "windows" && !artifact.endsWith(".exe")) throw new Error("Global Windows publication requires an EXE installer.");
+if (!basename(artifact).includes(`-Global-${platform === "windows" ? "Setup-" : ""}${desktopPackage.version}-`)) {
+  throw new Error("Global metadata requires an artifact named for the Global edition and current version.");
+}
+if (platform === "macos") {
+  if (process.platform !== "darwin") throw new Error("Global macOS verification requires macOS.");
+  if (!appArgument || !existsSync(resolve(appArgument))) throw new Error("Global macOS metadata requires the packaged App for actual signature and notarization verification.");
+  const appPath = resolve(appArgument);
+  const runtimePath = join(appPath, "Contents/Resources/global-runtime-config.json");
+  const runtime = JSON.parse(readFileSync(runtimePath, "utf8"));
+  if (runtime.productEdition !== "global" || runtime.releaseChannel !== "global"
+      || runtime.webWorkspaceUrl !== "https://offersteady.com/app"
+      || runtime.apiBaseUrl !== "https://offersteady.com/api/v1") {
+    throw new Error("Global production App must use the approved Global HTTPS endpoints.");
+  }
+  if (existsSync(join(appPath, "Contents/Resources/local-test-runtime.json"))) throw new Error("Local test overrides are forbidden in Global release Apps.");
+  const verification = spawnSync(process.execPath, [join(desktopRoot, "scripts/verify-release-mac.mjs"),
+    "--app", appPath, "--dmg", artifact, "--bundle-id", "com.offersteady.companion.global"], { stdio: "inherit" });
+  if (verification.status !== 0) throw new Error("Global macOS metadata requires successful App and DMG verification.");
+}
 
 const bytes = readFileSync(artifact);
 const metadata = {

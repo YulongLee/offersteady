@@ -5,6 +5,8 @@ from app.services.mock_interview_repository import MockInterviewRepository, mock
 
 
 class GlobalMockInterviewRepository(MockInterviewRepository):
+    duration_limit_ms = None
+    flat_rate_billing = False
     migration_name = "0052_global_mock_interviews.sql"
     interview_language = "en-US"
     lock_namespace = "global-mock-user"

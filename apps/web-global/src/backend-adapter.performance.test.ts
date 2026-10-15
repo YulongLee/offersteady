@@ -12,7 +12,7 @@ const envelope = (data: unknown) => ({
   meta: { apiVersion: "v1", timestamp: new Date().toISOString() },
 });
 
-const stateResponse = () => new Response(JSON.stringify(envelope(state)), {
+const stateResponse = (data: WebAppState = state) => new Response(JSON.stringify(envelope(data)), {
   status: 200,
   headers: { "Content-Type": "application/json" },
 });
@@ -63,6 +63,61 @@ describe("Global Web performance coordinator", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("starts an authoritative refresh independently and never caches a late older response", async () => {
+    const complete: Array<(value: Response) => void> = [];
+    const fetchImpl = vi.fn(() => new Promise<Response>(resolve => complete.push(resolve)));
+    const adapter = new BackendPreviewInterviewAdapter("https://offersteady.com", fetchImpl as typeof fetch);
+    const earlier = adapter.loadState();
+    const refreshed = adapter.loadState(undefined, { force: true });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const latest = { ...state, interviews: [{ id: "after-mutation" }] } as WebAppState;
+    complete[1]!(stateResponse(latest));
+    expect((await refreshed).interviews[0]?.id).toBe("after-mutation");
+    complete[0]!(stateResponse());
+    await earlier;
+    expect((await adapter.loadState()).interviews[0]?.id).toBe("after-mutation");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not share a cached authenticated value across a changed login", async () => {
+    window.localStorage.setItem("offersteady.auth.access_token", "synthetic-owner-a");
+    window.localStorage.setItem("offersteady.auth.refresh_token", "synthetic-refresh");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "owner-a", displayName: "Synthetic A", createdAtMs: 1, bindings: [] }));
+    const fetchImpl = vi.fn(async (_input: unknown, init?: RequestInit) => stateResponse({
+      ...state,
+      account: { id: new Headers(init?.headers).get("Authorization")?.endsWith("owner-a") ? "owner-a" : "owner-b" },
+    } as WebAppState));
+    const adapter = new BackendPreviewInterviewAdapter("https://offersteady.com", fetchImpl as typeof fetch);
+    expect((await adapter.loadState()).account.id).toBe("owner-a");
+    window.localStorage.setItem("offersteady.auth.access_token", "synthetic-owner-b");
+    window.localStorage.setItem("offersteady.auth.account", JSON.stringify({ id: "owner-b", displayName: "Synthetic B", createdAtMs: 1, bindings: [] }));
+    expect((await adapter.loadState()).account.id).toBe("owner-b");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("lets an aborted caller leave without cancelling the other shared caller", async () => {
+    let complete!: (value: Response) => void;
+    const fetchImpl = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => new Promise<Response>(resolve => { complete = resolve; }));
+    const adapter = new BackendPreviewInterviewAdapter("https://offersteady.com", fetchImpl as typeof fetch);
+    const controller = new AbortController();
+    const first = adapter.loadState(controller.signal).catch(error => error);
+    const second = adapter.loadState();
+    controller.abort();
+    expect((await first).name).toBe("AbortError");
+    expect((fetchImpl.mock.calls[0]?.[1] as RequestInit).signal?.aborted).toBe(false);
+    complete(stateResponse());
+    expect(await second).toEqual(state);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not cache a failed state read", async () => {
+    const fetchImpl = vi.fn().mockRejectedValueOnce(new Error("synthetic-network-failure")).mockResolvedValueOnce(stateResponse());
+    const adapter = new BackendPreviewInterviewAdapter("https://offersteady.com", fetchImpl as typeof fetch);
+    await expect(adapter.loadState()).rejects.toThrow();
+    expect(await adapter.loadState()).toEqual(state);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it("samples non-final transcript telemetry per session and keeps final revisions", async () => {

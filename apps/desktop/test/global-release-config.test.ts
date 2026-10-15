@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -55,5 +57,66 @@ describe("isolated Global companion release", () => {
     expect(domestic).toContain("appId: com.offersteady.companion");
     expect(domestic).toContain("productName: 面试稳伴随程序");
     expect(domestic).not.toContain("com.offersteady.companion.global");
+  });
+
+  it("uses the formal Mac release pipeline and validates actual capture signatures", () => {
+    const config = readDesktop("electron-builder.global.yml");
+    const release = readDesktop("scripts/package-release-mac.mjs");
+    const packageJson = JSON.parse(readDesktop("package.json")) as { scripts: Record<string, string> };
+    for (const arch of ["arm64", "x64"]) {
+      expect(packageJson.scripts[`package:mac:global:${arch}`]).toBe(`OFFERSTEADY_PRODUCT_EDITION=global node scripts/package-release-mac.mjs ${arch}`);
+    }
+    expect(config).toContain("forceCodeSigning: true");
+    expect(config).toContain("notarize: true");
+    expect(config).toContain("entitlements: build/entitlements.mac.release.plist");
+    expect(config).toContain("entitlementsInherit: build/entitlements.mac.release.inherit.plist");
+    expect(config).toContain("Contents/Resources/app/native/macos-capture/OfferSteadyCaptureRuntime");
+    expect(config).not.toContain("target: zip");
+    expect(release).toContain('isGlobal ? "electron-builder.global.yml"');
+    expect(release).toContain('isGlobal ? "build:global" : "build"');
+    expect(release).toContain('"scripts/generate-global-release-metadata.mjs"');
+    expect(release).toContain('"Global and domestic Beta release editions cannot be combined."');
+  });
+
+  it("keeps the native helper permission identity and wording in the Global edition", () => {
+    const globalInfo = readDesktop("native/macos-capture/Info.global.plist");
+    const domesticInfo = readDesktop("native/macos-capture/Info.plist");
+    const builder = readDesktop("scripts/build-native-runtime.mjs");
+    expect(builder).toContain('process.env.OFFERSTEADY_PRODUCT_EDITION === "global"');
+    expect(builder).toContain('"native/macos-capture/Info.global.plist"');
+    expect(globalInfo).toContain("com.offersteady.companion.global");
+    expect(globalInfo).not.toMatch(/[\u3400-\u9fff]/);
+    for (const usage of ["NSMicrophoneUsageDescription", "NSAudioCaptureUsageDescription", "NSScreenCaptureUsageDescription"]) {
+      expect(globalInfo).toContain(usage);
+    }
+    expect(domesticInfo).toContain("<string>com.offersteady.companion</string>");
+    expect(domesticInfo).toContain("面试稳");
+  });
+
+  it("does not label an unverified Global Mac artifact as signed or notarized", () => {
+    const metadata = readDesktop("scripts/generate-global-release-metadata.mjs");
+    expect(metadata).toContain('"scripts/verify-release-mac.mjs"');
+    expect(metadata).toContain('"--bundle-id", "com.offersteady.companion.global"');
+    expect(metadata).toContain("Global macOS metadata requires the packaged App");
+    expect(metadata).toContain('runtime.webWorkspaceUrl !== "https://offersteady.com/app"');
+    expect(metadata).toContain('runtime.apiBaseUrl !== "https://offersteady.com/api/v1"');
+    expect(metadata).toContain('signingStatus: platform === "macos" ? "verified" : "unsigned"');
+  });
+
+  it("rejects an arbitrary DMG instead of publishing verified metadata for its extension", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "offersteady-global-metadata-"));
+    try {
+      mkdirSync(path.join(root, "scripts"));
+      mkdirSync(path.join(root, "release/global"), { recursive: true });
+      copyFileSync(path.join(desktopRoot, "scripts/generate-global-release-metadata.mjs"), path.join(root, "scripts/generate-global-release-metadata.mjs"));
+      writeFileSync(path.join(root, "package.json"), JSON.stringify({ version: "1.3.5", type: "module" }));
+      const fakeArtifact = path.join(root, "OfferSteady-Companion-Global-1.3.5-macOS-arm64.dmg");
+      writeFileSync(fakeArtifact, "synthetic text that is not a signed or notarized DMG");
+      const result = spawnSync(process.execPath, [path.join(root, "scripts/generate-global-release-metadata.mjs"), "macos", "arm64", fakeArtifact], { encoding: "utf8" });
+      expect(result.status).not.toBe(0);
+      expect(existsSync(path.join(root, "release/global/OfferSteady-Companion-Global-1.3.5-macOS-arm64.json"))).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

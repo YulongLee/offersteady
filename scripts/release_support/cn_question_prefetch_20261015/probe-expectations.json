@@ -1,0 +1,863 @@
+{
+  "app": {
+    "__init__.py": "c7a401fa1dbc4189255d002741ff7ab4a30bf0c64b25d2bcdc987b88723bed5a",
+    "adapters/__init__.py": "5384bfdb2df380b6557cc7a71d16891415bccaa87699406e236f752c6415389f",
+    "adapters/oss_storage.py": "ac84828377f8a9c1b0ec83d1d303497a45d34f66067760d2956dba159794ad5d",
+    "api/__init__.py": "5645d3ba205ea9d1a0e80fd4b2381fde91e928b9e2263ddb32578704addac9d7",
+    "api/admin.py": "4470bb1bc472943e8ed4a9a42cb2b3fb7a6292499af4c542d345d3df2fd95824",
+    "api/admin_promotion.py": "c275dcc34545a6a08d872d94d9fbec9f36002aaf1fd0c61482252fd8bbe3d056",
+    "api/promotion.py": "c3ae744fd8233b866c6fb490771c80b6b6691a19965d7c940a84e3b24e48a764",
+    "api/routers/__init__.py": "6a4d3814ef27df4a3fa435f48fe7e244c40c3ecd1de8b260c010988cb6e5f3fb",
+    "api/routers/system.py": "b893fe4e816bad3c4af43e1a8e4bbb1f285e8ae543d9c86675a1309e04b4eee1",
+    "api/v1.py": "12574ffdb050f91cef3975b2d3c855b3ae2355e0aaf1f1ebf15b042b454c28a9",
+    "core/config.py": "1f8c5e7d29d2868686cb785a3f7f628a4211bc3899ad2d9192c965439f66c881",
+    "core/errors.py": "f821ad52cfa04117dd8d9888dded51f3293f6e3a68b1dc4bb11a51672fd3bee3",
+    "core/logging.py": "1cfd23c7bf714cd2dd9c45ea6d439c906633d755bf575f616d526c3f90cbb9ad",
+    "core/request_context.py": "2b1d072915927ef1b4a5eb7efef93840a00c079fcb88a6242061331042e60fce",
+    "core/responses.py": "4cedbe41efae8655846467d8136a23cb57aa8a834917fb716c433bad5f5b8c18",
+    "deps.py": "37ce0eb37d3f2139970c1e8eb0efb2a2010d6097dfe5b7465f4636e4175c8fb1",
+    "desktop_release_manifest.json": "76ba8b6009071d4c4c0b824b6bbbf1c05c7d848f95c1ab08649c9e9e05c4a76a",
+    "interview_languages.py": "f014c7e55fd6758ff1c44dc0a1d605b6e2b012fc0c98e4051147d96e5a966de6",
+    "main.py": "5345d2f1a8a2d1fa1f6721e394515c5d17d6465f2a5073319a989607b8221ec4",
+    "material_formats.py": "efab7d20e8288f570ab8652d1130f3b7ed2edb8fd11630af9f97a69fd8bb0172",
+    "middleware/request_context.py": "61eb30de386a04d1e948b439a30295aff4e84192fda97773bc838ac6347b0da3",
+    "modules/__init__.py": "b45973b814e6ae9d0a608f5ae7422cf0143f1e956d61e30d08201177c7da2a78",
+    "modules/authentication.py": "77e74aa24dd10a5f4ea39e4ba6a5a93831382cbbb81f9acc4245ef97eb04cdc2",
+    "modules/billing.py": "9528378a10e381e43b284ecaa19d94e7d0e09c0496753c60520aa71a4ed87b9f",
+    "modules/common.py": "0469c3a903f5a0ce35cc16452a1e40262330ec5915e2ab09e0e2346421ad1e2d",
+    "modules/document_processing.py": "fe24f901343c16b1184077cf522fc9fc214bc579e3b27cf16365fe9dbee3d503",
+    "modules/document_service.py": "a92094ba4e484e6ca0f5a6ac9b29375efcfd971ba191d4c09c5d7d5959985574",
+    "modules/job_description.py": "37a3083bafa1cfdb59edce391b5ff810cc4515763cf9bfa504d8210d18bc84e2",
+    "modules/knowledge.py": "d2bb9662defbd6d685bff6e44f0a56d29551cfc829e217b2812b555e2e8239df",
+    "modules/knowledge_retrieval.py": "9dadab5f7884fdef3642f371b3e40a7a646f19f4fd5b3d43307fa8fde05d657e",
+    "modules/live_answer.py": "542706aecf1ac4801767280d6776dfe542a111d29d5d606db5b37510580b148f",
+    "modules/mock_interview.py": "ab24f60c96ace6b248727a0c38b1ba58d18b0cfd964ef6e9a8b635f40c9dd953",
+    "modules/mock_interview_legacy.py": "7b36d6c9f14a3d625a7ac645e3ca79ea9f0751c1bd43e4deaf6ddf1d387e9b9e",
+    "modules/partner_program.py": "2f6a3e5875e39b3362548a5c63c6748efb8a8946c44a842e292e6e33ef1515f6",
+    "modules/realtime_speech.py": "88a204e6a142388b990d46644bce585013941b9230487dcc15a7eb377117e276",
+    "modules/resume.py": "08b8bcb11fa2c52f7a2506410b1b8f331c456c4ad9eb4776155786dfc3f22a45",
+    "modules/screenshot_answer.py": "3f91557a4f5f175dad744052459ebba4d1859d3bf8833446d479744d99b5f3ba",
+    "modules/session.py": "134738ac1149bf1e25b2ac175f3808b12865ecafa3a99add06dfbd12121532c7",
+    "modules/system.py": "8826eecc3e26b7436f4a0c262f47bd8b35e6d774f8078c7a99a8e494aa8eb188",
+    "modules/web.py": "2f474ca44f98667c1419869e2c7cf6a5de2d002ade410d78a728966e8c62534c",
+    "platform/database.py": "99deb33b4b3f5c85973187dae12b2d02a99e2b53ec1c7d1e959f31c7271b1ce2",
+    "platform/object_storage.py": "e8ff28890f56ccebcb79445f506d5695d802b08fd3e32d54284de7d745afe12a",
+    "platform/pgvector.py": "848cbf97964325afa85bde6971d424f64a92a3245b5af35270486498f445203d",
+    "platform/retrieval_boundary.py": "79ddddb72f04b7e5ef459aa78f26ae3c2316b27f4cbccc1ee728fd42bfe94a01",
+    "ports/answer_generation.py": "00c5ff8e5466a200c283f1c4dc67379f3f59e08461a18dcb160821c4838f1077",
+    "ports/authentication.py": "e48bfa0fa29d93f0c9019b1279076ae2d8b80d601b546ef37bdfb622b8eacf01",
+    "ports/billing_persistence.py": "7eb776322891efee2b45ddff5846729cf504c45a7ec5be91b729f0881fb4a062",
+    "ports/chat.py": "a9c55c281724e937e7b3d8b109f531b2026b08edef1a312c9a2a7d5b19ec8e98",
+    "ports/commercial_hardening.py": "8d2bba33c5e65a278d198f1ea7811da1fa3928b56762da3395202a7ff3f05955",
+    "ports/document_processing.py": "3c602c00d60c06fc59810d583ae2f1775fbf4c709f00722a0136b89b9c3e7495",
+    "ports/document_repository.py": "10d629aad531a82c7e6040a9d9a39e4d71501b261adfa9b9b16a474f40c8ae7c",
+    "ports/interview_session.py": "35b3fc828a3264697e2e00167be4c430da7110048a0879e09d184b9be511606e",
+    "ports/parsing.py": "6c31b5c36888525a24290a7079f6cc48b5b6a3d7079d7bd07b69180aa081e50c",
+    "ports/points_redemption.py": "60bd1278fcfd24575452dd6a8cb336852766b7ee01380b00ef0c4414cab3f0df",
+    "ports/realtime_speech.py": "83df0aa69d2ab4c09978d07591e8ddfe77a67c4b98674321189e6511cd07d98b",
+    "ports/retrieval.py": "118adb630c0c81dbaf1217d13047332e7747c2f33b645a0dd4c4b383fa0c3540",
+    "ports/screenshot_analysis.py": "205ead9dd8acf932e790f675380ca2eda31ab274e16508605ce204dfb0115c3c",
+    "ports/screenshot_answer.py": "031f3a91aa7c51056b6632fd9fee01a17705ae521c474de993606eba5f99e4d0",
+    "ports/storage.py": "0f22c3e5cd4ee663bca51d27a0e6996916e2eda7753dbe2cc83885b99db2daaf",
+    "ports/streaming.py": "e279618d9f6633ee0158189e2998af39cd2cf5376d64fb2b8b03c86728a1dfc3",
+    "ports/web_search.py": "ddbfd4f25ad93f4b1749c7afe0854c2c8e16b819105e9d217a2adc2449af15b6",
+    "schemas/admin.py": "b0e457bc772f52b4840d193ff47fdac5763e19e239920da15b13fc7137bd9ae2",
+    "schemas/authentication.py": "0d348dca673388e7c3205be1f0fbefdf7894da3e9f86751924ef2580d891e4e2",
+    "schemas/document_processing.py": "47f21b25c4d20275cf10358a833f6a2324e095a1bc8d22e7971872aa54283d8f",
+    "schemas/document_service.py": "262fcb80a526a145129cd73e695901263e52b1ade1e37e650525b99f4058ee92",
+    "schemas/foundation.py": "5d04614e9e931e878284584e09c4d3f6d44496ab61a4b73400c13a422c308b59",
+    "schemas/live_answer.py": "271e08ea11becc48683cc690eeea9fbd1269187016135359906d9918063bfda3",
+    "schemas/material_upload.py": "192f76c59c4198cc8cc81d5ed27cba6acde25ba8895754d53899d21489b4cf46",
+    "schemas/mock_interview.py": "86db9960d73f812052b1ac0c80718e32db57a16f3a67ca68c1379d4967d36eb9",
+    "schemas/promotion.py": "abe09ade5f33356c2d8fcaba29cdf3e3e5aa451bbb437563f78378c3f1afd3c0",
+    "schemas/realtime_speech.py": "5e5dfa1f3e612aaec8603aaa477ab6483244705e9fbb15ab60d714933691c46a",
+    "schemas/retrieval.py": "7cc3de63416e71987486ac6f123f78749b830308c03f91b77546cd6c5c4e1618",
+    "schemas/screenshot_answer.py": "d8593dfed7dce0a22bd4fa768405f4c597d4bc8613029e20636b5f7af07026df",
+    "schemas/session.py": "60bc974b1fc0b0a933931f34f6d22887648a88a9367d5f84c040fa3ddf76a45f",
+    "services/__init__.py": "5384bfdb2df380b6557cc7a71d16891415bccaa87699406e236f752c6415389f",
+    "services/admin_analytics.py": "fceb02206cc944fabc40c3cf7e377e6cca5729f9f9f9fb253e0a8af37e2a5c41",
+    "services/admin_analytics_job.py": "89477b1dc881b772fe27815dd344362b3eff46eceff95b08ce849b2c9d6e045b",
+    "services/admin_bootstrap.py": "e48f1d13b57cae3f89e20923f5bf21885398fd80d623b6eb30afea4c0cc8aa33",
+    "services/admin_capacity.py": "c19b72df52909fb1aa5e4845644aee9c263260b16f78115b5997a5dffd21e385",
+    "services/admin_repository.py": "8f5d8eadede8fbf96befc3764b4bf958deacb91691dba9db6b737896dbde5535",
+    "services/admin_service.py": "e67ab97785ad6de4f43047151b7199259102901582839288ab4fdee3419a78fa",
+    "services/alipay_provider.py": "68dc6bd82a9f1b4347519c3b2cb14692cbf756cb7fad3e3e8b5896dd53f6f359",
+    "services/authentication_repository.py": "a4ead5df34bbe891d593505f83f448e51363b408215b9a96611151c3e622644b",
+    "services/authentication_service.py": "f056652fff78d9eeaf4fac7d9a98524a03b08c860771bd1edc168faaaa3bf646",
+    "services/billing_service.py": "a95b5cda1ab436956f43c8700ef5b7f985946538306398d6d22aaf987ee39db4",
+    "services/chat_repository.py": "431180e0ea8fa847fc1e30b4ae591e1efb7d57efd182d197c676d1980f74e52f",
+    "services/chat_service.py": "8828c29018a1095899c7409123ab93dea33a00213fc58a51bd6afbf0e9ebe8cd",
+    "services/commercial_hardening.py": "d0880f32765f5fab6e533dd80002032dc43e483bb86698d3a0ef3ed5c54d5d63",
+    "services/commercial_worker.py": "47663b6eda68ad61bf6422347e76292f1bc7c65dde00878df1424ece9ae31fdb",
+    "services/dashscope_realtime_asr_gateway.py": "f978931265889544a02aab942f888dcb18323114beda87355d113c6b31dd7ae4",
+    "services/dashscope_task_asr_gateway.py": "e3f729088a99ead9a79069e1d35712e2b5b7f62429b9272ce9fbd07cbd525f46",
+    "services/document_parser.py": "0d6c192bd471643f66921cf33a0541718cee0c8eb0647a6bd45b50ff57962015",
+    "services/document_processing.py": "233b064cfc70d2cb4289eb65328e1ae247d687871d13a4e23bb2ae53bbb5951e",
+    "services/document_processing_adapters.py": "8fa749eac4871b1601f2671419a6e11fce97136a8b464ebedc1e7a2175509e2f",
+    "services/document_processing_repository.py": "3d2d852638cf754fc2c615266e411937884d70d014f98ef29f081270f520fca1",
+    "services/document_repository.py": "ae455d34d8caa79014b72e40f1e3b9787e852ffe5ec6ad89b623a7b0aa697435",
+    "services/document_service.py": "bdf0de2bdd8b1a25061b2da68503b48b8445c7542cd4bfa71f20b91000aba4e3",
+    "services/embedding_pipeline.py": "f4bd8db3fe67e690fbdaf9b91d7c0e7d907e064d7f288e2ec6114ada3a37aa7e",
+    "services/end_to_end_integration.py": "937eab572940366af5350b925ed10c0e59ff5857d68f832596c6359699c0d564",
+    "services/integration_verification.py": "297243b64be13a8656ad82e1de4568089f977c709cb8a7bd323c28b0fe9f6454",
+    "services/interview_session_repository.py": "ad7b972c7a32a16fabe300e5ca79fe23ad611b1529b1ead000abe130a92bb1cb",
+    "services/knowledge_index_quote.py": "a44ffe259837e79c8271bf0c6040b28a7c89d6db3f8b759becee2c542eceb12e",
+    "services/knowledge_retrieval.py": "3a96f86a185f96be16405ffed2c00d790a22896309ecdb51232971735b81961e",
+    "services/live_answer_stream_executor.py": "7bace4fc81f42f4b48744b84f9e607d90c0e8f929c37c23f5a44cbaf139c9bcd",
+    "services/material_availability.py": "4cdc4729e511031cc4c71cb7b23dfebd1f418c305632c20b9962356ae578a95f",
+    "services/material_deletion.py": "4910e2d07c4e4f2855df18b6cdccf69e1d3b73b61d0cd80575d68ebc24b955db",
+    "services/material_ingestion.py": "a0361c311c2585bb45eae1087818efed62a8c77362f3aec04bda3dd822216fc8",
+    "services/material_object_keys.py": "4592d6b8d1093a3617ccacba2128109ca75ba50ea3df98bf6e707452b6234075",
+    "services/mock_interview_audio.py": "1039d5612ee2bf822351286238bfffa9e17d0519997410e8c497366716c8e830",
+    "services/mock_interview_generation.py": "002e62063d5cfcf6b017c5fb0393e984c627fe386e912e1c5225c42b678fe760",
+    "services/mock_interview_jobs.py": "73f11d55c05d0610fe251bb47467f4f5bb261a0ad8321287414f0b5f81a2b702",
+    "services/mock_interview_legacy.py": "97a5846395a631617339ee8a433431ab939e53d88dd73f5bde5a02b881c53f9f",
+    "services/mock_interview_repository.py": "f769ece3b35b1323011d828f96eb4e094abef424094e3e1c28fc544c385480cf",
+    "services/mock_interview_rounds.py": "b7990c8bcbc33c651ab444379e078e28bb056cdb4ff91ad545d2644221bb1afd",
+    "services/mock_interview_runtime.py": "d90738ef92ec7c78b597cdd01da754e165e8e8f9d3ca9fc821f5fed0ba461469",
+    "services/mock_interview_tts.py": "38e6540b7b05c7f91728a7e0284e21dce95b8f30f5c12e15cda09d760290acea",
+    "services/mzfpay_provider.py": "9c2ad8e3447af2aa5f3caaee35ed3ac432e595a3510aa9980979c5246dbb2b1e",
+    "services/partner_program.py": "4eae767a3e5696d864c0f45b069c53177996d51d72d600b0376f3c5911bfd543",
+    "services/payment_channel_service.py": "a2e8f5d6bd7e395a259d8fe9b2aac5ce532b7f6a138210b0e72f9a9df35dd693",
+    "services/payment_reconciliation.py": "484c28ebfa762370898695f27e4d33577a1b9e1b381c0039d9ead3c6a445e24b",
+    "services/postgres_authentication_repository.py": "290487d2b4618c62b249006ecacd064e1cc4d9a1b88b3fa086cf2389ce7eb50a",
+    "services/postgres_billing_repository.py": "a85a69221334c4f45c62fc9971fd5cfb4d6235e8e1ec01b48aed99bb937d035a",
+    "services/postgres_interview_session_repository.py": "48b946a6527336dee26cbdba1ba868fee7f4e70562bb96ce582403c0e59adb53",
+    "services/postgres_material_persistence.py": "bc948515d0409b93f272c40cd013e2adf2bcd88f796a24a9c7b04054d6f7c727",
+    "services/postgres_migrations.py": "b372b42696c9acf7a7b7672b5202f3dc95bc4bb69e44e51125617156501c713d",
+    "services/postgres_points_redemption_repository.py": "20ff35a5ad8b966b5e6a20e5ced4ceafc3a7277de5a76b5b250aacecd28a6b2b",
+    "services/programming_prompt.py": "31d8c67a0f221ca382d7a6eafac64b699a05c62f6da238dc54bd64e8707bf593",
+    "services/promotion_analytics_job.py": "dc215318a85cd783351e1dfdf19f0a2aa240ada4fdf722f2bf494c42d484c8f9",
+    "services/promotion_repository.py": "7cfec5bb9e84282d01623fe65ec53302103e5137f0290a2c1d05fe50db7c88ad",
+    "services/question_prefetch_scheduler.py": "36bc5ab7fc2329945a3becdedc0ccc0a38356c334e8b32a735610c58774d744f",
+    "services/realtime_control_executor.py": "49258e90349e5fb32682e26fc75ef1833aca5214824ef00430e9d7b6d70a0430",
+    "services/realtime_event_wait.py": "b6146abf4db5035eb4352575eb61a7bd8b9c1ba01eb55968fd258753d964c7c4",
+    "services/realtime_speech_repository.py": "886f6aa4148f5a36d1f5c5748224db4b7cc217a4a5b542fd476efbd2f4fd0857",
+    "services/realtime_speech_service.py": "812d21e1019b92532f10b0c9c7bfe27839822157bcb1b6fbbccf34a54c154390",
+    "services/redis_live_task_repositories.py": "e54a2a02547a0f40b1dd93b0d986491cd2df7a5c4e739f6a39e1806b0eccfc55",
+    "services/redis_realtime_speech_repository.py": "63e94529614eebef4baf24daf58ca27edccafe669f519b38e4b092f6eb3e0fcd",
+    "services/screenshot_answer_performance.py": "8d4d0d6263699779adc7bf6b857c7bf2cb8f56f136e6b0f0b1bf1c431e95ff66",
+    "services/screenshot_answer_repository.py": "63605f19f6ea0724c3894b865e1502ad7d59d844c5079d2e226a9b9e8b6de140",
+    "services/screenshot_answer_service.py": "674d5849c83420c56b97781ff0aec7f9c380460fc013c712504600b9ffd7318d",
+    "services/screenshot_stream_admission.py": "6467fabb6675f5483430750571442194dfbd8621363601ceb810e6bf3cfbf7f2",
+    "services/session_mode_guard.py": "cbb726b645d8ed82af93fa63362706f970ff63e1bb8392d162d73d883a45eeab",
+    "services/session_service.py": "b1e064bc4e15a97b0a14c6c37bcc71048adf09e6d5d7e6e25e4e4ebb6e23175f",
+    "services/sms_verification_provider.py": "8a8c2a19f0fa0d6ee30239f3ac56164963661998d1bb68466032946894319ce3",
+    "services/upload_intent_repository.py": "5ca514b3f11f0668cf82325c819e11d6b1710ef0557a35729f144d723fab964e",
+    "services/web_search_gateway.py": "e382df112b85708e571849ad1d518c4cee63a917099a6632395acef7158db997",
+    "services/wechat_pay_provider.py": "8a9bec3579d972662b8dd57ec61afb8a9abec9b60c4a7cac80fa4cd927637963",
+    "worker.py": "799f884210678a62648b647927357c52224b5db3852d46fe438e604b8b4ee6f3"
+  },
+  "baselineImage": "sha256:eb242b56fded1473659c2f4517f07b42eeaff138b59029e5819fbaa972b12488",
+  "ignoredNonSourceNames": [
+    "._*",
+    "__pycache__",
+    "*.pyc",
+    ".desktop-release-manifest.lock"
+  ],
+  "prefetchConfig": {
+    "cacheMaxKeys": 128,
+    "cacheTtlMs": 60000,
+    "maxKeys": 256,
+    "maxWaitSeconds": 1.5,
+    "pendingTtlSeconds": 10,
+    "quietSeconds": 0.35,
+    "stateTtlSeconds": 120,
+    "workers": 2
+  },
+  "prompts": {
+    "README.md": "acf349b25a322e5fca2e48127366f31e0289c65e7b0fb62849a0aef24a0de614",
+    "chat-service/continuation.en.md": "95989b17e55324a7b82e042608315abf1f8477600424d1e2f3b90f15b257f426",
+    "chat-service/continuation.md": "d4b4880b802f4573da9c9d1c7837ab1d0f87a44c2a96541ed3c95d130c4df64a",
+    "chat-service/detail.en.md": "b4984f9be58d6d4b4f0819e21fffab66795bcd6b2afd2240d5384349fc10f255",
+    "chat-service/detail.md": "7c7efcda04559435ab91044b0439d037e82201deb5a9f114c01fc757f11b21d0",
+    "chat-service/quick.en.md": "26443efd71ada5c230ffe25211a08994d26af084d223d29a388a06f85306e738",
+    "chat-service/quick.md": "8b20f1783abafbb1980f3c3d5cee7e165d359d5249df864bcaa2fe1f2a514372",
+    "chat-service/system-v3.md": "1e640d13e62d39aae5423c86c0b616af42ae4a36f1cecec8104c3b70c8e9dcef",
+    "chat-service/system.en.md": "81f09c9e6f6fe01efc80dbb4b8cd182508d889854ac27a3281c11e72538bc269",
+    "chat-service/system.md": "e84d13f4e140edfe8b45b776c9ba05e8273b58b54bb14afa8b7d80d3f9eb8b1d",
+    "mock-interview/README.md": "c0a4d9600a0c3a480ba633761b418873911eb19a6242d6a446697ee0fc22aa58",
+    "mock-interview/answer-structure.md": "4ef41e892499bffe67558b837e6b4a5c70f10533c9b247f840cd036c99b83d96",
+    "mock-interview/question.md": "8fd1fbc0ef6f6e7abc641f548d2e2fee35db04d80c57a1dde787ff7c225c63cd",
+    "mock-interview/report.md": "2a3d09711b7eb3dbcdbf0187d71f6dccbe210cbc7addfb147a5a8645f4ac249d",
+    "mock-interview/tts.txt": "a40515717c54dba2ce20b3f8c1d4f2955252fa7b5f3934e0ba08e1ba207bc67c",
+    "programming-policy/policy.en.md": "219670eed2f0c2cbcdc3c50cdac29ff1d68f1fe63da05e92f9a9a634ccbca011",
+    "programming-policy/policy.md": "47368570999be8ed50070f6e280c5e5bdb205a836fd140f71a76119f4cfdeb74",
+    "screenshot-answer/system-v1.md": "a5439942e8a421cfe9e6e8c4fdce71678bb8be22991582a82e2e2e7d2a349e0b",
+    "screenshot-answer/system.en.md": "b868664c2f8feba31763c2749d28ccf96277e05a1bebac7c4f732e21c746584b",
+    "screenshot-answer/system.md": "edd6812d53240ba6ab249c4803679ee960f2b1382a514735cd6120df382c1068"
+  },
+  "protectedMethods": {
+    "ChatService": {
+      "_answer_looks_incomplete": "6c911559a3c6e188b622a97aaec611e0a7a7bcd20fa37a32bb5e68d5a18f6947",
+      "_append_without_overlap": "3c9feb0c77dad7857e878cd20aab994a50e89d58022056e1ae661743a6782197",
+      "_assemble_material_context": "38198682d9bf93e1a27ed2d7cfe403474cbe88e714a45f5922a62f4bae5168a5",
+      "_complete_answer_stage": "7f8c4fa0e11a16a9e5257c31c4f8477f2aff5afda45cf3ad155d58fbd8abcc6d",
+      "_complete_task": "5fdac82e8efb71d48830ca49c63bec361ecaff59f204b8741db2c2e7f8ede9c3",
+      "_continuation_prompt": "e6a11b91e52f2b67f2fcb8d8a9454819cd628b88654b69450e03aff6c4289903",
+      "_conversation_history": "7314d484c62b23fea25c145e3edf525049f1a885f61bfdd165c338d65a0af54b",
+      "_ensure_web_search_allowed": "e5e7424f845940e95d7e87fa6d347e40673c10da174a1c113c0f780713200103",
+      "_is_task_cancelled": "60a32e17948bee68540b2492b64783b4da1e65511faf039c95cdb6f7beac0d84",
+      "_load_material_summary_for_prompt": "b3317d6dfe1b403c3c096cd1fb39bdcb6b548d6548178070b31920287baf2dc6",
+      "_load_stage_prompt": "9202cbba08b983c4c4a9deacea178d92b632dd71e8026fcb8d039af48759a113",
+      "_log": "7d0ca1dfb94c7dc4f888fc27303fbac2a7d7923304498d3d7b4dd847f3f2b73f",
+      "_log_language_violation": "a0a6ac9625d44bf7e1551661768ec24551a720b695bd43c50632c89720b8b52b",
+      "_log_stage_finish": "abd7631feb2b4c5ca1b41c5830d301e9aacd171a9b726ff620a2fadd5f0e5dbb",
+      "_material_source_payload": "a563e52ba324c73656c64c292b99489e3714bb89a70e1d2e83750d83495b6a5c",
+      "_prompt_metadata": "9a7ce4a41f5ab3ba45d74c64d3f7507f1c08c7225ee848f540574300f875edf1",
+      "_record_ai_usage": "764f3bd8d25a26461a68a5f2b574722eb540749b7c0b1f643d6347aaab5b8c12",
+      "_reserve_answer_usage": "4d07363e7921a2187c1261e89167cfe335d92909dcc03a0f0b574deeda6ce828",
+      "_session_material_prompt_context": "a849b41c9a0934144303eec66e8902ebe7c8375dcfa51f1b295ba10b1913ed36",
+      "_size_bucket": "cfa56e8a85b3e527624c1669f9ebc50c0c0471301b9ed2bb9c8e3d64f55c915f",
+      "_to_retrieval_response": "2f10d16201ef49a08cc34bf94094c799e799718a1090a5200088ef501b4ff8cd",
+      "_web_sources_payload": "4ad0f65397bcfa9656d0422ebb6e08e75f2d76eaf3e12a077b44e260cbce3366",
+      "answer_question": "7cb0b7f066963b5c0d573af64cce5f23630cd9fa41bfd0a5723dde594ea4da74",
+      "cancel_task": "7dc9b1f133be28036f709df0314439a17f86cad8a268262f7e4d78914e0d25f1",
+      "get_task": "3b2ff8f9a6f9a41795f9f33b90d042551efb3559b7a0c794977ca46c09b0a143",
+      "list_session_history": "3331e751a863459182211bca852d02aa7a9a1f34ca713ee32aa35fa1adb9613a"
+    },
+    "RealtimeSpeechService": {
+      "_acquire_session_cleanup_lock": "e6441c0b108d6c534171176bbfaa8dffe3a9554e6138693deca548a04edb4a8c",
+      "_active_request_enter": "ea7eb445ed5548487a8676575df629e41f6f9afdd57b549470dadba596c848e7",
+      "_active_request_leave": "e0e6fd5269809aa5358f3a483d92e4da52b2db636f591e48bf4dda420b52b954",
+      "_asr_timeout_seconds": "06d1508196a7978a0cbac171d3eb47a6b4244368c99eba876beab5aa82aefda4",
+      "_assemble_interviewer_question_turn": "3afa0f980fe7601052417195466da79b57407cf7e51179f49b13d0caa2bd6e83",
+      "_assert_companion_current": "06fb7d4b6aa217e82d714f9c471b4175e79df6338be5475ffb0e957964fdcbe0",
+      "_backlog_coalesce_take_count": "751eaf076e1c403b76585f6dca208de09a92f8bbe11d5814a56335014d2427de",
+      "_binding_is_active": "2a4383f8b94d274807a63da791a7bef16f7bf705ec2e14c661672a80093166f8",
+      "_binding_stale_reason": "71d761fcd41e153ceb786edb135f4d635f968a11069374c6846c5330d0d15193",
+      "_buffer_segment_audio": "0bdaf895753afc33d6d2e56af850b282ef57e09a9d8cfd8f4b596e994b802663",
+      "_candidate_response": "4ae9cfec51a0fbaf8a4a91a0febbd4dd69fbf7f32237323e92bbc5961fb9ae6f",
+      "_classify_runtime_anomalies": "bb8dd8840436c57d3abd49069dee7bb54d1697a6bf205ff31a1b54ac96d848ec",
+      "_cleanup_source_resources": "88dfa41078a124b7bccde1490fcd1738e6f8a6664053aeb59f7ba4d40b1e238f",
+      "_clear_runtime_orphan": "35ecf953f6f9710a28d8556c4600d5b1caa903b83a86e7c6b64e79665cf80666",
+      "_clear_segment_audio": "954e6dc5a1d613b8885451e5ddc7a1a55de6d44c7cbd149b49878be35887b5f0",
+      "_clear_session_audio": "c56299c17f75b22615d0ec0382ebbdeb3a1ddd754ede6daca26610755e0646f8",
+      "_close_asr_source": "e5d7ba0d30e0b6cb7d063265c98a48905516a7ef8f1a288500b4d5076d30f207",
+      "_coalesce_prepared_frame_jobs": "166c8f58da0e3ff2cef11f4bbf0507d74bb87c818b7de9d73259f0c07fef3d9e",
+      "_compact_transcript_for_dedup": "55716e6e4427022fcf1d467d4a13545d2a6bf83af56be0ab30de211654998f1c",
+      "_complete_source_turn": "da2a8363fbeaad483b583e0ee36f457f86258dd316e6711aaca82cbb58e7398b",
+      "_compute_desktop_pairing_status": "a54632792f520ed202db942ec86dc5a1c1eeb847253b213c8b7d19f20b831572",
+      "_control_query_diagnostics": "411aeffca5308b3f044bc1cfc2947daea3d850421e305fb1fcd2a4f33bc920ab",
+      "_counter_bucket": "2bd765f110566dc0ba48b76bcb6e2b1f8d650f484144f1997624359f548265fd",
+      "_desktop_device_fresh": "0b632dc94b0b39f2c1c6b2582360eebd353a27bfa1257d0460b4023f739aa924",
+      "_duplicate_nearby_suppression_reason": "eb0e9c2e0c2e0687a1eedb507c688b66045c2c72b9c568d84273ad1139bf0a79",
+      "_ensure_realtime_metering": "04b4ee56ec479b62d25f9b962f41ff264ed954a42fa288699ac887d2b037c118",
+      "_event_payload": "532e26cf205b3a70e4b84acb73993670c488ec0c6aba04cd9aef683c73039d70",
+      "_finalize_abandoned_source_turn": "6f617eecb14901a8b37765faed4d52ad0fa1c7bde4f261c5fe69455e26e3e187",
+      "_finalize_suppressed_partial": "fa4bf72cbb1adad3002b69a11cfeac6d15db0f5cc20dd202efafd13483bd7a3e",
+      "_frame_worker_loop": "e433c52062c9e836fb899fd21c07da81fa9fc115b6ceeb01869f3bc5b73f822b",
+      "_gateway_diagnostics": "d6c1cb8edb85c2abb234b0b38ff9fc12f584456267daaa60b8b68412f4a690c0",
+      "_gateway_runtime_status": "35a557938965826b2630f9441ed278ea211dfe52a634a22c6d6ed7a6002649e1",
+      "_invalidate_control_query_cache": "058a07f6131a427222bdc1fc76aa2475e7906ff067f2926241983465a7182da4",
+      "_is_meaningful_transcript": "c192f6b0a0a37b4a47e095b62ac3455e77b6021446db2a2f51e87dc33a508b58",
+      "_latest_companion_version": "36ffe8555d35930ca4ffef32dacdc54843a13f6f761c90437d0e299db168a72a",
+      "_latest_timing": "78959de4299c5b47a4b8d472cf84aada426024ed8b3a2457a1cabbd5ed10e292",
+      "_log": "a0a8af85c64b2d5a953b54dffa25892aff35f050e59e96a922c561d733ad267d",
+      "_looks_like_filler_transcript": "6c4c55148fd69941e628288b090f41b16fd0d7bb7996da359cf70d1d904ca34f",
+      "_looks_like_question": "d20db1ec97f769b74a6c02c2c3965b253a2735c83531015c8acd286701997ee2",
+      "_looks_like_repetitive_hallucination": "9c7ba8be95a311c2137292e490931a0ab723a642b23f3266152b91c68ad6c9f7",
+      "_mark_terminal_accepted": "722bc72fb389cee265e848bf14cae00a3aba1cb6994e05ddb3f8688cd3499942",
+      "_maybe_detect_question": "a9d5ebfcc7b61c356d2e181a0aaf950deb4c68f122bc89956c59d303268500ac",
+      "_merge_recovery_transcript": "1f0793973b6e3306cc323cfda7a661b033f00222b7bb31c8dc849885c2e94fc3",
+      "_observe_asr_prewarm": "5c9d20b9c25fe9186ade9946b1974e67383ab0f0b31a6367634855eb2e36b59a",
+      "_observe_trace": "96ed8ff479d1358532f24b08b40de210b50ae745ffcb7d409d4676cc2f6132c6",
+      "_pause_for_insufficient_realtime_balance": "5e9cd584010529af117849bec73b8b22848d562997e2ab8cbd864d3b0baed666",
+      "_percentile": "2c40d3207694b797ca526b9f63d2b47a1b8db3a44f883c59612a2f746efb83e0",
+      "_permission_status": "d1e9b7dcf9ef1ebec638497b38c2d92e39448400df475b78ed19a0264d1272bb",
+      "_prepare_audio_frame": "142b8e75fe6121b3e3628e6b7165c476513c1de7bd1ad8c98a46ff06765ee42a",
+      "_prewarm_asr_session": "b85a8f94b8569e2467b82cfeb8f69659d9823c244512dcd1731a267889d33b7b",
+      "_promote_queued_terminal": "813cf49f7c78fd7faac8706faa2976d1f51750bb0829b16d186705ccdc2a215d",
+      "_publish_candidate_state": "9e2e565e045930d3891d52cc94257a84705cd43ec557d256bcd7ab3b3281d03f",
+      "_publish_committing_event": "2cd1c35a5e6f36816f39683d3762e8458133ffe420c7341817e9c8f85dfa7510",
+      "_publisher_can_ingest": "8d54d8c031052f097f9b0ed20015ade7c212c34b77a395038c11b8e6a9cfaba4",
+      "_publisher_response": "71f67a1028e492a55ccb2d050684b40d192e2cd04be57804ff83c48029e6ab9a",
+      "_realtime_meter_loop": "ce2bb8c44fd2216ab2c8287a5bdd851170e3f78aaeb60bf1d298279080e8a3a5",
+      "_realtime_minute_usage_id": "d6855c29692c2f223c742830a3c52836ca983e4eec7c8966ba0b53d2b8930086",
+      "_reclamation_loop": "10cef5d5937a4ff5bdca10db44e0fa939f7dcd147eb6c37151ab5965be286720",
+      "_record_reclamation": "326e707a4fbe3fcea875ee66eb8c39ca537576f03a5d6b0d04750d3140147cf7",
+      "_record_speech_usage": "bba31854ebd5488a4c927c53029c5b793a6c975d1ea66eaa12d7b34347405f46",
+      "_release_session_cleanup_lock": "1abe07f0a304d3d0d5cdad6efe74c70905f4df4ecffe8e0b9aaa125049ff72dd",
+      "_replace_queued_partial_with_terminal": "402ba8bfd5415c7e99df53f6ee3db09bb1b12f022e00cf37c66095ff9065a19b",
+      "_replay_frame": "1e9ba970af840751a95d6e05185a5bfca2e7784ee5f5505a22cee96216e3a486",
+      "_require_active_desktop_binding": "dc2b9e891eff9476a9ec4fc3d89ff90cb1f32688dcd101feb19f91e07ba4363a",
+      "_require_candidate": "154089ba2c7322cf8202193577a8e340e664965c10c63a96d09f990277acba1e",
+      "_require_publisher_token": "d02129406d26f98e3a8e9071fa83fe5413fa0837241a3e8e6b36c60ae91c3d39",
+      "_reserve_realtime_minute": "ae2be749d394555bd47c50864f3b271a32936c02c3204dc64497fae83b1d2f39",
+      "_reset_realtime_session": "b16c95daf62b0d4c6c23a1bff3183cdc79446961e9a6729216e7397cae4383cb",
+      "_retire_session_id": "476d50d5091f64bdd56042bd3a95e05aca8ca414edadc2c85ea78e92bb8265fe",
+      "_role_for_audio_source": "45b86dcfd45ce1e09048a703a5e3745c758dbf107d578e825c5c5157b4e15066",
+      "_runtime_evidence": "114666412c7282354e30c6e9b5124e19bc3cd388a1dbcfa3935268f8425c276b",
+      "_runtime_source_health": "5cb0523be8c7833384db0ef7367b835775439f46381e3fe6c98b1bcef901d5bb",
+      "_save_event": "c6b97f5e7444592534ce1777c1a1c8d23cabb8fa78a8d26e4eebe38cd171e4bf",
+      "_session_is_retired": "6858fbd6ba0c4d9b930e89b1de7e2304844b26d71d2004e2131532152d2a9496",
+      "_session_source_key": "7806acf11d5ffa0f1dd22cd9025e23b6cb78475a3219fb34745e00541e6c01dd",
+      "_set_latest_timing": "b9366d260714e8cafed62d6d93bf2e2a03e6f5e156db8ab78c8098ce63d62687",
+      "_settle_realtime_minute": "c4637439594bc80028b242fe6d984ebe03ffede2fa137b430648a6eca72888f0",
+      "_source_watchdog_loop": "422ec3f07353a2d82694324194b4e73f6e7d60a148fc1f7faa7f7bf66138e792",
+      "_stale_binding_message": "1f843d9a031885dcb6c35d9750709f71d430223655747d0970a475b81ef84093",
+      "_stop_realtime_metering": "1f502bd65643d68375b10ab1cbaa47d3a48659e8be56ec6da325118bd2559fe5",
+      "_submit_cold": "212a57173f71fc9995ddeb0a0eec4b94976cc5cedeb6948f6e322e9f67840207",
+      "_suppression_reason": "428cd39011645b4895a928d13cb5be74a9a1d03eba0dbd6ce089f6a8c6a6d12d",
+      "_sweep_ended_runtime_orphans": "0bf192824ec5b55b9267316f0b381ecf4124a39c92b84ff9ff31fb2cdeb2ed45",
+      "_terminal_ack": "39a9edbca034f741d8e98764c0c18ad2275680136a539808e8171b7e3fc8b311",
+      "_terminalize_visible_partial": "208fab29bcceefe4976fe71444a7dd12ca8e8bd9598b404d622960a85ffa0450",
+      "_touch_session_activity": "3493e3a7a9fd41a411bd7916c4485e604a3af7f761bf95454f30f262dff7eb96",
+      "_trace_snapshot": "f8ac4c4842a78bc9643b70e2b6df80bb64c61760b2f82b7df3b4572380ffb68a",
+      "_track_source_turn": "b1cac676a4f8c17cc60a5bca985223963d3e2e1d3dad1b52ff0198e5bce73d4a",
+      "_transcribe_frame": "d4c0875672113270b8beeb1f8446ea11f27d216835bbc96fda33e517c9a1fe9f",
+      "_transcript_response": "3d2b3834b3d1d52689b8be13f85b04c300c6f2c5719ae77ec96e14aaca2c8a7d",
+      "_transition_publisher_status": "2593a6913f4114ccd5160ac8c48f5e1fc1357f5de95bf8950e714e98601d5963",
+      "_unretire_session_id": "0b285b48f5d3d81c054f0b92dcb1ff6a3778d3034b908a5d6d4689c8ca07b0ff",
+      "_verify_performance_ack_session": "3ed9726511dfb16d71a44bbf6081cf4f85d628003132c0403ae72ee425bdbd7c",
+      "_web_heartbeat_fresh": "094822a4242065110b5cddb001576a7d6f24904b41d77bb51ee4c1199d336d7d",
+      "acknowledge_runtime_timing": "3d880c109e334c392b1f84e30c0f774495347e79d21ca314c85b8482e91b3c96",
+      "bind_auto_answer_candidate": "da2d17e9ad57bb04e850a083d2e4fc83b4efa55113d113ff3b1be77cd787e90e",
+      "bind_desktop_device": "4922f6eb0f9234a15663f3e08df4072fb0dc0711de1e6dfc3f2aeaf9de366333",
+      "capture_control_state": "a195996a1613425f3233b3652586cc2e4bea75ada74ce67aeee7bb2708795d38",
+      "claim_auto_answer_candidate": "e121d04bb89788aac3f6b2bcc086d7c072f54fe072e51cb2eaf74d0419c7cd0e",
+      "confirm_candidate": "6db86564118b10541165b14d12334aa81725c28f8a1ae4f7b0c033ad4233b109",
+      "connect_publisher": "647824dd3db307602e314a05b06909b3928a60a86cc9a8984f5c0b05527ec639",
+      "control_capture": "2751ac66a2f9ee28e726b7d3023e891d4b1ccda555890d7dd140bd792095a3e4",
+      "create_publisher": "4740f15cb6299918bd431aa732eb85b6ff686a6cbcdbe4b99605a8fb15a7015d",
+      "desktop_binding_response": "ccc630372a424f66d282ca658c51a1620338ff3bd649c2abca0dd3e5662631c5",
+      "disconnect_publisher": "ac690ad0277e0eda6d73435da961d398efff6c076dc27c3696293b5627eccda9",
+      "dismiss_candidate": "588d883a073c3dcb044a3c2f0d9907e91215c5d2f9104c10635ff14baa9b5b1f",
+      "enqueue_audio_frame": "960c416d80ab66cf8b8e1a6d1caf4478785d50881e9758b6b4dfce4faf2dbb71",
+      "event_response": "a28bc92ecff22f669e30c26d024df2826a54c891e1a6a871ecf3603b4e519b02",
+      "finish_auto_answer_candidate": "dfeb45aa62eff59bc418629981cd87a0d701704ec766a15028e571824c0467ff",
+      "get_active_interview_conflict": "690e5c728d9ffb434057a5e7e82007de949c167c9b3ff7d183ed5cb179176955",
+      "get_desktop_active_binding": "9e4f20a274c6eef43850bc0c66af1c5c6b2d971ab55a8dee2a81e496a0063972",
+      "get_desktop_active_binding_by_code": "f1ace63208e8c47814a6db540234d2dafff2d31406a4f426b74d16228cd10e92",
+      "get_desktop_active_connection": "8116fa42a9a50a5daa7c6c32d7fb25a77e7d9b6e39de8c22dcb53e76b2beb732",
+      "get_desktop_binding": "5da72d4e103c74764a4b4189ed9fcce07b174703868b86953342480e03e49575",
+      "get_desktop_capture_binding": "8d61006fde60b1d1117bfde3b69a4e9c5f61f2604414b08565a1591b8a76d2b2",
+      "get_desktop_pairing_status": "d992a16694185dfe72bd6b9c4af7fd36d5dbd72a6549be465a33c414e9095af0",
+      "get_last_desktop_device_for_user": "f09a5a7d63b741a1d47af8e406ce1204025617fb3d75be0a4cac30b8f63d2f26",
+      "get_runtime": "ad489c6a754b263727ce126afff55b0c6ca83597e4ff95e9289221bbf129255a",
+      "get_session_snapshot": "3d0b009ee8acfe116ffa32ae76a368c3d2dc3603728178755004bf66dc01f045",
+      "get_stream_bootstrap_state": "d81cbd2c68e588cfd172811ba8b5938bdf9ec97c7e6964d01af297cacdc84549",
+      "latest_source_generation": "29f74209007c1e30af70607357e487329706b0cb8a7a0a28b577a03d220ea88c",
+      "list_candidates": "eac76ee1bc5b7ed8a6aa11857815195b26c78275add4ab38b12df41418704346",
+      "list_desktop_devices_for_user": "2f2df7acb33f1a4950dd28caf5ed47117c06bb3e0522abec824abf2c416889f7",
+      "list_events": "2dd4ee631c1f3a29aa382cfb730738d3ba3b2c47a052fc8c208f155f6d0592d8",
+      "list_session_events_after": "919b92ae3c726c7b61ede9096d173b28825e88ce77069d7b53deaf3fd3068c00",
+      "list_stream_bootstrap_events": "2c6a45c33c08fd7b1fe1b86f08f73e7e7356c09b55cb7a6b10246d2b95403899",
+      "list_transcripts": "d7a2579d470b802059400e69a1c71472a94489c7a29bc5c49f11d44e18ed77b3",
+      "observe_sse_delivery": "e66e7ca1d988bfc7be07669789b7dd4b27d254aaed9a28e8741239b38a2b7659",
+      "performance_summary": "17b999474029188f1d2f6fd2ebc52a5f38067a98ac4d510a4d7f962abe299112",
+      "performance_traces": "f3396ad0d4e99efb6fb994448d43ff5b7706b6114896db99a0b89d39ad682211",
+      "process_audio_frame": "2de78afe0ceaa32b0b4a58f7e8904977fe655545178749a5d86715c90e47ea50",
+      "publish_device_status": "1d91eefba60034f865bf464a83111b2bd1347ed7aa890c3342a194289b98e464",
+      "publish_screenshot_shortcut_accepted": "0a027a0a94acf86e59ed22882c5a69670bfc3cd8158108a0e96d0c78cc8ffc7d",
+      "publish_session_event": "7075fb73e94e1e377c798affa2576cfe760809bea9d4baee61f87ae6ce2e5af9",
+      "reap_idle_sessions": "3294601bfd7935edb1ad33f1045431c5540bb30490b5267722b0f0dc476b8ade",
+      "reclamation_metrics": "8c91fd8b49c8d99b57a5833aa055d8ba3d31a3b571d6d45316b8ebc33b924f13",
+      "reconcile_idle_session": "c8b7cd413ed97e37aead7d05a662713721d3972dce47f2b106183e7b38ffd150",
+      "reconcile_idle_sessions": "7dcfaab35a916189e805b161080b62ef768b7e57275ef6bb8d7ce64809854ce0",
+      "record_delivery_metric": "965da7dc2e384cde9da88e40b53b4ffb9f778f65acbdad06c7ca25f6493feaf2",
+      "record_desktop_device_heartbeat": "6312391800b7fbe1a93faffe31d4baa2a7385dbe6316a1db96e350157a19280f",
+      "record_web_session_heartbeat": "f48ce32926a35cc69157166f0b72e31b79d46bde91ba5271e923b89eec0e4e23",
+      "register_desktop_device": "5f87a202b587e1b8036ee2ea9fd35efa66ef0430bebf32b9aaeba22ed3ea2e43",
+      "release_auto_answer_candidate": "928e0a43b8b26fadacea850e5980b780f787a6a0e3ec95c24fade8504b189f77",
+      "require_active_realtime_session": "ef5a60b23ec75ef6f5aea57a25ed36832d90819b07d8df01154073b0ce60da7e",
+      "session_activity_version": "5be87904a025327c70182a7a806ba68127774cb49e1b0ec8b088cb5c3ad59f95",
+      "start_live_session": "a1a7b7b861eabab7967b27f9cf345e33be45d80db7f8043327a49e94047722ca",
+      "stop_reclamation": "a0f7949febe9a437001e6c11fc65542b1de396b5127b731c62b313f5ef447803",
+      "supersede_active_interviews": "db5313b760d3b28896f2fb8355e93da771dc97920b7ecf92f76885feebd1d13b",
+      "terminal_is_accepted": "18ee5fe0c0505675dd037db55d2e95c32e6a0814334a9b5ef63125c374d68038",
+      "terminate_session_for_admin": "1bbdc0c9c0f325a02a396ca0a38c11acd3938d289ae0a7b9906e9b194c6e007e",
+      "wait_for_session_events_after": "003507925457fcfb54a2f71a3ac809ee663565767686e2e0ea38154a3dbabf98"
+    }
+  },
+  "routeModules": {
+    "modules/__init__.py": "b45973b814e6ae9d0a608f5ae7422cf0143f1e956d61e30d08201177c7da2a78",
+    "modules/authentication.py": "77e74aa24dd10a5f4ea39e4ba6a5a93831382cbbb81f9acc4245ef97eb04cdc2",
+    "modules/billing.py": "9528378a10e381e43b284ecaa19d94e7d0e09c0496753c60520aa71a4ed87b9f",
+    "modules/common.py": "0469c3a903f5a0ce35cc16452a1e40262330ec5915e2ab09e0e2346421ad1e2d",
+    "modules/document_processing.py": "fe24f901343c16b1184077cf522fc9fc214bc579e3b27cf16365fe9dbee3d503",
+    "modules/document_service.py": "a92094ba4e484e6ca0f5a6ac9b29375efcfd971ba191d4c09c5d7d5959985574",
+    "modules/job_description.py": "37a3083bafa1cfdb59edce391b5ff810cc4515763cf9bfa504d8210d18bc84e2",
+    "modules/knowledge.py": "d2bb9662defbd6d685bff6e44f0a56d29551cfc829e217b2812b555e2e8239df",
+    "modules/knowledge_retrieval.py": "9dadab5f7884fdef3642f371b3e40a7a646f19f4fd5b3d43307fa8fde05d657e",
+    "modules/live_answer.py": "542706aecf1ac4801767280d6776dfe542a111d29d5d606db5b37510580b148f",
+    "modules/mock_interview.py": "ab24f60c96ace6b248727a0c38b1ba58d18b0cfd964ef6e9a8b635f40c9dd953",
+    "modules/mock_interview_legacy.py": "7b36d6c9f14a3d625a7ac645e3ca79ea9f0751c1bd43e4deaf6ddf1d387e9b9e",
+    "modules/partner_program.py": "2f6a3e5875e39b3362548a5c63c6748efb8a8946c44a842e292e6e33ef1515f6",
+    "modules/realtime_speech.py": "88a204e6a142388b990d46644bce585013941b9230487dcc15a7eb377117e276",
+    "modules/resume.py": "08b8bcb11fa2c52f7a2506410b1b8f331c456c4ad9eb4776155786dfc3f22a45",
+    "modules/screenshot_answer.py": "3f91557a4f5f175dad744052459ebba4d1859d3bf8833446d479744d99b5f3ba",
+    "modules/session.py": "134738ac1149bf1e25b2ac175f3808b12865ecafa3a99add06dfbd12121532c7",
+    "modules/system.py": "8826eecc3e26b7436f4a0c262f47bd8b35e6d774f8078c7a99a8e494aa8eb188",
+    "modules/web.py": "2f474ca44f98667c1419869e2c7cf6a5de2d002ade410d78a728966e8c62534c"
+  },
+  "routes": {
+    "http": {
+      "/api/v1": [
+        "get"
+      ],
+      "/api/v1/auth/login": [
+        "post"
+      ],
+      "/api/v1/auth/logout": [
+        "post"
+      ],
+      "/api/v1/auth/me": [
+        "get"
+      ],
+      "/api/v1/auth/refresh": [
+        "post"
+      ],
+      "/api/v1/auth/register": [
+        "post"
+      ],
+      "/api/v1/auth/sessions": [
+        "get"
+      ],
+      "/api/v1/auth/sms/send-code": [
+        "post"
+      ],
+      "/api/v1/auth/sms/verify-login": [
+        "post"
+      ],
+      "/api/v1/auth/status": [
+        "get"
+      ],
+      "/api/v1/auth/wechat/authorization-sessions": [
+        "post"
+      ],
+      "/api/v1/auth/wechat/authorization-sessions/{auth_request_id}": [
+        "get"
+      ],
+      "/api/v1/auth/wechat/authorization-sessions/{auth_request_id}/authorize": [
+        "post"
+      ],
+      "/api/v1/auth/wechat/authorization-sessions/{auth_request_id}/scan": [
+        "post"
+      ],
+      "/api/v1/auth/wechat/callback": [
+        "post"
+      ],
+      "/api/v1/billing/checkout-orders": [
+        "post"
+      ],
+      "/api/v1/billing/checkout-orders/{order_id}": [
+        "get"
+      ],
+      "/api/v1/billing/payment-providers/alipay/return": [
+        "get"
+      ],
+      "/api/v1/billing/payment-providers/mzfpay/return": [
+        "get"
+      ],
+      "/api/v1/billing/redemptions": [
+        "post"
+      ],
+      "/api/v1/billing/referrals/activate": [
+        "post"
+      ],
+      "/api/v1/billing/referrals/me": [
+        "get"
+      ],
+      "/api/v1/billing/referrals/{referral_code}": [
+        "get"
+      ],
+      "/api/v1/billing/state": [
+        "get"
+      ],
+      "/api/v1/billing/status": [
+        "get"
+      ],
+      "/api/v1/document-processing/documents/{document_id}": [
+        "get"
+      ],
+      "/api/v1/document-processing/tasks/{task_id}": [
+        "get"
+      ],
+      "/api/v1/document-processing/tasks/{task_id}/retry": [
+        "post"
+      ],
+      "/api/v1/documents": [
+        "get"
+      ],
+      "/api/v1/documents/processing/handoffs": [
+        "get"
+      ],
+      "/api/v1/documents/upload-intents": [
+        "post"
+      ],
+      "/api/v1/documents/uploads/complete": [
+        "post"
+      ],
+      "/api/v1/documents/validation-policy": [
+        "get"
+      ],
+      "/api/v1/documents/{document_id}": [
+        "delete",
+        "get"
+      ],
+      "/api/v1/documents/{document_id}/availability": [
+        "patch"
+      ],
+      "/api/v1/documents/{document_id}/display-name": [
+        "patch"
+      ],
+      "/api/v1/documents/{document_id}/download": [
+        "get"
+      ],
+      "/api/v1/job-descriptions/status": [
+        "get"
+      ],
+      "/api/v1/job-descriptions/text": [
+        "post"
+      ],
+      "/api/v1/job-descriptions/upload-intents": [
+        "post"
+      ],
+      "/api/v1/job-descriptions/uploads/complete": [
+        "post"
+      ],
+      "/api/v1/job-descriptions/uploads/proxy": [
+        "post"
+      ],
+      "/api/v1/knowledge-retrieval/context": [
+        "post"
+      ],
+      "/api/v1/knowledge/collections": [
+        "post"
+      ],
+      "/api/v1/knowledge/collections/{collection_id}": [
+        "delete",
+        "patch"
+      ],
+      "/api/v1/knowledge/collections/{collection_id}/upload-intents": [
+        "post"
+      ],
+      "/api/v1/knowledge/collections/{collection_id}/uploads/complete": [
+        "post"
+      ],
+      "/api/v1/knowledge/collections/{collection_id}/uploads/proxy": [
+        "post"
+      ],
+      "/api/v1/knowledge/collections/{collection_id}/uploads/quote": [
+        "post"
+      ],
+      "/api/v1/knowledge/status": [
+        "get"
+      ],
+      "/api/v1/live-answer/questions": [
+        "post"
+      ],
+      "/api/v1/live-answer/questions/stream": [
+        "post"
+      ],
+      "/api/v1/live-answer/sessions/{session_id}/history": [
+        "get"
+      ],
+      "/api/v1/live-answer/status": [
+        "get"
+      ],
+      "/api/v1/live-answer/tasks/{task_id}": [
+        "get"
+      ],
+      "/api/v1/live-answer/tasks/{task_id}/cancel": [
+        "post"
+      ],
+      "/api/v1/mock-interviews": [
+        "get",
+        "post"
+      ],
+      "/api/v1/mock-interviews/capabilities": [
+        "get"
+      ],
+      "/api/v1/mock-interviews/{session_id}": [
+        "delete",
+        "get"
+      ],
+      "/api/v1/mock-interviews/{session_id}/resume": [
+        "post"
+      ],
+      "/api/v1/partner-program/config": [
+        "get"
+      ],
+      "/api/v1/partner-program/join": [
+        "post"
+      ],
+      "/api/v1/partner-program/me": [
+        "get"
+      ],
+      "/api/v1/partner-program/payout-profile": [
+        "put"
+      ],
+      "/api/v1/partner-program/payout-requests": [
+        "post"
+      ],
+      "/api/v1/promotion/claim": [
+        "post"
+      ],
+      "/api/v1/promotion/opt-out": [
+        "post"
+      ],
+      "/api/v1/promotion/qualify": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/desktop-devices": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/desktop-devices/by-code/{manual_code}/binding": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/desktop-devices/last-used": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/desktop-devices/pairing-status": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/desktop-devices/register": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/desktop-devices/{device_id}/binding": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/desktop-devices/{device_id}/heartbeat": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/frames": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/metrics": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/publishers": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/question-candidates/{candidate_id}/confirm": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/question-candidates/{candidate_id}/dismiss": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/capture-control": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/delivery-metrics": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/desktop-binding": [
+        "get",
+        "post"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/device-status": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/events": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/performance-ack": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/performance-summary": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/performance-traces": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/question-candidates": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/runtime": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/snapshot": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/stream": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/transcripts": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/web-heartbeat": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/status": [
+        "get"
+      ],
+      "/api/v1/resume/status": [
+        "get"
+      ],
+      "/api/v1/resume/upload-intents": [
+        "post"
+      ],
+      "/api/v1/resume/uploads/complete": [
+        "post"
+      ],
+      "/api/v1/resume/uploads/proxy": [
+        "post"
+      ],
+      "/api/v1/screenshot-answer/capture-requests/{request_id}": [
+        "get"
+      ],
+      "/api/v1/screenshot-answer/capture-requests/{request_id}/cancel": [
+        "post"
+      ],
+      "/api/v1/screenshot-answer/capture-requests/{request_id}/desktop-fail": [
+        "post"
+      ],
+      "/api/v1/screenshot-answer/capture-requests/{request_id}/desktop-upload": [
+        "post"
+      ],
+      "/api/v1/screenshot-answer/desktop-devices/{device_id}/capture-requests/next": [
+        "get"
+      ],
+      "/api/v1/screenshot-answer/desktop-devices/{device_id}/capture-requests/stream": [
+        "get"
+      ],
+      "/api/v1/screenshot-answer/desktop-devices/{device_id}/shortcut-capture-requests": [
+        "post"
+      ],
+      "/api/v1/screenshot-answer/sessions/{session_id}/history": [
+        "get"
+      ],
+      "/api/v1/screenshot-answer/sessions/{session_id}/remote-capture-requests": [
+        "get",
+        "post"
+      ],
+      "/api/v1/screenshot-answer/sessions/{session_id}/uploads": [
+        "get"
+      ],
+      "/api/v1/screenshot-answer/status": [
+        "get"
+      ],
+      "/api/v1/screenshot-answer/tasks": [
+        "post"
+      ],
+      "/api/v1/screenshot-answer/tasks/{task_id}": [
+        "delete",
+        "get"
+      ],
+      "/api/v1/screenshot-answer/upload-intents": [
+        "post"
+      ],
+      "/api/v1/screenshot-answer/uploads/complete": [
+        "post"
+      ],
+      "/api/v1/screenshot-answer/uploads/direct": [
+        "post"
+      ],
+      "/api/v1/screenshot-answer/validation-policy": [
+        "get"
+      ],
+      "/api/v1/sessions": [
+        "get",
+        "post"
+      ],
+      "/api/v1/sessions/status": [
+        "get"
+      ],
+      "/api/v1/sessions/{session_id}": [
+        "delete",
+        "get"
+      ],
+      "/api/v1/sessions/{session_id}/active-conflict": [
+        "get"
+      ],
+      "/api/v1/sessions/{session_id}/audio-mode": [
+        "patch"
+      ],
+      "/api/v1/sessions/{session_id}/auto-answer": [
+        "patch"
+      ],
+      "/api/v1/sessions/{session_id}/context": [
+        "get",
+        "post"
+      ],
+      "/api/v1/sessions/{session_id}/continue": [
+        "post"
+      ],
+      "/api/v1/sessions/{session_id}/end": [
+        "post"
+      ],
+      "/api/v1/sessions/{session_id}/idle-status": [
+        "get"
+      ],
+      "/api/v1/sessions/{session_id}/language": [
+        "patch"
+      ],
+      "/api/v1/sessions/{session_id}/materials/confirm": [
+        "post"
+      ],
+      "/api/v1/sessions/{session_id}/programming": [
+        "patch"
+      ],
+      "/api/v1/sessions/{session_id}/restart": [
+        "post"
+      ],
+      "/api/v1/sessions/{session_id}/review": [
+        "get"
+      ],
+      "/api/v1/sessions/{session_id}/start": [
+        "post"
+      ],
+      "/api/v1/sessions/{session_id}/supersede-active": [
+        "post"
+      ],
+      "/api/v1/sessions/{session_id}/usage": [
+        "get",
+        "post"
+      ],
+      "/api/v1/system/foundation": [
+        "get"
+      ],
+      "/api/v1/system/ownership": [
+        "get"
+      ],
+      "/api/v1/system/runtime": [
+        "get"
+      ],
+      "/api/v1/web/downloads/desktop/{filename}": [
+        "get"
+      ],
+      "/api/v1/web/state": [
+        "get"
+      ]
+    },
+    "mockWebSockets": [
+      "/mock-interviews/{session_id}/control",
+      "/mock-interviews/{session_id}/microphone"
+    ]
+  },
+  "runtimeConfigFields": [
+    "product_edition",
+    "environment",
+    "api_prefix",
+    "chat_qwen_model",
+    "chat_qwen_base_url",
+    "chat_quick_model",
+    "chat_detail_model",
+    "realtime_asr_model",
+    "realtime_asr_ws_url",
+    "realtime_asr_inference_ws_url",
+    "realtime_desktop_heartbeat_write_min_interval_seconds",
+    "retrieval_candidate_top_k",
+    "retrieval_final_top_k",
+    "retrieval_strategy",
+    "retrieval_reranker_enabled",
+    "embedding_model",
+    "rerank_model",
+    "screenshot_vision_model",
+    "mock_interview_enabled",
+    "mock_interview_tts_model",
+    "mock_interview_tts_voice",
+    "chat_detail_retrieval_prefetch_enabled"
+  ],
+  "schemaVersion": 1,
+  "threeSources": {
+    "services/chat_service.py": "8828c29018a1095899c7409123ab93dea33a00213fc58a51bd6afbf0e9ebe8cd",
+    "services/question_prefetch_scheduler.py": "36bc5ab7fc2329945a3becdedc0ccc0a38356c334e8b32a735610c58774d744f",
+    "services/realtime_speech_service.py": "812d21e1019b92532f10b0c9c7bfe27839822157bcb1b6fbbccf34a54c154390"
+  }
+}

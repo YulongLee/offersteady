@@ -12,8 +12,10 @@ vi.mock("./mock-interview-client", async importOriginal => ({
   ...await importOriginal<typeof import("./mock-interview-client")>(), mockRequest: vi.fn(),
 }));
 
-const quote = { activeTimeMember: true, dailyFreeRemaining: 2, entryPoints: 0, minutePoints: 0,
-  billingClass: "daily_pass_free", savedCount: 0, savedLimit: 2 };
+const quote = { activeTimeMember: true, dailyFreeRemaining: 1, entryPoints: 0, minutePoints: 0,
+  billingClass: "daily_pass_free", savedCount: 0, savedLimit: 2,
+  dailyFreeLimit: 1, durationLimitMinutes: 60, quotaDay: "2026-10-15", timezone: "Asia/Shanghai",
+  nowMs: Date.parse("2026-10-15T12:00:00+08:00") };
 const session: MockSession = { sessionId: "mock-synthetic", title: "合成模拟面试", targetRole: "后端开发",
   billingClass: "points", refunded: false, createdAtMs: 1, resumeId: "resume", resumeVersion: "v1",
   error: null, billableMs: 10000, billedMinutes: 1, interacting: false, partial: true,
@@ -37,7 +39,10 @@ describe("CN mock interviews", () => {
     vi.mocked(mockRequest).mockImplementation(async path => path.endsWith("capabilities") ? { enabled: true } : { sessions: [], quote });
     render(<MemoryRouter><MockInterviewPage /></MemoryRouter>);
     expect(await screen.findByText("本场免费")).toBeInTheDocument();
-    expect(screen.getByText(/今日剩余 2 次/)).toBeInTheDocument();
+    expect(screen.getByText(/今日剩余 1 场/)).toBeInTheDocument();
+    expect(screen.getByText(/所有有效会员每天免费 1 场，北京时间 00:00 更新/)).toBeInTheDocument();
+    expect(screen.getByText(/开始后 60 分钟自动结束/)).toBeInTheDocument();
+    expect(screen.queryByText(/分钟费|5 积分.*分钟|会员 3 次/)).not.toBeInTheDocument();
     expect(screen.getByText(/最多 2 场；不保存原始音频/)).toBeInTheDocument();
   });
   it("blocks creation when both saved slots are occupied", async () => {
@@ -57,15 +62,127 @@ describe("CN mock interviews", () => {
       title: "模拟面试", expectedBillingClass: "daily_pass_free",
     })));
   });
-  it("fourth member creation requires paid confirmation; cancel sends no creation request", async () => {
+  it("the second member creation confirms only a fixed fee; cancel sends no creation request", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(false);
-    vi.mocked(mockRequest).mockImplementation(async path => path.endsWith("capabilities") ? { enabled: true } : { sessions: [], quote: { ...quote, dailyFreeRemaining: 0, entryPoints: 100, minutePoints: 5, billingClass: "points" } });
+    vi.mocked(mockRequest).mockImplementation(async path => path.endsWith("capabilities") ? { enabled: true } : { sessions: [], quote: { ...quote, dailyFreeRemaining: 0, entryPoints: 100, billingClass: "points" } });
     render(<MemoryRouter><MockInterviewPage /></MemoryRouter>);
     const button = await screen.findByRole("button", { name: "创建模拟面试 →" });
     await waitFor(() => expect(button).toBeEnabled());
     fireEvent.click(button);
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("每开始一分钟扣 5 积分"));
+    expect(window.confirm).toHaveBeenCalledWith("本场一次性扣 100 积分，开始后 60 分钟自动结束。确认创建？");
     expect(vi.mocked(mockRequest).mock.calls.filter(([, body]) => body !== undefined)).toHaveLength(0);
+  });
+  it("refreshes at Beijing midnight using the server clock instead of the computer clock", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("1999-01-01T01:00:00Z"));
+    let listings = 0;
+    vi.mocked(mockRequest).mockImplementation(async path => {
+      if (path.endsWith("capabilities")) return { enabled: true };
+      listings++;
+      return { sessions: [], quote: listings === 1
+        ? { ...quote, dailyFreeRemaining: 0, entryPoints: 100, billingClass: "points", nowMs: Date.parse("2026-10-15T23:59:59.900+08:00") }
+        : { ...quote, quotaDay: "2026-10-16", nowMs: Date.parse("2026-10-16T00:00:00.100+08:00") } };
+    });
+    render(<MemoryRouter><MockInterviewPage /></MemoryRouter>);
+    await act(async () => {});
+    expect(listings).toBe(1);
+    expect(screen.getByText("100 积分 / 场")).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(199); });
+    expect(listings).toBe(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(listings).toBe(2);
+    expect(screen.getByText("本场免费")).toBeInTheDocument();
+    expect(screen.getByText(/今日剩余 1 场/)).toBeInTheDocument();
+  });
+  it("refreshes an expired quote when the window becomes visible", async () => {
+    let listings = 0;
+    vi.mocked(mockRequest).mockImplementation(async path => {
+      if (path.endsWith("capabilities")) return { enabled: true };
+      listings++;
+      return { sessions: [], quote: listings === 1 ? { ...quote, dailyFreeRemaining: 0, entryPoints: 100, billingClass: "points" } : quote };
+    });
+    render(<MemoryRouter><MockInterviewPage /></MemoryRouter>);
+    await screen.findByText("100 积分 / 场");
+    await waitFor(() => expect(screen.getByRole("button", { name: "创建模拟面试 →" })).toBeEnabled());
+    const visibility = vi.spyOn(document, "visibilityState", "get");
+    visibility.mockReturnValue("hidden");
+    fireEvent(document, new Event("visibilitychange"));
+    expect(listings).toBe(1);
+    visibility.mockReturnValue("visible");
+    fireEvent(document, new Event("visibilitychange"));
+    expect(await screen.findByText("本场免费")).toBeInTheDocument();
+    expect(listings).toBe(2);
+  });
+  it("refreshes a stale free quote and requires explicit paid confirmation before retry", async () => {
+    let listings = 0;
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    vi.mocked(mockRequest).mockImplementation(async (path, body) => {
+      if (path.endsWith("capabilities")) return { enabled: true };
+      if (body) throw new Error("会员免费次数或本场价格已变化，请重新确认。");
+      listings++;
+      return { sessions: [], quote: listings === 1 ? quote : { ...quote, dailyFreeRemaining: 0, entryPoints: 100, billingClass: "points" } };
+    });
+    render(<MemoryRouter><MockInterviewPage /></MemoryRouter>);
+    await screen.findByText("本场免费");
+    fireEvent.click(screen.getByRole("button", { name: "创建模拟面试 →" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("请重新确认");
+    expect(screen.getByText("100 积分 / 场")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "创建模拟面试 →" }));
+    expect(window.confirm).toHaveBeenCalledWith("本场一次性扣 100 积分，开始后 60 分钟自动结束。确认创建？");
+    expect(vi.mocked(mockRequest).mock.calls.filter(([path, body]) => path === "/mock-interviews" && body)).toHaveLength(1);
+  });
+  it("reuses a paid creation key after a lost response instead of creating and charging again", async () => {
+    const bodies: any[] = [];
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.mocked(mockRequest).mockImplementation(async (path, body) => {
+      if (path.endsWith("capabilities")) return { enabled: true };
+      if (body) {
+        bodies.push(body);
+        if (bodies.length === 1) throw new Error("无法连接后端基础服务");
+        return session;
+      }
+      return { sessions: [], quote: { ...quote, activeTimeMember: false, dailyFreeRemaining: 0, entryPoints: 100, billingClass: "points" } };
+    });
+    render(<MemoryRouter initialEntries={["/app/mock-interviews"]}><Routes>
+      <Route path="/app/mock-interviews" element={<MockInterviewPage />} />
+      <Route path="/app/mock-interviews/:id" element={<p>合成场次已恢复</p>} />
+    </Routes></MemoryRouter>);
+    await screen.findByText("100 积分 / 场");
+    await waitFor(() => expect(screen.getByRole("button", { name: "创建模拟面试 →" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "创建模拟面试 →" }));
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "创建模拟面试 →" }));
+    expect(await screen.findByText("合成场次已恢复")).toBeInTheDocument();
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0].idempotencyKey).toBe(bodies[1].idempotencyKey);
+  });
+  it("creates a new key only after the user changes the creation parameters", async () => {
+    const bodies: any[] = [];
+    vi.mocked(mockRequest).mockImplementation(async (path, body) => {
+      if (path.endsWith("capabilities")) return { enabled: true };
+      if (body) { bodies.push(body); throw new Error("合成网络故障"); }
+      return { sessions: [], quote };
+    });
+    render(<MemoryRouter><MockInterviewPage /></MemoryRouter>);
+    await screen.findByText("本场免费");
+    fireEvent.click(screen.getByRole("button", { name: "创建模拟面试 →" }));
+    await screen.findByRole("alert");
+    fireEvent.change(screen.getByPlaceholderText("例如：后端开发工程师"), { target: { value: "产品工程师" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建模拟面试 →" }));
+    await screen.findByRole("alert");
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0].idempotencyKey).not.toBe(bodies[1].idempotencyKey);
+    expect(bodies[1].targetRole).toBe("产品工程师");
+  });
+  it("shows the server deadline in Beijing time and the authoritative automatic-end reason", async () => {
+    const row = { ...session, startedAtMs: Date.parse("2026-10-15T23:30:00+08:00"),
+      deadlineAtMs: Date.parse("2026-10-16T00:30:00+08:00"), durationLimitMinutes: 60, endReason: "time_limit" };
+    vi.mocked(mockRequest).mockImplementation(async path => path.endsWith("capabilities") ? { enabled: true } : row);
+    render(<MemoryRouter initialEntries={["/app/mock-interviews/mock-synthetic"]}><Routes><Route path="/app/mock-interviews/:id" element={<MockInterviewPage />} /></Routes></MemoryRouter>);
+    expect(await screen.findByText(/2026\/10\/16 00:30（北京时间）/)).toBeInTheDocument();
+    expect(screen.getByText(/暂停、等待和重连不延长/)).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("60 分钟时限，模拟面试已自动结束");
+    expect(screen.queryByText(/已计.*分钟|分钟费|积分不足，本场已暂停/)).not.toBeInTheDocument();
   });
   it("report includes per-question evidence and partial-session label", () => {
     render(<MemoryRouter><MockReportView session={session} /></MemoryRouter>);

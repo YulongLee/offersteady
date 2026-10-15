@@ -7,7 +7,9 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const desktopDir = resolve(scriptDir, "..");
 const targetArch = process.argv[2] || process.arch;
 const source = join(desktopDir, "native/macos-capture/OfferSteadyCaptureRuntime.swift");
-const infoPlist = join(desktopDir, "native/macos-capture/Info.plist");
+const infoPlist = join(desktopDir, process.env.OFFERSTEADY_PRODUCT_EDITION === "global"
+  ? "native/macos-capture/Info.global.plist"
+  : "native/macos-capture/Info.plist");
 const buildDir = join(desktopDir, "native/macos-capture/build");
 const output = join(buildDir, "OfferSteadyCaptureRuntime");
 const distDir = join(desktopDir, "dist/native/macos-capture");

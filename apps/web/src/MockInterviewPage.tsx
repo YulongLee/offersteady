@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { authClient } from "./auth-client";
-import { mockRequest, mockSocketUrl, MockVoicePlayer, type MockQuote, type MockResume, type MockSession } from "./mock-interview-client";
+import { mockRequest, mockSocketUrl, nextMockQuoteRefreshDelay, MockVoicePlayer, type MockQuote, type MockResume, type MockSession } from "./mock-interview-client";
 import { MockPlaybackIndicator } from "./MockPlaybackIndicator";
 import { mockReportDimensionLabels as labels, mockReportDisclosure } from "./mock-interview-report";
 import "./mock-interview.css";
 
 export const mockPhaseLabel: Record<MockSession["state"]["phase"], string> = {
   preparing: "面试准备", generating_question: "面试官正在出题", speaking: "听听面试官的问题",
-  listening: "轮到你回答", paused: "已暂停 · 不计分钟费", generating_report: "正在整理面试报告", completed: "本场练习已结束",
+  listening: "轮到你回答", paused: "已暂停", generating_report: "正在整理面试报告", completed: "本场练习已结束",
 };
 const errorText = (error: unknown) => error instanceof Error ? error.message : "操作暂时不可用，请重试。";
 export function MockInterviewPage() {
@@ -42,6 +42,7 @@ export function MockInterviewPage() {
   const capturePrefix = useRef("");
   const voice = useRef(new MockVoicePlayer());
   const createKey = useRef<string | null>(null);
+  const quoteRequest = useRef(0);
   const answerId = useRef<string | null>(null);
   const playingQuestion = useRef<string | null>(null);
   const playbackAcknowledged = useRef(false);
@@ -103,10 +104,22 @@ export function MockInterviewPage() {
     }
   };
 
-  const reload = async () => {
+  const reload = useCallback(async () => {
+    const request = ++quoteRequest.current;
     const data = await mockRequest<{ sessions: MockSession[]; quote: MockQuote }>("/mock-interviews");
+    if (request !== quoteRequest.current) return;
     setSessions(data.sessions); setQuote(data.quote);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (id || enabled !== true) return;
+    let disposed = false;
+    const refresh = () => { void reload().catch(cause => { if (!disposed) setError(errorText(cause)); }); };
+    const timer = quote ? setTimeout(refresh, nextMockQuoteRefreshDelay(quote)) : undefined;
+    const recover = () => { if (document.visibilityState === "visible") refresh(); };
+    document.addEventListener("visibilitychange", recover);
+    return () => { disposed = true; clearTimeout(timer); document.removeEventListener("visibilitychange", recover); };
+  }, [id, enabled, quote, reload]);
 
   useEffect(() => {
     let disposed = false;
@@ -124,8 +137,8 @@ export function MockInterviewPage() {
         }
       } else await reload();
     }).catch(cause => { if (!disposed) setError(errorText(cause)); });
-    return () => { disposed = true; current.current = null; setSession(null); };
-  }, [id]);
+    return () => { disposed = true; quoteRequest.current++; current.current = null; setSession(null); };
+  }, [id, reload]);
 
   const needsConnection = Boolean(id && session && session.state.phase !== "completed");
   useEffect(() => {
@@ -184,7 +197,7 @@ export function MockInterviewPage() {
     connection.onclose = () => {
       clearInterval(heartbeat); clearTimeout(settleTimer.current); voice.current.close(); setSettlingAudio(false);
       microphoneReady.current = false; pendingListen.current = null; setWaitingForMicrophone(false);
-      if (!disposed) { setConnected(false); setPlaying(false); setError("面试连接已断开，收音与计费已暂停。请重新连接。"); }
+      if (!disposed) { setConnected(false); setPlaying(false); setError("面试连接已断开，收音已暂停。请重新连接；本场结束时间保持不变。"); }
     };
     return () => { disposed = true; clearInterval(heartbeat); clearTimeout(settleTimer.current); voice.current.close(); connection.close(); socket.current = null; microphoneReady.current = false; pendingListen.current = null; setConnected(false); };
   }, [id, needsConnection, reconnect]);
@@ -205,11 +218,19 @@ export function MockInterviewPage() {
   });
   const create = () => action(async () => {
     if (!quote) return;
-    if (quote.entryPoints && !window.confirm(`本场创建扣 ${quote.entryPoints} 积分，朗读与回答每开始一分钟扣 ${quote.minutePoints} 积分。确认创建？`)) return;
+    if (quote.entryPoints && !window.confirm(`本场一次性扣 ${quote.entryPoints} 积分，开始后 ${quote.durationLimitMinutes} 分钟自动结束。确认创建？`)) return;
     createKey.current ??= crypto.randomUUID();
-    const row = await mockRequest<MockSession>("/mock-interviews", { idempotencyKey: createKey.current,
-      title: target.trim() ? `${target.trim()} · 模拟面试` : "模拟面试", targetRole: target,
-      expectedBillingClass: quote.billingClass });
+    let row: MockSession;
+    try {
+      row = await mockRequest<MockSession>("/mock-interviews", { idempotencyKey: createKey.current,
+        title: target.trim() ? `${target.trim()} · 模拟面试` : "模拟面试", targetRole: target,
+        expectedBillingClass: quote.billingClass });
+    } catch (cause) {
+      // A lost response can follow a successful charge. Keep the creation key
+      // for retries, while refreshing any quote invalidated by quota or date.
+      try { await reload(); } catch { /* Preserve the original actionable error. */ }
+      throw cause;
+    }
     createKey.current = null;
     navigate(`/app/mock-interviews/${row.sessionId}`);
   });
@@ -219,26 +240,26 @@ export function MockInterviewPage() {
     <header className="mock-page-heading"><div><span className="eyebrow">AI PRACTICE</span><h1>把下一次面试，提前练一遍。</h1><p>围绕你的简历展开，最多 10 道问题。按自己的节奏回答，结束后获得反馈。</p></div><span className="mock-pill">已保存 {quote?.savedCount ?? "—"} / 2</span></header>
     {error && <p role="alert" className="mock-alert">{error}</p>}
     <section className="mock-create-grid"><div className="mock-portrait"><img src="/assets/mock-interview/interviewer-v1.png" alt="原创虚拟 AI 面试官形象" /><div><span className="mock-pill">AI 模拟面试官</span><h2>一次对话，一次更充分的准备。</h2></div></div>
-      <div className="mock-panel"><span className="eyebrow">开始练习</span><h2>这次，想准备什么岗位？</h2><label>目标岗位 <span>选填</span><input value={target} maxLength={80} onChange={e => { setTarget(e.target.value); createKey.current = null; }} placeholder="例如：后端开发工程师" /></label>
-      <div className="mock-price"><strong>{quote?.entryPoints === 0 ? "本场免费" : "100 积分 / 场"}</strong><p>{quote?.entryPoints === 0 ? `时间会员今日剩余 ${quote.dailyFreeRemaining} 次免费创建，本场分钟费也免费。` : "另收 5 积分 / 分钟，仅累计题目朗读与回答时间，每开始一分钟计费。"}</p></div>
-      <ul className="mock-notes"><li>创建后选择一份已解析简历，连接现有正式版桌面助手，无需为此升级助手。</li><li>每天按北京时间重置会员 3 次免费额度，超出后按积分收费。</li><li>准备、出题等待、暂停、断线及报告生成不计分钟费。</li><li>结束自动保存问答和报告，最多 2 场；不保存原始音频。不自动覆盖旧记录。</li><li>主动取消不退创建费；系统故障导致一题都无法完成时，退本场积分或恢复免费次数。</li></ul>
+      <div className="mock-panel"><span className="eyebrow">开始练习</span><h2>这次，想准备什么岗位？</h2><label>目标岗位 <span>选填</span><input value={target} maxLength={80} disabled={busy} onChange={e => { setTarget(e.target.value); createKey.current = null; }} placeholder="例如：后端开发工程师" /></label>
+      <div className="mock-price"><strong>{quote?.entryPoints === 0 ? "本场免费" : "100 积分 / 场"}</strong><p>{quote?.entryPoints === 0 ? `有效会员今日剩余 ${quote.dailyFreeRemaining} 场免费模拟面试。` : "每场一次性扣 100 积分，朗读、回答和报告不额外收费。"}</p></div>
+      <ul className="mock-notes"><li>创建后选择一份已解析简历，连接现有正式版桌面助手，无需为此升级助手。</li><li>所有有效会员每天免费 {quote?.dailyFreeLimit ?? 1} 场，北京时间 00:00 更新；当天免费次数用完后，100 积分 / 场。</li><li>开始后 {quote?.durationLimitMinutes ?? 60} 分钟自动结束；准备阶段不计时，暂停、出题等待和断线不延长结束时间。</li><li>结束自动保存问答和报告，最多 2 场；不保存原始音频。不自动覆盖旧记录。</li><li>主动取消不退创建费；系统故障导致一题都无法完成时，退本场积分或恢复免费次数。</li></ul>
       <button className="button primary" disabled={busy || !quote || quote.savedCount >= 2} onClick={() => void create()}>{busy ? "正在创建…" : quote && quote.savedCount >= 2 ? "请先手动删除旧记录" : "创建模拟面试 →"}</button></div></section>
     <section className="mock-history"><h2>我的模拟面试</h2>{sessions.length === 0 && <p>你的每一次练习，都会从这里开始。</p>}{sessions.map(row => <article key={row.sessionId} className="mock-panel"><div><h3>{row.title}</h3><p>{mockPhaseLabel[row.state.phase]} · {new Date(row.createdAtMs).toLocaleString("zh-CN")}</p></div><Link className="button" to={`/app/mock-interviews/${row.sessionId}`}>{row.state.phase === "completed" ? "查看报告" : "继续面试"}</Link>{row.state.phase === "completed" && <button className="button" disabled={busy} onClick={() => void action(async () => { if (!window.confirm("删除本场问答和报告？不会退还已使用积分或免费次数。")) return; await mockRequest(`/mock-interviews/${row.sessionId}`, undefined, "DELETE"); await reload(); })}>删除</button>}</article>)}</section>
   </main>;
   if (!session) return <main className="app-page mock-page"><h1>正在恢复面试…</h1>{error && <p role="alert">{error}</p>}</main>;
   const phase = session.state.phase;
   const question = session.state.rounds.at(-1);
-  return <main className="app-page mock-page"><header className="mock-page-heading"><div><Link to="/app/mock-interviews">← 我的模拟面试</Link><h1>{session.title}</h1><p>{session.billingClass === "daily_pass_free" ? "本场全程免费" : `创建 100 积分 · 已计 ${session.billedMinutes} 分钟 / ${session.billedMinutes * 5} 积分`} · {session.interacting ? "正在计时" : "当前不计分钟费"}{session.refunded ? " · 本场已退还" : ""}</p></div><span className="mock-pill">{mockPhaseLabel[phase]}</span></header>
+  return <main className="app-page mock-page"><header className="mock-page-heading"><div><Link to="/app/mock-interviews">← 我的模拟面试</Link><h1>{session.title}</h1><p>{session.billingClass === "daily_pass_free" ? "本场全程免费" : "创建费用 100 积分"}{session.refunded ? " · 本场已退还" : ""}</p><p>{session.deadlineAtMs ? <>本场结束时间：{new Date(session.deadlineAtMs).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })}（北京时间） · 暂停、等待和重连不延长</> : <>开始后 {session.durationLimitMinutes ?? 60} 分钟自动结束，准备阶段不计时。</>}</p></div><span className="mock-pill">{mockPhaseLabel[phase]}</span></header>
     {error && <p role="alert" className="mock-alert">{error}</p>}
     {phase !== "completed" && !connected && <button className="button" onClick={() => setReconnect(n => n + 1)}>重新连接</button>}
-    {session.error === "mock_minute_insufficient_balance" && <p role="alert" className="mock-alert">积分不足，本场已暂停且不再计时。请补充积分后继续，或结束并保存已有回答。</p>}
+    {session.endReason === "time_limit" && <p role="status" className="mock-alert">已达到本场 {session.durationLimitMinutes ?? 60} 分钟时限，模拟面试已自动结束。已提交的回答将保存在报告中。</p>}
     {phase === "completed" ? <MockReportView session={session} /> : <div className="mock-workbench"><aside className={`mock-portrait ${playing ? "is-speaking" : ""}`}><img src="/assets/mock-interview/interviewer-v1.png" alt="AI 模拟面试官" /><div><span className="mock-pill">AI 模拟面试官 · 非真人</span><h2>{mockPhaseLabel[phase]}</h2><MockPlaybackIndicator player={voice.current} phase={phase} /><p>基于你的简历与你对话，不代表真实招聘结果。</p></div></aside><section className="mock-panel mock-conversation">
       {phase === "preparing" ? <><span className="eyebrow">开始前检查</span><h2>让这场面试围绕你展开</h2><label>选择已解析的简历<select aria-label="选择简历" value={session.resumeId ?? ""} disabled={busy || !connected} onChange={e => void action(async () => { const doc = resumes.find(r => r.documentId === e.target.value); if (doc) update(await mockRequest<MockSession>(`/mock-interviews/${id}/resume`, { version: session.state.version, documentId: doc.documentId, documentVersionId: doc.documentVersionId })); })}><option value="">请选择简历</option>{resumes.map(doc => <option key={doc.documentId} value={doc.documentId}>{doc.displayName}</option>)}</select></label>{resumes.length === 0 && <p><Link to="/app/library">先去资料页上传并解析简历</Link></p>}<label>桌面助手机器码<input inputMode="numeric" maxLength={6} value={machineCode} onChange={e => setMachineCode(e.target.value.replace(/\D/g, ""))} placeholder="6 位机器码" /></label><p className="mock-muted">现有正式版助手即可，无需为模拟面试升级。请开启麦克风权限和系统自动校时，建议佩戴耳机。</p><p className="mock-muted">仅使用麦克风，不使用系统声音。助手在提问期间可能仍采集上传，服务器会丢弃非回答时段的音频，不转写、不保存。</p><button className="button" disabled={busy || !connected || machineCode.length !== 6} onClick={() => void bindDevice()}>验证并连接</button><p role="status" aria-label="助手连接状态">{!connected ? "页面连接未就绪，请重新连接。" : bindingNotice || preparation?.message || (desktopConnected ? "● 助手已连接，开始后连接收音通道" : "请打开桌面助手，输入机器码后验证并连接。")}</p><button className="button primary" disabled={!connected || !desktopConnected || !session.resumeId || busy} onClick={() => void voice.current.unlock().then(() => command("start")).catch(cause => setError(errorText(cause)))}>开始模拟面试 →</button></> : <>
       <div className="mock-question-meta"><span>问题 {session.state.rounds.length} / 10</span><span>{desktopConnected ? "麦克风助手在线" : "助手未连接"}</span></div>{question && <h2 className="mock-question">{question.question}</h2>}
-      {(phase === "generating_question" || phase === "generating_report") && <div role="status" className="mock-wait"><span className="mock-spinner" />{mockPhaseLabel[phase]}<small>等待期间不计分钟费，请不要重复创建。</small></div>}
+      {(phase === "generating_question" || phase === "generating_report") && <div role="status" className="mock-wait"><span className="mock-spinner" />{mockPhaseLabel[phase]}<small>请稍候，不额外收费，无需重复创建。</small></div>}
       {session.error === "generation_unavailable" && <button className="button" disabled={!connected} onClick={() => command("retry")}>重试生成</button>}
-      {waitingForMicrophone && phase === "speaking" && <p role="status" className="mock-wait">正在等待助手收音通道连接，等待期间不计分钟费。请保持助手运行，显示“轮到你回答”后再开口。</p>}
-      {settlingAudio && phase === "speaking" && <p role="status" className="mock-wait">正在准备收音，请稍候片刻，显示“轮到你回答”后再开口。此阶段不计分钟费。</p>}
+      {waitingForMicrophone && phase === "speaking" && <p role="status" className="mock-wait">正在等待助手收音通道连接。请保持助手运行，显示“轮到你回答”后再开口。</p>}
+      {settlingAudio && phase === "speaking" && <p role="status" className="mock-wait">正在准备收音，请稍候片刻，显示“轮到你回答”后再开口。</p>}
       {phase === "speaking" && <div className="mock-actions"><button className="button primary" disabled={!connected || playing || waitingForMicrophone || settlingAudio} onClick={() => { pendingListen.current = null; playingQuestion.current = question?.question_id ?? null; voice.current.stop(); playbackAcknowledged.current = false; setPlaying(true); void voice.current.unlock().then(() => command("speak")).catch(cause => setError(errorText(cause))); }}>朗读问题</button><button className="button" disabled={!connected || waitingForMicrophone || settlingAudio} onClick={() => { voice.current.stop(); playingQuestion.current = null; if (question) prepareListening(question.question_id); }}>我已读完，开始回答</button></div>}
       {(phase === "listening" || phase === "paused") && <><label>你的回答<textarea aria-label="你的回答" rows={8} value={draft} maxLength={8000} onChange={e => { edited.current = true; setEditing(true); draftText.current = e.target.value; setDraft(e.target.value); }} placeholder="请对着麦克风回答，也可在这里校正转写。" /></label><p className="mock-muted">{editing ? "已进入文字校正，新的转写不会覆盖你的修改。" : "思考和停顿不会自动进入下一题。确认回答后再提交。"}</p></>}
       <div className="mock-actions">{phase === "listening" && <><button className="button primary" disabled={!connected || !draft.trim()} onClick={() => { answerId.current ??= crypto.randomUUID(); command("submit", { answer: draft.trim(), submissionId: answerId.current }); }}>回答完成 →</button><button className="button" onClick={() => command("pause")} disabled={!connected}>暂停</button><button className="button" onClick={() => command("replay")} disabled={!connected}>重新听题</button></>}{phase === "paused" && <button className="button primary" disabled={!connected || !desktopConnected} onClick={() => command("resume")}>继续本题</button>}</div>

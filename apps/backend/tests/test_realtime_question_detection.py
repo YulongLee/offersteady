@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+import threading
 
 from app.ports.realtime_speech import QuestionCandidateRecord, TranscriptSegmentRecord
 from app.services.realtime_speech_repository import InMemoryRealtimeSpeechRepository
@@ -34,6 +35,10 @@ def service_with_repository(repository: InMemoryRealtimeSpeechRepository) -> Rea
     service = RealtimeSpeechService.__new__(RealtimeSpeechService)
     service.repository = repository
     service.settings = SimpleNamespace(realtime_question_auto_confirm_threshold=0.85)
+    service._stable_question_state = {}
+    service._stable_question_state_lock = threading.Lock()
+    service._stable_question_generations = {}
+    service._question_prefetch_scheduler = None
     return service
 
 
@@ -175,8 +180,7 @@ def test_only_stable_interviewer_partial_triggers_context_prefetch() -> None:
     prefetched: list[dict[str, object]] = []
     service = service_with_repository(repository)
     service._stable_question_state = {}
-    service.question_prefetcher = lambda **kwargs: prefetched.append(kwargs)
-    service._submit_cold = lambda operation, /, *args, **kwargs: operation(*args, **kwargs)  # type: ignore[method-assign]
+    service._question_prefetch_scheduler = SimpleNamespace(submit=lambda **kwargs: prefetched.append(kwargs))
 
     first = TranscriptSegmentRecord(**{
         **synthetic_system_transcript("请介绍一下你最近", segment_id="partial-question").__dict__,
@@ -205,6 +209,71 @@ def test_only_stable_interviewer_partial_triggers_context_prefetch() -> None:
         "question_id": "question:synthetic-session:partial-question",
         "revision": 2,
         "question": "请介绍一下你最近",
+        "is_final": False,
     }]
     assert service._observe_stable_interviewer_partial(candidate) is None
     assert len(prefetched) == 1
+
+
+def test_same_text_final_promotes_prefetch_without_duplicate_stable_event() -> None:
+    repository = InMemoryRealtimeSpeechRepository()
+    service = service_with_repository(repository)
+    prefetched: list[dict[str, object]] = []
+    service._question_prefetch_scheduler = SimpleNamespace(submit=lambda **kwargs: prefetched.append(kwargs))
+    service._submit_cold = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("prefetch must not use cold queue"))
+    first = TranscriptSegmentRecord(**{
+        **synthetic_system_transcript("介绍一下最近的项目").__dict__, "revision": 1, "is_final": False,
+    })
+    second = TranscriptSegmentRecord(**{
+        **first.__dict__, "text": first.text + "及主要职责", "revision": 2,
+    })
+    final = TranscriptSegmentRecord(**{**first.__dict__, "revision": 3, "is_final": True})
+
+    assert service._observe_stable_interviewer_partial(first) is None
+    assert service._observe_stable_interviewer_partial(second) is not None
+    assert service._observe_stable_interviewer_partial(final) is None
+    assert [(item["revision"], item["is_final"]) for item in prefetched] == [(2, False), (3, True)]
+    events = repository.list_events_for_session(session_id=first.session_id)
+    assert [event.kind for event in events] == ["question-stable"]
+
+
+def test_late_partial_or_older_final_cannot_overwrite_final_stable_state() -> None:
+    service = service_with_repository(InMemoryRealtimeSpeechRepository())
+    prefetched: list[dict[str, object]] = []
+    service._question_prefetch_scheduler = SimpleNamespace(submit=lambda **kwargs: prefetched.append(kwargs))
+    final = TranscriptSegmentRecord(**{
+        **synthetic_system_transcript("介绍最终确定的合成问题").__dict__, "revision": 4,
+    })
+    assert service._observe_stable_interviewer_partial(final) is not None
+    for revision, is_final in [(1, False), (4, False), (5, False), (3, True), (4, True)]:
+        stale = TranscriptSegmentRecord(**{
+            **final.__dict__, "text": "不应恢复的旧合成问题", "revision": revision, "is_final": is_final,
+        })
+        assert service._observe_stable_interviewer_partial(stale) is None
+    state = service._stable_question_state[(final.session_id, final.segment_id)]
+    assert state["revision"] == 4 and state["isFinal"] is True
+    assert state["stableText"] == final.text
+    assert len(prefetched) == 1
+
+
+def test_retired_session_ignores_delayed_stable_observation() -> None:
+    service = service_with_repository(InMemoryRealtimeSpeechRepository())
+    final = synthetic_system_transcript()
+    service._retired_session_ids = {final.session_id}
+    assert service._observe_stable_interviewer_partial(final) is None
+    assert service._stable_question_state == {}
+
+
+def test_stable_state_lock_does_not_cover_event_io_and_admission_is_memory_only() -> None:
+    service = service_with_repository(InMemoryRealtimeSpeechRepository())
+
+    def event(**kwargs):
+        assert not service._stable_question_state_lock.locked()
+        return kwargs
+
+    def schedule(**_kwargs):
+        assert service._stable_question_state_lock.locked()
+
+    service._save_event = event
+    service._question_prefetch_scheduler = SimpleNamespace(submit=schedule)
+    assert service._observe_stable_interviewer_partial(synthetic_system_transcript()) is not None

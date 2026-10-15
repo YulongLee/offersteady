@@ -205,13 +205,14 @@ def test_existing_runtime_audio_and_text_fallback_contract(monkeypatch, failure)
     events = [event("task-failed")] if failure else [event("task-started"), b"00", event("task-finished")]
     service, socket, _ = make(events)
     runtime = object.__new__(MockInterviewRuntime)
+    runtime.repository = SimpleNamespace(duration_deadline=lambda _: None)
     runtime.tts = service
     runtime._meter = AsyncMock()
     messages = []
     async def send(value):
         messages.append(value)
-    state = SimpleNamespace(version=4, rounds=[SimpleNamespace(question_id="synthetic-q", question="合成提问")])
-    controller = SimpleNamespace(closed=False, record={}, has_audio=False, lock=asyncio.Lock(), send=send)
+    state = SimpleNamespace(phase="speaking", version=4, rounds=[SimpleNamespace(question_id="synthetic-q", question="合成提问")])
+    controller = SimpleNamespace(closed=False, duration_ended=False, record={"data": {}}, has_audio=False, lock=asyncio.Lock(), send=send)
     monkeypatch.setattr("app.services.mock_interview_runtime.round_state", lambda _: state)
     asyncio.run(runtime._speak(controller, state))
     assert messages[0] == {"type": "audio_start", "questionId": "synthetic-q", "sampleRate": 24000}
@@ -241,8 +242,9 @@ def test_global_legacy_protocol_and_voice_are_not_migrated():
 def test_runtime_end_during_audio_delivery_closes_provider_before_return(monkeypatch):
     service, socket, _ = make([event("task-started"), b"00", b"00", event("task-finished")])
     runtime = object.__new__(MockInterviewRuntime)
+    runtime.repository = SimpleNamespace(duration_deadline=lambda _: None)
     runtime.tts = service
-    state = SimpleNamespace(version=4, rounds=[SimpleNamespace(question_id="synthetic-q", question="合成提问")])
+    state = SimpleNamespace(phase="speaking", version=4, rounds=[SimpleNamespace(question_id="synthetic-q", question="合成提问")])
     monkeypatch.setattr("app.services.mock_interview_runtime.round_state", lambda _: state)
     async def run():
         delivering = asyncio.Event()
@@ -250,7 +252,7 @@ def test_runtime_end_during_audio_delivery_closes_provider_before_return(monkeyp
             if value["type"] == "audio":
                 delivering.set()
                 await asyncio.Event().wait()
-        controller = SimpleNamespace(closed=False, record={}, has_audio=False, send=send)
+        controller = SimpleNamespace(closed=False, duration_ended=False, record={"data": {}}, has_audio=False, send=send)
         task = asyncio.create_task(runtime._speak(controller, state))
         await asyncio.wait_for(delivering.wait(), timeout=1)
         await runtime._cancel(task)

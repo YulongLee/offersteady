@@ -151,3 +151,24 @@ def test_active_practice_is_free_after_expiry_and_fault_restores_once(repos):
     for _ in range(2):
         repo.compensate_fault(user_id=user2, session_id=failed["session_id"], now_ms=NOW)
     assert repo.quote(user2, NOW)["dailyFreeRemaining"] == 3
+
+
+def test_global_does_not_acquire_cn_sixty_minute_limit(repos):
+    repo, commerce, sessions = repos
+    user, _ = member(commerce)
+    row = create(repo, user, "no-cn-limit")
+    sid = row["session_id"]
+    row = repo.transition(user_id=user, session_id=sid, expected_version=0,
+        now_ms=NOW, move=lambda state: state.start())
+    assert repo.duration_deadline(row) is None
+    assert all(key not in row["data"] for key in ("started_at_ms", "deadline_at_ms", "duration_limit_ms"))
+    later = NOW+3_600_001
+    restored = repo.expire_duration(user_id=user, session_id=sid, now_ms=later)
+    assert round_state(restored).phase == "generating_question"
+    op = round_state(restored).operation_id
+    claim = repo.claim_generation(user_id=user, session_id=sid, operation_id=op, now_ms=later)
+    question = repo.finish_generation(user_id=user, session_id=sid, operation_id=op,
+        claim_id=claim["data"]["generation_claim"], now_ms=later+1,
+        question="How did you validate this synthetic example?")
+    assert round_state(question).phase == "speaking" and sessions.get_session(sid).status == "live"
+    assert repo.quote(user, later)["dailyFreeRemaining"] == 2

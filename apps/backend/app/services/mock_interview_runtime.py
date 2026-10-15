@@ -30,6 +30,9 @@ def public_mock(record: dict) -> dict:
         "report": data.get("report"), "error": data.get("error"),
         "billableMs": data["billable_ms"], "billedMinutes": data["billed_minutes"],
         "interacting": data.get("clock_at_ms") is not None,
+        "startedAtMs": data.get("started_at_ms"), "deadlineAtMs": data.get("deadline_at_ms"),
+        "durationLimitMinutes": data["duration_limit_ms"] // 60_000 if data.get("duration_limit_ms") else None,
+        "endReason": data.get("end_reason"),
         "partial": len([r for r in data["state"]["rounds"] if r.get("answer")]) < 10}
 
 
@@ -48,6 +51,7 @@ class MockController:
     closed: bool = False
     draft: tuple[str, str] | None = None
     binding_released: bool = False
+    duration_ended: bool = False
     capture_closes: set[asyncio.Task] = field(default_factory=set)
 
 
@@ -121,7 +125,9 @@ class MockInterviewRuntime:
         # Reconnecting never silently resumes the microphone or replays audio.
         try:
             state = round_state(record)
-            if state.phase in ("speaking", "listening"):
+            if await self._enforce_duration(controller):
+                pass
+            elif state.phase in ("speaking", "listening"):
                 controller.record = await self._transition(controller, state.pause)
             await self.publish(controller)
         except BaseException:
@@ -169,6 +175,36 @@ class MockInterviewRuntime:
             session_id=controller.session_id, control_token=controller.token,
             now_ms=self.now_ms(), active=active, renew_lease=renew_lease)
         return controller.record["data"].get("clock_at_ms") is not None
+
+    def _duration_due(self, record):
+        deadline_method = getattr(self.repository, "duration_deadline", None)
+        deadline = deadline_method(record) if deadline_method else None
+        return deadline is not None and self.now_ms() >= deadline
+
+    async def _enforce_duration(self, controller):
+        """End once using durable server time; never restart the sixty-minute clock."""
+        if controller.closed or controller.duration_ended:
+            return False
+        phase = round_state(controller.record).phase
+        timed_out = controller.record["data"].get("end_reason") == "time_limit"
+        if not timed_out and (phase in ("completed", "generating_report") or not self._duration_due(controller.record)):
+            return False
+        if not timed_out:
+            controller.record = await self.db(self.repository.expire_duration,
+                user_id=controller.user_id, session_id=controller.session_id, now_ms=self.now_ms())
+        if controller.record["data"].get("end_reason") != "time_limit":
+            return False
+        # The transaction has already fenced capture and question completion.
+        # Revoke immediately; slow ASR shutdown must not delay the report.
+        await self._close_capture(controller, wait=False)
+        await self._cancel(controller.speech)
+        await self._cancel(controller.generation)
+        await self._release_binding(controller)
+        controller.duration_ended = True
+        if (round_state(controller.record).phase == "generating_report"
+                and not controller.record["data"].get("error")):
+            self._generate(controller)
+        return True
 
     async def _cancel(self, task):
         if task and not task.done() and task is not asyncio.current_task():
@@ -235,12 +271,16 @@ class MockInterviewRuntime:
             await self._drain_capture_closes(controller.capture_closes)
 
     async def _open_capture(self, controller):
+        if await self._enforce_duration(controller):
+            return
         binding = await asyncio.to_thread(self.validate_device, controller.user_id, controller.session_id)
         desktop = self.desktops.get(controller.session_id)
         if not desktop or desktop[0] != binding.device_id:
             raise mock_error("请等待桌面助手连接模拟面试通道。", "mock_desktop_unavailable")
         state = round_state(controller.record)
         if not await self._meter(controller, True):
+            if await self._enforce_duration(controller):
+                return
             controller.record = await self._transition(controller, state.pause)
             return
         loop = asyncio.get_running_loop()
@@ -253,10 +293,14 @@ class MockInterviewRuntime:
         await desktop[1]({"type": "capture", "epoch": state.capture_epoch})
 
     def _draft(self, controller, epoch, text):
-        if not controller.closed and round_state(controller.record).capture_epoch == epoch:
+        if (not controller.closed and not self._duration_due(controller.record)
+                and round_state(controller.record).capture_epoch == epoch):
             controller.draft = (epoch, text)
 
     async def flush_draft(self, controller):
+        if self._duration_due(controller.record):
+            controller.draft = None
+            return
         if controller.draft and not controller.closed:
             epoch, text = controller.draft
             controller.draft = None
@@ -264,8 +308,14 @@ class MockInterviewRuntime:
 
     async def heartbeat(self, controller):
         async with controller.lock:
+            if await self._enforce_duration(controller):
+                await self.publish(controller)
+                return
             was_active = controller.record["data"].get("clock_at_ms") is not None
             await self._meter(controller)
+            if await self._enforce_duration(controller):
+                await self.publish(controller)
+                return
             state = round_state(controller.record)
             if state.phase in ("speaking", "listening") and not controller.record["data"].get("clock_at_ms"):
                 if state.phase == "listening" or was_active:
@@ -295,8 +345,14 @@ class MockInterviewRuntime:
         async with controller.lock:
             if controller.closed:
                 raise mock_error("连接已关闭。", "mock_control_expired")
+            if await self._enforce_duration(controller):
+                await self.publish(controller)
+                return
             # Renew/check the durable fence before any external action.
             await self._meter(controller)
+            if await self._enforce_duration(controller):
+                await self.publish(controller)
+                return
             state = round_state(controller.record)
             if state.version != version:
                 # A duplicate answer must match the original payload exactly.
@@ -313,11 +369,17 @@ class MockInterviewRuntime:
                 await asyncio.to_thread(self.reader.read, user_id=controller.user_id,
                     document_id=data["resume_id"], version_id=data["resume_version"])
                 controller.record = await self._transition(controller, state.start)
+                if await self._enforce_duration(controller):
+                    await self.publish(controller)
+                    return
                 self._generate(controller)
             elif action == "retry":
                 if controller.generation and not controller.generation.done():
                     raise mock_error("正在生成，请稍候。", "mock_generation_in_progress")
                 controller.record = await self._transition(controller, state.retry_generation)
+                if await self._enforce_duration(controller):
+                    await self.publish(controller)
+                    return
                 self._generate(controller)
             elif action == "speak":
                 if state.phase != "speaking" or state.rounds[-1].question_id != question_id:
@@ -346,6 +408,9 @@ class MockInterviewRuntime:
                     # Stop the interaction clock and fence old output before
                     # waiting for provider shutdown/cancellation.
                     controller.record = await self._transition(controller, move)
+                    if await self._enforce_duration(controller):
+                        await self.publish(controller)
+                        return
                     await self._close_capture(controller, wait=False)
                     await self._cancel(controller.speech)
                     if action not in ("submit", "listen", "resume"):
@@ -356,6 +421,9 @@ class MockInterviewRuntime:
                         try:
                             await self._open_capture(controller)
                         except Exception:
+                            if await self._enforce_duration(controller):
+                                await self.publish(controller)
+                                return
                             current = round_state(controller.record)
                             await self._meter(controller, False)
                             controller.record = await self._transition(controller, current.pause)
@@ -375,6 +443,7 @@ class MockInterviewRuntime:
                         return
                     controller.record = await self.db(self.repository.get,
                         user_id=controller.user_id, session_id=controller.session_id)
+                    await self._enforce_duration(controller)
                     await self.publish(controller)
             except asyncio.CancelledError:
                 raise
@@ -387,20 +456,41 @@ class MockInterviewRuntime:
     async def _speak(self, controller, state):
         question = state.rounds[-1]
         try:
+            if self._duration_due(controller.record):
+                async with controller.lock:
+                    await self._enforce_duration(controller)
+                    await self.publish(controller)
+                return
             await controller.send({"type": "audio_start", "questionId": question.question_id,
                                    "sampleRate": 24000})
             async for pcm in self.tts.stream(question.question):
+                if self._duration_due(controller.record):
+                    async with controller.lock:
+                        await self._enforce_duration(controller)
+                        await self.publish(controller)
+                    return
                 if controller.closed or round_state(controller.record).version != state.version:
                     return
                 controller.has_audio = True
                 await controller.send({"type": "audio", "questionId": question.question_id,
                                        "pcm": base64.b64encode(pcm).decode("ascii")})
+            if self._duration_due(controller.record):
+                async with controller.lock:
+                    await self._enforce_duration(controller)
+                    await self.publish(controller)
+                return
             await controller.send({"type": "audio_end", "questionId": question.question_id})
         except asyncio.CancelledError:
             raise
         except Exception:
             async with controller.lock:
+                if await self._enforce_duration(controller):
+                    await self.publish(controller)
+                    return
                 await self._meter(controller, False)
+                if await self._enforce_duration(controller):
+                    await self.publish(controller)
+                    return
                 await controller.send({"type": "speech_unavailable", "questionId": question.question_id,
                                        "message": "朗读暂时不可用，可重试或阅读题目后开始回答。"})
 
@@ -426,6 +516,11 @@ class MockInterviewRuntime:
 
     async def reap(self):
         for controller in list(self.controllers.values()):
+            if self._duration_due(controller.record) and not controller.duration_ended:
+                async with controller.lock:
+                    if await self._enforce_duration(controller):
+                        await self.publish(controller)
+                        continue
             if controller.record["data"].get("lease_until_ms", 0) <= self.now_ms():
                 await self.detach(controller)
                 continue

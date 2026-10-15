@@ -1083,6 +1083,7 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   private readonly lastTranscriptAckAtBySession = new Map<string, number>();
   private readonly webStateCache = new Map<WebStateCacheKey, WebStateCacheEntry>();
   private readonly webStateRequests = new Map<WebStateCacheKey, Promise<WebAppState>>();
+  private webStateAuthIdentity: string | undefined;
   private performanceAckInFlight = false;
 
   private drainPerformanceAcks() {
@@ -1334,22 +1335,35 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   async loadState(signal?: AbortSignal, options?: { readonly auth?: boolean; readonly force?: boolean }): Promise<WebAppState> {
     const key: WebStateCacheKey = options?.auth === false ? "public" : "authenticated";
     if (signal?.aborted) return Promise.reject(abortError());
+    const headers = key === "public" ? {} : authHeaders();
+    if (key === "authenticated") {
+      const identity = new Headers(headers).get("Authorization") ?? "";
+      if (identity !== this.webStateAuthIdentity) {
+        this.webStateAuthIdentity = identity;
+        this.webStateCache.delete(key);
+        this.webStateRequests.delete(key);
+      }
+    }
     const now = Date.now();
     const cached = this.webStateCache.get(key);
     if (!options?.force && cached && now - cached.cachedAtMs < WEB_STATE_CACHE_TTL_MS) {
       return cloneWebState(cached.state);
     }
 
-    let request = this.webStateRequests.get(key);
+    let request = options?.force ? undefined : this.webStateRequests.get(key);
     if (!request) {
       const controller = new AbortController();
       request = this.client.request<WebAppState>(
         "/api/v1/web/state",
-        { headers: key === "public" ? {} : authHeaders() },
+        { headers },
         controller.signal,
       )
         .then(state => {
-          this.webStateCache.set(key, { state: cloneWebState(state), cachedAtMs: Date.now() });
+          // A force refresh or changed login can supersede this request while
+          // its callers still wait. Late results must not replace newer state.
+          if (this.webStateRequests.get(key) === request) {
+            this.webStateCache.set(key, { state: cloneWebState(state), cachedAtMs: Date.now() });
+          }
           return state;
         })
         .finally(() => {

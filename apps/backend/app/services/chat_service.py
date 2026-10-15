@@ -9,7 +9,7 @@ import os
 import re
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import replace
 from json import JSONDecodeError
 from pathlib import Path
@@ -63,6 +63,8 @@ _NORMALIZED_QUESTION_OPEN = "<normalized_question>"
 _NORMALIZED_QUESTION_CLOSE = "</normalized_question>"
 _NORMALIZATION_BUFFER_LIMIT = 800
 _DETAIL_RETRIEVAL_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="chat-detail-retrieval")
+_QUESTION_PREFETCH_TTL_MS = 60_000
+_QUESTION_PREFETCH_MAX_KEYS = 128
 _HAN_SCRIPT_PATTERN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 _LATIN_SCRIPT_PATTERN = re.compile(r"[A-Za-z]")
 _ENGLISH_REPAIR_DIRECTIVE = (
@@ -670,8 +672,8 @@ class ChatService:
         self.web_search_gateway = web_search_gateway
         self.billing_usage_by_task: dict[str, str] = {}
         self._prepared_context_lock = threading.Lock()
-        self._prepared_context: dict[tuple[str, str, int], dict[str, object]] = {}
-        self._latest_prefetch_revision: dict[tuple[str, str], int] = {}
+        self._prepared_context: dict[tuple[str, str, str, int], dict[str, object]] = {}
+        self._latest_prefetch_revision: dict[tuple[str, str, str], dict[str, object]] = {}
 
     def prefetch_question_context(
         self,
@@ -681,52 +683,196 @@ class ChatService:
         question_id: str,
         revision: int,
         question: str,
+        is_current: Callable[[], bool] | None = None,
     ) -> None:
-        """Prepare retrieval off the media path; failures fall back on click."""
+        """Prepare optional evidence without adding work to explicit answer startup."""
+        question_key = (user_id, session_id, question_id)
+        token: object | None = None
         try:
-            question_key = (session_id, question_id)
+            if is_current is not None and not is_current():
+                return
+            normalized_question = " ".join(question.split())
+            if not normalized_question:
+                return
             with self._prepared_context_lock:
-                latest = self._latest_prefetch_revision.get(question_key, -1)
-                if revision < latest:
+                self._prune_prepared_context(_now_ms())
+                latest = self._latest_prefetch_revision.get(question_key)
+                if latest is not None and revision < int(latest["revision"]):
                     return
-                self._latest_prefetch_revision[question_key] = revision
             session = self.session_service.get_session(user_id=user_id, session_id=session_id)
             require_standard_session(session)
-            retrieval = self._retrieve_context(user_id=user_id, session=session, question=question)
+            if session.status != "live":
+                return
+            fingerprint = self._prefetch_material_fingerprint(user_id=user_id, session_id=session_id, session=session)
+            if fingerprint is None or (is_current is not None and not is_current()):
+                return
+            # Run scheduling callbacks outside the cache lock: a click must never
+            # wait for scheduler locking or any optional prefetch operation.
+            with self._prepared_context_lock:
+                previous = self._latest_prefetch_revision.get(question_key)
+                previous_cached = self._prepared_context.get((*question_key, revision))
+            previous_guard = previous.get("isCurrent") if previous is not None else None
+            previous_is_current = previous_guard is None or (callable(previous_guard) and previous_guard())
+            cached_guard = previous_cached.get("isCurrent") if previous_cached is not None else None
+            cached_is_current = cached_guard is None or (callable(cached_guard) and cached_guard())
+            started_at_ms = _now_ms()
+            with self._prepared_context_lock:
+                self._prune_prepared_context(started_at_ms)
+                latest = self._latest_prefetch_revision.get(question_key)
+                if latest is not None and revision < int(latest["revision"]):
+                    return
+                cached = self._prepared_context.get((*question_key, revision))
+                if (
+                    cached is previous_cached and cached and cached_is_current
+                    and cached["question"] == normalized_question and cached["materials"] == fingerprint
+                ):
+                    return
+                if (
+                    latest is previous and latest is not None and previous_is_current
+                    and latest["revision"] == revision and latest["question"] == normalized_question
+                    and latest["materials"] == fingerprint and latest["inFlight"]
+                ):
+                    return
+                token = object()
+                # Reinsert so the bounded dictionary evicts the oldest generation.
+                self._latest_prefetch_revision.pop(question_key, None)
+                self._latest_prefetch_revision[question_key] = {
+                    "revision": revision, "question": normalized_question, "materials": fingerprint,
+                    "token": token, "createdAtMs": started_at_ms, "inFlight": True, "isCurrent": is_current,
+                }
+                self._prune_prepared_context(started_at_ms)
+            if is_current is not None and not is_current():
+                return
+            if not self._prefetch_generation_is_current(question_key, token):
+                return
+            retrieval = self._retrieve_context(user_id=user_id, session=session, question=question, raise_on_error=True)
+            if (is_current is not None and not is_current()) or not self._prefetch_generation_is_current(question_key, token):
+                return
+            # A bound document can be reprocessed without changing selection
+            # revision. Only admitted retrievals pay for this background recheck.
+            current_session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+            require_standard_session(current_session)
+            if (
+                current_session.status != "live"
+                or fingerprint != self._prefetch_material_fingerprint(
+                    user_id=user_id, session_id=session_id, session=current_session
+                )
+                or (is_current is not None and not is_current())
+            ):
+                return
             prepared = {
-                "question": question.strip(),
+                "question": normalized_question,
+                "materials": fingerprint,
                 "retrieval": retrieval,
-                "createdAtMs": _now_ms(),
+                "createdAtMs": started_at_ms,
+                "token": token,
+                "isCurrent": is_current,
             }
             with self._prepared_context_lock:
-                if self._latest_prefetch_revision.get(question_key) != revision:
+                now_ms = _now_ms()
+                self._prune_prepared_context(now_ms)
+                latest = self._latest_prefetch_revision.get(question_key)
+                if latest is None or latest["token"] is not token:
                     return
                 for key in tuple(self._prepared_context):
-                    if key[:2] == question_key and key[2] < revision:
+                    if key[:3] == question_key:
                         self._prepared_context.pop(key, None)
-                self._prepared_context[(session_id, question_id, revision)] = prepared
-                if len(self._prepared_context) > 128:
-                    oldest = min(self._prepared_context, key=lambda item: int(self._prepared_context[item].get("createdAtMs", 0)))
-                    self._prepared_context.pop(oldest, None)
+                self._prepared_context[(*question_key, revision)] = prepared
+                self._prune_prepared_context(now_ms)
+            # The scheduler owns a separate lock. Recheck after publication, then
+            # conditionally remove only this generation if revocation raced it.
+            try:
+                committed_is_current = is_current is None or is_current()
+            except Exception:
+                committed_is_current = False
+            if not committed_is_current:
+                with self._prepared_context_lock:
+                    cached = self._prepared_context.get((*question_key, revision))
+                    if cached is not None and cached.get("token") is token:
+                        self._prepared_context.pop((*question_key, revision), None)
         except Exception as exc:
             self.logger.info("chat.question_prefetch_skipped", extra={"safe_error_code": exc.__class__.__name__})
+        finally:
+            if token is not None:
+                with self._prepared_context_lock:
+                    latest = self._latest_prefetch_revision.get(question_key)
+                    if latest is not None and latest["token"] is token:
+                        latest["inFlight"] = False
+
+    def _prefetch_generation_is_current(self, question_key: tuple[str, str, str], token: object) -> bool:
+        with self._prepared_context_lock:
+            self._prune_prepared_context(_now_ms())
+            state = self._latest_prefetch_revision.get(question_key)
+            return state is not None and state["token"] is token
+
+    def _prune_prepared_context(self, now_ms: int) -> None:
+        """Called under the cache lock; eviction also revokes in-flight writers."""
+        for key, state in tuple(self._latest_prefetch_revision.items()):
+            if now_ms - int(state["createdAtMs"]) >= _QUESTION_PREFETCH_TTL_MS:
+                self._latest_prefetch_revision.pop(key, None)
+        while len(self._latest_prefetch_revision) > _QUESTION_PREFETCH_MAX_KEYS:
+            self._latest_prefetch_revision.pop(next(iter(self._latest_prefetch_revision)))
+        for key, prepared in tuple(self._prepared_context.items()):
+            if key[:3] not in self._latest_prefetch_revision or now_ms - int(prepared["createdAtMs"]) >= _QUESTION_PREFETCH_TTL_MS:
+                self._prepared_context.pop(key, None)
+        while len(self._prepared_context) > _QUESTION_PREFETCH_MAX_KEYS:
+            self._prepared_context.pop(next(iter(self._prepared_context)))
+
+    @staticmethod
+    def _prefetch_material_fingerprint(*, user_id: str, session_id: str, session) -> str | None:
+        binding = session.material_binding
+        if (
+            session.owner_user_id != user_id or session.session_id != session_id
+            or binding.owner_user_id != user_id or binding.session_id != session_id
+        ):
+            return None
+        documents = sorted(
+            (
+                item.document_id, item.document_kind, item.document_version_id or "", item.status,
+                item.index_state or "", bool(item.active), item.knowledge_collection_id or "",
+            )
+            for item in binding.bound_documents
+        )
+        identity = (
+            user_id, session_id, getattr(session, "session_mode", "interview"), session.status,
+            binding.owner_user_id, binding.session_id, binding.revision,
+            binding.resume_document_id, binding.job_description_document_id,
+            sorted(binding.knowledge_document_ids), documents,
+        )
+        return hashlib.sha256(json.dumps(identity, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
 
     def _prepared_retrieval(
         self,
         *,
+        user_id: str,
         session_id: str,
+        session,
         question_id: str | None,
         revision: int | None,
         question: str,
     ) -> RetrievalContext | None:
         if not question_id or revision is None:
             return None
-        with self._prepared_context_lock:
-            prepared = self._prepared_context.get((session_id, question_id, revision))
-        if not prepared or _now_ms() - int(prepared.get("createdAtMs", 0)) > 60_000:
+        fingerprint = self._prefetch_material_fingerprint(user_id=user_id, session_id=session_id, session=session)
+        if fingerprint is None or session.status != "live":
             return None
-        prepared_question = str(prepared.get("question", "")).strip()
-        if prepared_question not in question.strip() and question.strip() not in prepared_question:
+        with self._prepared_context_lock:
+            self._prune_prepared_context(_now_ms())
+            prepared = self._prepared_context.get((user_id, session_id, question_id, revision))
+        if not prepared or prepared["materials"] != fingerprint:
+            return None
+        if prepared["question"] != " ".join(question.split()):
+            return None
+        guard = prepared.get("isCurrent")
+        try:
+            guard_is_current = guard is None or (callable(guard) and guard())
+        except Exception:
+            guard_is_current = False
+        if not guard_is_current:
+            with self._prepared_context_lock:
+                key = (user_id, session_id, question_id, revision)
+                if self._prepared_context.get(key) is prepared:
+                    self._prepared_context.pop(key, None)
             return None
         retrieval = prepared.get("retrieval")
         return retrieval if isinstance(retrieval, RetrievalContext) else None
@@ -1282,7 +1428,9 @@ class ChatService:
             activity_already_touched=True,
         )
         quick_retrieval = self._prepared_retrieval(
+            user_id=user_id,
             session_id=session_id,
+            session=session,
             question_id=question_id,
             revision=prefetch_revision,
             question=question,
@@ -2032,7 +2180,7 @@ class ChatService:
         )
         return self.repository.save_task(completed)
 
-    def _retrieve_context(self, *, user_id: str, session, question: str):
+    def _retrieve_context(self, *, user_id: str, session, question: str, raise_on_error: bool = False):
         try:
             knowledge_documents = [document for document in session.material_binding.bound_documents if document.active and document.document_kind == "knowledge"]
             context = self.retrieval_service.retrieve(
@@ -2068,6 +2216,8 @@ class ChatService:
                 retry_count=0,
                 error_code=exc.__class__.__name__,
             )
+            if raise_on_error:
+                raise
             from app.ports.retrieval import RetrievalContext
 
             return RetrievalContext(

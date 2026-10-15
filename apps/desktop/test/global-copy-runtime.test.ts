@@ -29,4 +29,11 @@ describe("Global companion runtime copy", () => {
       children: "The companion reported an issue. Check device permissions and the connection, then try again.",
     });
   });
+
+  it("explains a denied practice microphone and keeps its manual retry action in English", () => {
+    expect(localizeGlobalCompanionProps({ children: "模拟面试麦克风权限被拒绝。请在系统设置中允许麦克风，然后点击“重试麦克风”。" })).toEqual({
+      children: "Microphone access was denied. Allow it in System Settings, then click Retry microphone.",
+    });
+    expect(localizeGlobalCompanionProps({ children: "重试麦克风" })).toEqual({ children: "Retry microphone" });
+  });
 });

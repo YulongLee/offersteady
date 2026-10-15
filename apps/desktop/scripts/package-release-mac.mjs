@@ -11,10 +11,12 @@ const desktopDir = resolve(scriptDir, "..");
 const repoRoot = resolve(desktopDir, "../..");
 const arch = process.argv[2] || process.arch;
 const isBeta = process.env.OFFERSTEADY_RELEASE_CHANNEL === "beta";
-const outputDir = join(desktopDir, isBeta ? "release/macos-beta" : "release/macos-production");
-const builderConfig = isBeta ? "electron-builder.beta.mac.yml" : "electron-builder.release.mac.yml";
-const expectedBundleId = isBeta ? "com.offersteady.companion.beta" : "com.offersteady.companion";
-const productName = isBeta ? "面试稳伴随程序 Beta" : "面试稳伴随程序";
+const isGlobal = process.env.OFFERSTEADY_PRODUCT_EDITION === "global";
+if (isGlobal && isBeta) throw new Error("Global and domestic Beta release editions cannot be combined.");
+const outputDir = join(desktopDir, isGlobal ? "release/global" : isBeta ? "release/macos-beta" : "release/macos-production");
+const builderConfig = isGlobal ? "electron-builder.global.yml" : isBeta ? "electron-builder.beta.mac.yml" : "electron-builder.release.mac.yml";
+const expectedBundleId = isGlobal ? "com.offersteady.companion.global" : isBeta ? "com.offersteady.companion.beta" : "com.offersteady.companion";
+const productName = isGlobal ? "OfferSteady Companion Global" : isBeta ? "面试稳伴随程序 Beta" : "面试稳伴随程序";
 const prepareOnly = process.argv.includes("--prepare-only");
 
 if (process.platform !== "darwin") throw new Error("macOS release packaging must run on macOS.");
@@ -108,8 +110,9 @@ if (existsSync(outputDir)) {
     }
   }
 }
+if (isGlobal) run(process.execPath, [join(desktopDir, "scripts/prepare-global-runtime-config.mjs")]);
 run(process.execPath, [join(desktopDir, "scripts/build-native-runtime.mjs"), arch]);
-run("npm", ["run", "build"]);
+run("npm", ["run", isGlobal ? "build:global" : "build"]);
 
 const electronBuilderCli = join(repoRoot, "node_modules/electron-builder/out/cli/cli.js");
 const localElectronDist = join(repoRoot, "node_modules/electron/dist");
@@ -184,11 +187,20 @@ run(process.execPath, [
   ...(prepareOnly ? ["--allow-unnotarized"] : ["--dmg", dmgs[0]]),
 ]);
 
-if (!prepareOnly && !isBeta) {
+if (!prepareOnly && !isBeta && !isGlobal) {
   run(process.execPath, [
     join(desktopDir, "scripts/generate-production-mac-metadata.mjs"),
     arch,
     dmgs[0],
+  ]);
+}
+if (!prepareOnly && isGlobal) {
+  run(process.execPath, [
+    join(desktopDir, "scripts/generate-global-release-metadata.mjs"),
+    "macos",
+    arch,
+    dmgs[0],
+    apps[0],
   ]);
 }
 if (!prepareOnly && isBeta) {

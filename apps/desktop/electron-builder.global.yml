@@ -10,12 +10,20 @@ extraResources:
   - from: build/generated/global-runtime-config.json
     to: global-runtime-config.json
 mac:
+  identity: "Yulong li (8Y5FAR3TF3)"
+  type: distribution
+  forceCodeSigning: true
+  strictVerify: true
+  notarize: true
   icon: resources/app-icon.png
   category: public.app-category.productivity
   minimumSystemVersion: 14.2.0
   hardenedRuntime: true
-  entitlements: build/entitlements.mac.plist
-  entitlementsInherit: build/entitlements.mac.plist
+  entitlements: build/entitlements.mac.release.plist
+  entitlementsInherit: build/entitlements.mac.release.inherit.plist
+  signIgnore: '/(?:Resources|resources)/.*\.(?:asar|bin|dat|pak)$'
+  binaries:
+    - Contents/Resources/app/native/macos-capture/OfferSteadyCaptureRuntime
   extendInfo:
     NSMicrophoneUsageDescription: OfferSteady uses your microphone only when you explicitly start audio capture for interview transcription.
     NSAudioCaptureUsageDescription: OfferSteady captures system audio only when you explicitly start interview transcription.
@@ -25,8 +33,10 @@ mac:
       to: app/native/macos-capture/OfferSteadyCaptureRuntime
   target:
     - target: dmg
-    - target: zip
   artifactName: OfferSteady-Companion-Global-${version}-macOS-${arch}.${ext}
+dmg:
+  sign: false
+  title: OfferSteady Companion Global ${version}
 win:
   icon: resources/app-icon.png
   executableName: OfferSteadyGlobal

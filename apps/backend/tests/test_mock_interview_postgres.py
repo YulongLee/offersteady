@@ -70,7 +70,7 @@ def test_mock_controller_start_listen_pause_submit_end_cleanup(repositories):
         state = round_state(controller.record)
         old_epoch = state.capture_epoch
         assert state.phase == "listening" and runtime.audio.snapshot()["captures"] == 1
-        assert billing.state_for_user(user_id=user).balance == 95
+        assert billing.state_for_user(user_id=user).balance == 100
         now[0] += 2000
         await runtime.command(controller, action="pause", version=state.version)
         assert runtime.audio.snapshot()["captures"] == 0
@@ -154,12 +154,12 @@ def test_verified_repeated_provider_fault_refunds_once_and_preserves_record(repo
         assert billing.state_for_user(user_id=user).balance == initial + (0 if member else 100)
         assert runtime.repository.quote(user, now[0])["savedCount"] == 1
         if member:
-            assert runtime.repository.quote(user, now[0])["dailyFreeRemaining"] == 3
+            assert runtime.repository.quote(user, now[0])["dailyFreeRemaining"] == 1
         await runtime.detach(controller)
     asyncio.run(run())
 
 
-def test_paid_boundary_reaper_never_renews_browser_lease(repositories):
+def test_flat_session_reaper_never_renews_browser_lease(repositories):
     async def run():
         runtime, user, sid, now, _, billing = mock_runtime_fixture(repositories)
         controller = await runtime.attach(user_id=user, session_id=sid, send=AsyncMock())
@@ -174,13 +174,13 @@ def test_paid_boundary_reaper_never_renews_browser_lease(repositories):
         lease = controller.record["data"]["lease_until_ms"]
         now[0] += 5000
         await runtime.reap()
-        assert controller.record["data"]["billed_minutes"] == 2
+        assert controller.record["data"]["billed_minutes"] == 0
         assert controller.record["data"]["lease_until_ms"] == lease
-        assert billing.state_for_user(user_id=user).balance == 90
+        assert billing.state_for_user(user_id=user).balance == 100
         now[0] = lease
         await runtime.reap()
         assert runtime.controllers == {} and runtime.audio.snapshot()["captures"] == 0
-        assert billing.state_for_user(user_id=user).balance == 90
+        assert billing.state_for_user(user_id=user).balance == 100
     asyncio.run(run())
 
 
@@ -209,7 +209,7 @@ def test_tts_buffer_wait_does_not_accrue_minutes(repositories):
             now[0] += advance
             await runtime.command(controller, action=action, version=state.version, question_id=qid)
         assert controller.record["data"]["billable_ms"] == 3000
-        assert controller.record["data"]["billed_minutes"] == 1
+        assert controller.record["data"]["billed_minutes"] == 0
         await runtime.detach(controller)
     asyncio.run(run())
 
@@ -267,7 +267,7 @@ def test_repeated_complete_ten_question_sessions_release_resources(repositories)
             assert round_state(controller.record).phase == "completed"
             assert len(round_state(controller.record).rounds) == 10
             assert generator.question.await_count == 10 and generator.report.await_count == 1
-            assert billing.state_for_user(user_id=user).balance == 95
+            assert billing.state_for_user(user_id=user).balance == 100
             assert runtime.audio.snapshot() == {"captures": 0, "draft_characters": 0}
             await runtime.detach(controller)
             # The fake desktop sender is not a real socket; its ASGI disconnect
@@ -348,24 +348,24 @@ def test_storage_cap_is_atomic_and_deletion_keeps_idempotency(repositories):
     assert deleted["data"] == {}
 
 
-def test_member_fourth_creation_paid_and_delete_does_not_restore_quota(repositories):
+def test_member_second_creation_paid_and_delete_does_not_restore_quota(repositories):
     repo, billing, _ = repositories
     user = account(repositories, member=True)
     now = int(time()*1000)
-    for i in range(3):
+    for i in range(1):
         r = create(repo, user, str(i), free=True, now=now)
         finish(repo, user, r["session_id"])
         repo.delete(user_id=user, session_id=r["session_id"], now_ms=now+1)
     quote = repo.quote(user, now)
-    assert quote["entryPoints"] == 100 and quote["minutePoints"] == 5
+    assert quote["entryPoints"] == 100 and quote["minutePoints"] == 0
     assert quote["dailyFreeRemaining"] == 0
     with pytest.raises(DomainRequestError, match="重新确认"):
         create(repo, user, "stale-free", free=True, now=now)
-    paid = create(repo, user, "fourth", now=now)
+    paid = create(repo, user, "second", now=now)
     assert paid["billing_class"] == "points" and billing.state_for_user(user_id=user).balance == 100
-    assert repo.quote(user, now+86_400_000)["dailyFreeRemaining"] == 3
-    assert create(repo, user, "fourth", now=now+86_400_000)["session_id"] == paid["session_id"]
-    assert repo.quote(user, now+86_400_000)["dailyFreeRemaining"] == 3
+    assert repo.quote(user, now+86_400_000)["dailyFreeRemaining"] == 1
+    assert create(repo, user, "second", now=now+86_400_000)["session_id"] == paid["session_id"]
+    assert repo.quote(user, now+86_400_000)["dailyFreeRemaining"] == 1
 
 
 def test_creation_rollback_owner_isolation_and_idempotency_parameters(repositories, monkeypatch):
@@ -400,10 +400,6 @@ def test_last_free_slot_cannot_be_claimed_twice_or_silently_charged(repositories
     repo, billing, _ = repositories
     user = account(repositories, member=True)
     now = int(time()*1000)
-    for index in range(2):
-        old = create(repo, user, f"old-{index}", free=True, now=now)
-        finish(repo, user, old["session_id"])
-        repo.delete(user_id=user, session_id=old["session_id"], now_ms=now)
     def attempt(key):
         try:
             return create(repo, user, key, free=True, now=now)
@@ -616,16 +612,16 @@ def test_free_creation_rollback_and_terminal_fault_restore_quota_once(repositori
         patch.setattr(repo, "_ledger", Mock(side_effect=RuntimeError("synthetic storage fault")))
         with pytest.raises(RuntimeError):
             create(repo, user, free=True, now=now)
-    assert repo.quote(user, now)["dailyFreeRemaining"] == 3
+    assert repo.quote(user, now)["dailyFreeRemaining"] == 1
     row = create(repo, user, free=True, now=now)
-    assert repo.quote(user, now)["dailyFreeRemaining"] == 2
+    assert repo.quote(user, now)["dailyFreeRemaining"] == 0
     sid = row["session_id"]
     finish(repo, user, sid)
     repo.change(user_id=user, session_id=sid, now_ms=now,
         operation=lambda r, c: r["data"].update(error="terminal_provider_failure"))
     for _ in range(3):
         repo.compensate_fault(user_id=user, session_id=sid, now_ms=now)
-    assert repo.quote(user, now)["dailyFreeRemaining"] == 3
+    assert repo.quote(user, now)["dailyFreeRemaining"] == 1
     assert billing.state_for_user(user_id=user).balance == 200
 
 
@@ -640,7 +636,7 @@ def speaking_record(repo, user, *, free=False):
     return repo.acquire_control(user_id=user, session_id=row["session_id"], now_ms=now), now
 
 
-def test_minute_meter_pause_resume_rounding_and_duplicate_pulses(repositories):
+def test_flat_meter_pause_resume_and_duplicate_pulses_do_not_charge(repositories):
     repo, billing, _ = repositories
     user = account(repositories)
     row, now = speaking_record(repo, user)
@@ -657,14 +653,14 @@ def test_minute_meter_pause_resume_rounding_and_duplicate_pulses(repositories):
     for second in (70, 80, 90):
         repo.control_tick(**args, now_ms=now+second*1000)
     row = repo.control_tick(**args, now_ms=now+95_000, active=False)
-    assert row["data"]["billable_ms"] == 60_000 and row["data"]["billed_minutes"] == 1
-    assert billing.state_for_user(user_id=user).balance == 95
+    assert row["data"]["billable_ms"] == 60_000 and row["data"]["billed_minutes"] == 0
+    assert billing.state_for_user(user_id=user).balance == 100
     with ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(lambda _: repo.control_tick(**args, now_ms=now+96_000, active=True), range(4)))
-    assert billing.state_for_user(user_id=user).balance == 90
+    assert billing.state_for_user(user_id=user).balance == 100
 
 
-def test_minute_meter_expiry_fences_old_controller_and_does_not_bill_gap(repositories):
+def test_flat_meter_expiry_fences_old_controller_and_does_not_bill_gap(repositories):
     repo, billing, _ = repositories
     user = account(repositories)
     row, now = speaking_record(repo, user)
@@ -682,10 +678,10 @@ def test_minute_meter_expiry_fences_old_controller_and_does_not_bill_gap(reposit
     repo.release_control(**args, now_ms=now+300_001)
     assert repo.get(user_id=user, session_id=row["session_id"])["data"]["control_token"] == new_args["control_token"]
     assert repo.interaction_deadline(active) == now+315_000
-    assert billing.state_for_user(user_id=user).balance == 95
+    assert billing.state_for_user(user_id=user).balance == 100
 
 
-def test_minute_meter_membership_lock_and_exhausted_balance(repositories):
+def test_flat_meter_exhausted_member_quota_and_reserved_balance_do_not_charge(repositories):
     repo, billing, _ = repositories
     member = account(repositories, member=True)
     free, now = speaking_record(repo, member, free=True)
@@ -693,32 +689,24 @@ def test_minute_meter_membership_lock_and_exhausted_balance(repositories):
     for index in range(20):
         free = repo.control_tick(**free_args, now_ms=now+index*10_000, active=True)
     assert free["data"]["billed_minutes"] == 0 and billing.state_for_user(user_id=member).balance == 200
-    # A fourth member session remains paid, even with an active time pass.
     finish(repo, member, free["session_id"])
     repo.delete(user_id=member, session_id=free["session_id"], now_ms=now)
-    for key in ("free2", "free3"):
-        r = create(repo, member, key, free=True, now=now)
-        finish(repo, member, r["session_id"])
-        repo.delete(user_id=member, session_id=r["session_id"], now_ms=now)
-    # Use a fresh creation key because deletion deliberately keeps idempotency.
-    paid = repo.create(user_id=member, idempotency_key="paid4", title="合成模拟面试", target_role="后端",
+    paid = repo.create(user_id=member, idempotency_key="paid2", title="合成模拟面试", target_role="后端",
         expected_billing_class="points", now_ms=now)
     assert paid["billing_class"] == "points"
-    def seed(r, c):
-        state = round_state(r).start()
-        r["data"]["state"] = asdict(state.publish_question(state.operation_id, "合成问题"))
-        c.execute("UPDATE interview_sessions SET status='live' WHERE session_id=%s", (r["session_id"],))
-    repo.change(user_id=member, session_id=paid["session_id"], now_ms=now, operation=seed)
+    paid = repo.transition(user_id=member, session_id=paid["session_id"], expected_version=0,
+        now_ms=now, move=lambda state: state.start())
+    op = round_state(paid).operation_id
+    claimed = repo.claim_generation(user_id=member, session_id=paid["session_id"], operation_id=op, now_ms=now)
+    paid = repo.finish_generation(user_id=member, session_id=paid["session_id"], operation_id=op,
+        claim_id=claimed["data"]["generation_claim"], now_ms=now, question="合成问题")
     ctrl = repo.acquire_control(user_id=member, session_id=paid["session_id"], now_ms=now)
     args = dict(user_id=member, session_id=paid["session_id"], control_token=ctrl["data"]["control_token"])
-    paid = repo.control_tick(**args, now_ms=now, active=True)
-    assert paid["data"]["billed_minutes"] == 1 and billing.state_for_user(user_id=member).balance == 95
-    # Existing wallet reservations prevent financing the next minute.
-    for i in range(19):
+    for i in range(20):
         billing.reserve_usage(user_id=member, usage_id=f"held-{member}-{i}", usage_kind="answer", wallet_only=True)
-    for second in (10, 20, 30, 40, 50, 60):
-        paid = repo.control_tick(**args, now_ms=now+second*1000)
-    assert paid["data"]["billable_ms"] == 60_000
-    assert paid["data"]["clock_at_ms"] is None
-    assert paid["data"]["error"] == "mock_minute_insufficient_balance"
-    assert billing.state_for_user(user_id=member).balance == 95
+    for second in range(0, 121, 10):
+        paid = repo.control_tick(**args, now_ms=now+second*1000, active=True)
+    assert paid["data"]["billable_ms"] == 120_000
+    assert paid["data"]["billed_minutes"] == 0 and paid["data"]["clock_at_ms"] is not None
+    assert paid["data"]["error"] is None
+    assert billing.state_for_user(user_id=member).balance == 100

@@ -127,7 +127,7 @@ def test_browser_and_desktop_round_submit_end_release_and_single_debit(client_ru
             assert runtime.audio.snapshot()["captures"] == 0
     assert runtime.controllers == {} and runtime.desktops == {}
     row = runtime.repository.get(user_id=user, session_id=sid)
-    assert row["data"]["billed_minutes"] == 1
+    assert row["data"]["billed_minutes"] == 0
 
 
 @pytest.mark.parametrize("media", ["binary-v1", "json-base64"])
@@ -197,7 +197,7 @@ def test_shipped_companion_prepare_publish_capture_reconnect_and_cleanup(client_
             if state["phase"] == "generating_report": state = receive_type(browser, "state")["session"]["state"]
             assert state["phase"] == "completed"
     assert not runtime.legacy.sessions and not runtime.desktops and not runtime.controllers
-    assert runtime.repository.get(user_id=user, session_id=sid)["data"]["billed_minutes"] == 1
+    assert runtime.repository.get(user_id=user, session_id=sid)["data"]["billed_minutes"] == 0
     runtime.realtime.create_publisher.assert_not_called()
     runtime.realtime.connect_publisher.assert_not_called()
     runtime.realtime.enqueue_audio_frame.assert_not_called()

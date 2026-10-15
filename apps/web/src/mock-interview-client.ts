@@ -9,6 +9,7 @@ export interface MockSession {
   sessionId: string; title: string; targetRole: string; billingClass: "points" | "daily_pass_free";
   refunded: boolean; createdAtMs: number; resumeId: string | null; resumeVersion: string | null;
   error: string | null; billableMs: number; billedMinutes: number; interacting: boolean; partial: boolean;
+  startedAtMs?: number | null; deadlineAtMs?: number | null; durationLimitMinutes?: number | null; endReason?: string | null;
   state: { phase: "preparing" | "generating_question" | "speaking" | "listening" | "paused" | "generating_report" | "completed";
     version: number; rounds: MockRound[]; capture_epoch: string | null };
   report: { summary: string; overall_score: number | null; dimensions: Record<string, number> | null;
@@ -16,7 +17,15 @@ export interface MockSession {
     practice_priorities: string[] } | null;
 }
 export interface MockQuote { activeTimeMember: boolean; dailyFreeRemaining: number; entryPoints: number;
-  minutePoints: number; billingClass: "points" | "daily_pass_free"; savedCount: number; savedLimit: number }
+  minutePoints: number; billingClass: "points" | "daily_pass_free"; savedCount: number; savedLimit: number;
+  dailyFreeLimit: number; durationLimitMinutes: number; quotaDay: string; timezone: "Asia/Shanghai"; nowMs: number }
+
+/** Use the quoted server clock, even if the computer's clock is inaccurate. */
+export function nextMockQuoteRefreshDelay(quote: Pick<MockQuote, "quotaDay" | "nowMs">): number {
+  const nextMidnight = Date.parse(`${quote.quotaDay}T00:00:00+08:00`) + 86_400_000;
+  const delay = nextMidnight - quote.nowMs;
+  return Number.isFinite(delay) ? Math.max(100, delay + 100) : 60_000;
+}
 export interface MockResume { documentId: string; displayName: string; documentVersionId: string; status: string; indexState: string }
 
 export const mockRequest = <T>(path: string, body?: unknown, method?: string): Promise<T> => {
