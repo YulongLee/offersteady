@@ -1,0 +1,8 @@
+import { describe, expect, it } from "vitest";
+import { summarizePointsLedger } from "./BillingPage";
+import type { PointsLedgerEntry } from "@offersteady/protocol";
+const row = (kind: PointsLedgerEntry["kind"], points: number, referenceId: string, description = "合成原始说明"): PointsLedgerEntry => ({ id: referenceId, userId: "synthetic-owner", kind, points, referenceId, description, createdAtMs: 1 });
+describe("国服简历优化积分明细", () => {
+  it("新扣退kind显示准确中文并保留净额及重复引用去重", () => { const rows = [row("resume_optimizer_charge", -100, "charge-a", "合成回答优化"), row("resume_optimizer_charge", -100, "charge-b"), row("resume_optimizer_refund", 100, "refund-a"), row("resume_optimizer_refund", 100, "refund-a")]; const display = summarizePointsLedger(rows); expect(display).toHaveLength(2); expect(display.find(x => x.kind === "resume_optimizer_charge")).toMatchObject({ description: "简历优化扣费", points: -200, count: 2 }); expect(display.find(x => x.kind === "resume_optimizer_refund")).toMatchObject({ description: "简历优化退还", points: 100, count: 1 }); expect(display.reduce((sum, x) => sum + x.points, 0)).toBe(-100); });
+  it("未知旧kind和原先消费仍保留，不归并或吞掉新流水", () => { const display = summarizePointsLedger([row("support_adjustment", 50, "old-positive"), row("future_existing_kind" as PointsLedgerEntry["kind"], -7, "old-extension", "原有扩展说明"), row("usage_settle", -5, "old-answer", "普通回答"), row("resume_optimizer_charge", -100, "new-charge")]); expect(display).toHaveLength(4); expect(display.find(x => x.kind === "future_existing_kind")).toMatchObject({ description: "原有扩展说明", points: -7 }); expect(display.find(x => x.kind === "usage_settle")).toMatchObject({ description: "普通回答消费", points: -5 }); });
+});

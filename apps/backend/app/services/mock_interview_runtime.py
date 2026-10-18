@@ -7,15 +7,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from time import monotonic, time
+from time import time
 from typing import Awaitable, Callable
 
-from app.core.config import get_settings
 from app.core.errors import DomainRequestError
-from app.core.logging import LOGGER_NAME, log_event
 from app.services.mock_interview_audio import MockInterviewAudio
 from app.services.mock_interview_legacy import MockLegacyBridge
 from app.services.mock_interview_repository import MockInterviewRepository, mock_error, round_state
@@ -73,12 +70,7 @@ class MockInterviewRuntime:
         self._admission = asyncio.Lock()
         self._next_offline_scan_ms = self.now_ms() + 30_000
         self._offline_jobs: dict[str, asyncio.Task] = {}
-        # Observer tasks can be cancelled by event-loop shutdown; the actual
-        # provider futures stay tracked until their work really finishes.
         self._capture_closes: dict[asyncio.Task, asyncio.Future] = {}
-        # Closing sockets must not occupy the default executor used by DB and
-        # resume reads, otherwise enough slow closes would delay generation
-        # again. Admission in MockInterviewAudio also bounds this work queue.
         self._capture_close_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="mock-asr-close")
 
     async def db(self, method, **kwargs):
@@ -176,90 +168,36 @@ class MockInterviewRuntime:
             now_ms=self.now_ms(), active=active, renew_lease=renew_lease)
         return controller.record["data"].get("clock_at_ms") is not None
 
-    def _duration_due(self, record):
-        deadline_method = getattr(self.repository, "duration_deadline", None)
-        deadline = deadline_method(record) if deadline_method else None
-        return deadline is not None and self.now_ms() >= deadline
-
-    async def _enforce_duration(self, controller):
-        """End once using durable server time; never restart the sixty-minute clock."""
-        if controller.closed or controller.duration_ended:
-            return False
-        phase = round_state(controller.record).phase
-        timed_out = controller.record["data"].get("end_reason") == "time_limit"
-        if not timed_out and (phase in ("completed", "generating_report") or not self._duration_due(controller.record)):
-            return False
-        if not timed_out:
-            controller.record = await self.db(self.repository.expire_duration,
-                user_id=controller.user_id, session_id=controller.session_id, now_ms=self.now_ms())
-        if controller.record["data"].get("end_reason") != "time_limit":
-            return False
-        # The transaction has already fenced capture and question completion.
-        # Revoke immediately; slow ASR shutdown must not delay the report.
-        await self._close_capture(controller, wait=False)
-        await self._cancel(controller.speech)
-        await self._cancel(controller.generation)
-        await self._release_binding(controller)
-        controller.duration_ended = True
-        if (round_state(controller.record).phase == "generating_report"
-                and not controller.record["data"].get("error")):
-            self._generate(controller)
-        return True
-
     async def _cancel(self, task):
         if task and not task.done() and task is not asyncio.current_task():
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
 
-    async def _drain_capture_closes(self, tasks):
-        if tasks:
-            # A timeout must not cancel a to_thread close: its native thread
-            # would continue, losing our resource tracking. Keep pending tasks
-            # registered until their actual completion, including after detach.
-            futures = tuple(self._capture_closes[task] for task in tuple(tasks) if task in self._capture_closes)
-            if futures:
-                await asyncio.wait(futures, timeout=self.capture_cleanup_wait_seconds)
-
     async def _close_capture(self, controller, *, wait=True):
         capture = self.audio.revoke(controller.session_id)
         controller.draft = None
         if capture:
-            started = monotonic()
-            observer_cancelled = False
-            # Submit now, rather than at the observer's first scheduling turn.
-            # Even an observer cancelled before it starts must release capture.
-            future = asyncio.get_running_loop().run_in_executor(self._capture_close_executor, self.audio.close, capture)
-            async def close():
-                nonlocal observer_cancelled
+            # Bound asynchronous cleanup for time-limit expiry; ordinary commands
+            # await the same close by default and retain the running behavior.
+            future = asyncio.get_running_loop().run_in_executor(
+                self._capture_close_executor, self.audio.close, capture)
+            async def observe():
                 try:
                     await asyncio.shield(future)
                 except asyncio.CancelledError:
-                    observer_cancelled = True
                     raise
                 except Exception:
-                    # The real work's callback owns diagnostics and tracking.
                     pass
-            task = asyncio.create_task(close())
+            task = asyncio.create_task(observe())
             self._capture_closes[task] = future
             controller.capture_closes.add(task)
             def finished(actual):
                 self._capture_closes.pop(task, None)
                 controller.capture_closes.discard(task)
-                outcome = "cancelled" if observer_cancelled or task.cancelling() else "ok"
-                error_code = "asr_close_observer_cancelled" if outcome == "cancelled" else None
                 try:
                     actual.result()
-                except asyncio.CancelledError:
-                    outcome, error_code = "cancelled", "asr_close_cancelled"
-                except Exception:
-                    outcome = "failed"
-                    error_code = "asr_close_failed"
-                # No exception body, identifiers or transcript content. Only
-                # report completion once the real close has released resources.
-                log_event(logging.getLogger(LOGGER_NAME), logging.WARNING if outcome == "failed" else logging.INFO,
-                    settings=get_settings(), event="mock_interview.capture_close", feature="mock-interview",
-                    action="capture-close", stage="asr_close", duration_ms=round((monotonic() - started) * 1000),
-                    outcome=outcome, error_code=error_code)
+                except (asyncio.CancelledError, Exception):
+                    pass
             future.add_done_callback(finished)
         desktop = self.desktops.get(controller.session_id)
         if desktop:
@@ -411,10 +349,8 @@ class MockInterviewRuntime:
                     if await self._enforce_duration(controller):
                         await self.publish(controller)
                         return
-                    await self._close_capture(controller, wait=False)
+                    await self._close_capture(controller)
                     await self._cancel(controller.speech)
-                    if action not in ("submit", "listen", "resume"):
-                        await self._drain_capture_closes(controller.capture_closes)
                     if action == "end":
                         await self._cancel(controller.generation)
                     if following.phase == "listening":
@@ -575,3 +511,42 @@ class MockInterviewRuntime:
         # Pending close tasks remain registered and their threads finish; do
         # not block the application event loop or abandon queued resources.
         self._capture_close_executor.shutdown(wait=False)
+
+    async def _drain_capture_closes(self, tasks):
+        if tasks:
+            # A timeout must not cancel a to_thread close: its native thread
+            # would continue, losing our resource tracking. Keep pending tasks
+            # registered until their actual completion, including after detach.
+            futures = tuple(self._capture_closes[task] for task in tuple(tasks) if task in self._capture_closes)
+            if futures:
+                await asyncio.wait(futures, timeout=self.capture_cleanup_wait_seconds)
+
+    async def _enforce_duration(self, controller):
+        """End once using durable server time; never restart the sixty-minute clock."""
+        if controller.closed or controller.duration_ended:
+            return False
+        phase = round_state(controller.record).phase
+        timed_out = controller.record["data"].get("end_reason") == "time_limit"
+        if not timed_out and (phase in ("completed", "generating_report") or not self._duration_due(controller.record)):
+            return False
+        if not timed_out:
+            controller.record = await self.db(self.repository.expire_duration,
+                user_id=controller.user_id, session_id=controller.session_id, now_ms=self.now_ms())
+        if controller.record["data"].get("end_reason") != "time_limit":
+            return False
+        # The transaction has already fenced capture and question completion.
+        # Revoke immediately; slow ASR shutdown must not delay the report.
+        await self._close_capture(controller, wait=False)
+        await self._cancel(controller.speech)
+        await self._cancel(controller.generation)
+        await self._release_binding(controller)
+        controller.duration_ended = True
+        if (round_state(controller.record).phase == "generating_report"
+                and not controller.record["data"].get("error")):
+            self._generate(controller)
+        return True
+
+    def _duration_due(self, record):
+        deadline_method = getattr(self.repository, "duration_deadline", None)
+        deadline = deadline_method(record) if deadline_method else None
+        return deadline is not None and self.now_ms() >= deadline

@@ -175,6 +175,51 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
             self.publishers_by_id.pop(item.publisher_id, None)
             self.publishers_by_token.pop(item.token, None)
 
+    def clear_session_runtime(self, *, session_id: str, preserve_transcripts: bool = True) -> dict[str, int]:
+        """Drop transient runtime state after an ended session.
+
+        Transcripts remain available for review unless an explicit destructive
+        cleanup is requested. The operation is idempotent so normal end,
+        disconnect expiry, and admin termination can safely race.
+        """
+        with self._event_condition:
+            publisher_ids = [
+                item.publisher_id
+                for item in self.publishers_by_id.values()
+                if item.session_id == session_id
+            ]
+            for publisher_id in publisher_ids:
+                publisher = self.publishers_by_id.pop(publisher_id, None)
+                if publisher is not None:
+                    self.publishers_by_token.pop(publisher.token, None)
+            frame_receipts = len(self.frame_receipts.pop(session_id, {}))
+            events = len(self.events.pop(session_id, []))
+            event_cursors = len(self.event_cursors.pop(session_id, {}))
+            candidates = sum(
+                1 for item in self.candidates.values() if item.session_id == session_id
+            )
+            for candidate_id in [
+                item.candidate_id for item in self.candidates.values() if item.session_id == session_id
+            ]:
+                self.candidates.pop(candidate_id, None)
+            self.session_activity_versions.pop(session_id, None)
+            self.web_session_heartbeats = {
+                key: value for key, value in self.web_session_heartbeats.items()
+                if key[1] != session_id
+            }
+            transcripts = 0
+            if not preserve_transcripts:
+                transcripts = len(self.transcripts.pop(session_id, {}))
+            self._event_condition.notify_all()
+        return {
+            "cleared_publishers": len(publisher_ids),
+            "cleared_frame_receipts": frame_receipts,
+            "cleared_events": events,
+            "cleared_event_cursors": event_cursors,
+            "cleared_candidates": candidates,
+            "cleared_transcripts": transcripts,
+        }
+
     def save_frame_receipt(self, receipt: RealtimeFrameReceiptRecord) -> RealtimeFrameReceiptRecord:
         stored = replace(receipt)
         self.frame_receipts.setdefault(stored.session_id, {})[(stored.source_kind, stored.source_id)] = stored
@@ -201,34 +246,6 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
         if not receipts:
             self.frame_receipts.pop(session_id, None)
         return len(removable)
-
-    def clear_session_runtime(self, *, session_id: str, preserve_transcripts: bool = True) -> dict[str, int]:
-        """Drop process-local realtime state that is not needed for review."""
-        publishers = [
-            item for item in self.publishers_by_id.values()
-            if item.session_id == session_id
-        ]
-        for item in publishers:
-            self.publishers_by_id.pop(item.publisher_id, None)
-            self.publishers_by_token.pop(item.token, None)
-        receipts = self.frame_receipts.pop(session_id, {})
-        events = self.events.pop(session_id, [])
-        event_cursors = self.event_cursors.pop(session_id, {})
-        self.session_activity_versions.pop(session_id, None)
-        self.web_session_heartbeats = {
-            key: value
-            for key, value in self.web_session_heartbeats.items()
-            if key[1] != session_id
-        }
-        if not preserve_transcripts:
-            self.transcripts.pop(session_id, None)
-        return {
-            "cleared_publishers": len(publishers),
-            "cleared_frame_receipts": len(receipts),
-            "cleared_events": len(events),
-            "cleared_event_cursors": len(event_cursors),
-            "cleared_transcripts": 0 if preserve_transcripts else 1,
-        }
 
     def list_runtime_session_owners(self, *, limit: int = 128) -> dict[str, str]:
         """Return a bounded index of sessions that still own ephemeral state."""

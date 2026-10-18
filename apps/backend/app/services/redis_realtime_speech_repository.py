@@ -589,53 +589,13 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
             pipeline.hdel(self._publisher_token_key, item.token)
         pipeline.execute()
         return None
-    def save_frame_receipt(self, receipt):
+
+    def clear_session_runtime(self, *, session_id, preserve_transcripts=True):
         with self._runtime_lock:
-            stored = super().save_frame_receipt(receipt)
-        field = f"{stored.session_id}:{stored.source_kind}:{stored.source_id}"
-        self._redis.hset(self._receipt_key, field, json.dumps(asdict(stored), ensure_ascii=True, separators=(",", ":")))
-        self._redis.expire(self._receipt_key, self._runtime_ttl_seconds)
-        return stored
-
-    def get_frame_receipt(self, *, session_id, source_kind, source_id):
-        raw = self._redis.hget(self._receipt_key, f"{session_id}:{source_kind}:{source_id}")
-        if raw:
-            return RealtimeFrameReceiptRecord(**json.loads(raw))
-        return None
-
-    def list_frame_receipts_for_session(self, *, session_id):
-        prefix = f"{session_id}:"
-        records = [
-            RealtimeFrameReceiptRecord(**json.loads(raw))
-            for field, raw in self._redis.hscan_iter(self._receipt_key, match=f"{prefix}*")
-        ]
-        return sorted(records, key=lambda item: (item.source_kind, item.source_id))
-
-    def delete_frame_receipts_for_session(self, *, session_id, source_kind=None):
-        prefix = f"{session_id}:"
-        fields = []
-        for field, raw in self._redis.hscan_iter(self._receipt_key, match=f"{prefix}*"):
-            if source_kind is None:
-                fields.append(field)
-                continue
-            try:
-                payload = json.loads(raw)
-            except Exception:
-                continue
-            if payload.get("source_kind") == source_kind:
-                fields.append(field)
-        if not fields:
-            return 0
-        return int(self._redis.hdel(self._receipt_key, *fields))
-
-    def clear_session_runtime(self, *, session_id: str, preserve_transcripts: bool = True) -> dict[str, int]:
-        """Remove ended-session realtime state while retaining review transcripts."""
-        with self._runtime_lock:
-            resources = super().clear_session_runtime(
+            result = super().clear_session_runtime(
                 session_id=session_id,
                 preserve_transcripts=preserve_transcripts,
             )
-
         publisher_ids: list[str] = []
         publisher_tokens: list[str] = []
         for publisher_id, raw in self._redis.hscan_iter(self._publisher_key):
@@ -644,33 +604,35 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
             except (TypeError, ValueError):
                 continue
             if payload.get("session_id") == session_id:
-                publisher_ids.append(str(publisher_id))
-                if payload.get("token"):
-                    publisher_tokens.append(str(payload["token"]))
-
+                publisher_ids.append(publisher_id)
+                token = payload.get("token")
+                if isinstance(token, str):
+                    publisher_tokens.append(token)
         receipt_fields = [
-            str(field)
-            for field, _raw in self._redis.hscan_iter(
-                self._receipt_key,
-                match=f"{session_id}:*",
+            field for field, _raw in self._redis.hscan_iter(
+                self._receipt_key, match=f"{session_id}:*"
             )
         ]
         heartbeat_fields = [
-            str(field)
-            for field, _raw in self._redis.hscan_iter(
-                self._web_heartbeat_entity_key,
-                match=f"*|{session_id}",
+            field for field, _raw in self._redis.hscan_iter(
+                self._web_heartbeat_entity_key, match=f"*|{session_id}"
             )
         ]
-        active_web_users: list[str] = []
+        active_user_fields: list[str] = []
         for user_id, raw in self._redis.hscan_iter(self._active_web_user_key):
             try:
                 payload = json.loads(raw)
             except (TypeError, ValueError):
                 continue
             if payload.get("session_id") == session_id:
-                active_web_users.append(str(user_id))
-
+                active_user_fields.append(user_id)
+        transcript_fields: list[str] = []
+        if not preserve_transcripts:
+            transcript_fields = [
+                field for field, _raw in self._redis.hscan_iter(
+                    self._transcript_key, match=f"{session_id}:*"
+                )
+            ]
         pipeline = self._redis.pipeline()
         if publisher_ids:
             pipeline.hdel(self._publisher_key, *publisher_ids)
@@ -680,30 +642,27 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
             pipeline.hdel(self._receipt_key, *receipt_fields)
         if heartbeat_fields:
             pipeline.hdel(self._web_heartbeat_entity_key, *heartbeat_fields)
-        if active_web_users:
-            pipeline.hdel(self._active_web_user_key, *active_web_users)
+        if active_user_fields:
+            pipeline.hdel(self._active_web_user_key, *active_user_fields)
+        if transcript_fields:
+            pipeline.hdel(self._transcript_key, *transcript_fields)
         pipeline.delete(
             f"offersteady:realtime:events:{session_id}",
             self._event_cursor_index_key(session_id),
             self._latest_event_key(session_id),
         )
         pipeline.hdel(self._activity_key, session_id)
-        if not preserve_transcripts:
-            transcript_fields = [
-                str(field)
-                for field, _raw in self._redis.hscan_iter(
-                    self._transcript_key,
-                    match=f"{session_id}:*",
-                )
-            ]
-            if transcript_fields:
-                pipeline.hdel(self._transcript_key, *transcript_fields)
-                resources["cleared_transcripts"] = len(transcript_fields)
         pipeline.execute()
-
-        resources["cleared_publishers"] = max(resources["cleared_publishers"], len(publisher_ids))
-        resources["cleared_frame_receipts"] = max(resources["cleared_frame_receipts"], len(receipt_fields))
-        return resources
+        with self._redis.lock(self._lock_key, timeout=5, blocking_timeout=2):
+            with self._runtime_lock:
+                encoded = json.dumps(self._snapshot(), ensure_ascii=True, separators=(",", ":"))
+                self._redis.set(self._snapshot_key, encoded)
+                self._redis.expire(self._snapshot_key, self._runtime_ttl_seconds)
+        result["cleared_publishers"] = max(result["cleared_publishers"], len(publisher_ids))
+        result["cleared_frame_receipts"] = max(result["cleared_frame_receipts"], len(receipt_fields))
+        result["cleared_candidates"] = result.get("cleared_candidates", 0)
+        result["cleared_transcripts"] = max(result["cleared_transcripts"], len(transcript_fields))
+        return result
 
     def list_runtime_session_owners(self, *, limit: int = 128) -> dict[str, str]:
         """Discover orphan candidates with a bounded, rotating Redis scan."""
@@ -739,6 +698,27 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
                         break
             self._runtime_owner_scan_key_index = (start_index + 1) % len(keys)
         return owners
+    def save_frame_receipt(self, receipt):
+        with self._runtime_lock:
+            stored = super().save_frame_receipt(receipt)
+        field = f"{stored.session_id}:{stored.source_kind}:{stored.source_id}"
+        self._redis.hset(self._receipt_key, field, json.dumps(asdict(stored), ensure_ascii=True, separators=(",", ":")))
+        self._redis.expire(self._receipt_key, self._runtime_ttl_seconds)
+        return stored
+
+    def get_frame_receipt(self, *, session_id, source_kind, source_id):
+        raw = self._redis.hget(self._receipt_key, f"{session_id}:{source_kind}:{source_id}")
+        if raw:
+            return RealtimeFrameReceiptRecord(**json.loads(raw))
+        return None
+
+    def list_frame_receipts_for_session(self, *, session_id):
+        prefix = f"{session_id}:"
+        records = [
+            RealtimeFrameReceiptRecord(**json.loads(raw))
+            for field, raw in self._redis.hscan_iter(self._receipt_key, match=f"{prefix}*")
+        ]
+        return sorted(records, key=lambda item: (item.source_kind, item.source_id))
 
     def save_transcript(self, segment):
         with self._runtime_lock:

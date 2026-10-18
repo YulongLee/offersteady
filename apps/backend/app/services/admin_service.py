@@ -27,20 +27,20 @@ PERMISSIONS_BY_ROLE: dict[str, frozenset[str]] = {
         "sessions.read", "sessions.terminate", "observability.read",
         "audit.read", "admins.manage",
         "growth.manage",
-        "promotion.read", "promotion.manage", "promotion.cost.manage", "seo.read", "seo.manage",
+        "promotion.read", "promotion.manage", "promotion.cost.manage", "promotion.payout.manage",
     }),
     "operations": frozenset({
         "users.read", "billing.read", "materials.read", "materials.retry",
         "sessions.read", "sessions.terminate", "observability.read",
         "growth.manage",
-        "promotion.read", "promotion.manage", "promotion.cost.manage", "seo.read", "seo.manage",
+        "promotion.read", "promotion.manage", "promotion.cost.manage", "promotion.payout.manage",
     }),
-    "support": frozenset({"users.read", "billing.read", "materials.read", "sessions.read", "seo.read"}),
+    "support": frozenset({"users.read", "billing.read", "materials.read", "sessions.read", "promotion.read"}),
     "finance": frozenset({
         "users.read", "billing.read", "billing.adjust", "catalog.manage", "redemptions.generate",
-        "payments.reconcile", "payments.manage", "audit.read", "promotion.read", "promotion.cost.manage", "seo.read", "seo.manage",
+        "payments.reconcile", "payments.manage", "audit.read", "promotion.read", "promotion.cost.manage", "promotion.payout.manage",
     }),
-    "technical_auditor": frozenset({"materials.read", "sessions.read", "observability.read", "audit.read", "seo.read"}),
+    "technical_auditor": frozenset({"materials.read", "sessions.read", "observability.read", "audit.read", "promotion.read"}),
 }
 
 SAFE_DETAIL_KEYS = frozenset({
@@ -51,10 +51,9 @@ SAFE_DETAIL_KEYS = frozenset({
     "published", "catalog_version",
     "enabled", "reward_points", "invitee_reward_points", "config_version",
     "channel_id", "campaign_id", "link_id", "scope_type", "amount_cents", "status",
-    "offer_code", "plan_version", "entitlement_id", "source_kind",
 })
 HIGH_RISK_PERMISSIONS = frozenset({
-    "users.suspend", "billing.adjust", "catalog.manage", "redemptions.generate", "payments.manage", "payments.reconcile", "growth.manage", "admins.manage", "promotion.cost.manage", "seo.manage",
+    "users.suspend", "billing.adjust", "catalog.manage", "redemptions.generate", "payments.manage", "payments.reconcile", "growth.manage", "admins.manage", "promotion.cost.manage", "promotion.payout.manage",
 })
 
 
@@ -146,15 +145,22 @@ class AdminService:
         permissions = row["permissions_json"]
         if isinstance(permissions, str):
             permissions = json.loads(permissions)
-        effective_permissions = frozenset(
+        effective_permissions = {
             str(item) for item in permissions
             if self.settings.promotion_enabled or not str(item).startswith("promotion.")
-        )
+        }
+        # Aggregate acquisition and partner reconciliation data contains no
+        # referred-user PII and is visible to every active administrator.
+        # Add this dynamically so sessions created before the feature rollout
+        # gain read access without re-authentication. Mutation permissions stay
+        # snapshotted and continue to require their dedicated role grants.
+        if self.settings.promotion_enabled:
+            effective_permissions.add("promotion.read")
         return AdminPrincipal(
             admin_session_id=str(row["admin_session_id"]),
             user_id=str(row["user_id"]),
             role=str(row["role"]),
-            permissions=effective_permissions,
+            permissions=frozenset(effective_permissions),
             recent_mfa_at_ms=int(row["recent_mfa_at_ms"]),
         )
 

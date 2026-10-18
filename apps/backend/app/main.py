@@ -10,7 +10,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1 import api_router
 from app.api.admin import admin_router, admin_service
 from app.api.admin_promotion import admin_promotion_router
-from app.api.admin_global_commerce import admin_global_commerce_router
 from app.api.promotion import public_promotion_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging, utc_now_iso
@@ -37,10 +36,11 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(application: FastAPI):
         task: asyncio.Task[None] | None = None
-        reaper_task: asyncio.Task[None] | None = None
+        resource_reaper_task: asyncio.Task[None] | None = None
         mock_reaper_task: asyncio.Task[None] | None = None
         mock_runtime_instance = None
-        realtime_service_instance = None
+        cn_resume_optimizer_runtime = None
+        realtime_service = None
         realtime_event_wait_executor = RealtimeEventWaitExecutor(
             max_workers=settings.realtime_event_wait_workers,
         )
@@ -63,31 +63,6 @@ def create_app() -> FastAPI:
         application.state.screenshot_stream_admission = screenshot_stream_admission
         application.state.realtime_control_executor = realtime_control_executor
         application.state.live_answer_stream_executor = live_answer_stream_executor
-        if settings.realtime_resource_reaper_enabled:
-            try:
-                from app.deps import realtime_speech_service
-
-                realtime_service_instance = realtime_speech_service()
-
-                async def reap_realtime_resources() -> None:
-                    while True:
-                        try:
-                            await asyncio.to_thread(realtime_service_instance.reap_idle_sessions)
-                        except asyncio.CancelledError:
-                            raise
-                        except Exception as exc:
-                            logger.warning(
-                                "realtime_resource_reaper_failed",
-                                extra={"errorCode": exc.__class__.__name__},
-                            )
-                        await asyncio.sleep(max(5, settings.realtime_resource_reaper_interval_seconds))
-
-                reaper_task = asyncio.create_task(reap_realtime_resources())
-            except Exception as exc:
-                logger.warning(
-                    "realtime_resource_reaper_unavailable",
-                    extra={"errorCode": exc.__class__.__name__},
-                )
         if settings.admin_enabled and settings.database_url:
             try:
                 monitor = AdminCapacityMonitor(settings, admin_service().repository)
@@ -104,7 +79,23 @@ def create_app() -> FastAPI:
                 task = asyncio.create_task(sample_capacity())
             except Exception:
                 logger.warning("admin_capacity_monitor_unavailable")
-        if (settings.global_mock_interview_enabled if settings.product_edition == "global" else settings.mock_interview_enabled):
+        if settings.realtime_resource_reaper_enabled and not os.environ.get("PYTEST_CURRENT_TEST"):
+            from app.deps import realtime_speech_service
+
+            realtime_service = realtime_speech_service()
+
+            async def reap_idle_sessions() -> None:
+                while True:
+                    try:
+                        await asyncio.to_thread(realtime_service.reap_idle_sessions)
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:
+                        logger.warning("realtime_resource_reaper_failed")
+                    await asyncio.sleep(max(5, settings.realtime_resource_reaper_interval_seconds))
+
+            resource_reaper_task = asyncio.create_task(reap_idle_sessions())
+        if settings.product_edition == "cn" and settings.mock_interview_enabled:
             from app.modules.mock_interview import mock_runtime
 
             if int(os.environ.get("WEB_CONCURRENCY", "1")) != 1:
@@ -121,34 +112,34 @@ def create_app() -> FastAPI:
                         logger.warning("mock_resource_reaper_failed")
                     await asyncio.sleep(0.25)
             mock_reaper_task = asyncio.create_task(reap_mock_resources())
+        if settings.product_edition == "cn" and settings.cn_resume_optimizer_enabled:
+            from app.deps import cn_resume_optimizer_service
+            from app.services.cn_resume_optimizer_service import CNResumeOptimizerRuntime
+            if settings.chat_qwen_api_key and settings.chat_qwen_base_url:
+                optimizer_service = await asyncio.to_thread(cn_resume_optimizer_service)
+                cn_resume_optimizer_runtime = CNResumeOptimizerRuntime(optimizer_service)
+                await cn_resume_optimizer_runtime.start()
         try:
             yield
         finally:
-            from app.deps import realtime_speech_service
-
-            service = realtime_speech_service()
+            if cn_resume_optimizer_runtime is not None:
+                await cn_resume_optimizer_runtime.shutdown()
             if mock_reaper_task is not None:
                 mock_reaper_task.cancel()
                 with suppress(asyncio.CancelledError):
                     await mock_reaper_task
             if mock_runtime_instance is not None:
                 await mock_runtime_instance.shutdown()
-            stop_reclamation = getattr(service, "stop_reclamation", None)
-            if callable(stop_reclamation):
-                stop_reclamation()
+            if resource_reaper_task is not None:
+                resource_reaper_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await resource_reaper_task
+            if realtime_service is not None:
+                await asyncio.to_thread(realtime_service.shutdown)
             if task is not None:
                 task.cancel()
                 with suppress(asyncio.CancelledError):
                     await task
-            if reaper_task is not None:
-                reaper_task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await reaper_task
-            # Test clients may create multiple application lifespans while
-            # sharing the dependency singleton; keep that singleton reusable
-            # during pytest and close it for the real process shutdown.
-            if realtime_service_instance is not None and not os.environ.get("PYTEST_CURRENT_TEST"):
-                await asyncio.to_thread(realtime_service_instance.shutdown)
             realtime_event_wait_executor.shutdown()
             screenshot_event_wait_executor.shutdown()
             screenshot_stream_admission.shutdown()
@@ -163,7 +154,6 @@ def create_app() -> FastAPI:
                     close()
 
     application = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
-    application.state.live_answer_stream_executor = live_answer_stream_executor
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[
@@ -176,6 +166,8 @@ def create_app() -> FastAPI:
         expose_headers=[settings.request_id_header, "X-OfferSteady-App-Version", "X-OfferSteady-Environment"],
     )
     application.add_middleware(RequestContextMiddleware, settings=settings, logger=logger)
+    from app.modules.cn_resume_optimizer import CNResumeOptimizerPrivacyMiddleware
+    application.add_middleware(CNResumeOptimizerPrivacyMiddleware, api_prefix=settings.api_prefix)
     install_exception_handlers(application, settings=settings, logger=logger)
 
     @application.get("/healthz", response_model=ApiEnvelope[HealthResponse])
@@ -194,7 +186,6 @@ def create_app() -> FastAPI:
     application.include_router(api_router, prefix=settings.api_prefix)
     application.include_router(admin_router, prefix=settings.api_prefix)
     application.include_router(admin_promotion_router, prefix=settings.api_prefix)
-    application.include_router(admin_global_commerce_router, prefix=settings.api_prefix)
     application.include_router(public_promotion_router)
     return application
 

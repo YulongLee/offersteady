@@ -53,9 +53,9 @@ from app.ports.screenshot_answer import (
 )
 from app.schemas.retrieval import RetrievalResponse, RetrievedChunkResponse
 from app.services.chat_service import (
-    _COMMERCIAL_ANSWER_CONTRACT,
     NonRetryableChatError,
     RetryableChatError,
+    _english_output_violation,
     _english_repair_instruction,
 )
 from app.services.material_object_keys import MaterialObjectKeyFactory
@@ -63,7 +63,6 @@ from app.services.session_service import SessionService
 from app.services.programming_prompt import render_programming_policy
 from app.services.billing_service import BillingService
 from app.ports.interview_session import InterviewLanguage, ProgrammingLanguage
-from app.interview_languages import get_interview_language, interview_prompt_assets_ready, interview_prompt_directory, output_language_violation
 
 
 def _now_ms() -> int:
@@ -115,19 +114,11 @@ class FileScreenshotPromptTemplateAdapter(ScreenshotPromptTemplatePort):
         prompt_path = Path(self.settings.screenshot_prompt_template_path)
         if not prompt_path.is_absolute():
             prompt_path = Path(__file__).resolve().parents[4] / self.settings.screenshot_prompt_template_path
-        default_path = Path(__file__).resolve().parents[4] / "ai/prompts/screenshot-answer/system.md"
-        if prompt_path == default_path and interview_prompt_assets_ready(interview_language):
-            prompt_path = interview_prompt_directory(interview_language) / "screenshot.md"
-        elif interview_language != "zh-CN":
+        if interview_language == "en-US":
             prompt_path = prompt_path.with_name(f"{prompt_path.stem}.en{prompt_path.suffix}")
         text = prompt_path.read_text(encoding="utf-8").strip()
-        if "<commercial_answer_contract>" not in text:
-            text = f"{text}\n\n{_COMMERCIAL_ANSWER_CONTRACT}"
-        definition = get_interview_language(interview_language)
-        if definition and interview_language not in {"zh-CN", "en-US"} and "<output_language>" not in text:
-            text = f"{text}\n\n<output_language>{definition.output_language} only. Return concise, professional interview guidance.</output_language>"
         return text, PromptConfig(
-            template_id=("screenshot-answer-en-system" if interview_language == "en-US" else "screenshot-answer-system") if interview_language in {"zh-CN", "en-US"} else f"screenshot-answer-{interview_language}-system",
+            template_id="screenshot-answer-en-system" if interview_language == "en-US" else "screenshot-answer-system",
             version=self.settings.screenshot_prompt_version,
             max_history_entries=self.settings.screenshot_max_history_entries,
             include_retrieval_context=False,
@@ -520,18 +511,9 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
         prompt_path = Path(self.settings.screenshot_prompt_template_path)
         if not prompt_path.is_absolute():
             prompt_path = Path(__file__).resolve().parents[4] / self.settings.screenshot_prompt_template_path
-        default_path = Path(__file__).resolve().parents[4] / "ai/prompts/screenshot-answer/system.md"
-        if prompt_path == default_path and interview_prompt_assets_ready(interview_language):
-            prompt_path = interview_prompt_directory(interview_language) / "screenshot.md"
-        elif interview_language == "en-US":
+        if interview_language == "en-US":
             prompt_path = prompt_path.with_name(f"{prompt_path.stem}.en{prompt_path.suffix}")
-        text = prompt_path.read_text(encoding="utf-8").strip()
-        if "<commercial_answer_contract>" not in text:
-            text = f"{text}\n\n{_COMMERCIAL_ANSWER_CONTRACT}"
-        definition = get_interview_language(interview_language)
-        if definition and interview_language not in {"zh-CN", "en-US"} and "<output_language>" not in text:
-            text = f"{text}\n\n<output_language>{definition.output_language} only.</output_language>"
-        return text
+        return prompt_path.read_text(encoding="utf-8").strip()
 
     def analyze(
         self,
@@ -1092,8 +1074,8 @@ class ScreenshotAnswerService:
         for attempt in range(self.settings.screenshot_retry_max_attempts + 1):
             try:
                 attempt_instruction = (
-                    _english_repair_instruction(screenshot_instruction, interview_language)
-                    if interview_language != "zh-CN" and attempt > 0
+                    _english_repair_instruction(screenshot_instruction)
+                    if interview_language == "en-US" and attempt > 0
                     else screenshot_instruction
                 )
                 using_streaming_gateway = False
@@ -1126,7 +1108,7 @@ class ScreenshotAnswerService:
                     ))
                     answer_parts: list[str] = []
                     chunks: list[ChatAnswerChunk] = []
-                    language_prefix_validated = interview_language == "zh-CN"
+                    language_prefix_validated = interview_language != "en-US"
                     last_emit_at = perf_counter()
                     try:
                         for text_part in stream_analyze(
@@ -1140,9 +1122,9 @@ class ScreenshotAnswerService:
                             if telemetry is not None and telemetry.get("first_text_ms") is None:
                                 telemetry["first_text_ms"] = _elapsed_ms(vision_started)
                             chunks.append(ChatAnswerChunk(sequence=len(chunks) + 1, text=text_part, is_final=False))
-                            if interview_language != "zh-CN" and not language_prefix_validated:
+                            if interview_language == "en-US" and not language_prefix_validated:
                                 prefix = "".join(answer_parts)
-                                if output_language_violation(prefix, interview_language):
+                                if _english_output_violation(prefix):
                                     log_event(
                                         self.logger,
                                         logging.WARNING,
@@ -1152,7 +1134,7 @@ class ScreenshotAnswerService:
                                         action="enforce-output-language",
                                         session_id=session_id,
                                         task_id=current.task_id,
-                                        interview_language=interview_language,
+                                        interview_language="en-US",
                                         stage="vision-stream",
                                         prompt_template_id="screenshot-vision-direct-en",
                                         prompt_version=self.settings.screenshot_prompt_version,
@@ -1200,9 +1182,8 @@ class ScreenshotAnswerService:
                     )
                 if telemetry is not None:
                     telemetry["vision_model_ms"] = _elapsed_ms(vision_started)
-                if interview_language != "zh-CN" and output_language_violation(
-                    (vision.final_answer or vision.summary_text or vision.derived_question).strip(),
-                    interview_language,
+                if interview_language == "en-US" and _english_output_violation(
+                    (vision.final_answer or vision.summary_text or vision.derived_question).strip()
                 ):
                     log_event(
                         self.logger,
@@ -1213,7 +1194,7 @@ class ScreenshotAnswerService:
                         action="enforce-output-language",
                         session_id=session_id,
                         task_id=current.task_id,
-                        interview_language=interview_language,
+                        interview_language="en-US",
                         stage="vision-complete",
                         prompt_template_id="screenshot-vision-direct-en",
                         prompt_version=self.settings.screenshot_prompt_version,
@@ -1648,10 +1629,10 @@ class ScreenshotAnswerService:
         detail_heading = "Detailed Answer" if interview_language == "en-US" else "详细回答"
         if quick_heading not in answer_text or "---" not in answer_text or detail_heading not in answer_text:
             quick_body = vision.derived_question.strip() or vision.title
-            if interview_language != "zh-CN" and output_language_violation(quick_body, interview_language):
+            if interview_language == "en-US" and _english_output_violation(quick_body):
                 quick_body = "Use the visible constraints to state the core solution."
             answer_text = f"{quick_heading}\n{quick_body}\n\n---\n\n{detail_heading}\n{answer_text}"
-        if interview_language != "zh-CN" and output_language_violation(answer_text, interview_language):
+        if interview_language == "en-US" and _english_output_violation(answer_text):
             raise RetryableVisionError("screenshot_output_language_violation")
         completed = replace(
             task,

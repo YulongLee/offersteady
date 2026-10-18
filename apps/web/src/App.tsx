@@ -10,7 +10,7 @@ import { ContextPicker } from "./ContextPicker";
 import { contextLevel, managedLibrarySources, selectionValidity } from "./context-selection";
 import { assetUrl } from "./assets";
 import { interviewPlatforms } from "./platform-brands";
-import { LivePage, preloadLivePage, BillingPage, DownloadCenter, GuidePage, LegalPage, LibraryManager, MockInterviewPage } from "./route-components";
+import { LivePage, preloadLivePage, BillingPage, DownloadCenter, GuidePage, LegalPage, LibraryManager, MockInterviewPage, ResumeOptimizerPage } from "./route-components";
 import { mockRequest } from "./mock-interview-client";
 import { resetTransientInterviewState } from "./live-workspace";
 import { authClient } from "./auth-client";
@@ -103,7 +103,7 @@ function PrototypeProvider({ children, initialAuthenticated, initialState, publi
   const logout = async () => {
     await authClient.logout();
     setAuthenticated(false);
-    try { setState(await interviewAppAdapter.loadState(undefined, { auth: false, force: true })); } catch { setState(current => current); }
+    try { setState(await interviewAppAdapter.loadState()); } catch { setState(current => current); }
   };
 
   if (!state && publicStartup?.pathname === pathname && /^\/(?:guide|terms|privacy)?\/?$/.test(pathname)) {
@@ -218,7 +218,7 @@ function LandingPage() {
           <summary><span>查看更多资源</span><CaretDownIcon size={16} aria-hidden="true" /></summary>
           <div className="footer-more-grid">
             <nav className="footer-column" aria-label="页脚产品导航"><h2>产品</h2><a href="/features/ai-interview-assistant">AI 面试助手</a><a href="/features/realtime-interview">实时面试辅助</a><a href="/features/screenshot-answer">截图回答</a><a href="/features/interview-review">面试复盘</a><a href="/pricing">积分与会员</a><a href="/download">下载助手</a></nav>
-            <nav className="footer-column" aria-label="页脚资源导航"><h2>更多内容</h2><Link to={`${routes.publicGuide}#desktop`}>下载安装说明</Link><a href="/resources/">技术报告与资源中心</a><a href="/guides/interview-preparation">面试准备清单</a><a href="/guides/star-interview-answer">STAR 回答结构</a><a href="/guides/audio-troubleshooting">收音问题排查</a><a href="/security">安全说明</a><a href="/about">关于产品</a><a href="/contact">联系我们</a><Link to={routes.terms}>用户协议</Link><Link to={routes.privacy}>隐私政策</Link></nav>
+            <nav className="footer-column" aria-label="页脚资源导航"><h2>更多内容</h2><Link to={`${routes.publicGuide}#desktop`}>下载安装说明</Link><a href="/guides/interview-preparation">面试准备清单</a><a href="/guides/star-interview-answer">STAR 回答结构</a><a href="/guides/audio-troubleshooting">收音问题排查</a><a href="/security">安全说明</a><a href="/about">关于产品</a><a href="/contact">联系我们</a><Link to={routes.terms}>用户协议</Link><Link to={routes.privacy}>隐私政策</Link></nav>
           </div>
         </details>
         <div className="public-footer-legal">
@@ -247,7 +247,7 @@ function LoginPage() {
   const enter = () => { setAuthenticated(true); navigate(destination, { replace: true }); };
   const enterWithAccount = (account: WebAppState["account"]) => {
     setState(current => ({ ...current, account }));
-    void interviewAppAdapter.loadState(undefined, { force: true }).then(next => setState(next)).catch(() => undefined);
+    void interviewAppAdapter.loadState().then(next => setState(next)).catch(() => undefined);
     enter();
   };
   useEffect(() => {
@@ -337,6 +337,7 @@ const navItems = [
   { to: routes.app, label: "面试模式", icon: "◫", end: true },
   { to: routes.writtenExams, label: "笔试模式", icon: "◇" },
   { to: routes.mockInterviews, label: "模拟面试", icon: "◉" },
+  { to: routes.resumeOptimizer, label: "简历优化", icon: "▤" },
   { to: routes.library, label: "资料", icon: "◇" },
   { to: routes.billing, label: "积分与会员", icon: "点" },
   { to: routes.partnerProgram, label: "合作伙伴计划", icon: "◇" },
@@ -428,7 +429,7 @@ function HomePage() {
     try {
       await runAdapterOperation(signal => interviewAppAdapter.deleteInterview(interviewId, signal));
       try {
-        const next = await runAdapterOperation(signal => interviewAppAdapter.loadState(signal, { force: true }));
+        const next = await runAdapterOperation(signal => interviewAppAdapter.loadState(signal));
         setState(next);
       } catch {
         setState(current => ({ ...current, interviews: current.interviews.filter(item => item.id !== interviewId) }));
@@ -458,7 +459,7 @@ function WrittenExamHomePage() {
     try {
       await runAdapterOperation(signal => interviewAppAdapter.deleteInterview(sessionId, signal));
       try {
-        setState(await runAdapterOperation(signal => interviewAppAdapter.loadState(signal, { force: true })));
+        setState(await runAdapterOperation(signal => interviewAppAdapter.loadState(signal)));
       } catch {
         setState(current => ({ ...current, interviews: current.interviews.filter(item => item.id !== sessionId) }));
       }
@@ -470,7 +471,7 @@ function WrittenExamHomePage() {
   };
   return <main className="app-page"><PageHeader eyebrow="WRITTEN EXAM MODE" title={active ? "继续这场笔试" : "准备好下一场笔试了吗？"} detail="笔试模式仅使用截屏回答，不启用收音、实时转写或快答。" action={<Link className="button primary" to={routes.newWrittenExam}>＋ 新建笔试</Link>} />
     {active ? <section className="continue-card"><div><span className="live-chip"><i /> {sessionStatusLabel[active.status]}</span><h2>{active.title}</h2><p>{active.company} · {active.role}</p><div className="progress-line"><i style={{ width: `${active.readiness}%` }} /></div><small>仅使用截屏回答 · 不启用音频</small></div><div className="continue-actions"><Link className="button primary" to={interviewContinuationRoute(active)}>继续笔试</Link></div></section> : <EmptyState title="创建第一场笔试" detail="连接伴随助手后，通过截屏识别题目并生成回答。" action={<Link className="button primary" to={routes.newWrittenExam}>开始创建</Link>} />}
-    <section className="dashboard-grid"><div className="panel"><div className="panel-heading"><h2>最近笔试</h2><span>{recentExams.length} / 5 场</span></div>{deleteError ? <div className="inline-error" role="alert">{deleteError}</div> : null}<div className="interview-list">{recentExams.map(item => <article key={item.id} className="recent-interview-row"><Link to={interviewContinuationRoute(item)}><span className={`status-icon ${item.status}`}>{item.status === "ended" ? "✓" : "↗"}</span><div><strong>{item.title}</strong><small>{item.updatedAt} · {sessionStatusLabel[item.status]}</small></div><span>→</span></Link><button type="button" disabled={deletingId === item.id} onClick={() => void deleteRecentExam(item.id)}>{deletingId === item.id ? "删除中…" : "删除"}</button></article>)}</div></div><div className="panel readiness-panel"><div className="panel-heading"><h2>笔试说明</h2><Link to={routes.billing}>收费说明</Link></div><ul className="compact-list"><li><span>进入笔试</span><b>会员免费 · 非会员 30 积分 / 次</b></li><li><span>答题方式</span><b>仅截屏回答</b></li><li><span>音频采集</span><b>不启用</b></li></ul></div></section>
+    <section className="dashboard-grid"><div className="panel"><div className="panel-heading"><h2>最近笔试</h2><span>{recentExams.length} / 5 场</span></div>{deleteError ? <div className="inline-error" role="alert">{deleteError}</div> : null}<div className="interview-list">{recentExams.map(item => <article key={item.id} className="recent-interview-row"><Link to={interviewContinuationRoute(item)}><span className={`status-icon ${item.status}`}>{item.status === "ended" ? "✓" : "↗"}</span><div><strong>{item.title}</strong><small>{item.updatedAt} · {sessionStatusLabel[item.status]}</small></div><span>→</span></Link><button type="button" disabled={deletingId === item.id} onClick={() => void deleteRecentExam(item.id)}>{deletingId === item.id ? "删除中…" : "删除"}</button></article>)}</div></div><div className="panel readiness-panel"><div className="panel-heading"><h2>笔试说明</h2><Link to={routes.billing}>收费说明</Link></div><ul className="compact-list"><li><span>进入笔试</span><b>30 积分 / 次</b></li><li><span>答题方式</span><b>仅截屏回答</b></li><li><span>音频采集</span><b>不启用</b></li></ul></div></section>
   </main>;
 }
 
@@ -541,7 +542,7 @@ function NewWrittenExamPage() {
       setSaving(false);
     }
   };
-  return <main className="app-page narrow"><Link className="back-link" to={routes.writtenExams}>← 返回笔试模式</Link><PageHeader eyebrow="NEW WRITTEN EXAM" title="创建一场笔试" detail="笔试模式只使用截屏回答，不启用收音和实时转写。" /><form className="form-panel" onSubmit={submit}><label>笔试名称<input value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} placeholder="例如：算法笔试" /></label><label>目标岗位<input value={form.role} onChange={event => setForm({ ...form, role: event.target.value })} placeholder="例如：算法工程师" /></label><label>公司（可选）<input value={form.company} onChange={event => setForm({ ...form, company: event.target.value })} placeholder="例如：示例科技" /></label>{error ? <div className="inline-error" role="alert">{error}</div> : null}<div className="form-actions"><Link className="button ghost" to={routes.writtenExams}>取消</Link><button className="button primary" type="submit" disabled={saving}>{saving ? "创建中…" : "保存并准备 →"}</button></div><small className="saved-note">有效时间会员免费进入笔试；没有会员时成功进入固定扣除 30 积分，每次截屏回答按现有规则计费。</small></form></main>;
+  return <main className="app-page narrow"><Link className="back-link" to={routes.writtenExams}>← 返回笔试模式</Link><PageHeader eyebrow="NEW WRITTEN EXAM" title="创建一场笔试" detail="笔试模式只使用截屏回答，不启用收音和实时转写。" /><form className="form-panel" onSubmit={submit}><label>笔试名称<input value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} placeholder="例如：算法笔试" /></label><label>目标岗位<input value={form.role} onChange={event => setForm({ ...form, role: event.target.value })} placeholder="例如：算法工程师" /></label><label>公司（可选）<input value={form.company} onChange={event => setForm({ ...form, company: event.target.value })} placeholder="例如：示例科技" /></label>{error ? <div className="inline-error" role="alert">{error}</div> : null}<div className="form-actions"><Link className="button ghost" to={routes.writtenExams}>取消</Link><button className="button primary" type="submit" disabled={saving}>{saving ? "创建中…" : "保存并准备 →"}</button></div><small className="saved-note">成功进入笔试固定扣除 30 积分，每次截屏回答按现有规则计费。</small></form></main>;
 }
 
 function CompanionUpdateRequired({ requirement }: { readonly requirement: CompanionVersionRequirement }) {
@@ -791,7 +792,7 @@ function PreparationPage() {
       {versionRequirement?.status === "update-required" ? <CompanionUpdateRequired requirement={versionRequirement} /> : null}
       {startError ? <div className="inline-error written-start-error" role="alert">{startError}</div> : null}
       <div className="written-start-row">
-        <small>有效时间会员免费 · 非会员开始时扣除 30 积分</small>
+        <small>开始时扣除 30 积分</small>
         <button className="button primary" disabled={!canStart || starting} onClick={() => void startInterview()}>{starting ? "正在进入…" : "开始笔试 →"}</button>
       </div>
     </section>
@@ -898,6 +899,8 @@ function ReviewPage() {
   </main>;
 }
 
+function ResumeOptimizerRoutePage() { const { state, setState } = usePrototype(); return <ResumeOptimizerPage state={state} setState={setState} />; }
+
 function LibraryPage() { const { state, setState } = usePrototype(); return <LibraryManager state={state} setState={setState} />; }
 
 const money = (cents = 0) => new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2 }).format(cents / 100);
@@ -977,7 +980,7 @@ function NotFoundPage() { return <main className="center-page"><EmptyState title
 function RouteLoadingPage() { return <main className="route-loading-page" role="status" aria-label="页面加载中" />; }
 
 export function AppRoutes() {
-  return <Routes><Route element={<PublicLayout />}><Route path={routes.landing} element={<LandingPage />} /><Route path={routes.login} element={<LoginPage />} /><Route path={routes.publicGuide} element={<GuideRoutePage />} /><Route path={routes.invite()} element={<ReferralLandingPage />} /><Route path={routes.terms} element={<LegalPage kind="terms" />} /><Route path={routes.privacy} element={<LegalPage kind="privacy" />} /></Route><Route element={<ProtectedRoute />}><Route path="/app" element={<AppLayout />}><Route index element={<HomePage />} /><Route path="written-exams" element={<WrittenExamHomePage />} /><Route path="mock-interviews" element={<MockInterviewPage />} /><Route path="mock-interviews/:id" element={<MockInterviewPage />} /><Route path="interviews/new" element={<NewInterviewPage />} /><Route path="written-exams/new" element={<NewWrittenExamPage />} /><Route path="interviews/:id/prepare" element={<PreparationPage />} /><Route path="interviews/:id/review" element={<ReviewPage />} /><Route path="library" element={<LibraryPage />} /><Route path="billing" element={<BillingRoutePage />} /><Route path="partner-program" element={<PartnerProgramPage />} /><Route path="guide" element={<GuideRoutePage />} /><Route path="devices" element={<DevicesPage />} /><Route path="settings" element={<SettingsPage />} /></Route><Route path="/app/interviews/:id/live" element={<LivePage brand={<Logo />} accountMenu={<AccountMenu compact />} />} /></Route><Route path="/error" element={<RouteErrorPage />} /><Route path="*" element={<NotFoundPage />} /></Routes>;
+  return <Routes><Route element={<PublicLayout />}><Route path={routes.landing} element={<LandingPage />} /><Route path={routes.login} element={<LoginPage />} /><Route path={routes.publicGuide} element={<GuideRoutePage />} /><Route path={routes.invite()} element={<ReferralLandingPage />} /><Route path={routes.terms} element={<LegalPage kind="terms" />} /><Route path={routes.privacy} element={<LegalPage kind="privacy" />} /></Route><Route element={<ProtectedRoute />}><Route path="/app" element={<AppLayout />}><Route index element={<HomePage />} /><Route path="written-exams" element={<WrittenExamHomePage />} /><Route path="mock-interviews" element={<MockInterviewPage />} /><Route path="mock-interviews/:id" element={<MockInterviewPage />} /><Route path="interviews/new" element={<NewInterviewPage />} /><Route path="written-exams/new" element={<NewWrittenExamPage />} /><Route path="interviews/:id/prepare" element={<PreparationPage />} /><Route path="interviews/:id/review" element={<ReviewPage />} /><Route path="resume-optimizer" element={<ResumeOptimizerRoutePage />} /><Route path="library" element={<LibraryPage />} /><Route path="billing" element={<BillingRoutePage />} /><Route path="partner-program" element={<PartnerProgramPage />} /><Route path="guide" element={<GuideRoutePage />} /><Route path="devices" element={<DevicesPage />} /><Route path="settings" element={<SettingsPage />} /></Route><Route path="/app/interviews/:id/live" element={<LivePage brand={<Logo />} accountMenu={<AccountMenu compact />} />} /></Route><Route path="/error" element={<RouteErrorPage />} /><Route path="*" element={<NotFoundPage />} /></Routes>;
 }
 
 function DocumentTitleManager() {

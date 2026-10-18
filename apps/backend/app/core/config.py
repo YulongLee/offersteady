@@ -36,11 +36,9 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
         "http://127.0.0.1:5175",
-        "http://127.0.0.1:5187",
         "http://localhost:5173",
         "http://localhost:5174",
         "http://localhost:5175",
-        "http://localhost:5187",
         "null",
     ])
 
@@ -116,9 +114,8 @@ class Settings(BaseSettings):
     chat_qwen_api_key: str | None = None
     chat_qwen_base_url: str | None = None
     mock_interview_enabled: bool = False
-    global_mock_interview_enabled: bool = False
-    global_web_answer_enabled: bool = False
-    global_mock_interview_tts_ws_url: str = "wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime"
+    cn_resume_optimizer_enabled: bool = False
+    cn_resume_optimizer_timeout_seconds: float = Field(default=90.0, ge=1, le=90)
     mock_interview_tts_model: str = "qwen3-tts-instruct-flash-realtime"
     mock_interview_tts_voice: str = "Cherry"
     mock_interview_tts_ws_url: str = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
@@ -128,9 +125,7 @@ class Settings(BaseSettings):
     web_search_enabled: bool = False
     web_search_responses_base_url: str | None = None
     web_search_api_key: str | None = None
-    # Search providers may need several seconds to fan out to live sources;
-    # keep this bounded without turning normal provider latency into fallback.
-    web_search_timeout_seconds: float = 20.0
+    web_search_timeout_seconds: float = 2.5
     web_search_max_sources: int = 5
     web_search_max_context_characters: int = 3000
     web_search_points: int = 20
@@ -184,9 +179,9 @@ class Settings(BaseSettings):
     screenshot_stream_retry_after_seconds: int = 5
     realtime_control_worker_count: int = 8
     realtime_control_queue_max: int = 64
-    # Pairing/active-connection is a control-plane query. Keep the result
-    # cached for the same 10-second budget used by clients; binding mutations
-    # invalidate this cache immediately.
+    # Active-connection is a control-plane query. Keep results for the same
+    # 10-second budget returned to the desktop client; binding mutations
+    # invalidate the cache immediately.
     realtime_control_cache_ms: int = 10_000
     realtime_runtime_ttl_seconds: int = 7200
     live_task_runtime_ttl_seconds: int = 7200
@@ -199,8 +194,6 @@ class Settings(BaseSettings):
     redis_realtime_required: bool = False
     realtime_redis_snapshot_reload_on_access: bool = False
     realtime_desktop_heartbeat_ttl_seconds: int = 45
-    # Older companions may heartbeat more frequently than the server needs to
-    # persist. Keep the in-process lease fresh while bounding Redis writes.
     realtime_desktop_heartbeat_write_min_interval_seconds: float = 10.0
     realtime_web_heartbeat_ttl_seconds: int = 60
     interview_idle_warning_seconds: int = 18 * 60
@@ -238,19 +231,11 @@ class Settings(BaseSettings):
     runtime_performance_telemetry_enabled: bool = True
     runtime_performance_telemetry_ttl_seconds: int = 7 * 24 * 60 * 60
     runtime_performance_telemetry_sample_rate: float = 1.0
-    # Performance acknowledgements are diagnostic-only. Cache the ownership
-    # check briefly so repeated subtitle render samples do not reread the full
-    # interview row and its bound materials on every request.
-    runtime_performance_ack_session_cache_seconds: float = 60.0
     auth_jwt_secret: str = "offersteady-dev-jwt-secret"
     auth_jwt_issuer: str = "offersteady-backend"
     auth_access_token_ttl_seconds: int = 900
     auth_refresh_token_ttl_seconds: int = 14 * 24 * 60 * 60
     auth_password_hash_iterations: int = 120000
-    auth_global_password_min_length: int = 15
-    auth_global_password_max_length: int = 128
-    auth_global_login_attempt_limit: int = 10
-    auth_global_login_window_seconds: int = 900
     auth_wechat_provider_mode: str = "compatible"
     auth_wechat_app_id: str = "offersteady-dev-wechat-app"
     auth_wechat_callback_url: str = "http://127.0.0.1:8000/api/v1/auth/wechat/callback"
@@ -273,22 +258,6 @@ class Settings(BaseSettings):
     alipay_review_login_enabled: bool = False
     alipay_review_phone: str | None = None
     alipay_review_code: str | None = None
-    auth_email_enabled: bool = False
-    auth_email_provider_mode: Literal["fake", "smtp"] = "fake"
-    auth_email_code_pepper: str | None = None
-    auth_email_ttl_seconds: int = 600
-    auth_email_send_interval_seconds: int = 60
-    auth_email_daily_limit: int = 20
-    auth_email_verify_attempt_limit: int = 5
-    auth_email_fake_code: str = "123456"
-    auth_email_smtp_host: str | None = None
-    auth_email_smtp_port: int = 587
-    auth_email_smtp_username: str | None = None
-    auth_email_smtp_password: str | None = None
-    auth_email_smtp_ssl: bool = False
-    auth_email_smtp_starttls: bool = True
-    auth_email_from_address: str | None = None
-    auth_email_from_name: str = "OfferSteady"
     admin_enabled: bool = False
     admin_allowed_origins: list[str] = Field(default_factory=list)
     admin_session_ttl_seconds: int = 8 * 60 * 60
@@ -314,23 +283,6 @@ class Settings(BaseSettings):
     admin_capacity_error_rate_warning_percent: float = 2.0
     admin_capacity_error_rate_critical_percent: float = 5.0
 
-    # Baidu PC ranking is an opt-in, server-side SEO observation path.
-    baidu_ranking_enabled: bool = False
-    baidu_ranking_endpoint: str = "https://seozbbdpcpm.api.bdymkt.com/seo/baidu/pc/ranking"
-    baidu_ranking_access_key: str | None = None
-    baidu_ranking_secret_key: str | None = None
-    baidu_ranking_app_code: str | None = None
-    baidu_ranking_domain: str = "mianshiwen.cn"
-    baidu_ranking_keywords: list[str] = Field(default_factory=lambda: [
-        "AI面试助手", "面试助手", "AI面试辅助", "实时面试辅助", "面试AI",
-        "AI面试工具", "AI面试实时回答", "程序员面试助手", "AI面试助手哪个好", "AI面试助手价格",
-    ])
-    baidu_ranking_timezone: str = "Asia/Shanghai"
-    baidu_ranking_timeout_seconds: float = 15.0
-    baidu_ranking_retry_attempts: int = 1
-    baidu_ranking_manual_refresh_enabled: bool = True
-    baidu_ranking_manual_refresh_limit_per_hour: int = 3
-
     # Promotion analytics is an isolated, opt-in side path. Keeping collection
     # disabled by default prevents unfinished/local builds from changing live traffic.
     promotion_enabled: bool = False
@@ -351,24 +303,21 @@ class Settings(BaseSettings):
     promotion_redirect_rate_limit_per_minute: int = 120
     promotion_qualification_rate_limit_per_minute: int = 30
     promotion_claim_rate_limit_per_minute: int = 20
+    partner_program_enabled: bool = False
+    partner_commission_rate_bps: int = Field(default=2000, ge=1, le=10_000)
+    partner_commission_rule_version: int = Field(default=1, ge=1)
+    partner_eligible_order_days: int = Field(default=90, ge=1, le=365)
+    partner_refund_hold_days: int = Field(default=7, ge=0, le=365)
+    partner_minimum_payout_cents: int = Field(default=10_000, ge=1)
+    partner_agreement_version: str = "2026-09-v1"
+    partner_projection_batch_size: int = Field(default=200, ge=1, le=1000)
+    partner_payout_profile_enabled: bool = False
+    partner_payout_encryption_key: str | None = None
+    partner_payout_key_version: int = Field(default=1, ge=1)
+    partner_payout_retention_days: int = Field(default=730, ge=30, le=3650)
 
     public_web_base_url: str = "http://127.0.0.1:5173"
     checkout_provider: str = ""
-    global_commerce_enabled: bool = False
-    global_commerce_provider_mode: Literal["test", "live"] = "test"
-    creem_test_base_url: str = "https://test-api.creem.io"
-    creem_live_base_url: str = "https://api.creem.io"
-    creem_test_api_key: str | None = None
-    creem_live_api_key: str | None = None
-    creem_test_webhook_secret: str | None = None
-    creem_live_webhook_secret: str | None = None
-    creem_checkout_success_url: str | None = None
-    creem_http_timeout_seconds: float = 8.0
-    creem_http_retry_attempts: int = 2
-    global_terms_url: str | None = None
-    global_privacy_url: str | None = None
-    global_refund_policy_url: str | None = None
-    global_fair_use_policy_url: str | None = None
     mzfpay_base_url: str = "https://pay.mzfpay.com"
     mzfpay_pid: str | None = None
     mzfpay_key: str | None = None

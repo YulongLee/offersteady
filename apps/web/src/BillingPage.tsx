@@ -132,6 +132,7 @@ interface PointsLedgerDisplayEntry {
 
 const consumptionCategory = (entry: PointsLedgerEntry) => {
   if (entry.points >= 0) return null;
+  if (entry.kind === "resume_optimizer_charge") return "resume-optimizer";
   const marker = `${entry.kind} ${entry.description}`.toLowerCase();
   if (marker.includes("screenshot") || marker.includes("截图"))
     return "screenshot-answer";
@@ -154,6 +155,7 @@ const consumptionCategory = (entry: PointsLedgerEntry) => {
 };
 
 const consumptionDescription = (category: string, fallback: string) => {
+  if (category === "resume-optimizer") return "简历优化扣费";
   if (category === "answer") return "普通回答消费";
   if (category === "screenshot-answer") return "截图回答消费";
   if (category === "knowledge-index") return "知识材料制作消费";
@@ -187,7 +189,7 @@ export function summarizePointsLedger(
     seenReferences.add(entry.referenceId);
     const category = consumptionCategory(entry);
     if (!category) {
-      displayEntries.push({ ...entry, count: 1, isConsumption: false });
+      displayEntries.push({ ...entry, description: entry.kind === "resume_optimizer_refund" ? "简历优化退还" : entry.description, count: 1, isConsumption: false });
       continue;
     }
     const existing = consumptionGroups.get(category);

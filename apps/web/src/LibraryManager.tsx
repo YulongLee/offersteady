@@ -127,7 +127,7 @@ export function LibraryManager({ state, setState }: Props) {
   const refreshFromBackend = async (signal?: AbortSignal) => {
     const generation = ++refreshGenerationRef.current;
     const next = await runAdapterOperation(
-      (requestSignal) => interviewAppAdapter.loadState(requestSignal, { force: true }),
+      (requestSignal) => interviewAppAdapter.loadState(requestSignal),
       signal,
     );
     if (generation === refreshGenerationRef.current) setState(next);
@@ -836,6 +836,7 @@ export function LibraryManager({ state, setState }: Props) {
           <h1>面试资料</h1>
           <p>{tabCopy[tab].detail}</p>
         </div>
+        {tab === "resume" ? <Link className="button ghost" to={routes.resumeOptimizer}>简历优化 →</Link> : null}
         <button className="button primary" onClick={openPrimary}>
           {tabCopy[tab].action}
         </button>

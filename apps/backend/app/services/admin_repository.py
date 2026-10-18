@@ -15,7 +15,6 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg.rows import dict_row
-from psycopg.types.json import Jsonb
 
 from app.core.config import REPO_ROOT, Settings
 from app.services.postgres_migrations import apply_sql_migrations
@@ -546,58 +545,6 @@ class AdminRepository:
         )
         return int(row["earliest"]) if row and row["earliest"] is not None else None
 
-    def list_baidu_keywords(self, *, domain: str, include_inactive: bool = True) -> list[dict[str, Any]]:
-        where = "" if include_inactive else " AND status = 'active'"
-        return self._all(
-            f"SELECT keyword_id, domain, keyword, status, created_at_ms, updated_at_ms FROM baidu_ranking_keywords WHERE domain = %s{where} ORDER BY status, keyword",
-            (domain,),
-        )
-
-    def upsert_baidu_keyword(self, *, domain: str, keyword: str, status: str = "active") -> dict[str, Any]:
-        current = now_ms()
-        keyword_id = f"baidu-keyword-{uuid4().hex}"
-        with self.connect() as connection, connection.cursor() as cursor:
-            cursor.execute(
-                """INSERT INTO baidu_ranking_keywords (keyword_id, domain, keyword, status, created_at_ms, updated_at_ms)
-                VALUES (%s,%s,%s,%s,%s,%s)
-                ON CONFLICT (domain, keyword) DO UPDATE SET status = EXCLUDED.status, updated_at_ms = EXCLUDED.updated_at_ms
-                RETURNING keyword_id, domain, keyword, status, created_at_ms, updated_at_ms""",
-                (keyword_id, domain, keyword, status, current, current),
-            )
-            row = cursor.fetchone(); connection.commit()
-        return dict(row)
-
-    def set_baidu_keyword_status(self, *, keyword_id: str, status: str) -> dict[str, Any] | None:
-        with self.connect() as connection, connection.cursor() as cursor:
-            cursor.execute("UPDATE baidu_ranking_keywords SET status=%s, updated_at_ms=%s WHERE keyword_id=%s RETURNING keyword_id, domain, keyword, status, created_at_ms, updated_at_ms", (status, now_ms(), keyword_id))
-            row = cursor.fetchone(); connection.commit()
-        return dict(row) if row else None
-
-    def upsert_baidu_snapshot(self, payload: dict[str, Any]) -> dict[str, Any]:
-        with self.connect() as connection, connection.cursor() as cursor:
-            cursor.execute(
-                """INSERT INTO baidu_ranking_snapshots (snapshot_id, keyword_id, domain, keyword, observed_date, observed_at_ms, status, results_json, top_rank, matched_url, matched_title, duration_ms, safe_error_code, created_at_ms)
-                VALUES (%(snapshot_id)s,%(keyword_id)s,%(domain)s,%(keyword)s,%(observed_date)s,%(observed_at_ms)s,%(status)s,%(results_json)s,%(top_rank)s,%(matched_url)s,%(matched_title)s,%(duration_ms)s,%(safe_error_code)s,%(created_at_ms)s)
-                ON CONFLICT (keyword_id, observed_date) DO UPDATE SET observed_at_ms=EXCLUDED.observed_at_ms,status=EXCLUDED.status,results_json=EXCLUDED.results_json,top_rank=EXCLUDED.top_rank,matched_url=EXCLUDED.matched_url,matched_title=EXCLUDED.matched_title,duration_ms=EXCLUDED.duration_ms,safe_error_code=EXCLUDED.safe_error_code
-                RETURNING *""",
-                {**payload, "results_json": Jsonb(payload.get("results_json", []))},
-            )
-            row = cursor.fetchone(); connection.commit()
-        return dict(row)
-
-    def baidu_ranking_overview(self, *, domain: str) -> dict[str, Any]:
-        keywords = self.list_baidu_keywords(domain=domain)
-        items: list[dict[str, Any]] = []
-        with self.connect(readonly=True) as connection, connection.cursor() as cursor:
-            for keyword in keywords:
-                cursor.execute("SELECT * FROM baidu_ranking_snapshots WHERE keyword_id=%s ORDER BY observed_date DESC LIMIT 2", (keyword["keyword_id"],))
-                snapshots = [dict(row) for row in cursor.fetchall()]
-                latest = snapshots[0] if snapshots else None
-                previous = snapshots[1] if len(snapshots) > 1 else None
-                item = {**keyword, "latest": latest, "previousRank": previous.get("top_rank") if previous else None, "rankDelta": (int(latest["top_rank"]) - int(previous["top_rank"])) if latest and latest.get("top_rank") is not None and previous and previous.get("top_rank") is not None else None}
-                items.append(item)
-        return {"domain": domain, "items": items, "lastSyncAtMs": max((int(i["latest"]["observed_at_ms"]) for i in items if i.get("latest")), default=None)}
-
     def cleanup_hourly_analytics(self, *, before_ms: int) -> int:
         with self.connect() as connection, connection.cursor() as cursor:
             cursor.execute(
@@ -676,58 +623,6 @@ class AdminRepository:
             ORDER BY u.created_at_ms DESC LIMIT %s OFFSET %s
             """,
             (pattern, pattern, pattern, limit, offset),
-        )
-
-    def list_global_members(self, *, search: str, limit: int, offset: int) -> list[dict[str, Any]]:
-        if self.settings.product_edition != "global":
-            raise LookupError("global_member_admin_unavailable")
-        normalized = search.strip()
-        pattern = f"%{normalized}%"
-        current = now_ms()
-        return self._all(
-            """
-            SELECT u.user_id, u.login_id AS email, u.display_name, u.created_at_ms,
-                   u.last_login_at_ms, active.offer_code AS current_offer_code,
-                   active.display_name AS current_plan_name,
-                   active.ends_at_ms AS current_ends_at_ms,
-                   COALESCE(stats.order_count, 0)::INTEGER AS order_count,
-                   COALESCE(stats.paid_order_count, 0)::INTEGER AS paid_order_count
-            FROM auth_users u
-            LEFT JOIN LATERAL (
-              SELECT e.offer_code, e.ends_at_ms, p.display_name
-              FROM global_commerce_entitlements e
-              JOIN global_commerce_plan_versions p
-                ON p.offer_code = e.offer_code AND p.plan_version = e.plan_version
-              WHERE e.user_id = u.user_id AND e.status = 'active'
-                AND e.starts_at_ms <= %s
-                AND (e.ends_at_ms IS NULL OR e.ends_at_ms > %s)
-              ORDER BY e.full_product_enabled DESC,
-                       (e.offer_code = 'global-free') ASC,
-                       e.starts_at_ms DESC
-              LIMIT 1
-            ) active ON TRUE
-            LEFT JOIN LATERAL (
-              SELECT COUNT(*) AS order_count,
-                     COUNT(*) FILTER (WHERE status = 'paid') AS paid_order_count
-              FROM global_commerce_orders o WHERE o.user_id = u.user_id
-            ) stats ON TRUE
-            WHERE (%s = '' OR u.user_id ILIKE %s OR u.login_id ILIKE %s OR u.display_name ILIKE %s)
-            ORDER BY u.created_at_ms DESC
-            LIMIT %s OFFSET %s
-            """,
-            (current, current, normalized, pattern, pattern, pattern, limit, offset),
-        )
-
-    def global_member_identity(self, user_id: str) -> dict[str, Any] | None:
-        if self.settings.product_edition != "global":
-            raise LookupError("global_member_admin_unavailable")
-        return self._one(
-            """
-            SELECT user_id, login_id AS email, display_name, created_at_ms,
-                   updated_at_ms, last_login_at_ms, last_login_provider
-            FROM auth_users WHERE user_id = %s
-            """,
-            (user_id,),
         )
 
     def payment_revenue_summary(self) -> dict[str, Any]:
@@ -1147,15 +1042,7 @@ class AdminRepository:
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0025_referral_ledger_constraint_repair_v2.sql",
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0029_early_referral_mutual_rewards.sql",
             Path(REPO_ROOT) / "apps/backend/migrations/versions/0031_capacity_metric_granularity.sql",
-            Path(REPO_ROOT) / "apps/backend/migrations/versions/0047_baidu_ranking_monitoring.sql",
         ]
-        if self.settings.product_edition == "global":
-            migrations.extend([
-                Path(REPO_ROOT) / "apps/backend/migrations/versions/0040_global_creem_commerce.sql",
-                Path(REPO_ROOT) / "apps/backend/migrations/versions/0042_global_creem_lifecycle_hardening.sql",
-                Path(REPO_ROOT) / "apps/backend/migrations/versions/0043_global_creem_admin_configuration.sql",
-                Path(REPO_ROOT) / "apps/backend/migrations/versions/0045_global_commerce_catalog_v2.sql",
-            ])
         with self.connect() as connection, connection.cursor() as cursor:
             apply_sql_migrations(cursor, migrations)
             connection.commit()

@@ -8,3 +8,5 @@ export const BillingPage = lazy(() => import("./BillingPage").then(module => ({ 
 export const GuidePage = lazy(() => import("./GuidePage").then(module => ({ default: module.GuidePage })));
 export const LegalPage = lazy(() => import("./LegalPage").then(module => ({ default: module.LegalPage })));
 export const AnswerWorkspace = lazy(() => import("./AnswerWorkspace").then(module => ({ default: module.AnswerWorkspace })));
+
+export const ResumeOptimizerPage = lazy(() => import("./ResumeOptimizerPage").then(module => ({ default: module.ResumeOptimizerPage })));

@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import shutil
-import re
 from collections import deque
 from pathlib import Path
 from threading import Lock
@@ -20,7 +19,6 @@ CAPACITY_KEY = "offersteady:admin:capacity:v1"
 REQUEST_WINDOW_MS = 5 * 60 * 1000
 DISPLAY_WINDOW_MS = 60 * 60 * 1000
 PEAK_PERSISTENCE_WARNING_INTERVAL_MS = 5 * 60 * 1000
-REQUEST_BREAKDOWN_ROUTE_LIMIT = 8
 logger = logging.getLogger(__name__)
 
 
@@ -48,14 +46,11 @@ def capacity_level(value: float | int | None, warning: float | int | None, criti
 
 class RequestWindow:
     def __init__(self) -> None:
-        self._events: deque[tuple[int, float, int, str, str]] = deque(maxlen=20_000)
+        self._events: deque[tuple[int, float, int, str]] = deque(maxlen=20_000)
         self._lock = Lock()
 
     @staticmethod
     def request_class(path: str) -> str:
-        path = path.split("?", 1)[0]
-        if path.startswith("/api/v1/admin/"):
-            return "telemetry"
         if path.startswith("/api/v1/realtime-speech/sessions/") and path.endswith("/snapshot"):
             return "recovery_snapshot"
         if path.endswith("/stream") and (
@@ -63,62 +58,14 @@ class RequestWindow:
             or path.startswith("/api/v1/screenshot-answer/")
         ):
             return "sse_stream"
-        if any(
-            marker in path
-            for marker in (
-                "/performance-ack",
-                "/web-heartbeat",
-                "/device-status",
-                "/heartbeat",
-                "/active-connection",
-                "/idle-status",
-            )
-        ):
-            return "telemetry"
         return "control_api"
-
-    @staticmethod
-    def normalized_route(path: str) -> str:
-        """Return a stable route template without query strings or identifiers."""
-        clean = path.split("?", 1)[0].split("#", 1)[0]
-        segments = clean.split("/")
-        dynamic_parent = {
-            "sessions",
-            "interviews",
-            "desktop-devices",
-            "capture-requests",
-            "materials",
-            "documents",
-            "tasks",
-        }
-        normalized: list[str] = []
-        for index, segment in enumerate(segments):
-            if not segment:
-                continue
-            previous = segments[index - 1] if index else ""
-            if previous in dynamic_parent or re.fullmatch(r"(?:session|device|capture|desktop-binding|task|request)-[A-Za-z0-9_-]+", segment):
-                normalized.append("{id}")
-            elif re.fullmatch(r"[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,}", segment):
-                normalized.append("{id}")
-            else:
-                normalized.append(segment)
-        return "/" + "/".join(normalized)
-
-    @staticmethod
-    def _breakdown_class(request_class: str) -> str:
-        return {
-            "control_api": "user_api",
-            "telemetry": "telemetry",
-            "recovery_snapshot": "recovery_snapshot",
-            "sse_stream": "sse_stream",
-        }.get(request_class, "user_api")
 
     def record(self, *, path: str, elapsed_ms: float, status_code: int) -> None:
         if path in {"/healthz", "/api/v1/admin/capacity", "/api/v1/admin/server-health"}:
             return
         current = _now_ms()
         with self._lock:
-            self._events.append((current, elapsed_ms, status_code, self.request_class(path), self.normalized_route(path)))
+            self._events.append((current, elapsed_ms, status_code, self.request_class(path)))
             self._prune(current)
 
     def summary(self, current: int | None = None) -> dict[str, float]:
@@ -130,12 +77,10 @@ class RequestWindow:
         durations = [item[1] for item in ordinary_events]
         errors = sum(1 for item in ordinary_events if item[2] >= 500)
         span_minutes = max(1.0, min(5.0, (now - events[0][0]) / 60_000)) if events else 1.0
-        result: dict[str, Any] = {
+        result = {
             "apiP95Ms": round(percentile(durations, 0.95) or 0.0, 2),
             "apiErrorRate": round(errors * 100 / len(ordinary_events), 2) if ordinary_events else 0.0,
             "requestsPerMinute": round(len(events) / span_minutes, 2),
-            "userApiP95Ms": round(percentile([item[1] for item in events if self._breakdown_class(item[3]) == "user_api"], 0.95) or 0.0, 2),
-            "telemetryP95Ms": round(percentile([item[1] for item in events if self._breakdown_class(item[3]) == "telemetry"], 0.95) or 0.0, 2),
         }
         for request_class, prefix in (
             ("control_api", "controlApi"),
@@ -145,37 +90,6 @@ class RequestWindow:
             classified = [item[1] for item in events if item[3] == request_class]
             result[f"{prefix}P95Ms"] = round(percentile(classified, 0.95) or 0.0, 2)
             result[f"{prefix}RequestCount"] = len(classified)
-        class_summary: dict[str, dict[str, float | int]] = {}
-        for breakdown_class in ("user_api", "telemetry", "recovery_snapshot", "sse_stream"):
-            classified = [item for item in events if self._breakdown_class(item[3]) == breakdown_class]
-            class_durations = [item[1] for item in classified]
-            error_count = sum(1 for item in classified if item[2] >= 500)
-            class_summary[breakdown_class] = {
-                "requestCount": len(classified),
-                "p95Ms": round(percentile(class_durations, 0.95) or 0.0, 2),
-                "errorCount": error_count,
-                "errorRate": round(error_count * 100 / len(classified), 2) if classified else 0.0,
-            }
-        route_groups: dict[tuple[str, str], list[tuple[int, float, int, str, str]]] = {}
-        for event in events:
-            key = (self._breakdown_class(event[3]), event[4])
-            route_groups.setdefault(key, []).append(event)
-        slow_routes = []
-        for (breakdown_class, route), grouped in route_groups.items():
-            route_durations = [item[1] for item in grouped]
-            error_count = sum(1 for item in grouped if item[2] >= 500)
-            slow_routes.append({
-                "route": route,
-                "class": breakdown_class,
-                "requestCount": len(grouped),
-                "p95Ms": round(percentile(route_durations, 0.95) or 0.0, 2),
-                "errorCount": error_count,
-                "errorRate": round(error_count * 100 / len(grouped), 2),
-            })
-        result["requestBreakdown"] = {
-            "classes": class_summary,
-            "slowRoutes": sorted(slow_routes, key=lambda item: (-float(item["p95Ms"]), -int(item["requestCount"])))[:REQUEST_BREAKDOWN_ROUTE_LIMIT],
-        }
         # Preserve the existing response fields for older admin clients while
         # exposing the accurate full-connection duration name to new clients.
         result["sseHandshakeP95Ms"] = result["sseStreamDurationP95Ms"]
@@ -198,8 +112,6 @@ class AdminCapacityMonitor:
         self._previous_cpu: tuple[int, float] | None = None
         self._server_cache: dict[str, Any] | None = None
         self._server_cache_at_ms = 0
-        self._live_session_cache: set[str] | None = None
-        self._live_session_cache_at_ms = 0
         self._last_peak_persistence_warning_at_ms = 0
         self._redis = (
             redis.Redis.from_url(
@@ -264,9 +176,7 @@ class AdminCapacityMonitor:
             ("diskPercent", "服务器磁盘", "%", 75, 90, "应用所在文件系统的整体使用率，不扫描文件内容。"),
             ("loadAverage1m", "系统 1 分钟负载", "load", None, None, "Linux 系统一分钟平均负载。"),
             ("uptimeSeconds", "服务器运行时长", "s", None, None, "Linux 主机或容器可见的运行时长。"),
-            ("apiP95Ms", "API P95（综合）", "ms", self.settings.admin_capacity_api_p95_warning_ms, self.settings.admin_capacity_api_p95_critical_ms, "最近 5 分钟所有普通后端请求的综合 P95；请结合分类指标判断用户请求是否变慢。"),
-            ("userApiP95Ms", "用户请求 P95", "ms", self.settings.admin_capacity_api_p95_warning_ms, self.settings.admin_capacity_api_p95_critical_ms, "最近 5 分钟用户业务请求耗时 P95，不包含后台遥测和实时流。"),
-            ("telemetryP95Ms", "后台遥测 P95", "ms", None, None, "最近 5 分钟设备连接、heartbeat 等后台遥测请求耗时 P95。"),
+            ("apiP95Ms", "API P95", "ms", self.settings.admin_capacity_api_p95_warning_ms, self.settings.admin_capacity_api_p95_critical_ms, "最近 5 分钟后端请求耗时 P95。"),
             ("apiErrorRate", "API 5xx 错误率", "%", self.settings.admin_capacity_error_rate_warning_percent, self.settings.admin_capacity_error_rate_critical_percent, "最近 5 分钟服务端错误占比。"),
             ("databaseConnections", "数据库连接", "条", database_limit * 0.7 if database_limit else None, database_limit * 0.9 if database_limit else None, "当前数据库连接数及其最大连接配额。"),
         ]
@@ -284,17 +194,6 @@ class AdminCapacityMonitor:
                 "description": description,
                 "points": [{"atMs": item["atMs"], "value": item.get(key)} for item in samples],
             })
-        request_breakdown = dict(current.get("requestBreakdown") or {})
-        request_breakdown["series"] = [
-            {
-                "atMs": int(item["atMs"]),
-                "classes": {
-                    key: float((item.get("requestBreakdown") or {}).get("classes", {}).get(key, {}).get("p95Ms") or 0.0)
-                    for key in ("user_api", "telemetry", "recovery_snapshot", "sse_stream")
-                },
-            }
-            for item in samples
-        ]
         return {
             "generatedAtMs": _now_ms(),
             "sampleIntervalSeconds": self.settings.admin_capacity_sample_interval_seconds,
@@ -309,15 +208,6 @@ class AdminCapacityMonitor:
                     "source": current.get("containerMemorySource"),
                 },
                 "hostMemoryPercent": current.get("hostMemoryPercent"),
-                "requestBreakdown": request_breakdown or {
-                    "classes": {
-                        "user_api": {"requestCount": 0, "p95Ms": 0.0, "errorCount": 0, "errorRate": 0.0},
-                        "telemetry": {"requestCount": 0, "p95Ms": 0.0, "errorCount": 0, "errorRate": 0.0},
-                        "recovery_snapshot": {"requestCount": 0, "p95Ms": 0.0, "errorCount": 0, "errorRate": 0.0},
-                        "sse_stream": {"requestCount": 0, "p95Ms": 0.0, "errorCount": 0, "errorRate": 0.0},
-                    },
-                    "slowRoutes": [],
-                },
                 "requestClasses": {
                     "controlApi": {
                         "p95Ms": current.get("controlApiP95Ms"),
@@ -364,7 +254,8 @@ class AdminCapacityMonitor:
             "supporting": {
                 "uptimeSeconds": current.get("uptimeSeconds"),
                 "requestsPerMinute": capacity["supporting"].get("requestsPerMinute"),
-                "requestBreakdown": capacity["supporting"].get("requestBreakdown"),
+                "containerMemory": capacity["supporting"].get("containerMemory"),
+                "hostMemoryPercent": capacity["supporting"].get("hostMemoryPercent"),
             },
         }
         with self._lock:
@@ -392,13 +283,6 @@ class AdminCapacityMonitor:
             devices = payload.get("devices", [])
             heartbeats = payload.get("heartbeats", [])
             receipts = [json.loads(item) for item in self._redis.hvals("offersteady:realtime:runtime:v2:receipts")]
-            live_session_ids = self._live_session_ids(current)
-            publisher_statuses = {
-                str(item.get("publisher_id")): item.get("status")
-                for raw_publisher in self._redis.hvals("offersteady:realtime:runtime:v2:publishers")
-                for item in [json.loads(raw_publisher)]
-                if item.get("publisher_id")
-            }
             online_devices = {
                 str(item.get("device_id"))
                 for item in devices
@@ -415,11 +299,6 @@ class AdminCapacityMonitor:
                 (str(item.get("session_id")), str(item.get("source_kind")), str(item.get("source_id")))
                 for item in receipts
                 if item.get("source_id") != "diagnostic-pcm-probe"
-                and (live_session_ids is None or str(item.get("session_id")) in live_session_ids)
-                and (
-                    not publisher_statuses
-                    or publisher_statuses.get(str(item.get("publisher_id"))) not in {"closed", "failed"}
-                )
                 and int(item.get("frame_count") or 0) > 0
                 and int(item.get("received_at_ms") or 0) >= current - 30_000
                 and item.get("asr_status") in {"pending", "accepted"}
@@ -431,28 +310,6 @@ class AdminCapacityMonitor:
             }
         except Exception:
             return {"activeWebSessions": None, "onlineDevices": None, "activeAudioStreams": None}
-
-    def _live_session_ids(self, current: int) -> set[str] | None:
-        """Return live interview ids so stale receipts cannot inflate capacity cards."""
-        with self._lock:
-            if self._live_session_cache is not None and current - self._live_session_cache_at_ms < 10_000:
-                return set(self._live_session_cache)
-        list_sessions = getattr(self.repository, "list_sessions", None)
-        if not callable(list_sessions):
-            return None
-        try:
-            rows = list_sessions(limit=5_000, offset=0)
-            live = {
-                str(row.get("session_id"))
-                for row in rows
-                if isinstance(row, dict) and row.get("status") == "live" and row.get("session_id")
-            }
-        except Exception:
-            return None
-        with self._lock:
-            self._live_session_cache = live
-            self._live_session_cache_at_ms = current
-        return set(live)
 
     def _resource_counts(self) -> dict[str, Any]:
         memory = self._memory_stats()
@@ -569,11 +426,9 @@ class AdminCapacityMonitor:
     def _memory_stats() -> dict[str, float | int | str | None]:
         """Return container memory and host memory separately.
 
-        Docker installations without a memory limit expose ``memory.max`` as
-        ``max``. In that case the process RSS is the only container-specific
-        usage signal; it is deliberately reported as a percentage of host
-        total memory and tagged with its source instead of pretending a host
-        percentage is a container percentage.
+        When Docker has no memory limit, use process RSS as the container-specific
+        signal and expose the host percentage separately. This avoids labeling the
+        whole host's memory as backend-container memory.
         """
         current: int | None = None
         maximum: int | None = None

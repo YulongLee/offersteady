@@ -6,3 +6,5 @@ export { BillingPage } from "./BillingPage";
 export { GuidePage } from "./GuidePage";
 export { LegalPage } from "./LegalPage";
 export { AnswerWorkspace } from "./AnswerWorkspace";
+export { MockInterviewPage } from "./MockInterviewPage";
+export { ResumeOptimizerPage } from "./ResumeOptimizerPage";

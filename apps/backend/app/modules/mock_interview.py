@@ -1,4 +1,4 @@
-"""Edition-gated mock interview API. Never exposes credentials or raw records."""
+"""Default-off CN mock interview API. Never exposes credentials or raw records."""
 from __future__ import annotations
 
 import asyncio
@@ -13,7 +13,7 @@ from app.core.config import get_settings
 from app.core.errors import DomainRequestError
 from app.core.logging import utc_now_iso
 from app.core.responses import success_response
-from app.deps import (authentication_service, billing_service, usage_billing_service, document_repository,
+from app.deps import (authentication_service, billing_service, document_repository,
     interview_session_repository, logger, realtime_speech_service, require_authenticated_context,
     storage_port, _configured_realtime_asr_gateway)
 from app.schemas.mock_interview import CreateMockInterviewRequest, SelectMockResumeRequest, MockWireCommand
@@ -30,11 +30,7 @@ router = APIRouter(prefix="/mock-interviews", tags=["mock-interview"])
 
 def enabled() -> bool:
     settings = get_settings()
-    return settings.global_mock_interview_enabled if settings.product_edition == "global" else settings.mock_interview_enabled
-
-
-def mock_billing_service():
-    return usage_billing_service() if get_settings().product_edition == "global" else billing_service()
+    return settings.product_edition == "cn" and settings.mock_interview_enabled
 
 
 @lru_cache(maxsize=1)
@@ -46,17 +42,12 @@ def mock_runtime() -> MockInterviewRuntime:
         raise mock_error("模拟面试服务尚未配置。", "mock_not_configured", 503)
     # Ensure additive migrations run after the existing session/billing schema.
     interview_session_repository()
-    mock_billing_service()
-    if settings.product_edition == "global":
-        from app.services.global_mock_interview_repository import GlobalMockInterviewRepository
-        repository = GlobalMockInterviewRepository(settings)
-    else:
-        repository = MockInterviewRepository(settings)
+    billing_service()
+    repository = MockInterviewRepository(settings)
     reader = MockResumeReader(settings, document_repository(), storage_port())
     return MockInterviewRuntime(repository, reader,
         MockInterviewJobs(repository, reader, MockInterviewGenerator(settings)), MockInterviewTts(settings),
-        MockInterviewAudio(gateway_factory=lambda: _configured_realtime_asr_gateway(settings, logger()),
-            interview_language="en-US" if settings.product_edition == "global" else "zh-CN"), realtime_speech_service())
+        MockInterviewAudio(gateway_factory=lambda: _configured_realtime_asr_gateway(settings, logger())), realtime_speech_service())
 
 
 def require_mock_runtime():
@@ -84,7 +75,7 @@ def list_mock(request: Request, auth=Depends(require_authenticated_context), run
 @router.post("")
 def create_mock(payload: CreateMockInterviewRequest, request: Request,
                 auth=Depends(require_authenticated_context), runtime=Depends(require_mock_runtime)):
-    mock_billing_service().state_for_user(user_id=auth.user_id)
+    billing_service().state_for_user(user_id=auth.user_id)
     row = runtime.repository.create(user_id=auth.user_id, now_ms=runtime.now_ms(),
         idempotency_key=payload.idempotency_key, title=payload.title, target_role=payload.target_role,
         expected_billing_class=payload.expected_billing_class)
@@ -189,7 +180,7 @@ async def mock_control(socket: WebSocket, session_id: str):
                 await runtime.detach(controller)
             try:
                 await socket.close()
-            except (RuntimeError, WebSocketDisconnect):
+            except RuntimeError:
                 pass
 
 
@@ -264,5 +255,5 @@ async def mock_microphone(socket: WebSocket, session_id: str):
                         await runtime.publish(controller)
             try:
                 await socket.close()
-            except (RuntimeError, WebSocketDisconnect):
+            except RuntimeError:
                 pass

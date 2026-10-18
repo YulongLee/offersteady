@@ -11,8 +11,8 @@ from app.ports.interview_session import (
     InterviewLanguage,
     ProgrammingLanguage,
     SessionUsageRecord,
-    SessionHeartbeatState,
 )
+from app.ports.interview_session import SessionHeartbeatState
 
 
 class InMemoryInterviewSessionRepository(InterviewSessionRepository):
@@ -30,18 +30,6 @@ class InMemoryInterviewSessionRepository(InterviewSessionRepository):
     def get_session(self, session_id: str) -> InterviewSessionRecord | None:
         record = self.sessions.get(session_id)
         return replace(record) if record else None
-
-    def get_heartbeat_state(self, session_id: str) -> SessionHeartbeatState | None:
-        record = self.sessions.get(session_id)
-        if record is None:
-            return None
-        return SessionHeartbeatState(
-            session_id=record.session_id,
-            owner_user_id=record.owner_user_id,
-            status=record.status,
-            started_at_ms=record.started_at_ms,
-            last_activity_at_ms=record.last_activity_at_ms,
-        )
 
     def list_sessions_for_user(self, *, user_id: str, status=None) -> list[InterviewSessionRecord]:
         items = [session for session in self.sessions.values() if session.owner_user_id == user_id]
@@ -73,6 +61,22 @@ class InMemoryInterviewSessionRepository(InterviewSessionRepository):
             self.sessions[session_id] = updated
             return replace(updated)
 
+    def update_audio_mode_if_preparing(
+        self, *, user_id: str, session_id: str, interview_audio_mode: InterviewAudioMode, updated_at_ms: int
+    ) -> InterviewSessionRecord | None:
+        with self._session_lock:
+            session = self.sessions.get(session_id)
+            if session is None or session.owner_user_id != user_id or session.status != "preparing":
+                return None
+            updated = replace(
+                session,
+                interview_audio_mode=interview_audio_mode,
+                updated_at_ms=updated_at_ms,
+                last_activity_at_ms=updated_at_ms,
+            )
+            self.sessions[session_id] = updated
+            return replace(updated)
+
     def update_programming_if_preparing(
         self, *, user_id: str, session_id: str, programming_required: bool,
         programming_language: ProgrammingLanguage | None, updated_at_ms: int
@@ -85,22 +89,6 @@ class InMemoryInterviewSessionRepository(InterviewSessionRepository):
                 session,
                 programming_required=programming_required,
                 programming_language=programming_language,
-                updated_at_ms=updated_at_ms,
-                last_activity_at_ms=updated_at_ms,
-            )
-            self.sessions[session_id] = updated
-            return replace(updated)
-
-    def update_audio_mode_if_preparing(
-        self, *, user_id: str, session_id: str, interview_audio_mode: InterviewAudioMode, updated_at_ms: int
-    ) -> InterviewSessionRecord | None:
-        with self._session_lock:
-            session = self.sessions.get(session_id)
-            if session is None or session.owner_user_id != user_id or session.status != "preparing":
-                return None
-            updated = replace(
-                session,
-                interview_audio_mode=interview_audio_mode,
                 updated_at_ms=updated_at_ms,
                 last_activity_at_ms=updated_at_ms,
             )
@@ -180,3 +168,15 @@ class InMemoryInterviewSessionRepository(InterviewSessionRepository):
 
     def list_usage_records(self, *, session_id: str) -> list[SessionUsageRecord]:
         return [replace(item) for item in self.usage_records.get(session_id, [])]
+
+    def get_heartbeat_state(self, session_id: str) -> SessionHeartbeatState | None:
+        record = self.sessions.get(session_id)
+        if record is None:
+            return None
+        return SessionHeartbeatState(
+            session_id=record.session_id,
+            owner_user_id=record.owner_user_id,
+            status=record.status,
+            started_at_ms=record.started_at_ms,
+            last_activity_at_ms=record.last_activity_at_ms,
+        )

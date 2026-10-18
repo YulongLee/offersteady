@@ -5,7 +5,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core.logging import utc_now_iso
 from app.core.responses import success_response
-from app.deps import authorize_global_feature, document_service, optional_authenticated_context, resolve_owned_user_id
+from app.deps import document_service, optional_authenticated_context, resolve_owned_user_id
 from app.ports.authentication import AuthenticatedRequestContext
 from app.schemas.foundation import ApiEnvelope, ModuleDescriptor
 from app.schemas.material_upload import CompleteUploadRequest, CreatePastedJobDescriptionRequest, MaterialUploadCompletionResponse, UploadIntentRequest, UploadIntentResponse
@@ -39,7 +39,6 @@ async def create_job_description_upload_intent(
     service: DocumentService = Depends(document_service),
 ) -> ApiEnvelope[UploadIntentResponse]:
     user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
-    authorize_global_feature(user_id=user_id, feature="resumeJd")
     intent = service.create_upload_intent(
         user_id=user_id,
         document_kind="job_description",
@@ -137,7 +136,6 @@ async def create_pasted_job_description(
     service: DocumentService = Depends(document_service),
 ) -> ApiEnvelope[MaterialUploadCompletionResponse]:
     user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
-    authorize_global_feature(user_id=user_id, feature="resumeJd")
     completed = service.create_pasted_job_description(
         user_id=user_id,
         text=request.text,

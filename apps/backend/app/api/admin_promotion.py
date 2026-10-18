@@ -19,10 +19,14 @@ from app.schemas.promotion import (
     PromotionCostReverse,
     PromotionLinkCreate,
     PromotionLinkUpdate,
+    PartnerPayoutTransition,
+    PartnerProgramSettingsUpdate,
+    PartnerRefundRequest,
 )
 from app.services.admin_service import AdminPrincipal
 from app.services.promotion_analytics_job import PromotionAnalyticsJob
 from app.services.promotion_repository import ATTRIBUTION_MODELS, PromotionEventQueue, PromotionRepository, now_ms
+from app.services.partner_program import PartnerProgramRepository
 
 
 admin_promotion_router = APIRouter(prefix="/admin/promotion", tags=["admin-promotion"])
@@ -34,6 +38,14 @@ def repository() -> PromotionRepository:
     if not settings.promotion_enabled:
         raise RuntimeError("promotion_center_disabled")
     return PromotionRepository(settings)
+
+
+@lru_cache(maxsize=1)
+def partner_repository() -> PartnerProgramRepository:
+    settings = get_settings()
+    if not settings.partner_program_enabled or not settings.promotion_enabled:
+        raise RuntimeError("partner_program_disabled")
+    return PartnerProgramRepository(settings)
 
 
 def _camel(value: str) -> str:
@@ -63,7 +75,7 @@ def _call(callback):
     except TimeoutError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except RuntimeError as exc:
-        if str(exc) == "promotion_center_disabled":
+        if str(exc) in {"promotion_center_disabled", "partner_program_disabled"}:
             raise HTTPException(status_code=404, detail="Not found") from exc
         raise
 
@@ -152,6 +164,146 @@ def _compact_funnel(metrics: dict[str, Any] | None) -> list[dict[str, Any]]:
         })
         previous = count
     return result
+
+
+@admin_promotion_router.get("/partner-settings")
+def partner_settings(principal: Annotated[AdminPrincipal, Depends(permission("promotion.read"))]):
+    return {"data": _serialize(_call(lambda: partner_repository().activity_settings()))}
+
+
+@admin_promotion_router.put("/partner-settings")
+def update_partner_settings(
+    payload: PartnerProgramSettingsUpdate,
+    request: Request,
+    principal: Annotated[AdminPrincipal, Depends(permission("promotion.manage"))],
+):
+    if not payload.confirmed:
+        raise HTTPException(status_code=422, detail="Confirmation is required")
+    row = _call(lambda: partner_repository().update_activity_settings(
+        enabled=payload.enabled,
+        updated_by_user_id=principal.user_id,
+    ))
+    _audit(
+        request,
+        principal,
+        action="promotion.partner.settings.update",
+        resource_type="partner_program_settings",
+        resource_id="default",
+        reason=payload.reason,
+        details={"enabled": payload.enabled, "config_version": row["config_version"]},
+    )
+    return {"data": _serialize(row)}
+
+
+@admin_promotion_router.get("/partners")
+def list_partners(principal: Annotated[AdminPrincipal, Depends(permission("promotion.read"))], limit: int = 100):
+    rows = _call(lambda: partner_repository().list_partners(limit=limit))
+    return {"data": {"items": _serialize(rows)}}
+
+
+@admin_promotion_router.get("/partner-payouts")
+def list_partner_payouts(
+    principal: Annotated[AdminPrincipal, Depends(permission("promotion.read"))],
+    status: str | None = None,
+    limit: int = 100,
+):
+    if status not in {None, "requested", "approved", "rejected", "paid"}:
+        raise HTTPException(status_code=422, detail="invalid_partner_payout_status")
+    rows = _call(lambda: partner_repository().list_payouts(status=status, limit=limit))
+    return {"data": {"items": _serialize(rows)}}
+
+
+@admin_promotion_router.get("/partner-reconciliation")
+def partner_reconciliation(principal: Annotated[AdminPrincipal, Depends(permission("promotion.read"))]):
+    return {"data": _serialize(_call(lambda: partner_repository().reconciliation_summary()))}
+
+
+@admin_promotion_router.get("/partner-commission-orders")
+def partner_commission_orders(
+    principal: Annotated[AdminPrincipal, Depends(permission("promotion.read"))],
+    state: str | None = None,
+    start_ms: int | None = None,
+    end_ms: int | None = None,
+    limit: int = 100,
+    offset: int = 0,
+):
+    rows = _call(lambda: partner_repository().list_commission_orders(
+        state=state, start_ms=start_ms, end_ms=end_ms, limit=limit, offset=offset,
+    ))
+    return {"data": {"items": _serialize(rows), "limit": min(max(1, limit), 200), "offset": min(max(0, offset), 10_000)}}
+
+
+@admin_promotion_router.post("/partner-payouts/{payout_request_id}/reveal")
+def reveal_partner_payout_profile(
+    payout_request_id: str,
+    request: Request,
+    principal: Annotated[AdminPrincipal, Depends(permission("promotion.payout.manage"))],
+):
+    try:
+        row = _call(lambda: partner_repository().reveal_payout_profile(payout_request_id=payout_request_id))
+    except Exception:
+        ip_hash, user_agent_hash = _client_hashes(request)
+        admin_service().audit(
+            principal=principal, action="promotion.partner.payout.reveal", resource_type="partner_payout",
+            resource_id=payout_request_id, reason="manual payout processing", request_id=_request_id(request),
+            result="failure", details={"status": "failed"}, ip_hash=ip_hash, user_agent_hash=user_agent_hash,
+        )
+        raise
+    _audit(request, principal, action="promotion.partner.payout.reveal", resource_type="partner_payout",
+           resource_id=payout_request_id, reason="manual payout processing", details={"status": "revealed"})
+    from fastapi.responses import JSONResponse
+    return JSONResponse(content={"data": _serialize(row)}, headers={"Cache-Control": "no-store", "Pragma": "no-cache"})
+
+
+@admin_promotion_router.post("/partners/project")
+def project_partner_commissions(
+    request: Request,
+    principal: Annotated[AdminPrincipal, Depends(permission("promotion.payout.manage"))],
+    limit: int = 200,
+):
+    result = _call(lambda: partner_repository().project_paid_orders(limit=limit))
+    _audit(request, principal, action="promotion.partner.project", resource_type="partner_commission", resource_id=None,
+           reason="bounded partner commission projection", details={"status": "completed"})
+    return {"data": _serialize(result)}
+
+
+@admin_promotion_router.post("/partner-refunds")
+def record_partner_refund(
+    payload: PartnerRefundRequest,
+    request: Request,
+    principal: Annotated[AdminPrincipal, Depends(permission("promotion.payout.manage"))],
+):
+    row = _call(lambda: partner_repository().record_refund(
+        order_id=payload.order_id,
+        refund_reference=payload.refund_reference,
+        refunded_cents=payload.refunded_cents,
+        actor_user_id=principal.user_id,
+    ))
+    _audit(request, principal, action="promotion.partner.refund", resource_type="partner_commission",
+           resource_id=payload.refund_reference, reason=payload.reason,
+           details={"order_id": payload.order_id, "amount_cents": payload.refunded_cents})
+    return {"data": _serialize(row)}
+
+
+@admin_promotion_router.patch("/partner-payouts/{payout_request_id}")
+def transition_partner_payout(
+    payout_request_id: str,
+    payload: PartnerPayoutTransition,
+    request: Request,
+    principal: Annotated[AdminPrincipal, Depends(permission("promotion.payout.manage"))],
+):
+    row = _call(lambda: partner_repository().transition_payout(
+        payout_request_id=payout_request_id,
+        target_status=payload.status,
+        actor_user_id=principal.user_id,
+        reason=payload.reason,
+        payment_reference=payload.payment_reference,
+    ))
+    _audit(request, principal, action=f"promotion.partner.payout.{payload.status}", resource_type="partner_payout",
+           resource_id=payout_request_id, reason=payload.reason, details={
+               "previous_status": row["previous_status"], "status": payload.status, "amount_cents": row["amount_cents"],
+           })
+    return {"data": _serialize(row)}
 
 
 @admin_promotion_router.get("/channels")

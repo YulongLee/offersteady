@@ -306,7 +306,7 @@ export type RealtimeSessionUpdate = Pick<WebAppState, "speaker"> & Partial<Pick<
 };
 
 export interface InterviewAppAdapter {
-  loadState(signal?: AbortSignal, options?: { readonly auth?: boolean; readonly force?: boolean }): Promise<WebAppState>;
+  loadState(signal?: AbortSignal, options?: { readonly auth?: boolean }): Promise<WebAppState>;
   getBillingState(signal?: AbortSignal): Promise<BillingPresentationState>;
   getReferralStatus(signal?: AbortSignal): Promise<ReferralStatus>;
   resolveReferral(code: string, signal?: AbortSignal): Promise<{ valid: boolean; enabled: boolean; rewardPoints?: number; inviterRewardPoints?: number; inviteeRewardPoints?: number; activationWindowDays?: number }>;

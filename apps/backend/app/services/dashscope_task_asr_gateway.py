@@ -16,7 +16,6 @@ from app.core.logging import log_event
 from app.ports.interview_session import InterviewLanguage
 from app.ports.realtime_speech import AsrUsageReport, AudioFrame, RealtimeAsrGatewayPort, TranscriptResult
 from app.services.realtime_speech_service import NonRetryableAsrError, RetryableAsrError
-from app.interview_languages import asr_language_code
 
 
 @dataclass
@@ -76,7 +75,6 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
         self._connection_create_counts: dict[str, int] = {}
         self._connection_reconnect_counts: dict[str, int] = {}
         self._connection_closed_counts: dict[str, int] = {}
-        self._closure_failures: dict[str, int] = {}
         self._connection_lifetime_total_ms: dict[str, int] = {}
         self._connection_lifetime_max_ms: dict[str, int] = {}
         self._task_start_counts: dict[str, int] = {}
@@ -160,7 +158,6 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
             ),
             "asr_connection_completed_lifetime_max_ms": self._connection_lifetime_max_ms.get(source_kind, 0),
             "active_provider_sessions": len(active),
-            "closure_failures": self._closure_failures.get(source_kind, 0),
             "task_start_count": self._task_start_counts.get(source_kind, 0),
             "task_finish_count": self._task_finish_counts.get(source_kind, 0),
             "task_failure_count": self._task_failure_counts.get(source_kind, 0),
@@ -405,7 +402,7 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
                 "parameters": {
                     "format": "pcm",
                     "sample_rate": session.sample_rate_hz,
-                    "language_hints": [asr_language_code(session.interview_language)],
+                    "language_hints": ["en" if session.interview_language == "en-US" else "zh"],
                     "semantic_punctuation_enabled": False,
                     "max_sentence_silence": max(
                         200, min(6000, int(self.settings.realtime_asr_max_sentence_silence_ms))
@@ -742,7 +739,7 @@ class DashScopeTaskAsrGateway(RealtimeAsrGatewayPort):
         try:
             session.connection.close()
         except Exception:
-            self._closure_failures[source_kind] = self._closure_failures.get(source_kind, 0) + 1
+            pass
 
     def _connect_url(self) -> str:
         return (

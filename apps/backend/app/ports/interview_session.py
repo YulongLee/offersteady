@@ -9,7 +9,7 @@ from app.material_formats import MaterialKind
 InterviewSessionState = Literal["preparing", "live", "ended"]
 InterviewSessionMode = Literal["interview", "written", "mock"]
 InterviewAudioMode = Literal["computer", "mobile"]
-from app.interview_languages import InterviewLanguage
+InterviewLanguage = Literal["zh-CN", "en-US"]
 ProgrammingLanguage = Literal["python", "java", "cpp", "javascript", "typescript", "go"]
 SessionContinueTarget = Literal["preparing", "live", "history"]
 ConversationRole = Literal["system", "interviewer", "candidate", "assistant", "manual-question", "screenshot", "event"]
@@ -139,8 +139,6 @@ class InterviewSessionRepository(Protocol):
 
     def get_session(self, session_id: str) -> InterviewSessionRecord | None: ...
 
-    def get_heartbeat_state(self, session_id: str) -> SessionHeartbeatState | None: ...
-
     def list_sessions_for_user(self, *, user_id: str, status: InterviewSessionState | None = None) -> list[InterviewSessionRecord]: ...
 
     def touch_activity(self, *, user_id: str, session_id: str, activity_at_ms: int) -> InterviewSessionRecord | None: ...
@@ -178,3 +176,5 @@ class InterviewSessionRepository(Protocol):
     def save_usage_record(self, record: SessionUsageRecord) -> SessionUsageRecord: ...
 
     def list_usage_records(self, *, session_id: str) -> list[SessionUsageRecord]: ...
+
+    def get_heartbeat_state(self, session_id: str) -> SessionHeartbeatState | None: ...

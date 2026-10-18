@@ -1,3 +1,5 @@
+> 本分支为国服当前线上版本封版 `release-cn-20261019.1`。实际运行源码、完整网页快照与验证见[封版记录](docs/releases/release-cn-20261019.1.md)及[版本清单](releases/cn-20261019.1/README.md)。共享开发分支保持原状；本分支仅代表国服。
+
 # OfferSteady
 
 OfferSteady 是一个面向求职者的 AI 面试辅助产品，目前处于产品原型与需求验证阶段。

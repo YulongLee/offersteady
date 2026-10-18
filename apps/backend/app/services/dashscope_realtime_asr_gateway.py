@@ -15,7 +15,6 @@ from app.core.config import Settings
 from app.ports.interview_session import InterviewLanguage
 from app.ports.realtime_speech import AsrUsageReport, AudioFrame, RealtimeAsrGatewayPort, TranscriptResult
 from app.services.realtime_speech_service import NonRetryableAsrError, RetryableAsrError
-from app.interview_languages import asr_language_code
 
 
 @dataclass
@@ -67,7 +66,6 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         self._connection_lifetime_total_ms: dict[str, int] = {}
         self._connection_lifetime_max_ms: dict[str, int] = {}
         self._connection_closed_counts: dict[str, int] = {}
-        self._closure_failures: dict[str, int] = {}
         self._connected_source_keys: set[str] = set()
         self._utterance_counts: dict[str, int] = {}
         self._session_created_missing: dict[str, int] = {}
@@ -224,7 +222,6 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             "append_count": self._append_counts.get(source_kind, 0),
             "commit_count": self._commit_counts.get(source_kind, 0),
             "active_provider_sessions": active_provider_sessions,
-            "closure_failures": self._closure_failures.get(source_kind, 0),
             "frames_before_first_partial": self._frames_before_first_partial.get(source_kind, 0),
         }
 
@@ -437,7 +434,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                 try:
                     existing.connection.close()
                 except Exception:
-                    self._closure_failures[existing.source_kind] = self._closure_failures.get(existing.source_kind, 0) + 1
+                    pass
             connection, mode = self._open_connection(frame)
             with self._source_sessions_lock:
                 self._connection_recreations[frame.source_kind] = self._connection_recreations.get(frame.source_kind, 0) + 1
@@ -540,7 +537,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             "input_audio_format": "pcm",
             "sample_rate": frame.sample_rate_hz,
             "input_audio_transcription": {
-                "language": asr_language_code(frame.interview_language),
+                "language": "en" if frame.interview_language == "en-US" else "zh",
             },
         }
         if mode == "vad":
@@ -733,7 +730,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         try:
             session.connection.close()
         except Exception:
-            self._closure_failures[session.source_kind] = self._closure_failures.get(session.source_kind, 0) + 1
+            pass
 
     def _record_closed_lifetime(self, session: _SourceRealtimeSession) -> None:
         lifetime_ms = max(0, int((time.monotonic() - session.created_at_monotonic) * 1000))
@@ -778,7 +775,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
             try:
                 session.connection.close()
             except Exception:
-                self._closure_failures[session.source_kind] = self._closure_failures.get(session.source_kind, 0) + 1
+                pass
 
     def _connect_url(self) -> str:
         dedicated_workspace_base = None

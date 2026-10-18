@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
-import { resourceCenterManifest, resourceReviewDate } from "../resource-center-manifest.mjs";
 
 const webRoot = resolve(import.meta.dirname, "..");
 const repoRoot = resolve(webRoot, "../..");
@@ -50,10 +49,6 @@ const engineeringTopicRoutes = new Map([
 const articleRoutes = new Set([...guideRoutes.keys(), ...aiTopicRoutes.keys(), ...engineeringTopicRoutes.keys()]);
 const deepArticleRoutes = new Set([...coreGuideRoutes, ...aiTopicRoutes.keys(), ...engineeringTopicRoutes.keys()]);
 const topicRoutes = new Map([...hubRoutes, ...featureRoutes, ...commercialRoutes, ...guideRoutes, ...aiTopicRoutes, ...engineeringTopicRoutes]);
-const resourceRoutes = new Map([
-  ["/resources/", "public/resources/index.html"],
-  ...resourceCenterManifest.map(({ slug }) => [`/resources/${slug}/`, `public/resources/${slug}/index.html`]),
-]);
 const readWeb = (path) => readFile(resolve(webRoot, path), "utf8");
 const [indexHtml, guideHtml, robots, sitemap, notFound, nginx, llms, llmsFull, factsText, appSource, shareCard] = await Promise.all([
   readWeb("index.html"), readWeb("guide.html"), readWeb("public/robots.txt"), readWeb("public/sitemap.xml"),
@@ -62,8 +57,7 @@ const [indexHtml, guideHtml, robots, sitemap, notFound, nginx, llms, llmsFull, f
   readWeb("src/App.tsx"), readFile(resolve(webRoot, "public/assets/brand/share-card.png")),
 ]);
 const topicDocuments = new Map(await Promise.all([...topicRoutes].map(async ([route, file]) => [route, await readWeb(file)])));
-const resourceDocuments = new Map(await Promise.all([...resourceRoutes].map(async ([route, file]) => [route, await readWeb(file)])));
-const publicEntries = new Map([["/", indexHtml], ["/guide", guideHtml], ...topicDocuments, ...resourceDocuments]);
+const publicEntries = new Map([["/", indexHtml], ["/guide", guideHtml], ...topicDocuments]);
 const canonicalUrl = (route) => `https://mianshiwen.cn${route}`;
 
 const metadata = [];
@@ -106,15 +100,6 @@ for (const route of articleRoutes) {
   assert.match(html, /class="answer-block"/);
   assert.match(html, /class="[^"]*\bsource-note\b[^"]*"/);
 }
-for (const [route, html] of resourceDocuments) {
-  const graph = JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1])["@graph"];
-  assert.deepEqual(graph.map((node) => node["@type"]), route === "/resources/" ? ["CollectionPage", "ItemList", "BreadcrumbList"] : ["Article", "BreadcrumbList"], `Unexpected resource schema for ${route}`);
-  if (route === "/resources/") assert.equal(graph.find((node) => node["@type"] === "ItemList").numberOfItems, resourceCenterManifest.length);
-  if (route !== "/resources/") assert.match(html, /article:published_time|article:modified_time/);
-  assert.match(html, /class="boundary"/);
-  assert.doesNotMatch(html, /(?:AccessKey|Secret|BEGIN .* KEY|sk-[A-Za-z0-9])/i);
-  assert.ok(Buffer.byteLength(html) <= 16_000, `Resource HTML budget exceeded for ${route}`);
-}
 for (const route of commercialRoutes.keys()) {
   const html = topicDocuments.get(route);
   assert.match(html, /登录|产品内|下载页|联系/);
@@ -138,7 +123,7 @@ const sitemapEntries = [...sitemap.matchAll(/<url>\s*<loc>(https:\/\/mianshiwen\
 assert.deepEqual(new Set(sitemapEntries.map(({ url }) => url.pathname)), new Set(publicEntries.keys()));
 assert.equal(sitemapEntries.length, publicEntries.size);
 const updatedCorePages = new Set(["/pricing", "/download", "/features/realtime-interview", "/features/ai-interview-assistant"]);
-assert.ok(sitemapEntries.every(({ url, lastmod }) => lastmod === (resourceRoutes.has(url.pathname) ? resourceReviewDate : updatedCorePages.has(url.pathname) ? "2026-09-12" : url.pathname === "/" ? "2026-09-08" : "2026-08-19")));
+assert.ok(sitemapEntries.every(({ url, lastmod }) => lastmod === (updatedCorePages.has(url.pathname) ? "2026-09-12" : url.pathname === "/" ? "2026-09-08" : "2026-08-19")));
 assert.doesNotMatch(sitemap, /\/login|\/app/);
 
 const discoveryHtml = `${indexHtml}\n${guideHtml}\n${[...hubRoutes.keys()].map((route) => topicDocuments.get(route)).join("\n")}`;
@@ -171,8 +156,6 @@ assert.ok(nginx.includes("location ~ ^/(pricing|download|security|about|contact)
 assert.ok(nginx.includes("location ~ ^/guides/(audio-troubleshooting|interview-preparation|macos-permissions|feishu-audio-setup|tencent-meeting-audio-setup|star-interview-answer|self-introduction|project-experience|technical-interview|common-interview-questions)/?$"));
 assert.ok(nginx.includes("location ~ ^/interview-questions/(llm|rag|ai-agent)/?$"));
 assert.ok(nginx.includes("location ~ ^/interview-questions/(java-backend|frontend|algorithms)/?$"));
-assert.ok(nginx.includes("location ~ ^/resources/?$"));
-assert.ok(nginx.includes("location ~ ^/resources/(api-p95-latency-diagnosis|container-memory-not-falling|resume-pdf-parsing-failures|mac-microphone-permission|realtime-interview-polling)/?$"));
 for (const resource of ["llms.txt", "llms-full.txt", "public-facts.json"]) assert.ok(nginx.includes(`location = /${resource}`), `Missing Nginx route for ${resource}`);
 assert.match(nginx, /location ~\* "\^\/assets\/[\s\S]*?Cache-Control "public, max-age=31536000, immutable"/);
 assert.ok(nginx.includes('location ~ ^/(?:login|error|invite/'));

@@ -20,7 +20,6 @@ from app.deps import (
     screenshot_answer_service,
     session_service,
     storage_port,
-    usage_billing_service,
 )
 from app.ports.commercial_hardening import CommercialHardeningRepository
 from app.ports.authentication import AuthenticatedRequestContext, UserRecord
@@ -51,8 +50,7 @@ def _desktop_release_dir() -> Path:
 
 
 def _published_desktop_manifest_path() -> Path:
-    filename = "global_desktop_release_manifest.json" if get_settings().product_edition == "global" else "desktop_release_manifest.json"
-    return Path(__file__).resolve().parents[1] / filename
+    return Path(__file__).resolve().parents[1] / "desktop_release_manifest.json"
 
 
 def _published_desktop_manifest() -> dict[str, object] | None:
@@ -137,7 +135,6 @@ def _account_payload(user: UserRecord | None) -> dict[str, object]:
             "id": "anonymous",
             "displayName": "访客",
             "createdAtMs": 1_719_000_000_000,
-            "defaultInterviewLanguage": "en-US",
             "bindings": [
                 {
                     "id": "anonymous-prototype-binding",
@@ -153,7 +150,6 @@ def _account_payload(user: UserRecord | None) -> dict[str, object]:
         "id": user.user_id,
         "displayName": user.display_name,
         "createdAtMs": user.created_at_ms,
-        "defaultInterviewLanguage": getattr(user, "default_interview_language", "en-US"),
         "bindings": [
             {
                 "id": item.binding_id,
@@ -566,11 +562,11 @@ def _knowledge_document_payload(document, storage: FileStoragePort | None = None
 
 
 @router.get("/state", response_model=ApiEnvelope[dict[str, object]])
-async def get_web_state(
+def get_web_state(
     request: Request,
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     documents: DocumentService = Depends(document_read_service),
-    billing = Depends(usage_billing_service),
+    billing: BillingService = Depends(billing_service),
     sessions: SessionService = Depends(session_service),
 ) -> ApiEnvelope[dict[str, object]]:
     user = authentication_service().get_current_user(auth_context=auth_context) if auth_context else None
@@ -586,8 +582,7 @@ async def get_web_state(
     review_screenshots: list[dict[str, object]] = []
     resources = [_prepared_resource_payload(item) for item in document_items[:3]]
     billing_payload = billing.state_payload(billing_state)
-    billing_repository = getattr(billing, "billing_repository", None)
-    billing_payload["availablePaymentChannels"] = PaymentChannelService(settings, billing_repository).available_channels() if billing_repository else []
+    billing_payload["availablePaymentChannels"] = PaymentChannelService(settings, billing.billing_repository).available_channels() if billing.billing_repository else []
     state = {
         "interviews": [_session_payload(item) for item in session_items],
         "preparation": {"resources": resources, "device": None},

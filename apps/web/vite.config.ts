@@ -69,14 +69,6 @@ export default defineConfig(({ mode }) => {
       host: "127.0.0.1",
       port: 5173,
       strictPort: true,
-      // Keep local preview requests same-origin so the development browser can
-      // reach the local API without requiring production CORS configuration.
-      proxy: {
-        "/api": {
-          target: "http://127.0.0.1:8000",
-          changeOrigin: false,
-        },
-      },
     },
     preview: {
       host: "127.0.0.1",

@@ -7,7 +7,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core.logging import utc_now_iso
 from app.core.responses import success_response
-from app.deps import authorize_global_interview_start, optional_authenticated_context, realtime_speech_service, resolve_owned_user_id, session_service
+from app.deps import optional_authenticated_context, realtime_speech_service, resolve_owned_user_id, session_service
 from app.ports.authentication import AuthenticatedRequestContext
 from app.schemas.foundation import ApiEnvelope, ModuleDescriptor
 from app.schemas.session import (
@@ -141,7 +141,7 @@ async def create_session(
 
 
 @router.get("", response_model=ApiEnvelope[list[InterviewSessionResponse]])
-async def list_sessions(
+def list_sessions(
     request: Request,
     user_id: str | None = Query(default=None, alias="userId"),
     status: str | None = None,
@@ -154,7 +154,7 @@ async def list_sessions(
 
 
 @router.get("/{session_id}", response_model=ApiEnvelope[InterviewSessionResponse])
-async def get_session(
+def get_session(
     session_id: str,
     request: Request,
     user_id: str | None = Query(default=None, alias="userId"),
@@ -166,7 +166,7 @@ async def get_session(
 
 
 @router.get("/{session_id}/review", response_model=ApiEnvelope[InterviewReviewSnapshotResponse])
-async def get_interview_review(
+def get_interview_review(
     session_id: str,
     request: Request,
     user_id: str | None = Query(default=None, alias="userId"),
@@ -272,7 +272,7 @@ async def continue_session(
     )
 
 @router.get("/{session_id}/idle-status", response_model=ApiEnvelope[dict[str, object]])
-async def idle_status(
+def idle_status(
     session_id: str,
     request: Request,
     user_id: str | None = Query(default=None, alias="userId"),
@@ -376,12 +376,9 @@ async def start_session(
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[InterviewSessionResponse]:
-    user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
-    current = service.session_service.get_session(user_id=user_id, session_id=session_id)
-    authorize_global_interview_start(user_id=user_id, interview_already_active=current.status == "live")
     session = await run_in_threadpool(
         service.start_live_session,
-        user_id=user_id,
+        user_id=resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context),
         session_id=session_id,
     )
     return success_response(request=request_context, data=_to_session_response(session), timestamp=utc_now_iso())

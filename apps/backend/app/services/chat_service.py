@@ -63,8 +63,6 @@ _NORMALIZED_QUESTION_OPEN = "<normalized_question>"
 _NORMALIZED_QUESTION_CLOSE = "</normalized_question>"
 _NORMALIZATION_BUFFER_LIMIT = 800
 _DETAIL_RETRIEVAL_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="chat-detail-retrieval")
-_QUESTION_PREFETCH_TTL_MS = 60_000
-_QUESTION_PREFETCH_MAX_KEYS = 128
 _HAN_SCRIPT_PATTERN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 _LATIN_SCRIPT_PATTERN = re.compile(r"[A-Za-z]")
 _ENGLISH_REPAIR_DIRECTIVE = (
@@ -641,6 +639,11 @@ class QwenCompatibleGateway(LLMGatewayPort):
         )
 
 
+_QUESTION_PREFETCH_TTL_MS = 60_000
+
+_QUESTION_PREFETCH_MAX_KEYS = 128
+
+
 class ChatService:
     def __init__(
         self,
@@ -799,48 +802,6 @@ class ChatService:
                     if latest is not None and latest["token"] is token:
                         latest["inFlight"] = False
 
-    def _prefetch_generation_is_current(self, question_key: tuple[str, str, str], token: object) -> bool:
-        with self._prepared_context_lock:
-            self._prune_prepared_context(_now_ms())
-            state = self._latest_prefetch_revision.get(question_key)
-            return state is not None and state["token"] is token
-
-    def _prune_prepared_context(self, now_ms: int) -> None:
-        """Called under the cache lock; eviction also revokes in-flight writers."""
-        for key, state in tuple(self._latest_prefetch_revision.items()):
-            if now_ms - int(state["createdAtMs"]) >= _QUESTION_PREFETCH_TTL_MS:
-                self._latest_prefetch_revision.pop(key, None)
-        while len(self._latest_prefetch_revision) > _QUESTION_PREFETCH_MAX_KEYS:
-            self._latest_prefetch_revision.pop(next(iter(self._latest_prefetch_revision)))
-        for key, prepared in tuple(self._prepared_context.items()):
-            if key[:3] not in self._latest_prefetch_revision or now_ms - int(prepared["createdAtMs"]) >= _QUESTION_PREFETCH_TTL_MS:
-                self._prepared_context.pop(key, None)
-        while len(self._prepared_context) > _QUESTION_PREFETCH_MAX_KEYS:
-            self._prepared_context.pop(next(iter(self._prepared_context)))
-
-    @staticmethod
-    def _prefetch_material_fingerprint(*, user_id: str, session_id: str, session) -> str | None:
-        binding = session.material_binding
-        if (
-            session.owner_user_id != user_id or session.session_id != session_id
-            or binding.owner_user_id != user_id or binding.session_id != session_id
-        ):
-            return None
-        documents = sorted(
-            (
-                item.document_id, item.document_kind, item.document_version_id or "", item.status,
-                item.index_state or "", bool(item.active), item.knowledge_collection_id or "",
-            )
-            for item in binding.bound_documents
-        )
-        identity = (
-            user_id, session_id, getattr(session, "session_mode", "interview"), session.status,
-            binding.owner_user_id, binding.session_id, binding.revision,
-            binding.resume_document_id, binding.job_description_document_id,
-            sorted(binding.knowledge_document_ids), documents,
-        )
-        return hashlib.sha256(json.dumps(identity, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
-
     def _prepared_retrieval(
         self,
         *,
@@ -880,13 +841,11 @@ class ChatService:
     def _ensure_web_search_allowed(self, *, enabled: bool) -> None:
         if not enabled:
             return
-        if self.settings.product_edition == "global" and (
-            not self.settings.global_web_answer_enabled or not self.settings.web_search_enabled
-        ):
+        if self.settings.product_edition != "cn":
             raise DomainRequestError(
                 "live-answer",
                 "web-search",
-                "Web answers are not enabled for this service.",
+                "联网详细回答当前仅支持国服。",
                 409,
                 error_code="web_search_not_available",
             )
@@ -910,14 +869,9 @@ class ChatService:
             user_id=user_id,
             usage_id=usage_id,
             usage_kind="web_answer" if web_search_enabled else "answer",
-            **({"minimum_pass_duration_days": 7}
-               if web_search_enabled and self.settings.product_edition != "global" else {}),
+            minimum_pass_duration_days=7 if web_search_enabled else None,
         )
         if reservation.status == "insufficient_balance":
-            if self.settings.product_edition == "global":
-                raise DomainRequestError("billing", "reserve-answer",
-                    "An active membership of 7 days or longer is required for web answers." if web_search_enabled else "Your interview allowance is unavailable. Please check your plan.",
-                    403, error_code="global_practice_membership_required" if web_search_enabled else "global_allowance_unavailable")
             raise DomainRequestError(
                 "billing",
                 "reserve-web-answer" if web_search_enabled else "reserve-answer",
@@ -2383,3 +2337,45 @@ class ChatService:
             question_length=len(question),
             error_code=error_code,
         )
+
+    def _prefetch_generation_is_current(self, question_key: tuple[str, str, str], token: object) -> bool:
+        with self._prepared_context_lock:
+            self._prune_prepared_context(_now_ms())
+            state = self._latest_prefetch_revision.get(question_key)
+            return state is not None and state["token"] is token
+
+    @staticmethod
+    def _prefetch_material_fingerprint(*, user_id: str, session_id: str, session) -> str | None:
+        binding = session.material_binding
+        if (
+            session.owner_user_id != user_id or session.session_id != session_id
+            or binding.owner_user_id != user_id or binding.session_id != session_id
+        ):
+            return None
+        documents = sorted(
+            (
+                item.document_id, item.document_kind, item.document_version_id or "", item.status,
+                item.index_state or "", bool(item.active), item.knowledge_collection_id or "",
+            )
+            for item in binding.bound_documents
+        )
+        identity = (
+            user_id, session_id, getattr(session, "session_mode", "interview"), session.status,
+            binding.owner_user_id, binding.session_id, binding.revision,
+            binding.resume_document_id, binding.job_description_document_id,
+            sorted(binding.knowledge_document_ids), documents,
+        )
+        return hashlib.sha256(json.dumps(identity, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+    def _prune_prepared_context(self, now_ms: int) -> None:
+        """Called under the cache lock; eviction also revokes in-flight writers."""
+        for key, state in tuple(self._latest_prefetch_revision.items()):
+            if now_ms - int(state["createdAtMs"]) >= _QUESTION_PREFETCH_TTL_MS:
+                self._latest_prefetch_revision.pop(key, None)
+        while len(self._latest_prefetch_revision) > _QUESTION_PREFETCH_MAX_KEYS:
+            self._latest_prefetch_revision.pop(next(iter(self._latest_prefetch_revision)))
+        for key, prepared in tuple(self._prepared_context.items()):
+            if key[:3] not in self._latest_prefetch_revision or now_ms - int(prepared["createdAtMs"]) >= _QUESTION_PREFETCH_TTL_MS:
+                self._prepared_context.pop(key, None)
+        while len(self._prepared_context) > _QUESTION_PREFETCH_MAX_KEYS:
+            self._prepared_context.pop(next(iter(self._prepared_context)))

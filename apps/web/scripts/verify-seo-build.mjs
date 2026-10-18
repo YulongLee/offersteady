@@ -15,8 +15,6 @@ const staticOutputs = [
   "seo/common-interview-questions.html",
   "seo/llm.html", "seo/rag.html", "seo/ai-agent.html",
   "seo/java-backend.html", "seo/frontend.html", "seo/algorithms.html",
-  "resources/index.html", "resources/api-p95-latency-diagnosis/index.html", "resources/container-memory-not-falling/index.html",
-  "resources/resume-pdf-parsing-failures/index.html", "resources/mac-microphone-permission/index.html", "resources/realtime-interview-polling/index.html",
   "seo/public-search.css", "llms.txt", "llms-full.txt", "public-facts.json", "robots.txt", "sitemap.xml", "404.html",
 ];
 const [homepage, guide] = await Promise.all([readFile(resolve(dist, "index.html"), "utf8"), readFile(resolve(dist, "guide.html"), "utf8")]);
@@ -26,9 +24,9 @@ assert.notEqual(homepage, guide);
 assert.match(homepage, /<script type="module" crossorigin src="\/assets\/.+-[A-Za-z0-9_-]{8}\.js"><\/script>/);
 assert.match(guide, /<script type="module" crossorigin src="\/assets\/.+-[A-Za-z0-9_-]{8}\.js"><\/script>/);
 for (const file of staticOutputs) assert.ok((await stat(resolve(dist, file))).size > 0, `Missing or empty build output: ${file}`);
-for (const file of staticOutputs.filter((file) => file.endsWith(".html") && (file.startsWith("seo/") || file.startsWith("resources/")))) {
+for (const file of staticOutputs.filter((file) => file.endsWith(".html") && file.startsWith("seo/"))) {
   const html = await readFile(resolve(dist, file), "utf8");
-  assert.match(html, /<link rel="canonical" href="https:\/\/mianshiwen\.cn\/(?:features(?:\/|\")|guides(?:\/|\")|interview-questions|pricing|download|security|about|contact|resources\/)/);
+  assert.match(html, /<link rel="canonical" href="https:\/\/mianshiwen\.cn\/(?:features(?:\/|\")|guides(?:\/|\")|interview-questions|pricing|download|security|about|contact)/);
   assert.equal((html.match(/<h1(?:\s[^>]*)?>/g) ?? []).length, 1);
   JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
 }

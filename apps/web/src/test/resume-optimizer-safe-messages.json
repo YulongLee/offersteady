@@ -1,0 +1,181 @@
+{
+  "syntheticOnly": true,
+  "source": "fixed backend diagnostic constants; no user/provider content",
+  "cases": [
+    {
+      "reason": "provider_timeout",
+      "errorCode": "provider_timeout",
+      "message": "AI 服务响应超时，请稍后重试，原简历无需重新上传。"
+    },
+    {
+      "reason": "provider_http_error",
+      "errorCode": "provider_unavailable",
+      "message": "AI 服务暂时不可用，请稍后重试，原简历无需重新上传。"
+    },
+    {
+      "reason": "provider_unconfigured",
+      "errorCode": "provider_unconfigured",
+      "message": "简历优化的 AI 服务尚未就绪，请联系支持人员检查服务配置。"
+    },
+    {
+      "reason": "response_too_large",
+      "errorCode": "invalid_output",
+      "message": "AI 返回的结果超过处理上限，未能生成优化稿。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "response_encoding_invalid",
+      "errorCode": "invalid_output",
+      "message": "AI 返回的结果格式不完整，未能生成优化稿。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "provider_envelope_invalid",
+      "errorCode": "invalid_output",
+      "message": "AI 返回的结果格式不完整，未能生成优化稿。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "provider_finish_length",
+      "errorCode": "invalid_output",
+      "message": "AI 返回的结果被截断，未能生成完整优化稿。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "provider_finish_invalid",
+      "errorCode": "invalid_output",
+      "message": "AI 未正常完成生成，本次没有可用优化稿。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "content_encoding_invalid",
+      "errorCode": "invalid_output",
+      "message": "AI 返回的结果格式不完整，未能生成优化稿。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "content_json_invalid",
+      "errorCode": "invalid_output",
+      "message": "AI 返回的结果格式不完整，未能生成优化稿。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "content_json_ambiguous",
+      "errorCode": "invalid_output",
+      "message": "AI 返回的结果存在重复字段，未能可靠读取。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "review_schema_invalid",
+      "errorCode": "invalid_output",
+      "message": "AI 返回的结果格式不完整，未能生成优化稿。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "dimension_set_invalid",
+      "errorCode": "invalid_output",
+      "message": "AI 返回的评分维度不完整，未能生成可靠评估。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "evidence_quote_missing",
+      "errorCode": "invalid_output",
+      "message": "AI 返回的依据与原简历或岗位描述不一致，已停止生成。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "role_evidence_missing",
+      "errorCode": "invalid_output",
+      "message": "AI 返回的依据与原简历或岗位描述不一致，已停止生成。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "explanation_language_invalid",
+      "errorCode": "invalid_output",
+      "message": "AI 未按要求提供中文说明，未能生成可用结果。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "missing_facts_language_invalid",
+      "errorCode": "invalid_output",
+      "message": "AI 返回的待补充说明不符合要求，未能生成可用结果。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "edit_quote_not_unique",
+      "errorCode": "invalid_output",
+      "message": "AI 返回的改写位置无法与原简历唯一对应，已停止生成。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "fact_numbers_changed",
+      "errorCode": "invalid_output",
+      "message": "AI 改写未通过原文事实检查，已停止生成。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "fact_contact_changed",
+      "errorCode": "invalid_output",
+      "message": "AI 改写未通过原文事实检查，已停止生成。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "fact_english_content_added",
+      "errorCode": "invalid_output",
+      "message": "AI 改写未通过原文事实检查，已停止生成。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "fact_english_content_removed",
+      "errorCode": "invalid_output",
+      "message": "AI 改写未通过原文事实检查，已停止生成。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "fact_credentials_changed",
+      "errorCode": "invalid_output",
+      "message": "AI 改写未通过原文事实检查，已停止生成。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "fact_dates_counts_changed",
+      "errorCode": "invalid_output",
+      "message": "AI 改写未通过原文事实检查，已停止生成。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "fact_negation_changed",
+      "errorCode": "invalid_output",
+      "message": "AI 改写未通过原文事实检查，已停止生成。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "fact_entities_changed",
+      "errorCode": "invalid_output",
+      "message": "AI 改写未通过原文事实检查，已停止生成。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "fact_responsibility_changed",
+      "errorCode": "invalid_output",
+      "message": "AI 改写未通过原文事实检查，已停止生成。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "fact_skills_changed",
+      "errorCode": "invalid_output",
+      "message": "AI 改写未通过原文事实检查，已停止生成。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "edit_spans_overlap",
+      "errorCode": "invalid_output",
+      "message": "AI 返回的修改位置相互重叠，未能安全合并优化稿。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "draft_invalid",
+      "errorCode": "invalid_output",
+      "message": "AI 优化稿未通过完整性检查，未能安全交付。原简历无需重新上传，请稍后重试。"
+    },
+    {
+      "reason": "no_effective_edits",
+      "errorCode": "invalid_output",
+      "message": "本次未生成可安全应用的有效修改，原简历已保留。"
+    },
+    {
+      "reason": "runtime_timeout",
+      "errorCode": "provider_timeout",
+      "message": "简历优化处理超时，请稍后重试，原简历无需重新上传。"
+    },
+    {
+      "reason": "runtime_interrupted",
+      "errorCode": "interrupted",
+      "message": "简历优化处理已中断，请稍后重新发起，原简历无需重新上传。"
+    },
+    {
+      "reason": "runtime_internal_error",
+      "errorCode": "interrupted",
+      "message": "简历优化处理遇到内部错误，请稍后重试；若仍失败请联系支持人员。"
+    },
+    {
+      "reason": "runtime_repository_unavailable",
+      "errorCode": "interrupted",
+      "message": "简历优化状态暂时无法处理，请稍后重试；若仍失败请联系支持人员。"
+    }
+  ]
+}

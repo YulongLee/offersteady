@@ -4,7 +4,7 @@ import hashlib
 from dataclasses import dataclass, field, replace
 from pathlib import PurePath
 from time import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 from uuid import uuid4
 
 from app.core.errors import DomainRequestError
@@ -70,6 +70,7 @@ class DocumentService:
     commercial_repository: CommercialHardeningRepository | None = None
     billing_service: BillingService | None = None
     max_file_size_bytes: int = 20 * 1024 * 1024
+    optimizer_delete_hook: Callable[[DocumentRecord, int], None] | None = None
 
     @staticmethod
     def _safe_display_name(value: str) -> str:
@@ -539,6 +540,8 @@ class DocumentService:
         deleting = DocumentRecord(
             **{**record.__dict__, "status": "deleted", "deleted_at_ms": _now_ms(), "updated_at_ms": _now_ms(), "summary": "文档已删除，不再用于面试或后续处理。"}
         )
+        if self.optimizer_delete_hook is not None:
+            self.optimizer_delete_hook(deleting, deleting.deleted_at_ms or _now_ms())
         saved = self.repository.save(deleting)
         if self.processing_service is not None:
             self.processing_service.release_document_index_reservation(document_id=saved.document_id, user_id=user_id)
@@ -665,6 +668,39 @@ class DocumentService:
         if self.processing_service is not None:
             self.processing_service.submit_document(document)
         return CompleteDocumentUploadResponse(document=self._to_response(document))
+
+    def create_optimized_resume(self, *, user_id: str, markdown: str, stable_id: str) -> DocumentRecordResponse:
+        """Explicit independent optimizer copy; deterministic ids make retries safe."""
+        document_id = f"document-opt-{stable_id}"
+        version_id = f"version-opt-{stable_id}"
+        existing = self.repository.get_by_id(document_id)
+        if existing is not None:
+            if existing.owner_user_id != user_id or existing.deleted_at_ms is not None or existing.status == "deleted":
+                raise DomainRequestError("resume-optimizer", "save-as", "已另存的简历已失效，请重新选择或编辑后再保存。", 409,
+                                         error_code="resume_optimizer_source_unavailable")
+            document = existing
+        else:
+            current_ms = _now_ms()
+            payload = markdown.encode("utf-8")
+            key_factory = MaterialObjectKeyFactory(get_settings())
+            key = key_factory.original_key(owner_user_id=user_id, document_kind="resume", document_id=document_id,
+                document_version_id=version_id, object_id=stable_id, file_kind="md")
+            self.storage.save_object_bytes(object_key=key, payload=payload, content_type="text/markdown; charset=utf-8")
+            document = self.repository.save(DocumentRecord(
+                document_id=document_id, owner_user_id=user_id, document_kind="resume",
+                display_name=self._unique_display_name(user_id=user_id, document_kind="resume", requested_name="优化后简历.md"),
+                file_kind="md", content_type="text/markdown; charset=utf-8", size_bytes=len(payload), object_key=key,
+                status="processing_requested", knowledge_collection_id=None, processing_requested_at_ms=current_ms,
+                deleted_at_ms=None, created_at_ms=current_ms, updated_at_ms=current_ms,
+                summary="优化稿已另存，正在准备为可选面试资料。", object_id=stable_id,
+                document_version_id=version_id, version=1, content_fingerprint=hashlib.sha256(payload).hexdigest(),
+                original_filename="优化后简历.md", index_state="queued"))
+            self._record_original_artifact(document=document, verified_at_ms=current_ms)
+        if self.processing_service is not None and document.status == "processing_requested":
+            task_id = f"task-{version_id}"
+            if self.processing_service.task_repository.get_task(task_id) is None:
+                self.processing_service.submit_document(document)
+        return self._to_response(document)
 
     def _record_original_artifact(self, *, document: DocumentRecord, verified_at_ms: int) -> None:
         if self.commercial_repository is None or not document.document_version_id:

@@ -1,0 +1,322 @@
+{
+  "synthetic": true,
+  "edition": "cn",
+  "providerCalls": 2,
+  "responses": [
+    {
+      "label": "partial-create",
+      "status": 200,
+      "body": {
+        "success": true,
+        "data": {
+          "jobId": "resume-opt-a7f2cb21fb494567b21399e490faed15",
+          "status": "queued",
+          "revision": 1,
+          "sourceDocumentId": "source-owner",
+          "sourceVersionId": "version-source-owner",
+          "sourceDisplayName": "合成简历.md",
+          "targetRole": "",
+          "hasJd": false,
+          "quotaDay": "2026-10-18",
+          "allowanceStatus": "reserved",
+          "billingStatus": "reserved",
+          "billingClass": "points",
+          "pointsCharged": 100,
+          "createdAtMs": 1792339170000,
+          "updatedAtMs": 1792339170000,
+          "completedAtMs": null,
+          "errorCode": null,
+          "errorMessage": null,
+          "savedDocumentId": null,
+          "savedVersionId": null,
+          "sourceText": "# 合成候选人\nsynthetic@example.invalid\n负责使用Python开发数据接口，为12个团队提供服务。\n2024年 合成科技有限公司\n教育：合成大学 本科。",
+          "jdText": "",
+          "jdDocumentId": null,
+          "jdVersionId": null,
+          "review": null,
+          "initialDraftMarkdown": null,
+          "draftMarkdown": null,
+          "promptVersion": "resume-optimizer-zh-CN-v2",
+          "scoreVersion": "resume-reference-v1"
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T21:44:01.453580+00:00"
+        }
+      }
+    },
+    {
+      "label": "partial-detail",
+      "status": 200,
+      "body": {
+        "success": true,
+        "data": {
+          "jobId": "resume-opt-a7f2cb21fb494567b21399e490faed15",
+          "status": "completed",
+          "revision": 2,
+          "sourceDocumentId": "source-owner",
+          "sourceVersionId": "version-source-owner",
+          "sourceDisplayName": "合成简历.md",
+          "targetRole": "",
+          "hasJd": false,
+          "quotaDay": "2026-10-18",
+          "allowanceStatus": "settled",
+          "billingStatus": "settled",
+          "billingClass": "points",
+          "pointsCharged": 100,
+          "createdAtMs": 1792339170000,
+          "updatedAtMs": 1792339170000,
+          "completedAtMs": 1792339170000,
+          "errorCode": null,
+          "errorMessage": null,
+          "savedDocumentId": null,
+          "savedVersionId": null,
+          "sourceText": "# 合成候选人\nsynthetic@example.invalid\n负责使用Python开发数据接口，为12个团队提供服务。\n2024年 合成科技有限公司\n教育：合成大学 本科。",
+          "jdText": "",
+          "jdDocumentId": null,
+          "jdVersionId": null,
+          "review": {
+            "dimensions": [
+              {
+                "key": "completeness",
+                "score": 70,
+                "reason": "现有描述具有真实依据，可进一步清晰说明。",
+                "evidence": [
+                  {
+                    "quote": "负责使用Python开发数据接口",
+                    "source": "resume"
+                  }
+                ]
+              },
+              {
+                "key": "impact",
+                "score": 71,
+                "reason": "现有描述具有真实依据，可进一步清晰说明。",
+                "evidence": [
+                  {
+                    "quote": "负责使用Python开发数据接口",
+                    "source": "resume"
+                  }
+                ]
+              },
+              {
+                "key": "clarity",
+                "score": 72,
+                "reason": "现有描述具有真实依据，可进一步清晰说明。",
+                "evidence": [
+                  {
+                    "quote": "负责使用Python开发数据接口",
+                    "source": "resume"
+                  }
+                ]
+              },
+              {
+                "key": "structure",
+                "score": 73,
+                "reason": "现有描述具有真实依据，可进一步清晰说明。",
+                "evidence": [
+                  {
+                    "quote": "负责使用Python开发数据接口",
+                    "source": "resume"
+                  }
+                ]
+              }
+            ],
+            "disclaimer": "评分仅供本工具简历评估参考，不代表录用概率。使用前请逐项核实所有事实。",
+            "editSummary": {
+              "appliedCount": 1,
+              "proposedCount": 2,
+              "retainedCount": 1,
+              "retainedReasonCounts": {
+                "overlap": 0,
+                "factCheck": 1,
+                "unchanged": 0,
+                "sourceQuote": 0
+              }
+            },
+            "suggestions": [
+              {
+                "title": "清晰描述已有开发工作",
+                "evidence": [
+                  {
+                    "quote": "负责使用Python开发数据接口",
+                    "source": "resume"
+                  }
+                ],
+                "priority": "high",
+                "explanation": "现有措辞可以更直接，缺失成果应另行核实。",
+                "recommendation": "使用已核实事实说明数据接口开发工作。"
+              }
+            ],
+            "missingFacts": [
+              "如有可核实的成果，请补充具体依据，不要编造指标。"
+            ],
+            "overallScore": 72,
+            "roleMatchingAssessed": false
+          },
+          "initialDraftMarkdown": "# 合成候选人\nsynthetic@example.invalid\n使用Python实现数据接口开发，为12个团队提供服务。\n2024年 合成科技有限公司\n教育：合成大学 本科。",
+          "draftMarkdown": "# 合成候选人\nsynthetic@example.invalid\n使用Python实现数据接口开发，为12个团队提供服务。\n2024年 合成科技有限公司\n教育：合成大学 本科。",
+          "promptVersion": "resume-optimizer-zh-CN-v2",
+          "scoreVersion": "resume-reference-v1"
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T21:44:01.487148+00:00"
+        }
+      }
+    },
+    {
+      "label": "no-effective-create",
+      "status": 200,
+      "body": {
+        "success": true,
+        "data": {
+          "jobId": "resume-opt-2281b277515646c18a4687caa294dfe6",
+          "status": "queued",
+          "revision": 1,
+          "sourceDocumentId": "source-owner",
+          "sourceVersionId": "version-source-owner",
+          "sourceDisplayName": "合成简历.md",
+          "targetRole": "",
+          "hasJd": false,
+          "quotaDay": "2026-10-18",
+          "allowanceStatus": "reserved",
+          "billingStatus": "reserved",
+          "billingClass": "points",
+          "pointsCharged": 100,
+          "createdAtMs": 1792339170000,
+          "updatedAtMs": 1792339170000,
+          "completedAtMs": null,
+          "errorCode": null,
+          "errorMessage": null,
+          "savedDocumentId": null,
+          "savedVersionId": null,
+          "sourceText": "# 合成候选人\nsynthetic@example.invalid\n负责使用Python开发数据接口，为12个团队提供服务。\n2024年 合成科技有限公司\n教育：合成大学 本科。",
+          "jdText": "",
+          "jdDocumentId": null,
+          "jdVersionId": null,
+          "review": null,
+          "initialDraftMarkdown": null,
+          "draftMarkdown": null,
+          "promptVersion": "resume-optimizer-zh-CN-v2",
+          "scoreVersion": "resume-reference-v1"
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T21:44:01.529794+00:00"
+        }
+      }
+    },
+    {
+      "label": "no-effective-detail",
+      "status": 200,
+      "body": {
+        "success": true,
+        "data": {
+          "jobId": "resume-opt-2281b277515646c18a4687caa294dfe6",
+          "status": "failed",
+          "revision": 2,
+          "sourceDocumentId": "source-owner",
+          "sourceVersionId": "version-source-owner",
+          "sourceDisplayName": "合成简历.md",
+          "targetRole": "",
+          "hasJd": false,
+          "quotaDay": "2026-10-18",
+          "allowanceStatus": "released",
+          "billingStatus": "released",
+          "billingClass": "points",
+          "pointsCharged": 100,
+          "createdAtMs": 1792339170000,
+          "updatedAtMs": 1792339170000,
+          "completedAtMs": null,
+          "errorCode": "invalid_output",
+          "errorMessage": "本次未生成可安全应用的有效修改，原简历已保留。本次积分或免费次数已退还。",
+          "savedDocumentId": null,
+          "savedVersionId": null,
+          "sourceText": "# 合成候选人\nsynthetic@example.invalid\n负责使用Python开发数据接口，为12个团队提供服务。\n2024年 合成科技有限公司\n教育：合成大学 本科。",
+          "jdText": "",
+          "jdDocumentId": null,
+          "jdVersionId": null,
+          "review": null,
+          "initialDraftMarkdown": null,
+          "draftMarkdown": null,
+          "promptVersion": "resume-optimizer-zh-CN-v2",
+          "scoreVersion": "resume-reference-v1"
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T21:44:01.578795+00:00"
+        }
+      }
+    },
+    {
+      "label": "history",
+      "status": 200,
+      "body": {
+        "success": true,
+        "data": {
+          "jobs": [
+            {
+              "jobId": "resume-opt-a7f2cb21fb494567b21399e490faed15",
+              "status": "completed",
+              "revision": 2,
+              "sourceDocumentId": "source-owner",
+              "sourceVersionId": "version-source-owner",
+              "sourceDisplayName": "合成简历.md",
+              "targetRole": "",
+              "hasJd": false,
+              "quotaDay": "2026-10-18",
+              "allowanceStatus": "settled",
+              "billingStatus": "settled",
+              "billingClass": "points",
+              "pointsCharged": 100,
+              "createdAtMs": 1792339170000,
+              "updatedAtMs": 1792339170000,
+              "completedAtMs": 1792339170000,
+              "errorCode": null,
+              "errorMessage": null,
+              "savedDocumentId": null,
+              "savedVersionId": null
+            },
+            {
+              "jobId": "resume-opt-2281b277515646c18a4687caa294dfe6",
+              "status": "failed",
+              "revision": 2,
+              "sourceDocumentId": "source-owner",
+              "sourceVersionId": "version-source-owner",
+              "sourceDisplayName": "合成简历.md",
+              "targetRole": "",
+              "hasJd": false,
+              "quotaDay": "2026-10-18",
+              "allowanceStatus": "released",
+              "billingStatus": "released",
+              "billingClass": "points",
+              "pointsCharged": 100,
+              "createdAtMs": 1792339170000,
+              "updatedAtMs": 1792339170000,
+              "completedAtMs": null,
+              "errorCode": "invalid_output",
+              "errorMessage": "本次未生成可安全应用的有效修改，原简历已保留。本次积分或免费次数已退还。",
+              "savedDocumentId": null,
+              "savedVersionId": null
+            }
+          ]
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T21:44:01.588659+00:00"
+        }
+      }
+    }
+  ]
+}

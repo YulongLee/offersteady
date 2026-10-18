@@ -57,7 +57,6 @@ describe("optimized product experience", () => {
     expect(within(contacts!).getAllByText("面试稳AI助手")).toHaveLength(2);
     expect(within(footer!).getByRole("link", { name: "使用手册" })).toHaveAttribute("href", "/guide");
     expect(within(footer!).getByRole("link", { name: "下载安装说明" })).toHaveAttribute("href", "/guide#desktop");
-    expect(within(footer!).getByRole("link", { name: "技术报告与资源中心" })).toHaveAttribute("href", "/resources/");
     expect(within(footer!).getByRole("link", { name: "产品功能" })).toHaveAttribute("href", "/features");
     expect(within(footer!).getByRole("link", { name: "面试题与专题" })).toHaveAttribute("href", "/interview-questions");
     expect(within(footer!).getByRole("link", { name: "面试指南" })).toHaveAttribute("href", "/guides");
@@ -266,25 +265,7 @@ describe("optimized product experience", () => {
   });
 
   it("shows the revised catalog and complete consumption rules", () => {
-    open("/app/billing");
-    const oneDayCard = screen.getByRole("heading", { name: "1 天会员" }).parentElement!;
-    expect(oneDayCard).toHaveTextContent("¥29.90");
-    expect(oneDayCard.querySelector(":scope > span")).toHaveTextContent("约 ¥1.25/小时");
-    expect(oneDayCard).toHaveTextContent("笔试入场免费");
-    expect(oneDayCard).toHaveTextContent("联网详细回答 20 点/次");
-    const sevenDayCard = screen.getByRole("heading", { name: "7 天会员" }).parentElement!;
-    expect(sevenDayCard.querySelector(":scope > span")).toHaveTextContent("约 ¥0.77/小时");
-    expect(sevenDayCard).toHaveTextContent("联网详细回答不限次");
-    expect(screen.getByRole("heading", { name: "3 天会员" }).parentElement).toHaveTextContent("知识材料按点");
-    expect(screen.getByRole("heading", { name: "30 天会员" }).parentElement).toHaveTextContent("含 2 份知识材料");
-    expect(screen.getByRole("heading", { name: "1000 积分" }).parentElement).toHaveTextContent("¥99.90");
-    expect(screen.getByRole("heading", { name: "66666 积分" })).toBeInTheDocument();
-    expect(screen.getByText("点数消费说明")).toBeInTheDocument();
-    expect(screen.getByText("联网详细回答", { selector: "strong" })).toBeInTheDocument();
-    expect(screen.getByText("笔试入场", { selector: "strong" })).toBeInTheDocument();
-    expect(screen.getByText(/有效时间会员免费；没有有效会员时/)).toBeInTheDocument();
-    expect(screen.getByText(/7 天及以上会员免费/)).toBeInTheDocument();
-    expect(screen.getByText(/每 5,000 Token 20 点/)).toBeInTheDocument();
+    open("/app/billing"); expect(screen.getByRole("heading", { name: "1 天会员" }).parentElement).toHaveTextContent("¥29.90"); expect(screen.getByRole("heading", { name: "3 天会员" }).parentElement).toHaveTextContent("知识材料按点"); expect(screen.getByRole("heading", { name: "30 天会员" }).parentElement).toHaveTextContent("含 2 份知识材料"); expect(screen.getByRole("heading", { name: "1000 积分" }).parentElement).toHaveTextContent("¥99.90"); expect(screen.getByRole("heading", { name: "66666 积分" })).toBeInTheDocument(); expect(screen.getByText("点数消费说明")).toBeInTheDocument(); expect(screen.getByText(/每 5,000 Token 20 点/)).toBeInTheDocument();
   });
 
   it("includes queued membership time in the consolidated entitlement card", () => {

@@ -1,0 +1,20 @@
+{
+  "NotoSansCJKsc-VF.ttf": {
+    "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/Variable/TTF/NotoSansCJKsc-VF.ttf",
+    "bytes": 36144788,
+    "sha256": "990c807e79c25662a5a9ecf7f971baeb2bf2eab9a559e5ecf15cdfdb8561d21f"
+  },
+  "OFL.txt": {
+    "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/LICENSE",
+    "bytes": 4301,
+    "sha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2"
+  },
+  "build": {
+    "tool": "fonttools==4.61.1",
+    "axes": {
+      "wght": 400
+    },
+    "runtime": "ReportLab4.4.9",
+    "fontSha256": "fa2124fd2197ba2f050d48e1e66284d0aa00900657897eec679ab04d2913c429"
+  }
+}

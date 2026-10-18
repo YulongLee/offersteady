@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from app.core.config import Settings
 from app.core.errors import DomainRequestError
-from app.ports.document_repository import DocumentRepository
+from app.ports.document_repository import DocumentRecord, DocumentRepository
 from app.ports.interview_session import (
     ConversationContextEntry,
     IntegrationReference,
@@ -21,11 +21,10 @@ from app.ports.interview_session import (
     SessionMaterialBinding,
     SessionUsageRecord,
     SessionUsageTotals,
-    SessionHeartbeatState,
 )
+from app.ports.interview_session import SessionHeartbeatState
 from app.services.material_availability import MaterialAvailabilityValidator
 from app.services.session_mode_guard import require_standard_session
-from app.interview_languages import get_interview_language, interview_prompt_assets_ready
 
 
 def _now_ms() -> int:
@@ -62,8 +61,6 @@ class SessionService:
         if session_mode not in ("interview", "written"):
             raise DomainRequestError("session", "create", "请通过 AI 模拟面试入口创建。", 409,
                                      "mock_dedicated_command_required")
-        if get_interview_language(interview_language) is None:
-            raise DomainRequestError("session", "create", "暂不支持该面试语言，请选择其他语言。", 422, error_code="unsupported_interview_language")
         now_ms = _now_ms()
         session_id = f"session-{uuid4().hex}"
         config_snapshot = self._default_config_snapshot(captured_at_ms=now_ms)
@@ -108,8 +105,6 @@ class SessionService:
     def update_interview_language(
         self, *, user_id: str, session_id: str, interview_language: InterviewLanguage
     ) -> InterviewSessionRecord:
-        if get_interview_language(interview_language) is None:
-            raise DomainRequestError("session", "update-language", "暂不支持该面试语言，请选择其他语言。", 422, error_code="unsupported_interview_language")
         session = self.get_session(user_id=user_id, session_id=session_id)
         require_standard_session(session)
         if session.status != "preparing":
@@ -138,6 +133,35 @@ class SessionService:
                 error_code="interview_language_locked",
             )
         raise DomainRequestError("session", "update-language", "面试语言保存失败，请重试。", 409)
+
+    def update_interview_programming(
+        self, *, user_id: str, session_id: str, programming_required: bool,
+        programming_language: ProgrammingLanguage | None
+    ) -> InterviewSessionRecord:
+        session = self.get_session(user_id=user_id, session_id=session_id)
+        require_standard_session(session)
+        if session.status != "preparing":
+            raise DomainRequestError(
+                "session", "update-programming", "面试开始后不能修改编程设置。", 409,
+                error_code="interview_programming_locked",
+            )
+        normalized_language = (programming_language or "python") if programming_required else None
+        updated = self.repository.update_programming_if_preparing(
+            user_id=user_id,
+            session_id=session_id,
+            programming_required=programming_required,
+            programming_language=normalized_language,
+            updated_at_ms=_now_ms(),
+        )
+        if updated is not None:
+            return updated
+        latest = self.get_session(user_id=user_id, session_id=session_id)
+        if latest.status != "preparing":
+            raise DomainRequestError(
+                "session", "update-programming", "面试开始后不能修改编程设置。", 409,
+                error_code="interview_programming_locked",
+            )
+        raise DomainRequestError("session", "update-programming", "编程设置保存失败，请重试。", 409)
 
     def update_interview_audio_mode(
         self, *, user_id: str, session_id: str, interview_audio_mode: InterviewAudioMode
@@ -170,35 +194,6 @@ class SessionService:
             )
         raise DomainRequestError("session", "update-audio-mode", "面试设备模式保存失败，请重试。", 409)
 
-    def update_interview_programming(
-        self, *, user_id: str, session_id: str, programming_required: bool,
-        programming_language: ProgrammingLanguage | None
-    ) -> InterviewSessionRecord:
-        session = self.get_session(user_id=user_id, session_id=session_id)
-        require_standard_session(session)
-        if session.status != "preparing":
-            raise DomainRequestError(
-                "session", "update-programming", "面试开始后不能修改编程设置。", 409,
-                error_code="interview_programming_locked",
-            )
-        normalized_language = (programming_language or "python") if programming_required else None
-        updated = self.repository.update_programming_if_preparing(
-            user_id=user_id,
-            session_id=session_id,
-            programming_required=programming_required,
-            programming_language=normalized_language,
-            updated_at_ms=_now_ms(),
-        )
-        if updated is not None:
-            return updated
-        latest = self.get_session(user_id=user_id, session_id=session_id)
-        if latest.status != "preparing":
-            raise DomainRequestError(
-                "session", "update-programming", "面试开始后不能修改编程设置。", 409,
-                error_code="interview_programming_locked",
-            )
-        raise DomainRequestError("session", "update-programming", "编程设置保存失败，请重试。", 409)
-
     def update_auto_answer(
         self, *, user_id: str, session_id: str, enabled: bool
     ) -> InterviewSessionRecord:
@@ -229,7 +224,9 @@ class SessionService:
 
     def list_sessions(self, *, user_id: str, status: str | None = None) -> list[InterviewSessionRecord]:
         sessions = self.repository.list_sessions_for_user(user_id=user_id, status=status)  # type: ignore[arg-type]
-        return [self._refresh_bound_document_activity(session) for session in sessions]
+        # Scope reuse to this list call so the next request sees fresh material state.
+        document_records: dict[str, DocumentRecord | None] = {}
+        return [self._refresh_bound_document_activity(session, document_records=document_records) for session in sessions]
 
     def delete_session(self, *, user_id: str, session_id: str) -> None:
         session = self.get_session(user_id=user_id, session_id=session_id)
@@ -271,41 +268,7 @@ class SessionService:
         return session
 
     def idle_status(self, *, user_id: str, session_id: str, at_ms: int | None = None) -> dict[str, object]:
-        session = self.get_session(user_id=user_id, session_id=session_id)
-        return self._idle_status_from_session(session=session, at_ms=at_ms)
-
-    def heartbeat_idle_status(self, *, user_id: str, session_id: str, at_ms: int | None = None) -> dict[str, object]:
-        session = self.repository.get_heartbeat_state(session_id)
-        if session is None:
-            raise DomainRequestError("session", "get", "面试会话不存在。", 404)
-        if session.owner_user_id != user_id:
-            raise DomainRequestError("session", "get", "不能查看其他用户的面试会话。", 403)
-        return self._idle_status_from_session(session=session, at_ms=at_ms)
-
-    def _idle_status_from_session(
-        self, *, session: InterviewSessionRecord | SessionHeartbeatState, at_ms: int | None = None
-    ) -> dict[str, object]:
-        current = at_ms if at_ms is not None else _now_ms()
-        warning_at_ms = session.last_activity_at_ms + self.settings.interview_idle_warning_seconds * 1000
-        expires_at_ms = session.last_activity_at_ms + self.settings.interview_idle_timeout_seconds * 1000
-        if session.status == "ended":
-            state = "ended"
-        elif session.status != "live" or session.started_at_ms is None:
-            state = "active"
-        elif current >= expires_at_ms:
-            state = "expired"
-        elif current >= warning_at_ms:
-            state = "warning"
-        else:
-            state = "active"
-        return {
-            "sessionId": session.session_id,
-            "state": state,
-            "lastActivityAtMs": session.last_activity_at_ms,
-            "warningAtMs": warning_at_ms,
-            "expiresAtMs": expires_at_ms,
-            "remainingMs": max(0, expires_at_ms - current),
-        }
+        return self.heartbeat_idle_status(user_id=user_id, session_id=session_id, at_ms=at_ms)
 
     def list_idle_live_sessions(self, *, user_id: str | None = None, at_ms: int | None = None) -> list[InterviewSessionRecord]:
         current = at_ms if at_ms is not None else _now_ms()
@@ -364,15 +327,6 @@ class SessionService:
     def start_session(self, *, user_id: str, session_id: str) -> InterviewSessionRecord:
         session = self.get_session(user_id=user_id, session_id=session_id)
         require_standard_session(session)
-        language_definition = get_interview_language(session.interview_language)
-        if language_definition is None or not interview_prompt_assets_ready(session.interview_language) or language_definition.tier != "production":
-            raise DomainRequestError(
-                "session",
-                "start",
-                "所选面试语言尚未完成服务能力验证，请切换到生产支持语言后再开始。",
-                409,
-                error_code="interview_language_not_ready",
-            )
         if session.status == "ended":
             raise DomainRequestError("session", "start", "已结束的会话不能直接开始，请重新开始一场新的面试。", 400)
         active_conflicts = [
@@ -598,14 +552,19 @@ class SessionService:
             active=True,
         )
 
-    def _refresh_bound_document_activity(self, session: InterviewSessionRecord) -> InterviewSessionRecord:
+    def _refresh_bound_document_activity(
+        self, session: InterviewSessionRecord, *, document_records: dict[str, DocumentRecord | None] | None = None
+    ) -> InterviewSessionRecord:
         # Mock state owns the selected version; a legacy read must not rewrite it.
         if session.session_mode == "mock":
             return session
+        records = {} if document_records is None else document_records
         refreshed_docs: list[SessionBoundDocument] = []
         changed = False
         for bound in session.material_binding.bound_documents:
-            current = self.document_repository.get_by_id(bound.document_id)
+            if bound.document_id not in records:
+                records[bound.document_id] = self.document_repository.get_by_id(bound.document_id)
+            current = records[bound.document_id]
             active = current is not None and current.status == "ready" and current.index_state in {None, "indexed"}
             status = current.status if current is not None else "deleted"
             display_name = current.display_name if current is not None else bound.display_name
@@ -725,3 +684,36 @@ class SessionService:
         if status == "ended":
             return "history"
         return "preparing"
+
+    def heartbeat_idle_status(self, *, user_id: str, session_id: str, at_ms: int | None = None) -> dict[str, object]:
+        session = self.repository.get_heartbeat_state(session_id)
+        if session is None:
+            raise DomainRequestError("session", "get", "面试会话不存在。", 404)
+        if session.owner_user_id != user_id:
+            raise DomainRequestError("session", "get", "不能查看其他用户的面试会话。", 403)
+        return self._idle_status_from_session(session=session, at_ms=at_ms)
+
+    def _idle_status_from_session(
+        self, *, session: InterviewSessionRecord | SessionHeartbeatState, at_ms: int | None = None
+    ) -> dict[str, object]:
+        current = at_ms if at_ms is not None else _now_ms()
+        warning_at_ms = session.last_activity_at_ms + self.settings.interview_idle_warning_seconds * 1000
+        expires_at_ms = session.last_activity_at_ms + self.settings.interview_idle_timeout_seconds * 1000
+        if session.status == "ended":
+            state = "ended"
+        elif session.status != "live" or session.started_at_ms is None:
+            state = "active"
+        elif current >= expires_at_ms:
+            state = "expired"
+        elif current >= warning_at_ms:
+            state = "warning"
+        else:
+            state = "active"
+        return {
+            "sessionId": session.session_id,
+            "state": state,
+            "lastActivityAtMs": session.last_activity_at_ms,
+            "warningAtMs": warning_at_ms,
+            "expiresAtMs": expires_at_ms,
+            "remainingMs": max(0, expires_at_ms - current),
+        }

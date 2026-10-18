@@ -22,8 +22,8 @@ from app.ports.interview_session import (
     SessionMaterialBinding,
     SessionUsageRecord,
     SessionUsageTotals,
-    SessionHeartbeatState,
 )
+from app.ports.interview_session import SessionHeartbeatState
 from app.services.postgres_migrations import apply_sql_migrations
 
 
@@ -109,16 +109,6 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
             cursor.execute("SELECT * FROM interview_sessions WHERE session_id = %s AND deleted_at_ms IS NULL", (session_id,))
             row = cursor.fetchone()
         return self._row_to_session(row) if row else None
-
-    def get_heartbeat_state(self, session_id: str) -> SessionHeartbeatState | None:
-        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
-            cursor.execute(
-                """SELECT session_id, owner_user_id, status, started_at_ms, last_activity_at_ms
-                   FROM interview_sessions WHERE session_id = %s AND deleted_at_ms IS NULL""",
-                (session_id,),
-            )
-            row = cursor.fetchone()
-        return SessionHeartbeatState(**row) if row else None
 
     def list_sessions_for_user(self, *, user_id: str, status=None) -> list[InterviewSessionRecord]:
         params: list[Any] = [user_id]
@@ -371,7 +361,6 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
                     """
                 )
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_interview_sessions_owner_updated ON interview_sessions (owner_user_id, updated_at_ms DESC)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_interview_sessions_live_activity ON interview_sessions (last_activity_at_ms DESC) WHERE status = 'live' AND deleted_at_ms IS NULL")
                 cursor.execute(
                     """
                     CREATE TABLE IF NOT EXISTS interview_session_context_entries (
@@ -458,3 +447,13 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
 
     def _usage_record_from_json(self, data: dict[str, Any]) -> SessionUsageRecord:
         return SessionUsageRecord(**data)
+
+    def get_heartbeat_state(self, session_id: str) -> SessionHeartbeatState | None:
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """SELECT session_id, owner_user_id, status, started_at_ms, last_activity_at_ms
+                   FROM interview_sessions WHERE session_id = %s AND deleted_at_ms IS NULL""",
+                (session_id,),
+            )
+            row = cursor.fetchone()
+        return SessionHeartbeatState(**row) if row else None

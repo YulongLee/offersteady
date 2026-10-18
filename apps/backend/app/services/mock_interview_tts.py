@@ -29,15 +29,13 @@ class MockInterviewTts:
         self.settings = settings
         self._connector = connector
         self._slots = asyncio.Semaphore(settings.mock_interview_provider_concurrency)
-        prompt = "ai/prompts/mock-interview/en/tts.txt" if settings.product_edition == "global" else "ai/prompts/mock-interview/tts.txt"
-        self._instructions = (REPO_ROOT / prompt).read_text(encoding="utf-8").strip()
+        self._instructions = (REPO_ROOT / "ai/prompts/mock-interview/tts.txt").read_text(encoding="utf-8").strip()
 
     async def stream(self, text: str) -> AsyncIterator[bytes]:
         if not text.strip() or len(text) > self.max_text_characters:
             raise MockSpeechUnavailable("朗读文本不可用。")
         key = self.settings.mock_interview_tts_api_key or self.settings.chat_qwen_api_key
-        endpoint = urlsplit(self.settings.global_mock_interview_tts_ws_url
-            if self.settings.product_edition == "global" else self.settings.mock_interview_tts_ws_url)
+        endpoint = urlsplit(self.settings.mock_interview_tts_ws_url)
         if not key or endpoint.scheme != "wss" or endpoint.username or endpoint.password:
             raise MockSpeechUnavailable("模拟面试语音尚未配置。")
         audio_plus = self.settings.mock_interview_tts_model == "qwen-audio-3.0-tts-plus"
@@ -67,7 +65,7 @@ class MockInterviewTts:
                             return
                         await send(socket, "session.update", session={
                             "voice": self.settings.mock_interview_tts_voice,
-                            "mode": "commit", "language_type": "English" if self.settings.product_edition == "global" else "Chinese",
+                            "mode": "commit", "language_type": "Chinese",
                             "response_format": "pcm", "sample_rate": self.sample_rate,
                             "instructions": self._instructions, "optimize_instructions": False,
                         })

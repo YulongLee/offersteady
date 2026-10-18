@@ -1089,19 +1089,6 @@ class RealtimeSpeechService:
         self._publisher_status_cache[publisher.publisher_id] = status
         return updated
 
-    def _stable_question_observation_generation(self, *, session_id: str) -> object | None:
-        """Capture a bounded lifecycle token before optional work is queued."""
-        with self._stable_question_state_lock:
-            if self._session_is_retired(session_id) or getattr(self, "_shutdown_complete", False):
-                return None
-            generation = self._stable_question_generations.get(session_id)
-            if generation is None:
-                generation = object()
-                if len(self._stable_question_generations) >= 256:
-                    self._stable_question_generations.pop(next(iter(self._stable_question_generations)))
-                self._stable_question_generations[session_id] = generation
-            return generation
-
     def _observe_stable_interviewer_partial(
         self,
         transcript: TranscriptSegmentRecord,
@@ -1369,7 +1356,6 @@ class RealtimeSpeechService:
             "sessionActivityEntries": len(self._session_last_activity_ms),
             "publisherStatusCacheEntries": len(self._publisher_status_cache),
             "stableQuestionEntries": len(self._stable_question_state),
-            "stableQuestionGenerationEntries": len(self._stable_question_generations),
             "retiredSessionIds": len(self._retired_session_ids),
         }
         if screenshot_state:
@@ -1409,7 +1395,6 @@ class RealtimeSpeechService:
             },
             "eventStore": repository_diagnostics() if callable(repository_diagnostics) else {},
             "controlPlane": self._control_query_diagnostics(),
-            "performanceAck": self._performance_ack_diagnostics(),
             "questionPrefetch": (self._question_prefetch_scheduler.diagnostics()
                                  if self._question_prefetch_scheduler is not None else {}),
             "sessionReclamation": {
@@ -1445,18 +1430,6 @@ class RealtimeSpeechService:
                 "desktopHeartbeatTrackedDevices": len(getattr(self, "_desktop_heartbeat_last_persisted_ms", {})),
             })
         return diagnostics
-
-    def _performance_ack_diagnostics(self) -> dict[str, int]:
-        lock = getattr(self, "_performance_ack_access_lock", None)
-        if lock is None:
-            return {"accessCacheHits": 0, "accessCacheMisses": 0, "accessCacheEntries": 0}
-        with lock:
-            cache = getattr(self, "_performance_ack_access_cache", {})
-            return {
-                "accessCacheHits": getattr(self, "_performance_ack_access_hits", 0),
-                "accessCacheMisses": getattr(self, "_performance_ack_access_misses", 0),
-                "accessCacheEntries": len(cache),
-            }
 
     def _invalidate_control_query_cache(
         self,
@@ -2626,8 +2599,6 @@ class RealtimeSpeechService:
                 "sessionStatus": session_status,
                 "sessionMode": session_mode,
                 "interviewAudioMode": interview_audio_mode,
-                # Mock interviews own a separate per-round microphone channel;
-                # old companions must never enter the ordinary quick-answer path.
                 "captureState": ("paused" if session_mode == "written" else self.capture_control_state(session_id=binding.session_id)) if session_status == "live" else "ready",
                 "bindingLockState": binding_lock_state,
                 "message": "网页端已绑定本机。",
@@ -2839,7 +2810,6 @@ class RealtimeSpeechService:
 
     def create_publisher(self, *, user_id: str, session_id: str, source_kind: RealtimeSourceKind, client_name: str) -> RealtimePublisherRecord:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
-        # Fail closed until the dedicated round-aware microphone gateway is wired.
         require_standard_session(session)
         if session.session_mode == "written":
             raise DomainRequestError("realtime-speech", "create-publisher", "笔试模式不启用实时收音。", 409, "written_exam_audio_disabled")
@@ -5616,18 +5586,10 @@ class RealtimeSpeechService:
         return current_cursor, [event for event in events if event.owner_user_id == user_id], resumable
 
     def _verify_performance_ack_session(self, *, user_id: str, session_id: str, cacheable: bool) -> None:
-        """Authorize diagnostic acknowledgements without rereading full session state.
-
-        Answer and screenshot acknowledgements keep the original full session
-        lookup. Subtitle render/delivery acknowledgements are content-free
-        diagnostics and may reuse a short-lived positive ownership check. A
-        cache hit never changes the product session state and is bounded to the
-        current process, so a restart naturally clears it.
-        """
+        """Authorize content-free render telemetry without rereading full state."""
         if not cacheable:
             self.session_service.get_session(user_id=user_id, session_id=session_id)
             return
-
         lock = getattr(self, "_performance_ack_access_lock", None)
         if lock is None:
             lock = threading.Lock()
@@ -5649,7 +5611,6 @@ class RealtimeSpeechService:
                     raise DomainRequestError("session", "get", "不能查看其他用户的面试会话。", 403)
                 cache.pop(session_id, None)
             self._performance_ack_access_misses = getattr(self, "_performance_ack_access_misses", 0) + 1
-
         self.session_service.get_session(user_id=user_id, session_id=session_id)
         with lock:
             cache[session_id] = (user_id, now + ttl)
@@ -5857,3 +5818,16 @@ class RealtimeSpeechService:
             error_code=error_code,
             source_kind=source_kind,
         )
+
+    def _stable_question_observation_generation(self, *, session_id: str) -> object | None:
+        """Capture a bounded lifecycle token before optional work is queued."""
+        with self._stable_question_state_lock:
+            if self._session_is_retired(session_id) or getattr(self, "_shutdown_complete", False):
+                return None
+            generation = self._stable_question_generations.get(session_id)
+            if generation is None:
+                generation = object()
+                if len(self._stable_question_generations) >= 256:
+                    self._stable_question_generations.pop(next(iter(self._stable_question_generations)))
+                self._stable_question_generations[session_id] = generation
+            return generation

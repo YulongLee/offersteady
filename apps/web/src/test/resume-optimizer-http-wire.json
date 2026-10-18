@@ -1,0 +1,515 @@
+{
+  "synthetic": true,
+  "providerCalls": 0,
+  "edition": "cn",
+  "responses": [
+    {
+      "label": "points-capabilities",
+      "status": 200,
+      "body": {
+        "success": true,
+        "data": {
+          "enabled": true,
+          "eligible": true,
+          "dailyLimit": 3,
+          "dailyRemaining": 0,
+          "quotaDay": "2026-10-18",
+          "timezone": "Asia/Shanghai",
+          "resetAtMs": 1792339200000,
+          "nowMs": 1792339170000,
+          "memberRequired": false,
+          "activeTimeMember": false,
+          "exhausted": false,
+          "activeJobId": null,
+          "billingClass": "points",
+          "entryPoints": 100,
+          "availablePoints": 200,
+          "canStart": true,
+          "limits": {
+            "resumeCharacters": 40000,
+            "jdCharacters": 12000,
+            "targetRoleCharacters": 120,
+            "draftCharacters": 60000
+          },
+          "exports": [
+            "docx",
+            "pdf"
+          ]
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T19:04:04.136994+00:00"
+        }
+      }
+    },
+    {
+      "label": "points-create",
+      "status": 200,
+      "body": {
+        "success": true,
+        "data": {
+          "jobId": "resume-opt-3654489b931f4b9ba5545bbad9484a12",
+          "status": "queued",
+          "revision": 1,
+          "sourceDocumentId": "source-owner",
+          "sourceVersionId": "version-source-owner",
+          "sourceDisplayName": "合成简历.md",
+          "targetRole": "",
+          "hasJd": false,
+          "quotaDay": "2026-10-18",
+          "allowanceStatus": "reserved",
+          "billingStatus": "reserved",
+          "billingClass": "points",
+          "pointsCharged": 100,
+          "createdAtMs": 1792339170000,
+          "updatedAtMs": 1792339170000,
+          "completedAtMs": null,
+          "errorCode": null,
+          "errorMessage": null,
+          "savedDocumentId": null,
+          "savedVersionId": null,
+          "sourceText": "# 合成候选人\nsynthetic@example.invalid\n负责使用Python开发数据接口，为12个团队提供服务。\n2024年 合成科技有限公司\n教育：合成大学 本科。",
+          "jdText": "",
+          "jdDocumentId": null,
+          "jdVersionId": null,
+          "review": null,
+          "initialDraftMarkdown": null,
+          "draftMarkdown": null,
+          "promptVersion": "resume-optimizer-zh-CN-v1",
+          "scoreVersion": "resume-reference-v1"
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T19:04:04.190692+00:00"
+        }
+      }
+    },
+    {
+      "label": "points-replay",
+      "status": 200,
+      "body": {
+        "success": true,
+        "data": {
+          "jobId": "resume-opt-3654489b931f4b9ba5545bbad9484a12",
+          "status": "queued",
+          "revision": 1,
+          "sourceDocumentId": "source-owner",
+          "sourceVersionId": "version-source-owner",
+          "sourceDisplayName": "合成简历.md",
+          "targetRole": "",
+          "hasJd": false,
+          "quotaDay": "2026-10-18",
+          "allowanceStatus": "reserved",
+          "billingStatus": "reserved",
+          "billingClass": "points",
+          "pointsCharged": 100,
+          "createdAtMs": 1792339170000,
+          "updatedAtMs": 1792339170000,
+          "completedAtMs": null,
+          "errorCode": null,
+          "errorMessage": null,
+          "savedDocumentId": null,
+          "savedVersionId": null,
+          "sourceText": "# 合成候选人\nsynthetic@example.invalid\n负责使用Python开发数据接口，为12个团队提供服务。\n2024年 合成科技有限公司\n教育：合成大学 本科。",
+          "jdText": "",
+          "jdDocumentId": null,
+          "jdVersionId": null,
+          "review": null,
+          "initialDraftMarkdown": null,
+          "draftMarkdown": null,
+          "promptVersion": "resume-optimizer-zh-CN-v1",
+          "scoreVersion": "resume-reference-v1"
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T19:04:04.209828+00:00"
+        }
+      }
+    },
+    {
+      "label": "points-cancel",
+      "status": 200,
+      "body": {
+        "success": true,
+        "data": {
+          "jobId": "resume-opt-3654489b931f4b9ba5545bbad9484a12",
+          "status": "cancelled",
+          "revision": 2,
+          "sourceDocumentId": "source-owner",
+          "sourceVersionId": "version-source-owner",
+          "sourceDisplayName": "合成简历.md",
+          "targetRole": "",
+          "hasJd": false,
+          "quotaDay": "2026-10-18",
+          "allowanceStatus": "released",
+          "billingStatus": "released",
+          "billingClass": "points",
+          "pointsCharged": 100,
+          "createdAtMs": 1792339170000,
+          "updatedAtMs": 1792339170000,
+          "completedAtMs": null,
+          "errorCode": null,
+          "errorMessage": null,
+          "savedDocumentId": null,
+          "savedVersionId": null,
+          "sourceText": "# 合成候选人\nsynthetic@example.invalid\n负责使用Python开发数据接口，为12个团队提供服务。\n2024年 合成科技有限公司\n教育：合成大学 本科。",
+          "jdText": "",
+          "jdDocumentId": null,
+          "jdVersionId": null,
+          "review": null,
+          "initialDraftMarkdown": null,
+          "draftMarkdown": null,
+          "promptVersion": "resume-optimizer-zh-CN-v1",
+          "scoreVersion": "resume-reference-v1"
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T19:04:04.227168+00:00"
+        }
+      }
+    },
+    {
+      "label": "free-capabilities",
+      "status": 200,
+      "body": {
+        "success": true,
+        "data": {
+          "enabled": true,
+          "eligible": true,
+          "dailyLimit": 3,
+          "dailyRemaining": 3,
+          "quotaDay": "2026-10-18",
+          "timezone": "Asia/Shanghai",
+          "resetAtMs": 1792339200000,
+          "nowMs": 1792339170000,
+          "memberRequired": false,
+          "activeTimeMember": true,
+          "exhausted": false,
+          "activeJobId": null,
+          "billingClass": "daily_pass_free",
+          "entryPoints": 0,
+          "availablePoints": 200,
+          "canStart": true,
+          "limits": {
+            "resumeCharacters": 40000,
+            "jdCharacters": 12000,
+            "targetRoleCharacters": 120,
+            "draftCharacters": 60000
+          },
+          "exports": [
+            "docx",
+            "pdf"
+          ]
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T19:04:04.323186+00:00"
+        }
+      }
+    },
+    {
+      "label": "free-create",
+      "status": 200,
+      "body": {
+        "success": true,
+        "data": {
+          "jobId": "resume-opt-b4a4f159d78b4c86bdb0add62f6b7a24",
+          "status": "queued",
+          "revision": 1,
+          "sourceDocumentId": "source-owner",
+          "sourceVersionId": "version-source-owner",
+          "sourceDisplayName": "合成简历.md",
+          "targetRole": "",
+          "hasJd": false,
+          "quotaDay": "2026-10-18",
+          "allowanceStatus": "reserved",
+          "billingStatus": "reserved",
+          "billingClass": "daily_pass_free",
+          "pointsCharged": 0,
+          "createdAtMs": 1792339170000,
+          "updatedAtMs": 1792339170000,
+          "completedAtMs": null,
+          "errorCode": null,
+          "errorMessage": null,
+          "savedDocumentId": null,
+          "savedVersionId": null,
+          "sourceText": "# 合成候选人\nsynthetic@example.invalid\n负责使用Python开发数据接口，为12个团队提供服务。\n2024年 合成科技有限公司\n教育：合成大学 本科。",
+          "jdText": "",
+          "jdDocumentId": null,
+          "jdVersionId": null,
+          "review": null,
+          "initialDraftMarkdown": null,
+          "draftMarkdown": null,
+          "promptVersion": "resume-optimizer-zh-CN-v1",
+          "scoreVersion": "resume-reference-v1"
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T19:04:04.368165+00:00"
+        }
+      }
+    },
+    {
+      "label": "quote-changed",
+      "status": 409,
+      "body": {
+        "success": false,
+        "data": null,
+        "error": {
+          "code": "domain_request_error",
+          "message": "免费次数、会员状态或本次报价已变化，请刷新并重新确认。",
+          "details": {
+            "feature": "resume-optimizer",
+            "action": "request",
+            "errorCode": "resume_optimizer_quote_changed"
+          }
+        },
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T19:04:04.597309+00:00"
+        }
+      }
+    },
+    {
+      "label": "insufficient-balance",
+      "status": 402,
+      "body": {
+        "success": false,
+        "data": null,
+        "error": {
+          "code": "domain_request_error",
+          "message": "可用积分不足，本次简历优化需要 100 积分。",
+          "details": {
+            "feature": "resume-optimizer",
+            "action": "request",
+            "errorCode": "resume_optimizer_insufficient_balance"
+          }
+        },
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T19:04:04.622395+00:00"
+        }
+      }
+    },
+    {
+      "label": "unauthenticated",
+      "status": 401,
+      "body": {
+        "success": false,
+        "data": null,
+        "error": {
+          "code": "domain_request_error",
+          "message": "缺少有效的 Bearer 访问令牌。",
+          "details": {
+            "feature": "authentication",
+            "action": "require-auth",
+            "errorCode": null
+          }
+        },
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T19:04:04.627275+00:00"
+        }
+      }
+    }
+  ],
+  "pointsCreateRequest": {
+    "idempotencyKey": "synthetic-key",
+    "sourceDocumentId": "source-owner",
+    "sourceVersionId": "version-source-owner",
+    "targetRole": "",
+    "jdDocumentId": null,
+    "jdVersionId": null,
+    "jdText": "",
+    "quotedQuotaDay": "2026-10-18",
+    "quotedBillingClass": "points",
+    "quotedPoints": 100,
+    "confirmPointsCharge": true,
+    "confirmProcessing": true
+  },
+  "billingAfterRefund": {
+    "catalog": [
+      {
+        "id": "pass-1",
+        "catalogVersion": 5,
+        "kind": "time_pass",
+        "displayName": "1 天会员",
+        "priceCents": 2990,
+        "durationDays": 1,
+        "knowledgeIndexAllowance": 0,
+        "published": true
+      },
+      {
+        "id": "pass-3",
+        "catalogVersion": 5,
+        "kind": "time_pass",
+        "displayName": "3 天会员",
+        "priceCents": 6990,
+        "durationDays": 3,
+        "knowledgeIndexAllowance": 0,
+        "published": true
+      },
+      {
+        "id": "pass-7",
+        "catalogVersion": 5,
+        "kind": "time_pass",
+        "displayName": "7 天会员",
+        "priceCents": 12990,
+        "durationDays": 7,
+        "knowledgeIndexAllowance": 0,
+        "published": true
+      },
+      {
+        "id": "pass-15",
+        "catalogVersion": 5,
+        "kind": "time_pass",
+        "displayName": "15 天会员",
+        "priceCents": 21990,
+        "durationDays": 15,
+        "knowledgeIndexAllowance": 2,
+        "published": true
+      },
+      {
+        "id": "pass-30",
+        "catalogVersion": 5,
+        "kind": "time_pass",
+        "displayName": "30 天会员",
+        "priceCents": 32990,
+        "durationDays": 30,
+        "knowledgeIndexAllowance": 2,
+        "published": true
+      },
+      {
+        "id": "points-1000",
+        "catalogVersion": 5,
+        "kind": "points_pack",
+        "displayName": "1000 积分",
+        "priceCents": 9990,
+        "points": 1000,
+        "knowledgeIndexAllowance": 0,
+        "published": true
+      },
+      {
+        "id": "points-3000",
+        "catalogVersion": 5,
+        "kind": "points_pack",
+        "displayName": "3000 积分",
+        "priceCents": 26990,
+        "points": 3000,
+        "knowledgeIndexAllowance": 0,
+        "published": true
+      },
+      {
+        "id": "points-10000",
+        "catalogVersion": 5,
+        "kind": "points_pack",
+        "displayName": "10000 积分",
+        "priceCents": 79990,
+        "points": 10000,
+        "knowledgeIndexAllowance": 0,
+        "published": true
+      },
+      {
+        "id": "points-30000",
+        "catalogVersion": 5,
+        "kind": "points_pack",
+        "displayName": "30000 积分",
+        "priceCents": 199990,
+        "points": 30000,
+        "knowledgeIndexAllowance": 0,
+        "published": true
+      },
+      {
+        "id": "points-66666",
+        "catalogVersion": 5,
+        "kind": "points_pack",
+        "displayName": "66666 积分",
+        "priceCents": 399990,
+        "points": 66666,
+        "knowledgeIndexAllowance": 0,
+        "published": true
+      }
+    ],
+    "rates": {
+      "catalogVersion": 5,
+      "answerPoints": 5,
+      "webSearchAnswerPoints": 20,
+      "screenshotAnswerPoints": 15,
+      "writtenExamPoints": 30,
+      "realtimeMinutePoints": 5,
+      "knowledgeIndexMinimumPoints": 20,
+      "knowledgeIndexPointsPer1000Tokens": 4,
+      "tokenizerVersion": "mvp-v1"
+    },
+    "balance": 200,
+    "ledger": [
+      {
+        "id": "ledger-cn-resume-edecf9304bbe4f75a147b94667c0f6f4",
+        "userId": "owner",
+        "kind": "resume_optimizer_refund",
+        "points": 100,
+        "createdAtMs": 1792339170000,
+        "referenceId": "cn-resume-optimizer:resume-opt-3654489b931f4b9ba5545bbad9484a12:refund",
+        "description": "简历优化未完成退还"
+      },
+      {
+        "id": "ledger-cn-resume-1ff22c85c2394af8ba5e95f102921ca8",
+        "userId": "owner",
+        "kind": "resume_optimizer_charge",
+        "points": -100,
+        "createdAtMs": 1792339170000,
+        "referenceId": "cn-resume-optimizer:resume-opt-3654489b931f4b9ba5545bbad9484a12:charge",
+        "description": "简历优化扣费"
+      },
+      {
+        "id": "ledger-welcome-185246ad293e40bbbfc586c76c948251",
+        "userId": "owner",
+        "kind": "welcome_grant",
+        "points": 200,
+        "createdAtMs": 1792263844056,
+        "referenceId": "welcome:owner",
+        "description": "新用户赠送积分"
+      }
+    ],
+    "activePass": null,
+    "queuedPasses": [],
+    "orders": [],
+    "officialOrders": [],
+    "support": {
+      "wechatId": "mianshiwen_01",
+      "email": "contact@oneshowailab.com",
+      "qrAssetPath": "",
+      "serviceHours": "工作日 10:00-18:00",
+      "refundSummary": "退款按订单状态和未使用权益审核"
+    }
+  },
+  "freeCreateRequest": {
+    "idempotencyKey": "free",
+    "sourceDocumentId": "source-owner",
+    "sourceVersionId": "version-source-owner",
+    "targetRole": "",
+    "jdDocumentId": null,
+    "jdVersionId": null,
+    "jdText": "",
+    "quotedQuotaDay": "2026-10-18",
+    "quotedBillingClass": "daily_pass_free",
+    "quotedPoints": 0,
+    "confirmPointsCharge": false,
+    "confirmProcessing": true
+  }
+}

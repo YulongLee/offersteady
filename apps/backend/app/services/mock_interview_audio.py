@@ -44,20 +44,16 @@ class MockInterviewAudio:
     max_captures = 64
     max_frame_bytes = 8192
 
-    def __init__(self, gateway=None, *, gateway_factory=None, now_ms=None, interview_language="zh-CN"):
+    def __init__(self, gateway=None, *, gateway_factory=None, now_ms=None):
         # Production uses a per-round adapter. Some legacy ASR adapters retain
         # per-source creation locks for their own lifetime; do not accumulate
         # those locks across every historical mock round in a shared singleton.
         if gateway is None and gateway_factory is None:
             raise ValueError("ASR adapter factory required")
         self._gateway_factory = gateway_factory or (lambda: gateway)
-        self.interview_language = interview_language
         self.now_ms = now_ms or (lambda: int(time() * 1000))
         self._lock = threading.RLock()
         self._captures: dict[str, Capture] = {}
-        # Detached rounds still own an upstream resource until close finishes.
-        # Count them against admission so fast submissions/replays cannot grow
-        # provider connections while earlier close handshakes are pending.
         self._closing: dict[str, Capture] = {}
 
     def open(self, *, session_id: str, owner_id: str, device_id: str, epoch: str,
@@ -141,7 +137,7 @@ class MockInterviewAudio:
                 segment_id=capture.epoch, revision=capture.sequence, sequence=capture.sequence,
                 captured_at_ms=now, started_at_ms=capture.opened_at_ms, ended_at_ms=now,
                 duration_ms=len(pcm) // 32, codec="pcm-s16le", sample_rate_hz=16000,
-                channels=1, is_final=False, audio_bytes=pcm, interview_language=self.interview_language)
+                channels=1, is_final=False, audio_bytes=pcm)
             result = capture.gateway.transcribe(frame=frame, attempt=1)
             self._partial(frame, result)
 

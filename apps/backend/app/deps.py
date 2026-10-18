@@ -11,7 +11,7 @@ from .adapters.oss_storage import AliyunOssStorageAdapter
 from .core.config import REPO_ROOT, Settings, get_settings
 from .core.errors import DomainRequestError
 from .core.logging import configure_logging
-from .ports.authentication import AccessTokenCodecPort, AuthenticatedRequestContext, AuthenticationRepository, EmailVerificationProviderPort, PasswordHasherPort, SmsVerificationProviderPort
+from .ports.authentication import AccessTokenCodecPort, AuthenticatedRequestContext, AuthenticationRepository, PasswordHasherPort, SmsVerificationProviderPort
 from .ports.commercial_hardening import CommercialHardeningRepository
 from .ports.document_processing import ProcessingTaskRepository, VectorStorePort
 from .ports.chat import ChatRepository, LLMGatewayPort, PromptBuilderPort, PromptTemplatePort
@@ -50,15 +50,7 @@ from .services.authentication_repository import InMemoryAuthenticationRepository
 from .services.postgres_authentication_repository import PostgresAuthenticationRepository
 from .services.authentication_service import AuthenticationService, CompatibleWechatLoginProvider, JWTAccessTokenCodec, PBKDF2PasswordHasher
 from .services.sms_verification_provider import AliyunDypnsSmsVerificationProvider, AliyunDysmsSmsVerificationProvider, FakeSmsVerificationProvider
-from .services.email_verification_provider import FakeEmailVerificationProvider, SmtpEmailVerificationProvider
 from .services.billing_service import BillingService
-from .services.global_commerce_repository import InMemoryGlobalCommerceRepository
-from .services.global_commerce_service import GlobalCommerceService
-from .services.global_checkout_service import GlobalCheckoutService
-from .services.global_creem_configuration_service import GlobalCreemConfigurationService
-from .services.global_usage_billing_adapter import GlobalUsageBillingAdapter
-from .services.creem_provider import CreemProvider
-from .services.postgres_global_commerce_repository import PostgresGlobalCommerceRepository
 from .services.postgres_billing_repository import PostgresBillingRepository
 from .services.postgres_points_redemption_repository import PostgresPointsRedemptionRepository
 from .services.document_repository import InMemoryDocumentRepository
@@ -225,7 +217,8 @@ def document_service() -> DocumentService:
         processing_service=document_processing_service(),
         deletion_scheduler=material_deletion_scheduler(),
         commercial_repository=commercial_hardening_repository(),
-        billing_service=usage_billing_service(),
+        billing_service=billing_service(),
+        optimizer_delete_hook=delete_cn_resume_optimizer_source if get_settings().product_edition == "cn" else None,
     )
 
 
@@ -311,7 +304,7 @@ def chat_service() -> ChatService:
         prompt_builder=prompt_builder_port(),
         llm_gateway=llm_gateway_port(),
         web_search_gateway=web_search_gateway_port(),
-        billing_service=usage_billing_service(),
+        billing_service=billing_service(),
         commercial_repository=commercial_hardening_repository(),
     )
 
@@ -367,25 +360,6 @@ def sms_verification_provider() -> SmsVerificationProviderPort:
 
 
 @lru_cache(maxsize=1)
-def email_verification_provider() -> EmailVerificationProviderPort:
-    settings = get_settings()
-    if not settings.auth_email_enabled:
-        return FakeEmailVerificationProvider(settings)
-    if settings.auth_email_provider_mode == "smtp":
-        _require_production_provider(settings, "email", {
-            "OFFERSTEADY_AUTH_EMAIL_CODE_PEPPER": settings.auth_email_code_pepper,
-            "OFFERSTEADY_AUTH_EMAIL_SMTP_HOST": settings.auth_email_smtp_host,
-            "OFFERSTEADY_AUTH_EMAIL_SMTP_USERNAME": settings.auth_email_smtp_username,
-            "OFFERSTEADY_AUTH_EMAIL_SMTP_PASSWORD": settings.auth_email_smtp_password,
-            "OFFERSTEADY_AUTH_EMAIL_FROM_ADDRESS": settings.auth_email_from_address,
-        })
-        return SmtpEmailVerificationProvider(settings)
-    if settings.environment == "production":
-        raise RuntimeError("email production configuration requires SMTP provider mode")
-    return FakeEmailVerificationProvider(settings)
-
-
-@lru_cache(maxsize=1)
 def authentication_service() -> AuthenticationService:
     return AuthenticationService(
         settings=get_settings(),
@@ -395,7 +369,6 @@ def authentication_service() -> AuthenticationService:
         token_codec=access_token_codec_port(),
         wechat_provider=wechat_login_provider(),
         sms_provider=sms_verification_provider(),
-        email_provider=email_verification_provider(),
     )
 
 
@@ -426,44 +399,6 @@ def billing_service() -> BillingService:
         billing_repository=billing_repository,
         authentication_repository=authentication_repository(),
     )
-
-
-@lru_cache(maxsize=1)
-def global_commerce_repository():
-    settings = get_settings()
-    if settings.product_edition == "global" and settings.environment == "production" and not settings.database_url:
-        raise RuntimeError("OFFERSTEADY_DATABASE_URL is required for production Global commerce")
-    if settings.product_edition == "global" and settings.database_url and not os.environ.get("PYTEST_CURRENT_TEST"):
-        return PostgresGlobalCommerceRepository(settings)
-    return InMemoryGlobalCommerceRepository()
-
-
-@lru_cache(maxsize=1)
-def global_commerce_service() -> GlobalCommerceService:
-    return GlobalCommerceService(get_settings(), global_commerce_repository())
-
-
-@lru_cache(maxsize=1)
-def global_creem_configuration_service() -> GlobalCreemConfigurationService:
-    return GlobalCreemConfigurationService(get_settings(), global_commerce_repository())
-
-
-def creem_provider() -> CreemProvider:
-    settings = get_settings()
-    configuration = global_creem_configuration_service()
-    mode = configuration.active_mode()
-    return CreemProvider(configuration.configured_settings(mode), mode=mode)
-
-
-def global_checkout_service() -> GlobalCheckoutService:
-    settings = get_settings()
-    mode = global_creem_configuration_service().active_mode()
-    return GlobalCheckoutService(settings=settings.model_copy(update={"global_commerce_provider_mode": mode}), repository=global_commerce_repository(), provider=creem_provider(), entitlements=global_commerce_service())
-
-
-@lru_cache(maxsize=1)
-def usage_billing_service():
-    return GlobalUsageBillingAdapter(global_commerce_service()) if get_settings().product_edition == "global" else billing_service()
 
 
 @lru_cache(maxsize=1)
@@ -523,7 +458,7 @@ def screenshot_answer_service() -> ScreenshotAnswerService:
         prompt_template=screenshot_prompt_template_port(),
         prompt_builder=screenshot_prompt_builder_port(),
         llm_gateway=llm_gateway_port(),
-        billing_service=usage_billing_service(),
+        billing_service=billing_service(),
         commercial_repository=commercial_hardening_repository(),
     )
 
@@ -574,7 +509,7 @@ def realtime_speech_service() -> RealtimeSpeechService:
         repository=realtime_speech_repository(),
         session_service=session_service(),
         asr_gateway=realtime_asr_gateway(),
-        billing_service=usage_billing_service(),
+        billing_service=billing_service(),
         commercial_repository=commercial_hardening_repository(),
         screenshot_upload_port=screenshot_upload_port(),
         # Resolve chat/retrieval lazily on a cold-path worker. Realtime audio
@@ -732,7 +667,7 @@ def document_processing_service() -> DocumentProcessingService:
         embedding_pipeline=embedding_pipeline_service(),
         material_availability=material_availability_validator(),
         commercial_repository=commercial_hardening_repository(),
-        billing_service=usage_billing_service(),
+        billing_service=billing_service(),
     )
 
 
@@ -813,24 +748,40 @@ def resolve_owned_user_id(*, explicit_user_id: str | None, auth_context: Authent
     return auth_context.user_id
 
 
-def authorize_global_feature(*, user_id: str, feature: str) -> None:
-    settings = get_settings()
-    if settings.product_edition != "global" or not settings.global_commerce_enabled:
-        return
-    state = global_commerce_service().state(user_id)
-    allowed = bool(state["features"].get(feature))
-    if not allowed:
-        raise DomainRequestError("global-commerce", f"feature-{feature}", "Your current plan does not include this feature.", 402, error_code="global_feature_not_in_plan")
+@lru_cache(maxsize=1)
+def cn_resume_optimizer_repository():
+    from .services.cn_resume_optimizer_repository import CNResumeOptimizerRepository
+    settings=get_settings()
+    if settings.product_edition!="cn" or not settings.database_url:
+        from .services.cn_resume_optimizer_repository import optimizer_error
+        raise optimizer_error("disabled")
+    document_repository()
+    # This feature never falls back to a separate in-memory wallet.
+    PostgresBillingRepository(settings)
+    return CNResumeOptimizerRepository(settings)
 
 
-def authorize_global_interview_start(*, user_id: str, interview_already_active: bool) -> None:
-    settings = get_settings()
-    if settings.product_edition != "global" or not settings.global_commerce_enabled:
+@lru_cache(maxsize=1)
+def cn_resume_optimizer_service():
+    from .services.cn_resume_optimizer_service import CNResumeOptimizerService
+    return CNResumeOptimizerService(settings=get_settings(),repository=cn_resume_optimizer_repository(),
+        documents=document_repository(),storage=storage_port(),document_service=document_service())
+
+
+def delete_cn_resume_optimizer_source(document,deleted_at_ms):
+    settings=get_settings()
+    if settings.product_edition!="cn" or not settings.database_url:
         return
-    try:
-        global_commerce_service().authorize_interview(user_id=user_id, interview_already_active=interview_already_active)
-    except Exception as exc:
-        from .services.global_commerce_service import GlobalFairUseRestricted
-        if isinstance(exc, GlobalFairUseRestricted):
-            raise DomainRequestError("global-commerce", "fair-use", str(exc), 429, error_code="global_fair_use_restricted") from exc
-        raise
+    import psycopg
+    with psycopg.connect(settings.database_url,connect_timeout=settings.database_connect_timeout_seconds,
+                         application_name="offersteady-cn-resume-source-delete") as connection:
+        if connection.execute("SELECT to_regclass('cn_resume_optimizer_jobs')").fetchone()[0] is None:
+            return
+    # Existing private content is purged even after this feature is disabled.
+    repo=cn_resume_optimizer_repository()
+    repo.purge_by_source(user_id=document.owner_user_id,document_id=document.document_id,
+                         now_ms=deleted_at_ms,delete_source=True)
+    if cn_resume_optimizer_service.cache_info().currsize:
+        service=cn_resume_optimizer_service()
+        if service.runtime:
+            service.runtime.cancel_active_for_source(document.document_id)

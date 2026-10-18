@@ -1,0 +1,1541 @@
+{
+  "app": {
+    "worker.py": "799f884210678a62648b647927357c52224b5db3852d46fe438e604b8b4ee6f3",
+    "interview_languages.py": "f014c7e55fd6758ff1c44dc0a1d605b6e2b012fc0c98e4051147d96e5a966de6",
+    "material_formats.py": "efab7d20e8288f570ab8652d1130f3b7ed2edb8fd11630af9f97a69fd8bb0172",
+    "main.py": "5345d2f1a8a2d1fa1f6721e394515c5d17d6465f2a5073319a989607b8221ec4",
+    "__init__.py": "c7a401fa1dbc4189255d002741ff7ab4a30bf0c64b25d2bcdc987b88723bed5a",
+    "desktop_release_manifest.json": "76ba8b6009071d4c4c0b824b6bbbf1c05c7d848f95c1ab08649c9e9e05c4a76a",
+    "deps.py": "37ce0eb37d3f2139970c1e8eb0efb2a2010d6097dfe5b7465f4636e4175c8fb1",
+    "adapters/__init__.py": "5384bfdb2df380b6557cc7a71d16891415bccaa87699406e236f752c6415389f",
+    "adapters/oss_storage.py": "ac84828377f8a9c1b0ec83d1d303497a45d34f66067760d2956dba159794ad5d",
+    "ports/realtime_speech.py": "83df0aa69d2ab4c09978d07591e8ddfe77a67c4b98674321189e6511cd07d98b",
+    "ports/document_processing.py": "3c602c00d60c06fc59810d583ae2f1775fbf4c709f00722a0136b89b9c3e7495",
+    "ports/retrieval.py": "118adb630c0c81dbaf1217d13047332e7747c2f33b645a0dd4c4b383fa0c3540",
+    "ports/screenshot_analysis.py": "205ead9dd8acf932e790f675380ca2eda31ab274e16508605ce204dfb0115c3c",
+    "ports/billing_persistence.py": "7eb776322891efee2b45ddff5846729cf504c45a7ec5be91b729f0881fb4a062",
+    "ports/screenshot_answer.py": "031f3a91aa7c51056b6632fd9fee01a17705ae521c474de993606eba5f99e4d0",
+    "ports/document_repository.py": "10d629aad531a82c7e6040a9d9a39e4d71501b261adfa9b9b16a474f40c8ae7c",
+    "ports/web_search.py": "ddbfd4f25ad93f4b1749c7afe0854c2c8e16b819105e9d217a2adc2449af15b6",
+    "ports/chat.py": "a9c55c281724e937e7b3d8b109f531b2026b08edef1a312c9a2a7d5b19ec8e98",
+    "ports/streaming.py": "e279618d9f6633ee0158189e2998af39cd2cf5376d64fb2b8b03c86728a1dfc3",
+    "ports/authentication.py": "864612b3b24d546b63e12532afd03c22735b05c09c05ea3938edcad31cdd3d27",
+    "ports/points_redemption.py": "60bd1278fcfd24575452dd6a8cb336852766b7ee01380b00ef0c4414cab3f0df",
+    "ports/commercial_hardening.py": "8d2bba33c5e65a278d198f1ea7811da1fa3928b56762da3395202a7ff3f05955",
+    "ports/parsing.py": "6c31b5c36888525a24290a7079f6cc48b5b6a3d7079d7bd07b69180aa081e50c",
+    "ports/storage.py": "0f22c3e5cd4ee663bca51d27a0e6996916e2eda7753dbe2cc83885b99db2daaf",
+    "ports/answer_generation.py": "00c5ff8e5466a200c283f1c4dc67379f3f59e08461a18dcb160821c4838f1077",
+    "ports/interview_session.py": "35b3fc828a3264697e2e00167be4c430da7110048a0879e09d184b9be511606e",
+    "modules/realtime_speech.py": "a26b0194a1f088d0771d29edce5d23536fbd710897c22eda3e33b1c2b1cdf646",
+    "modules/knowledge.py": "d2bb9662defbd6d685bff6e44f0a56d29551cfc829e217b2812b555e2e8239df",
+    "modules/document_processing.py": "fe24f901343c16b1184077cf522fc9fc214bc579e3b27cf16365fe9dbee3d503",
+    "modules/partner_program.py": "2f6a3e5875e39b3362548a5c63c6748efb8a8946c44a842e292e6e33ef1515f6",
+    "modules/screenshot_answer.py": "3f91557a4f5f175dad744052459ebba4d1859d3bf8833446d479744d99b5f3ba",
+    "modules/common.py": "0469c3a903f5a0ce35cc16452a1e40262330ec5915e2ab09e0e2346421ad1e2d",
+    "modules/live_answer.py": "542706aecf1ac4801767280d6776dfe542a111d29d5d606db5b37510580b148f",
+    "modules/authentication.py": "77e74aa24dd10a5f4ea39e4ba6a5a93831382cbbb81f9acc4245ef97eb04cdc2",
+    "modules/billing.py": "9528378a10e381e43b284ecaa19d94e7d0e09c0496753c60520aa71a4ed87b9f",
+    "modules/__init__.py": "b45973b814e6ae9d0a608f5ae7422cf0143f1e956d61e30d08201177c7da2a78",
+    "modules/resume.py": "08b8bcb11fa2c52f7a2506410b1b8f331c456c4ad9eb4776155786dfc3f22a45",
+    "modules/document_service.py": "a92094ba4e484e6ca0f5a6ac9b29375efcfd971ba191d4c09c5d7d5959985574",
+    "modules/job_description.py": "37a3083bafa1cfdb59edce391b5ff810cc4515763cf9bfa504d8210d18bc84e2",
+    "modules/session.py": "90e433e65123f9bb5b47a79833c9eba8e39f671d36e0c2ae7242c7383d63eee0",
+    "modules/system.py": "8826eecc3e26b7436f4a0c262f47bd8b35e6d774f8078c7a99a8e494aa8eb188",
+    "modules/knowledge_retrieval.py": "9dadab5f7884fdef3642f371b3e40a7a646f19f4fd5b3d43307fa8fde05d657e",
+    "modules/web.py": "b83023fee378a7d9a2baa16cee454f59f94b03553678c529eb1bb232402edcf1",
+    "modules/mock_interview.py": "ab24f60c96ace6b248727a0c38b1ba58d18b0cfd964ef6e9a8b635f40c9dd953",
+    "modules/mock_interview_legacy.py": "7b36d6c9f14a3d625a7ac645e3ca79ea9f0751c1bd43e4deaf6ddf1d387e9b9e",
+    "services/integration_verification.py": "297243b64be13a8656ad82e1de4568089f977c709cb8a7bd323c28b0fe9f6454",
+    "services/redis_realtime_speech_repository.py": "63e94529614eebef4baf24daf58ca27edccafe669f519b38e4b092f6eb3e0fcd",
+    "services/upload_intent_repository.py": "5ca514b3f11f0668cf82325c819e11d6b1710ef0557a35729f144d723fab964e",
+    "services/screenshot_answer_service.py": "674d5849c83420c56b97781ff0aec7f9c380460fc013c712504600b9ffd7318d",
+    "services/admin_analytics_job.py": "89477b1dc881b772fe27815dd344362b3eff46eceff95b08ce849b2c9d6e045b",
+    "services/dashscope_task_asr_gateway.py": "e3f729088a99ead9a79069e1d35712e2b5b7f62429b9272ce9fbd07cbd525f46",
+    "services/postgres_points_redemption_repository.py": "20ff35a5ad8b966b5e6a20e5ced4ceafc3a7277de5a76b5b250aacecd28a6b2b",
+    "services/billing_service.py": "a95b5cda1ab436956f43c8700ef5b7f985946538306398d6d22aaf987ee39db4",
+    "services/document_processing.py": "233b064cfc70d2cb4289eb65328e1ae247d687871d13a4e23bb2ae53bbb5951e",
+    "services/sms_verification_provider.py": "8a8c2a19f0fa0d6ee30239f3ac56164963661998d1bb68466032946894319ce3",
+    "services/partner_program.py": "4eae767a3e5696d864c0f45b069c53177996d51d72d600b0376f3c5911bfd543",
+    "services/material_availability.py": "4cdc4729e511031cc4c71cb7b23dfebd1f418c305632c20b9962356ae578a95f",
+    "services/knowledge_index_quote.py": "a44ffe259837e79c8271bf0c6040b28a7c89d6db3f8b759becee2c542eceb12e",
+    "services/admin_repository.py": "8f5d8eadede8fbf96befc3764b4bf958deacb91691dba9db6b737896dbde5535",
+    "services/document_processing_adapters.py": "8fa749eac4871b1601f2671419a6e11fce97136a8b464ebedc1e7a2175509e2f",
+    "services/postgres_billing_repository.py": "a85a69221334c4f45c62fc9971fd5cfb4d6235e8e1ec01b48aed99bb937d035a",
+    "services/promotion_analytics_job.py": "dc215318a85cd783351e1dfdf19f0a2aa240ada4fdf722f2bf494c42d484c8f9",
+    "services/promotion_repository.py": "7cfec5bb9e84282d01623fe65ec53302103e5137f0290a2c1d05fe50db7c88ad",
+    "services/screenshot_answer_repository.py": "63605f19f6ea0724c3894b865e1502ad7d59d844c5079d2e226a9b9e8b6de140",
+    "services/session_service.py": "b6e664eedb605038bc9f421ce2f9afc84d47c9cdbf02674218b30b49bd2de886",
+    "services/postgres_authentication_repository.py": "d1fb67c9ef7b72689a28aed50df8ae98e76f8530e4a4861321238462be698c99",
+    "services/dashscope_realtime_asr_gateway.py": "f978931265889544a02aab942f888dcb18323114beda87355d113c6b31dd7ae4",
+    "services/authentication_repository.py": "af096a9eed91d0f46e3dd4255a539a3104ede9d50d7d71b40fbf72c128b3cd57",
+    "services/programming_prompt.py": "31d8c67a0f221ca382d7a6eafac64b699a05c62f6da238dc54bd64e8707bf593",
+    "services/screenshot_answer_performance.py": "8d4d0d6263699779adc7bf6b857c7bf2cb8f56f136e6b0f0b1bf1c431e95ff66",
+    "services/realtime_event_wait.py": "b6146abf4db5035eb4352575eb61a7bd8b9c1ba01eb55968fd258753d964c7c4",
+    "services/embedding_pipeline.py": "f4bd8db3fe67e690fbdaf9b91d7c0e7d907e064d7f288e2ec6114ada3a37aa7e",
+    "services/document_parser.py": "0d6c192bd471643f66921cf33a0541718cee0c8eb0647a6bd45b50ff57962015",
+    "services/admin_service.py": "e67ab97785ad6de4f43047151b7199259102901582839288ab4fdee3419a78fa",
+    "services/document_processing_repository.py": "3d2d852638cf754fc2c615266e411937884d70d014f98ef29f081270f520fca1",
+    "services/material_deletion.py": "4910e2d07c4e4f2855df18b6cdccf69e1d3b73b61d0cd80575d68ebc24b955db",
+    "services/document_repository.py": "ae455d34d8caa79014b72e40f1e3b9787e852ffe5ec6ad89b623a7b0aa697435",
+    "services/wechat_pay_provider.py": "8a9bec3579d972662b8dd57ec61afb8a9abec9b60c4a7cac80fa4cd927637963",
+    "services/realtime_speech_service.py": "812d21e1019b92532f10b0c9c7bfe27839822157bcb1b6fbbccf34a54c154390",
+    "services/commercial_worker.py": "47663b6eda68ad61bf6422347e76292f1bc7c65dde00878df1424ece9ae31fdb",
+    "services/mzfpay_provider.py": "9c2ad8e3447af2aa5f3caaee35ed3ac432e595a3510aa9980979c5246dbb2b1e",
+    "services/payment_reconciliation.py": "484c28ebfa762370898695f27e4d33577a1b9e1b381c0039d9ead3c6a445e24b",
+    "services/web_search_gateway.py": "e382df112b85708e571849ad1d518c4cee63a917099a6632395acef7158db997",
+    "services/chat_repository.py": "431180e0ea8fa847fc1e30b4ae591e1efb7d57efd182d197c676d1980f74e52f",
+    "services/admin_analytics.py": "fceb02206cc944fabc40c3cf7e377e6cca5729f9f9f9fb253e0a8af37e2a5c41",
+    "services/material_ingestion.py": "a0361c311c2585bb45eae1087818efed62a8c77362f3aec04bda3dd822216fc8",
+    "services/commercial_hardening.py": "d0880f32765f5fab6e533dd80002032dc43e483bb86698d3a0ef3ed5c54d5d63",
+    "services/._web_search_gateway.py": "59e018b5446ecdfefd1f271135abc85988aecf31e17c29b9d0db23bd208ae530",
+    "services/__init__.py": "5384bfdb2df380b6557cc7a71d16891415bccaa87699406e236f752c6415389f",
+    "services/admin_capacity.py": "c19b72df52909fb1aa5e4845644aee9c263260b16f78115b5997a5dffd21e385",
+    "services/alipay_provider.py": "68dc6bd82a9f1b4347519c3b2cb14692cbf756cb7fad3e3e8b5896dd53f6f359",
+    "services/admin_bootstrap.py": "e48f1d13b57cae3f89e20923f5bf21885398fd80d623b6eb30afea4c0cc8aa33",
+    "services/authentication_service.py": "56de5d0f059231592ada21eae723978e3d9cdc4a83a3fdeb0bd1089d035605ff",
+    "services/redis_live_task_repositories.py": "e54a2a02547a0f40b1dd93b0d986491cd2df7a5c4e739f6a39e1806b0eccfc55",
+    "services/realtime_speech_repository.py": "886f6aa4148f5a36d1f5c5748224db4b7cc217a4a5b542fd476efbd2f4fd0857",
+    "services/payment_channel_service.py": "a2e8f5d6bd7e395a259d8fe9b2aac5ce532b7f6a138210b0e72f9a9df35dd693",
+    "services/postgres_material_persistence.py": "bc948515d0409b93f272c40cd013e2adf2bcd88f796a24a9c7b04054d6f7c727",
+    "services/chat_service.py": "8828c29018a1095899c7409123ab93dea33a00213fc58a51bd6afbf0e9ebe8cd",
+    "services/interview_session_repository.py": "ad7b972c7a32a16fabe300e5ca79fe23ad611b1529b1ead000abe130a92bb1cb",
+    "services/document_service.py": "bdf0de2bdd8b1a25061b2da68503b48b8445c7542cd4bfa71f20b91000aba4e3",
+    "services/postgres_migrations.py": "b372b42696c9acf7a7b7672b5202f3dc95bc4bb69e44e51125617156501c713d",
+    "services/postgres_interview_session_repository.py": "48b946a6527336dee26cbdba1ba868fee7f4e70562bb96ce582403c0e59adb53",
+    "services/live_answer_stream_executor.py": "7bace4fc81f42f4b48744b84f9e607d90c0e8f929c37c23f5a44cbaf139c9bcd",
+    "services/material_object_keys.py": "4592d6b8d1093a3617ccacba2128109ca75ba50ea3df98bf6e707452b6234075",
+    "services/knowledge_retrieval.py": "3a96f86a185f96be16405ffed2c00d790a22896309ecdb51232971735b81961e",
+    "services/screenshot_stream_admission.py": "6467fabb6675f5483430750571442194dfbd8621363601ceb810e6bf3cfbf7f2",
+    "services/realtime_control_executor.py": "49258e90349e5fb32682e26fc75ef1833aca5214824ef00430e9d7b6d70a0430",
+    "services/end_to_end_integration.py": "937eab572940366af5350b925ed10c0e59ff5857d68f832596c6359699c0d564",
+    "services/question_prefetch_scheduler.py": "36bc5ab7fc2329945a3becdedc0ccc0a38356c334e8b32a735610c58774d744f",
+    "services/mock_interview_runtime.py": "d90738ef92ec7c78b597cdd01da754e165e8e8f9d3ca9fc821f5fed0ba461469",
+    "services/mock_interview_repository.py": "f769ece3b35b1323011d828f96eb4e094abef424094e3e1c28fc544c385480cf",
+    "services/mock_interview_jobs.py": "73f11d55c05d0610fe251bb47467f4f5bb261a0ad8321287414f0b5f81a2b702",
+    "services/mock_interview_audio.py": "1039d5612ee2bf822351286238bfffa9e17d0519997410e8c497366716c8e830",
+    "services/mock_interview_tts.py": "38e6540b7b05c7f91728a7e0284e21dce95b8f30f5c12e15cda09d760290acea",
+    "services/session_mode_guard.py": "cbb726b645d8ed82af93fa63362706f970ff63e1bb8392d162d73d883a45eeab",
+    "services/mock_interview_rounds.py": "b7990c8bcbc33c651ab444379e078e28bb056cdb4ff91ad545d2644221bb1afd",
+    "services/mock_interview_legacy.py": "97a5846395a631617339ee8a433431ab939e53d88dd73f5bde5a02b881c53f9f",
+    "services/mock_interview_generation.py": "002e62063d5cfcf6b017c5fb0393e984c627fe386e912e1c5225c42b678fe760",
+    "middleware/request_context.py": "61eb30de386a04d1e948b439a30295aff4e84192fda97773bc838ac6347b0da3",
+    "schemas/realtime_speech.py": "5e5dfa1f3e612aaec8603aaa477ab6483244705e9fbb15ab60d714933691c46a",
+    "schemas/document_processing.py": "47f21b25c4d20275cf10358a833f6a2324e095a1bc8d22e7971872aa54283d8f",
+    "schemas/retrieval.py": "7cc3de63416e71987486ac6f123f78749b830308c03f91b77546cd6c5c4e1618",
+    "schemas/admin.py": "b0e457bc772f52b4840d193ff47fdac5763e19e239920da15b13fc7137bd9ae2",
+    "schemas/screenshot_answer.py": "d8593dfed7dce0a22bd4fa768405f4c597d4bc8613029e20636b5f7af07026df",
+    "schemas/live_answer.py": "271e08ea11becc48683cc690eeea9fbd1269187016135359906d9918063bfda3",
+    "schemas/authentication.py": "0d348dca673388e7c3205be1f0fbefdf7894da3e9f86751924ef2580d891e4e2",
+    "schemas/promotion.py": "abe09ade5f33356c2d8fcaba29cdf3e3e5aa451bbb437563f78378c3f1afd3c0",
+    "schemas/foundation.py": "5d04614e9e931e878284584e09c4d3f6d44496ab61a4b73400c13a422c308b59",
+    "schemas/document_service.py": "262fcb80a526a145129cd73e695901263e52b1ade1e37e650525b99f4058ee92",
+    "schemas/material_upload.py": "192f76c59c4198cc8cc81d5ed27cba6acde25ba8895754d53899d21489b4cf46",
+    "schemas/session.py": "60bc974b1fc0b0a933931f34f6d22887648a88a9367d5f84c040fa3ddf76a45f",
+    "schemas/mock_interview.py": "86db9960d73f812052b1ac0c80718e32db57a16f3a67ca68c1379d4967d36eb9",
+    "api/v1.py": "12574ffdb050f91cef3975b2d3c855b3ae2355e0aaf1f1ebf15b042b454c28a9",
+    "api/admin_promotion.py": "c275dcc34545a6a08d872d94d9fbec9f36002aaf1fd0c61482252fd8bbe3d056",
+    "api/admin.py": "4470bb1bc472943e8ed4a9a42cb2b3fb7a6292499af4c542d345d3df2fd95824",
+    "api/promotion.py": "c3ae744fd8233b866c6fb490771c80b6b6691a19965d7c940a84e3b24e48a764",
+    "api/__init__.py": "5645d3ba205ea9d1a0e80fd4b2381fde91e928b9e2263ddb32578704addac9d7",
+    "platform/database.py": "99deb33b4b3f5c85973187dae12b2d02a99e2b53ec1c7d1e959f31c7271b1ce2",
+    "platform/pgvector.py": "848cbf97964325afa85bde6971d424f64a92a3245b5af35270486498f445203d",
+    "platform/retrieval_boundary.py": "79ddddb72f04b7e5ef459aa78f26ae3c2316b27f4cbccc1ee728fd42bfe94a01",
+    "platform/object_storage.py": "e8ff28890f56ccebcb79445f506d5695d802b08fd3e32d54284de7d745afe12a",
+    "core/logging.py": "1cfd23c7bf714cd2dd9c45ea6d439c906633d755bf575f616d526c3f90cbb9ad",
+    "core/errors.py": "f821ad52cfa04117dd8d9888dded51f3293f6e3a68b1dc4bb11a51672fd3bee3",
+    "core/request_context.py": "2b1d072915927ef1b4a5eb7efef93840a00c079fcb88a6242061331042e60fce",
+    "core/config.py": "1f8c5e7d29d2868686cb785a3f7f628a4211bc3899ad2d9192c965439f66c881",
+    "core/responses.py": "4cedbe41efae8655846467d8136a23cb57aa8a834917fb716c433bad5f5b8c18",
+    "api/routers/__init__.py": "6a4d3814ef27df4a3fa435f48fe7e244c40c3ecd1de8b260c010988cb6e5f3fb",
+    "api/routers/system.py": "b893fe4e816bad3c4af43e1a8e4bbb1f285e8ae543d9c86675a1309e04b4eee1"
+  },
+  "baselineImage": "sha256:cc040a55f261a37226272c31937744e6ca4bd7a8c25e0810e360d218d41acfc0",
+  "ignoredNonSourceNames": [
+    "._*",
+    "__pycache__",
+    "*.pyc",
+    ".desktop-release-manifest.lock"
+  ],
+  "prefetchConfig": {
+    "cacheMaxKeys": 128,
+    "cacheTtlMs": 60000,
+    "maxKeys": 256,
+    "maxWaitSeconds": 1.5,
+    "pendingTtlSeconds": 10,
+    "quietSeconds": 0.35,
+    "stateTtlSeconds": 120,
+    "workers": 2
+  },
+  "prompts": {
+    "README.md": "acf349b25a322e5fca2e48127366f31e0289c65e7b0fb62849a0aef24a0de614",
+    "programming-policy/policy.en.md": "219670eed2f0c2cbcdc3c50cdac29ff1d68f1fe63da05e92f9a9a634ccbca011",
+    "programming-policy/policy.md": "47368570999be8ed50070f6e280c5e5bdb205a836fd140f71a76119f4cfdeb74",
+    "chat-service/quick.md": "8b20f1783abafbb1980f3c3d5cee7e165d359d5249df864bcaa2fe1f2a514372",
+    "chat-service/system-v3.md": "1e640d13e62d39aae5423c86c0b616af42ae4a36f1cecec8104c3b70c8e9dcef",
+    "chat-service/detail.md": "7c7efcda04559435ab91044b0439d037e82201deb5a9f114c01fc757f11b21d0",
+    "chat-service/continuation.en.md": "95989b17e55324a7b82e042608315abf1f8477600424d1e2f3b90f15b257f426",
+    "chat-service/quick.en.md": "26443efd71ada5c230ffe25211a08994d26af084d223d29a388a06f85306e738",
+    "chat-service/system.en.md": "81f09c9e6f6fe01efc80dbb4b8cd182508d889854ac27a3281c11e72538bc269",
+    "chat-service/system.md": "e84d13f4e140edfe8b45b776c9ba05e8273b58b54bb14afa8b7d80d3f9eb8b1d",
+    "chat-service/detail.en.md": "b4984f9be58d6d4b4f0819e21fffab66795bcd6b2afd2240d5384349fc10f255",
+    "chat-service/continuation.md": "d4b4880b802f4573da9c9d1c7837ab1d0f87a44c2a96541ed3c95d130c4df64a",
+    "screenshot-answer/system-v1.md": "a5439942e8a421cfe9e6e8c4fdce71678bb8be22991582a82e2e2e7d2a349e0b",
+    "screenshot-answer/system.en.md": "b868664c2f8feba31763c2749d28ccf96277e05a1bebac7c4f732e21c746584b",
+    "screenshot-answer/system.md": "edd6812d53240ba6ab249c4803679ee960f2b1382a514735cd6120df382c1068",
+    "mock-interview/README.md": "c0a4d9600a0c3a480ba633761b418873911eb19a6242d6a446697ee0fc22aa58",
+    "mock-interview/tts.txt": "a40515717c54dba2ce20b3f8c1d4f2955252fa7b5f3934e0ba08e1ba207bc67c",
+    "mock-interview/report.md": "2a3d09711b7eb3dbcdbf0187d71f6dccbe210cbc7addfb147a5a8645f4ac249d",
+    "mock-interview/question.md": "8fd1fbc0ef6f6e7abc641f548d2e2fee35db04d80c57a1dde787ff7c225c63cd",
+    "mock-interview/answer-structure.md": "4ef41e892499bffe67558b837e6b4a5c70f10533c9b247f840cd036c99b83d96"
+  },
+  "routeModules": {
+    "modules/realtime_speech.py": "a26b0194a1f088d0771d29edce5d23536fbd710897c22eda3e33b1c2b1cdf646",
+    "modules/knowledge.py": "d2bb9662defbd6d685bff6e44f0a56d29551cfc829e217b2812b555e2e8239df",
+    "modules/document_processing.py": "fe24f901343c16b1184077cf522fc9fc214bc579e3b27cf16365fe9dbee3d503",
+    "modules/partner_program.py": "2f6a3e5875e39b3362548a5c63c6748efb8a8946c44a842e292e6e33ef1515f6",
+    "modules/screenshot_answer.py": "3f91557a4f5f175dad744052459ebba4d1859d3bf8833446d479744d99b5f3ba",
+    "modules/common.py": "0469c3a903f5a0ce35cc16452a1e40262330ec5915e2ab09e0e2346421ad1e2d",
+    "modules/live_answer.py": "542706aecf1ac4801767280d6776dfe542a111d29d5d606db5b37510580b148f",
+    "modules/authentication.py": "77e74aa24dd10a5f4ea39e4ba6a5a93831382cbbb81f9acc4245ef97eb04cdc2",
+    "modules/billing.py": "9528378a10e381e43b284ecaa19d94e7d0e09c0496753c60520aa71a4ed87b9f",
+    "modules/__init__.py": "b45973b814e6ae9d0a608f5ae7422cf0143f1e956d61e30d08201177c7da2a78",
+    "modules/resume.py": "08b8bcb11fa2c52f7a2506410b1b8f331c456c4ad9eb4776155786dfc3f22a45",
+    "modules/document_service.py": "a92094ba4e484e6ca0f5a6ac9b29375efcfd971ba191d4c09c5d7d5959985574",
+    "modules/job_description.py": "37a3083bafa1cfdb59edce391b5ff810cc4515763cf9bfa504d8210d18bc84e2",
+    "modules/session.py": "90e433e65123f9bb5b47a79833c9eba8e39f671d36e0c2ae7242c7383d63eee0",
+    "modules/system.py": "8826eecc3e26b7436f4a0c262f47bd8b35e6d774f8078c7a99a8e494aa8eb188",
+    "modules/knowledge_retrieval.py": "9dadab5f7884fdef3642f371b3e40a7a646f19f4fd5b3d43307fa8fde05d657e",
+    "modules/web.py": "b83023fee378a7d9a2baa16cee454f59f94b03553678c529eb1bb232402edcf1",
+    "modules/mock_interview.py": "ab24f60c96ace6b248727a0c38b1ba58d18b0cfd964ef6e9a8b635f40c9dd953",
+    "modules/mock_interview_legacy.py": "7b36d6c9f14a3d625a7ac645e3ca79ea9f0751c1bd43e4deaf6ddf1d387e9b9e"
+  },
+  "routes": {
+    "http": {
+      "/api/v1": [
+        "get"
+      ],
+      "/api/v1/auth/login": [
+        "post"
+      ],
+      "/api/v1/auth/logout": [
+        "post"
+      ],
+      "/api/v1/auth/me": [
+        "get"
+      ],
+      "/api/v1/auth/refresh": [
+        "post"
+      ],
+      "/api/v1/auth/register": [
+        "post"
+      ],
+      "/api/v1/auth/sessions": [
+        "get"
+      ],
+      "/api/v1/auth/sms/send-code": [
+        "post"
+      ],
+      "/api/v1/auth/sms/verify-login": [
+        "post"
+      ],
+      "/api/v1/auth/status": [
+        "get"
+      ],
+      "/api/v1/auth/wechat/authorization-sessions": [
+        "post"
+      ],
+      "/api/v1/auth/wechat/authorization-sessions/{auth_request_id}": [
+        "get"
+      ],
+      "/api/v1/auth/wechat/authorization-sessions/{auth_request_id}/authorize": [
+        "post"
+      ],
+      "/api/v1/auth/wechat/authorization-sessions/{auth_request_id}/scan": [
+        "post"
+      ],
+      "/api/v1/auth/wechat/callback": [
+        "post"
+      ],
+      "/api/v1/billing/checkout-orders": [
+        "post"
+      ],
+      "/api/v1/billing/checkout-orders/{order_id}": [
+        "get"
+      ],
+      "/api/v1/billing/payment-providers/alipay/return": [
+        "get"
+      ],
+      "/api/v1/billing/payment-providers/mzfpay/return": [
+        "get"
+      ],
+      "/api/v1/billing/redemptions": [
+        "post"
+      ],
+      "/api/v1/billing/referrals/activate": [
+        "post"
+      ],
+      "/api/v1/billing/referrals/me": [
+        "get"
+      ],
+      "/api/v1/billing/referrals/{referral_code}": [
+        "get"
+      ],
+      "/api/v1/billing/state": [
+        "get"
+      ],
+      "/api/v1/billing/status": [
+        "get"
+      ],
+      "/api/v1/document-processing/documents/{document_id}": [
+        "get"
+      ],
+      "/api/v1/document-processing/tasks/{task_id}": [
+        "get"
+      ],
+      "/api/v1/document-processing/tasks/{task_id}/retry": [
+        "post"
+      ],
+      "/api/v1/documents": [
+        "get"
+      ],
+      "/api/v1/documents/processing/handoffs": [
+        "get"
+      ],
+      "/api/v1/documents/upload-intents": [
+        "post"
+      ],
+      "/api/v1/documents/uploads/complete": [
+        "post"
+      ],
+      "/api/v1/documents/validation-policy": [
+        "get"
+      ],
+      "/api/v1/documents/{document_id}": [
+        "delete",
+        "get"
+      ],
+      "/api/v1/documents/{document_id}/availability": [
+        "patch"
+      ],
+      "/api/v1/documents/{document_id}/display-name": [
+        "patch"
+      ],
+      "/api/v1/documents/{document_id}/download": [
+        "get"
+      ],
+      "/api/v1/job-descriptions/status": [
+        "get"
+      ],
+      "/api/v1/job-descriptions/text": [
+        "post"
+      ],
+      "/api/v1/job-descriptions/upload-intents": [
+        "post"
+      ],
+      "/api/v1/job-descriptions/uploads/complete": [
+        "post"
+      ],
+      "/api/v1/job-descriptions/uploads/proxy": [
+        "post"
+      ],
+      "/api/v1/knowledge-retrieval/context": [
+        "post"
+      ],
+      "/api/v1/knowledge/collections": [
+        "post"
+      ],
+      "/api/v1/knowledge/collections/{collection_id}": [
+        "delete",
+        "patch"
+      ],
+      "/api/v1/knowledge/collections/{collection_id}/upload-intents": [
+        "post"
+      ],
+      "/api/v1/knowledge/collections/{collection_id}/uploads/complete": [
+        "post"
+      ],
+      "/api/v1/knowledge/collections/{collection_id}/uploads/proxy": [
+        "post"
+      ],
+      "/api/v1/knowledge/collections/{collection_id}/uploads/quote": [
+        "post"
+      ],
+      "/api/v1/knowledge/status": [
+        "get"
+      ],
+      "/api/v1/live-answer/questions": [
+        "post"
+      ],
+      "/api/v1/live-answer/questions/stream": [
+        "post"
+      ],
+      "/api/v1/live-answer/sessions/{session_id}/history": [
+        "get"
+      ],
+      "/api/v1/live-answer/status": [
+        "get"
+      ],
+      "/api/v1/live-answer/tasks/{task_id}": [
+        "get"
+      ],
+      "/api/v1/live-answer/tasks/{task_id}/cancel": [
+        "post"
+      ],
+      "/api/v1/mock-interviews": [
+        "get",
+        "post"
+      ],
+      "/api/v1/mock-interviews/capabilities": [
+        "get"
+      ],
+      "/api/v1/mock-interviews/{session_id}": [
+        "delete",
+        "get"
+      ],
+      "/api/v1/mock-interviews/{session_id}/resume": [
+        "post"
+      ],
+      "/api/v1/partner-program/config": [
+        "get"
+      ],
+      "/api/v1/partner-program/join": [
+        "post"
+      ],
+      "/api/v1/partner-program/me": [
+        "get"
+      ],
+      "/api/v1/partner-program/payout-profile": [
+        "put"
+      ],
+      "/api/v1/partner-program/payout-requests": [
+        "post"
+      ],
+      "/api/v1/promotion/claim": [
+        "post"
+      ],
+      "/api/v1/promotion/opt-out": [
+        "post"
+      ],
+      "/api/v1/promotion/qualify": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/desktop-devices": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/desktop-devices/by-code/{manual_code}/binding": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/desktop-devices/last-used": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/desktop-devices/pairing-status": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/desktop-devices/register": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/desktop-devices/{device_id}/binding": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/desktop-devices/{device_id}/heartbeat": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/frames": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/metrics": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/publishers": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/question-candidates/{candidate_id}/confirm": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/question-candidates/{candidate_id}/dismiss": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/capture-control": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/delivery-metrics": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/desktop-binding": [
+        "get",
+        "post"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/device-status": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/events": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/performance-ack": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/performance-summary": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/performance-traces": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/question-candidates": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/runtime": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/snapshot": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/stream": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/transcripts": [
+        "get"
+      ],
+      "/api/v1/realtime-speech/sessions/{session_id}/web-heartbeat": [
+        "post"
+      ],
+      "/api/v1/realtime-speech/status": [
+        "get"
+      ],
+      "/api/v1/resume/status": [
+        "get"
+      ],
+      "/api/v1/resume/upload-intents": [
+        "post"
+      ],
+      "/api/v1/resume/uploads/complete": [
+        "post"
+      ],
+      "/api/v1/resume/uploads/proxy": [
+        "post"
+      ],
+      "/api/v1/screenshot-answer/capture-requests/{request_id}": [
+        "get"
+      ],
+      "/api/v1/screenshot-answer/capture-requests/{request_id}/cancel": [
+        "post"
+      ],
+      "/api/v1/screenshot-answer/capture-requests/{request_id}/desktop-fail": [
+        "post"
+      ],
+      "/api/v1/screenshot-answer/capture-requests/{request_id}/desktop-upload": [
+        "post"
+      ],
+      "/api/v1/screenshot-answer/desktop-devices/{device_id}/capture-requests/next": [
+        "get"
+      ],
+      "/api/v1/screenshot-answer/desktop-devices/{device_id}/capture-requests/stream": [
+        "get"
+      ],
+      "/api/v1/screenshot-answer/desktop-devices/{device_id}/shortcut-capture-requests": [
+        "post"
+      ],
+      "/api/v1/screenshot-answer/sessions/{session_id}/history": [
+        "get"
+      ],
+      "/api/v1/screenshot-answer/sessions/{session_id}/remote-capture-requests": [
+        "get",
+        "post"
+      ],
+      "/api/v1/screenshot-answer/sessions/{session_id}/uploads": [
+        "get"
+      ],
+      "/api/v1/screenshot-answer/status": [
+        "get"
+      ],
+      "/api/v1/screenshot-answer/tasks": [
+        "post"
+      ],
+      "/api/v1/screenshot-answer/tasks/{task_id}": [
+        "delete",
+        "get"
+      ],
+      "/api/v1/screenshot-answer/upload-intents": [
+        "post"
+      ],
+      "/api/v1/screenshot-answer/uploads/complete": [
+        "post"
+      ],
+      "/api/v1/screenshot-answer/uploads/direct": [
+        "post"
+      ],
+      "/api/v1/screenshot-answer/validation-policy": [
+        "get"
+      ],
+      "/api/v1/sessions": [
+        "get",
+        "post"
+      ],
+      "/api/v1/sessions/status": [
+        "get"
+      ],
+      "/api/v1/sessions/{session_id}": [
+        "delete",
+        "get"
+      ],
+      "/api/v1/sessions/{session_id}/active-conflict": [
+        "get"
+      ],
+      "/api/v1/sessions/{session_id}/audio-mode": [
+        "patch"
+      ],
+      "/api/v1/sessions/{session_id}/auto-answer": [
+        "patch"
+      ],
+      "/api/v1/sessions/{session_id}/context": [
+        "get",
+        "post"
+      ],
+      "/api/v1/sessions/{session_id}/continue": [
+        "post"
+      ],
+      "/api/v1/sessions/{session_id}/end": [
+        "post"
+      ],
+      "/api/v1/sessions/{session_id}/idle-status": [
+        "get"
+      ],
+      "/api/v1/sessions/{session_id}/language": [
+        "patch"
+      ],
+      "/api/v1/sessions/{session_id}/materials/confirm": [
+        "post"
+      ],
+      "/api/v1/sessions/{session_id}/programming": [
+        "patch"
+      ],
+      "/api/v1/sessions/{session_id}/restart": [
+        "post"
+      ],
+      "/api/v1/sessions/{session_id}/review": [
+        "get"
+      ],
+      "/api/v1/sessions/{session_id}/start": [
+        "post"
+      ],
+      "/api/v1/sessions/{session_id}/supersede-active": [
+        "post"
+      ],
+      "/api/v1/sessions/{session_id}/usage": [
+        "get",
+        "post"
+      ],
+      "/api/v1/system/foundation": [
+        "get"
+      ],
+      "/api/v1/system/ownership": [
+        "get"
+      ],
+      "/api/v1/system/runtime": [
+        "get"
+      ],
+      "/api/v1/web/downloads/desktop/{filename}": [
+        "get"
+      ],
+      "/api/v1/web/state": [
+        "get"
+      ]
+    },
+    "mockWebSockets": [
+      "/mock-interviews/{session_id}/control",
+      "/mock-interviews/{session_id}/microphone"
+    ]
+  },
+  "runtimeConfigFields": [
+    "product_edition",
+    "environment",
+    "api_prefix",
+    "chat_qwen_model",
+    "chat_qwen_base_url",
+    "chat_quick_model",
+    "chat_detail_model",
+    "realtime_asr_model",
+    "realtime_asr_ws_url",
+    "realtime_asr_inference_ws_url",
+    "realtime_desktop_heartbeat_write_min_interval_seconds",
+    "retrieval_candidate_top_k",
+    "retrieval_final_top_k",
+    "retrieval_strategy",
+    "retrieval_reranker_enabled",
+    "embedding_model",
+    "rerank_model",
+    "screenshot_vision_model",
+    "mock_interview_enabled",
+    "mock_interview_tts_model",
+    "mock_interview_tts_voice",
+    "chat_detail_retrieval_prefetch_enabled"
+  ],
+  "schemaVersion": 1,
+  "openapiSha": "87d07432b35c17df7c71411c73725e7d11e22b3b2f83032b4a71393f3cb5def1",
+  "prefetchSources": {
+    "services/chat_service.py": "8828c29018a1095899c7409123ab93dea33a00213fc58a51bd6afbf0e9ebe8cd",
+    "services/realtime_speech_service.py": "812d21e1019b92532f10b0c9c7bfe27839822157bcb1b6fbbccf34a54c154390",
+    "services/question_prefetch_scheduler.py": "36bc5ab7fc2329945a3becdedc0ccc0a38356c334e8b32a735610c58774d744f"
+  },
+  "syncStateNodes": {
+    "modules/session.py": [
+      "list_sessions",
+      "get_session",
+      "get_interview_review",
+      "idle_status"
+    ],
+    "modules/web.py": [
+      "get_web_state"
+    ],
+    "modules/realtime_speech.py": [
+      "get_runtime",
+      "get_last_used_desktop_device",
+      "list_account_desktop_devices"
+    ]
+  },
+  "protectedNodes": {
+    "services/authentication_service.py": {
+      "_now_ms": "472d44c0bc393b924b3189875d0f9bbe44ed5748d0c4a1eff33d1381db49b636",
+      "_now_seconds": "e795f3c03ef5880af2f0829c4f30c670b4a111fb3a5e2822cf849de072806c9a",
+      "_safe_user_ref": "3ef6bbc41c7a3f1bbcd245ca2578d6f841ea65808b1c4d902d2f638d5039e6b0",
+      "PBKDF2PasswordHasher.__init__": "1ca60aa68dba2b8ac788df18336ed27636a91c4e148d5b9f789cc7b4df9a4a0f",
+      "PBKDF2PasswordHasher.hash_password": "de6ffa7060555291860619708457373bbab5699402b9d5ce32f171a5f09713c1",
+      "PBKDF2PasswordHasher.verify_password": "bde11a207424460dcfcd9cbb74654b576eb5dd01afef63f1f95f69db5d6c9933",
+      "JWTAccessTokenCodec.__init__": "1ca60aa68dba2b8ac788df18336ed27636a91c4e148d5b9f789cc7b4df9a4a0f",
+      "JWTAccessTokenCodec.issue_access_token": "aa5fce7157c2b2a97e7531d00935bc920b295291dc73bb42b4d81898104e9ce5",
+      "CompatibleWechatLoginProvider.__init__": "1ca60aa68dba2b8ac788df18336ed27636a91c4e148d5b9f789cc7b4df9a4a0f",
+      "CompatibleWechatLoginProvider.provider_mode": "408e854db34e25837aae2368c0251d3c9af9dbf79c32bdf6cb12c754c8c03b9b",
+      "CompatibleWechatLoginProvider.create_authorization_entry": "192c5a6f46682fa08f0891d76d4c1302fe70a1e08b6e49614b8c9b3d9796c431",
+      "CompatibleWechatLoginProvider.exchange_callback": "f53546de003b5c892be344e992534e2ceeff55169f15f5cfbdba6af961711577",
+      "CompatibleWechatLoginProvider.simulate_scan": "6ac96ca3077405fd46b02e83869c017818639995392b7c1795c2cc5ebc20d9d8",
+      "CompatibleWechatLoginProvider.simulate_authorize": "a6c84ff74b009648b04a6ed308a4c5a6f5dc2eab604509f84d3baa99adbaa8f5",
+      "AuthenticationService.__init__": "a9c0cacec7d09fec4330f7da6a9ea9c95df8e97dd05c2768b0c861581706f1f3",
+      "AuthenticationService.register_user": "dfdecddda74f600024208d325a74c5966f4e4d0ce386823d7c50a00a612457c7",
+      "AuthenticationService.login": "a3dae26fa4ca383636c289cc100bdaa7416853691ae44b037e460645341f2758",
+      "AuthenticationService.refresh": "e2cd7c74472212a715bd03a21c480f44436857dd2c390781b5508ca68ed53bf5",
+      "AuthenticationService.logout": "06d66b7359c4d9730920dfcfc1653ab9d17b31e3d309193c0aa8c713e0892efc",
+      "AuthenticationService.get_current_user": "541f663203176ed7ae080c99a738f037721b7985d02ff356487738278fce408b",
+      "AuthenticationService.send_sms_code": "9f174ce51246b5b0fb0ce0fe0b4d502606a07c022e03e2baeb8126fbb52ac4e0",
+      "AuthenticationService.verify_sms_login": "8edb89f0d58a0f9695f5779934ea834b3d0775adca661b58a3075d889865d30f",
+      "AuthenticationService.create_wechat_authorization_session": "a361d9683dc20dbaf6fd7c55e4000545e3d0373daeea06679ce563edece1fb8d",
+      "AuthenticationService.get_wechat_authorization_session": "da5d1c981a0ce25c71cead770a66882005073535e370d0d10ee30341efcfb9c4",
+      "AuthenticationService.simulate_wechat_scan": "7237139738a0466919554df17a29fa82cddae5aa3daef6221f9722ab63339484",
+      "AuthenticationService.simulate_wechat_authorize": "20c97221ae77de7690ac18a8143022caad74f45eff2a813da55ab4ad528c4fb1",
+      "AuthenticationService.complete_wechat_callback": "6e494ac0a2525192118f8c4d82eb6214260f783cd41d2086a81f7c45b1360111",
+      "AuthenticationService.list_auth_sessions": "4da07a44b8c21720527c39e79174eb136cb670556bb8be842e2842bf0c8bc003",
+      "AuthenticationService._issue_auth_session": "332927083f0efa1d828f66714147d34bfb5034f416025718c521be38ab44a373",
+      "AuthenticationService._complete_wechat_authorization": "301ca4a0bd84d22d8b3d0ee142421be0fff45cbf287da8b9153b215480496651",
+      "AuthenticationService._get_or_create_sms_user": "fe246cbc3754b1d44efbaa74cd8681889d8830a81d60f1642db48f29b80218ff",
+      "AuthenticationService._issue_access_token": "2cecfc0d6139644cc432cedc7b1909e107a1837f16e2f41b9c1e4c855e86b7a0",
+      "AuthenticationService._require_refresh_session": "b0630c3dbe39285b649642c2ec393729ad19a98fab36881a381bb6f7e19330f3",
+      "AuthenticationService._require_user": "676c612b8872fd2bd25434462eae0d755e7238d8ef4dd81cb98eea8a2034cfca",
+      "AuthenticationService._normalize_phone": "e06c909dc9e3e3f30b881177ca94cdac86d44964a6fffd137d39ebbbd575e2ff",
+      "AuthenticationService._phone_hash": "fa6d9df7c1555c4fb29dff03c2eb1296949700456be65886cc59859b0f36889e",
+      "AuthenticationService._is_alipay_review_phone": "ab4bdde1e78aefb61232a7b2c19d5b9f6bd2eb821089a646bdaa62342b2e9f8c",
+      "AuthenticationService._is_alipay_review_sms_code": "12d0abcb62075fab49861ff5c830168529cfc76c38adbba927d3b4d9e0a7d089",
+      "AuthenticationService._normalize_phone_for_review": "77a169c36a5f50489de0e88177e82d0f6a7c9f679be60c77fe1204f652ad0dbe",
+      "AuthenticationService._mask_phone": "5ec14ba3e121cad0a1fcfe27ebf4d59120c23d7c3d5d3c6fec95acde18a2f29b",
+      "AuthenticationService._refresh_fingerprint": "934bf1bdcf728d7ceb54eb5db3008e8dfa27f2f1188e9c65792a9e51132a5859",
+      "AuthenticationService._log": "205d4b3a3c316291fdd49090d5aed6ed8cd33a9ade07359bbaf55897327c77f3"
+    },
+    "services/authentication_repository.py": {
+      "InMemoryAuthenticationRepository.save_user": "749aab4dbe1a288d4641b39bdac67d1c1f7326df4957c58e1c4e498ca4e81ed0",
+      "InMemoryAuthenticationRepository.get_user_by_login_id": "8ed0e8aa90e0d872b9054591718cd752ca2cc8c9b6956f8f9e7d4231cf94859f",
+      "InMemoryAuthenticationRepository.get_user": "319e3ec7949b22b533d69e7c175545b26cc790f58ebe4711b82b3b5d83ebaae8",
+      "InMemoryAuthenticationRepository.get_user_by_provider_subject": "4e32a7381aa21d6aedda3107f8a6c755d0e050d3a7fd786ce9c9039bc1e913de",
+      "InMemoryAuthenticationRepository.save_identity_binding": "03d8f25e1576635b14ae72f8d16004c75cbf7e923d5bfac94e3d0cc2fa9ec236",
+      "InMemoryAuthenticationRepository.get_auth_session": "481e383791eab5991705d0acd438853e774078a7ef6ad4140742e1852c7ddeb8",
+      "InMemoryAuthenticationRepository.get_auth_session_by_refresh_fingerprint": "672484515962bdaac06fc4e12d6f70e8e2447f9ed92c26d68107b114039c9c44",
+      "InMemoryAuthenticationRepository.list_auth_sessions_for_user": "ea06d6d0ef1e023148a0ca5bc552cf9b7540ca23548d3f0abd816767152c1de7",
+      "InMemoryAuthenticationRepository.save_wechat_authorization_session": "e0fc6cdb5bf524ab9ea5d5009b7a5d16d4f04488e8bbd9f499972cd62559bebe",
+      "InMemoryAuthenticationRepository.get_wechat_authorization_session": "b2bfe2c068d28bead8455d5a1c78c20648afa9a8d076b86c5da218dc672306ab",
+      "InMemoryAuthenticationRepository.get_wechat_authorization_session_by_state": "0192dfd90aad47ce8c4e417f6c7acb6d1f359ba88ed5a4d6ba614dd7e615daba",
+      "InMemoryAuthenticationRepository.save_sms_challenge": "d4a4e80920b94bb9aa30ef3768716f71954e4ff40c8e1463f45ea4feb0d3e370",
+      "InMemoryAuthenticationRepository.get_sms_challenge": "0f7920883402725a4963c7f38c4dc6b030c850e7527fcb3ce212a9e635634c30",
+      "InMemoryAuthenticationRepository.list_sms_challenges_for_phone": "55ece6d15fc1f6345dec009abacee26b7d6386b5c1ad6acf3be24650381b59f5"
+    },
+    "services/postgres_authentication_repository.py": {
+      "PostgresAuthenticationRepository.__init__": "714bc491fae73f4fd461e08ec8b4fd770b9a08753cbd7409a1fb81b9f63e1910",
+      "PostgresAuthenticationRepository.save_user": "a407425d97b3eb0c52117504577cb1e658a4d5a0b7b98a7fbf2b984827a5e34b",
+      "PostgresAuthenticationRepository.get_user_by_login_id": "19fe579d79d0f8dd968b5175649762f124e2ea6704adfb87ef2d6edd4910884b",
+      "PostgresAuthenticationRepository.get_user": "d9e214968ad87e1af6348f5d3a8ad4764a9d67b082bf38a72f8bc88c2c2f8b7d",
+      "PostgresAuthenticationRepository.get_user_by_provider_subject": "10cbb9b1f618bc8020493a0b435e0f6ed8738fb83131de3a9e82cf34037fbc4e",
+      "PostgresAuthenticationRepository.save_identity_binding": "0df27004fdff809a8d62f9fca92881174a793324c909a99553a63b8277c800ce",
+      "PostgresAuthenticationRepository.save_auth_session": "924388829a0f75cdac48503243d5ff8e3fc2801dfd00589e90a067178bf02aea",
+      "PostgresAuthenticationRepository.get_auth_session": "2ac6fa8c0f404772d0c56a99a6ea06764216de6179baf5dedec0b3ed126281ba",
+      "PostgresAuthenticationRepository.get_auth_session_by_refresh_fingerprint": "3d2b145f4a5fbe8b8a822ff37730084f3a3b7f6ebd73a7f0c72b565028b6a290",
+      "PostgresAuthenticationRepository.list_auth_sessions_for_user": "9b62cbd570cd57a4f33471a9f8a8187cce33b901d8954f39676da12fecb9b369",
+      "PostgresAuthenticationRepository.save_wechat_authorization_session": "09f9ee51b6feac3b374ab5d718d820630d92feeae0112aa61f503dbf4fe5c864",
+      "PostgresAuthenticationRepository.get_wechat_authorization_session": "e32a3802968fff2f51882468ebd9d5252144749ec09b694047080cfa571fffad",
+      "PostgresAuthenticationRepository.get_wechat_authorization_session_by_state": "1f3c88d19048ca6cff7c5b50933baee458ed54bfea2844deb3868f7a4cd609f4",
+      "PostgresAuthenticationRepository.save_sms_challenge": "e4c130dcea4bd0e909d073cff726a5438ee28d97f27e9845ad8d85ec5a6bd440",
+      "PostgresAuthenticationRepository.get_sms_challenge": "2f4e459da62a0a6a60ce2b15323f0ea77ceeb389b1f030bce10a9fc6aceb5079",
+      "PostgresAuthenticationRepository.list_sms_challenges_for_phone": "78ac1252d54797c63665df82fb1d055ab6d3f852b88f266e97ccbc1d94345416",
+      "PostgresAuthenticationRepository._get_user": "898ea7a341218359cf876d752ad8fa683d5ff8ab3c6ce11d673310d2c03dd10a",
+      "PostgresAuthenticationRepository._user_from_row": "bbf8d40f7c0f22859ed254657c9d400176222491a4b0d4f89781ca2417ea4b0b",
+      "PostgresAuthenticationRepository._binding_from_row": "80d6420371c19218bca9ca7f544fa32fa5768dca1f100908b46651d9a9cb483e",
+      "PostgresAuthenticationRepository._get_auth_session": "bb6beb041350beb3958070fe060bfda4ecfbd548a1fa14d3123c6fa6e744f724",
+      "PostgresAuthenticationRepository._auth_session_from_row": "bf8a9348bdecb540f3b9c2a7c7add8b8302e70bcefbbd8b7374fd2454a98499b",
+      "PostgresAuthenticationRepository._sms_challenge_from_row": "056172e180719e35f0ae1747457331ff7e8f36a355eb28a125fe32822a660fd1",
+      "PostgresAuthenticationRepository._connect": "3010439e78a8cc37c8b8a92791d77fd21eeebdc2b7a04c83908d0c94f4f34cc8",
+      "PostgresAuthenticationRepository._ensure_tables": "386a827ff5490d9b78fd0bda5b949c26d2fabc3e4cd831f878ee6866e8b67842",
+      "PostgresAuthenticationRepository._migration_path": "153e41c7d5c8070a57a7fa6934bf275116d565e74274764c0c6e2dd58992fbee"
+    },
+    "ports/authentication.py": {
+      "PasswordHasherPort.hash_password": "79c47746aa137718222b5505949265e22ade420dee63aee1a09a881d2b0171b2",
+      "PasswordHasherPort.verify_password": "c3d9ead18d060eadb3a905c89592356c5cde6e5fe671df765ca5557030a9cc34",
+      "AccessTokenCodecPort.issue_access_token": "3e671be8a622420d63f38c443c0f521c64ed83c32f92ae64b47a8a56288d762f",
+      "AccessTokenCodecPort.decode_access_token": "6ad6312bfb2fffdc7f3ad6bb563a9cc60ca762e7b4add7dd8f22d704e3b5dfb1",
+      "IdentityProviderPort.provider_kind": "4839381ea26d4449a2311d62d5d64ef999cdfaebb4751638cac8a1e170e06249",
+      "WechatLoginProviderPort.provider_mode": "b055420518aa16b7b6faf819029fad111fa0a9d90616009e7df609d518f26359",
+      "WechatLoginProviderPort.create_authorization_entry": "e149fca86d55eb5a3c353055e17912056ce9e724c22f533bc4f1a2dfbf6d707f",
+      "WechatLoginProviderPort.exchange_callback": "7284e9b94cc4352c65d209b205f3eeee0843d0f9e38ee1f569712c2d6c85ffc8",
+      "WechatLoginProviderPort.simulate_scan": "8cd0be3a5a358eb09820e47dec419dfae0db41b0fae7bd20c62c79d7971220af",
+      "WechatLoginProviderPort.simulate_authorize": "d6533ac1f76d3178498e9af4b32eedfb2e8cab4c28c33b6bd18cb31d2792fdbb",
+      "SmsVerificationProviderPort.provider_name": "f8d5b125efd439308302e74dc53256a7e9baaf54a5f56c534d6fd67cd3bc3f33",
+      "SmsVerificationProviderPort.send_code": "60bf27f075e168566a058c132f95e49be4730198d456bda1307961d37b5ad34c",
+      "SmsVerificationProviderPort.verify_code": "523cc51e818dcc5bdb418fadc320b74d53649b40daf4064981a38fe7d15bac0d",
+      "AuthenticationRepository.save_user": "9495b4da94d87f591ce8f62467370ea53a54a3885fb2999ed744d53276943d12",
+      "AuthenticationRepository.get_user_by_login_id": "70200478b32fb342b7a480490ea63eb3ed2cf58c755c173907f1fe08e1a0b67c",
+      "AuthenticationRepository.get_user": "499a8a150c787d778c291e5bfdbb533a7e042fb182f1df17196783557495b42d",
+      "AuthenticationRepository.get_user_by_provider_subject": "a5a79a75e0eadca91ea7aa36ead1b73b6dddb0356442fe940f6271c832e2884f",
+      "AuthenticationRepository.save_identity_binding": "0e58f8baf48c322fb164fdb385446e23ae21ed1f32aea0b1742d8c90e7a8392e",
+      "AuthenticationRepository.save_auth_session": "e74166528e5d137b2e1fb07a855123f47e7f514d0e9f98c98128d8c83057638c",
+      "AuthenticationRepository.get_auth_session": "010312746dadddb2617b067df31f7416bbde52de0e7f2bfe00d2c182a7b4ebcd",
+      "AuthenticationRepository.get_auth_session_by_refresh_fingerprint": "d2465a0d4d43ca17ddfcd6fb7a4ed9765a40cbcd901b47bc1ec430f39acb0959",
+      "AuthenticationRepository.list_auth_sessions_for_user": "f98cd06f762d00d0894f53b28ca866c274a3576012fae6a22baa48f338a7f59e",
+      "AuthenticationRepository.save_wechat_authorization_session": "a906200970da2e32ada8d7b7b12cec40699375ae666831095aa0254936f26097",
+      "AuthenticationRepository.get_wechat_authorization_session": "b0623db1670023ac9c2def23d2da12811b4dde65da7fb077e413ae2128bef265",
+      "AuthenticationRepository.get_wechat_authorization_session_by_state": "87796a21efb43f74d3800867830528cfb42b8755a625c9ee7140cc58452b2eb8",
+      "AuthenticationRepository.save_sms_challenge": "9b4e3dc0a241159685ee69f449bff359ef6e497195a42c49d1ad647d41f66792",
+      "AuthenticationRepository.get_sms_challenge": "0cde6a4c81e4a294a7e0a52da3a30322f129d3779e416ff91c12cf8018938bba",
+      "AuthenticationRepository.list_sms_challenges_for_phone": "c4668b946059c2ede23377c84981bb93ff551867c81085f8894e8043e6bd0735"
+    },
+    "services/session_service.py": {
+      "_now_ms": "472d44c0bc393b924b3189875d0f9bbe44ed5748d0c4a1eff33d1381db49b636",
+      "SessionService.__init__": "74b2fe5ef277bc7574a106f65ca077cd73837b17e6db04fa63a0c0200931fdb2",
+      "SessionService.create_session": "af66e82f901af0baa9935bd85cac41c18cccd5c146d063c2788d3602815b3541",
+      "SessionService.update_interview_language": "ead67493e10b337e82f8908d3a9c127ea0f5945d30621313862ffd71d5292a50",
+      "SessionService.update_interview_programming": "35dd7f64024aed5d88daf3badda7a8d789c3d0a89180354116a55243d1271452",
+      "SessionService.update_interview_audio_mode": "b8fce00ee51512e35b424a4e0fec69b092ca472ac9a3d1213bb12689d8f02878",
+      "SessionService.update_auto_answer": "ebdc089a48e2e085d6a716523034d9c9c3a14b3fa0d81ba22eba53db44d8741a",
+      "SessionService.delete_session": "e422746a2841bf78b3fb1afed409eea5d8765e1d291a7006e90b684c44a7ce3b",
+      "SessionService.get_session": "2f8afb238abb42b993367e17c9fda05275433f38f7bd27933a16683b663cb015",
+      "SessionService.continue_session": "4392150421f84efd68c8430d077f2b11edac78addb27e4c3df58afa37b656ac7",
+      "SessionService.touch_activity": "567baa68097808a1256481e014c470fea0443ea2de92269bd1a5075881a5016c",
+      "SessionService.list_idle_live_sessions": "41919e36b067e0dee5f1ae9437bf4a146db0ad99cf4735e834635e17bf1181a8",
+      "SessionService.confirm_materials": "a15068871c19b11ddada1c2e5e247df959598fef69675e3777a0880ed5748c3d",
+      "SessionService.start_session": "f2687514b24338b0b6b5e43e7ce6b5207c72579c5ba2293953ed440950caaceb",
+      "SessionService.end_session": "54b82cb97778b1e94b891477ce81da7f5bfc7c6ff0b2569c64de0a42a39c479b",
+      "SessionService.restart_session": "d7c81773c962d13edd8d6c883a5744d0bfd8edc58aecb1043951bb662d978b8b",
+      "SessionService.append_context": "7a2dc245aa36c70180bcf1667ed657c2ce10986da7ebe743d8dbe023929a2b91",
+      "SessionService.get_context_window": "035fcfbd32ebd81b2e3951e2a5202b2337aa8628eb5fa2350ca184ca36fe9175",
+      "SessionService.get_review_transcripts": "a5a330656a9b03e4ab4d6418a5315277e297d8829186fbaa961b9179581f17c6",
+      "SessionService.record_usage": "a55535ef5a3ca9c1506a60f33c0cc53f9fbb9493f9e2353b1d93a0c416554b59",
+      "SessionService.get_usage": "692bb32f3ee8f86abf4300390a3dbd3dfbce7302bf18b41c1e7af6a90293ce94",
+      "SessionService._calculate_usage_totals": "19db6458ee0d87b6988a3ef717cba5f919d58ba527d03b63ba457de282163213",
+      "SessionService._require_document": "0e7a4f06dff2b06bf4c121d9247fd336e0aa69fc92767f2a56a5c77b718fe787",
+      "SessionService._default_config_snapshot": "17a50a019f7c1a036520467c21f622e60afcc6bab27a10fb1257a715ffba81ea",
+      "SessionService._build_integration_references": "fd703e8298104d89ba79e272553a4cf90d0da32e86e01d3d7afe02edf137990b",
+      "SessionService._save_session": "9ac4d9f5e0e449555b944c432487f20240fc8100136367327fd8ebf5ff539c16",
+      "SessionService._derive_continue_target": "27ac431ad9e1c24bd071f4ae70b6e8bef94a02a7624abdb5800ff05f453e4d04",
+      "SessionService.heartbeat_idle_status": "3ffde13fc14a81d25c6edefa261f4b11af10f115beea809f6e8bab97d0c1d684",
+      "SessionService._idle_status_from_session": "02c17a9299ffb8d71c61d7400d10e3a334d24b170e912c1c63c5315eb5ee8db0"
+    },
+    "modules/session.py": {
+      "_to_session_response": "9383f11e04bff82a3304fd622886bcf5be45351c5b26e1c0cb2e7dca87a8f54c",
+      "status": "9d5788985e0b0b3f83402751fab89bec5ea8321ca0b3ec3c34bcfa31c3ae366f",
+      "create_session": "a0102fc3fbc725eb947f0d02ec54a84cdce48ae1b5f2aa36a1242b3c7b93d4e5",
+      "delete_session": "240eac7bb2b66a8e5ea85a9e0b17c2c74a16440bc9f6c2bd0dfdb5ae20f383bd",
+      "get_active_session_conflict": "59a6466ff908fbac92efa51edda6175542b9a2b2c01d8283e2b4cb2713e51799",
+      "supersede_active_sessions": "7b50c58162dbd17c5724b80e31a06cd1abc7b5fc95cd95076badb4855d8740e4",
+      "continue_session": "c7075792651295bdbcb744d43ad04d17e0aef7696d8b3bf61f16e2f5120b2987",
+      "confirm_materials": "74d2b4d7fa42227b0b472d458c55a41ce6d4a361210cbc68d7157081efdeb125",
+      "update_interview_language": "84f65d0cca2efa54e4d779eaa9d01ead92ec51ba14b9eee27b3078268d85f4b3",
+      "update_interview_audio_mode": "887806d6ff0cf6f5e13cb6550db57ad95f3619b57388f177280d99df986894e9",
+      "update_interview_programming": "3331b264a3a3fd47ad5b6c7e5aef1375f8bb0803cfabfe9a75f05501d0baa681",
+      "update_interview_auto_answer": "9ebb7439fe22e84ffb12fed3fbcd6fd6d97d973196c282171498a38c79d18e4b",
+      "start_session": "1201356773da0fc3786fe9954d803b5f9b01772efd8a97f34c8cf43c1c181665",
+      "end_session": "ddbe79ad1d8301e5a7b484924a288259b25603f18585e8996cad88ebb0d535d3",
+      "restart_session": "f24c5443304260913a960e77f331244232143fcfab5f9f97c1eada100cd6062d",
+      "append_context": "1d7ad1c1ebc43eba3716816b66764305e66689adc24ff23f19e2cbd038c16473",
+      "get_context_window": "df257e5cb30238aa9ee1249592427cbca18158ab4a4bec34fa2c42e6cc9268c7",
+      "record_usage": "c9929250b646a8fce35d788a6027bf6b8d846d707b01b774aa52b9c0be2436c2",
+      "get_usage": "280d239c76460de89ca2833effe0cff6d3dc1f545fef45ea1e4790c188d4e4b7"
+    },
+    "modules/realtime_speech.py": {
+      "should_validate_realtime_session": "3d52766fb1d08047d3a79c0085d9b8d552d00dc386bdb1de5c9b1ce21c3385b9",
+      "session_stream_refresh_plan": "dd4852c8e368d4411e8d6e7f448dc9a00ab03bf6f4bb27413144c9492c14b423",
+      "coalesce_transcript_revisions": "9d7edcb753cd4220658bbffd9ad9631a4eebc0e70c3a18dd03863d9520e5de46",
+      "_sse_frame": "2bd98ee5f167da09b86202fe8e2b8118fb4903724a3e6e62a483da2b26c668e9",
+      "_fast_desktop_binding_response": "6526f36c9d0b02f913414f4e251d4368ce8be7219ede29eee2a3b1468ddbd02f",
+      "status": "bb8b1bd4880d2a52981b93bc453175b97b2b97e99f82fca7cc5d376015924e32",
+      "realtime_metrics": "67b53621e46c904d667f6b475e86645e9b5269b88576748329a9fe36b086147e",
+      "acknowledge_runtime_performance": "03ee3f289a7ba7934989ba7f2fee002f9651b95bfc8b0133229fb47471ae3c30",
+      "realtime_performance_summary": "6d7b52c8e4df0268095fa62ec3528751e0d35d737b1fbb63a18a142f8ba438eb",
+      "realtime_performance_traces": "4ab34babbe088738267fc5106e2e49febc5bb1a1c80e47e3da0c996eae257116",
+      "record_delivery_metric": "d1fcaa4e3f41134bb21030ab38dbb27fca41f1c4e019380ca1c8c2ea9785ccb9",
+      "create_publisher": "7398a26134e230fe9f0faa4e987a2510f8612ae4531530a25a0c1e3f86ce2a1e",
+      "register_desktop_device": "594f0137654f28fec1a6c576f8998fe025bb68cadc565cc0d9cf238ff9f90c22",
+      "desktop_device_heartbeat": "6b220658cd3657cf6eef78af692033dd201ce5d54c6ec92631c6e67574ae2e9b",
+      "bind_desktop_device": "3c383c1ec42f71c0f01d6b2044f1ce393baa2504f277cf9a3208868927f97a4d",
+      "web_session_heartbeat": "74f72af7e17d0387da69c7373401b5c8e1488134a1fc595d6784fd6c5638e8dd",
+      "get_desktop_binding": "0393e92cdf040a8ba9625869d6edb48a757c8f37f5e1175c28c4564074ba1245",
+      "get_desktop_active_binding": "3e65fa841f2618ca01520d79d75dcbaf3f36552fd1000d80a92b34afc0a83abf",
+      "get_desktop_active_binding_by_code": "48619c46eabb5cb2c1b24636c693bacdfa8514193d5420c5be7d37c08e207f79",
+      "get_desktop_pairing_status": "9f44e2d0bf7fc767c26588cad21c8dd137b0fbe6ca35ddc053ae5b2cddab6372",
+      "get_desktop_active_connection": "5520fd912e2c91176a5f5615be3cd79fc497d82aee07633b87229d39aa622a7f",
+      "get_session_snapshot": "51d6bcf52f518e44f7ae0af06bbb600c7261fb142f6d342dfd5e7b13384d88c3",
+      "control_session_capture": "23f2a4b30f53766e7c47e6dcd1638c74938e5091f0127fe704b5707ae12d7056",
+      "stream_session_runtime": "c21859c6839ed6d6aeb77a24d8f94872d26c908a5d86040f40787c401d676104",
+      "list_transcripts": "eac91c52c93649b7e10216bbbba0799d6e19fa70081b3f8af8033f6c9a18f434",
+      "list_candidates": "a6c5822d9e8641e708eb454c76bdc5cceedd87810edae25a24ca11e71a18350e",
+      "confirm_candidate": "7690690810466bc2d0ad1a65a6f290f54f4ec3650fe33a18bc13f0cce5965f0b",
+      "dismiss_candidate": "77153eaf2aa35dea1a4d577708ebe627027eab9dd275dc4c3deeaed3460acf0e",
+      "list_events": "a4fb0fe09fb11ab3c1e13697b97d47f1c1fca8f3ed14f37c13afec67b717b688",
+      "publish_device_status": "207daf783762f8b8e77b5ab92ca4a2a5bb3cd3b6a9b0f6f599ad52331c26b4db",
+      "ingest_frame": "c8b51b43e1ef936cab7b18993554e856b2d4e1381d8b018040d7ad0ccdbccb52",
+      "realtime_ws": "6be712718da1eaa079c05f1c9aceb588667ad64d3021aaa379c4d54bff2b1107",
+      "realtime_ingest_ws": "804fc0882c96a4d8fac66e8c2216e81da44d0818c560536e923017dc3fc1faaf"
+    },
+    "modules/web.py": {
+      "_desktop_release_dir": "624d525049fabc6dadf5c01fc98486f4cbadcb558f0a868c411b141f0ee6d572",
+      "_published_desktop_manifest_path": "82990ee3a3c13f61a4acb651c794c05661865f58b7cfaa3b75f4355f816ff63e",
+      "_published_desktop_manifest": "ea09af52bd6878d970cddcec7c61bad33165aa77b5b0fb4b25b42674946f105f",
+      "_published_desktop_entry": "cdb28aa340c4c3a0638fa05e3c58d61af1641d74a9550b78803565f2a4b63d92",
+      "_is_public_desktop_entry": "0110e4d74eb3b29faf4aa26eee6f70e2ae2822dc70f7a662ff432fde3681e2c1",
+      "download_desktop_artifact": "140568b3dc463db58662ccf9f2064f12cf8f20aebf15fd1fbc914a891bddb015",
+      "_account_payload": "f072a55df62148e1c674b724656050b643723af551b8085ec79420d037854cc5",
+      "_release_manifest": "6c0262abed5a1de5aedbcb678919be1c8aafca7ce2426eeacb3f5ad4d608a189",
+      "_is_selectable_document": "38fb1c98ee06a7006d4f1ae6c14d9f18e7b64205be3d491b35acb393d7aaf87d",
+      "_document_ui_status": "9e46c37d864534823f0a3a6e36a9f074b39469640bc3082506dd387976516081",
+      "_artifact_manifest": "dae6fde0a3d2f07c7baa61ed5bcf5e8b42fc3ec4e099c90c9496a7fbcbc2f310",
+      "_document_source_payload": "8f6b44ef44672fa47ec1d7eed51625ff34dd966771625b70c6fdfecc76b3d700",
+      "_prepared_resource_payload": "f505af7ae64f10d782862aecdd1044ed507a0a7223a9ac92be55a69b7d01b1c9",
+      "_session_status": "ff05d16d3c1a675d8432472a9b38edac29fede793555ffaca8634a834357e88e",
+      "_session_payload": "215b5be35eb655f68fb2553b43b1d277fb188b5044b28a64b136a02a13247d59",
+      "_selection_payload": "d7728389ac874be42ac9922fc11434fa92a032efcb8dcca0ea8e41eccd128ba4",
+      "_question_from_chat": "9446e94b047c85f3bfdba30b07e51775c8e340877b6b1e9d4beb7ed0518f573e",
+      "_question_from_screenshot": "812ec2652b752d06e7d18d0610756de071da2700f571a971d84b2a4312fd7e9b",
+      "_knowledge_collection_payload": "a909f42cd62a0f59c3e50dc9ddafb2c4c55b8da311f8ce828c27a62e20a92c33",
+      "_knowledge_document_payload": "aaa589c3d45505ebdd68a463b510172458ffcc090723d5d3c6eb9665887848c2"
+    }
+  },
+  "localVerification": {
+    "candidateTests": 433,
+    "additionalSubtests": 16,
+    "globalOnlySkipped": 1
+  },
+  "liveHttp": {
+    "/healthz": [
+      "get"
+    ],
+    "/api/v1/system/foundation": [
+      "get"
+    ],
+    "/api/v1/system/ownership": [
+      "get"
+    ],
+    "/api/v1/system/runtime": [
+      "get"
+    ],
+    "/api/v1/sessions/status": [
+      "get"
+    ],
+    "/api/v1/sessions": [
+      "get",
+      "post"
+    ],
+    "/api/v1/sessions/{session_id}": [
+      "delete",
+      "get"
+    ],
+    "/api/v1/sessions/{session_id}/review": [
+      "get"
+    ],
+    "/api/v1/sessions/{session_id}/active-conflict": [
+      "get"
+    ],
+    "/api/v1/sessions/{session_id}/supersede-active": [
+      "post"
+    ],
+    "/api/v1/sessions/{session_id}/continue": [
+      "post"
+    ],
+    "/api/v1/sessions/{session_id}/idle-status": [
+      "get"
+    ],
+    "/api/v1/sessions/{session_id}/materials/confirm": [
+      "post"
+    ],
+    "/api/v1/sessions/{session_id}/language": [
+      "patch"
+    ],
+    "/api/v1/sessions/{session_id}/audio-mode": [
+      "patch"
+    ],
+    "/api/v1/sessions/{session_id}/programming": [
+      "patch"
+    ],
+    "/api/v1/sessions/{session_id}/auto-answer": [
+      "patch"
+    ],
+    "/api/v1/sessions/{session_id}/start": [
+      "post"
+    ],
+    "/api/v1/sessions/{session_id}/end": [
+      "post"
+    ],
+    "/api/v1/sessions/{session_id}/restart": [
+      "post"
+    ],
+    "/api/v1/sessions/{session_id}/context": [
+      "get",
+      "post"
+    ],
+    "/api/v1/sessions/{session_id}/usage": [
+      "get",
+      "post"
+    ],
+    "/api/v1/auth/status": [
+      "get"
+    ],
+    "/api/v1/auth/register": [
+      "post"
+    ],
+    "/api/v1/auth/login": [
+      "post"
+    ],
+    "/api/v1/auth/sms/send-code": [
+      "post"
+    ],
+    "/api/v1/auth/sms/verify-login": [
+      "post"
+    ],
+    "/api/v1/auth/refresh": [
+      "post"
+    ],
+    "/api/v1/auth/me": [
+      "get"
+    ],
+    "/api/v1/auth/sessions": [
+      "get"
+    ],
+    "/api/v1/auth/logout": [
+      "post"
+    ],
+    "/api/v1/auth/wechat/authorization-sessions": [
+      "post"
+    ],
+    "/api/v1/auth/wechat/authorization-sessions/{auth_request_id}": [
+      "get"
+    ],
+    "/api/v1/auth/wechat/authorization-sessions/{auth_request_id}/scan": [
+      "post"
+    ],
+    "/api/v1/auth/wechat/authorization-sessions/{auth_request_id}/authorize": [
+      "post"
+    ],
+    "/api/v1/auth/wechat/callback": [
+      "post"
+    ],
+    "/api/v1/documents/validation-policy": [
+      "get"
+    ],
+    "/api/v1/documents/upload-intents": [
+      "post"
+    ],
+    "/api/v1/documents/uploads/complete": [
+      "post"
+    ],
+    "/api/v1/documents": [
+      "get"
+    ],
+    "/api/v1/documents/{document_id}": [
+      "delete",
+      "get"
+    ],
+    "/api/v1/documents/{document_id}/availability": [
+      "patch"
+    ],
+    "/api/v1/documents/{document_id}/display-name": [
+      "patch"
+    ],
+    "/api/v1/documents/{document_id}/download": [
+      "get"
+    ],
+    "/api/v1/documents/processing/handoffs": [
+      "get"
+    ],
+    "/api/v1/document-processing/tasks/{task_id}": [
+      "get"
+    ],
+    "/api/v1/document-processing/documents/{document_id}": [
+      "get"
+    ],
+    "/api/v1/document-processing/tasks/{task_id}/retry": [
+      "post"
+    ],
+    "/api/v1/resume/status": [
+      "get"
+    ],
+    "/api/v1/resume/upload-intents": [
+      "post"
+    ],
+    "/api/v1/resume/uploads/complete": [
+      "post"
+    ],
+    "/api/v1/resume/uploads/proxy": [
+      "post"
+    ],
+    "/api/v1/job-descriptions/status": [
+      "get"
+    ],
+    "/api/v1/job-descriptions/upload-intents": [
+      "post"
+    ],
+    "/api/v1/job-descriptions/uploads/complete": [
+      "post"
+    ],
+    "/api/v1/job-descriptions/uploads/proxy": [
+      "post"
+    ],
+    "/api/v1/job-descriptions/text": [
+      "post"
+    ],
+    "/api/v1/knowledge/status": [
+      "get"
+    ],
+    "/api/v1/knowledge/collections": [
+      "post"
+    ],
+    "/api/v1/knowledge/collections/{collection_id}": [
+      "delete",
+      "patch"
+    ],
+    "/api/v1/knowledge/collections/{collection_id}/upload-intents": [
+      "post"
+    ],
+    "/api/v1/knowledge/collections/{collection_id}/uploads/complete": [
+      "post"
+    ],
+    "/api/v1/knowledge/collections/{collection_id}/uploads/quote": [
+      "post"
+    ],
+    "/api/v1/knowledge/collections/{collection_id}/uploads/proxy": [
+      "post"
+    ],
+    "/api/v1/knowledge-retrieval/context": [
+      "post"
+    ],
+    "/api/v1/live-answer/status": [
+      "get"
+    ],
+    "/api/v1/live-answer/questions": [
+      "post"
+    ],
+    "/api/v1/live-answer/questions/stream": [
+      "post"
+    ],
+    "/api/v1/live-answer/tasks/{task_id}": [
+      "get"
+    ],
+    "/api/v1/live-answer/tasks/{task_id}/cancel": [
+      "post"
+    ],
+    "/api/v1/live-answer/sessions/{session_id}/history": [
+      "get"
+    ],
+    "/api/v1/realtime-speech/status": [
+      "get"
+    ],
+    "/api/v1/realtime-speech/metrics": [
+      "get"
+    ],
+    "/api/v1/realtime-speech/sessions/{session_id}/performance-ack": [
+      "post"
+    ],
+    "/api/v1/realtime-speech/sessions/{session_id}/performance-summary": [
+      "get"
+    ],
+    "/api/v1/realtime-speech/sessions/{session_id}/performance-traces": [
+      "get"
+    ],
+    "/api/v1/realtime-speech/sessions/{session_id}/delivery-metrics": [
+      "post"
+    ],
+    "/api/v1/realtime-speech/publishers": [
+      "post"
+    ],
+    "/api/v1/realtime-speech/desktop-devices/register": [
+      "post"
+    ],
+    "/api/v1/realtime-speech/desktop-devices/{device_id}/heartbeat": [
+      "post"
+    ],
+    "/api/v1/realtime-speech/sessions/{session_id}/desktop-binding": [
+      "get",
+      "post"
+    ],
+    "/api/v1/realtime-speech/desktop-devices/last-used": [
+      "get"
+    ],
+    "/api/v1/realtime-speech/desktop-devices": [
+      "get"
+    ],
+    "/api/v1/realtime-speech/sessions/{session_id}/web-heartbeat": [
+      "post"
+    ],
+    "/api/v1/realtime-speech/desktop-devices/{device_id}/binding": [
+      "get"
+    ],
+    "/api/v1/realtime-speech/desktop-devices/by-code/{manual_code}/binding": [
+      "get"
+    ],
+    "/api/v1/realtime-speech/desktop-devices/pairing-status": [
+      "get"
+    ],
+    "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection": [
+      "get"
+    ],
+    "/api/v1/realtime-speech/sessions/{session_id}/runtime": [
+      "get"
+    ],
+    "/api/v1/realtime-speech/sessions/{session_id}/snapshot": [
+      "get"
+    ],
+    "/api/v1/realtime-speech/sessions/{session_id}/capture-control": [
+      "post"
+    ],
+    "/api/v1/realtime-speech/sessions/{session_id}/stream": [
+      "get"
+    ],
+    "/api/v1/realtime-speech/sessions/{session_id}/transcripts": [
+      "get"
+    ],
+    "/api/v1/realtime-speech/sessions/{session_id}/question-candidates": [
+      "get"
+    ],
+    "/api/v1/realtime-speech/question-candidates/{candidate_id}/confirm": [
+      "post"
+    ],
+    "/api/v1/realtime-speech/question-candidates/{candidate_id}/dismiss": [
+      "post"
+    ],
+    "/api/v1/realtime-speech/sessions/{session_id}/events": [
+      "get"
+    ],
+    "/api/v1/realtime-speech/sessions/{session_id}/device-status": [
+      "post"
+    ],
+    "/api/v1/realtime-speech/frames": [
+      "post"
+    ],
+    "/api/v1/screenshot-answer/status": [
+      "get"
+    ],
+    "/api/v1/screenshot-answer/validation-policy": [
+      "get"
+    ],
+    "/api/v1/screenshot-answer/upload-intents": [
+      "post"
+    ],
+    "/api/v1/screenshot-answer/uploads/complete": [
+      "post"
+    ],
+    "/api/v1/screenshot-answer/uploads/direct": [
+      "post"
+    ],
+    "/api/v1/screenshot-answer/sessions/{session_id}/uploads": [
+      "get"
+    ],
+    "/api/v1/screenshot-answer/tasks": [
+      "post"
+    ],
+    "/api/v1/screenshot-answer/tasks/{task_id}": [
+      "delete",
+      "get"
+    ],
+    "/api/v1/screenshot-answer/sessions/{session_id}/history": [
+      "get"
+    ],
+    "/api/v1/screenshot-answer/sessions/{session_id}/remote-capture-requests": [
+      "get",
+      "post"
+    ],
+    "/api/v1/screenshot-answer/desktop-devices/{device_id}/shortcut-capture-requests": [
+      "post"
+    ],
+    "/api/v1/screenshot-answer/capture-requests/{request_id}": [
+      "get"
+    ],
+    "/api/v1/screenshot-answer/capture-requests/{request_id}/cancel": [
+      "post"
+    ],
+    "/api/v1/screenshot-answer/desktop-devices/{device_id}/capture-requests/next": [
+      "get"
+    ],
+    "/api/v1/screenshot-answer/desktop-devices/{device_id}/capture-requests/stream": [
+      "get"
+    ],
+    "/api/v1/screenshot-answer/capture-requests/{request_id}/desktop-upload": [
+      "post"
+    ],
+    "/api/v1/screenshot-answer/capture-requests/{request_id}/desktop-fail": [
+      "post"
+    ],
+    "/api/v1/billing/status": [
+      "get"
+    ],
+    "/api/v1/billing/state": [
+      "get"
+    ],
+    "/api/v1/billing/referrals/me": [
+      "get"
+    ],
+    "/api/v1/billing/referrals/{referral_code}": [
+      "get"
+    ],
+    "/api/v1/billing/referrals/activate": [
+      "post"
+    ],
+    "/api/v1/billing/redemptions": [
+      "post"
+    ],
+    "/api/v1/billing/checkout-orders": [
+      "post"
+    ],
+    "/api/v1/billing/checkout-orders/{order_id}": [
+      "get"
+    ],
+    "/api/v1/billing/payment-providers/mzfpay/return": [
+      "get"
+    ],
+    "/api/v1/billing/payment-providers/alipay/return": [
+      "get"
+    ],
+    "/api/v1/partner-program/config": [
+      "get"
+    ],
+    "/api/v1/partner-program/me": [
+      "get"
+    ],
+    "/api/v1/partner-program/join": [
+      "post"
+    ],
+    "/api/v1/partner-program/payout-requests": [
+      "post"
+    ],
+    "/api/v1/partner-program/payout-profile": [
+      "put"
+    ],
+    "/api/v1/web/downloads/desktop/{filename}": [
+      "get"
+    ],
+    "/api/v1/web/state": [
+      "get"
+    ],
+    "/api/v1/promotion/qualify": [
+      "post"
+    ],
+    "/api/v1/promotion/claim": [
+      "post"
+    ],
+    "/api/v1/promotion/opt-out": [
+      "post"
+    ],
+    "/api/v1/mock-interviews/capabilities": [
+      "get"
+    ],
+    "/api/v1/mock-interviews": [
+      "get",
+      "post"
+    ],
+    "/api/v1/mock-interviews/{session_id}": [
+      "delete",
+      "get"
+    ],
+    "/api/v1/mock-interviews/{session_id}/resume": [
+      "post"
+    ],
+    "/api/v1": [
+      "get"
+    ],
+    "/api/v1/admin/session": [
+      "delete",
+      "get",
+      "post"
+    ],
+    "/api/v1/admin/dashboard": [
+      "get"
+    ],
+    "/api/v1/admin/observability": [
+      "get"
+    ],
+    "/api/v1/admin/analytics/trends": [
+      "get"
+    ],
+    "/api/v1/admin/analytics/health": [
+      "get"
+    ],
+    "/api/v1/admin/capacity": [
+      "get"
+    ],
+    "/api/v1/admin/server-health": [
+      "get"
+    ],
+    "/api/v1/admin/users": [
+      "get"
+    ],
+    "/api/v1/admin/orders": [
+      "get"
+    ],
+    "/api/v1/admin/payments/revenue-summary": [
+      "get"
+    ],
+    "/api/v1/admin/payment-channels": [
+      "get"
+    ],
+    "/api/v1/admin/growth/referrals": [
+      "get",
+      "put"
+    ],
+    "/api/v1/admin/payment-channels/{channel}": [
+      "put"
+    ],
+    "/api/v1/admin/payment-channels/{channel}/activation": [
+      "post"
+    ],
+    "/api/v1/admin/catalog-products": [
+      "get"
+    ],
+    "/api/v1/admin/redemption-batches": [
+      "get",
+      "post"
+    ],
+    "/api/v1/admin/materials": [
+      "get"
+    ],
+    "/api/v1/admin/interviews": [
+      "get"
+    ],
+    "/api/v1/admin/audit": [
+      "get"
+    ],
+    "/api/v1/admin/admins": [
+      "get",
+      "post"
+    ],
+    "/api/v1/admin/catalog-products/{product_id}": [
+      "post"
+    ],
+    "/api/v1/admin/admins/{user_id}/disable": [
+      "post"
+    ],
+    "/api/v1/admin/users/{user_id}/suspend": [
+      "post"
+    ],
+    "/api/v1/admin/users/{user_id}/restore": [
+      "post"
+    ],
+    "/api/v1/admin/users/{user_id}/points": [
+      "post"
+    ],
+    "/api/v1/admin/users/{user_id}/time": [
+      "post"
+    ],
+    "/api/v1/admin/orders/{order_id}/reconcile": [
+      "post"
+    ],
+    "/api/v1/admin/materials/tasks/{task_id}/retry": [
+      "post"
+    ],
+    "/api/v1/admin/interviews/{session_id}/terminate": [
+      "post"
+    ],
+    "/api/v1/admin/promotion/partner-settings": [
+      "get",
+      "put"
+    ],
+    "/api/v1/admin/promotion/partners": [
+      "get"
+    ],
+    "/api/v1/admin/promotion/partner-payouts": [
+      "get"
+    ],
+    "/api/v1/admin/promotion/partner-reconciliation": [
+      "get"
+    ],
+    "/api/v1/admin/promotion/partner-commission-orders": [
+      "get"
+    ],
+    "/api/v1/admin/promotion/partner-payouts/{payout_request_id}/reveal": [
+      "post"
+    ],
+    "/api/v1/admin/promotion/partners/project": [
+      "post"
+    ],
+    "/api/v1/admin/promotion/partner-refunds": [
+      "post"
+    ],
+    "/api/v1/admin/promotion/partner-payouts/{payout_request_id}": [
+      "patch"
+    ],
+    "/api/v1/admin/promotion/channels": [
+      "get",
+      "post"
+    ],
+    "/api/v1/admin/promotion/channels/{channel_id}": [
+      "patch"
+    ],
+    "/api/v1/admin/promotion/campaigns": [
+      "get",
+      "post"
+    ],
+    "/api/v1/admin/promotion/campaigns/{campaign_id}": [
+      "get",
+      "put"
+    ],
+    "/api/v1/admin/promotion/links": [
+      "get",
+      "post"
+    ],
+    "/api/v1/admin/promotion/links/{link_id}": [
+      "put"
+    ],
+    "/api/v1/admin/promotion/links/{link_id}/clone": [
+      "post"
+    ],
+    "/api/v1/admin/promotion/costs": [
+      "get",
+      "post"
+    ],
+    "/api/v1/admin/promotion/costs/{cost_entry_id}/reverse": [
+      "post"
+    ],
+    "/api/v1/admin/promotion/overview": [
+      "get"
+    ],
+    "/api/v1/admin/promotion/reports/{dimension}": [
+      "get"
+    ],
+    "/api/v1/admin/promotion/trends": [
+      "get"
+    ],
+    "/api/v1/admin/promotion/campaigns/{campaign_id}/report": [
+      "get"
+    ],
+    "/api/v1/admin/promotion/funnel": [
+      "get"
+    ],
+    "/api/v1/admin/promotion/health": [
+      "get"
+    ],
+    "/r/{slug}": [
+      "get"
+    ]
+  },
+  "liveOpenapiSha": "6b256080db7d4d0d5eefd6ad088ab0efc69684dc7b3ea9d71da5221645ccc0f4"
+}

@@ -38,16 +38,12 @@ class MockInterviewRepository:
     daily_free_limit = 1
     duration_limit_ms = 3_600_000
     flat_rate_billing = True
-    migration_name = "0051_mock_interviews.sql"
-    interview_language = "zh-CN"
-    lock_namespace = "billing-user"
-    terminal_fault_summary = "出题服务连续失败，本场未完成作答，不进行评分。费用或免费次数已退还。"
     def __init__(self, settings: Settings):
         self.settings = settings
         if not settings.database_url:
             raise RuntimeError("Mock interviews require durable PostgreSQL storage")
         with self.connect() as connection, connection.cursor() as cursor:
-            apply_sql_migrations(cursor, [REPO_ROOT / "apps/backend/migrations/versions" / self.migration_name])
+            apply_sql_migrations(cursor, [REPO_ROOT / "apps/backend/migrations/versions/0051_mock_interviews.sql"])
 
     def connect(self):
         return psycopg.connect(self.settings.database_url, row_factory=dict_row,
@@ -57,7 +53,7 @@ class MockInterviewRepository:
     @contextmanager
     def transaction(self, user_id: str):
         with self.connect() as connection, connection.cursor() as cursor:
-            cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (f"{self.lock_namespace}:{user_id}",))
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (f"billing-user:{user_id}",))
             yield cursor
 
     @staticmethod
@@ -85,12 +81,6 @@ class MockInterviewRepository:
     def quote(self, user_id: str, now_ms: int) -> dict:
         with self.transaction(user_id) as cursor:
             return self._quote(cursor, user_id, now_ms)
-
-    def validate_creation_quote(self, quote: dict) -> None:
-        """Edition-specific admission before any record or fee is written."""
-
-    def validate_start(self, cursor, user_id: str, now_ms: int) -> None:
-        """CN creation-time free/paid classification remains locked."""
 
     @staticmethod
     def _available(cursor, user_id: str) -> int:
@@ -122,7 +112,6 @@ class MockInterviewRepository:
                     raise mock_error("创建标识已用于另一组参数。", "mock_idempotency_conflict")
                 return existing
             quote = self._quote(cursor, user_id, now_ms)
-            self.validate_creation_quote(quote)
             if quote["savedCount"] >= 2:
                 raise mock_error("最多保留两条模拟面试记录，请先手动删除旧记录。", "mock_history_full")
             if quote["billingClass"] != expected_billing_class:
@@ -136,8 +125,8 @@ class MockInterviewRepository:
                 (session_id,owner_user_id,title,session_mode,interview_audio_mode,interview_language,status,continue_target,
                  material_binding_json,config_snapshot_json,usage_totals_json,integration_references_json,
                  created_at_ms,updated_at_ms,last_activity_at_ms)
-                VALUES (%s,%s,%s,'mock','mobile',%s,'preparing','preparing',%s,%s,%s,'[]',%s,%s,%s)""",
-                (session_id, user_id, title.strip(), self.interview_language, Jsonb(asdict(material)), Jsonb(asdict(config)),
+                VALUES (%s,%s,%s,'mock','mobile','zh-CN','preparing','preparing',%s,%s,%s,'[]',%s,%s,%s)""",
+                (session_id, user_id, title.strip(), Jsonb(asdict(material)), Jsonb(asdict(config)),
                  Jsonb(asdict(SessionUsageTotals())), now_ms, now_ms, now_ms))
             data = {"title": title.strip(), "target_role": target_role.strip(), "state": asdict(MockRoundState()),
                     "resume_id": None, "resume_version": None, "report": None, "error": None,
@@ -212,7 +201,6 @@ class MockInterviewRepository:
                 if base is None or base["status"] == "ended":
                     raise mock_error("本场面试已结束。", "mock_session_ended")
             if previous.phase == "preparing" and following.phase == "generating_question":
-                self.validate_start(cursor, user_id, now_ms)
                 if self.duration_limit_ms is not None:
                     record["data"].update(started_at_ms=now_ms,
                         deadline_at_ms=now_ms + self.duration_limit_ms,
@@ -266,51 +254,6 @@ class MockInterviewRepository:
                 AND ({due_clause} OR (COALESCE((m.data->>'lease_until_ms')::bigint,0) <= %s
                 AND m.updated_at_ms <= %s)) ORDER BY m.updated_at_ms LIMIT %s""",
                 (*due_parameters, now_ms, cutoff, min(max(limit, 1), 2))).fetchall()
-
-    def duration_deadline(self, record: dict) -> int | None:
-        if self.duration_limit_ms is None:
-            return None
-        data = record["data"]
-        deadline = data.get("deadline_at_ms")
-        started = data.get("started_at_ms")
-        return int(deadline) if deadline is not None else (
-            int(started) + self.duration_limit_ms if started is not None else None)
-
-    def _restore_duration(self, record, cursor) -> None:
-        """Recover the original start of legacy CN sessions, never reconnect time."""
-        if self.duration_limit_ms is None or record["data"].get("deadline_at_ms") is not None:
-            return
-        if round_state(record).phase in ("preparing", "completed"):
-            return
-        started = record["data"].get("started_at_ms")
-        if started is None:
-            cursor.execute("SELECT started_at_ms FROM interview_sessions WHERE session_id=%s", (record["session_id"],))
-            base = cursor.fetchone()
-            started = base["started_at_ms"] if base else None
-        if started is not None:
-            started = int(started)
-            record["data"].update(started_at_ms=started, deadline_at_ms=started+self.duration_limit_ms,
-                                  duration_limit_ms=self.duration_limit_ms)
-
-    def _expire_duration(self, record, cursor, *, now_ms: int) -> bool:
-        self._restore_duration(record, cursor)
-        deadline = self.duration_deadline(record)
-        state = round_state(record)
-        if deadline is None or now_ms < deadline or state.phase in ("generating_report", "completed"):
-            return False
-        self._meter(record, cursor, now_ms=now_ms, active=False)
-        following = state.end()
-        record["data"].update(state=asdict(following), end_reason="time_limit", clock_at_ms=None,
-            generation_claim=None, generation_claim_until_ms=0, error=None)
-        cursor.execute("""UPDATE interview_sessions SET status='ended',continue_target='history',
-            ended_at_ms=COALESCE(ended_at_ms,%s),updated_at_ms=%s WHERE session_id=%s""",
-            (deadline, now_ms, record["session_id"]))
-        return True
-
-    def expire_duration(self, *, user_id: str, session_id: str, now_ms: int) -> dict:
-        """Commit expiry and return the ended record, including on repeated calls."""
-        return self.change(user_id=user_id, session_id=session_id, now_ms=now_ms,
-            operation=lambda record, cursor: self._expire_duration(record, cursor, now_ms=now_ms))
 
     def expire_offline(self, *, user_id: str, session_id: str, now_ms: int) -> dict:
         def operation(record, cursor):
@@ -451,15 +394,6 @@ class MockInterviewRepository:
                 error=None)
         return self.change(user_id=user_id, session_id=session_id, now_ms=now_ms, operation=operation)
 
-    @staticmethod
-    def _refundable_points(cursor, *, user_id: str, session_id: str) -> int:
-        # Refund settled fees, including legacy minute fees, rather than inferring
-        # a charge from mutable counters. Existing financial history is immutable.
-        cursor.execute("""SELECT COALESCE(-SUM(points),0) AS points FROM points_redemption_ledger
-            WHERE user_id=%s AND kind IN ('mock_interview_entry_settlement','mock_interview_minute_settlement')
-            AND reference_id LIKE %s""", (user_id, f"mock:{session_id}:%"))
-        return int(cursor.fetchone()["points"])
-
     def finish_generation(self, *, user_id: str, session_id: str, operation_id: str,
                           claim_id: str, now_ms: int, question: str | None = None,
                           report: dict | None = None, failed: bool = False,
@@ -486,7 +420,7 @@ class MockInterviewRepository:
                     if failures >= 3 and state.phase == "generating_question" and not any(r.answer for r in state.rounds):
                         ending = state.end()
                         record["data"]["state"] = asdict(ending.complete(ending.operation_id))
-                        record["data"]["report"] = {"summary": self.terminal_fault_summary,
+                        record["data"]["report"] = {"summary": "出题服务连续失败，本场未完成作答，不进行评分。费用或免费次数已退还。",
                             "dimensions": None, "overall_score": None, "feedback": [], "practice_priorities": []}
                         record["data"]["error"] = "terminal_provider_failure"
                         self._meter(record, cursor, now_ms=now_ms, active=False)
@@ -524,3 +458,57 @@ class MockInterviewRepository:
                         points=refund, reference=f"mock:{session_id}:refund", now_ms=now_ms)
             record["refunded"] = True
         return self.change(user_id=user_id, session_id=session_id, now_ms=now_ms, operation=operation)
+
+    @staticmethod
+    def _refundable_points(cursor, *, user_id: str, session_id: str) -> int:
+        # Refund settled fees, including legacy minute fees, rather than inferring
+        # a charge from mutable counters. Existing financial history is immutable.
+        cursor.execute("""SELECT COALESCE(-SUM(points),0) AS points FROM points_redemption_ledger
+            WHERE user_id=%s AND kind IN ('mock_interview_entry_settlement','mock_interview_minute_settlement')
+            AND reference_id LIKE %s""", (user_id, f"mock:{session_id}:%"))
+        return int(cursor.fetchone()["points"])
+
+    def expire_duration(self, *, user_id: str, session_id: str, now_ms: int) -> dict:
+        """Commit expiry and return the ended record, including on repeated calls."""
+        return self.change(user_id=user_id, session_id=session_id, now_ms=now_ms,
+            operation=lambda record, cursor: self._expire_duration(record, cursor, now_ms=now_ms))
+
+    def _expire_duration(self, record, cursor, *, now_ms: int) -> bool:
+        self._restore_duration(record, cursor)
+        deadline = self.duration_deadline(record)
+        state = round_state(record)
+        if deadline is None or now_ms < deadline or state.phase in ("generating_report", "completed"):
+            return False
+        self._meter(record, cursor, now_ms=now_ms, active=False)
+        following = state.end()
+        record["data"].update(state=asdict(following), end_reason="time_limit", clock_at_ms=None,
+            generation_claim=None, generation_claim_until_ms=0, error=None)
+        cursor.execute("""UPDATE interview_sessions SET status='ended',continue_target='history',
+            ended_at_ms=COALESCE(ended_at_ms,%s),updated_at_ms=%s WHERE session_id=%s""",
+            (deadline, now_ms, record["session_id"]))
+        return True
+
+    def _restore_duration(self, record, cursor) -> None:
+        """Recover the original start of legacy CN sessions, never reconnect time."""
+        if self.duration_limit_ms is None or record["data"].get("deadline_at_ms") is not None:
+            return
+        if round_state(record).phase in ("preparing", "completed"):
+            return
+        started = record["data"].get("started_at_ms")
+        if started is None:
+            cursor.execute("SELECT started_at_ms FROM interview_sessions WHERE session_id=%s", (record["session_id"],))
+            base = cursor.fetchone()
+            started = base["started_at_ms"] if base else None
+        if started is not None:
+            started = int(started)
+            record["data"].update(started_at_ms=started, deadline_at_ms=started+self.duration_limit_ms,
+                                  duration_limit_ms=self.duration_limit_ms)
+
+    def duration_deadline(self, record: dict) -> int | None:
+        if self.duration_limit_ms is None:
+            return None
+        data = record["data"]
+        deadline = data.get("deadline_at_ms")
+        started = data.get("started_at_ms")
+        return int(deadline) if deadline is not None else (
+            int(started) + self.duration_limit_ms if started is not None else None)

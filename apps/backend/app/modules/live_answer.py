@@ -120,8 +120,6 @@ def _publish_answer_task_event(
 async def status(request: Request) -> ApiEnvelope[dict[str, object]]:
     settings = get_settings()
     web_search_enabled = bool(getattr(settings, "web_search_enabled", False))
-    if settings.product_edition == "global":
-        web_search_enabled = web_search_enabled and settings.global_web_answer_enabled
     web_search_configured = bool(
         web_search_enabled
         and str(getattr(settings, "web_search_responses_base_url", "") or "").strip()
@@ -135,8 +133,7 @@ async def status(request: Request) -> ApiEnvelope[dict[str, object]]:
             "message": "Chat Service is available for session-grounded real-time interview answers.",
             "webSearchEnabled": web_search_enabled,
             "webSearchAvailable": web_search_configured,
-            "webSearchPoints": 0 if settings.product_edition == "global" else int(getattr(settings, "web_search_points", 20) or 20),
-            "webSearchMinimumMembershipDays": 7,
+            "webSearchPoints": int(getattr(settings, "web_search_points", 20) or 20),
         },
         timestamp=utc_now_iso(),
     )
@@ -282,19 +279,17 @@ async def stream_live_answer(
                 yield _sse_frame(_to_stream_event(payload))
         finally:
             try:
-                try:
-                    close = getattr(answer_iterator, "close", None)
-                    if callable(close):
-                        close()
-                finally:
-                    # The client may disconnect before learning the task ID.
-                    if not terminal and last_task is not None:
-                        outcome, cancelled = service.cancel_task(user_id=user_id, task_id=last_task.task_id)
-                        if outcome in {"cancelled", "already-cancelled"}:
-                            _publish_answer_task_event(
-                                realtime, user_id=user_id, session_id=request.session_id,
-                                phase="cancelled", task=cancelled, trigger=request.trigger_mode,
-                            )
+                if answer_iterator is not None:
+                    answer_iterator.close()
+                # A browser can abort before receiving task-started. It cannot
+                # call cancel by ID then, so the stream owns this cleanup.
+                if not terminal and last_task is not None:
+                    outcome, cancelled = service.cancel_task(user_id=user_id, task_id=last_task.task_id)
+                    if outcome in {"cancelled", "already-cancelled"}:
+                        _publish_answer_task_event(
+                            realtime, user_id=user_id, session_id=request.session_id,
+                            phase="cancelled", task=cancelled, trigger=request.trigger_mode,
+                        )
             finally:
                 if claim is not None:
                     if claim_bound:

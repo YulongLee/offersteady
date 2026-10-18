@@ -173,7 +173,7 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
   private readonly cancelResults = new Map<string, CancelAnswerResult>();
   private redemption: RedemptionSuccessData | null = null;
   private readonly redemptionRequests = new Map<string, PointsRedemptionResult>();
-  async loadState(signal?: AbortSignal, _options?: { readonly auth?: boolean; readonly force?: boolean }) {
+  async loadState(signal?: AbortSignal) {
     await delay(signal);
     const state = structuredClone(syntheticState);
     if (this.redemption) state.billing = { ...state.billing, balance: this.redemption.newBalance, ledger: [this.redemption.ledgerEntry, ...state.billing.ledger] };
@@ -227,13 +227,12 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
     return { payoutProfileId: "synthetic-payout-profile", version: 1, payoutMethod: "alipay" as const, maskedAccountName: "测*", maskedAccountIdentifier: "****1234", updatedAtMs: Date.now() };
   }
 
-  async createDraft(input: { title: string; role: string; company?: string; sessionMode?: "interview" | "written"; interviewAudioMode?: "computer" | "mobile" }, signal?: AbortSignal) {
+  async createDraft(input: { title: string; role: string; company?: string; sessionMode?: "interview" | "written" }, signal?: AbortSignal) {
     await delay(signal);
     const draft: InterviewSummary = {
       id: "draft",
       title: input.title.trim(),
       sessionMode: input.sessionMode ?? "interview",
-      interviewAudioMode: input.interviewAudioMode ?? "computer",
       interviewLanguage: "zh-CN",
       programmingRequired: false,
       programmingLanguage: null,
@@ -319,7 +318,7 @@ export class FixtureInterviewAdapter implements InterviewAppAdapter {
       deviceId: `fixture-device-${command.manualCode}`,
       manualCode: command.manualCode ?? "••••56",
       displayName: "面试稳伴随程序 · Mac",
-      capabilities: { appVersion: "0.1.0", platform: "macos", architecture: "arm64", microphone: true, systemAudio: true, screenCapture: true },
+      capabilities: { microphone: true, systemAudio: true, screenCapture: true },
       status: "bound",
       boundAtMs: Date.now(),
       lastSeenAtMs: Date.now(),

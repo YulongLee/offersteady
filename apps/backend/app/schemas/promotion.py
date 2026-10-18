@@ -107,3 +107,41 @@ class PromotionClaim(PromotionModel):
 class PromotionDownloadEvent(PromotionModel):
     event_id: str = Field(min_length=8, max_length=128)
     artifact: str = Field(min_length=1, max_length=180)
+
+
+class PartnerJoinRequest(PromotionModel):
+    agreement_version: str = Field(min_length=3, max_length=80)
+    agreement_accepted: bool
+
+
+class PartnerProgramSettingsUpdate(PromotionModel):
+    enabled: bool
+    confirmed: bool
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class PartnerPayoutProfileUpsert(PromotionModel):
+    payout_method: Literal["alipay", "wechat"]
+    account_name: str = Field(min_length=2, max_length=80)
+    account_identifier: str = Field(min_length=4, max_length=160)
+
+    @field_validator("account_name", "account_identifier")
+    @classmethod
+    def strip_sensitive_value(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("value must not be blank")
+        return value
+
+
+class PartnerRefundRequest(PromotionModel):
+    order_id: str = Field(min_length=3, max_length=120)
+    refund_reference: str = Field(min_length=3, max_length=160)
+    refunded_cents: int = Field(gt=0, le=1_000_000_000)
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class PartnerPayoutTransition(PromotionModel):
+    status: Literal["approved", "rejected", "paid"]
+    reason: str = Field(min_length=3, max_length=500)
+    payment_reference: str | None = Field(default=None, max_length=160)
