@@ -1,3 +1,4 @@
+import { GlobalWrittenMultiScreenPage } from "./GlobalWrittenMultiScreenPage";
 import { useWebAnswerControl, WebAnswerToggle } from "./WebAnswerControl";
 import { createContext, Suspense, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
@@ -15,7 +16,7 @@ import { Logo, RouteLoadingPage } from "./PageShell";
 import type { AppProps } from "./App";
 import { interviewPlatforms } from "./platform-brands";
 import { ConversationMonitor } from "./ConversationMonitor";
-import { AnswerWorkspace, BillingPage, DownloadCenter, GuidePage, LibraryManager, MockInterviewPage } from "./route-components";
+import { AnswerWorkspace, BillingPage, DownloadCenter, GuidePage, LibraryManager, MockInterviewPage, ResumeOptimizerPage } from "./route-components";
 import { latestInterviewerTurnText } from "./conversation-turns";
 import { ManualQuestionComposer } from "./ManualQuestionComposer";
 import { AnswerActionBar } from "./AnswerActionBar";
@@ -154,6 +155,7 @@ const navItems = [
   { to: routes.app, label: "Interviews", icon: UserFocusIcon, end: true },
   { to: routes.writtenExams, label: "Written exams", icon: ClipboardTextIcon },
   { to: routes.mockInterviews, label: "Mock interviews", icon: ClipboardTextIcon },
+  { to: routes.resumeOptimizer, label: "Resume Optimizer", icon: IdentificationCardIcon },
   { to: routes.library, label: "Materials", icon: DatabaseIcon },
   { to: routes.billing, label: "Plans & credits", icon: ChartLineUpIcon },
   { to: routes.guide, label: "Product guide", icon: ChatCircleTextIcon },
@@ -164,7 +166,7 @@ const navItems = [
 function WorkbenchNavigationItems({ mobile = false }: { readonly mobile?: boolean }) {
   return <>{navItems.map(item => {
     const Icon = item.icon;
-    const content = <><span className="nav-icon" aria-hidden="true"><Icon size={17} weight="regular" /></span>{mobile ? <small>{item.label}</small> : item.label}</>;
+    const content = <><span className="nav-icon" aria-hidden="true"><Icon size={17} weight="regular" /></span>{mobile ? <small>{item.to === routes.resumeOptimizer ? "Resume" : item.label}</small> : item.label}</>;
     return <NavLink key={item.to} to={item.to} {...(item.end ? { end: true } : {})}>{content}</NavLink>;
   })}</>;
 }
@@ -199,7 +201,7 @@ function AppLayout() {
     <div className="app-shell">
       <aside className="app-sidebar"><Link to={routes.app}><Logo compact /></Link><nav aria-label="Application navigation"><WorkbenchNavigationItems /></nav><div className="sidebar-foot"><span className="privacy-note">Audio is not stored by default</span><AccountMenu dropUp /></div></aside>
       <div className="app-content"><Outlet /></div>
-      <nav className="mobile-nav" aria-label="Mobile application navigation"><WorkbenchNavigationItems mobile /><AccountMenu compact dropUp /></nav>
+      <nav className="mobile-nav" aria-label="Mobile application navigation" style={{ gridTemplateColumns: `repeat(${navItems.length + 1}, minmax(0, 1fr))` }}><WorkbenchNavigationItems mobile /><AccountMenu compact dropUp /></nav>
     </div>
   );
 }
@@ -1805,6 +1807,8 @@ function ReviewPage() {
   </main>;
 }
 
+function ResumeOptimizerRoutePage() { const { state, setState } = usePrototype(); return <ResumeOptimizerPage state={state} setState={setState} />; }
+
 function LibraryPage() { const { state, setState } = usePrototype(); return <LibraryManager state={state} setState={setState} />; }
 
 function BillingRoutePage() { const { state } = usePrototype(); return <BillingPage state={state} />; }
@@ -1866,10 +1870,13 @@ function IntegrationModeErrorPage({ message, onRetry }: { readonly message: stri
 function NotFoundPage() { return <main className="center-page"><EmptyState title="没有找到这个页面" detail="检查地址，或回到面试首页继续。" action={<Link className="button primary" to={routes.app}>返回首页</Link>} /></main>; }
 
 export function AppRoutes() {
-  return <Routes><Route element={<ProtectedRoute />}><Route path="/" element={<AppLayout />}><Route index element={<HomePage />} /><Route path="written-exams" element={<WrittenExamHomePage />} /><Route path="mock-interviews" element={<MockInterviewPage />} /><Route path="mock-interviews/:id" element={<MockInterviewPage />} /><Route path="interviews/new" element={<NewInterviewPage />} /><Route path="written-exams/new" element={<NewWrittenExamPage />} /><Route path="interviews/:id/prepare" element={<PreparationPage />} /><Route path="interviews/:id/review" element={<ReviewPage />} /><Route path="library" element={<LibraryPage />} /><Route path="billing" element={<BillingRoutePage />} /><Route path="guide" element={<GuideRoutePage />} /><Route path="devices" element={<DevicesPage />} /><Route path="settings" element={<SettingsPage />} /></Route><Route path="interviews/:id/live" element={<LivePage />} /></Route><Route path="*" element={<NotFoundPage />} /></Routes>;
+  return <Routes><Route element={<ProtectedRoute />}><Route path="/" element={<AppLayout />}><Route index element={<HomePage />} /><Route path="written-exams" element={<WrittenExamHomePage />} /><Route path="mock-interviews" element={<MockInterviewPage />} /><Route path="mock-interviews/:id" element={<MockInterviewPage />} /><Route path="interviews/new" element={<NewInterviewPage />} /><Route path="written-exams/new" element={<NewWrittenExamPage />} /><Route path="interviews/:id/prepare" element={<PreparationPage />} /><Route path="interviews/:id/review" element={<ReviewPage />} /><Route path="resume-optimizer" element={<ResumeOptimizerRoutePage />} /><Route path="library" element={<LibraryPage />} /><Route path="billing" element={<BillingRoutePage />} /><Route path="guide" element={<GuideRoutePage />} /><Route path="devices" element={<DevicesPage />} /><Route path="settings" element={<SettingsPage />} /></Route><Route path="interviews/:id/live" element={<WrittenAwareLivePage />} /></Route><Route path="*" element={<NotFoundPage />} /></Routes>;
 }
 
 
 export function WorkspaceApp({ initialAuthenticated, initialState }: AppProps) {
   return <PrototypeProvider initialAuthenticated={initialAuthenticated} initialState={initialState}><Suspense fallback={<RouteLoadingPage />}><AppRoutes /></Suspense></PrototypeProvider>;
 }
+
+function WrittenAwareLivePage() { const { id } = useParams(); const { state } = usePrototype(); return state.interviews.find(item => item.id === id)?.sessionMode === "written" ? <GlobalWrittenMultiScreenPage /> : <LivePage />; }
+export { usePrototype, AccountMenu };

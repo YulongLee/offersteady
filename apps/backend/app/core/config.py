@@ -116,6 +116,8 @@ class Settings(BaseSettings):
     chat_qwen_api_key: str | None = None
     chat_qwen_base_url: str | None = None
     mock_interview_enabled: bool = False
+    global_resume_optimizer_enabled: bool = False
+    global_resume_optimizer_timeout_seconds: float = Field(default=90.0, ge=1, le=90)
     global_mock_interview_enabled: bool = False
     global_web_answer_enabled: bool = False
     global_mock_interview_tts_ws_url: str = "wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime"
@@ -128,8 +130,6 @@ class Settings(BaseSettings):
     web_search_enabled: bool = False
     web_search_responses_base_url: str | None = None
     web_search_api_key: str | None = None
-    # Search providers may need several seconds to fan out to live sources;
-    # keep this bounded without turning normal provider latency into fallback.
     web_search_timeout_seconds: float = 20.0
     web_search_max_sources: int = 5
     web_search_max_context_characters: int = 3000
@@ -238,9 +238,6 @@ class Settings(BaseSettings):
     runtime_performance_telemetry_enabled: bool = True
     runtime_performance_telemetry_ttl_seconds: int = 7 * 24 * 60 * 60
     runtime_performance_telemetry_sample_rate: float = 1.0
-    # Performance acknowledgements are diagnostic-only. Cache the ownership
-    # check briefly so repeated subtitle render samples do not reread the full
-    # interview row and its bound materials on every request.
     runtime_performance_ack_session_cache_seconds: float = 60.0
     auth_jwt_secret: str = "offersteady-dev-jwt-secret"
     auth_jwt_issuer: str = "offersteady-backend"

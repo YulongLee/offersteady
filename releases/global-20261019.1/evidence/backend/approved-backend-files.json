@@ -1,0 +1,8 @@
+{
+  "apps/backend/app/ports/screenshot_answer.py": "059ef14896ddabd27e53e666c3a50803c07ebf2ad6b40a978dc18c2376fa76a5",
+  "apps/backend/app/modules/screenshot_answer.py": "ec37a2b84cb609ee3e943b645fad36018d0d5cef8fc9113e098bbf4ef36b2e85",
+  "apps/backend/app/services/screenshot_answer_service.py": "8e2e5bfc5e5bcedade64ecd369c3c8c3cf8f32bc7e1b991d741d5f205f4b3a72",
+  "apps/backend/app/services/screenshot_answer_repository.py": "16df19c0a595621cfa84847f48867798b03da83501e706f03b9881a073b99219",
+  "apps/backend/app/services/redis_live_task_repositories.py": "f20ecb44738396f17a8863c7f6844e686cacdc4812a136e1ca4562dede67159f",
+  "apps/backend/app/schemas/screenshot_answer.py": "a242fa5f707f07d2d26573f888451981c4e159ab0158625f4927b6f94dc09d22"
+}

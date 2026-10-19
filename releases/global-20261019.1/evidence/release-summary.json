@@ -1,0 +1,61 @@
+{
+  "deployed": true,
+  "independentlyVerified": true,
+  "deploymentAtMs": 1792366750267,
+  "observedAtMs": 1792366980479,
+  "targetComponents": [
+    "Global Backend",
+    "Global Web"
+  ],
+  "components": {
+    "backend": {
+      "id": "a3a419d5586a1a5e802616ada6efbf59ddc254f0c2724a102e230671d4e61821",
+      "image": "sha256:f6a4dad4fb27222ca79f1fb5a86c23267093c741b4536c64ca76b83ac096ec19"
+    },
+    "web": {
+      "id": "6e4bd43d80c1d7f5b5959c3455fc423ca07efd304ef4210a02f2b0b16aa0629d",
+      "image": "sha256:7f5fd6640aaea0b742eddb6227c41ddb7a0a0390fbe657486fdfef86efd38ad6"
+    }
+  },
+  "publicChecks": 43,
+  "policyPassed": true,
+  "backendHealthy": true,
+  "restartCount": 0,
+  "observationSeconds": 180,
+  "errorLines": 0,
+  "tracebackLines": 0,
+  "http5xxLines": 0,
+  "otherComponentsUnchanged": true,
+  "existingConfigurationUnchanged": true,
+  "backendBusinessTests": 89,
+  "metadataRegressionChecks": 10,
+  "compiledWebChecks": 17,
+  "browserScenarios": 9,
+  "controllerTests": 221,
+  "actualOfflineChecks": 28,
+  "realProviderCalls": 0,
+  "productionBusinessTests": 0,
+  "physicalDesktopValidated": false,
+  "gitActions": 0,
+  "cnPublished": false,
+  "desktopPublished": false,
+  "evidenceSha256": {
+    "actual-initialize.json": "811d87cd19104f83f99a27d590c4872bf4d510a2932b815144297e30c99b8c6c",
+    "actual-upload.json": "f20efc78bc71ed49161e457acc89ad6bc5080a554e18cfbf59bd0daf670f536c",
+    "actual-prepare.json": "61921a8e4e6b9097cab22b818c9dd463340662b87ef7b0b2eab5eb8c81677b10",
+    "actual-preflight.json": "82b7cb307a1c97bcbfa6f97ab9e7440c980e608a4fee08fca215e51c3478ce25",
+    "actual-deploy.json": "803c7b1982d06b6468478d0681a7eda3d4263a3495ba57059dc8d9326f65bf0d",
+    "actual-verify.json": "89189abc7477f3601b0184bfa3440b76122643e43fa0118fbd6b6d6b007c4172",
+    "actual-evidence-before.json": "402a36dd39d9d0f0de1712433ba7b72ed08daacfdfa461fac22968a8c8d7d86d",
+    "actual-evidence-after.json": "66bd93a1681a145f3a0c41f33c07b5d8819918a2012ad37892fc6e5a81731a30",
+    "public-capture-policy.json": "08c1da627d3493d146c72512b701ace83dfaf5af787e7bb0365c0da1951a417b",
+    "short-observation.json": "273104bf1d43d2245146026ab130427a41f3be0877b35c7faed395a9c69346e3",
+    "root-payload-verification.json": "9191de30019e43be140af7238892c31827d7e6401d8c90e6fafc2ed1062593b6",
+    "root-cutover-go.json": "8f538a8e03e007736f138e857ef7e6e1dcf68b93b670cfbdea4ac5106d1c32ba",
+    "verified-qa.json": "4beea4bccc73c37ab727ad054389de92ea763b884cc7f8ee155533c24bd56d40",
+    "revision3-scope-review.json": "9ec59a9f477668795c1fc95ada425aed56c55ec59ccfd7801b91ffecdd12f634",
+    "deployed-backend-runtime-manifest.json": "54c34c9e1f2f0918849a57d2f2cb13f85e80e439d972187e75df01685586856b",
+    "deployed-web-static-manifest.json": "2faa1466937ef85c3ed4946ce9fe7117f66dcf957427520f48d99b1951487fbc",
+    "deployed-openapi.json": "e2f33fbe450150f71999e8a516dcb9918d4c6df153fff1b0c6f1375730a6eb11"
+  }
+}

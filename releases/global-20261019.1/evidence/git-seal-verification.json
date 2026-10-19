@@ -1,0 +1,18 @@
+{
+  "version": "global-20261019.1",
+  "stage": "Before commit and push",
+  "passed": true,
+  "freshReadOnlyLiveInventoryMatched": true,
+  "sealedRuntimeAndStaticSnapshotVerificationPassed": true,
+  "targetedBackendTestsPassed": 40,
+  "regionalWebTypecheckPassed": true,
+  "openSpecStrictPassed": true,
+  "productionChangedBySeal": false,
+  "realModelCallsBySeal": 0,
+  "physicalDesktopCaptureRetested": false,
+  "preservedDeployedTrailingBlankLines": [
+    "apps/backend/app/ports/authentication.py",
+    "apps/backend/app/services/authentication_repository.py",
+    "apps/backend/app/services/postgres_authentication_repository.py"
+  ]
+}

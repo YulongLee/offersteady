@@ -1,0 +1,1450 @@
+{
+  "syntheticOnly": true,
+  "actualFastApiRouter": true,
+  "actualService": true,
+  "actualLocalPostgres": true,
+  "actualRootFormatter": true,
+  "providerCalls": 0,
+  "realUserData": false,
+  "sourceHashes": {
+    "apps/backend/app/schemas/resume_optimizer.py": "e9fccbeeaccb2be712203c28db3b1f9ec7478fa5c91b8f94fca7e530cf5f0336",
+    "apps/backend/app/modules/resume_optimizer.py": "aaab63348eacfef7177fdfcbdcc49630be8b625a393e52d756ae3265e40f858c",
+    "apps/backend/app/services/resume_optimizer_service.py": "505764cc2eebc56c0f426f9a07b59abc77e02badb01bcd3b4d16acbc1bda2683",
+    "apps/backend/app/services/resume_optimizer_repository.py": "149c09c70daf1fbf1c0053f55246d00e3e4e7b864e8eaeadfe034dfbe58d373e",
+    "apps/backend/app/services/document_service.py": "5955746b57f4da414a6ba7da8dfde4c511e5633f51f7ef77be1ce7ccfa1c8b58",
+    "apps/backend/app/services/resume_optimizer_export.py": "bfadb294dde928b175762e126e36b5d21a37c1a2f8ed0fa6a9ec00a32adb0999",
+    "apps/backend/app/services/resume_optimizer_source.py": "6c61e9e62f0eca699261ca95db0ebf920b7d28e70acc48b673035149223324bc"
+  },
+  "sourceInput": {
+    "idempotencyKey": "synthetic-wire-second",
+    "sourceDocumentId": "source",
+    "sourceVersionId": "v-source",
+    "targetRole": "",
+    "jdDocumentId": null,
+    "jdVersionId": null,
+    "jdText": "",
+    "quotedQuotaDay": "2026-10-17",
+    "confirmProcessing": true
+  },
+  "webSource": {
+    "id": "source",
+    "ownerUserId": "owner",
+    "kind": "resume",
+    "displayName": "Synthetic Resume.md",
+    "version": "v1",
+    "status": "ready",
+    "processingState": "uploaded",
+    "updatedAtMs": 1792238400000,
+    "summary": "简历已处理完成，可在面试准备中选择。",
+    "documentId": "source",
+    "documentVersionId": "v-source",
+    "indexState": "indexed",
+    "selectable": true,
+    "syncStatus": "synced",
+    "artifactManifest": [
+      {
+        "artifactKind": "original",
+        "objectKey": "synthetic-source",
+        "exists": false,
+        "required": true,
+        "syncStatus": "unknown"
+      },
+      {
+        "artifactKind": "normalized_markdown",
+        "objectKey": "global-synthetic/test/users/7862c7bc57a0e52c991a5a1a75d2126e/documents/resume/source/versions/v-source/processed/normalized.md",
+        "exists": false,
+        "required": true,
+        "syncStatus": "unknown"
+      },
+      {
+        "artifactKind": "chunk_manifest",
+        "objectKey": "global-synthetic/test/users/7862c7bc57a0e52c991a5a1a75d2126e/documents/resume/source/versions/v-source/processed/chunks.jsonl",
+        "exists": false,
+        "required": true,
+        "syncStatus": "unknown"
+      }
+    ],
+    "unavailableReason": null,
+    "deletedAtMs": null
+  },
+  "savedWebSource": {
+    "id": "document-opt-c7ee0b1ec6ea554f86b646dc2cfaeef8",
+    "ownerUserId": "owner",
+    "kind": "resume",
+    "displayName": "Optimized Resume.md",
+    "version": "v1",
+    "status": "processing",
+    "processingState": "processing",
+    "updatedAtMs": 1792251421263,
+    "summary": "简历已处理完成，可在面试准备中选择。",
+    "documentId": "document-opt-c7ee0b1ec6ea554f86b646dc2cfaeef8",
+    "documentVersionId": "version-opt-c7ee0b1ec6ea554f86b646dc2cfaeef8",
+    "indexState": "queued",
+    "selectable": false,
+    "syncStatus": "processing",
+    "artifactManifest": [
+      {
+        "artifactKind": "original",
+        "objectKey": "global-synthetic/test/users/7862c7bc57a0e52c991a5a1a75d2126e/documents/resume/document-opt-c7ee0b1ec6ea554f86b646dc2cfaeef8/versions/version-opt-c7ee0b1ec6ea554f86b646dc2cfaeef8/original/c7ee0b1ec6ea554f86b646dc2cfaeef8.md",
+        "exists": false,
+        "required": true,
+        "syncStatus": "unknown"
+      },
+      {
+        "artifactKind": "normalized_markdown",
+        "objectKey": "global-synthetic/test/users/7862c7bc57a0e52c991a5a1a75d2126e/documents/resume/document-opt-c7ee0b1ec6ea554f86b646dc2cfaeef8/versions/version-opt-c7ee0b1ec6ea554f86b646dc2cfaeef8/processed/normalized.md",
+        "exists": false,
+        "required": false,
+        "syncStatus": "unknown"
+      },
+      {
+        "artifactKind": "chunk_manifest",
+        "objectKey": "global-synthetic/test/users/7862c7bc57a0e52c991a5a1a75d2126e/documents/resume/document-opt-c7ee0b1ec6ea554f86b646dc2cfaeef8/versions/version-opt-c7ee0b1ec6ea554f86b646dc2cfaeef8/processed/chunks.jsonl",
+        "exists": false,
+        "required": false,
+        "syncStatus": "unknown"
+      }
+    ],
+    "unavailableReason": "资料处理产物未同步或尚不可用",
+    "deletedAtMs": null
+  },
+  "responses": {
+    "capabilities": {
+      "method": "GET",
+      "path": "/api/v1/resume-optimizer/capabilities",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "body": {
+        "success": true,
+        "data": {
+          "enabled": true,
+          "eligible": true,
+          "dailyLimit": 1,
+          "dailyRemaining": 1,
+          "quotaDay": "2026-10-17",
+          "timezone": "UTC",
+          "resetAtMs": 1792281600000,
+          "memberRequired": true,
+          "exhausted": false,
+          "activeJobId": null,
+          "limits": {
+            "resumeCharacters": 40000,
+            "jdCharacters": 12000,
+            "targetRoleCharacters": 120,
+            "draftCharacters": 60000
+          },
+          "exports": [
+            "docx",
+            "pdf"
+          ]
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:00.816120+00:00"
+        }
+      }
+    },
+    "sourceMarkupUnsupported": {
+      "method": "POST",
+      "path": "/api/v1/resume-optimizer/jobs",
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "requestBody": {
+        "idempotencyKey": "synthetic-unsupported-markup",
+        "sourceDocumentId": "source",
+        "sourceVersionId": "v-source",
+        "targetRole": "",
+        "jdDocumentId": null,
+        "jdVersionId": null,
+        "jdText": "",
+        "quotedQuotaDay": "2026-10-17",
+        "confirmProcessing": true
+      },
+      "body": {
+        "success": false,
+        "data": null,
+        "error": {
+          "code": "domain_request_error",
+          "message": "The parsed resume or JD contains unsupported formatting. Use a plain-text or Markdown version without HTML markup and try again.",
+          "details": {
+            "feature": "resume-optimizer",
+            "action": "request",
+            "errorCode": "resume_optimizer_source_markup_unsupported"
+          }
+        },
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:00.841750+00:00"
+        }
+      }
+    },
+    "afterUnsupportedCapabilities": {
+      "method": "GET",
+      "path": "/api/v1/resume-optimizer/capabilities",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "body": {
+        "success": true,
+        "data": {
+          "enabled": true,
+          "eligible": true,
+          "dailyLimit": 1,
+          "dailyRemaining": 1,
+          "quotaDay": "2026-10-17",
+          "timezone": "UTC",
+          "resetAtMs": 1792281600000,
+          "memberRequired": true,
+          "exhausted": false,
+          "activeJobId": null,
+          "limits": {
+            "resumeCharacters": 40000,
+            "jdCharacters": 12000,
+            "targetRoleCharacters": 120,
+            "draftCharacters": 60000
+          },
+          "exports": [
+            "docx",
+            "pdf"
+          ]
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:00.851167+00:00"
+        }
+      }
+    },
+    "tableSourceCreate": {
+      "method": "POST",
+      "path": "/api/v1/resume-optimizer/jobs",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "requestBody": {
+        "idempotencyKey": "synthetic-table-source",
+        "sourceDocumentId": "source",
+        "sourceVersionId": "v-source",
+        "targetRole": "",
+        "jdDocumentId": null,
+        "jdVersionId": null,
+        "jdText": "",
+        "quotedQuotaDay": "2026-10-17",
+        "confirmProcessing": true
+      },
+      "body": {
+        "success": true,
+        "data": {
+          "jobId": "resume-opt-f31098f34f244d638e2c57d1b7f4cc07",
+          "status": "queued",
+          "revision": 1,
+          "sourceDocumentId": "source",
+          "sourceVersionId": "v-source",
+          "sourceDisplayName": "Synthetic Resume.md",
+          "targetRole": "",
+          "hasJd": false,
+          "quotaDay": "2026-10-17",
+          "allowanceStatus": "reserved",
+          "createdAtMs": 1792238400000,
+          "updatedAtMs": 1792238400000,
+          "completedAtMs": null,
+          "errorCode": null,
+          "errorMessage": null,
+          "savedDocumentId": null,
+          "savedVersionId": null,
+          "sourceText": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.\nTeam | Count\nReports | 12",
+          "jdText": "",
+          "jdDocumentId": null,
+          "jdVersionId": null,
+          "review": null,
+          "initialDraftMarkdown": null,
+          "draftMarkdown": null,
+          "promptVersion": "resume-optimizer-en-v1",
+          "scoreVersion": "resume-reference-v1"
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:00.889182+00:00"
+        }
+      }
+    },
+    "tableSourceCancel": {
+      "method": "POST",
+      "path": "/api/v1/resume-optimizer/jobs/resume-opt-f31098f34f244d638e2c57d1b7f4cc07/cancel",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "body": {
+        "success": true,
+        "data": {
+          "jobId": "resume-opt-f31098f34f244d638e2c57d1b7f4cc07",
+          "status": "cancelled",
+          "revision": 2,
+          "sourceDocumentId": "source",
+          "sourceVersionId": "v-source",
+          "sourceDisplayName": "Synthetic Resume.md",
+          "targetRole": "",
+          "hasJd": false,
+          "quotaDay": "2026-10-17",
+          "allowanceStatus": "released",
+          "createdAtMs": 1792238400000,
+          "updatedAtMs": 1792238400000,
+          "completedAtMs": null,
+          "errorCode": null,
+          "errorMessage": null,
+          "savedDocumentId": null,
+          "savedVersionId": null,
+          "sourceText": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.\nTeam | Count\nReports | 12",
+          "jdText": "",
+          "jdDocumentId": null,
+          "jdVersionId": null,
+          "review": null,
+          "initialDraftMarkdown": null,
+          "draftMarkdown": null,
+          "promptVersion": "resume-optimizer-en-v1",
+          "scoreVersion": "resume-reference-v1"
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:00.901411+00:00"
+        }
+      }
+    },
+    "missingConfirmation": {
+      "method": "POST",
+      "path": "/api/v1/resume-optimizer/jobs",
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "requestBody": {
+        "idempotencyKey": "synthetic-key",
+        "sourceDocumentId": "source",
+        "sourceVersionId": "v-source",
+        "targetRole": "",
+        "jdDocumentId": null,
+        "jdVersionId": null,
+        "jdText": "",
+        "quotedQuotaDay": "2026-10-17"
+      },
+      "body": {
+        "success": false,
+        "data": null,
+        "error": {
+          "code": "request_validation_error",
+          "message": "请求参数校验失败。",
+          "details": {
+            "issues": [
+              {
+                "type": "missing",
+                "loc": [
+                  "body",
+                  "confirmProcessing"
+                ],
+                "msg": "Field required",
+                "input": {
+                  "idempotencyKey": "synthetic-key",
+                  "sourceDocumentId": "source",
+                  "sourceVersionId": "v-source",
+                  "targetRole": "",
+                  "jdDocumentId": null,
+                  "jdVersionId": null,
+                  "jdText": "",
+                  "quotedQuotaDay": "2026-10-17"
+                }
+              }
+            ]
+          }
+        },
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:00.902888+00:00"
+        }
+      }
+    },
+    "create": {
+      "method": "POST",
+      "path": "/api/v1/resume-optimizer/jobs",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "requestBody": {
+        "idempotencyKey": "synthetic-key",
+        "sourceDocumentId": "source",
+        "sourceVersionId": "v-source",
+        "targetRole": "",
+        "jdDocumentId": null,
+        "jdVersionId": null,
+        "jdText": "",
+        "quotedQuotaDay": "2026-10-17",
+        "confirmProcessing": true
+      },
+      "body": {
+        "success": true,
+        "data": {
+          "jobId": "resume-opt-68ddc4e72f3e4fcf8c48a96f2a0b008b",
+          "status": "queued",
+          "revision": 1,
+          "sourceDocumentId": "source",
+          "sourceVersionId": "v-source",
+          "sourceDisplayName": "Synthetic Resume.md",
+          "targetRole": "",
+          "hasJd": false,
+          "quotaDay": "2026-10-17",
+          "allowanceStatus": "reserved",
+          "createdAtMs": 1792238400000,
+          "updatedAtMs": 1792238400000,
+          "completedAtMs": null,
+          "errorCode": null,
+          "errorMessage": null,
+          "savedDocumentId": null,
+          "savedVersionId": null,
+          "sourceText": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.",
+          "jdText": "",
+          "jdDocumentId": null,
+          "jdVersionId": null,
+          "review": null,
+          "initialDraftMarkdown": null,
+          "draftMarkdown": null,
+          "promptVersion": "resume-optimizer-en-v1",
+          "scoreVersion": "resume-reference-v1"
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:00.931744+00:00"
+        }
+      }
+    },
+    "queuedDetail": {
+      "method": "GET",
+      "path": "/api/v1/resume-optimizer/jobs/resume-opt-68ddc4e72f3e4fcf8c48a96f2a0b008b",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "body": {
+        "success": true,
+        "data": {
+          "jobId": "resume-opt-68ddc4e72f3e4fcf8c48a96f2a0b008b",
+          "status": "queued",
+          "revision": 1,
+          "sourceDocumentId": "source",
+          "sourceVersionId": "v-source",
+          "sourceDisplayName": "Synthetic Resume.md",
+          "targetRole": "",
+          "hasJd": false,
+          "quotaDay": "2026-10-17",
+          "allowanceStatus": "reserved",
+          "createdAtMs": 1792238400000,
+          "updatedAtMs": 1792238400000,
+          "completedAtMs": null,
+          "errorCode": null,
+          "errorMessage": null,
+          "savedDocumentId": null,
+          "savedVersionId": null,
+          "sourceText": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.",
+          "jdText": "",
+          "jdDocumentId": null,
+          "jdVersionId": null,
+          "review": null,
+          "initialDraftMarkdown": null,
+          "draftMarkdown": null,
+          "promptVersion": "resume-optimizer-en-v1",
+          "scoreVersion": "resume-reference-v1"
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:00.938894+00:00"
+        }
+      }
+    },
+    "cancel": {
+      "method": "POST",
+      "path": "/api/v1/resume-optimizer/jobs/resume-opt-68ddc4e72f3e4fcf8c48a96f2a0b008b/cancel",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "body": {
+        "success": true,
+        "data": {
+          "jobId": "resume-opt-68ddc4e72f3e4fcf8c48a96f2a0b008b",
+          "status": "cancelled",
+          "revision": 2,
+          "sourceDocumentId": "source",
+          "sourceVersionId": "v-source",
+          "sourceDisplayName": "Synthetic Resume.md",
+          "targetRole": "",
+          "hasJd": false,
+          "quotaDay": "2026-10-17",
+          "allowanceStatus": "released",
+          "createdAtMs": 1792238400000,
+          "updatedAtMs": 1792238400000,
+          "completedAtMs": null,
+          "errorCode": null,
+          "errorMessage": null,
+          "savedDocumentId": null,
+          "savedVersionId": null,
+          "sourceText": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.",
+          "jdText": "",
+          "jdDocumentId": null,
+          "jdVersionId": null,
+          "review": null,
+          "initialDraftMarkdown": null,
+          "draftMarkdown": null,
+          "promptVersion": "resume-optimizer-en-v1",
+          "scoreVersion": "resume-reference-v1"
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:00.953122+00:00"
+        }
+      }
+    },
+    "createAfterCancel": {
+      "method": "POST",
+      "path": "/api/v1/resume-optimizer/jobs",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "requestBody": {
+        "idempotencyKey": "synthetic-wire-second",
+        "sourceDocumentId": "source",
+        "sourceVersionId": "v-source",
+        "targetRole": "",
+        "jdDocumentId": null,
+        "jdVersionId": null,
+        "jdText": "",
+        "quotedQuotaDay": "2026-10-17",
+        "confirmProcessing": true
+      },
+      "body": {
+        "success": true,
+        "data": {
+          "jobId": "resume-opt-648d3ccf521e4b8eaf093506d634f665",
+          "status": "queued",
+          "revision": 1,
+          "sourceDocumentId": "source",
+          "sourceVersionId": "v-source",
+          "sourceDisplayName": "Synthetic Resume.md",
+          "targetRole": "",
+          "hasJd": false,
+          "quotaDay": "2026-10-17",
+          "allowanceStatus": "reserved",
+          "createdAtMs": 1792238400000,
+          "updatedAtMs": 1792238400000,
+          "completedAtMs": null,
+          "errorCode": null,
+          "errorMessage": null,
+          "savedDocumentId": null,
+          "savedVersionId": null,
+          "sourceText": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.",
+          "jdText": "",
+          "jdDocumentId": null,
+          "jdVersionId": null,
+          "review": null,
+          "initialDraftMarkdown": null,
+          "draftMarkdown": null,
+          "promptVersion": "resume-optimizer-en-v1",
+          "scoreVersion": "resume-reference-v1"
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:00.982435+00:00"
+        }
+      }
+    },
+    "completedDetail": {
+      "method": "GET",
+      "path": "/api/v1/resume-optimizer/jobs/resume-opt-648d3ccf521e4b8eaf093506d634f665",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "body": {
+        "success": true,
+        "data": {
+          "jobId": "resume-opt-648d3ccf521e4b8eaf093506d634f665",
+          "status": "completed",
+          "revision": 2,
+          "sourceDocumentId": "source",
+          "sourceVersionId": "v-source",
+          "sourceDisplayName": "Synthetic Resume.md",
+          "targetRole": "",
+          "hasJd": false,
+          "quotaDay": "2026-10-17",
+          "allowanceStatus": "settled",
+          "createdAtMs": 1792238400000,
+          "updatedAtMs": 1792238400000,
+          "completedAtMs": 1792238400000,
+          "errorCode": null,
+          "errorMessage": null,
+          "savedDocumentId": null,
+          "savedVersionId": null,
+          "sourceText": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.",
+          "jdText": "",
+          "jdDocumentId": null,
+          "jdVersionId": null,
+          "review": {
+            "dimensions": [
+              {
+                "key": "completeness",
+                "score": 70,
+                "reason": "The available evidence supports this reference score.",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ]
+              },
+              {
+                "key": "impact",
+                "score": 71,
+                "reason": "The available evidence supports this reference score.",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ]
+              },
+              {
+                "key": "clarity",
+                "score": 72,
+                "reason": "The available evidence supports this reference score.",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ]
+              },
+              {
+                "key": "structure",
+                "score": 73,
+                "reason": "The available evidence supports this reference score.",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ]
+              }
+            ],
+            "disclaimer": "Reference evaluation under OfferSteady's resume rubric, not a hiring probability. Verify all facts before use.",
+            "suggestions": [
+              {
+                "title": "Explain the supported work",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ],
+                "priority": "high",
+                "explanation": "The existing description could be clearer.",
+                "recommendation": "Describe the work using only verifiable details."
+              }
+            ],
+            "missingFacts": [
+              "Add a measurable outcome only if you can verify it."
+            ],
+            "overallScore": 72,
+            "roleMatchingAssessed": false
+          },
+          "initialDraftMarkdown": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.",
+          "draftMarkdown": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.",
+          "promptVersion": "resume-optimizer-en-v1",
+          "scoreVersion": "resume-reference-v1"
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:01.007328+00:00"
+        }
+      }
+    },
+    "afterCompletionCapabilities": {
+      "method": "GET",
+      "path": "/api/v1/resume-optimizer/capabilities",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "body": {
+        "success": true,
+        "data": {
+          "enabled": true,
+          "eligible": true,
+          "dailyLimit": 1,
+          "dailyRemaining": 0,
+          "quotaDay": "2026-10-17",
+          "timezone": "UTC",
+          "resetAtMs": 1792281600000,
+          "memberRequired": true,
+          "exhausted": true,
+          "activeJobId": null,
+          "limits": {
+            "resumeCharacters": 40000,
+            "jdCharacters": 12000,
+            "targetRoleCharacters": 120,
+            "draftCharacters": 60000
+          },
+          "exports": [
+            "docx",
+            "pdf"
+          ]
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:01.014894+00:00"
+        }
+      }
+    },
+    "list": {
+      "method": "GET",
+      "path": "/api/v1/resume-optimizer/jobs",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "body": {
+        "success": true,
+        "data": {
+          "jobs": [
+            {
+              "jobId": "resume-opt-f31098f34f244d638e2c57d1b7f4cc07",
+              "status": "cancelled",
+              "revision": 2,
+              "sourceDocumentId": "source",
+              "sourceVersionId": "v-source",
+              "sourceDisplayName": "Synthetic Resume.md",
+              "targetRole": "",
+              "hasJd": false,
+              "quotaDay": "2026-10-17",
+              "allowanceStatus": "released",
+              "createdAtMs": 1792238400000,
+              "updatedAtMs": 1792238400000,
+              "completedAtMs": null,
+              "errorCode": null,
+              "errorMessage": null,
+              "savedDocumentId": null,
+              "savedVersionId": null
+            },
+            {
+              "jobId": "resume-opt-68ddc4e72f3e4fcf8c48a96f2a0b008b",
+              "status": "cancelled",
+              "revision": 2,
+              "sourceDocumentId": "source",
+              "sourceVersionId": "v-source",
+              "sourceDisplayName": "Synthetic Resume.md",
+              "targetRole": "",
+              "hasJd": false,
+              "quotaDay": "2026-10-17",
+              "allowanceStatus": "released",
+              "createdAtMs": 1792238400000,
+              "updatedAtMs": 1792238400000,
+              "completedAtMs": null,
+              "errorCode": null,
+              "errorMessage": null,
+              "savedDocumentId": null,
+              "savedVersionId": null
+            },
+            {
+              "jobId": "resume-opt-648d3ccf521e4b8eaf093506d634f665",
+              "status": "completed",
+              "revision": 2,
+              "sourceDocumentId": "source",
+              "sourceVersionId": "v-source",
+              "sourceDisplayName": "Synthetic Resume.md",
+              "targetRole": "",
+              "hasJd": false,
+              "quotaDay": "2026-10-17",
+              "allowanceStatus": "settled",
+              "createdAtMs": 1792238400000,
+              "updatedAtMs": 1792238400000,
+              "completedAtMs": 1792238400000,
+              "errorCode": null,
+              "errorMessage": null,
+              "savedDocumentId": null,
+              "savedVersionId": null
+            }
+          ]
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:01.025704+00:00"
+        }
+      }
+    },
+    "dailyLimit": {
+      "method": "POST",
+      "path": "/api/v1/resume-optimizer/jobs",
+      "status": 429,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "requestBody": {
+        "idempotencyKey": "synthetic-wire-third",
+        "sourceDocumentId": "source",
+        "sourceVersionId": "v-source",
+        "targetRole": "",
+        "jdDocumentId": null,
+        "jdVersionId": null,
+        "jdText": "",
+        "quotedQuotaDay": "2026-10-17",
+        "confirmProcessing": true
+      },
+      "body": {
+        "success": false,
+        "data": null,
+        "error": {
+          "code": "domain_request_error",
+          "message": "Today's resume optimization has been used or reserved. Try again after 00:00 UTC.",
+          "details": {
+            "feature": "resume-optimizer",
+            "action": "request",
+            "errorCode": "resume_optimizer_daily_limit"
+          }
+        },
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:01.037770+00:00"
+        }
+      }
+    },
+    "revisionConflict": {
+      "method": "PATCH",
+      "path": "/api/v1/resume-optimizer/jobs/resume-opt-648d3ccf521e4b8eaf093506d634f665/draft",
+      "status": 409,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "requestBody": {
+        "expectedRevision": 1,
+        "markdown": "stale synthetic"
+      },
+      "body": {
+        "success": false,
+        "data": null,
+        "error": {
+          "code": "domain_request_error",
+          "message": "This draft has changed. Reload it before saving or downloading.",
+          "details": {
+            "feature": "resume-optimizer",
+            "action": "request",
+            "errorCode": "resume_optimizer_revision_conflict"
+          }
+        },
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:01.045505+00:00"
+        }
+      }
+    },
+    "draft": {
+      "method": "PATCH",
+      "path": "/api/v1/resume-optimizer/jobs/resume-opt-648d3ccf521e4b8eaf093506d634f665/draft",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "requestBody": {
+        "expectedRevision": 2,
+        "markdown": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.\nVerified user edit."
+      },
+      "body": {
+        "success": true,
+        "data": {
+          "jobId": "resume-opt-648d3ccf521e4b8eaf093506d634f665",
+          "status": "completed",
+          "revision": 3,
+          "sourceDocumentId": "source",
+          "sourceVersionId": "v-source",
+          "sourceDisplayName": "Synthetic Resume.md",
+          "targetRole": "",
+          "hasJd": false,
+          "quotaDay": "2026-10-17",
+          "allowanceStatus": "settled",
+          "createdAtMs": 1792238400000,
+          "updatedAtMs": 1792238400000,
+          "completedAtMs": 1792238400000,
+          "errorCode": null,
+          "errorMessage": null,
+          "savedDocumentId": null,
+          "savedVersionId": null,
+          "sourceText": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.",
+          "jdText": "",
+          "jdDocumentId": null,
+          "jdVersionId": null,
+          "review": {
+            "dimensions": [
+              {
+                "key": "completeness",
+                "score": 70,
+                "reason": "The available evidence supports this reference score.",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ]
+              },
+              {
+                "key": "impact",
+                "score": 71,
+                "reason": "The available evidence supports this reference score.",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ]
+              },
+              {
+                "key": "clarity",
+                "score": 72,
+                "reason": "The available evidence supports this reference score.",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ]
+              },
+              {
+                "key": "structure",
+                "score": 73,
+                "reason": "The available evidence supports this reference score.",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ]
+              }
+            ],
+            "disclaimer": "Reference evaluation under OfferSteady's resume rubric, not a hiring probability. Verify all facts before use.",
+            "suggestions": [
+              {
+                "title": "Explain the supported work",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ],
+                "priority": "high",
+                "explanation": "The existing description could be clearer.",
+                "recommendation": "Describe the work using only verifiable details."
+              }
+            ],
+            "missingFacts": [
+              "Add a measurable outcome only if you can verify it."
+            ],
+            "overallScore": 72,
+            "roleMatchingAssessed": false
+          },
+          "initialDraftMarkdown": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.",
+          "draftMarkdown": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.\nVerified user edit.",
+          "promptVersion": "resume-optimizer-en-v1",
+          "scoreVersion": "resume-reference-v1"
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:01.053351+00:00"
+        }
+      }
+    },
+    "export_docx": {
+      "method": "GET",
+      "path": "/api/v1/resume-optimizer/jobs/resume-opt-648d3ccf521e4b8eaf093506d634f665/export?format=docx&expectedRevision=3&factsConfirmed=true",
+      "status": 200,
+      "headers": {
+        "content-disposition": "attachment; filename=optimized-resume.docx; filename*=UTF-8''optimized-resume.docx",
+        "x-content-type-options": "nosniff",
+        "content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "cache-control": "private, no-store"
+      },
+      "bodyBase64": "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",
+      "bodySha256": "0555705d38ae4dffc5453fb03c47476deffc438025eab17fdc7bdf00c606a13a"
+    },
+    "export_pdf": {
+      "method": "GET",
+      "path": "/api/v1/resume-optimizer/jobs/resume-opt-648d3ccf521e4b8eaf093506d634f665/export?format=pdf&expectedRevision=3&factsConfirmed=true",
+      "status": 200,
+      "headers": {
+        "content-disposition": "attachment; filename=optimized-resume.pdf; filename*=UTF-8''optimized-resume.pdf",
+        "x-content-type-options": "nosniff",
+        "content-type": "application/pdf",
+        "cache-control": "private, no-store"
+      },
+      "bodyBase64": "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ciA2IDAgUiAvTGFzdENoYXIgMTI3IC9OYW1lIC9GMiswIC9TdWJ0eXBlIC9UcnVlVHlwZSAKICAvVG9Vbmljb2RlIDQgMCBSIC9UeXBlIC9Gb250IC9XaWR0aHMgWyAxMDAwIDEwMDAgMTAwMCAxMDAwIDEwMDAgMTAwMCAxMDAwIDEwMDAgMTAwMCAxMDAwIAogIDEwMDAgMTAwMCAxMDAwIDEwMDAgMTAwMCAxMDAwIDEwMDAgMTAwMCAxMDAwIDEwMDAgCiAgMTAwMCAxMDAwIDEwMDAgMTAwMCAxMDAwIDEwMDAgMTAwMCAxMDAwIDEwMDAgMTAwMCAKICAxMDAwIDEwMDAgMjI0IDMyMyA0NzQgNTU1IDU1NSA5MjEgNjgwIDI3OCAKICAzMzggMzM4IDQ2NyA1NTUgMjc4IDM0NyAyNzggMzkyIDU1NSA1NTUgCiAgNTU1IDU1NSA1NTUgNTU1IDU1NSA1NTUgNTU1IDU1NSAyNzggMjc4IAogIDU1NSA1NTUgNTU1IDQ3NCA5NDYgNjA4IDY1NyA2MzggNjg4IDU4OSAKICA1NTIgNjg5IDcyOCAyOTMgNTM1IDY0NiA1NDMgODEyIDcyMyA3NDIgCiAgNjMzIDc0MiA2MzUgNTk2IDU5OSA3MjEgNTc1IDg3OCA1NzMgNTMxIAogIDYwMyAzMzggMzkyIDMzOCA1NTUgNTU5IDYwNiA1NjMgNjE4IDUxMCAKICA2MjAgNTU0IDMyNSA1NjQgNjA3IDI3NSAyNzUgNTUyIDI4NCA5MjYgCiAgNjEwIDYwNiA2MjAgNjIwIDM4OCA0NjggMzc3IDYwNyA1MjEgODAyIAogIDQ5OCA1MjEgNDc1IDMzOCAyNzAgMzM4IDU1NSAxMDAwIF0KPj4KZW5kb2JqCjggMCBvYmoKPDwKL1BhZ2VNb2RlIC9Vc2VOb25lIC9QYWdlcyAxMCAwIFIgL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjkgMCBvYmoKPDwKL0F1dGhvciAoKSAvQ3JlYXRpb25EYXRlIChEOjIwMjYxMDE3MjMzNzAxKzA4JzAwJykgL0NyZWF0b3IgKCkgL0tleXdvcmRzICgpIC9Nb2REYXRlIChEOjIwMjYxMDE3MjMzNzAxKzA4JzAwJykgL1Byb2R1Y2VyIChSZXBvcnRMYWIgUERGIExpYnJhcnkgLSBcKG9wZW5zb3VyY2VcKSkgCiAgL1N1YmplY3QgKCkgL1RpdGxlIChSZXN1bWUpIC9UcmFwcGVkIC9GYWxzZQo+PgplbmRvYmoKMTAgMCBvYmoKPDwKL0NvdW50IDEgL0tpZHMgWyAzIDAgUiBdIC9UeXBlIC9QYWdlcwo+PgplbmRvYmoKMTEgMCBvYmoKPDwKL0ZpbHRlciBbIC9BU0NJSTg1RGVjb2RlIC9GbGF0ZURlY29kZSBdIC9MZW5ndGggMzEyCj4+CnN0cmVhbQpHYXRVbDpKWld0JkI0KmNNS2VcZ0pvLCcsbSlgb3AqXiIrNl1mNF1eWGF1KSNdNWJVISJdcFspbjNBPmZVajhPKkhQbTsvTWJqKUUiZy9SbURFNTRXV2tsInVLPVhSTFAuLSlkSW5HSCNvIUJnZiwjMU9XOW5JamRpW2ssPFA+SCwnJydCW1RORmtNOzxbWkcwRFlvMC1VUmVZWiM8SVFiS2ZVLnJPME8uZDAnMGpALzcmNEkzI2MzWnEuYk4vLWdeLU47c1guZ1oiPWNubzBwX15DM2hYS1s8M1c2NDwyNUhGN0BcJzRxK0FPNTsibVZEP2lSNDBUaTJRSCI6Ji9iIz1fYTdMLlxZMjgzLGtqUXJLOUApSEVFUzxvL1RjZkFxW2oiPktXSCcjO2kwK1EpLztdOyJRfj5lbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCAxMgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwNjEgMDAwMDAgbiAKMDAwMDAwMDEwNCAwMDAwMCBuIAowMDAwMDAwMjExIDAwMDAwIG4gCjAwMDAwMDA0MTYgMDAwMDAgbiAKMDAwMDAwMTE3MSAwMDAwMCBuIAowMDAwMDA4Njk1IDAwMDAwIG4gCjAwMDAwMDg5MjUgMDAwMDAgbiAKMDAwMDAwOTY4OCAwMDAwMCBuIAowMDAwMDA5NzU3IDAwMDAwIG4gCjAwMDAwMDk5ODcgMDAwMDAgbiAKMDAwMDAxMDA0NyAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9JRCAKWzwyYWU2ZmEzYmQ1OTBkMzBiNGFkNzA2ZTcyNmRjZWJkNz48MmFlNmZhM2JkNTkwZDMwYjRhZDcwNmU3MjZkY2ViZDc+XQolIFJlcG9ydExhYiBnZW5lcmF0ZWQgUERGIGRvY3VtZW50IC0tIGRpZ2VzdCAob3BlbnNvdXJjZSkKCi9JbmZvIDkgMCBSCi9Sb290IDggMCBSCi9TaXplIDEyCj4+CnN0YXJ0eHJlZgoxMDQ1MAolJUVPRgo=",
+      "bodySha256": "fba5afb9dc00836e6a5719e84250291c4bf2abcd5d220ab6626677d2bcafe704"
+    },
+    "exportUnconfirmed": {
+      "method": "GET",
+      "path": "/api/v1/resume-optimizer/jobs/resume-opt-648d3ccf521e4b8eaf093506d634f665/export?format=pdf&expectedRevision=3&factsConfirmed=false",
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "body": {
+        "success": false,
+        "data": null,
+        "error": {
+          "code": "domain_request_error",
+          "message": "Use nonempty plain resume text of at most 60,000 characters, without HTML or control characters.",
+          "details": {
+            "feature": "resume-optimizer",
+            "action": "request",
+            "errorCode": "resume_optimizer_invalid_draft"
+          }
+        },
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:01.226202+00:00"
+        }
+      }
+    },
+    "saveAsFailure": {
+      "method": "POST",
+      "path": "/api/v1/resume-optimizer/jobs/resume-opt-648d3ccf521e4b8eaf093506d634f665/save-as",
+      "status": 503,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "requestBody": {
+        "expectedRevision": 3,
+        "confirmIndependentCopy": true,
+        "factsConfirmed": true
+      },
+      "body": {
+        "success": false,
+        "data": null,
+        "error": {
+          "code": "domain_request_error",
+          "message": "Synthetic safe storage failure.",
+          "details": {
+            "feature": "object-storage",
+            "action": "save-object",
+            "errorCode": "oss_write_network_error"
+          }
+        },
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:01.246342+00:00"
+        }
+      }
+    },
+    "saveAs": {
+      "method": "POST",
+      "path": "/api/v1/resume-optimizer/jobs/resume-opt-648d3ccf521e4b8eaf093506d634f665/save-as",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "requestBody": {
+        "expectedRevision": 3,
+        "confirmIndependentCopy": true,
+        "factsConfirmed": true
+      },
+      "body": {
+        "success": true,
+        "data": {
+          "document": {
+            "documentId": "document-opt-c7ee0b1ec6ea554f86b646dc2cfaeef8",
+            "ownerUserId": "owner",
+            "documentKind": "resume",
+            "displayName": "Optimized Resume.md",
+            "fileKind": "md",
+            "contentType": "text/markdown; charset=utf-8",
+            "sizeBytes": 147,
+            "objectKey": "global-synthetic/test/users/7862c7bc57a0e52c991a5a1a75d2126e/documents/resume/document-opt-c7ee0b1ec6ea554f86b646dc2cfaeef8/versions/version-opt-c7ee0b1ec6ea554f86b646dc2cfaeef8/original/c7ee0b1ec6ea554f86b646dc2cfaeef8.md",
+            "status": "processing_requested",
+            "knowledgeCollectionId": null,
+            "processingRequestedAtMs": 1792251421263,
+            "deletedAtMs": null,
+            "createdAtMs": 1792251421263,
+            "updatedAtMs": 1792251421263,
+            "summary": "Optimized copy saved. Preparing it for material selection.",
+            "objectId": "c7ee0b1ec6ea554f86b646dc2cfaeef8",
+            "documentVersionId": "version-opt-c7ee0b1ec6ea554f86b646dc2cfaeef8",
+            "version": 1,
+            "contentFingerprint": "6a100c4834daaf47578688216e5a7150bdd3e42358830c485c00d5cee75c9a3f",
+            "originalFilename": "Optimized Resume.md",
+            "indexState": "queued"
+          }
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:01.275595+00:00"
+        }
+      }
+    },
+    "saveAsReplay": {
+      "method": "POST",
+      "path": "/api/v1/resume-optimizer/jobs/resume-opt-648d3ccf521e4b8eaf093506d634f665/save-as",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "requestBody": {
+        "expectedRevision": 3,
+        "confirmIndependentCopy": true,
+        "factsConfirmed": true
+      },
+      "body": {
+        "success": true,
+        "data": {
+          "document": {
+            "documentId": "document-opt-c7ee0b1ec6ea554f86b646dc2cfaeef8",
+            "ownerUserId": "owner",
+            "documentKind": "resume",
+            "displayName": "Optimized Resume.md",
+            "fileKind": "md",
+            "contentType": "text/markdown; charset=utf-8",
+            "sizeBytes": 147,
+            "objectKey": "global-synthetic/test/users/7862c7bc57a0e52c991a5a1a75d2126e/documents/resume/document-opt-c7ee0b1ec6ea554f86b646dc2cfaeef8/versions/version-opt-c7ee0b1ec6ea554f86b646dc2cfaeef8/original/c7ee0b1ec6ea554f86b646dc2cfaeef8.md",
+            "status": "processing_requested",
+            "knowledgeCollectionId": null,
+            "processingRequestedAtMs": null,
+            "deletedAtMs": null,
+            "createdAtMs": 1792251421263,
+            "updatedAtMs": 1792251421263,
+            "summary": "Optimized copy saved. Preparing it for material selection.",
+            "objectId": "c7ee0b1ec6ea554f86b646dc2cfaeef8",
+            "documentVersionId": "version-opt-c7ee0b1ec6ea554f86b646dc2cfaeef8",
+            "version": 1,
+            "contentFingerprint": "6a100c4834daaf47578688216e5a7150bdd3e42358830c485c00d5cee75c9a3f",
+            "originalFilename": "Optimized Resume.md",
+            "indexState": "queued"
+          }
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:01.288029+00:00"
+        }
+      }
+    },
+    "afterSaveAs": {
+      "method": "GET",
+      "path": "/api/v1/resume-optimizer/jobs/resume-opt-648d3ccf521e4b8eaf093506d634f665",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "body": {
+        "success": true,
+        "data": {
+          "jobId": "resume-opt-648d3ccf521e4b8eaf093506d634f665",
+          "status": "completed",
+          "revision": 3,
+          "sourceDocumentId": "source",
+          "sourceVersionId": "v-source",
+          "sourceDisplayName": "Synthetic Resume.md",
+          "targetRole": "",
+          "hasJd": false,
+          "quotaDay": "2026-10-17",
+          "allowanceStatus": "settled",
+          "createdAtMs": 1792238400000,
+          "updatedAtMs": 1792238400000,
+          "completedAtMs": 1792238400000,
+          "errorCode": null,
+          "errorMessage": null,
+          "savedDocumentId": "document-opt-c7ee0b1ec6ea554f86b646dc2cfaeef8",
+          "savedVersionId": "version-opt-c7ee0b1ec6ea554f86b646dc2cfaeef8",
+          "sourceText": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.",
+          "jdText": "",
+          "jdDocumentId": null,
+          "jdVersionId": null,
+          "review": {
+            "dimensions": [
+              {
+                "key": "completeness",
+                "score": 70,
+                "reason": "The available evidence supports this reference score.",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ]
+              },
+              {
+                "key": "impact",
+                "score": 71,
+                "reason": "The available evidence supports this reference score.",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ]
+              },
+              {
+                "key": "clarity",
+                "score": 72,
+                "reason": "The available evidence supports this reference score.",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ]
+              },
+              {
+                "key": "structure",
+                "score": 73,
+                "reason": "The available evidence supports this reference score.",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ]
+              }
+            ],
+            "disclaimer": "Reference evaluation under OfferSteady's resume rubric, not a hiring probability. Verify all facts before use.",
+            "suggestions": [
+              {
+                "title": "Explain the supported work",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ],
+                "priority": "high",
+                "explanation": "The existing description could be clearer.",
+                "recommendation": "Describe the work using only verifiable details."
+              }
+            ],
+            "missingFacts": [
+              "Add a measurable outcome only if you can verify it."
+            ],
+            "overallScore": 72,
+            "roleMatchingAssessed": false
+          },
+          "initialDraftMarkdown": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.",
+          "draftMarkdown": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.\nVerified user edit.",
+          "promptVersion": "resume-optimizer-en-v1",
+          "scoreVersion": "resume-reference-v1"
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:01.295232+00:00"
+        }
+      }
+    },
+    "draftUnsupportedGlyph": {
+      "method": "PATCH",
+      "path": "/api/v1/resume-optimizer/jobs/resume-opt-648d3ccf521e4b8eaf093506d634f665/draft",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "requestBody": {
+        "expectedRevision": 3,
+        "markdown": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.\nUnsupported emoji: 😀"
+      },
+      "body": {
+        "success": true,
+        "data": {
+          "jobId": "resume-opt-648d3ccf521e4b8eaf093506d634f665",
+          "status": "completed",
+          "revision": 4,
+          "sourceDocumentId": "source",
+          "sourceVersionId": "v-source",
+          "sourceDisplayName": "Synthetic Resume.md",
+          "targetRole": "",
+          "hasJd": false,
+          "quotaDay": "2026-10-17",
+          "allowanceStatus": "settled",
+          "createdAtMs": 1792238400000,
+          "updatedAtMs": 1792238400000,
+          "completedAtMs": 1792238400000,
+          "errorCode": null,
+          "errorMessage": null,
+          "savedDocumentId": null,
+          "savedVersionId": null,
+          "sourceText": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.",
+          "jdText": "",
+          "jdDocumentId": null,
+          "jdVersionId": null,
+          "review": {
+            "dimensions": [
+              {
+                "key": "completeness",
+                "score": 70,
+                "reason": "The available evidence supports this reference score.",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ]
+              },
+              {
+                "key": "impact",
+                "score": 71,
+                "reason": "The available evidence supports this reference score.",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ]
+              },
+              {
+                "key": "clarity",
+                "score": 72,
+                "reason": "The available evidence supports this reference score.",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ]
+              },
+              {
+                "key": "structure",
+                "score": 73,
+                "reason": "The available evidence supports this reference score.",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ]
+              }
+            ],
+            "disclaimer": "Reference evaluation under OfferSteady's resume rubric, not a hiring probability. Verify all facts before use.",
+            "suggestions": [
+              {
+                "title": "Explain the supported work",
+                "evidence": [
+                  {
+                    "quote": "Helped maintain Python reports for 12 teams in 2024.",
+                    "source": "resume"
+                  }
+                ],
+                "priority": "high",
+                "explanation": "The existing description could be clearer.",
+                "recommendation": "Describe the work using only verifiable details."
+              }
+            ],
+            "missingFacts": [
+              "Add a measurable outcome only if you can verify it."
+            ],
+            "overallScore": 72,
+            "roleMatchingAssessed": false
+          },
+          "initialDraftMarkdown": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.",
+          "draftMarkdown": "# Example Candidate\nexample@example.invalid\nHelped maintain Python reports for 12 teams in 2024.\nEducation: Example University.\nUnsupported emoji: 😀",
+          "promptVersion": "resume-optimizer-en-v1",
+          "scoreVersion": "resume-reference-v1"
+        },
+        "error": null,
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:01.326172+00:00"
+        }
+      }
+    },
+    "exportUnavailable": {
+      "method": "GET",
+      "path": "/api/v1/resume-optimizer/jobs/resume-opt-648d3ccf521e4b8eaf093506d634f665/export?format=pdf&expectedRevision=4&factsConfirmed=true",
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "private, no-store"
+      },
+      "body": {
+        "success": false,
+        "data": null,
+        "error": {
+          "code": "domain_request_error",
+          "message": "This resume cannot be exported in this format right now. Try Word (DOCX), or edit unsupported characters and retry.",
+          "details": {
+            "feature": "resume-optimizer",
+            "action": "export",
+            "errorCode": "resume_optimizer_export_unavailable"
+          }
+        },
+        "requestId": "request-id-unavailable",
+        "meta": {
+          "apiVersion": "v1",
+          "timestamp": "2026-10-17T15:37:01.333446+00:00"
+        }
+      }
+    }
+  }
+}

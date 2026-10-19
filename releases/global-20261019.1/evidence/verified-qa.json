@@ -1,0 +1,30 @@
+{
+  "passed": true,
+  "syntheticOnly": true,
+  "sourceFrozenAfterTests": true,
+  "backendTests": 89,
+  "webTests": 17,
+  "browserScenarios": 9,
+  "typecheck": true,
+  "openspecStrict": true,
+  "providerCallsByReleaseControllerAndOfflineProbe": 0,
+  "actualProbeRehearsalChecks": 28,
+  "physicalDesktopValidated": false,
+  "controllerTests": 221,
+  "manifestSha256": "6c63690adffaed92ca932833a6c603ac428ea8ef0a0bd4aacaee31db5f82776d",
+  "records": {
+    "backend-verification/backend-verification.json": "d49f7c2446c17232b43d3389288f80a8248b5b9303a76e1fa5f2ef9fa838d5b9",
+    "backend-verification/root-independent-function-review.json": "4dd04f99ca7d8ebf9f188707a776cc41afbcb637f314c351139355a042b700dd",
+    "backend-verification/independent-release-probe-final-review.json": "d93caa9585c203269a9323a4a0a332053df275baee98cbcd613cf77e456ea0b9",
+    "web/web-verification.json": "982ae743769c39b358f5ba43c65aec2d7a74c81d4160ecd6185f1a1482aada71",
+    "web/bundled-browser-verification.json": "36a04c3c1bd89466a348b3f056f9bec8ddc1645b40432a25ce3574ae7b65fd0d",
+    "web/source-typecheck.json": "0e4ed1e7ceb392232459e4897912d661e65b6022d2ec63d77b07e9e55330745e",
+    "release-tools/tool-review.json": "d8cfb6dbd71815c0b7422ae3861d6a7f2052c8bfa7590648c3c2cdaa52e09e9d",
+    "probe/local-rehearsal.json": "511213ca9e70cb5474f6af8f10456b65412ae976233747fff2cc2555fca1de22",
+    "release-tools/controller-tests.xml": "a28f584db9e95d57d080b3d8e8177197d1808473a044965f04db4235da3ed5c5",
+    "release-tools/web_public_mode_probe.py.fragment": "68603e95d87e7805c9d42aa3edd244826923adf38489053118368689e8dba2d5",
+    "release/public-permission-diagnosis.json": "07d1a6ece7ee92f8ebe99d9db104d3d5f4a6f7c233b8f8d080698bd1d7a2185e",
+    "backend-verification/openapi-review.json": "bfa1038d8759c86e305f6b8d24eda03ab387fcb8d75c2ee79e882225c229494d",
+    "backend-verification/openapi-after.json": "2134b5eda3073815ad3c91dd5d07ab8d6fb3e430fb03c3072016813000a0fea9"
+  }
+}

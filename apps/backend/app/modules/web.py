@@ -566,7 +566,7 @@ def _knowledge_document_payload(document, storage: FileStoragePort | None = None
 
 
 @router.get("/state", response_model=ApiEnvelope[dict[str, object]])
-async def get_web_state(
+def get_web_state(
     request: Request,
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     documents: DocumentService = Depends(document_read_service),

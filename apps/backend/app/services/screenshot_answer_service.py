@@ -11,6 +11,7 @@ import logging
 import re
 import threading
 from collections.abc import Callable
+from contextlib import AbstractContextManager
 from json import JSONDecodeError
 from dataclasses import replace
 from pathlib import Path
@@ -756,6 +757,10 @@ class OpenAICompatibleVisionGateway(VisionGatewayPort):
         return stripped
 
 
+class _ScreenshotAnswerCancelled(Exception):
+    """Internal cooperative cancellation; never a provider retry."""
+
+
 class ScreenshotAnswerService:
     allowed_extensions = [".png", ".jpg", ".jpeg", ".webp"]
     allowed_mime_types = ["image/png", "image/jpeg", "image/webp"]
@@ -828,6 +833,7 @@ class ScreenshotAnswerService:
 
     def validation_policy(self) -> dict[str, object]:
         return {
+            "supportsCaptureOnly": True,
             "maxFileSizeBytes": self.settings.screenshot_max_file_size_bytes,
             "acceptedExtensions": self.allowed_extensions,
             "acceptedMimeTypes": self.allowed_mime_types,
@@ -1021,6 +1027,8 @@ class ScreenshotAnswerService:
         stream: bool,
         telemetry: dict[str, object] | None = None,
         on_task_update: Callable[[ScreenshotAnswerTaskRecord], None] | None = None,
+        should_cancel: Callable[[], bool] | None = None,
+        task_lock: Callable[[], AbstractContextManager] | None = None,
     ) -> tuple[ScreenshotAnswerTaskRecord, RetrievalResponse]:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         require_standard_session(session)
@@ -1037,6 +1045,22 @@ class ScreenshotAnswerService:
                 400,
             )
         uploads = [self._require_upload(user_id=user_id, session_id=session_id, image_id=image_id) for image_id in image_ids]
+        operation_lock = task_lock or (lambda: self.repository.session_operation_lock(session_id=session_id))
+
+        def check_cancelled(task: ScreenshotAnswerTaskRecord | None = None) -> None:
+            authoritative = self.repository.get_task(task.task_id) if task is not None else None
+            if (should_cancel is not None and should_cancel()) or (authoritative is not None and authoritative.status == "cancelled"):
+                if task is not None:
+                    self._delete_task_unlocked(user_id=user_id, task_id=task.task_id)
+                raise _ScreenshotAnswerCancelled()
+
+        def emit_task_update(task: ScreenshotAnswerTaskRecord) -> None:
+            with operation_lock():
+                check_cancelled(task)
+                if on_task_update is not None:
+                    on_task_update(task)
+
+        check_cancelled()
         now_ms = _now_ms()
         task_id = f"screenshot-answer-{uuid4().hex}"
         billing_usage_id = f"screenshot-answer:{session_id}:{':'.join(sorted(image_ids))}"
@@ -1058,6 +1082,7 @@ class ScreenshotAnswerService:
             telemetry.setdefault("delivery_mode", self.settings.screenshot_vision_delivery_mode)
             telemetry["signed_url_ms"] = _elapsed_ms(prepare_started)
         if self.billing_service is not None:
+            check_cancelled()
             reservation = self.billing_service.reserve_usage(
                 user_id=user_id, usage_id=billing_usage_id, usage_kind="screenshot_answer"
             )
@@ -1078,6 +1103,7 @@ class ScreenshotAnswerService:
                 updated_at_ms=now_ms,
             )
         )
+        emit_task_update(task)
         self._log(logging.INFO, "screenshot_answer.started", task=task, session_id=session_id, image_count=len(image_ids), retry_count=0)
         current = self.repository.save_task(replace(task, status="processing-images", updated_at_ms=_now_ms()))
         last_error: Exception | None = None
@@ -1091,6 +1117,7 @@ class ScreenshotAnswerService:
         )
         for attempt in range(self.settings.screenshot_retry_max_attempts + 1):
             try:
+                check_cancelled(current)
                 attempt_instruction = (
                     _english_repair_instruction(screenshot_instruction, interview_language)
                     if interview_language != "zh-CN" and attempt > 0
@@ -1136,6 +1163,7 @@ class ScreenshotAnswerService:
                             attempt=attempt,
                             **_vision_language_kwargs(stream_analyze, interview_language, session),
                         ):
+                            check_cancelled(current)
                             answer_parts.append(text_part)
                             if telemetry is not None and telemetry.get("first_text_ms") is None:
                                 telemetry["first_text_ms"] = _elapsed_ms(vision_started)
@@ -1172,8 +1200,7 @@ class ScreenshotAnswerService:
                                     chunks=chunks.copy(),
                                     updated_at_ms=_now_ms(),
                                 ))
-                                if on_task_update is not None:
-                                    on_task_update(current)
+                                emit_task_update(current)
                                 last_emit_at = perf_counter()
                     except (RetryableVisionError, NonRetryableVisionError):
                         if answer_parts:
@@ -1200,6 +1227,7 @@ class ScreenshotAnswerService:
                     )
                 if telemetry is not None:
                     telemetry["vision_model_ms"] = _elapsed_ms(vision_started)
+                check_cancelled(current)
                 if interview_language != "zh-CN" and output_language_violation(
                     (vision.final_answer or vision.summary_text or vision.derived_question).strip(),
                     interview_language,
@@ -1239,61 +1267,64 @@ class ScreenshotAnswerService:
                         updated_at_ms=_now_ms(),
                     )
                 )
-                persist_started = perf_counter()
-                completed = self._complete_vision_direct_task(
-                    task=current,
-                    vision=vision,
-                    retry_count=attempt,
-                    interview_language=interview_language,
-                )
-                if using_streaming_gateway and on_task_update is not None:
-                    on_task_update(completed)
-                self.session_service.append_context(
-                    user_id=user_id,
-                    session_id=session_id,
-                    role="screenshot",
-                    source_kind="screenshot-answer",
-                    content=vision.summary_text,
-                    visibility="session",
-                    related_task_id=completed.task_id,
-                )
-                self.session_service.append_context(
-                    user_id=user_id,
-                    session_id=session_id,
-                    role="assistant",
-                    source_kind="screenshot-answer",
-                    content=completed.answer_text,
-                    visibility="ai",
-                    related_task_id=completed.task_id,
-                )
-                if vision.usage is not None:
-                    self.session_service.record_usage(
+                with operation_lock():
+                    check_cancelled(current)
+                    persist_started = perf_counter()
+                    completed = self._complete_vision_direct_task(
+                        task=current,
+                        vision=vision,
+                        retry_count=attempt,
+                        interview_language=interview_language,
+                    )
+                    check_cancelled(completed)
+                    self.session_service.append_context(
                         user_id=user_id,
                         session_id=session_id,
-                        usage_kind="other",
-                        prompt_tokens=0,
-                        completion_tokens=0,
-                        total_tokens=vision.usage.total_tokens,
-                        provider_name=vision.usage.provider_name,
-                        model_name=vision.usage.model_name,
+                        role="screenshot",
+                        source_kind="screenshot-answer",
+                        content=vision.summary_text,
+                        visibility="session",
                         related_task_id=completed.task_id,
                     )
-                self._log(logging.INFO, "screenshot_answer.completed", task=completed, session_id=session_id, image_count=len(image_ids), retry_count=attempt)
-                if telemetry is not None:
-                    telemetry["answer_persist_ms"] = _elapsed_ms(persist_started)
-                    completed = self.repository.save_task(replace(completed, telemetry=self._telemetry_from_metrics(telemetry)))
-                if self.billing_service is not None:
-                    self.billing_service.settle_usage(usage_id=billing_usage_id)
-                self._record_ai_usage(
-                    user_id=user_id, session_id=session_id, task_id=completed.task_id,
-                    status="succeeded", started_at_ms=completed.created_at_ms, usage=vision.usage,
-                    first_token_ms=(
-                        max(0, round(float(telemetry["first_text_ms"])))
-                        if telemetry is not None and telemetry.get("first_text_ms") is not None
-                        else None
-                    ),
-                )
-                return completed, self._to_retrieval_response(retrieval_context)
+                    self.session_service.append_context(
+                        user_id=user_id,
+                        session_id=session_id,
+                        role="assistant",
+                        source_kind="screenshot-answer",
+                        content=completed.answer_text,
+                        visibility="ai",
+                        related_task_id=completed.task_id,
+                    )
+                    if vision.usage is not None:
+                        self.session_service.record_usage(
+                            user_id=user_id,
+                            session_id=session_id,
+                            usage_kind="other",
+                            prompt_tokens=0,
+                            completion_tokens=0,
+                            total_tokens=vision.usage.total_tokens,
+                            provider_name=vision.usage.provider_name,
+                            model_name=vision.usage.model_name,
+                            related_task_id=completed.task_id,
+                        )
+                    self._log(logging.INFO, "screenshot_answer.completed", task=completed, session_id=session_id, image_count=len(image_ids), retry_count=attempt)
+                    if telemetry is not None:
+                        telemetry["answer_persist_ms"] = _elapsed_ms(persist_started)
+                        completed = self.repository.save_task(replace(completed, telemetry=self._telemetry_from_metrics(telemetry)))
+                    if self.billing_service is not None:
+                        self.billing_service.settle_usage(usage_id=billing_usage_id)
+                    self._record_ai_usage(
+                        user_id=user_id, session_id=session_id, task_id=completed.task_id,
+                        status="succeeded", started_at_ms=completed.created_at_ms, usage=vision.usage,
+                        first_token_ms=(
+                            max(0, round(float(telemetry["first_text_ms"])))
+                            if telemetry is not None and telemetry.get("first_text_ms") is not None
+                            else None
+                        ),
+                    )
+                    if on_task_update is not None:
+                        on_task_update(completed)
+                    return completed, self._to_retrieval_response(retrieval_context)
             except (RetryableVisionError, RetryableChatError) as exc:
                 last_error = exc
                 self._log(
@@ -1344,6 +1375,11 @@ class ScreenshotAnswerService:
 
     def delete_task(self, *, user_id: str, task_id: str) -> ScreenshotAnswerTaskRecord:
         task = self.get_task(user_id=user_id, task_id=task_id)
+        with self.repository.session_operation_lock(session_id=task.session_id):
+            return self._delete_task_unlocked(user_id=user_id, task_id=task_id)
+
+    def _delete_task_unlocked(self, *, user_id: str, task_id: str) -> ScreenshotAnswerTaskRecord:
+        task = self.get_task(user_id=user_id, task_id=task_id)
         if task.status == "cancelled":
             return task
         cancelled = self.repository.save_task(replace(task, status="cancelled", updated_at_ms=_now_ms(), completed_at_ms=_now_ms()))
@@ -1359,6 +1395,15 @@ class ScreenshotAnswerService:
         self.session_service.get_session(user_id=user_id, session_id=session_id)
         return [task for task in self.repository.list_tasks_for_session(session_id=session_id) if task.status != "cancelled"]
 
+    def _require_written_session(self, *, user_id: str, session_id: str):
+        session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+        require_standard_session(session)
+        if getattr(session, "session_mode", "interview") != "written":
+            raise DomainRequestError("screenshot-answer", "multi-screen", "Multi-screen answers are available only in written mode.", 409, "written_multi_screen_mode_required")
+        if session.status != "live":
+            raise DomainRequestError("screenshot-answer", "multi-screen", "Capture and answer are available only in an active written session.", 409, "written_multi_screen_session_not_live")
+        return session
+
     def create_remote_capture_request(
         self,
         *,
@@ -1367,26 +1412,193 @@ class ScreenshotAnswerService:
         device_id: str,
         manual_code: str,
         instruction: str,
+        capture_only: bool = False,
     ) -> RemoteScreenshotCaptureRequest:
+        # Mode/ownership guards precede even repository lock admission.
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         require_standard_session(session)
-        if session.status != "live":
-            raise DomainRequestError("screenshot-answer", "remote-capture", "只有进行中的面试会话才能发起截屏回答。", 400)
-        self.session_service.touch_activity(user_id=user_id, session_id=session_id, force=True)
-        now_ms = _now_ms()
-        request = RemoteScreenshotCaptureRequest(
-            request_id=f"shot-capture-{uuid4().hex}",
-            session_id=session_id,
-            owner_user_id=user_id,
-            device_id=device_id,
-            manual_code=manual_code,
-            instruction=instruction.strip(),
-            status="requested",
-            stage="requested",
-            created_at_ms=now_ms,
-            updated_at_ms=now_ms,
-        )
-        return self.repository.save_remote_capture_request(request)
+        with self.repository.session_operation_lock(session_id=session_id):
+            session = self.session_service.get_session(user_id=user_id, session_id=session_id)
+            require_standard_session(session)
+            if session.status != "live":
+                raise DomainRequestError("screenshot-answer", "remote-capture", "只有进行中的面试会话才能发起截屏回答。", 400)
+            if capture_only:
+                self._require_written_session(user_id=user_id, session_id=session_id)
+                pending_count = 0
+                for item in self.repository.list_remote_capture_requests_for_session(session_id=session_id):
+                    if not item.capture_only or item.owner_user_id != user_id or item.consumed_by_request_id:
+                        continue
+                    if item.status in {"requested", "processing"}:
+                        if item.created_at_ms + self.settings.oss_upload_intent_ttl_seconds * 1000 <= _now_ms():
+                            self._release_request_images(item)
+                            self.repository.save_remote_capture_request(replace(
+                                item, status="cancelled", stage="cancelled", updated_at_ms=_now_ms(),
+                                completed_at_ms=_now_ms(), error_message="The capture request expired. Capture the screen again.",
+                            ))
+                        else:
+                            pending_count += 1
+                    elif item.status == "completed" and item.captured_image_id:
+                        image = self.repository.get_upload(item.captured_image_id)
+                        if image is not None and image.status == "uploaded":
+                            try:
+                                self.upload_port.load_image_bytes(image=image)
+                            except DomainRequestError:
+                                self._release_transient_uploads([image])
+                            else:
+                                pending_count += 1
+                if pending_count >= self.settings.screenshot_max_images_per_task:
+                    raise DomainRequestError("screenshot-answer", "remote-capture", f"You can collect up to {self.settings.screenshot_max_images_per_task} screenshots. Answer or remove one first.", 409, "screenshot_capture_limit_reached")
+            self.session_service.touch_activity(user_id=user_id, session_id=session_id, force=True)
+            now_ms = _now_ms()
+            return self.repository.save_remote_capture_request(RemoteScreenshotCaptureRequest(
+                request_id=f"shot-capture-{uuid4().hex}", session_id=session_id,
+                owner_user_id=user_id, device_id=device_id, manual_code=manual_code,
+                instruction=instruction.strip(), status="requested", stage="requested",
+                created_at_ms=now_ms, updated_at_ms=now_ms, capture_only=capture_only,
+            ))
+
+    def create_batch_answer_request(
+        self, *, user_id: str, session_id: str, capture_request_ids: list[str], instruction: str,
+    ) -> tuple[RemoteScreenshotCaptureRequest, bool]:
+        self._require_written_session(user_id=user_id, session_id=session_id)
+        with self.repository.session_operation_lock(session_id=session_id):
+            self._require_written_session(user_id=user_id, session_id=session_id)
+            if not capture_request_ids or len(capture_request_ids) > self.settings.screenshot_max_images_per_task:
+                raise DomainRequestError("screenshot-answer", "batch-answer", f"Choose between 1 and {self.settings.screenshot_max_images_per_task} screenshots.", 400, "screenshot_batch_invalid_count")
+            if len(set(capture_request_ids)) != len(capture_request_ids):
+                raise DomainRequestError("screenshot-answer", "batch-answer", "A screenshot cannot be submitted more than once in the same batch.", 400, "screenshot_batch_duplicate_capture")
+            for existing in self.repository.list_remote_capture_requests_for_session(session_id=session_id):
+                if existing.owner_user_id == user_id and existing.capture_request_ids == capture_request_ids:
+                    return existing, False
+            sources = []
+            for capture_id in capture_request_ids:
+                source = self.get_remote_capture_request(user_id=user_id, request_id=capture_id)
+                if source.session_id != session_id:
+                    raise DomainRequestError("screenshot-answer", "batch-answer", "Screenshots must belong to this written session.", 403, "screenshot_batch_scope_mismatch")
+                if source.consumed_by_request_id:
+                    raise DomainRequestError("screenshot-answer", "batch-answer", "A screenshot has already been submitted. Capture the screen again.", 409, "screenshot_batch_capture_consumed")
+                if not source.capture_only or source.status != "completed" or not source.captured_image_id:
+                    raise DomainRequestError("screenshot-answer", "batch-answer", "A screenshot is not ready or has been removed. Capture the screen again.", 409, "screenshot_batch_capture_not_ready")
+                try:
+                    image = self._require_upload(user_id=user_id, session_id=session_id, image_id=source.captured_image_id)
+                    self.upload_port.load_image_bytes(image=image)
+                except DomainRequestError as exc:
+                    raise DomainRequestError("screenshot-answer", "batch-answer", "A screenshot expired or is unavailable. Capture the screen again before answering.", 410, "screenshot_batch_recapture_required") from exc
+                sources.append(source)
+            now_ms = _now_ms()
+            parent = RemoteScreenshotCaptureRequest(
+                request_id=f"shot-batch-{uuid4().hex}", session_id=session_id, owner_user_id=user_id,
+                device_id=sources[0].device_id, manual_code=sources[0].manual_code,
+                instruction=instruction.strip(), status="processing", stage="vision-running",
+                created_at_ms=now_ms, updated_at_ms=now_ms, capture_request_ids=list(capture_request_ids),
+            )
+            self.repository.save_remote_capture_request(parent)
+            for source in sources:
+                self.repository.save_remote_capture_request(replace(source, consumed_by_request_id=parent.request_id, updated_at_ms=now_ms))
+            self.session_service.touch_activity(user_id=user_id, session_id=session_id, force=True)
+            return parent, True
+
+    def _release_request_images(self, request: RemoteScreenshotCaptureRequest) -> None:
+        ids = [request.captured_image_id] if request.captured_image_id else []
+        for source_id in request.capture_request_ids:
+            source = self.repository.get_remote_capture_request(source_id)
+            if source is not None and source.captured_image_id:
+                ids.append(source.captured_image_id)
+        uploads = [image for image_id in ids if (image := self.repository.get_upload(image_id)) is not None]
+        self._release_transient_uploads(uploads)
+
+    def complete_batch_answer_request_safely(
+        self, *, request_id: str,
+        on_transition: Callable[[RemoteScreenshotCaptureRequest, ScreenshotAnswerTaskRecord | None], None] | None = None,
+    ) -> None:
+        request = self.repository.get_remote_capture_request(request_id)
+        if request is None or request.status != "processing" or not request.capture_request_ids:
+            return
+        background_started = perf_counter()
+        metrics: dict[str, object] = {}
+
+        def should_cancel() -> bool:
+            current = self.repository.get_remote_capture_request(request_id)
+            if current is None or current.status == "cancelled":
+                return True
+            session = self.session_service.get_session(user_id=request.owner_user_id, session_id=request.session_id)
+            return session.status != "live"
+
+        def update_task(task: ScreenshotAnswerTaskRecord) -> None:
+            # answer_screenshots owns the session lock while publishing updates.
+            current = self.repository.get_remote_capture_request(request_id)
+            if current is None or current.status == "cancelled":
+                return
+            current = self.repository.save_remote_capture_request(replace(
+                current, answer_task_id=task.task_id,
+                status="completed" if task.status == "completed" else "processing",
+                stage="completed" if task.status == "completed" else "vision-running",
+                updated_at_ms=_now_ms(),
+                completed_at_ms=_now_ms() if task.status == "completed" else None,
+            ))
+            if on_transition is not None:
+                on_transition(current, task)
+
+        try:
+            image_ids = []
+            for source_id in request.capture_request_ids:
+                source = self.get_remote_capture_request(user_id=request.owner_user_id, request_id=source_id)
+                if source.captured_image_id is None or source.consumed_by_request_id != request_id:
+                    raise DomainRequestError("screenshot-answer", "batch-answer", "A screenshot is unavailable. Capture the screen again before answering.", 410, "screenshot_batch_recapture_required")
+                image_ids.append(source.captured_image_id)
+            task, _ = self.answer_screenshots(
+                user_id=request.owner_user_id, session_id=request.session_id,
+                image_ids=image_ids, instruction=request.instruction, stream=True, telemetry=metrics,
+                should_cancel=should_cancel,
+                task_lock=lambda: self.repository.session_operation_lock(session_id=request.session_id),
+                on_task_update=update_task,
+            )
+            with self.repository.session_operation_lock(session_id=request.session_id):
+                current = self.repository.get_remote_capture_request(request_id)
+                if current is None or current.status == "cancelled":
+                    return
+                metrics["total_background_ms"] = _elapsed_ms(background_started)
+                telemetry = self._telemetry_from_metrics(metrics)
+                task = self.repository.save_task(replace(task, telemetry=telemetry))
+                failed = task.status != "completed"
+                current = self.repository.save_remote_capture_request(replace(
+                    current, answer_task_id=task.task_id,
+                    status="failed" if failed else "completed", stage="failed" if failed else "completed",
+                    updated_at_ms=_now_ms(), completed_at_ms=_now_ms(), telemetry=telemetry,
+                    error_message="回答失败，请重新截屏后再回答。" if failed else None,
+                ))
+                if on_transition is not None:
+                    on_transition(current, task)
+        except _ScreenshotAnswerCancelled:
+            with self.repository.session_operation_lock(session_id=request.session_id):
+                current = self.repository.get_remote_capture_request(request_id)
+                if current is not None and current.status != "cancelled":
+                    current = self.repository.save_remote_capture_request(replace(
+                        current, status="cancelled", stage="cancelled", updated_at_ms=_now_ms(), completed_at_ms=_now_ms(),
+                        error_message="回答已终止，请重新截屏后再回答。",
+                    ))
+                    if on_transition is not None:
+                        on_transition(current, None)
+        except Exception as exc:
+            with self.repository.session_operation_lock(session_id=request.session_id):
+                current = self.repository.get_remote_capture_request(request_id)
+                if current is not None and current.status not in {"cancelled", "completed"}:
+                    if current.answer_task_id:
+                        task = self.get_task(user_id=request.owner_user_id, task_id=current.answer_task_id)
+                        self.repository.save_task(replace(task, status="failed", updated_at_ms=_now_ms(), completed_at_ms=_now_ms(), error_code="screenshot_batch_failed", error_message="回答失败，请重新截屏。"))
+                    if self.billing_service is not None:
+                        self.billing_service.release_usage(usage_id=f"screenshot-answer:{request.session_id}:{':'.join(sorted(image_ids))}")
+                    message = f"{exc.message} 请重新截屏后再回答。" if isinstance(exc, DomainRequestError) else "回答失败，请重新截屏后再回答。"
+                    current = self.repository.save_remote_capture_request(replace(
+                        current, status="failed", stage="failed", updated_at_ms=_now_ms(), completed_at_ms=_now_ms(),
+                        error_message=message,
+                    ))
+                    if on_transition is not None:
+                        on_transition(current, None)
+            self._log(logging.WARNING, "screenshot_answer.batch_failed", task=None, session_id=request.session_id,
+                      image_count=len(request.capture_request_ids), retry_count=0, error_code=getattr(exc, "error_code", None) or exc.__class__.__name__)
+        finally:
+            self._release_request_images(request)
 
     def get_remote_capture_request(self, *, user_id: str, request_id: str) -> RemoteScreenshotCaptureRequest:
         request = self.repository.get_remote_capture_request(request_id)
@@ -1406,12 +1618,20 @@ class ScreenshotAnswerService:
 
     def cancel_remote_capture_request(self, *, user_id: str, request_id: str) -> RemoteScreenshotCaptureRequest:
         request = self.get_remote_capture_request(user_id=user_id, request_id=request_id)
-        if request.status in {"completed", "failed", "cancelled"}:
-            return request
-        cancelled = replace(request, status="cancelled", stage="cancelled", updated_at_ms=_now_ms(), completed_at_ms=_now_ms(), error_message="截图回答已终止。")
-        if request.answer_task_id:
-            self.delete_task(user_id=user_id, task_id=request.answer_task_id)
-        return self.repository.save_remote_capture_request(cancelled)
+        with self.repository.session_operation_lock(session_id=request.session_id):
+            request = self.get_remote_capture_request(user_id=user_id, request_id=request_id)
+            if request.consumed_by_request_id:
+                # A submitted input belongs to its batch; cancelling the batch owns cleanup.
+                return request
+            if request.status == "cancelled":
+                return request
+            if request.status in {"completed", "failed"} and not request.capture_only:
+                return request
+            cancelled = replace(request, status="cancelled", stage="cancelled", updated_at_ms=_now_ms(), completed_at_ms=_now_ms(), error_message="截图回答已终止。")
+            if request.answer_task_id:
+                self._delete_task_unlocked(user_id=user_id, task_id=request.answer_task_id)
+            self._release_request_images(request)
+            return self.repository.save_remote_capture_request(cancelled)
 
     def get_next_remote_capture_request(self, *, device_id: str, manual_code: str) -> RemoteScreenshotCaptureRequest | None:
         return self.repository.get_next_pending_remote_capture_request(device_id=device_id, manual_code=manual_code)
@@ -1444,68 +1664,90 @@ class ScreenshotAnswerService:
         content_type: str,
         payload: bytes,
         on_transition: Callable[[RemoteScreenshotCaptureRequest, ScreenshotAnswerTaskRecord | None], None] | None = None,
-    ) -> tuple[RemoteScreenshotCaptureRequest, ScreenshotAnswerTaskRecord]:
+    ) -> tuple[RemoteScreenshotCaptureRequest, ScreenshotAnswerTaskRecord | None]:
         background_started = perf_counter()
         metrics: dict[str, object] = {"upload_accepted_ms": 0.0}
-        request = self.claim_remote_capture_request(request_id=request_id, device_id=device_id, manual_code=manual_code)
+        request = self.repository.get_remote_capture_request(request_id)
+        if request is None:
+            raise DomainRequestError("screenshot-answer", "remote-capture", "截图回答请求不存在。", 404)
+        with self.repository.session_operation_lock(session_id=request.session_id):
+            request = self.claim_remote_capture_request(request_id=request_id, device_id=device_id, manual_code=manual_code)
+            if request.upload_in_progress or request.status in {"completed", "failed"}:
+                task = self.get_task(user_id=request.owner_user_id, task_id=request.answer_task_id) if request.answer_task_id else None
+                return request, task
+            request = self.repository.save_remote_capture_request(replace(request, upload_in_progress=True, updated_at_ms=_now_ms()))
         upload_started = perf_counter()
         upload = self.upload_bytes(
-            user_id=request.owner_user_id,
-            session_id=request.session_id,
-            filename=filename,
-            content_type=content_type,
-            payload=payload,
-            telemetry=metrics,
+            user_id=request.owner_user_id, session_id=request.session_id,
+            filename=filename, content_type=content_type, payload=payload, telemetry=metrics,
         )
         metrics["upload_accepted_ms"] = _elapsed_ms(upload_started)
-        request = self.repository.save_remote_capture_request(replace(
-            request,
-            status="processing",
-            stage="uploaded",
-            updated_at_ms=_now_ms(),
-            captured_filename=filename,
-            telemetry=self._telemetry_from_metrics(metrics),
-        ))
-        if on_transition is not None:
-            on_transition(request, None)
-        request = self.repository.save_remote_capture_request(replace(
-            request,
-            stage="vision-running",
-            updated_at_ms=_now_ms(),
-            telemetry=self._telemetry_from_metrics(metrics),
-        ))
-        if on_transition is not None:
-            on_transition(request, None)
-        task, _ = self.answer_screenshots(
-            user_id=request.owner_user_id,
-            session_id=request.session_id,
-            image_ids=[upload.image_id],
-            instruction=request.instruction,
-            stream=True,
-            telemetry=metrics,
-            on_task_update=(
-                (lambda updated_task: on_transition(request, updated_task))
-                if on_transition is not None
-                else None
-            ),
-        )
-        metrics["total_background_ms"] = _elapsed_ms(background_started)
-        final_telemetry = self._telemetry_from_metrics(metrics)
-        task = self.repository.save_task(replace(task, telemetry=final_telemetry))
-        completed = replace(
-            request,
-            status="completed" if task.status == "completed" else "failed",
-            updated_at_ms=_now_ms(),
-            completed_at_ms=_now_ms(),
-            answer_task_id=task.task_id,
-            captured_filename=filename,
-            error_message=task.error_message,
-            telemetry=final_telemetry,
-        )
-        final_request = self.repository.save_remote_capture_request(replace(completed, stage="completed" if task.status == "completed" else "failed"))
-        if on_transition is not None:
-            on_transition(final_request, task)
-        return final_request, task
+        with self.repository.session_operation_lock(session_id=request.session_id):
+            current = self.get_remote_capture_request(user_id=request.owner_user_id, request_id=request_id)
+            session = self.session_service.get_session(user_id=request.owner_user_id, session_id=request.session_id)
+            if current.status in {"cancelled", "failed"} or session.status != "live":
+                self._release_transient_uploads([upload])
+                if current.status not in {"cancelled", "failed"}:
+                    current = self.repository.save_remote_capture_request(replace(current, status="cancelled", stage="cancelled", updated_at_ms=_now_ms(), completed_at_ms=_now_ms()))
+                if on_transition is not None:
+                    on_transition(current, None)
+                return current, None
+            request = self.repository.save_remote_capture_request(replace(
+                current, status="completed" if current.capture_only else "processing",
+                stage="completed" if current.capture_only else "uploaded", updated_at_ms=_now_ms(),
+                completed_at_ms=_now_ms() if current.capture_only else None,
+                captured_filename=filename, captured_image_id=upload.image_id,
+                telemetry=self._telemetry_from_metrics(metrics),
+            ))
+            if on_transition is not None:
+                on_transition(request, None)
+            if request.capture_only:
+                return request, None
+            request = self.repository.save_remote_capture_request(replace(request, stage="vision-running", updated_at_ms=_now_ms()))
+            if on_transition is not None:
+                on_transition(request, None)
+
+        def should_cancel() -> bool:
+            current = self.repository.get_remote_capture_request(request_id)
+            return current is None or current.status == "cancelled"
+
+        def update_task(task: ScreenshotAnswerTaskRecord) -> None:
+            current = self.repository.get_remote_capture_request(request_id)
+            if current is None or current.status == "cancelled":
+                return
+            current = self.repository.save_remote_capture_request(replace(current, answer_task_id=task.task_id, updated_at_ms=_now_ms()))
+            # Preserve the established single-screen stage sequence. Initial
+            # identity binding is internal; the wrapper publishes completion.
+            if on_transition is not None and task.status == "streaming" and task.answer_text:
+                on_transition(current, task)
+
+        try:
+            task, _ = self.answer_screenshots(
+                user_id=request.owner_user_id, session_id=request.session_id,
+                image_ids=[upload.image_id], instruction=request.instruction, stream=True, telemetry=metrics,
+                should_cancel=should_cancel,
+                task_lock=lambda: self.repository.session_operation_lock(session_id=request.session_id),
+                on_task_update=update_task,
+            )
+        except _ScreenshotAnswerCancelled:
+            self._release_transient_uploads([upload])
+            return self.get_remote_capture_request(user_id=request.owner_user_id, request_id=request_id), None
+        with self.repository.session_operation_lock(session_id=request.session_id):
+            request = self.get_remote_capture_request(user_id=request.owner_user_id, request_id=request_id)
+            if request.status == "cancelled":
+                return request, task
+            metrics["total_background_ms"] = _elapsed_ms(background_started)
+            final_telemetry = self._telemetry_from_metrics(metrics)
+            task = self.repository.save_task(replace(task, telemetry=final_telemetry))
+            final_request = self.repository.save_remote_capture_request(replace(
+                request, status="completed" if task.status == "completed" else "failed",
+                stage="completed" if task.status == "completed" else "failed",
+                updated_at_ms=_now_ms(), completed_at_ms=_now_ms(),
+                answer_task_id=task.task_id, error_message=task.error_message, telemetry=final_telemetry,
+            ))
+            if on_transition is not None:
+                on_transition(final_request, task)
+            return final_request, task
 
     def complete_remote_capture_request_safely(
         self,

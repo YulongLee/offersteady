@@ -365,7 +365,7 @@ async def bind_desktop_device(
 
 
 @router.get("/desktop-devices/last-used", response_model=ApiEnvelope[dict[str, object] | None])
-async def get_last_used_desktop_device(
+def get_last_used_desktop_device(
     request: Request,
     user_id: str | None = Query(default=None, alias="userId"),
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
@@ -377,7 +377,7 @@ async def get_last_used_desktop_device(
 
 
 @router.get("/desktop-devices", response_model=ApiEnvelope[list[dict[str, object]]])
-async def list_account_desktop_devices(
+def list_account_desktop_devices(
     request: Request,
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
@@ -506,7 +506,7 @@ async def get_desktop_active_connection(
 
 
 @router.get("/sessions/{session_id}/runtime", response_model=ApiEnvelope[RealtimeSessionRuntimeResponse])
-async def get_runtime(
+def get_runtime(
     session_id: str,
     request: Request,
     user_id: str | None = Query(default=None, alias="userId"),

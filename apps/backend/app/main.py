@@ -40,6 +40,7 @@ def create_app() -> FastAPI:
         reaper_task: asyncio.Task[None] | None = None
         mock_reaper_task: asyncio.Task[None] | None = None
         mock_runtime_instance = None
+        resume_optimizer_runtime = None
         realtime_service_instance = None
         realtime_event_wait_executor = RealtimeEventWaitExecutor(
             max_workers=settings.realtime_event_wait_workers,
@@ -121,9 +122,18 @@ def create_app() -> FastAPI:
                         logger.warning("mock_resource_reaper_failed")
                     await asyncio.sleep(0.25)
             mock_reaper_task = asyncio.create_task(reap_mock_resources())
+        if settings.product_edition == "global" and settings.global_resume_optimizer_enabled:
+            from app.deps import resume_optimizer_service
+            from app.services.resume_optimizer_service import ResumeOptimizerRuntime
+            if settings.chat_qwen_api_key and settings.chat_qwen_base_url:
+                optimizer_service = await asyncio.to_thread(resume_optimizer_service)
+                resume_optimizer_runtime = ResumeOptimizerRuntime(optimizer_service)
+                await resume_optimizer_runtime.start()
         try:
             yield
         finally:
+            if resume_optimizer_runtime is not None:
+                await resume_optimizer_runtime.shutdown()
             from app.deps import realtime_speech_service
 
             service = realtime_speech_service()
@@ -163,6 +173,8 @@ def create_app() -> FastAPI:
                     close()
 
     application = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
+    from app.modules.resume_optimizer import ResumeOptimizerPrivacyMiddleware
+    application.add_middleware(ResumeOptimizerPrivacyMiddleware, api_prefix=settings.api_prefix)
     application.state.live_answer_stream_executor = live_answer_stream_executor
     application.add_middleware(
         CORSMiddleware,

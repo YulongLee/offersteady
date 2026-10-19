@@ -24,6 +24,7 @@ export const routes = {
   live: (id = ":id") => `/app/interviews/${id}/live`,
   review: (id = ":id") => `/app/interviews/${id}/review`,
   library: "/app/library",
+  resumeOptimizer: "/app/resume-optimizer",
   billing: "/app/billing",
   guide: "/app/guide",
   devices: "/app/devices",
@@ -35,6 +36,7 @@ export type ProtectedRoute =
   | typeof routes.writtenExams
   | typeof routes.newInterview
   | typeof routes.newWrittenExam
+  | typeof routes.resumeOptimizer
   | typeof routes.library
   | typeof routes.billing
   | typeof routes.guide

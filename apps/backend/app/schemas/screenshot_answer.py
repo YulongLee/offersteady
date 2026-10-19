@@ -14,6 +14,7 @@ class ScreenshotValidationPolicyResponse(BaseModel):
     accepted_extensions: list[str] = Field(alias="acceptedExtensions")
     accepted_mime_types: list[str] = Field(alias="acceptedMimeTypes")
     max_images_per_task: int = Field(alias="maxImagesPerTask")
+    supports_capture_only: bool = Field(default=True, alias="supportsCaptureOnly")
 
 
 class CreateScreenshotUploadIntentRequest(BaseModel):
@@ -148,6 +149,14 @@ class CreateRemoteScreenshotCaptureRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
     user_id: str = Field(min_length=1, alias="userId")
     instruction: str = ""
+    capture_only: bool = Field(default=False, alias="captureOnly")
+
+
+class CreateBatchScreenshotAnswerRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+    user_id: str = Field(min_length=1, alias="userId")
+    capture_request_ids: list[str] = Field(min_length=1, alias="captureRequestIds")
+    instruction: str = ""
 
 
 class CreateDesktopShortcutCaptureRequest(BaseModel):
@@ -164,6 +173,9 @@ class RemoteScreenshotCaptureRequestResponse(BaseModel):
     device_id: str = Field(alias="deviceId")
     manual_code: str = Field(alias="manualCode")
     instruction: str
+    capture_only: bool = Field(default=False, alias="captureOnly")
+    captured_image_id: str | None = Field(default=None, alias="capturedImageId")
+    capture_request_ids: list[str] = Field(default_factory=list, alias="captureRequestIds")
     status: str
     stage: str = "requested"
     created_at_ms: int = Field(alias="createdAtMs")

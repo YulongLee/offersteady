@@ -1,0 +1,29 @@
+{
+  "passed": true,
+  "reason": "local expected OpenAPI omitted actual Global service title while version was inherited",
+  "fixedBy": "supply fresh actual info.title and info.version through local OFFERSTEADY_APP_NAME/APP_VERSION; compare all remaining metadata without overriding generated output",
+  "expectedInfo": {
+    "title": "OfferSteady Global Backend",
+    "version": "20261011-global-performance-parity-1"
+  },
+  "deltaFromFrozenRevision2": [
+    "info.title"
+  ],
+  "completeInfoPreserved": true,
+  "allTopLevelAndNonSchemaComponentMetadataPreserved": true,
+  "metadataRegressionPassed": 10,
+  "existingBackendTestsStillBound": 89,
+  "existingBusinessSourcesUnchanged": true,
+  "runtimeInputsStillBound": 302,
+  "frozenRelease1And2NotModified": true,
+  "productionAccessed": false,
+  "providerCalls": 0,
+  "businessTestsRepeated": false,
+  "files": {
+    "generate-openapi.py": "20e611f7e04e56c15edac4fd0967ed9cb3181cbb3608fcc43f720f164d9e31e8",
+    "openapi-after.json": "2134b5eda3073815ad3c91dd5d07ab8d6fb3e430fb03c3072016813000a0fea9",
+    "openapi-review.json": "bfa1038d8759c86e305f6b8d24eda03ab387fcb8d75c2ee79e882225c229494d",
+    "test_openapi_metadata.py": "795dc57db21611ee7f85bdcc9d88eb95349d26d309041e9b6dff6edfd7a2efd2",
+    "openapi-metadata-junit.xml": "89fe925132f18003f1f061f74b2a6f2c978a3733a7d12f5b3bb178fbcdaa9dca"
+  }
+}

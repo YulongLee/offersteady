@@ -9,3 +9,5 @@ export const GuidePage = lazy(() => import("./GuidePage").then(module => ({ defa
 export const LegalPage = lazy(() => import("./LegalPage").then(module => ({ default: module.LegalPage })));
 export const PublicReviewPage = lazy(() => import("./PublicReviewPage").then(module => ({ default: module.PublicReviewPage })));
 export const AnswerWorkspace = lazy(() => import("./AnswerWorkspace").then(module => ({ default: module.AnswerWorkspace })));
+
+export const ResumeOptimizerPage = lazy(() => import("./ResumeOptimizerPage").then(module => ({ default: module.ResumeOptimizerPage })));

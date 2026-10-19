@@ -61,9 +61,6 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         self._latest_binding_device_key = f"{self._snapshot_key}:indexes:binding-devices:v1"
         self._latest_binding_code_key = f"{self._snapshot_key}:indexes:binding-codes:v1"
         self._runtime_lock = threading.RLock()
-        self._runtime_owner_scan_lock = threading.Lock()
-        self._runtime_owner_scan_cursors: dict[str, int] = {}
-        self._runtime_owner_scan_key_index = 0
         self._event_retention = max(100, settings.realtime_event_retention)
         self._runtime_ttl_seconds = max(300, settings.realtime_runtime_ttl_seconds)
         self._settings = settings
@@ -704,41 +701,6 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         resources["cleared_publishers"] = max(resources["cleared_publishers"], len(publisher_ids))
         resources["cleared_frame_receipts"] = max(resources["cleared_frame_receipts"], len(receipt_fields))
         return resources
-
-    def list_runtime_session_owners(self, *, limit: int = 128) -> dict[str, str]:
-        """Discover orphan candidates with a bounded, rotating Redis scan."""
-        bounded_limit = max(1, limit)
-        scan_budget = max(24, bounded_limit * 3)
-        owners: dict[str, str] = {}
-        keys = (self._publisher_key, self._receipt_key, self._web_heartbeat_entity_key)
-        with self._runtime_owner_scan_lock:
-            start_index = self._runtime_owner_scan_key_index % len(keys)
-            scanned = 0
-            for offset in range(len(keys)):
-                if scanned >= scan_budget or len(owners) >= bounded_limit:
-                    break
-                key = keys[(start_index + offset) % len(keys)]
-                cursor = self._runtime_owner_scan_cursors.get(key, 0)
-                next_cursor, batch = self._redis.hscan(
-                    key,
-                    cursor=cursor,
-                    count=min(64, scan_budget - scanned),
-                )
-                self._runtime_owner_scan_cursors[key] = int(next_cursor)
-                scanned += len(batch)
-                for raw in batch.values():
-                    try:
-                        payload = json.loads(raw)
-                    except (TypeError, ValueError):
-                        continue
-                    session_id = str(payload.get("session_id") or "")
-                    owner_user_id = str(payload.get("owner_user_id") or "")
-                    if session_id and owner_user_id:
-                        owners.setdefault(session_id, owner_user_id)
-                    if len(owners) >= bounded_limit:
-                        break
-            self._runtime_owner_scan_key_index = (start_index + 1) % len(keys)
-        return owners
 
     def save_transcript(self, segment):
         with self._runtime_lock:

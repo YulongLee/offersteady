@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from contextlib import AbstractContextManager
 from typing import Literal, Protocol
 
 from app.ports.interview_session import InterviewLanguage, ProgrammingLanguage
@@ -155,6 +156,11 @@ class RemoteScreenshotCaptureRequest:
     claimed_at_ms: int | None = None
     completed_at_ms: int | None = None
     telemetry: ScreenshotTimingTelemetry = field(default_factory=ScreenshotTimingTelemetry)
+    capture_only: bool = False
+    captured_image_id: str | None = None
+    capture_request_ids: list[str] = field(default_factory=list)
+    consumed_by_request_id: str | None = None
+    upload_in_progress: bool = False
 
 
 class ScreenshotUploadPort(Protocol):
@@ -227,6 +233,8 @@ class ScreenshotPromptBuilderPort(Protocol):
 
 
 class ScreenshotAnswerRepository(Protocol):
+    def session_operation_lock(self, *, session_id: str) -> AbstractContextManager: ...
+
     def save_task(self, task: ScreenshotAnswerTaskRecord) -> ScreenshotAnswerTaskRecord: ...
 
     def get_task(self, task_id: str) -> ScreenshotAnswerTaskRecord | None: ...

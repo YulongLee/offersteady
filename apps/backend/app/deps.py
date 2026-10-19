@@ -226,6 +226,7 @@ def document_service() -> DocumentService:
         deletion_scheduler=material_deletion_scheduler(),
         commercial_repository=commercial_hardening_repository(),
         billing_service=usage_billing_service(),
+        optimizer_delete_hook=delete_resume_optimizer_source if get_settings().product_edition == "global" else None,
     )
 
 
@@ -834,3 +835,44 @@ def authorize_global_interview_start(*, user_id: str, interview_already_active: 
         if isinstance(exc, GlobalFairUseRestricted):
             raise DomainRequestError("global-commerce", "fair-use", str(exc), 429, error_code="global_fair_use_restricted") from exc
         raise
+
+
+@lru_cache(maxsize=1)
+def resume_optimizer_repository():
+    from .services.resume_optimizer_repository import ResumeOptimizerRepository
+    settings = get_settings()
+    if settings.product_edition != "global" or not settings.database_url:
+        raise DomainRequestError("resume-optimizer", "repository", "Resume Optimizer is unavailable.", 404,
+                                 error_code="resume_optimizer_disabled")
+    document_repository()
+    global_commerce_repository()
+    return ResumeOptimizerRepository(settings)
+
+
+@lru_cache(maxsize=1)
+def resume_optimizer_service():
+    from .services.resume_optimizer_service import ResumeOptimizerService
+    return ResumeOptimizerService(settings=get_settings(), repository=resume_optimizer_repository(),
+        documents=document_repository(), storage=storage_port(), document_service=document_service())
+
+
+def delete_resume_optimizer_source(document, deleted_at_ms):
+    settings = get_settings()
+    if settings.product_edition != "global" or not settings.database_url:
+        return
+    # Also clean previously created sensitive tasks if the feature is disabled.
+    # Do not create a schema merely because an old material is being deleted.
+    import psycopg
+    with psycopg.connect(settings.database_url, connect_timeout=settings.database_connect_timeout_seconds,
+                         application_name="offersteady-global-resume-source-delete") as connection:
+        if connection.execute("SELECT to_regclass('global_resume_optimizer_jobs')").fetchone()[0] is None:
+            return
+    repo = resume_optimizer_repository()
+    repo.purge_by_source(user_id=document.owner_user_id, document_id=document.document_id,
+                         now_ms=deleted_at_ms, delete_source=True)
+    if resume_optimizer_service.cache_info().currsize:
+        service = resume_optimizer_service()
+        if service.runtime:
+            # Source deletion already durably removed content. Interrupt the
+            # local provider promptly too; another worker still cannot commit.
+            service.runtime.cancel_active_for_source(document.document_id)

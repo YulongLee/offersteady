@@ -1,0 +1,26 @@
+{
+  "beforePaths": 222,
+  "afterPaths": 223,
+  "addedPaths": [
+    "/api/v1/screenshot-answer/sessions/{session_id}/batch-answer-requests"
+  ],
+  "removedPaths": [],
+  "changedOldPaths": [],
+  "changedSchemas": [
+    "CreateRemoteScreenshotCaptureRequest",
+    "RemoteScreenshotCaptureRequestResponse",
+    "ScreenshotValidationPolicyResponse"
+  ],
+  "newSchemas": [
+    "CreateBatchScreenshotAnswerRequest"
+  ],
+  "infoVersionInherited": "20261011-global-performance-parity-1",
+  "infoTitleInherited": "OfferSteady Global Backend",
+  "completeInfoPreserved": true,
+  "topLevelMetadataPreserved": true,
+  "componentMetadataPreserved": true,
+  "lifecycleEntered": false,
+  "productionAccessed": false,
+  "networkAccessed": false,
+  "passed": true
+}

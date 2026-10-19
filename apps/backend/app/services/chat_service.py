@@ -63,8 +63,6 @@ _NORMALIZED_QUESTION_OPEN = "<normalized_question>"
 _NORMALIZED_QUESTION_CLOSE = "</normalized_question>"
 _NORMALIZATION_BUFFER_LIMIT = 800
 _DETAIL_RETRIEVAL_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="chat-detail-retrieval")
-_QUESTION_PREFETCH_TTL_MS = 60_000
-_QUESTION_PREFETCH_MAX_KEYS = 128
 _HAN_SCRIPT_PATTERN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 _LATIN_SCRIPT_PATTERN = re.compile(r"[A-Za-z]")
 _ENGLISH_REPAIR_DIRECTIVE = (
@@ -641,6 +639,11 @@ class QwenCompatibleGateway(LLMGatewayPort):
         )
 
 
+_QUESTION_PREFETCH_TTL_MS = 60_000
+
+_QUESTION_PREFETCH_MAX_KEYS = 128
+
+
 class ChatService:
     def __init__(
         self,
@@ -798,48 +801,6 @@ class ChatService:
                     latest = self._latest_prefetch_revision.get(question_key)
                     if latest is not None and latest["token"] is token:
                         latest["inFlight"] = False
-
-    def _prefetch_generation_is_current(self, question_key: tuple[str, str, str], token: object) -> bool:
-        with self._prepared_context_lock:
-            self._prune_prepared_context(_now_ms())
-            state = self._latest_prefetch_revision.get(question_key)
-            return state is not None and state["token"] is token
-
-    def _prune_prepared_context(self, now_ms: int) -> None:
-        """Called under the cache lock; eviction also revokes in-flight writers."""
-        for key, state in tuple(self._latest_prefetch_revision.items()):
-            if now_ms - int(state["createdAtMs"]) >= _QUESTION_PREFETCH_TTL_MS:
-                self._latest_prefetch_revision.pop(key, None)
-        while len(self._latest_prefetch_revision) > _QUESTION_PREFETCH_MAX_KEYS:
-            self._latest_prefetch_revision.pop(next(iter(self._latest_prefetch_revision)))
-        for key, prepared in tuple(self._prepared_context.items()):
-            if key[:3] not in self._latest_prefetch_revision or now_ms - int(prepared["createdAtMs"]) >= _QUESTION_PREFETCH_TTL_MS:
-                self._prepared_context.pop(key, None)
-        while len(self._prepared_context) > _QUESTION_PREFETCH_MAX_KEYS:
-            self._prepared_context.pop(next(iter(self._prepared_context)))
-
-    @staticmethod
-    def _prefetch_material_fingerprint(*, user_id: str, session_id: str, session) -> str | None:
-        binding = session.material_binding
-        if (
-            session.owner_user_id != user_id or session.session_id != session_id
-            or binding.owner_user_id != user_id or binding.session_id != session_id
-        ):
-            return None
-        documents = sorted(
-            (
-                item.document_id, item.document_kind, item.document_version_id or "", item.status,
-                item.index_state or "", bool(item.active), item.knowledge_collection_id or "",
-            )
-            for item in binding.bound_documents
-        )
-        identity = (
-            user_id, session_id, getattr(session, "session_mode", "interview"), session.status,
-            binding.owner_user_id, binding.session_id, binding.revision,
-            binding.resume_document_id, binding.job_description_document_id,
-            sorted(binding.knowledge_document_ids), documents,
-        )
-        return hashlib.sha256(json.dumps(identity, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
 
     def _prepared_retrieval(
         self,
@@ -2383,3 +2344,45 @@ class ChatService:
             question_length=len(question),
             error_code=error_code,
         )
+
+    def _prefetch_generation_is_current(self, question_key: tuple[str, str, str], token: object) -> bool:
+        with self._prepared_context_lock:
+            self._prune_prepared_context(_now_ms())
+            state = self._latest_prefetch_revision.get(question_key)
+            return state is not None and state["token"] is token
+
+    @staticmethod
+    def _prefetch_material_fingerprint(*, user_id: str, session_id: str, session) -> str | None:
+        binding = session.material_binding
+        if (
+            session.owner_user_id != user_id or session.session_id != session_id
+            or binding.owner_user_id != user_id or binding.session_id != session_id
+        ):
+            return None
+        documents = sorted(
+            (
+                item.document_id, item.document_kind, item.document_version_id or "", item.status,
+                item.index_state or "", bool(item.active), item.knowledge_collection_id or "",
+            )
+            for item in binding.bound_documents
+        )
+        identity = (
+            user_id, session_id, getattr(session, "session_mode", "interview"), session.status,
+            binding.owner_user_id, binding.session_id, binding.revision,
+            binding.resume_document_id, binding.job_description_document_id,
+            sorted(binding.knowledge_document_ids), documents,
+        )
+        return hashlib.sha256(json.dumps(identity, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+    def _prune_prepared_context(self, now_ms: int) -> None:
+        """Called under the cache lock; eviction also revokes in-flight writers."""
+        for key, state in tuple(self._latest_prefetch_revision.items()):
+            if now_ms - int(state["createdAtMs"]) >= _QUESTION_PREFETCH_TTL_MS:
+                self._latest_prefetch_revision.pop(key, None)
+        while len(self._latest_prefetch_revision) > _QUESTION_PREFETCH_MAX_KEYS:
+            self._latest_prefetch_revision.pop(next(iter(self._latest_prefetch_revision)))
+        for key, prepared in tuple(self._prepared_context.items()):
+            if key[:3] not in self._latest_prefetch_revision or now_ms - int(prepared["createdAtMs"]) >= _QUESTION_PREFETCH_TTL_MS:
+                self._prepared_context.pop(key, None)
+        while len(self._prepared_context) > _QUESTION_PREFETCH_MAX_KEYS:
+            self._prepared_context.pop(next(iter(self._prepared_context)))

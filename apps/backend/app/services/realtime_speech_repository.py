@@ -230,24 +230,6 @@ class InMemoryRealtimeSpeechRepository(RealtimeSpeechRepository):
             "cleared_transcripts": 0 if preserve_transcripts else 1,
         }
 
-    def list_runtime_session_owners(self, *, limit: int = 128) -> dict[str, str]:
-        """Return a bounded index of sessions that still own ephemeral state."""
-        bounded_limit = max(1, limit)
-        owners: dict[str, str] = {}
-        runtime_records = (
-            list(self.publishers_by_id.values())
-            + [item for records in self.frame_receipts.values() for item in records.values()]
-            + list(self.web_session_heartbeats.values())
-        )
-        for record in runtime_records:
-            session_id = getattr(record, "session_id", "")
-            owner_user_id = getattr(record, "owner_user_id", "")
-            if session_id and owner_user_id:
-                owners.setdefault(session_id, owner_user_id)
-            if len(owners) >= bounded_limit:
-                break
-        return owners
-
     def save_transcript(self, segment: TranscriptSegmentRecord) -> TranscriptSegmentRecord:
         stored = replace(segment)
         self.transcripts.setdefault(stored.session_id, {})[stored.segment_id] = stored

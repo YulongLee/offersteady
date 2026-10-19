@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "files": {
+    "apps/web-global/src/GlobalWrittenMultiScreenPage.tsx": "bb55b2622548b751501bd72f7dea943ad97b06691f1cfee3062b915289198297",
+    "apps/web-global/src/WrittenMultiScreenActionBar.tsx": "3532381b0cf136958da55da3227150799e51033fd2f0d64d26798dca59dddfb6",
+    "apps/web-global/src/WorkspaceApp.tsx": "e3b04e73adfc12613fbd5340f949a9f5a93c605b1bdfa9281b8faeb9c1ab41fe",
+    "apps/web-global/src/domain.ts": "706f0a45a89506c42a2f87cd7579f239cfcb05db7dba54f026c7e68fa810f637",
+    "apps/web-global/src/backend-adapter.ts": "303930d088f82621954cd30291da4b747bd0168e7bd8184bc066bb5f179e3fc5",
+    "apps/web-global/src/written-multi-screen.css": "093353eb173d62ea32359cf64be89875db357f5ef5796a352e8daa6f10dbd825"
+  },
+  "baseSourceProof": "../web-source-restoration.json",
+  "normalLivePageProtected": true,
+  "providerPromptUnchanged": true,
+  "rebuildScript": "../build-web-overlay.mjs",
+  "prepareScriptIsInitialMigrationOnly": true
+}

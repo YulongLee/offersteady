@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from app.core.config import Settings
 from app.core.errors import DomainRequestError
-from app.ports.document_repository import DocumentRepository
+from app.ports.document_repository import DocumentRecord, DocumentRepository
 from app.ports.interview_session import (
     ConversationContextEntry,
     IntegrationReference,
@@ -229,7 +229,9 @@ class SessionService:
 
     def list_sessions(self, *, user_id: str, status: str | None = None) -> list[InterviewSessionRecord]:
         sessions = self.repository.list_sessions_for_user(user_id=user_id, status=status)  # type: ignore[arg-type]
-        return [self._refresh_bound_document_activity(session) for session in sessions]
+        # Scope reuse to this list call so the next request sees fresh material state.
+        document_records: dict[str, DocumentRecord | None] = {}
+        return [self._refresh_bound_document_activity(session, document_records=document_records) for session in sessions]
 
     def delete_session(self, *, user_id: str, session_id: str) -> None:
         session = self.get_session(user_id=user_id, session_id=session_id)
@@ -271,8 +273,7 @@ class SessionService:
         return session
 
     def idle_status(self, *, user_id: str, session_id: str, at_ms: int | None = None) -> dict[str, object]:
-        session = self.get_session(user_id=user_id, session_id=session_id)
-        return self._idle_status_from_session(session=session, at_ms=at_ms)
+        return self.heartbeat_idle_status(user_id=user_id, session_id=session_id, at_ms=at_ms)
 
     def heartbeat_idle_status(self, *, user_id: str, session_id: str, at_ms: int | None = None) -> dict[str, object]:
         session = self.repository.get_heartbeat_state(session_id)
@@ -598,14 +599,19 @@ class SessionService:
             active=True,
         )
 
-    def _refresh_bound_document_activity(self, session: InterviewSessionRecord) -> InterviewSessionRecord:
+    def _refresh_bound_document_activity(
+        self, session: InterviewSessionRecord, *, document_records: dict[str, DocumentRecord | None] | None = None
+    ) -> InterviewSessionRecord:
         # Mock state owns the selected version; a legacy read must not rewrite it.
         if session.session_mode == "mock":
             return session
+        records = {} if document_records is None else document_records
         refreshed_docs: list[SessionBoundDocument] = []
         changed = False
         for bound in session.material_binding.bound_documents:
-            current = self.document_repository.get_by_id(bound.document_id)
+            if bound.document_id not in records:
+                records[bound.document_id] = self.document_repository.get_by_id(bound.document_id)
+            current = records[bound.document_id]
             active = current is not None and current.status == "ready" and current.index_state in {None, "indexed"}
             status = current.status if current is not None else "deleted"
             display_name = current.display_name if current is not None else bound.display_name

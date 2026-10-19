@@ -484,7 +484,6 @@ class DocumentProcessingService:
         payload = {
             "model": self.settings.chat_qwen_model,
             "stream": False,
-            "enable_thinking": False,
             "temperature": 0.1,
             "messages": [
                 {"role": "system", "content": "你是面试资料摘要助手，只做事实压缩，不做评价和扩写。"},

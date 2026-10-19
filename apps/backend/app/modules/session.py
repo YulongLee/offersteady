@@ -141,7 +141,7 @@ async def create_session(
 
 
 @router.get("", response_model=ApiEnvelope[list[InterviewSessionResponse]])
-async def list_sessions(
+def list_sessions(
     request: Request,
     user_id: str | None = Query(default=None, alias="userId"),
     status: str | None = None,
@@ -154,7 +154,7 @@ async def list_sessions(
 
 
 @router.get("/{session_id}", response_model=ApiEnvelope[InterviewSessionResponse])
-async def get_session(
+def get_session(
     session_id: str,
     request: Request,
     user_id: str | None = Query(default=None, alias="userId"),
@@ -166,7 +166,7 @@ async def get_session(
 
 
 @router.get("/{session_id}/review", response_model=ApiEnvelope[InterviewReviewSnapshotResponse])
-async def get_interview_review(
+def get_interview_review(
     session_id: str,
     request: Request,
     user_id: str | None = Query(default=None, alias="userId"),
@@ -272,7 +272,7 @@ async def continue_session(
     )
 
 @router.get("/{session_id}/idle-status", response_model=ApiEnvelope[dict[str, object]])
-async def idle_status(
+def idle_status(
     session_id: str,
     request: Request,
     user_id: str | None = Query(default=None, alias="userId"),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from threading import RLock
 
 from app.ports.authentication import (
     AuthSessionRecord,
@@ -17,6 +18,7 @@ from app.interview_languages import InterviewLanguage
 
 class InMemoryAuthenticationRepository(AuthenticationRepository):
     def __init__(self) -> None:
+        self._auth_session_lock = RLock()
         self.users_by_id: dict[str, UserRecord] = {}
         self.users_by_login_id: dict[str, str] = {}
         self.users_by_provider_subject: dict[tuple[IdentityProviderKind, str], str] = {}
@@ -75,13 +77,14 @@ class InMemoryAuthenticationRepository(AuthenticationRepository):
         return replace(binding)
 
     def save_auth_session(self, session: AuthSessionRecord) -> AuthSessionRecord:
-        stored = replace(session)
-        previous = self.auth_sessions_by_id.get(stored.auth_session_id)
-        if previous is not None and previous.refresh_token_fingerprint != stored.refresh_token_fingerprint:
-            self.auth_sessions_by_refresh_fingerprint.pop(previous.refresh_token_fingerprint, None)
-        self.auth_sessions_by_id[stored.auth_session_id] = stored
-        self.auth_sessions_by_refresh_fingerprint[stored.refresh_token_fingerprint] = stored.auth_session_id
-        return replace(stored)
+        with self._auth_session_lock:
+            stored = replace(session)
+            previous = self.auth_sessions_by_id.get(stored.auth_session_id)
+            if previous is not None and previous.refresh_token_fingerprint != stored.refresh_token_fingerprint:
+                self.auth_sessions_by_refresh_fingerprint.pop(previous.refresh_token_fingerprint, None)
+            self.auth_sessions_by_id[stored.auth_session_id] = stored
+            self.auth_sessions_by_refresh_fingerprint[stored.refresh_token_fingerprint] = stored.auth_session_id
+            return replace(stored)
 
     def get_auth_session(self, auth_session_id: str) -> AuthSessionRecord | None:
         record = self.auth_sessions_by_id.get(auth_session_id)
@@ -150,3 +153,37 @@ class InMemoryAuthenticationRepository(AuthenticationRepository):
         if since_ms is not None:
             records = [item for item in records if item.created_at_ms >= since_ms]
         return [replace(item) for item in sorted(records, key=lambda item: item.created_at_ms, reverse=True)]
+
+    def expire_auth_session(self, session: AuthSessionRecord, *, expired_at_ms: int) -> bool:
+        with self._auth_session_lock:
+            current = self.auth_sessions_by_id.get(session.auth_session_id)
+            if (
+                current is None or current.user_id != session.user_id or current.status != "active"
+                or current.revoked_at_ms is not None or current.expires_at_ms >= expired_at_ms
+                or current.refresh_token_fingerprint != session.refresh_token_fingerprint
+                or current.issued_at_ms != session.issued_at_ms or current.expires_at_ms != session.expires_at_ms
+            ):
+                return False
+            self.auth_sessions_by_id[current.auth_session_id] = replace(current, status="expired", revoked_at_ms=expired_at_ms)
+            return True
+
+
+    def get_access_token_state(self, *, auth_session_id: str, user_id: str) -> tuple[AuthSessionRecord | None, bool]:
+        with self._auth_session_lock:
+            return self.get_auth_session(auth_session_id), self.get_user(user_id) is not None
+
+
+    def touch_auth_session(self, session: AuthSessionRecord, *, used_at_ms: int, min_interval_ms: int) -> bool:
+        with self._auth_session_lock:
+            current = self.auth_sessions_by_id.get(session.auth_session_id)
+            if (
+                current is None or current.user_id != session.user_id or current.status != "active"
+                or current.revoked_at_ms is not None or current.expires_at_ms < used_at_ms
+                or current.refresh_token_fingerprint != session.refresh_token_fingerprint
+                or current.issued_at_ms != session.issued_at_ms or current.expires_at_ms != session.expires_at_ms
+                or used_at_ms - current.last_used_at_ms < min_interval_ms
+            ):
+                return False
+            self.auth_sessions_by_id[current.auth_session_id] = replace(current, last_used_at_ms=used_at_ms)
+            return True
+

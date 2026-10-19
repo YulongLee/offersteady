@@ -100,12 +100,18 @@ class RedisChatRepository(_RedisRuntimeStore, ChatRepository):
 class RedisScreenshotAnswerRepository(_RedisRuntimeStore, ScreenshotAnswerRepository):
     _prefix = "offersteady:live:screenshot:v1"
 
+    def session_operation_lock(self, *, session_id: str):
+        # Short admission/cleanup/completion sections, never held over model IO.
+        return self.redis.lock(f"{self._prefix}:session:{session_id}:operation-lock", timeout=30, blocking_timeout=5)
+
     def save_task(self, task: ScreenshotAnswerTaskRecord) -> ScreenshotAnswerTaskRecord:
         key = f"{self._prefix}:task:{task.task_id}"
         with self._lock(key):
             payload = self._load(key)
             existing = self._decode_task(payload) if payload else None
             if existing is not None:
+                if existing.status == "cancelled":
+                    return existing
                 if existing.status in {"completed", "failed", "cancelled"} and task.status not in {"completed", "failed", "cancelled"}:
                     return existing
                 if task.updated_at_ms < existing.updated_at_ms:
@@ -167,6 +173,8 @@ class RedisScreenshotAnswerRepository(_RedisRuntimeStore, ScreenshotAnswerReposi
             payload = self._load(key)
             existing = self._decode_request(payload) if payload else None
             if existing is not None:
+                if existing.status == "cancelled":
+                    return existing
                 if existing.status in {"completed", "failed", "cancelled"} and request.status not in {"completed", "failed", "cancelled"}:
                     return existing
                 if request.updated_at_ms < existing.updated_at_ms:

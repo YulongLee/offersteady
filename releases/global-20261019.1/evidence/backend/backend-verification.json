@@ -1,0 +1,33 @@
+{
+  "passed": true,
+  "backendRuntimeInputCount": 302,
+  "modifiedBackendInputCount": 6,
+  "newPassed": 40,
+  "regressionPassed": 49,
+  "failed": 0,
+  "skipped": 0,
+  "providerCalls": 0,
+  "productionAccessed": false,
+  "realPhysicalDeviceValidated": false,
+  "inventoryProof": "current-baseline.json runtimeInputs",
+  "files": {
+    "baseline-restoration.json": "3f91ae427c77c0cec40bd04611b60e49b1aee4eafb3f5d89fc92b1ee5a5e71ae",
+    "approved-backend-files.json": "73e5d70d234c80d256a142377725d2c2335a71264d2df3bc07660275065cc7d7",
+    "candidate-runtime-inputs.json": "301c2f5bca816a76e74665a4adfb37fb97b92a375938eed0e2825361e4597d63",
+    "global-feature.patch": "622934813eaa6c561bb82e0cc3156bbe2a7622f235b30e9d4728c81c52a18cc7",
+    "source-review.json": "b655ec9301cb5aa4169d7e40e2c85fe153f5770d28ee99cbb59c4530e8d385ff",
+    "openapi-after.json": "2134b5eda3073815ad3c91dd5d07ab8d6fb3e430fb03c3072016813000a0fea9",
+    "openapi-review.json": "bfa1038d8759c86e305f6b8d24eda03ab387fcb8d75c2ee79e882225c229494d",
+    "new-record.json": "3f7cccd6f50c77dd2c5abe165e074def62ec57ca000075c6215611810e261cb8",
+    "new-junit.xml": "f6c6d18edb1f5e3269da8b78b40d468f980fd72a0b94cdb264db37d5951e5b05",
+    "regression-record.json": "1a501acfd0d515f2e433c675272984552485480660cf6a28e33e0fecf8409499",
+    "regression-junit.xml": "5ca0e66b46a0d36e9a3c11933e76fc5548b4b5554f54fed1e58a8914ff3f4d25",
+    "generate-openapi.py": "20e611f7e04e56c15edac4fd0967ed9cb3181cbb3608fcc43f720f164d9e31e8",
+    "test_openapi_metadata.py": "795dc57db21611ee7f85bdcc9d88eb95349d26d309041e9b6dff6edfd7a2efd2",
+    "openapi-metadata-junit.xml": "89fe925132f18003f1f061f74b2a6f2c978a3733a7d12f5b3bb178fbcdaa9dca",
+    "openapi-metadata-fix.json": "6aed56a5f46a9e4e55b0906ec665036b051a71deb092e20ed04e897f442b3a27"
+  },
+  "metadataRegressionPassed": 10,
+  "completeOriginalOpenapiInfoAndMetadataPreserved": true,
+  "businessTestsRepeatedForMetadataFix": false
+}

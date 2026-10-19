@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "byteExactStaticInputs": 235,
+  "all235MatchActualProduction": true,
+  "adapterMatchesProduction": true,
+  "sourceFilesUnchanged": true,
+  "compilerRegionCommentsNormalizedToOriginalIdentifiers": true,
+  "productionAccessed": false,
+  "modelCalls": 0
+}

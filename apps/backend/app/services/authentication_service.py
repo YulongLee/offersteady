@@ -120,6 +120,8 @@ class JWTAccessTokenCodec(AccessTokenCodecPort):
                 algorithms=["HS256"],
                 issuer=self.settings.auth_jwt_issuer,
             )
+            if decoded.get("typ") != "access":
+                raise jwt.InvalidTokenError("Invalid access token type")
         except jwt.PyJWTError as exc:
             raise DomainRequestError("authentication", "decode-access-token", "访问令牌无效或已过期。", 401) from exc
         return AccessTokenPayload(
@@ -741,15 +743,18 @@ class AuthenticationService:
 
     def authenticate_access_token(self, *, access_token: str) -> AuthenticatedRequestContext:
         payload = self.token_codec.decode_access_token(access_token)
-        session = self.repository.get_auth_session(payload.sid)
+        session, user_available = self.repository.get_access_token_state(auth_session_id=payload.sid, user_id=payload.sub)
         if session is None or session.status != "active" or session.user_id != payload.sub:
             raise DomainRequestError("authentication", "authenticate", "登录状态已失效，请重新登录。", 401)
-        if _now_ms() > session.expires_at_ms:
-            self.repository.save_auth_session(replace(session, status="expired", revoked_at_ms=_now_ms()))
+        now_ms = _now_ms()
+        if now_ms > session.expires_at_ms:
+            self.repository.expire_auth_session(session, expired_at_ms=now_ms)
             raise DomainRequestError("authentication", "authenticate", "登录状态已失效，请重新登录。", 401)
-        self._require_user(payload.sub)
-        updated = self.repository.save_auth_session(replace(session, last_used_at_ms=_now_ms()))
-        return AuthenticatedRequestContext(user_id=payload.sub, login_id=payload.login_id, auth_session_id=updated.auth_session_id)
+        if not user_available:
+            raise DomainRequestError("authentication", "user", "用户不存在。", 404)
+        if now_ms - session.last_used_at_ms >= 60_000:
+            self.repository.touch_auth_session(session, used_at_ms=now_ms, min_interval_ms=60_000)
+        return AuthenticatedRequestContext(user_id=payload.sub, login_id=payload.login_id, auth_session_id=session.auth_session_id)
 
     def _issue_auth_session(self, *, user: UserRecord, client_label: str) -> tuple[AuthSessionRecord, str, str]:
         now_ms = _now_ms()

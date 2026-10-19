@@ -1,0 +1,32 @@
+{
+  "passed": true,
+  "testOnly": true,
+  "atMs": 1792364976724,
+  "actualCandidateEntry": "main-08d5d48b.js",
+  "candidateManifestSha256": "6c63690adffaed92ca932833a6c603ac428ea8ef0a0bd4aacaee31db5f82776d",
+  "realProviderCalls": 0,
+  "productionBusinessCalls": 0,
+  "physicalDesktopCaptureValidated": false,
+  "consoleErrors": 0,
+  "scenarios": [
+    "English switch defaults off",
+    "enable shows Capture and Answer; empty Answer disabled",
+    "two captures ordered; capture API count2 and answer count0",
+    "Answer sends one combined request and renders result; batch count1",
+    "capture4 disables Capture",
+    "remove releases one slot without an answer",
+    "switch off releases all remaining IDs and restores Screen Assist",
+    "off-mode original single-image handler completes; single count1",
+    "ordinary interview renders original production LivePage with Web answers/Auto Answer/English/dual panels and no multi-screen switch"
+  ],
+  "evidenceFiles": [
+    "bundled-two-images-ax.txt",
+    "bundled-two-images.png",
+    "bundled-four-limit-ax.txt",
+    "bundled-disable-cleans-ax.txt",
+    "bundled-single-ax.txt",
+    "bundled-normal-ax.txt"
+  ],
+  "harnessIsSeparateCopy": true,
+  "publishedAssetsUninstrumented": true
+}

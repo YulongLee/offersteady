@@ -1,0 +1,27 @@
+{
+  "passed": true,
+  "testCount": 17,
+  "tests": [
+    "217 old files remain; only sixteen HTML module URLs differ",
+    "34 patch files use fixed declared hashes",
+    "entire actual entry graph resolves, shares only new main, retains all original lazy features",
+    "old single-image method exact source and signature retained in new main",
+    "original normal Global LivePage is unchanged except module URLs",
+    "Global release manifest, all prompts and all commercial modules retained",
+    "new assets contain no synthetic/test fixture strings",
+    "compiled policy cap stays <=4",
+    "compiled policy rejects unsupported backend",
+    "compiled capture sends captureOnly and consumes queued event without any answer request",
+    "compiled batch preserves ordered IDs and creates exactly one answer request",
+    "compiled batch streams partial callback before final completed callback",
+    "compiled capture recovers via same GET on missing push",
+    "compiled failed batch cancels once and leaves no queued event",
+    "compiled unsupported capture cancels source and fails clearly",
+    "compiled completed capture missing image fails rather than submits empty batch",
+    "compiled cancellation does not revive late completed event"
+  ],
+  "actualCandidateReachableModules": 27,
+  "allNewModuleImportsResolved": true,
+  "actualProductionHelperBrowserIntegration": "separate CUA harness tests actual bundled main/client/auth helpers and compiled page; screenshots/AX saved",
+  "noProductionOrModelRequests": true
+}

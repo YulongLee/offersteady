@@ -6,3 +6,5 @@ export { LegalPage } from "./LegalPage";
 export { PublicReviewPage } from "./PublicReviewPage";
 export { AnswerWorkspace } from "./AnswerWorkspace";
 export { MockInterviewPage } from "./MockInterviewPage";
+
+export { ResumeOptimizerPage } from "./ResumeOptimizerPage";

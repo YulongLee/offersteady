@@ -1133,6 +1133,7 @@ export function LibraryManager({ state, setState }: Props) {
                     </p>
                   </div>
                   <div>
+                    {source.kind === "resume" && source.status === "ready" && source.syncStatus !== "missing_artifacts" ? <Link className="button ghost" to={`${routes.resumeOptimizer}?source=${encodeURIComponent(source.documentId ?? source.id)}`}>Optimize resume</Link> : null}
                     <span
                       className={`state-mark ${source.status === "ready" && source.syncStatus !== "missing_artifacts" ? "ready" : source.status === "processing" || source.status === "pending" ? "processing" : "error"}`}
                     >

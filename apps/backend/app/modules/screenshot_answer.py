@@ -27,6 +27,7 @@ from app.schemas.screenshot_answer import (
     ScreenshotValidationPolicyResponse,
     StartScreenshotAnswerRequest,
     CreateRemoteScreenshotCaptureRequest,
+    CreateBatchScreenshotAnswerRequest,
     CreateDesktopShortcutCaptureRequest,
     FailRemoteScreenshotCaptureRequest,
 )
@@ -136,6 +137,9 @@ def _to_remote_capture_request_response(request, task=None) -> RemoteScreenshotC
         deviceId=request.device_id,
         manualCode=request.manual_code,
         instruction=request.instruction,
+        captureOnly=request.capture_only,
+        capturedImageId=request.captured_image_id,
+        captureRequestIds=request.capture_request_ids,
         status=request.status,
         stage=request.stage,
         createdAtMs=request.created_at_ms,
@@ -157,7 +161,12 @@ def _publish_capture_event(realtime: RealtimeSpeechService, capture_request, tas
         "status": capture_request.status,
         "stage": capture_request.stage,
         "updatedAtMs": capture_request.updated_at_ms,
+        "captureOnly": capture_request.capture_only,
+        "capturedImageId": capture_request.captured_image_id,
+        "captureRequestIds": capture_request.capture_request_ids,
     }
+    if capture_request.captured_filename:
+        payload["capturedFilename"] = capture_request.captured_filename
     if capture_request.claimed_at_ms is not None:
         payload["claimedAtMs"] = capture_request.claimed_at_ms
     if capture_request.completed_at_ms is not None:
@@ -337,9 +346,35 @@ async def create_remote_capture_request(
         device_id=binding.device_id,
         manual_code=binding.manual_code,
         instruction=request.instruction,
+        capture_only=request.capture_only,
     )
     _publish_capture_event(realtime, capture_request)
     return success_response(request=request_context, data=_to_remote_capture_request_response(capture_request), timestamp=utc_now_iso())
+
+
+@router.post("/sessions/{session_id}/batch-answer-requests", response_model=ApiEnvelope[RemoteScreenshotCaptureRequestResponse])
+async def create_batch_answer_request(
+    session_id: str,
+    request_context: Request,
+    request: CreateBatchScreenshotAnswerRequest,
+    background_tasks: BackgroundTasks,
+    auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
+    service: ScreenshotAnswerService = Depends(screenshot_answer_service),
+    realtime: RealtimeSpeechService = Depends(realtime_speech_service),
+) -> ApiEnvelope[RemoteScreenshotCaptureRequestResponse]:
+    user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
+    capture_request, created = service.create_batch_answer_request(
+        user_id=user_id, session_id=session_id,
+        capture_request_ids=request.capture_request_ids, instruction=request.instruction,
+    )
+    if created:
+        _publish_capture_event(realtime, capture_request)
+        background_tasks.add_task(
+            service.complete_batch_answer_request_safely, request_id=capture_request.request_id,
+            on_transition=lambda updated, task: _publish_capture_event(realtime, updated, task),
+        )
+    task = service.get_task(user_id=user_id, task_id=capture_request.answer_task_id) if capture_request.answer_task_id else None
+    return success_response(request=request_context, data=_to_remote_capture_request_response(capture_request, task), timestamp=utc_now_iso())
 
 
 @router.get("/sessions/{session_id}/remote-capture-requests", response_model=ApiEnvelope[list[RemoteScreenshotCaptureRequestResponse]])

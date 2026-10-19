@@ -70,10 +70,8 @@ class CommercialWorkerService:
                     if task.current_stage == "COMPLETED":
                         succeeded += 1
                     elif task.current_stage == "QUEUED":
-                        # DocumentProcessingService has already persisted the task retry
-                        # and moved the durable job to ``retrying``.  Do not turn that
-                        # retry into a terminal failure here: doing so leaves the task
-                        # queued forever while the job is no longer claimable.
+                        # Processing already scheduled the bounded durable retry.
+                        # Do not turn that retry into an unclaimable failed job.
                         continue
                     else:
                         self.repository.mark_job_failed(

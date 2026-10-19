@@ -474,3 +474,71 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
         from app.core.config import REPO_ROOT
 
         return str(REPO_ROOT / "apps" / "backend" / "migrations" / "versions" / "0006_sms_authentication_service.sql")
+
+    def expire_auth_session(self, session: AuthSessionRecord, *, expired_at_ms: int) -> bool:
+        with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE auth_sessions SET status = 'expired', revoked_at_ms = %s
+                WHERE auth_session_id = %s AND user_id = %s
+                  AND status = 'active' AND revoked_at_ms IS NULL AND expires_at_ms < %s
+                  AND refresh_token_fingerprint = %s AND issued_at_ms = %s AND expires_at_ms = %s
+                """,
+                (expired_at_ms, session.auth_session_id, session.user_id, expired_at_ms,
+                 session.refresh_token_fingerprint, session.issued_at_ms, session.expires_at_ms),
+            )
+            updated = cursor.rowcount > 0
+            connection.commit()
+        return updated
+
+
+    def get_access_token_state(self, *, auth_session_id: str, user_id: str) -> tuple[AuthSessionRecord | None, bool]:
+        # This projection deliberately excludes passwords, profile and bindings:
+        # access validation only consumes session state and user availability.
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            try:
+                cursor.execute(
+                    """
+                    SELECT s.*, EXISTS (
+                      SELECT 1 FROM auth_users u WHERE u.user_id = %s
+                      AND NOT EXISTS (
+                        SELECT 1 FROM admin_user_restrictions r
+                        WHERE r.user_id = u.user_id AND r.status = 'active'
+                      )
+                    ) AS user_available
+                    FROM auth_sessions s WHERE s.auth_session_id = %s
+                    """,
+                    (user_id, auth_session_id),
+                )
+            except psycopg.errors.UndefinedTable:
+                # Keep the existing minimal/development schema compatibility.
+                connection.rollback()
+                cursor.execute(
+                    """
+                    SELECT s.*, EXISTS (SELECT 1 FROM auth_users u WHERE u.user_id = %s) AS user_available
+                    FROM auth_sessions s WHERE s.auth_session_id = %s
+                    """,
+                    (user_id, auth_session_id),
+                )
+            row = cursor.fetchone()
+        return (self._auth_session_from_row(row), bool(row["user_available"])) if row else (None, False)
+
+
+    def touch_auth_session(self, session: AuthSessionRecord, *, used_at_ms: int, min_interval_ms: int) -> bool:
+        with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE auth_sessions SET last_used_at_ms = %s
+                WHERE auth_session_id = %s AND user_id = %s
+                  AND status = 'active' AND revoked_at_ms IS NULL AND expires_at_ms >= %s
+                  AND refresh_token_fingerprint = %s AND issued_at_ms = %s AND expires_at_ms = %s
+                  AND last_used_at_ms <= %s
+                """,
+                (used_at_ms, session.auth_session_id, session.user_id, used_at_ms,
+                 session.refresh_token_fingerprint, session.issued_at_ms, session.expires_at_ms,
+                 used_at_ms - min_interval_ms),
+            )
+            updated = cursor.rowcount > 0
+            connection.commit()
+        return updated
+
