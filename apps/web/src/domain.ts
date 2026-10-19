@@ -238,6 +238,12 @@ export interface ScreenshotTask {
   readonly errorMessage?: string;
 }
 
+export interface CollectedScreenshot {
+  readonly requestId: string;
+  readonly imageId: string;
+  readonly name: string;
+}
+
 export interface LiveActionState {
   readonly manualDraft: string;
   readonly screenshotTask: ScreenshotTask | null;
@@ -346,6 +352,9 @@ export interface InterviewAppAdapter {
   submitManualAnswer(command: SubmitManualAnswerCommand, signal?: AbortSignal, onStreamUpdate?: (update: ManualAnswerStreamUpdate) => void): Promise<SubmitManualAnswerResult>;
   acknowledgeAnswerFirstRender?(command: { interviewId: string; taskId: string; clickedAtMs: number; browserEventReceiveAtMs?: number; browserRenderAtMs: number; renderedTextLength: number; timing?: LiveAnswerStreamEvent["timing"] }): void;
   submitScreenshotAnswer(command: SubmitScreenshotAnswerCommand, signal?: AbortSignal, onStage?: (task: ScreenshotTask) => void, onAnswerUpdate?: (result: SubmitManualAnswerResult) => void): Promise<SubmitManualAnswerResult>;
+  getScreenshotCapturePolicy?(signal?: AbortSignal): Promise<{ readonly maxImagesPerTask: number }>;
+  captureScreenshot?(command: { readonly interviewId: string }, signal?: AbortSignal, onStage?: (task: ScreenshotTask) => void): Promise<CollectedScreenshot>;
+  submitScreenshotBatch?(command: SubmitScreenshotAnswerCommand & { readonly captureRequestIds: readonly string[] }, signal?: AbortSignal, onStage?: (task: ScreenshotTask) => void, onAnswerUpdate?: (result: SubmitManualAnswerResult) => void): Promise<SubmitManualAnswerResult>;
   cancelAnswer(command: CancelAnswerCommand, current: AnswerTaskSnapshot, signal?: AbortSignal): Promise<CancelAnswerResult>;
   redeemPoints(request: PointsRedemptionRequest, signal?: AbortSignal): Promise<PointsRedemptionResult>;
   createCheckoutOrder(request: { productId: string; channel: "wechat" | "alipay"; idempotencyKey: string }, signal?: AbortSignal): Promise<OfficialCheckoutOrder>;

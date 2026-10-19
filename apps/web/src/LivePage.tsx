@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { AnswerTaskSnapshot, CaptureState } from "@offersteady/protocol";
-import type { IdleInterviewStatus, InterviewQuestion, LiveActionState, QuestionStatus, RealtimeSessionUpdate, ScreenshotTask, SessionMode, SessionStatus, WebAppState } from "./domain";
+import type { CollectedScreenshot, SubmitManualAnswerResult, IdleInterviewStatus, InterviewQuestion, LiveActionState, QuestionStatus, RealtimeSessionUpdate, ScreenshotTask, SessionMode, SessionStatus, WebAppState } from "./domain";
 import { runAdapterOperation } from "./api-client";
 import { interviewAppAdapter } from "./app-adapter";
 import { routes } from "./routes";
@@ -64,6 +64,21 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
   const [view, setView] = useState(() => initialLiveWorkspaceView(parseStoredSplitRatio(typeof window.sessionStorage?.getItem === "function" ? window.sessionStorage.getItem(storageKey) : null)));
   const [actionState, setActionState] = useState<Omit<LiveActionState, "pendingQuestion">>({ manualDraft: "", screenshotTask: null, quickAnswerStatus: "idle", quickAnswerMessage: "", screenshotAnswerStatus: "idle", webSearchEnabled: false });
   const [notice, setNotice] = useState("");
+  const [multiScreenEnabled, setMultiScreenEnabled] = useState(false);
+  const [collectedScreenshots, setCollectedScreenshots] = useState<readonly CollectedScreenshot[]>([]);
+  const [collectionBusy, setCollectionBusy] = useState(false);
+  const [collectionMessage, setCollectionMessage] = useState("");
+  const [batchAnswerBusy, setBatchAnswerBusy] = useState(false);
+  const [screenshotLimit, setScreenshotLimit] = useState<number | null>(null);
+  const [capturePolicyError, setCapturePolicyError] = useState("");
+  const collectedScreenshotsRef = useRef<readonly CollectedScreenshot[]>([]);
+  const collectionController = useRef<AbortController | null>(null);
+  const collectionEpoch = useRef(0);
+  const multiScreenEnabledRef = useRef(false);
+  const batchAnswerBusyRef = useRef(false);
+  const batchSourcesRef = useRef<readonly CollectedScreenshot[]>([]);
+  const batchTaskRef = useRef<{ id: string; questionId: string } | null>(null);
+  const batchQuestionIds = useRef(new Set<string>());
   const [cancellingAnswer, setCancellingAnswer] = useState(false);
   const [cancelAnswerError, setCancelAnswerError] = useState("");
   const [pageLeaseStatus, setPageLeaseStatus] = useState<"claiming" | "active" | "replaced">("claiming");
@@ -115,6 +130,53 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
       ? next.stage === "completed" ? "success" : next.stage === "failed" ? "failed" : next.stage === "cancelled" ? "cancelled" : "processing"
       : current.screenshotAnswerStatus ?? "idle",
   }));
+  const releaseCollectedScreenshots = (items: readonly CollectedScreenshot[]) => {
+    for (const item of items) {
+      void interviewAppAdapter.cancelDesktopShortcutScreenshot(item.requestId).catch(() => undefined);
+    }
+  };
+  const resetScreenshotCollection = (updateView = true) => {
+    collectionEpoch.current += 1;
+    collectionController.current?.abort();
+    collectionController.current = null;
+    if (batchAnswerBusyRef.current) screenshotController.current?.abort();
+    batchAnswerBusyRef.current = false;
+    releaseCollectedScreenshots([...collectedScreenshotsRef.current, ...batchSourcesRef.current]);
+    collectedScreenshotsRef.current = [];
+    batchSourcesRef.current = [];
+    if (updateView) {
+      setCollectedScreenshots([]);
+      setCollectionBusy(false);
+      setCollectionMessage("");
+      setBatchAnswerBusy(false);
+    }
+  };
+  useEffect(() => {
+    multiScreenEnabledRef.current = false;
+    setMultiScreenEnabled(false);
+    return () => resetScreenshotCollection(false);
+  }, [id]);
+  useEffect(() => {
+    if (pageLeaseStatus === "replaced") resetScreenshotCollection();
+  }, [pageLeaseStatus]);
+  useEffect(() => {
+    if (!isWritten) return;
+    const controller = new AbortController();
+    setScreenshotLimit(null);
+    setCapturePolicyError("");
+    const loadPolicy = async () => {
+      try {
+        if (!interviewAppAdapter.getScreenshotCapturePolicy) throw new Error("多屏截屏暂不可用，请稍后重试。");
+        const policy = await interviewAppAdapter.getScreenshotCapturePolicy(controller.signal);
+        if (!Number.isInteger(policy.maxImagesPerTask) || policy.maxImagesPerTask < 1) throw new Error("无法读取截屏数量限制，请刷新后重试。");
+        if (!controller.signal.aborted) setScreenshotLimit(Math.min(4, policy.maxImagesPerTask));
+      } catch (error) {
+        if (!controller.signal.aborted) setCapturePolicyError(error instanceof Error ? error.message : "无法读取截屏设置，请刷新后重试。");
+      }
+    };
+    void loadPolicy();
+    return () => controller.abort();
+  }, [id, isWritten]);
   const contextSelection = state.contextSelections[id] ?? { sessionId: id, resumeSourceId: null, jobDescriptionSourceId: null, knowledgeSourceIds: [], revision: 0, confirmedAtMs: null };
   const selectedContextSources = selectionSources(managedLibrarySources(state.librarySources, state.account.id).filter(eligibleSource), contextSelection);
   useEffect(() => { if (typeof window.sessionStorage?.setItem === "function") window.sessionStorage.setItem(storageKey, serializeSplitRatio(view.splitRatio)); }, [storageKey, view.splitRatio]);
@@ -852,10 +914,15 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
       setNotice(error instanceof Error ? error.message : isWritten ? "结束笔试失败，请稍后重试。" : "结束面试失败，请稍后重试。");
       return;
     }
+    resetScreenshotCollection();
     setCapture("ready", "ended");
     navigate(routes.review(id));
   };
   const updateQuestionStatus = (questionId: string, status: QuestionStatus) => {
+    if (status === "generating" && batchQuestionIds.current.has(questionId)) {
+      setCollectionMessage("本次截图已提交，请重新截屏后再回答。");
+      return;
+    }
     const question = state.questions.find(item => item.id === questionId);
     if (!question) return;
     if ((question.status === "cancelled" || question.status === "failed") && status === "generating") {
@@ -866,6 +933,109 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
       return;
     }
     setState(current => ({ ...current, questions: current.questions.map(item => item.id === questionId ? { ...item, status } : item) }));
+  };
+  const toggleMultiScreen = (enabled: boolean) => {
+    if (batchAnswerBusyRef.current || pageLeaseStatus === "replaced") return;
+    resetScreenshotCollection();
+    multiScreenEnabledRef.current = enabled;
+    setMultiScreenEnabled(enabled);
+  };
+  const collectScreenshot = async () => {
+    if (!isWritten || !multiScreenEnabledRef.current || pageLeaseStatus === "replaced" || collectionController.current || batchAnswerBusyRef.current) return;
+    if (screenshot && !["completed", "failed", "cancelled"].includes(screenshot.stage)) return;
+    if (!screenshotLimit || collectedScreenshotsRef.current.length >= screenshotLimit) return;
+    if (!interviewAppAdapter.captureScreenshot) { setCollectionMessage("多屏截屏暂不可用，请刷新后重试。"); return; }
+    const controller = new AbortController();
+    const epoch = collectionEpoch.current;
+    collectionController.current = controller;
+    setCollectionBusy(true);
+    setCollectionMessage("");
+    try {
+      const captured = await runAdapterOperation(signal => interviewAppAdapter.captureScreenshot!({ interviewId: id }, signal, task => {
+        if (controller.signal.aborted || collectionEpoch.current !== epoch) return;
+        setCollectionMessage(task.stage === "waiting-desktop" ? "等待本地助手截屏…" : task.stage === "uploading" ? "正在上传截图…" : "正在截取当前画面…");
+      }), controller.signal);
+      if (controller.signal.aborted || collectionEpoch.current !== epoch || !multiScreenEnabledRef.current) {
+        releaseCollectedScreenshots([captured]);
+        return;
+      }
+      const items = [...collectedScreenshotsRef.current, captured];
+      collectedScreenshotsRef.current = items;
+      setCollectedScreenshots(items);
+      setCollectionMessage("");
+    } catch (error) {
+      if (!controller.signal.aborted && collectionEpoch.current === epoch) setCollectionMessage(error instanceof Error ? error.message : "截屏失败，请重试。");
+    } finally {
+      if (collectionController.current === controller) {
+        collectionController.current = null;
+        setCollectionBusy(false);
+      }
+    }
+  };
+  const removeCollectedScreenshot = (requestId: string) => {
+    if (collectionController.current || batchAnswerBusyRef.current) return;
+    const removed = collectedScreenshotsRef.current.filter(item => item.requestId === requestId);
+    const remaining = collectedScreenshotsRef.current.filter(item => item.requestId !== requestId);
+    collectedScreenshotsRef.current = remaining;
+    setCollectedScreenshots(remaining);
+    setCollectionMessage("");
+    releaseCollectedScreenshots(removed);
+  };
+  const submitCollectedScreenshots = async () => {
+    if (!isWritten || !multiScreenEnabledRef.current || pageLeaseStatus === "replaced" || collectionController.current || batchAnswerBusyRef.current || collectedScreenshotsRef.current.length === 0) return;
+    if (screenshot && !["completed", "failed", "cancelled"].includes(screenshot.stage)) return;
+    if (!interviewAppAdapter.submitScreenshotBatch) { setCollectionMessage("多屏回答暂不可用，请刷新后重试。"); return; }
+    const sources = collectedScreenshotsRef.current;
+    const controller = new AbortController();
+    const epoch = collectionEpoch.current;
+    batchAnswerBusyRef.current = true;
+    batchSourcesRef.current = sources;
+    batchTaskRef.current = null;
+    collectedScreenshotsRef.current = [];
+    setCollectedScreenshots([]);
+    setBatchAnswerBusy(true);
+    setCollectionMessage("");
+    setNotice("");
+    screenshotController.current = controller;
+    setScreenshot({ name: `${sources.length} 张截图`, stage: "recognizing" });
+    const placeholderId = `shot-batch-pending-${Date.now()}`;
+    batchQuestionIds.current.add(placeholderId);
+    const question: InterviewQuestion = { ...emptyLiveQuestion, id: placeholderId, text: `请根据 ${sources.length} 张截图一起回答`, input: "screenshot", askedAt: "刚刚", status: "generating", advice: { ...emptyLiveQuestion.advice, detail: "正在识别多张截图并生成回答…", uncertain: false } };
+    const task = activeTaskFor(question, `screenshot:remote:batch:${Date.now()}`);
+    setState(current => ({ ...current, questions: [question, ...current.questions], activeAnswerTask: task }));
+    setView(current => ({ ...current, viewingAnswerId: null, newAnswerAvailable: false }));
+    const applyResult = (result: SubmitManualAnswerResult) => {
+      if (controller.signal.aborted || collectionEpoch.current !== epoch) return;
+      batchTaskRef.current = result.task;
+      batchQuestionIds.current.add(result.question.id);
+      setState(current => ({ ...current, ...reconcileAnswerWorkspace({ questions: current.questions.filter(item => item.id !== placeholderId), activeAnswerTask: current.activeAnswerTask?.questionId === placeholderId ? null : current.activeAnswerTask }, { questions: [result.question], activeAnswerTask: result.task }, { preferIncomingTask: true }) }));
+    };
+    try {
+      const result = await runAdapterOperation(signal => interviewAppAdapter.submitScreenshotBatch!({ interviewId: id, captureRequestIds: sources.map(item => item.requestId), instruction: screenshotInstruction }, signal, next => {
+        if (!controller.signal.aborted && collectionEpoch.current === epoch) setScreenshot(next);
+      }, applyResult), controller.signal);
+      if (controller.signal.aborted || collectionEpoch.current !== epoch) return;
+      applyResult(result);
+      setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "success" }));
+      if (result.task.status === "completed") void syncBilling();
+    } catch (error) {
+      if (controller.signal.aborted || collectionEpoch.current !== epoch) return;
+      const message = `${error instanceof Error ? error.message : "多屏回答失败。"} 请重新截屏后再回答。`;
+      setCollectionMessage(message);
+      setScreenshot(null);
+      const failedQuestionId = (batchTaskRef.current as { questionId: string } | null)?.questionId ?? placeholderId;
+      setState(current => ({ ...current, questions: current.questions.map(item => item.id === failedQuestionId ? { ...item, status: "failed", advice: { ...item.advice, detail: message, uncertain: true } } : item), activeAnswerTask: current.activeAnswerTask && current.activeAnswerTask.questionId === failedQuestionId ? { ...current.activeAnswerTask, status: "failed", partialText: message } : current.activeAnswerTask }));
+      setActionState(current => ({ ...current, screenshotAnswerStatus: "failed" }));
+    } finally {
+      releaseCollectedScreenshots(sources);
+      if (collectionEpoch.current === epoch) {
+        batchAnswerBusyRef.current = false;
+        batchSourcesRef.current = [];
+        batchTaskRef.current = null;
+        setBatchAnswerBusy(false);
+      }
+      if (screenshotController.current === controller) screenshotController.current = null;
+    }
   };
   const screenshotInstruction = "请只依据当前截图识别其中的题目、代码或系统设计内容，并给出可直接使用的中文回答。不要使用实时对话、面试官最近的问题或其他会话信息。";
   const submitScreenshot = async () => {
@@ -964,6 +1134,14 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
     return "共享屏幕暂时无法截取，请重试。";
   };
   const cancelScreenshot = async () => {
+    if (batchAnswerBusyRef.current) {
+      const task = batchTaskRef.current;
+      if (task) { cancelledManualTaskIds.current.add(task.id); cancelledManualTaskIds.current.add(task.questionId); }
+      resetScreenshotCollection();
+      setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "cancelled" }));
+      setState(current => ({ ...current, activeAnswerTask: current.activeAnswerTask ? { ...current.activeAnswerTask, status: "cancelled", revision: current.activeAnswerTask.revision + 1 } : null, questions: current.questions.map(question => question.id === current.activeAnswerTask?.questionId ? { ...question, status: "cancelled" } : question) }));
+      return;
+    }
     const shortcutRequestId = activeShortcutScreenshotRequest.current;
     if (shortcutRequestId) {
       terminalShortcutScreenshotRequests.current.add(shortcutRequestId);
@@ -1020,7 +1198,7 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
         });
     }, 0);
   };
-  beginInstantScreenshotRef.current = beginInstantScreenshot;
+  beginInstantScreenshotRef.current = isWritten && multiScreenEnabled ? () => void collectScreenshot() : beginInstantScreenshot;
   useEffect(() => {
     const handleScreenshotShortcut = (event: KeyboardEvent) => {
       if (
@@ -1049,6 +1227,7 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
   const stopAnswer = async () => {
     const task = state.activeAnswerTask;
     if (!task || (task.status !== "queued" && task.status !== "generating") || cancellingAnswer) return;
+    if (batchAnswerBusyRef.current) { await cancelScreenshot(); return; }
     const releaseReservedPoints = (usageId: string, points: number, description: string) => setState(current => current.billing.activePass ? current : ({
       ...current,
       billing: {
@@ -1136,7 +1315,7 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
   const conversationPanel = <ConversationMonitor state={state} interviewAudioMode={liveInterview?.interviewAudioMode ?? "computer"} onConfirmQuestion={pageLeaseStatus === "replaced" ? dismissPending : confirmPending} onDismissQuestion={dismissPending} />;
   const answerPanel = <AnswerWorkspace answers={state.questions} cancelledWebAnswerIds={preservedWebAnswerIds.current} viewingAnswerId={view.viewingAnswerId} newAnswerAvailable={view.newAnswerAvailable} activeTask={state.activeAnswerTask} cancelling={cancellingAnswer} cancelError={cancelAnswerError} interviewLanguage={liveInterview?.interviewLanguage ?? "zh-CN"} onStop={() => void stopAnswer()} onView={answerId => setView(current => ({ ...current, viewingAnswerId: answerId, newAnswerAvailable: answerId ? current.newAnswerAvailable : false }))} onRetry={updateQuestionStatus} />;
 
-  if (isWritten) return <main className={`live-page focused-live-page${desktopLayout ? " desktop-live-page" : " mobile-live-page"}`}><header className="live-top"><Link to={routes.writtenExams} aria-label="返回笔试模式">{brand}</Link><div className="live-session-heading"><strong>{interviewTitle}</strong><span><i className="online-dot" /> 桌面助手已连接 · 截屏回答可用</span><small className="live-language-badge">笔试模式</small></div><div className="live-top-actions"><Link className="live-balance" to={routes.billing}>积分与会员</Link>{accountMenu}<button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束笔试</button></div></header>{notice ? <div className="global-live-alert" role="alert"><strong>{notice}</strong><button type="button" onClick={() => setNotice("")}>关闭</button></div> : null}{pageLeaseStatus === "replaced" ? <div className="global-live-alert replaced-page-alert" role="status"><strong>本场笔试已在其他页面继续</strong><Link className="button primary" to={routes.writtenExams}>返回笔试模式</Link></div> : null}<div className="written-exam-workspace"><section className="answer-column">{answerPanel}<AnswerActionBar manualDraft="" screenshotTask={actionState.screenshotTask} screenshotOnly screenshotAnswerStatus={actionState.screenshotAnswerStatus ?? "idle"} disabled={pageLeaseStatus === "replaced"} onQuickAnswer={() => undefined} onScreenshot={beginInstantScreenshot} /></section></div>{screenshot && pageLeaseStatus !== "replaced" ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="screenshot-dialog-title"><section className="sheet"><h2 id="screenshot-dialog-title">{screenshotStageTitle(screenshot)}</h2>{screenshotStageDetail(screenshot) ? <p>{screenshotStageDetail(screenshot)}</p> : null}{screenshot.stage === "failed" ? <div className="sheet-actions split-actions"><button className="button ghost full" onClick={dismissScreenshotFailure}>删除本次失败</button><button className="button primary full" onClick={beginInstantScreenshot}>重新截屏</button></div> : <button className="button primary full" onClick={() => void cancelScreenshot()}>取消</button>}</section></div> : null}<footer className="session-bar"><div><i className="online-dot" /><strong>笔试进行中</strong></div><div><small>仅在你主动发起时截屏并生成回答</small></div></footer></main>;
+  if (isWritten) return <main className={`live-page focused-live-page${desktopLayout ? " desktop-live-page" : " mobile-live-page"}`}><header className="live-top"><Link to={routes.writtenExams} aria-label="返回笔试模式">{brand}</Link><div className="live-session-heading"><strong>{interviewTitle}</strong><span><i className="online-dot" /> 桌面助手已连接 · 截屏回答可用</span><small className="live-language-badge">笔试模式</small></div><div className="live-top-actions"><div className="live-auto-answer"><span>多屏回答</span><label className="switch-control"><input type="checkbox" role="switch" aria-label="多屏回答" checked={multiScreenEnabled} disabled={batchAnswerBusy || (!collectionBusy && actionState.screenshotAnswerStatus === "processing") || pageLeaseStatus === "replaced"} onChange={event => toggleMultiScreen(event.target.checked)} /><span aria-hidden="true" /></label></div><Link className="live-balance" to={routes.billing}>积分与会员</Link>{accountMenu}<button className="button danger live-session-control" disabled={pageLeaseStatus === "replaced"} onClick={() => void finishInterview()}>结束笔试</button></div></header>{notice ? <div className="global-live-alert" role="alert"><strong>{notice}</strong><button type="button" onClick={() => setNotice("")}>关闭</button></div> : null}{pageLeaseStatus === "replaced" ? <div className="global-live-alert replaced-page-alert" role="status"><strong>本场笔试已在其他页面继续</strong><Link className="button primary" to={routes.writtenExams}>返回笔试模式</Link></div> : null}<div className="written-exam-workspace"><section className="answer-column">{answerPanel}<AnswerActionBar manualDraft="" screenshotTask={actionState.screenshotTask} screenshotOnly screenshotAnswerStatus={actionState.screenshotAnswerStatus ?? "idle"} disabled={pageLeaseStatus === "replaced" || batchAnswerBusy} onQuickAnswer={() => undefined} onScreenshot={multiScreenEnabled ? () => void collectScreenshot() : beginInstantScreenshot} multiScreen={multiScreenEnabled} pendingScreenshots={collectedScreenshots} screenshotLimit={screenshotLimit ?? 4} captureBusy={collectionBusy} captureUnavailable={screenshotLimit === null} captureMessage={collectionMessage || capturePolicyError || (screenshotLimit === null ? "正在读取截屏设置…" : "")} onBatchAnswer={() => void submitCollectedScreenshots()} onRemoveScreenshot={removeCollectedScreenshot} /></section></div>{screenshot && pageLeaseStatus !== "replaced" ? <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="screenshot-dialog-title"><section className="sheet"><h2 id="screenshot-dialog-title">{screenshotStageTitle(screenshot)}</h2>{screenshotStageDetail(screenshot) ? <p>{screenshotStageDetail(screenshot)}</p> : null}{screenshot.stage === "failed" ? <div className="sheet-actions split-actions"><button className="button ghost full" onClick={dismissScreenshotFailure}>删除本次失败</button><button className="button primary full" onClick={beginInstantScreenshot}>重新截屏</button></div> : <button className="button primary full" onClick={() => void cancelScreenshot()}>取消</button>}</section></div> : null}<footer className="session-bar"><div><i className="online-dot" /><strong>笔试进行中</strong></div><div><small>仅在你主动发起时截屏并生成回答</small></div></footer></main>;
 
   return <main className={`live-page focused-live-page${desktopLayout ? " desktop-live-page" : " mobile-live-page"}`}>
     <header className="live-top">

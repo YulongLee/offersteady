@@ -1,0 +1,13 @@
+{
+  "version": "cn-20261019.2",
+  "stage": "Before commit and push",
+  "passed": true,
+  "freshReadOnlyLiveInventoryMatched": true,
+  "sealedRuntimeAndStaticSnapshotVerificationPassed": true,
+  "targetedBackendTestsPassed": 32,
+  "regionalWebTypecheckPassed": true,
+  "openSpecStrictPassed": true,
+  "productionChangedBySeal": false,
+  "realModelCallsBySeal": 0,
+  "physicalDesktopCaptureRetested": false
+}

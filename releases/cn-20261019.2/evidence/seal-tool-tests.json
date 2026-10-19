@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "scope": "Portable self-contained historical protected release/controller plus public mapping regressions",
+  "testFiles": [
+    "tools/test_written_release_controller.py",
+    "tools/test_public_checks_fixed.py"
+  ],
+  "testsPassed": 136,
+  "failed": 0,
+  "skipped": 0,
+  "exitCode": 0,
+  "runtime": "Python 3.13.9 repository .venv with pytest",
+  "fixtureChangesOnly": "Three former absolute historical fixture lookups now resolve bundled tools/fixtures. Protected controller/support/input bytes are unchanged.",
+  "networkCalls": 0,
+  "productionChanges": 0,
+  "realModelCalls": 0
+}

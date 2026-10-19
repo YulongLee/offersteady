@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "candidateImagesExactlyEqual": true,
+  "images": {
+    "backend": "sha256:2f2c89359d2268c460dabad38a4f9466e2af5610e730a94ded797586ef4c5e88",
+    "web": "sha256:011d1f5de69f1208bf8b9c5b9496d4acddcbe090e6c159a0173214eb8efbbee2"
+  },
+  "actualOfflineProbeExactlyEqual": true,
+  "settingsSha256": "8da0d5c924f42fafe26d5f3e5816837a47beb2d026ca7514e92ba36774c79efe",
+  "newProviderCalls": 0,
+  "totalProviderQARequests": 1,
+  "realDesktopCaptureValidated": false,
+  "sourceReportSha256": "b8487880770994c1b08002e994bad7a099e8b0f5efca863dde80598e0a9cfc53"
+}

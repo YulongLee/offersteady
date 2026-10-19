@@ -1,0 +1,44 @@
+{
+  "deployed": true,
+  "independentlyVerified": true,
+  "publicChecks": 26,
+  "policyPassed": true,
+  "observationSeconds": 180,
+  "zeroErrorsInObservation": true,
+  "otherComponentsUnchanged": true,
+  "existingConfigurationUnchanged": true,
+  "backendHealthy": true,
+  "restartCount": 0,
+  "realDesktopValidated": false,
+  "providerQARequestsTotal": 1,
+  "secondAttemptProviderRequests": 0,
+  "gitActions": 0,
+  "deploymentAtMs": 1792362979156,
+  "components": {
+    "backend": {
+      "id": "d12beb7086a7ab6b51b31ea55236b4891a8663607a174c996659c7a8c253ddd3",
+      "image": "sha256:2f2c89359d2268c460dabad38a4f9466e2af5610e730a94ded797586ef4c5e88"
+    },
+    "web": {
+      "id": "75986fa2193dca8ef72a35efbd5b7d74dde71767a97a3e1a0b09076857ce5310",
+      "image": "sha256:011d1f5de69f1208bf8b9c5b9496d4acddcbe090e6c159a0173214eb8efbbee2"
+    }
+  },
+  "evidenceSha256": {
+    "actual-prepare.json": "875eaf874820f8f273a91f7e5301eb1bc43cf1adb3281c5f42d61af3e471b96c",
+    "actual-evidence-before.json": "371bc7d8cd311b268c884df9a3b573321a99bec2708a4dad98efcd56dea7ca10",
+    "actual-preflight.json": "82b7cb307a1c97bcbfa6f97ab9e7440c980e608a4fee08fca215e51c3478ce25",
+    "actual-deploy.json": "8f76fb8758af233e88908e8ad4f975055bf3f3837bc9ce3f0e72496696b6fb1b",
+    "actual-verify.json": "37394332b879afe29b3144397c44e5e8e3d993dc9f3138afdaad003136e06120",
+    "public-capture-policy.json": "08c1da627d3493d146c72512b701ace83dfaf5af787e7bb0365c0da1951a417b",
+    "short-observation.json": "2b9cba110e6de0f66c53fa22df4380cc33f4cc9d791d665aa30df9637676eb6b",
+    "provider-qa-reuse-proof.json": "7bed1df817407279a9f0e4fdf55e82a42d6387ac9f7a696096b2d3cd40a366d0",
+    "root-payload-verification.json": "e5824091daa8348f7a1b0d90acab4e5bd9ccb18f6a4c43322e7cc2f57dadb691",
+    "root-cutover-go.json": "9824bc3ca7c5449763b648bc58dbbc132f447f8aa78d9300d7af6779ada49608",
+    "controller-tests.xml": "7e066b64bdd2dd2db638f672ba1cfb70fdafea1f2e8c5ac1ff1824259afc606e",
+    "deployed-backend-runtime-manifest.json": "e12f6dddd3e3929556384398800beb248eaecbe6f5350d24977022729c01f95c",
+    "deployed-web-static-manifest.json": "d3ef709cc59470f3dd435aac5f1c564f18346272a82fd7b1e895de9911d8be2e",
+    "deployed-openapi.json": "d88c0173a71682afed61615258af019204722f8bee2e80b307470333f75ecc45",
+    "release-source-manifest.json": "2c4e0911b5fd9a6435937c4a0002d0854f234f0816528e1aaf6209e5d09182cf"
+  }
+}

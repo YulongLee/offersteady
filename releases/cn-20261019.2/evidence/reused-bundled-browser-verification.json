@@ -1,0 +1,28 @@
+{
+  "passed": true,
+  "kind": "actual compiled production candidate with synthetic API envelopes",
+  "testOnlySeparateCopy": true,
+  "productionCandidateNotInstrumented": true,
+  "realDesktopCaptureTested": false,
+  "realModelTested": false,
+  "productionUserDataUsed": false,
+  "checks": [
+    "initial toggle off uses original production single-image screenshot method",
+    "enabled no images answer disabled",
+    "two capture-only requests and zero answer requests until Answer",
+    "two images -> exactly one batch request and displayed final answer",
+    "switch off -> original one-image flow still works",
+    "four images -> capture disabled",
+    "removing second image cancels it and re-enables capture",
+    "switch off cancels all three remaining captures",
+    "normal interview renders original production LivePage and no multi-screen toggle"
+  ],
+  "evidence": {
+    "bundled-four-limit-ax.txt": "1bb78a1698b086f6d667ac63d4ae12d00cbbce9f9e91b985a809c69ab5495958",
+    "bundled-single-ax.txt": "0fddac105aa5119886a564d3df180f380bd6be80db5867658184b8b11639c870",
+    "bundled-disable-cleans-ax.txt": "e07084c19e83d52f534f461eccc9043fd0526054e1ce7831620668687ea08606",
+    "bundled-normal-ax.txt": "2a94dda0f7d811a9368d9edb0814bed143127755dcc2aa88da9b5a666574b914",
+    "bundled-two-images.png": "b9b52da9b39834fb6b92550635fc0ad038b9e70c0beed51e33121312de0e5b0c",
+    "bundled-two-images-ax.txt": "6760bbdffb04575e2f2d66361de9c9c33f1a41ef7c78e5b4e909d14516cf68f9"
+  }
+}
