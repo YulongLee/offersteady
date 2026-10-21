@@ -1,0 +1,12 @@
+{
+  "exitCode": 0,
+  "results": [
+    {
+      "verified": true,
+      "components": 2,
+      "modelEnvironmentKeys": 5,
+      "onlyApprovedSummaryOverlays": true,
+      "nonTargetsUnchanged": true
+    }
+  ]
+}

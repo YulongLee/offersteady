@@ -1,0 +1,39 @@
+{
+  "aggregateOnly": true,
+  "rawUserLogsExported": false,
+  "observedAtMs": 1792604548981,
+  "components": {
+    "backend": {
+      "containerId": "7bc15c77cef86681d068d6157270f87338d0cab9f1b14c8cddf7d11e83ad7536",
+      "image": "sha256:63f8243bacfc075cd399032ec5ca05f669356cd087b5d57583a9ce08b474e066",
+      "running": true,
+      "restartCount": 0,
+      "health": "healthy",
+      "sinceMs": 1792604429151,
+      "throughMs": 1792604548981,
+      "seconds": 119.83,
+      "lines": 34,
+      "lineLimit": 4000,
+      "mayBeTruncated": false,
+      "errorLines": 0,
+      "tracebackLines": 0,
+      "http5xxLines": 0
+    },
+    "material-worker": {
+      "containerId": "e6f68f5f182e73e831e7b9c0633d3a8edd46e2cc0c1d1badc2cedd09a2591fea",
+      "image": "sha256:dc8a809fce79291d15a127f8121fe7f87a3d1f51b3d77422aba81c569115890d",
+      "running": true,
+      "restartCount": 0,
+      "health": null,
+      "sinceMs": 1792604429151,
+      "throughMs": 1792604548981,
+      "seconds": 119.83,
+      "lines": 0,
+      "lineLimit": 4000,
+      "mayBeTruncated": false,
+      "errorLines": 0,
+      "tracebackLines": 0,
+      "http5xxLines": 0
+    }
+  }
+}

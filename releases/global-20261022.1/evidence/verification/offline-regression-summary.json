@@ -1,0 +1,27 @@
+{
+  "exitCode": 0,
+  "seconds": 1.944,
+  "testFiles": [
+    "test_global_model_1017_compatibility.py",
+    "test_model_1017_adapter_probe_guards.py",
+    "test_global_interview_language_routing.py",
+    "test_global_written_multi_screen_answer.py",
+    "test_global_usage_billing_adapter.py",
+    "test_global_commerce_service.py",
+    "test_global_commerce_api.py",
+    "test_chat_answer_completeness.py",
+    "test_screenshot_inline_delivery.py",
+    "test_screenshot_stream_admission.py"
+  ],
+  "networkAttemptsBlocked": 0,
+  "productionRequests": 0,
+  "realModelCalls": 0,
+  "logFile": "/private/tmp/offersteady-global-model-1017-20261021/artifacts/global-model1017-release-20261022/offline-regression.txt",
+  "passed": 142,
+  "failed": 0,
+  "skipped": 0,
+  "warnings": [
+    "existing Starlette TestClient/httpx deprecation"
+  ],
+  "pytestSeconds": 1.7
+}

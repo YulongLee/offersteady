@@ -1,0 +1,77 @@
+{
+  "status": "verified-existing-performance-preserved; release pending",
+  "baselineTag": "release-global-20261019.1",
+  "actualBaselineEvidence": "/Users/liyulong/liyulong/1_projects/offersteady/artifacts/global-model1017-20261022/live-baseline.json",
+  "actualBaselineEvidenceSha256": "d1f12e95d8a3ba9a4802e2ee77e8b653a359e0d252e079849b56bd3032c239aa",
+  "actualBackendFiles": 302,
+  "sealedBackendManifestExactMatch": true,
+  "actualWebFiles": 235,
+  "sealedWebManifestExactMatch": true,
+  "workerRuntimeInputFiles": 267,
+  "baselineImages": {
+    "backend": "sha256:f6a4dad4fb27222ca79f1fb5a86c23267093c741b4536c64ca76b83ac096ec19",
+    "material-worker": "sha256:73624b44e619f6090249798047701c59ed0381d793c1302b59078349707f3010",
+    "web": "sha256:7f5fd6640aaea0b742eddb6227c41ddb7a0a0390fbe657486fdfef86efd38ad6"
+  },
+  "unchangedPerformanceSources": [
+    {
+      "path": "apps/backend/app/services/postgres_authentication_repository.py",
+      "sha256": "28b6f39c21a89b8ae88f49598af6c425e67802097727ed5d0f18f1b92ab17cfa",
+      "matchesActualAndSealed": true
+    },
+    {
+      "path": "apps/backend/app/services/authentication_service.py",
+      "sha256": "8a29bd76fc250b93dabdb8a0a27a52dfc759a05103175313492f81bbefb6a622",
+      "matchesActualAndSealed": true
+    },
+    {
+      "path": "apps/backend/app/services/session_service.py",
+      "sha256": "60cd8fd38d793a48a69396c5d32a71a7d795dc6184eec628d996001209b88db3",
+      "matchesActualAndSealed": true
+    },
+    {
+      "path": "apps/backend/app/services/realtime_speech_service.py",
+      "sha256": "d344c6089035fe5fd1a33a82425cc28637acf362447fb745ba5ab80e28594e69",
+      "matchesActualAndSealed": true
+    },
+    {
+      "path": "apps/backend/app/services/chat_service.py",
+      "sha256": "46d9db278aadc4eae36f8a17552ee307e9ddcdbd386c8d3f4297f86b70b8f890",
+      "matchesActualAndSealed": true
+    },
+    {
+      "path": "apps/backend/app/modules/web.py",
+      "sha256": "ac956e15b3eea7a8f4a94a7988c6bf407983d78203992ecbfb2e88527eb50026",
+      "matchesActualAndSealed": true
+    }
+  ],
+  "existingOptimizations": [
+    "Web state requests coalesced with 1500ms success cache; non-final transcript ACK interval 5000ms with final ACK retained.",
+    "Authentication one SELECT/projection and usedAt writes coalesced to 60 seconds; idle session projection, request list memo and eight synchronous GET handlers.",
+    "Question prefetch TTL60s, maximum256 question keys, two workers and maximum128 context cache entries.",
+    "Heartbeat five-field lightweight read and 10s activity write coalescing.",
+    "Separate user API / telemetry metrics and live-session index."
+  ],
+  "newPerformanceSourceChanges": 0,
+  "modelChangesOnly": {
+    "backendModelKeys": 4,
+    "workerModelKeys": 1,
+    "summaryPayloadAddedField": "enable_thinking=false",
+    "summarySourceBaseSha256": "d39dd68755db41cf24f6232af57e1615dbf1166e3a497af6e58a92ea1a5821cc",
+    "summarySourceCandidateSha256": "233b064cfc70d2cb4289eb65328e1ae247d687871d13a4e23bb2ae53bbb5951e"
+  },
+  "globalUploadGatewayAlready21m": "verified by root fresh actual Nginx read; no Web delta planned",
+  "regressionEvidence": {
+    "passed": 142,
+    "failed": 0,
+    "skipped": 0,
+    "realModelCalls": 0,
+    "path": "offline-regression.txt"
+  },
+  "historicalGlobalRealAdapterCases": 10,
+  "limitations": [
+    "No production deployment or cutover is asserted by this parity record.",
+    "No production traffic benchmark or new P95 measurement is implied.",
+    "Historical bounded synthetic provider cases do not prove all languages, algorithms or user resumes."
+  ]
+}

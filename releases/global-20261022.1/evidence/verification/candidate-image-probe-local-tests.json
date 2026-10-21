@@ -1,0 +1,85 @@
+{
+  "passed": true,
+  "cases": [
+    {
+      "role": "backend",
+      "case": "success",
+      "expectedPassed": true,
+      "matched": true,
+      "checks": [
+        "no_application_factory_or_lifespan_import",
+        "exact_approved_model_settings",
+        "all_other_settings_preserved",
+        "summary_non_thinking_payload",
+        "summary_existing_eight_second_budget",
+        "summary_success_both_document_kinds",
+        "summary_existing_failure_fallback",
+        "no_provider_network",
+        "no_database_access",
+        "no_worker_or_lifespan_started"
+      ],
+      "settingsDeltaKeys": [
+        "chat_detail_model",
+        "chat_quick_model",
+        "chat_qwen_model",
+        "screenshot_vision_model"
+      ]
+    },
+    {
+      "role": "material-worker",
+      "case": "success",
+      "expectedPassed": true,
+      "matched": true,
+      "checks": [
+        "no_application_factory_or_lifespan_import",
+        "exact_approved_model_settings",
+        "all_other_settings_preserved",
+        "summary_non_thinking_payload",
+        "summary_existing_eight_second_budget",
+        "summary_success_both_document_kinds",
+        "summary_existing_failure_fallback",
+        "no_provider_network",
+        "no_database_access",
+        "no_worker_or_lifespan_started"
+      ],
+      "settingsDeltaKeys": [
+        "chat_qwen_model"
+      ]
+    },
+    {
+      "role": "backend",
+      "case": "non_model_drift",
+      "expectedPassed": false,
+      "matched": true,
+      "checks": [
+        "candidate_probe_failed"
+      ],
+      "settingsDeltaKeys": []
+    },
+    {
+      "role": "backend",
+      "case": "wrong_model",
+      "expectedPassed": false,
+      "matched": true,
+      "checks": [
+        "candidate_probe_failed"
+      ],
+      "settingsDeltaKeys": []
+    },
+    {
+      "role": "backend",
+      "case": "baseline_field_missing",
+      "expectedPassed": false,
+      "matched": true,
+      "checks": [
+        "candidate_probe_failed"
+      ],
+      "settingsDeltaKeys": []
+    }
+  ],
+  "syntheticOnly": true,
+  "realProviderCalls": 0,
+  "productionConnections": 0,
+  "initialHarnessFailure": "incorrect OFFERSTEADY_ENV variable caused expected environment drift rejection; corrected to OFFERSTEADY_ENVIRONMENT without changing probe",
+  "probeSha256": "0f2bf54d5a4f7b619c4fa016312096a0d59afc8df0d7d09d3abe5296621ab42c"
+}

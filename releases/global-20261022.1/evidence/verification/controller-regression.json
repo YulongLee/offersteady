@@ -1,0 +1,26 @@
+{
+  "passed": true,
+  "tests": 137,
+  "controllerTests": 49,
+  "gateTests": 88,
+  "productionConnections": 0,
+  "realUserSamples": 0,
+  "providerCalls": 0,
+  "candidatePayloadFrozen": true,
+  "compileAndWhitespaceCheck": "passed",
+  "scopedGitDiffCheck": "passed",
+  "controllerSha256": "8eb6b6d119efcbc60d16f249cee772978cbe76ab6c76249c7d765290305015c3",
+  "inputSha256": "b9f0db89d517b99992ccdd250800060881e74d42657bba9420e58dd86c3cf233",
+  "coverage": [
+    "two_independent_compose_contexts",
+    "five_environment_keys_only",
+    "full_config_host_mount_network_preservation",
+    "full_source_migrations_pyproject_inventory",
+    "strict_global_gate_contracts",
+    "ownership_before_acceptance_journal",
+    "stopped_candidate_source_tar_hashes_and_drift_refusal",
+    "worker_first_rollback_with_backend_ip_proxy_refresh",
+    "tcp_same_id_host_config_drift_refusal",
+    "no_mutation_on_busy_or_unknown_work"
+  ]
+}

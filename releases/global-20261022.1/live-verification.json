@@ -1,0 +1,26 @@
+{
+  "readOnly": true,
+  "atMs": 1792605623724,
+  "atEndMs": 1792605626916,
+  "runtimeImages": {
+    "backend": "sha256:63f8243bacfc075cd399032ec5ca05f669356cd087b5d57583a9ce08b474e066",
+    "material-worker": "sha256:dc8a809fce79291d15a127f8121fe7f87a3d1f51b3d77422aba81c569115890d",
+    "web": "sha256:7f5fd6640aaea0b742eddb6227c41ddb7a0a0390fbe657486fdfef86efd38ad6"
+  },
+  "runtimeFileCounts": {
+    "backend": 302,
+    "material-worker": 267,
+    "web": 235
+  },
+  "exactManifestsVerified": true,
+  "runningRestartZero": true,
+  "apiPaths": 223,
+  "openapiSchemaSha256": "74d2e8756f3e27b82f08be3b731c3305a4c8f0574742ff14b2046e29435f60a7",
+  "settingsSha256": {
+    "backend": "e22dfb35810aac8d67432539aa91f2fe981874408f42b16260e9db0b1a554f31",
+    "material-worker": "43bd096f3a8fbd94566d7fe1c5bb899b1a8e42bc076db3c718226599e64211cd"
+  },
+  "nginxFileMetadata": "664 0 0",
+  "privateConfigurationIncluded": false,
+  "rawUserDataIncluded": false
+}

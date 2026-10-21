@@ -1,0 +1,3 @@
+{"complete": true, "expectedAnswerMatched": true, "httpStatus": 200, "model": "deepseek-v4.1-flash-1017", "operation": "text", "passed": true, "region": "global", "seconds": 2.175, "syntheticOnly": true, "usage": {"completion_tokens": 6, "prompt_tokens": 15, "total_tokens": 21}}
+{"complete": true, "expectedAnswerMatched": true, "httpStatus": 200, "model": "deepseek-v4.1-flash-1017", "operation": "vision", "passed": true, "region": "global", "seconds": 0.66, "syntheticOnly": true, "usage": {"completion_tokens": 2, "prompt_tokens": 220, "total_tokens": 222}}
+{"checks": 2, "passed": true, "productionChanged": false, "region": "global"}

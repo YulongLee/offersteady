@@ -1,13 +1,17 @@
 # 当前国际服封版基线
 
-用户于2026年10月19日授权将当前线上版本上传Git并封版。当前标签为 **`release-global-20261019.1`**，分支为 `codex/release-global-20261019-1`。后续国际服开发从此标签创建新分支；国服使用自己的独立封版。
+用户于2026年10月22日授权将当前线上版本上传Git并封版。本版本标签为 [release-global-20261022.1](https://github.com/YulongLee/offersteady/tree/release-global-20261022.1)，分支 `codex/release-global-20261022-1`，继承独立区域基线 `release-global-20261019.1`。后续从此已确认不可变标签新建 `codex/` 分支；两服分别维护，不能相互覆盖。
 
-- Backend：`sha256:f6a4dad4fb27222ca79f1fb5a86c23267093c741b4536c64ca76b83ac096ec19`
-- Web：`sha256:7f5fd6640aaea0b742eddb6227c41ddb7a0a0390fbe657486fdfef86efd38ad6`
-- 服务器发布目录：`/opt/offersteady-global/releases/20261019-global-written-multi-screen-3`
-- [封版清单与恢复说明](../releases/global-20261019.1/README.md)、[新鲜只读核验](../releases/global-20261019.1/live-verification.json)
-- [完整302项Backend清单](../releases/global-20261019.1/backend-runtime-manifest.json)、[235项Web清单](../releases/global-20261019.1/web-static-manifest.json)
+| 组件 | 实际固定镜像 | 运行输入数 |
+| --- | --- | --- |
+| backend | `sha256:63f8243bacfc075cd399032ec5ca05f669356cd087b5d57583a9ce08b474e066` | 302 |
+| material-worker | `sha256:dc8a809fce79291d15a127f8121fe7f87a3d1f51b3d77422aba81c569115890d` | 267 |
+| web | `sha256:7f5fd6640aaea0b742eddb6227c41ddb7a0a0390fbe657486fdfef86efd38ad6` | 235 |
 
-本标签恢复实际已发布Global完整Backend与可证明的Global Web源码，不混入国服改写/模板回退或混合开发分支。英文、语言、Creem、原Global会员与模拟面试、简历UTC每日1次、鉴权/状态/预取/性能及74 Prompt保持；笔试新增默认关闭的多屏回答。桌面全局快捷键继续单图。
+[封版内容和恢复说明](../releases/global-20261022.1/README.md)、[完整封版清单](../releases/global-20261022.1/manifest.json)及[新鲜只读核对](../releases/global-20261022.1/live-verification.json)保存实际组件来源。后端代码与独立资料worker分别完整保存；网页以封版静态包精确字节为准，普通全量源码构建不能自动视为线上等价。完整生产环境、端点凭据和镜像层不进入Git，仍留服务器。
 
-前端精确生产字节以封版静态包为准，使用其固定祖先和可移植overlay脚本可重建并验SHA。普通全量源码构建不能替代原静态保全证明。私有配置与密钥仅留服务器；未来发布先新鲜核对实际镜像与完整清单，活跃用户/未知状态停止切换。此次封版不部署或重启任何服务。
+Backend共享/快答/详答/截图4个模型选择器及旧worker共享选择器为 `deepseek-v4.1-flash-1017`。两组件分别在自身原镜像中仅增加摘要 `enable_thinking=false` 一行，原预算/回退保持。223条API、完整Schema、235份静态和Nginx保持。
+
+保留英文及语言、Creem/原会员权益、简历UTC每日1次、普通/模拟面试原开关、默认关闭的笔试多屏、74个Prompt及鉴权/状态/心跳/预取/网页性能优化。ASR、TTS、Embedding、Rerank、MinerU不变。生产增量来源 `/opt/offersteady-global/releases/20261022-global-model1017-1`。
+
+本轮封版只做源码、公开运行字节与脱敏证据的Git归档，不部署或重启线上，不修改用户资料、任务及账务。未来发布必须重新核对目标组件实际镜像、完整清单、有效配置及所有用户工作门禁；不能把标签目录或旧控制器当成新的部署授权。

@@ -1,0 +1,13 @@
+# Local review template only. Do not apply to production in this task.
+# A later authorized release must recheck each component's live baseline and
+# protected user work, pin its independent image, and preserve all other config.
+services:
+  backend:
+    environment:
+      OFFERSTEADY_CHAT_QWEN_MODEL: deepseek-v4.1-flash-1017
+      OFFERSTEADY_CHAT_QUICK_MODEL: deepseek-v4.1-flash-1017
+      OFFERSTEADY_CHAT_DETAIL_MODEL: deepseek-v4.1-flash-1017
+      OFFERSTEADY_SCREENSHOT_VISION_MODEL: deepseek-v4.1-flash-1017
+  material-worker:
+    environment:
+      OFFERSTEADY_CHAT_QWEN_MODEL: deepseek-v4.1-flash-1017

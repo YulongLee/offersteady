@@ -1,0 +1,15 @@
+{
+  "reviewed": true,
+  "candidateImages": {
+    "backend": "sha256:63f8243bacfc075cd399032ec5ca05f669356cd087b5d57583a9ce08b474e066",
+    "material-worker": "sha256:dc8a809fce79291d15a127f8121fe7f87a3d1f51b3d77422aba81c569115890d"
+  },
+  "evidenceSha256": "32e42c59e7d59fc67d17f3830fdf93a6fa7e09ecb4c81ab55777cf7f6d437030",
+  "apiPaths": 223,
+  "sourceFiles": {
+    "backend": 302,
+    "material-worker": 267
+  },
+  "nonTargets": 6,
+  "onlyApprovedSourceAndModelDeltas": true
+}

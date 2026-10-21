@@ -1,0 +1,2 @@
+FROM sha256:f6a4dad4fb27222ca79f1fb5a86c23267093c741b4536c64ca76b83ac096ec19
+COPY document_processing.py /app/apps/backend/app/services/document_processing.py
