@@ -1,0 +1,17 @@
+{
+  "deployed": true,
+  "independentlyVerified": true,
+  "deployedAtMs": 1792600256856,
+  "components": 3,
+  "modelEnvironmentKeys": 7,
+  "runtimeInputCounts": {
+    "backend": 230,
+    "material-worker": 196,
+    "web": 328
+  },
+  "apiPaths": 203,
+  "nonTargetContainersPreserved": 5,
+  "privateConfigurationIncluded": false,
+  "rawUserDataIncluded": false,
+  "maintenanceReceiptsIncluded": false
+}

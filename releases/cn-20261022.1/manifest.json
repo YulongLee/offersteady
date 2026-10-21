@@ -1,0 +1,171 @@
+{
+  "version": "cn-20261022.1",
+  "tag": "release-cn-20261022.1",
+  "branch": "codex/release-cn-20261022-1",
+  "parentTag": "release-cn-20261019.2",
+  "parentCommit": "19fdf593b1ef0e574247fa602bb4de3b8e3b6d2e",
+  "contentStatus": "fresh_runtime_verified_prepared_for_git_seal",
+  "scope": "Current actual CN release; code unchanged, seven model selectors and one 588-byte Nginx insertion.",
+  "backend": {
+    "image": "sha256:2f2c89359d2268c460dabad38a4f9466e2af5610e730a94ded797586ef4c5e88",
+    "runtimeInputs": 230,
+    "source": "repository apps/backend/app, ai/prompts, migrations and pyproject.toml",
+    "manifest": "backend-runtime-manifest.json",
+    "settings": {
+      "settingsSha256": "6d604cf35cee16097d26c340f9309f3efb41208c0ea88025de5826c34973dad0",
+      "fields": 340,
+      "edition": "cn",
+      "environment": "production",
+      "models": {
+        "chat_qwen_model": "deepseek-v4.1-flash-1017",
+        "chat_quick_model": "deepseek-v4.1-flash-1017",
+        "chat_detail_model": "deepseek-v4.1-flash-1017",
+        "screenshot_vision_model": "deepseek-v4.1-flash-1017"
+      }
+    }
+  },
+  "material-worker": {
+    "image": "sha256:df6b8500500e955aa2f01c3bc0c5b40dab218296459f4e8341da268bb6b0ee43",
+    "runtimeInputs": 196,
+    "source": "independent actual worker archive; never replace with Backend source",
+    "manifest": "material-worker-runtime-manifest.json",
+    "settings": {
+      "settingsSha256": "3f0fe4bd15e7d3627be76989f2c253a376efdb9a7cc4d6eeafad9f4d35ac7147",
+      "fields": 331,
+      "edition": "cn",
+      "environment": "production",
+      "models": {
+        "chat_qwen_model": "deepseek-v4.1-flash-1017",
+        "chat_quick_model": "deepseek-v4.1-flash-1017",
+        "chat_detail_model": "deepseek-v4.1-flash-1017"
+      }
+    }
+  },
+  "web": {
+    "image": "sha256:407376001c127de09cbb93d6bd9ee5f30dcace2693eb0c60e51c22e27cc49c1f",
+    "parentImage": "sha256:011d1f5de69f1208bf8b9c5b9496d4acddcbe090e6c159a0173214eb8efbbee2",
+    "staticFiles": 328,
+    "staticBytesChanged": false,
+    "nginxBeforeSha256": "b461e58972c10f64398fac815556feec8306b441a82c8252ba48194b36d3bb3b",
+    "nginxSha256": "db0cfd8c60f593470bf25fa47bf4863eeac6127c37cbb42419ef71b95059336f",
+    "nginxMetadata": {
+      "mode": "644",
+      "uid": 0,
+      "gid": 0
+    },
+    "preciseNginxInsertionBytes": 588,
+    "sourceOnlyFullRebuildProvenEquivalent": false
+  },
+  "api": {
+    "paths": 203,
+    "schemaSha256": "dd7da7440bf0177b590396cf09253219eac1b6bf786e98f9fd0ce4bcf8eee272"
+  },
+  "modelOverrides": {
+    "backend": {
+      "OFFERSTEADY_CHAT_QWEN_MODEL": "deepseek-v4.1-flash-1017",
+      "OFFERSTEADY_CHAT_QUICK_MODEL": "deepseek-v4.1-flash-1017",
+      "OFFERSTEADY_CHAT_DETAIL_MODEL": "deepseek-v4.1-flash-1017",
+      "OFFERSTEADY_SCREENSHOT_VISION_MODEL": "deepseek-v4.1-flash-1017"
+    },
+    "material-worker": {
+      "OFFERSTEADY_CHAT_QWEN_MODEL": "deepseek-v4.1-flash-1017",
+      "OFFERSTEADY_CHAT_QUICK_MODEL": "deepseek-v4.1-flash-1017",
+      "OFFERSTEADY_CHAT_DETAIL_MODEL": "deepseek-v4.1-flash-1017"
+    }
+  },
+  "archives": {
+    "material-worker-runtime.tar.gz": "13e6425565227d923bdf20d6a2b19dc8a9ef73f87ee584ad00baec0d182ff22c",
+    "web-static.tar.gz": "500bd86ca7f7179de1028da6ca5693450540d58b027ee824c017b5aa6f7818cc"
+  },
+  "freshVerification": {
+    "path": "live-verification.json",
+    "atMs": 1792605622106,
+    "atEndMs": 1792605625240,
+    "sha256": "3ae647da8c23041da3845964a257a1bf27a12f101618d10214f55eba855f1dd3"
+  },
+  "applicationSecretsIncluded": false,
+  "rawUserDataIncluded": false,
+  "realUserSupportCaseIncluded": false,
+  "productionChangesByGitSeal": false,
+  "withdrawnResumeVersionsIncluded": false,
+  "runtimeSourceChangedFromParent": false,
+  "historicalReleaseToolingMayBeReplayedWithoutNewAuthorization": false,
+  "evidenceLimits": "Historical synthetic/regression scopes overlap; 75.6-second aggregate observation is not long-term P95 or proof of every real resume parse.",
+  "sourceFiles": {
+    "ai/evals/model-v41-flash-1017.jsonl": "345550afff2bb07a93d2cfc06703def98288685d94690a13ba76968e788d7b59",
+    "apps/backend/tests/test_cn_upload20m_model1017_release.py": "08daf6cb4762ae10c88a3397411493dedd71bd8c02f7ee4546ad50d408149107",
+    "apps/backend/tests/test_cn_upload20m_model1017_release_r2.py": "14398c59a6d3b4ec1fb866d487fda317d9344a8c4577804d8d3ffea768f63fc5",
+    "apps/backend/tests/test_cn_upload_proxy_overlay.py": "7fe4fbbe2f5389f53a58aecfbc3037a335f1d08c25f359983246fce7d488bce6",
+    "apps/backend/tests/test_model_1017_adapter_probe_guards.py": "a02af32eff052687a914f278682657781eecfdf6d0dad4fd82b3326363f15a8c",
+    "apps/backend/tests/test_model_1017_compatibility.py": "84c25ab2e9f1e623f9af718ae81d6b3b0fb952a32bf1b3b54dd0ff625c1a8ce5",
+    "apps/backend/tests/test_model_1017_probe_guards.py": "243dd24b22f2016647b510def60ce804a3d3f31742686d6c87f0c6300dc3d7f4",
+    "docs/releases/cn-model-1017-release-review-20261021.md": "27b4f8d9ae78ff847d86f3527d69c9f1d2527d654cde63bf85e246b504abef2e",
+    "docs/releases/cn-upload-20m-local-20261021.md": "42687ea4a252cbfa7693dcdd90c6b29ecc2a5c3582b7bda5233de4ddeb4c9608",
+    "docs/releases/cn-upload20m-model1017-20261021.1.md": "333750d7578e8df7b84db3366cfe5e2d2d65ee07f934623b5f13fff37bc8fd63",
+    "docs/releases/cn-upload20m-model1017-r2-local-20261022.md": "17066a456404a55dd787f70965e7e34adc8391b9f3a46a2efda17efa505f3272",
+    "docs/releases/model-1017-local-20261021.md": "91e825a0db7469ed6066220181d82933a249dc22140d66868fce8c26f01231ee",
+    "infra/compose/docker-compose.model-1017.cn.yml": "f0ee5742c79badd1e4b019c86dfc93e93031e163c69113689381dcce0b9d75e3",
+    "openspec/changes/unify-models-v41-flash-1017/.openspec.yaml": "30cfdee007123f96b2ab27ca107e406084602caf445d6b7cd2130ab329668ed3",
+    "openspec/changes/unify-models-v41-flash-1017/design.md": "8ff79213a7e08e9e66f91d08fa277650d92d0887e4e280489d8835a11d780b81",
+    "openspec/changes/unify-models-v41-flash-1017/proposal.md": "5b7a5f4c7341169b00e2ca12635854a8172089a398e26fcbef5ad6b2b9eef20c",
+    "openspec/changes/unify-models-v41-flash-1017/specs/verified-model-1017-routing/spec.md": "39e43e63c7e2723e54f3016ed0fd835eb7aa3090ed10f9fb432c07644d6b9ca2",
+    "openspec/changes/unify-models-v41-flash-1017/tasks.md": "941d7c31a2f795cf06f0581604f71a2fab5f7b502786cc0ab31ac6cf4fa35ec1",
+    "scripts/model_1017_business_cases.py": "25560ee2118411874b96e0c5a1eb83750a74e9748ca9aef959b52636c45986fc",
+    "scripts/model_1017_gateway_cases.py": "503ffccf38a7f93636654248790747a1a80cbb75499f2d4eb02a7f56ae223bd2",
+    "scripts/observe_cn_upload20m_model1017.py": "1b7c36533e90ff5cdef7461aa804ea4d5e108423c7ad6ec4e9547e03fd50591a",
+    "scripts/patch_cn_upload_proxy_20m.py": "54b4a1b8f2948938da428769aadc2517780aa4d1dd93fb282b776353510f42ba",
+    "scripts/probe_cn_upload20m_public_boundary.py": "972090829a6236d9300fff438d59883f02332cc8872d8ca69d27ba1509990e8d",
+    "scripts/probe_model_1017_adapters.py": "d7d8335027fb651714d7e43760d0add3b66f35d1fbffd065a7aaa20e591308fc",
+    "scripts/probe_model_1017_smoke.py": "843eda7e5cd969789f21dcda37ee7ef71f7e011a4734413fd397231b4272b90d",
+    "scripts/release_cn_upload20m_model1017.py": "df35bfbac2d287cc3bd9688e5b38296c23f6553009315e87c5740ae44b96708c",
+    "scripts/release_cn_upload20m_model1017_v2.py": "620db734b9253db78134d3146c553c0070f03b1d2f7756eb8a69f8ec393a7943",
+    "scripts/release_support/cn_upload20m_model1017_20261021/active_work_gate.py": "da76085bc835282ce70e13fbc442ae503b9134902f26c136db07524459db382d",
+    "scripts/release_support/cn_upload20m_model1017_20261021/backend_tcp_idle_gate.py": "4d102932c1076a89126144a0687d7519345c3fcf4a50cf960d6ff4eb3591d291",
+    "scripts/release_support/cn_upload20m_model1017_20261021/base_helpers.py": "155a1ad40c4f8bc1044984312a45a5539425453085a921ea02da571baff84dbb",
+    "scripts/release_support/cn_upload20m_model1017_20261021/extra_idle_gate.py": "9adfaeb79a25a56a2e041eb68d882281fbcc7efae1f5b34426917f10d93babfb",
+    "scripts/release_support/cn_upload20m_model1017_20261021/financial_idle_gate.py": "882e0d4abeb9274ecf6da725837759524a08cca10385ca17805801621a0f3097",
+    "scripts/release_support/cn_upload20m_model1017_20261021/legacy-gates/check-idle.py": "5ab1d802f432c9a77f89421935088f9bc86717593c896f48f636d994c19fb934",
+    "scripts/release_support/cn_upload20m_model1017_20261021/legacy-gates/idle_gate.py": "e5423b9dbf693b45060d400e3bf0578282da928ad71a22dc5abd477d087835ea",
+    "scripts/release_support/cn_upload20m_model1017_20261021/legacy-gates/readiness-idle.py": "20f6c034e25028b9ab763660d37dcd7aa46ee4f6ea798080ddd4dafc0538ad5a",
+    "scripts/release_support/cn_upload20m_model1017_20261021/resume_optimizer_idle_gate.py": "aa04aa7d462b2f3bd8a2bacf81dbb33ac3564c6fb3fac5a73e82838e24bfd268",
+    "scripts/release_support/cn_upload20m_model1017_20261021_r2/active_work_gate.py": "da76085bc835282ce70e13fbc442ae503b9134902f26c136db07524459db382d",
+    "scripts/release_support/cn_upload20m_model1017_20261021_r2/backend_tcp_idle_gate.py": "4d102932c1076a89126144a0687d7519345c3fcf4a50cf960d6ff4eb3591d291",
+    "scripts/release_support/cn_upload20m_model1017_20261021_r2/base_helpers.py": "b3e3198fe7ac82a80ac1b28b7c41393acb1bcecdf1d251454954046e499288a8",
+    "scripts/release_support/cn_upload20m_model1017_20261021_r2/extra_idle_gate.py": "9adfaeb79a25a56a2e041eb68d882281fbcc7efae1f5b34426917f10d93babfb",
+    "scripts/release_support/cn_upload20m_model1017_20261021_r2/financial_idle_gate.py": "f07ab6ad158d790fc661460f2d03de88e31f895f0c925b8bef290c664223f6a2",
+    "scripts/release_support/cn_upload20m_model1017_20261021_r2/legacy-gates/check-idle.py": "5ab1d802f432c9a77f89421935088f9bc86717593c896f48f636d994c19fb934",
+    "scripts/release_support/cn_upload20m_model1017_20261021_r2/legacy-gates/idle_gate.py": "e5423b9dbf693b45060d400e3bf0578282da928ad71a22dc5abd477d087835ea",
+    "scripts/release_support/cn_upload20m_model1017_20261021_r2/legacy-gates/readiness-idle.py": "20f6c034e25028b9ab763660d37dcd7aa46ee4f6ea798080ddd4dafc0538ad5a",
+    "scripts/release_support/cn_upload20m_model1017_20261021_r2/resume_optimizer_idle_gate.py": "aa04aa7d462b2f3bd8a2bacf81dbb33ac3564c6fb3fac5a73e82838e24bfd268",
+    "scripts/test_probe_cn_upload20m_public_boundary.py": "6256025669338d637dd85744ac0c5c5ab687bf6226340b6f3105b6e180605147",
+    "scripts/verify_upload_20m_isolated_nginx.py": "aad8d9ea731890eefedb5324c6e22cc7b95cf5886e6f0d97549a0ed479939db8",
+    "openspec/changes/fix-material-upload-proxy-size-limit/design.md": "c1338d6693ca1dc0398705566a99c1f3ca89d0a4fa44f133c04279795508c9c8",
+    "openspec/changes/fix-material-upload-proxy-size-limit/proposal.md": "1a499e528ca3ac0e09c210005afb43042b371566fba51c485a3a09af49eced77",
+    "openspec/changes/fix-material-upload-proxy-size-limit/specs/material-upload-proxy-boundary/spec.md": "483b75bd8ecb1fe0eef548a5e8a91e68a662c1e878dce0ad5310eca4a0326688",
+    "openspec/changes/fix-material-upload-proxy-size-limit/tasks.md": "e303ced3bbd2111b26be3f54d6c2d7545788a32831060dbbe2b7159a73703da1",
+    "artifacts/cn-model-1017-release-20261021/scope-review.json": "ec15476857dcce4942fb4094343601222551f4523e86b22defa96c28c0a53425",
+    "artifacts/cn-model-1017-release-20261021/run_local_tests.py": "9f6cc0aadcd484aeb97a361a877e58a2b885db782810411757b4137be19918fb",
+    "artifacts/cn-model-1017-release-20261021/local-tests.txt": "f8cbfb25a274990369a475ec7c2100b5f4e4c7f416b8df06f53a80a127f800b9",
+    "artifacts/cn-model-1017-release-20261021/public-boundary-probe-local.json": "e1507b5c670eed61c07ea4532082b01a31b8a68d4144fce5d22d3f888ca8bffe",
+    "releases/cn-20261022.1/README.md": "79e3e382f7fe28f521b05d0c078813bb3d0df5167ce5bd302d791f9088b3125a",
+    "releases/cn-20261022.1/backend-runtime-manifest.json": "254777edb2aae77333822a7f71bbc3caace112f0e940a77e87a7014b7754a4ec",
+    "releases/cn-20261022.1/evidence/deployed-summary.json": "283dce9046420e1a2f8caa9f864fe450cdeb34d3a27bc32211f856e15335531a",
+    "releases/cn-20261022.1/evidence/public-boundary.json": "efc71da94e60be8e8f60ba24c00a679a220baf5b2f6c5efe765cec3cbce629d1",
+    "releases/cn-20261022.1/evidence/short-observation.json": "c5d3c56f4f75123f905fc7aad441ee384c17bc9a9a76ce87ca0d1c95caeb49a0",
+    "releases/cn-20261022.1/live-verification.json": "3ae647da8c23041da3845964a257a1bf27a12f101618d10214f55eba855f1dd3",
+    "releases/cn-20261022.1/material-worker-runtime-manifest.json": "d14ffce528aa7bce2451b1727165d5603269ebf19267661de1bd09072189eba3",
+    "releases/cn-20261022.1/material-worker-runtime.tar.gz": "13e6425565227d923bdf20d6a2b19dc8a9ef73f87ee584ad00baec0d182ff22c",
+    "releases/cn-20261022.1/model-overrides.compose.json": "357c52f501143cee192cf8f44ae97a76a87390a5a2b43e7bc3762e6ac0569cc4",
+    "releases/cn-20261022.1/nginx/default.conf": "db0cfd8c60f593470bf25fa47bf4863eeac6127c37cbb42419ef71b95059336f",
+    "releases/cn-20261022.1/openapi.json": "680ddf6b8eb35aa1084ec74c36b8ce6ac7780d476b2f3ea4e25e54453c8898af",
+    "releases/cn-20261022.1/recipes/backend.Dockerfile": "9e75fa7800056854ddb454cf0087dd23443dc3dd7406eeed9e10bf0dd38339de",
+    "releases/cn-20261022.1/recipes/material-worker.Dockerfile": "9e8df7c96a11db2bee34faa14dea4ba4e62d9865aee45829353f07763aa9e451",
+    "releases/cn-20261022.1/recipes/web.Dockerfile": "48329135b5a203f402cb1aabb3b9f38a481575ff63efb75742d55b8e5f626388",
+    "releases/cn-20261022.1/tools/restore_snapshot.py": "98dfe245faccc03745509525a831a3324621e067102dd4ef460c7a65bd520e2f",
+    "releases/cn-20261022.1/tools/verify_snapshot.py": "da83a55cc406be14dd2655d91702814b887b62c45dc1c7b3a9cc22c8bf952ea2",
+    "releases/cn-20261022.1/web-static-manifest.json": "94f29fffb22fb96563a666467a09659dd964407a669351eb66f2b1a8df1df45b",
+    "releases/cn-20261022.1/web-static.tar.gz": "500bd86ca7f7179de1028da6ca5693450540d58b027ee824c017b5aa6f7818cc",
+    "releases/cn-20261022.1/tools/test_snapshot_tools.py": "a966fa9b108fc3c0d3a08b8fc3dce2b6355b2e6491cd56653f2dda7d85521f16",
+    "docs/current-cn-baseline.md": "526fa8e024ef6cf16959d1ff5f5c84e0c26327769cebf39a10caf3f27072f106"
+  }
+}

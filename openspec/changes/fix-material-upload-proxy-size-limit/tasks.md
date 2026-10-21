@@ -24,3 +24,17 @@
 - `/healthz`: HTTP 200 after reload.
 - Rollback image: `compose-web:before-material-upload-20260906` (`sha256:7e1d60a5fce5...`).
 - Persisted image: `compose-web:material-upload-20260906` (`sha256:fb933c4f8074...`), also tagged `compose-web:latest`.
+
+## 4. 2026-10-21 runtime gateway follow-up
+
+- [x] 4.1 Record that the active gateway lacks the repository's upload-specific rule; preserve all historical production evidence without treating it as current verification.
+- [x] 4.2 Add a baseline-SHA-pinned, pure preparation tool that inserts only the material proxy envelope and refuses conflicts, drift and overwrite.
+- [x] 4.3 Run focused regressions proving byte preservation, routing isolation, failure guards and the exact Backend 20MiB file boundary.
+- [x] 4.4 Reproduce HTTP413 with the old missing-rule config in an isolated Nginx; verify synthetic20MiB multipart on all three routes,21MiB overflow and unchanged unrelated limits.
+- [x] 4.5 Freshly pin the actual production Web config/image, pass complete user-work gates, prepare and syntax-check the exact runtime-derived candidate and persist its fixed image through the combined authorized release.
+- [x] 4.6 Verify actual active gateway config, unchanged public JS/assets and non-target components after release; record actual deployment, independent verification and rollback readiness without creating production documents.
+- [x] 4.7 Append actual public unauthenticated upload-boundary probes and short-lived redacted error observations with their measured window; do not infer them from deployment success.
+
+Local verification: [2026-10-21 upload boundary](../../../docs/releases/cn-upload-20m-local-20261021.md). Frontend generic failure wording remains outside this follow-up.
+
+Production: [2026-10-22 actual cutover](../../../docs/releases/cn-upload20m-model1017-20261021.1.md), deployed2026-10-22 00:30:56.856CST; r2`deploy-3` and independent`verify-1` exit0. Prior two deploy attempts deferred atTCP1 without switching. Actual public probes returned proxy422/unrelated413 with transport success and no document/model work;75.6-second observation ended00:38:52.180CST with all three components running/restart0 and zeroERROR/traceback/HTTP5xx, without tail truncation.

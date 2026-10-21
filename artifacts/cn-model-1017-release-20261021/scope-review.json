@@ -1,0 +1,15 @@
+{
+  "candidateModel": "deepseek-v4.1-flash-1017",
+  "overrideCounts": {
+    "backend": 4,
+    "material-worker": 3
+  },
+  "onlyApprovedModelKeys": true,
+  "noEndpointOrOtherConfigInOverlay": true,
+  "trackedRuntimeSourcePromptAndWebDeltaFromSealedTag": false,
+  "priorCnActualAdapterCases": 13,
+  "priorCnActualAdapterCasesPassed": true,
+  "composeSha256": "f0ee5742c79badd1e4b019c86dfc93e93031e163c69113689381dcce0b9d75e3",
+  "historicalRecordsRewritten": false,
+  "productionAccessedByThisReview": false
+}

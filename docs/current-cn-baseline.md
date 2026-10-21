@@ -1,13 +1,17 @@
-# 国服后续开发基线
+# 当前国服封版基线
 
-2026年10月19日用户要求将当前线上代码上传Git并封版。当前国服基线为 [release-cn-20261019.2](https://github.com/YulongLee/offersteady/tree/release-cn-20261019.2)，封版分支 `codex/release-cn-20261019-2`。后续优化从此不可变标签新建 `codex/` 分支。
+用户于2026年10月22日授权将当前线上版本上传Git并封版。本版本标签为 [release-cn-20261022.1](https://github.com/YulongLee/offersteady/tree/release-cn-20261022.1)，分支 `codex/release-cn-20261022-1`，继承独立区域基线 `release-cn-20261019.2`。后续从此已确认不可变标签新建 `codex/` 分支；两服分别维护，不能相互覆盖。
 
-[封版说明](../releases/cn-20261019.2/README.md)、[完整清单](../releases/cn-20261019.2/manifest.json)和[封版前只读核对](../releases/cn-20261019.2/live-verification.json)保存实际运行来源。Backend镜像为 `sha256:2f2c89359d2268c460dabad38a4f9466e2af5610e730a94ded797586ef4c5e88`，Web镜像为 `sha256:011d1f5de69f1208bf8b9c5b9496d4acddcbe090e6c159a0173214eb8efbbee2`。
+| 组件 | 实际固定镜像 | 运行输入数 |
+| --- | --- | --- |
+| backend | `sha256:2f2c89359d2268c460dabad38a4f9466e2af5610e730a94ded797586ef4c5e88` | 230 |
+| material-worker | `sha256:df6b8500500e955aa2f01c3bc0c5b40dab218296459f4e8341da268bb6b0ee43` | 196 |
+| web | `sha256:407376001c127de09cbb93d6bd9ee5f30dcace2693eb0c60e51c22e27cc49c1f` | 328 |
 
-本版继承 [release-cn-20261019.1](https://github.com/YulongLee/offersteady/tree/release-cn-20261019.1)（`4cdd557b6d15189de6055b3d180a9b2297d7dd7d`）并纳入已部署的笔试多屏回答。开启后网页分别截屏、回答，最多4张一次处理；默认关闭并保留原单图。桌面全局快捷键仍为单图。
+[封版内容和恢复说明](../releases/cn-20261022.1/README.md)、[完整封版清单](../releases/cn-20261022.1/manifest.json)及[新鲜只读核对](../releases/cn-20261022.1/live-verification.json)保存实际组件来源。后端代码与独立资料worker分别完整保存；网页以封版静态包精确字节为准，普通全量源码构建不能自动视为线上等价。完整生产环境、端点凭据和镜像层不进入Git，仍留服务器。
 
-简历继续使用10月18日v2改写和原PDF模板，时间会员每日免费3次、其余100积分；普通面试、模拟面试、既有收费和已发布性能优化均保留。已撤回的v3–v6及新PDF研发版本只作历史研究，不能混入后续生产基线。
+Backend现有共享/快答/详答/截图4个模型选择器及worker既有3个文本模型选择器为 `deepseek-v4.1-flash-1017`。Backend与worker源未变；Web仅新增588字节上传代理规则，产品文件上限20MiB、三类资料请求封装21MiB，328份静态不变。203条API及完整Schema保持。
 
-完整230份Backend运行输入和328份Web公开静态逐SHA匹配。网页实际字节由封版静态包保存；仅已核实的前端增量源能够证明与对应发布片段相关，当前前端开发源码的整包构建不能自动视为线上等价物。准备改动页面时先核对封版清单、功能路由和实际目标镜像，禁止整文件覆盖导致无关服务回退。
+简历沿用10月18日v2和原PDF模板，时间会员每日3次、其余100积分；普通/模拟面试、默认关闭的笔试多屏、既有收费与性能优化保持。已撤回的v3–v6、新PDF研发版和国际服内容不得混入。ASR、TTS、Embedding、Rerank、MinerU、端点与Prompt均保留。生产增量来源 `/opt/offersteady/releases/20261021-cn-upload20m-model1017-2`。
 
-旧 `.1` 标签和归档工作区保持；本次Git封版没有重新部署或改变用户资料/任务/费用。本标签仅代表国服Backend/Web，国际服和桌面助手各自维护独立基线。每次后续生产发布仍须核对新鲜实际运行状态与全部用户工作保护门禁。
+本轮封版只做源码、公开运行字节与脱敏证据的Git归档，不部署或重启线上，不修改用户资料、任务及账务。未来发布必须重新核对目标组件实际镜像、完整清单、有效配置及所有用户工作门禁；不能把标签目录或旧控制器当成新的部署授权。

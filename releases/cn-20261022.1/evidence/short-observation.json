@@ -1,0 +1,47 @@
+{
+  "readOnly": true,
+  "fromMs": 1792600656623,
+  "toMs": 1792600732180,
+  "durationSeconds": 75.6,
+  "records": [
+    {
+      "component": "compose-backend-1",
+      "image": "sha256:2f2c89359d2268c460dabad38a4f9466e2af5610e730a94ded797586ef4c5e88",
+      "running": true,
+      "health": "healthy",
+      "restartCount": 0,
+      "linesRead": 322,
+      "tailLimitReached": false,
+      "errorLines": 0,
+      "tracebacks": 0,
+      "http5xx": 0
+    },
+    {
+      "component": "compose-material-worker-1",
+      "image": "sha256:df6b8500500e955aa2f01c3bc0c5b40dab218296459f4e8341da268bb6b0ee43",
+      "running": true,
+      "health": null,
+      "restartCount": 0,
+      "linesRead": 1,
+      "tailLimitReached": false,
+      "errorLines": 0,
+      "tracebacks": 0,
+      "http5xx": 0
+    },
+    {
+      "component": "compose-web-1",
+      "image": "sha256:407376001c127de09cbb93d6bd9ee5f30dcace2693eb0c60e51c22e27cc49c1f",
+      "running": true,
+      "health": null,
+      "restartCount": 0,
+      "linesRead": 150,
+      "tailLimitReached": false,
+      "errorLines": 0,
+      "tracebacks": 0,
+      "http5xx": 0
+    }
+  ],
+  "rawLogsExported": false,
+  "identifiersExported": false,
+  "scriptExitCode": 0
+}

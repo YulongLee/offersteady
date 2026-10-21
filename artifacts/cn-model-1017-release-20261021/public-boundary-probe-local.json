@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "syntheticLoopbackTests": 4,
+  "testSeconds": 2.088,
+  "productionConnections": 0,
+  "userRecordsUsed": false,
+  "modelCalls": 0,
+  "testCommand": "/Users/liyulong/liyulong/1_projects/offersteady/.venv/bin/python scripts/test_probe_cn_upload20m_public_boundary.py -v",
+  "initialSandboxAttempt": "localhost bind denied; four setup errors, no requests sent",
+  "rerunPermission": "loopback synthetic HTTP only",
+  "earlierPublicUrllibFailurePreserved": true,
+  "checksums": {
+    "scripts/probe_cn_upload20m_public_boundary.py": "972090829a6236d9300fff438d59883f02332cc8872d8ca69d27ba1509990e8d",
+    "scripts/test_probe_cn_upload20m_public_boundary.py": "6256025669338d637dd85744ac0c5c5ab687bf6226340b6f3105b6e180605147"
+  },
+  "postponedAnnotationsAdded": true,
+  "rerunAfterAnnotationCompatibility": true,
+  "annotationCompatibilityRerunSeconds": 2.08
+}

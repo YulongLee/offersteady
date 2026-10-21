@@ -54,3 +54,13 @@
 ## Open Questions
 
 无。
+
+## 2026-10-21 runtime-derived overlay
+
+发布输入必须是当前`compose-web-1`实际运行的`default.conf`原始字节和单独钉住的SHA-256。`scripts/patch_cn_upload_proxy_20m.py`只允许在唯一`location /api/`前插入上传专用location；复制该实际API块的既有上游和转发配置，移除对上传无用的WebSocket Upgrade/Connection头，添加`client_max_body_size 21m`。删除新增块必须逐字节恢复原文件，已有CSP、网页路由、SSE、静态文件和通用API配置不得改变。
+
+发现SHA漂移、已有上传块、多个server/API块、`^~`或先行regex覆盖上传路径等冲突时拒绝生成；不自动猜测新的路由拓扑。工具仅生成全新的候选文件，不能就地覆盖输入、直接重载Nginx或更改线上容器。
+
+隔离验证使用本机固定Nginx镜像、`--network none`、只读容器和tmpfs。上游是在同一容器内返回固定202的合成Nginx服务，不经过生产认证、OSS、解析器或数据库。先复现旧配置对1.5MiB请求返回413，再验证20MiB文件加multipart封装在三条专用路径均返回202；超过21MiB封装及普通/邻接API仍返回413。后端离线测试单独证明20MiB文件允许、20MiB加1字节拒绝，不能把21MiB网关封装误当产品文件上限。
+
+生产阶段由组合发布控制器执行新鲜基线/完整用户工作门禁、固定镜像和私有配置备份、候选语法验证、持久化镜像切换与验收；不能复制历史9月6日已完成记录来宣称本次发布完成。真实用户简历不用于回放，不创建用户资料或调用解析来做验收。不得整体重建前端或改写JavaScript错误文案。

@@ -1,0 +1,30 @@
+{
+  "passed": true,
+  "records": [
+    {
+      "route": "/api/v1/resume/uploads/proxy",
+      "status": 422,
+      "curlReturnCode": 0,
+      "passed": true,
+      "fileBytes": 1572864,
+      "authenticated": false
+    },
+    {
+      "route": "/api/v1/web/state",
+      "status": 413,
+      "curlReturnCode": 0,
+      "passed": true,
+      "fileBytes": 1572864,
+      "authenticated": false
+    }
+  ],
+  "requestCount": 2,
+  "documentWrites": 0,
+  "modelCalls": 0,
+  "userRecordsUsed": false,
+  "scriptExitCode": 0,
+  "observationStart": {
+    "fromMs": 1792600656623,
+    "startsAfterDeliberateRejectionChecks": true
+  }
+}

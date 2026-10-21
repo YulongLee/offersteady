@@ -1,0 +1,15 @@
+# Candidate only. Apply with a freshly verified pinned-image release plan after
+# explicit deployment authorization and complete protected-user-work gates.
+# This overlay does not change any images, flags, quotas, limits or credentials.
+services:
+  backend:
+    environment:
+      OFFERSTEADY_CHAT_QWEN_MODEL: deepseek-v4.1-flash-1017
+      OFFERSTEADY_CHAT_QUICK_MODEL: deepseek-v4.1-flash-1017
+      OFFERSTEADY_CHAT_DETAIL_MODEL: deepseek-v4.1-flash-1017
+      OFFERSTEADY_SCREENSHOT_VISION_MODEL: deepseek-v4.1-flash-1017
+  material-worker:
+    environment:
+      OFFERSTEADY_CHAT_QWEN_MODEL: deepseek-v4.1-flash-1017
+      OFFERSTEADY_CHAT_QUICK_MODEL: deepseek-v4.1-flash-1017
+      OFFERSTEADY_CHAT_DETAIL_MODEL: deepseek-v4.1-flash-1017
