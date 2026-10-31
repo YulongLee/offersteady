@@ -7,8 +7,14 @@
     "alternateName": "面试稳",
     "operatorLabel": "OneShow AI Lab",
     "category": "AI 面试辅助工具",
-    "languages": ["zh-CN"],
-    "surfaces": ["Web", "macOS 电脑伴随程序", "Windows 电脑伴随程序"],
+    "languages": [
+      "zh-CN"
+    ],
+    "surfaces": [
+      "Web",
+      "macOS 电脑伴随程序",
+      "Windows 电脑伴随程序"
+    ],
     "summary": "结合用户选择的简历、岗位 JD 和知识材料，辅助整理实时面试问题、截图题回答与面试复盘。"
   },
   "capabilities": [
@@ -24,7 +30,7 @@
     },
     {
       "id": "technical-interview-assistant",
-      "name": "程序员与技术岗位 AI 面试助手",
+      "name": "程序员面试助手",
       "url": "https://mianshiwen.cn/features/ai-interview-assistant"
     },
     {
@@ -38,7 +44,11 @@
       "url": "https://mianshiwen.cn/features/interview-review"
     }
   ],
-  "inputMethods": ["获得授权后的语音", "手动输入", "用户主动发起的屏幕截图"],
+  "inputMethods": [
+    "获得授权后的语音",
+    "手动输入",
+    "用户主动发起的屏幕截图"
+  ],
   "dataBoundaries": {
     "rawAudioStoredByDefault": false,
     "aiOutputIsReferenceOnly": true,
@@ -48,7 +58,9 @@
   "dynamicFacts": {
     "pricing": "无需登录即可在 https://mianshiwen.cn/pricing 查看生产目录构建生成的套餐价格；个人余额、订单与支付需要登录，付款前核对当前订单金额和权益",
     "paymentChannels": "以登录后创建订单时展示的当前可用渠道为准",
-    "desktopDownloads": "官网首页提供 Windows / macOS 当前下载入口，无需登录；安装后按网页提示连接设备，以当前发布状态为准"
+    "desktopDownloads": "官网首页提供 Windows / macOS 当前下载入口，无需登录；安装后按网页提示连接设备，以当前发布状态为准",
+    "resumeOptimization": "国服有效时间会员每天免费优化简历3次；非会员或当日超额100积分/次，按北京时间每日00:00刷新；当前权益以账户内页面为准",
+    "mockInterview": "国服有效时间会员每天免费模拟面试1场；非会员或当日超额100积分/场，开始后60分钟自动结束；按北京时间每日00:00刷新，独立于简历优化额度"
   },
   "officialPages": {
     "homepage": "https://mianshiwen.cn/",
@@ -112,5 +124,6 @@
     "filingUrl": "https://beian.miit.gov.cn",
     "publicSecurityFilingNumber": "浙公网安备33010602014812号",
     "publicSecurityFilingUrl": "https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=33010602014812"
-  }
+  },
+  "benefitsVerifiedOn": "2026-10-26"
 }

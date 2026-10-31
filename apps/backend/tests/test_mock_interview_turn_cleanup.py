@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from starlette.websockets import WebSocketDisconnect
 
+from app.core.config import Settings
 from app.core.errors import DomainRequestError
 from app.modules import mock_interview as api
 from app.ports.realtime_speech import TranscriptResult
@@ -239,7 +240,8 @@ def test_cancelled_active_or_queued_close_observer_still_releases_all_provider_r
             gateways.append(gateway)
             return gateway
         audio = MockInterviewAudio(gateway_factory=factory, now_ms=lambda: 1000)
-        runtime = MockInterviewRuntime(None, None, None, None, audio, None, now_ms=lambda: 1000)
+        repository = SimpleNamespace(settings=Settings(_env_file=None, environment="test", product_edition="cn"))
+        runtime = MockInterviewRuntime(repository, None, None, None, audio, None, now_ms=lambda: 1000)
         controllers = []
         try:
             for index in range(5):

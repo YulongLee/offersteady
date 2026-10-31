@@ -9,8 +9,9 @@ from app.services.mock_interview_runtime import MockInterviewRuntime
 from app.services.realtime_speech_service import RealtimeSpeechService
 
 
-def readiness_runtime(capabilities):
+def readiness_runtime(capabilities, *, edition="cn"):
     runtime = MockInterviewRuntime.__new__(MockInterviewRuntime)
+    runtime.repository = SimpleNamespace(settings=SimpleNamespace(product_edition=edition))
     realtime = runtime.realtime = Mock()
     realtime.session_service.get_session.return_value = SimpleNamespace(session_mode="mock", status="preparing")
     device = SimpleNamespace(device_id="synthetic-device", generation=1, capabilities=capabilities)
@@ -38,7 +39,7 @@ def test_shipped_unknown_or_missing_is_not_denied_and_never_rewrites_device(perm
     ({"protocolVersion": "2.0", "microphone": "denied"}, "mock_microphone_required"),
     ({"protocolVersion": "2.0", "microphone": "restricted"}, "mock_microphone_required"),
     ({"protocolVersion": "2.0", "microphone": "invalid"}, "mock_microphone_required"),
-    ({"protocolVersion": "2.0", "mockInterviewProtocol": 1, "microphone": "unknown"}, "mock_microphone_required"),
+    ({"protocolVersion": "2.0", "mockInterviewProtocol": 1, "microphone": "unknown"}, "mock_microphone_checking"),
     ({"protocolVersion": "1.0", "microphone": "unknown"}, "mock_desktop_incompatible"),
 ])
 def test_explicit_denial_and_nonlegacy_unknown_still_block(caps, code):
@@ -48,9 +49,45 @@ def test_explicit_denial_and_nonlegacy_unknown_still_block(caps, code):
     assert caught.value.error_code == code
 
 
+@pytest.mark.parametrize("permission", [None, "unknown", "invalid", "", True, {}, []])
+def test_dedicated_unconfirmed_is_checking_without_rewriting_permission(permission):
+    caps = {"protocolVersion": "2.0", "mockInterviewProtocol": 1}
+    if permission is not None:
+        caps["microphone"] = permission
+    runtime, device, _ = readiness_runtime(caps.copy())
+    with pytest.raises(DomainRequestError) as caught:
+        runtime.validate_device("synthetic-owner", "synthetic-session")
+    assert caught.value.error_code == "mock_microphone_checking"
+    assert "开启" not in caught.value.message
+    assert device.capabilities == caps
+    runtime.realtime.repository.save_desktop_device.assert_not_called()
+
+
+@pytest.mark.parametrize("permission", [None, "unknown", "invalid", {}, []])
+def test_global_dedicated_unconfirmed_retains_existing_rejection(permission):
+    runtime, _, _ = readiness_runtime({"mockInterviewProtocol": 1, "microphone": permission}, edition="global")
+    with pytest.raises(DomainRequestError) as caught:
+        runtime.validate_device("synthetic-owner", "synthetic-session")
+    assert caught.value.error_code == "mock_microphone_required"
+
+
+@pytest.mark.parametrize("permission", ["denied", "restricted"])
+def test_dedicated_explicit_denial_still_requires_permission(permission):
+    runtime, _, _ = readiness_runtime({"mockInterviewProtocol": 1, "microphone": permission})
+    with pytest.raises(DomainRequestError) as caught:
+        runtime.validate_device("synthetic-owner", "synthetic-session")
+    assert caught.value.error_code == "mock_microphone_required"
+    assert "助手当前上报" in caught.value.message
+    assert "如已允许，可重新检查" in caught.value.message
+
+
 @pytest.mark.parametrize("failure", ["offline", "generation", "device", "unbound", "ended", "ordinary", "missing"])
-def test_unknown_permission_does_not_bypass_binding_or_lifecycle(failure):
-    runtime, device, binding = readiness_runtime({"protocolVersion": "2.0", "microphone": "unknown"})
+@pytest.mark.parametrize("dedicated", [False, True])
+def test_unknown_permission_does_not_bypass_binding_or_lifecycle(failure, dedicated):
+    caps = {"protocolVersion": "2.0", "microphone": "unknown"}
+    if dedicated:
+        caps["mockInterviewProtocol"] = 1
+    runtime, device, binding = readiness_runtime(caps)
     if failure == "offline": runtime.realtime._desktop_device_fresh.return_value = False
     if failure == "generation": binding.binding_generation += 1
     if failure == "device": binding.device_id = "other"

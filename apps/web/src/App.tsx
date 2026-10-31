@@ -14,6 +14,7 @@ import { LivePage, preloadLivePage, BillingPage, DownloadCenter, GuidePage, Lega
 import { mockRequest } from "./mock-interview-client";
 import { resetTransientInterviewState } from "./live-workspace";
 import { authClient } from "./auth-client";
+import { isStateReadCancelled } from "./state-read-scope";
 import { materialUploadAdapter, saveMaterialDownload } from "./material-upload-adapter";
 import { applyAppearancePreferences, persistAppearancePreferences, readAppearancePreferences, type AppearancePreferences } from "./appearance-preferences";
 import { officialSocialContacts } from "./social-contacts";
@@ -49,15 +50,15 @@ function PrototypeProvider({ children, initialAuthenticated, initialState, publi
   useEffect(() => {
     if (initialState) return;
     const controller = new AbortController();
-    const existing = authClient.readStoredSession();
     const initialize = async () => {
+      const existing = authClient.readStoredSession();
       if (existing) {
         try {
           await authClient.restore(controller.signal);
           setAuthenticatedState(true);
-          return interviewAppAdapter.loadState(controller.signal);
+          return interviewAppAdapter.loadState(controller.signal, { forceRefresh: loadAttempt > 0 });
         } catch (error) {
-          if (controller.signal.aborted) throw error;
+          if (controller.signal.aborted || isStateReadCancelled(error)) throw error;
           authClient.clear();
           setAuthenticatedState(false);
           return interviewAppAdapter.loadState(controller.signal, { auth: false });
@@ -68,6 +69,12 @@ function PrototypeProvider({ children, initialAuthenticated, initialState, publi
       return interviewAppAdapter.loadState(controller.signal, { auth: false });
     };
     void initialize()
+      .catch(error => {
+        if (controller.signal.aborted || !isStateReadCancelled(error)) throw error;
+        // One immediate recovery uses the current identity; unmount/cleanup
+        // cancellation never starts replacement work.
+        return initialize();
+      })
       .then(next => {
         setState(next);
         setLoadError("");
@@ -102,6 +109,7 @@ function PrototypeProvider({ children, initialAuthenticated, initialState, publi
 
   const logout = async () => {
     await authClient.logout();
+    if (authClient.readStoredSession()) return;
     setAuthenticated(false);
     try { setState(await interviewAppAdapter.loadState()); } catch { setState(current => current); }
   };
@@ -147,7 +155,7 @@ function LandingPage() {
   return <main className="cn-commercial-home">
     <section className="landing-hero">
       <div><span className="kicker">面试稳 · AI 面试助手</span><h1>AI 面试助手，<br /><em>让你的经历更好表达。</em></h1>
-        <p>面试稳是一款面向求职者的AI面试助手。结合你的简历与目标岗位，整理更贴合自己的回答思路。</p>
+        <p>面试稳是一款面向求职者的AI面试助手。结合简历与岗位 JD，为语音追问、截图题和手动提问整理回答思路，帮你从面试准备走到现场表达与复盘。</p>
         <div className="hero-actions"><Link className="button primary large" to={routes.login}>免费使用 <span>→</span></Link><a className="text-link" href="#product-tour">看看怎么用 ↗</a></div>
         <HomepageDownloads manifest={state.releaseManifest} />
         <p className="cn-hero-note">AI 建议仅供参考，请以真实经历作答，并遵守面试规则。</p>
@@ -157,7 +165,7 @@ function LandingPage() {
     <section id="core-capabilities" className="public-section"><div className="section-intro"><span className="kicker">围绕你的面试</span><h2>从听清问题，到讲清自己</h2><p>把问题、资料和回答思路放在一起，表达更有条理。</p></div>
       <div className="cn-benefits">
         <article><ChatCircleTextIcon size={28} aria-hidden="true" /><h3>跟上每一个问题</h3><p>实时转写面试官与自己的声音，减少来回整理，把注意力留给交流。</p></article>
-        <article><IdentificationCardIcon size={28} aria-hidden="true" /><h3>回答更贴合你的经历</h3><p>按场选择简历、JD 和知识材料，围绕自己的项目与目标岗位组织回答。</p></article>
+        <article><IdentificationCardIcon size={28} aria-hidden="true" /><h3>回答更贴合你的经历</h3><p>简历提供经历依据，岗位 JD 明确重点；按场选择资料，让回答建议围绕你真实做过的事展开。</p></article>
         <article><ScanIcon size={28} aria-hidden="true" /><h3>截图题，也有思路</h3><p>通过电脑助手截取题目，查看识别与生成进度，无需手动重新输入。</p></article>
         <article><ClipboardTextIcon size={28} aria-hidden="true" /><h3>让下一场准备更充分</h3><p>回看问题、回答建议与资料来源，整理需要补充的经历和表达。</p></article>
       </div>
@@ -170,7 +178,7 @@ function LandingPage() {
       <details className="cn-film-details"><summary>也可以先看产品概览<CaretDownIcon size={18} aria-hidden="true" /></summary><div className="landing-film-frame"><video aria-label="面试稳产品宣传片" controls muted playsInline preload="none" poster="/media/offersteady-commercial-poster.jpg"><source src="/media/offersteady-commercial.web.mp4" type="video/mp4" /></video></div></details>
     </section>
     <HomepagePricing billing={state.billing} />
-    <section id="more-scenarios" className="public-section cn-more-scenarios"><div className="section-intro"><span className="kicker">不同岗位，同样认真准备</span><h2>找到与你相关的面试场景。</h2></div><div className="cn-scenario-paths"><a href="/features/ai-interview-assistant"><CodeIcon size={24} aria-hidden="true" /><h3>程序员与技术岗位</h3><p>项目追问、技术原理与系统设计。</p><span>查看技术面试场景 ↗</span></a><a href="/features/realtime-interview"><ChatCircleTextIcon size={24} aria-hidden="true" /><h3>业务追问与现场表达</h3><p>听清问题，结合资料组织思路。</p><span>了解实时辅助 ↗</span></a><a href="/guides"><GraduationCapIcon size={24} aria-hidden="true" /><h3>首次面试与转岗准备</h3><p>梳理经历，让表达贴近目标岗位。</p><span>浏览面试指南 ↗</span></a></div><details><summary>更多岗位与常见使用平台</summary>
+    <section id="more-scenarios" className="public-section cn-more-scenarios"><div className="section-intro"><span className="kicker">不同岗位，同样认真准备</span><h2>找到与你相关的面试场景。</h2></div><div className="cn-scenario-paths"><a href="/features/ai-interview-assistant"><CodeIcon size={24} aria-hidden="true" /><h3>程序员与技术岗位</h3><p>项目追问、技术原理与系统设计，围绕方案、取舍和自己的贡献展开。</p><span>查看技术面试场景 ↗</span></a><a href="/features/realtime-interview"><ChatCircleTextIcon size={24} aria-hidden="true" /><h3>实时面试辅助</h3><p>听清语音追问，结合本场资料生成回答建议，再由你核对并表达。</p><span>了解实时辅助 ↗</span></a><a href="/guides"><GraduationCapIcon size={24} aria-hidden="true" /><h3>首次面试与转岗准备</h3><p>梳理经历，让表达贴近目标岗位。</p><span>浏览面试指南 ↗</span></a></div><details><summary>更多岗位与常见使用平台</summary>
       <section id="platform-compatibility" className="public-section platform-compatibility" aria-labelledby="platform-compatibility-title">
         <div className="platform-compatibility-intro"><span className="kicker">PLATFORM COMPATIBILITY</span><h2 id="platform-compatibility-title">适配常见远程面试与在线笔试平台</h2><p>电脑伴随助手通过你明确授权的系统音频、麦克风和截图能力工作，无需安装平台插件。</p></div>
         <ul className="platform-grid" aria-label="常见使用平台">{interviewPlatforms.map(platform => <li className={`platform-card brand-${platform.slug}`} data-brand-source={platform.sourcePage} key={platform.name}><span className={`platform-brand platform-brand-${platform.presentation}`}><img src={platform.logoUrl} width="180" height="48" alt={`${platform.name} 品牌标识`} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={event => { event.currentTarget.hidden = true; }} /><span className={platform.presentation === "wordmark" ? "sr-only" : "platform-brand-copy"}><strong>{platform.name}</strong>{platform.secondaryLabel ? <small>{platform.secondaryLabel}</small> : null}</span></span></li>)}</ul>
@@ -194,7 +202,7 @@ function LandingPage() {
           <div className="public-faq-intro"><span className="kicker">开始前，你可能想知道</span><h2 id="public-faq-title">常见问题</h2><p>关于使用、费用和隐私的说明。</p><a className="text-link" href="/guide">查看完整使用手册 ↗</a></div>
           <div className="public-faq-list">
             <details><summary><span>面试稳是什么？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>面试稳是一款面向求职者的AI面试助手，通过语音、手动输入或截图整理问题，结合本场选择的简历、JD 和知识资料提供回答建议。</p></div></details>
-            <details><summary><span>AI 面试助手如何工作？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>先准备资料并连接电脑助手，再选择本场上下文。系统识别或接收问题、生成回答建议，最后由你核对事实并用自己的语言表达。了解<a href="/features/realtime-interview">实时面试辅助流程</a>，或查看<a href="/features/ai-interview-assistant">程序员与技术岗位场景</a>。</p></div></details>
+            <details><summary><span>AI 面试助手如何工作？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>先选择简历、岗位 JD 和需要的知识材料，再连接电脑助手接收问题。例如，简历写了“负责订单接口”，JD 侧重稳定性，建议可以帮助梳理职责、异常处理和验证方式，而不是替你编造业务规模或优化数据。这是合成说明示例，实际建议需你核对。了解<a href="/features/realtime-interview">实时面试辅助流程</a>，或查看<a href="/features/ai-interview-assistant">程序员与技术岗位场景</a>。</p></div></details>
             <details><summary><span>面试稳如何收费？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>提供积分包和按天会员，适合不同使用频率。无需登录即可查看<a href="/pricing">当前套餐价格、有效期与计费边界</a>，购买通过账户内的积分与会员页面完成。</p></div></details>
             <details><summary><span>面试稳AI助手适合哪些岗位？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>适用于需要结构化表达、专业追问或截图题辅助的求职场景，例如产品、技术、数据、设计、运营等岗位。建议质量取决于问题识别、你选择的简历与 JD 以及真实资料完整度，不能保证面试或录用结果。</p></div></details>
             <details><summary><span>面试稳可以免费使用吗？</span><CaretDownIcon size={18} aria-hidden="true" /></summary><div><p>可以先免费使用。具体可用权益和后续使用方式以登录后的“积分与会员”页面实时显示为准；需要高频使用时也可以选择按天会员。</p></div></details>

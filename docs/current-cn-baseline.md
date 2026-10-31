@@ -1,4 +1,10 @@
-# 当前国服封版基线
+> **2026-11-01国服模拟面试修复已上线。** 实际Backend为 `sha256:c62df7ddbb92627de83c7c2733574c862678b120a11d051b346b9d13abfcf58a`（232份输入），实际Web为 `sha256:4586bab84a0c18b4aadba9e9be079960372abdc6334030c01f59dbb45bffff76`（366份公开文件，入口 `assets/main-48f3fcb5.js`）。仅CN Backend/Web模拟面试最小增量，保留此前SEO、状态/控制查询优化及全部旧资产，池关闭、worker不变；未改助手或国际服。用户随后授权Git封版 `release-cn-20261101.1`，见[封存清单](../releases/cn-20261101.1/README.md)。后续以实际组件及此标签作为开发基线，不使用旧目录或整包源码构建覆盖生产。
+
+11月1日基于10月29日实际Backend `sha256:3e56917daba635e780d9bd728694d823494b40a6ab67a9968c5371c1378abb3e`（231输入）及Web `sha256:99822e10e7b516aefe4ad96248f9eea631d90b057cb77b8dd386cff4830516fb`（353公开文件）叠加五个mock Python文件及专用页面/播放器/样式。完整203条API Schema、有效配置、44依赖、普通/笔试/简历功能、模型/计费/截止时间、Nginx/CSP和六个非目标保持。Web兼容回退为 `sha256:1d082083d495c6078efcd04006409e0b4c33486a16d703b8b099fb4fe1405775`，包含全部旧字节与13个新资源。新发布没有Git提交/推送。
+
+10月29日是在已上线的[10月27日SEO资源图](releases/cn-search-content-20261027.1.md)及原实际Backend镜像上叠加最小增量，不能用旧封版或完整本地源码构建整体覆盖当前网页。模拟面试、简历优化、多屏、收费、模型、助手、SEO/CSP及六个非目标组件保持，无数据库迁移或Git提交推送。
+
+# 最近国服Git封版基线
 
 用户于2026年10月22日授权将当前线上版本上传Git并封版。本版本标签为 [release-cn-20261022.1](https://github.com/YulongLee/offersteady/tree/release-cn-20261022.1)，分支 `codex/release-cn-20261022-1`，继承独立区域基线 `release-cn-20261019.2`。后续从此已确认不可变标签新建 `codex/` 分支；两服分别维护，不能相互覆盖。
 

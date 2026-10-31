@@ -1,0 +1,18 @@
+{
+  "testedCandidateManifestSha256": "5489d78c3fd17866f5f63e6f7b08096861a16c4fe26e442a1907779c1479da8e",
+  "browser": "Codex in-app browser, hidden temporary tab",
+  "origin": "http://127.0.0.1:5196",
+  "checks": {
+    "homeRendered": true,
+    "screenshotDemoSelectionUpdated": true,
+    "threeDayMembershipSelectionUpdated": true,
+    "loginFormRendered": true
+  },
+  "realAuthentication": false,
+  "businessMutations": 0,
+  "productionRequests": 0,
+  "fixture": "synthetic anonymous state; writes blocked/no forwarding",
+  "doesNotProve": "authenticated full interview or audio/provider E2E",
+  "finalCandidateManifestSha256": "70d5fa3a7e85972013f63eba762a956fc6db0067203fe3ac66eb99ba7b4adcee",
+  "testedPublicBytesIdenticalToFinal": true
+}

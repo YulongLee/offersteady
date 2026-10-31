@@ -7,12 +7,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from time import time
+from time import monotonic, time
 from typing import Awaitable, Callable
 
 from app.core.errors import DomainRequestError
+from app.core.logging import LOGGER_NAME, log_event
 from app.services.mock_interview_audio import MockInterviewAudio
 from app.services.mock_interview_legacy import MockLegacyBridge
 from app.services.mock_interview_repository import MockInterviewRepository, mock_error, round_state
@@ -101,6 +103,16 @@ class MockInterviewRuntime:
                                and device.capabilities.get("protocolVersion") == "2.0"
                                and permission in (None, "unknown"))
         if permission != "granted" and not deferred_permission:
+            # The CN page can wait for the existing assistant registration to
+            # catch up. An unconfirmed capability is not evidence of OS denial,
+            # but still must not admit start or an authenticated audio channel.
+            # Keep Global and shipped legacy compatibility unchanged.
+            settings = getattr(getattr(self, "repository", None), "settings", None)
+            if (getattr(settings, "product_edition", None) == "cn"
+                    and device.capabilities.get("mockInterviewProtocol") == 1):
+                if permission not in ("denied", "restricted"):
+                    raise mock_error("正在检查助手的麦克风状态，请稍候。", "mock_microphone_checking")
+                raise mock_error("助手当前上报麦克风未获授权。请检查系统麦克风权限；如已允许，可重新检查，仍未恢复可重开助手后再试。", "mock_microphone_required")
             raise mock_error("请在助手中开启麦克风权限。", "mock_microphone_required")
         return binding, deferred_permission
 
@@ -173,12 +185,18 @@ class MockInterviewRuntime:
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
 
+    def _cn_runtime(self):
+        settings = getattr(getattr(self, "repository", None), "settings", None)
+        return getattr(settings, "product_edition", None) == "cn"
+
     async def _close_capture(self, controller, *, wait=True):
         capture = self.audio.revoke(controller.session_id)
         controller.draft = None
         if capture:
-            # Bound asynchronous cleanup for time-limit expiry; ordinary commands
-            # await the same close by default and retain the running behavior.
+            # Keep native work independent of its cancellable observer. Only
+            # actual completion can unregister the resource, even if the
+            # observer never starts or is cancelled while queued.
+            started = monotonic()
             future = asyncio.get_running_loop().run_in_executor(
                 self._capture_close_executor, self.audio.close, capture)
             async def observe():
@@ -194,10 +212,28 @@ class MockInterviewRuntime:
             def finished(actual):
                 self._capture_closes.pop(task, None)
                 controller.capture_closes.discard(task)
+                outcome, error_code = "success", "none"
                 try:
                     actual.result()
-                except (asyncio.CancelledError, Exception):
-                    pass
+                except asyncio.CancelledError:
+                    outcome, error_code = "cancelled", "asr_close_cancelled"
+                except Exception:
+                    outcome, error_code = "failed", "asr_close_failed"
+                else:
+                    if task.cancelled() or task.cancelling():
+                        outcome, error_code = "cancelled", "asr_close_observer_cancelled"
+                if self._cn_runtime():
+                    try:
+                        log_event(logging.getLogger(LOGGER_NAME), logging.INFO,
+                            settings=self.repository.settings,
+                            event="mock_interview.capture_close", feature="mock-interview",
+                            action="capture_close", stage="asr_close",
+                            duration_ms=max(0, int((monotonic() - started) * 1000)),
+                            outcome=outcome, error_code=error_code)
+                    except Exception:
+                        # Diagnostics cannot change cleanup or reveal the
+                        # exception, provider data, session or owner identity.
+                        pass
             future.add_done_callback(finished)
         desktop = self.desktops.get(controller.session_id)
         if desktop:
@@ -349,7 +385,15 @@ class MockInterviewRuntime:
                     if await self._enforce_duration(controller):
                         await self.publish(controller)
                         return
-                    await self._close_capture(controller)
+                    # Accepted CN answers have already persisted their next
+                    # phase and stopped the clock. Revoke the old epoch now,
+                    # then generate without waiting for its native ASR close.
+                    # Opening a new CN answer must not drain unrelated retired
+                    # captures either. Explicit stop/replay and Global retain
+                    # their waiting policy.
+                    await self._close_capture(controller,
+                        wait=not (self._cn_runtime()
+                                  and (action == "submit" or following.phase == "listening")))
                     await self._cancel(controller.speech)
                     if action == "end":
                         await self._cancel(controller.generation)

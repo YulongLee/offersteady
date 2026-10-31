@@ -342,6 +342,10 @@ class PostgresAuthenticationRepository(AuthenticationRepository):
     def _connect(self):
         if not self.settings.database_url:
             raise RuntimeError("database_url is required for authentication persistence")
+        from app.platform.cn_hot_database import cn_hot_repository_connection
+        pooled = cn_hot_repository_connection(self.settings, "authentication")
+        if pooled is not None:
+            return pooled
         return psycopg.connect(
             self.settings.database_url,
             connect_timeout=self.settings.database_connect_timeout_seconds,

@@ -124,6 +124,17 @@ class InterviewSessionRecord:
 
 
 @dataclass(frozen=True)
+class SessionControlState:
+    """Authoritative binding fields; excludes materials and conversation."""
+
+    session_id: str
+    owner_user_id: str
+    status: InterviewSessionState
+    session_mode: InterviewSessionMode
+    interview_audio_mode: InterviewAudioMode
+
+
+@dataclass(frozen=True)
 class SessionHeartbeatState:
     """Authoritative lifecycle fields; never includes materials or conversation."""
 
@@ -178,3 +189,5 @@ class InterviewSessionRepository(Protocol):
     def list_usage_records(self, *, session_id: str) -> list[SessionUsageRecord]: ...
 
     def get_heartbeat_state(self, session_id: str) -> SessionHeartbeatState | None: ...
+
+    def get_control_state(self, session_id: str) -> SessionControlState | None: ...

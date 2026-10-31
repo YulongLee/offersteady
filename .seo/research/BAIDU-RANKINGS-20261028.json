@@ -1,0 +1,190 @@
+{
+  "checkedDate": "2026-10-28",
+  "timezone": "Asia/Shanghai",
+  "site": "https://mianshiwen.cn/",
+  "source": "Authenticated Baidu Search Resource Platform; read-only visible UI via Chrome accessibility tree",
+  "sourceUrl": "https://ziyuan.baidu.com/keywords/index?range=month&site=https%3A%2F%2Fmianshiwen.cn%2F",
+  "device": "PC",
+  "periodLabel": "最近30天",
+  "exactPeriodEndpoints": null,
+  "metric": "period-average position; not a fixed real-time SERP position",
+  "dashboard": {
+    "clicks": 65,
+    "impressions": 408,
+    "queryCount": 192,
+    "calculatedCtrPercent": 15.93
+  },
+  "fullTableReview": {
+    "pages": 2,
+    "pageSize": 100,
+    "rowsRead": 192,
+    "uniqueRows": 192,
+    "rowClicksSum": 65,
+    "rowImpressionsSum": 410,
+    "dashboardImpressionsDifference": 2,
+    "differenceReason": "unknown; do not force reconciliation"
+  },
+  "brandClassification": {
+    "rule": "keyword contains 面试稳 or mianshiwen, case-insensitive",
+    "clicks": 61,
+    "nonbrandClicks": 4,
+    "clickSharePercent": 93.85
+  },
+  "selectedVerifiedRows": [
+    {
+      "keyword": "面试稳ai助手",
+      "position": 2,
+      "clicks": 23,
+      "impressions": 52,
+      "ctr": "44.23%"
+    },
+    {
+      "keyword": "面试稳app",
+      "position": 1.8,
+      "clicks": 14,
+      "impressions": 39,
+      "ctr": "35.90%"
+    },
+    {
+      "keyword": "面试稳",
+      "position": 3.3,
+      "clicks": 6,
+      "impressions": 12,
+      "ctr": "50.00%"
+    },
+    {
+      "keyword": "面试稳ai",
+      "position": 4.2,
+      "clicks": 5,
+      "impressions": 13,
+      "ctr": "38.46%"
+    },
+    {
+      "keyword": "面试稳下载",
+      "position": 2,
+      "clicks": 4,
+      "impressions": 10,
+      "ctr": "40.00%"
+    },
+    {
+      "keyword": "mianshiwen.cn",
+      "position": 1,
+      "clicks": 2,
+      "impressions": 6,
+      "ctr": "33.33%"
+    },
+    {
+      "keyword": "AI面试助手",
+      "position": 22.9,
+      "clicks": 0,
+      "impressions": 17,
+      "ctr": "0.00%"
+    },
+    {
+      "keyword": "AI面试工具",
+      "position": 13,
+      "clicks": 0,
+      "impressions": 1,
+      "ctr": "0.00%"
+    },
+    {
+      "keyword": "面试助手",
+      "position": 39,
+      "clicks": 0,
+      "impressions": 1,
+      "ctr": "0.00%"
+    },
+    {
+      "keyword": "AI面试辅助工具",
+      "position": 12.8,
+      "clicks": 1,
+      "impressions": 4,
+      "ctr": "25.00%"
+    },
+    {
+      "keyword": "AI面试实时辅助工具免费",
+      "position": 19.5,
+      "clicks": 1,
+      "impressions": 13,
+      "ctr": "7.69%"
+    },
+    {
+      "keyword": "AI辅助面试实操",
+      "position": 9.5,
+      "clicks": 1,
+      "impressions": 2,
+      "ctr": "50.00%"
+    },
+    {
+      "keyword": "AI面试辅助软件界面图片",
+      "position": 6,
+      "clicks": 1,
+      "impressions": 1,
+      "ctr": "100.00%"
+    },
+    {
+      "keyword": "面试AI助手",
+      "position": 20.7,
+      "clicks": 0,
+      "impressions": 3,
+      "ctr": "0.00%"
+    },
+    {
+      "keyword": "截屏解题助手",
+      "position": 14.7,
+      "clicks": 0,
+      "impressions": 3,
+      "ctr": "0.00%"
+    }
+  ],
+  "exactTargetTermsNotObserved": [
+    "AI面试辅助",
+    "面试AI",
+    "实时面试辅助",
+    "AI面试实时回答",
+    "程序员面试助手",
+    "AI面试助手价格",
+    "AI面试助手哪个好"
+  ],
+  "absenceMeaning": "No exact query row in this selected device/time-window table; does not prove no ranking, no indexing, or rank beyond 100.",
+  "mobile": {
+    "checked": true,
+    "periodSelected": "最近30天",
+    "rankingColumnPresent": false,
+    "rankings": null,
+    "note": "Do not substitute PC rankings or sum the visible mobile rows into a verified 30-day total; no mobile aggregate total was established."
+  },
+  "google": {
+    "rankingDataAvailable": false,
+    "reason": "No connected GSC provider or configured read-only GSC credentials found; no current Google position inferred."
+  },
+  "historicalReference": {
+    "checkedDate": "2026-10-26",
+    "periodLabel": "近30天（当时）",
+    "clicks": 62,
+    "impressions": 411,
+    "queryCount": 193,
+    "AI面试助手": {
+      "position": 22.9,
+      "clicks": 0,
+      "impressions": 17
+    },
+    "AI面试工具": {
+      "position": 17,
+      "clicks": 0,
+      "impressions": 2
+    },
+    "AI面试辅助工具": {
+      "position": 12.7,
+      "clicks": 0,
+      "impressions": 3
+    },
+    "sourceFile": "KEYWORD-MAP-20261026.md"
+  },
+  "limitations": [
+    "Rolling windows differ and most nonbrand query samples are tiny; do not claim rank improvement from AI面试工具 changing 17 to 13 with one current impression.",
+    "The October 27 deployment is too recent to isolate its effect from a rolling 30-day aggregate.",
+    "The UI says same-day data may be delayed about 5 hours; this is not an instantaneous ranking check.",
+    "This evidence file stores selected verified rows and aggregate review results, not a full original 192-query export."
+  ]
+}

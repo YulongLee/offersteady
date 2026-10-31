@@ -1,0 +1,19 @@
+{
+  "reviewPassed": true,
+  "blockingFindings": [],
+  "independentReviewAgent": "cn_mock_server_review",
+  "controllerTests": 37,
+  "controllerAndPreviousReleaseTests": 86,
+  "backendToolTests": 12,
+  "webToolTests": 12,
+  "assembledWebTests": 58,
+  "assembledWebManifestSha256": "197bea52379e490bf41c5163728dfc9415dad72b93905b5027f157eee0571bc0",
+  "actualBackendProbePassed": true,
+  "finalWebImageInventoryMatches": true,
+  "initialUnreleasedWebCandidatesSuperseded": true,
+  "nonmockParentsReferenceOnly": 10,
+  "financialAnchorMs": 1792600214792,
+  "fullSettingsUnchanged": true,
+  "companionGlobalUnchanged": true,
+  "realModelsOrAudioTested": false
+}

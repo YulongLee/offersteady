@@ -29,7 +29,7 @@ beforeEach(() => {
   });
   player = new MockVoicePlayer();
 });
-afterEach(() => { player.close(); vi.unstubAllGlobals(); });
+afterEach(() => { player.close(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 it("requires playback permission and rejects malformed PCM", async () => {
   expect(() => player.append("AAA=")).toThrow("点击朗读");
@@ -112,4 +112,81 @@ it("analysis failure mid-playback degrades silently without stopping the source"
   analyser.getFloatTimeDomainData.mockImplementation(() => { throw new Error("closed analyser"); });
   expect(() => tick(40)).not.toThrow(); expect(frames.size).toBe(0);
   expect(sources[0].stop).not.toHaveBeenCalled(); expect(observe.mock.lastCall![0].playing).toBe(false);
+});
+
+
+it("bounds pending browser resume and permits a later user-gesture retry", async () => {
+  await player.unlock();
+  context.state = "suspended";
+  let late!: () => void;
+  context.resume.mockImplementationOnce(() => new Promise<void>(resolve => { late = resolve; }));
+  vi.useFakeTimers();
+  const pending = player.unlock();
+  const failure = expect(pending).rejects.toThrow("网页声音尚未就绪");
+  await vi.advanceTimersByTimeAsync(3000); await failure;
+  expect(vi.getTimerCount()).toBe(0);
+  context.resume.mockImplementationOnce(async () => { context.state = "running"; });
+  await player.unlock(); expect(() => player.append("AAA=")).not.toThrow();
+  late();
+});
+
+it("rejects a resolved resume unless its own context is actually running", async () => {
+  await player.unlock(); context.state = "suspended";
+  await expect(player.unlock()).rejects.toThrow("网页声音尚未就绪");
+  context.resume.mockImplementationOnce(() => { throw new Error("sync failure"); });
+  await expect(player.unlock()).rejects.toThrow("网页声音尚未就绪");
+});
+
+it("close cancels pending unlocks and a stale context cannot unlock a replacement", async () => {
+  await player.unlock();
+  const old = context; let late!: () => void;
+  old.state = "suspended"; old.resume.mockImplementationOnce(() => new Promise<void>(resolve => { late = resolve; }));
+  vi.useFakeTimers();
+  const pending = player.unlock(); const failure = expect(pending).rejects.toThrow("网页声音尚未就绪");
+  player.close(); await failure;
+  expect(vi.getTimerCount()).toBe(0);
+  await player.unlock(); const fresh = context;
+  old.state = "running"; late();
+  expect(fresh).not.toBe(old); expect(() => player.append("AAA=")).not.toThrow();
+});
+
+it("notifies once when queued audio is interrupted after audio_end without later PCM", async () => {
+  player.subscribePlayback(vi.fn());
+  await player.unlock(); player.append("AAA=");
+  const finish = vi.fn(); player.finish(finish);
+  const unavailable = vi.fn(); player.onPlaybackUnavailable = unavailable;
+  context.state = "suspended"; context.onstatechange(); context.onstatechange();
+  expect(unavailable).toHaveBeenCalledOnce();
+  expect(finish).not.toHaveBeenCalled();
+  expect(frames.size).toBe(0);
+  // The consumer owns the state transition; without a callback the original
+  // visual-only suspension behavior remains unchanged.
+  player.stop(); context.onstatechange();
+  expect(unavailable).toHaveBeenCalledOnce();
+  expect(sources[0].onended).toBeNull(); expect(sources[0].buffer).toBeNull();
+});
+
+it("does not report idle, initial unlock, teardown or a stale context as playback interruption", async () => {
+  const unavailable = vi.fn(); player.onPlaybackUnavailable = unavailable;
+  await player.unlock();
+  const old = context; const staleHandler = old.onstatechange;
+  old.state = "suspended"; old.onstatechange();
+  expect(unavailable).not.toHaveBeenCalled();
+  player.close(); await player.unlock(); player.append("AAA=");
+  staleHandler();
+  expect(unavailable).not.toHaveBeenCalled();
+  player.close(); expect(unavailable).not.toHaveBeenCalled();
+});
+
+it("recreates a closed playback context for an explicit retry and disconnects its old analyser", async () => {
+  player.subscribePlayback(vi.fn()); await player.unlock(); player.append("AAA=");
+  const old = context;
+  const unavailable = vi.fn(() => player.stop()); player.onPlaybackUnavailable = unavailable;
+  old.state = "closed"; old.onstatechange();
+  expect(unavailable).toHaveBeenCalledOnce();
+  await player.unlock();
+  expect(context).not.toBe(old); expect(old.onstatechange).toBeNull();
+  expect(analyser.disconnect).toHaveBeenCalledOnce();
+  expect(() => player.append("AAA=")).not.toThrow();
+  expect(context.createAnalyser).toHaveBeenCalledOnce();
 });

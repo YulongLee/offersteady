@@ -1,0 +1,263 @@
+{
+  "_preview": {
+    "synthetic": true,
+    "containsUserData": false,
+    "catalogSource": "release-cn-20261022.1/seo/pricing.html",
+    "catalogSnapshotAt": "2026-10-10T18:41:34.564Z",
+    "publicMetadataSource": "anonymous CN web/state: support + desktop release metadata only",
+    "publicMetadataCapturedAt": "2026-10-26T03:08:06.724773+00:00",
+    "downloadHandling": "Local routes only; no download proxy or network forwarding"
+  },
+  "state": {
+    "interviews": [],
+    "preparation": {
+      "resources": [],
+      "device": null
+    },
+    "questions": [],
+    "review": {
+      "status": "waiting",
+      "duration": "",
+      "summary": "",
+      "screenshots": [],
+      "transcripts": []
+    },
+    "captureState": "not-connected",
+    "librarySources": [],
+    "contextSelections": {},
+    "billing": {
+      "catalog": [
+        {
+          "id": "pass-1",
+          "catalogVersion": 16,
+          "kind": "time_pass",
+          "displayName": "1 天会员",
+          "priceCents": 2990,
+          "published": true,
+          "durationDays": 1,
+          "knowledgeIndexAllowance": 0
+        },
+        {
+          "id": "pass-3",
+          "catalogVersion": 16,
+          "kind": "time_pass",
+          "displayName": "3 天会员",
+          "priceCents": 6990,
+          "published": true,
+          "durationDays": 3,
+          "knowledgeIndexAllowance": 0
+        },
+        {
+          "id": "pass-7",
+          "catalogVersion": 16,
+          "kind": "time_pass",
+          "displayName": "7 天会员",
+          "priceCents": 12990,
+          "published": true,
+          "durationDays": 7,
+          "knowledgeIndexAllowance": 0
+        },
+        {
+          "id": "pass-15",
+          "catalogVersion": 16,
+          "kind": "time_pass",
+          "displayName": "15 天会员",
+          "priceCents": 21990,
+          "published": true,
+          "durationDays": 15,
+          "knowledgeIndexAllowance": 2
+        },
+        {
+          "id": "pass-30",
+          "catalogVersion": 16,
+          "kind": "time_pass",
+          "displayName": "30 天会员",
+          "priceCents": 32990,
+          "published": true,
+          "durationDays": 30,
+          "knowledgeIndexAllowance": 2
+        },
+        {
+          "id": "points-1000",
+          "catalogVersion": 16,
+          "kind": "points_pack",
+          "displayName": "1000 积分",
+          "priceCents": 3990,
+          "published": true,
+          "points": 1000
+        },
+        {
+          "id": "points-3000",
+          "catalogVersion": 16,
+          "kind": "points_pack",
+          "displayName": "3000 积分",
+          "priceCents": 9990,
+          "published": true,
+          "points": 3000
+        },
+        {
+          "id": "points-10000",
+          "catalogVersion": 16,
+          "kind": "points_pack",
+          "displayName": "10000 积分",
+          "priceCents": 29990,
+          "published": true,
+          "points": 10000
+        },
+        {
+          "id": "points-30000",
+          "catalogVersion": 16,
+          "kind": "points_pack",
+          "displayName": "30000 积分",
+          "priceCents": 69990,
+          "published": true,
+          "points": 30000
+        },
+        {
+          "id": "points-66666",
+          "catalogVersion": 16,
+          "kind": "points_pack",
+          "displayName": "66666 积分",
+          "priceCents": 99990,
+          "published": true,
+          "points": 66666
+        }
+      ],
+      "rates": {
+        "catalogVersion": 16,
+        "answerPoints": 5,
+        "screenshotAnswerPoints": 15,
+        "writtenExamPoints": 30,
+        "realtimeMinutePoints": 5,
+        "knowledgeIndexMinimumPoints": 20,
+        "knowledgeIndexPointsPer1000Tokens": 4
+      },
+      "balance": 0,
+      "ledger": [],
+      "activePass": null,
+      "queuedPasses": [],
+      "orders": [],
+      "officialOrders": [],
+      "support": {
+        "wechatId": "mianshiwen_01",
+        "email": "contact@oneshowailab.com",
+        "qrAssetPath": "",
+        "serviceHours": "工作日 10:00-18:00",
+        "refundSummary": "退款按订单状态和未使用权益审核"
+      },
+      "availablePaymentChannels": []
+    },
+    "speaker": {
+      "mode": "manual-only",
+      "transcripts": [],
+      "pendingQuestion": null,
+      "degradation": null,
+      "runtimeNotice": null
+    },
+    "activeAnswerTask": null,
+    "account": {
+      "id": "local-preview-anonymous",
+      "displayName": "本地预览",
+      "createdAtMs": 0,
+      "bindings": []
+    },
+    "knowledgeCollections": [],
+    "knowledgeDocuments": [],
+    "releaseManifest": {
+      "version": 1,
+      "generatedAtMs": 1792007309033,
+      "entries": [
+        {
+          "id": "mac-arm64-135",
+          "platform": "macos",
+          "architecture": "arm64",
+          "displayName": "macOS Apple Silicon",
+          "version": "1.3.5",
+          "minimumOs": "macOS 14.2+",
+          "fileSizeBytes": 126182643,
+          "sha256": "9b6d95aa1fb0109cff7c2085c0418839228966e845bd19ea54db464882e8dce7",
+          "signingStatus": "verified",
+          "distributionStatus": "published",
+          "notarized": true,
+          "publishedAtMs": 1792007309033,
+          "protocolVersion": "2.0",
+          "captureRuntime": "electron-single-owner",
+          "developmentOnly": false,
+          "capabilities": {
+            "microphone": true,
+            "systemAudio": true,
+            "screenCapture": true,
+            "manualInputFallback": true,
+            "screenshotFallback": true
+          },
+          "downloadUrl": "/api/v1/web/downloads/desktop/OfferSteady-Companion-1.3.5-macOS-arm64.dmg"
+        },
+        {
+          "id": "mac-x64-135",
+          "platform": "macos",
+          "architecture": "x64",
+          "displayName": "macOS Intel",
+          "version": "1.3.5",
+          "minimumOs": "macOS 14.2+",
+          "fileSizeBytes": 129925399,
+          "sha256": "9cd6db94c7883cd9e8faba373ed9217ade7ff312c33afd4c3986a54f6a17804b",
+          "signingStatus": "verified",
+          "distributionStatus": "published",
+          "notarized": true,
+          "publishedAtMs": 1792007309033,
+          "protocolVersion": "2.0",
+          "captureRuntime": "electron-single-owner",
+          "developmentOnly": false,
+          "capabilities": {
+            "microphone": true,
+            "systemAudio": true,
+            "screenCapture": true,
+            "manualInputFallback": true,
+            "screenshotFallback": true
+          },
+          "downloadUrl": "/api/v1/web/downloads/desktop/OfferSteady-Companion-1.3.5-macOS-x64.dmg"
+        },
+        {
+          "id": "win-x64-135",
+          "platform": "windows",
+          "architecture": "x64",
+          "displayName": "Windows 10/11 安装版",
+          "version": "1.3.5",
+          "minimumOs": "Windows 10 22H2+",
+          "fileSizeBytes": 102155896,
+          "sha256": "2ce3ba67c97566c31734a3c8f75313526d47a118503ebba5dcd34520e6e6f3e0",
+          "signingStatus": "local-development",
+          "distributionStatus": "published",
+          "notarized": false,
+          "publishedAtMs": 1792007309033,
+          "protocolVersion": "2.0",
+          "captureRuntime": "electron-wasapi-loopback",
+          "developmentOnly": false,
+          "capabilities": {
+            "microphone": true,
+            "systemAudio": true,
+            "screenCapture": true,
+            "manualInputFallback": true,
+            "screenshotFallback": true
+          },
+          "downloadUrl": "/api/v1/web/downloads/desktop/OfferSteady-Companion-Setup-1.3.5-Windows-x64.exe"
+        }
+      ]
+    }
+  },
+  "foundation": {
+    "service": "local-content-preview",
+    "apiPrefix": "/api/v1",
+    "prototypeMode": "local-preview",
+    "modules": []
+  },
+  "partnerProgramConfig": {
+    "enabled": false,
+    "commissionRateBps": 0,
+    "eligibleOrderDays": 0,
+    "refundHoldDays": 0,
+    "minimumPayoutCents": 0,
+    "agreementVersion": "local-preview",
+    "settlementMode": "manual-monthly"
+  }
+}

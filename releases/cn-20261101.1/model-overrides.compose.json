@@ -1,0 +1,19 @@
+{
+  "services": {
+    "backend": {
+      "environment": {
+        "OFFERSTEADY_CHAT_QWEN_MODEL": "deepseek-v4.1-flash-1017",
+        "OFFERSTEADY_CHAT_QUICK_MODEL": "deepseek-v4.1-flash-1017",
+        "OFFERSTEADY_CHAT_DETAIL_MODEL": "deepseek-v4.1-flash-1017",
+        "OFFERSTEADY_SCREENSHOT_VISION_MODEL": "deepseek-v4.1-flash-1017"
+      }
+    },
+    "material-worker": {
+      "environment": {
+        "OFFERSTEADY_CHAT_QWEN_MODEL": "deepseek-v4.1-flash-1017",
+        "OFFERSTEADY_CHAT_QUICK_MODEL": "deepseek-v4.1-flash-1017",
+        "OFFERSTEADY_CHAT_DETAIL_MODEL": "deepseek-v4.1-flash-1017"
+      }
+    }
+  }
+}

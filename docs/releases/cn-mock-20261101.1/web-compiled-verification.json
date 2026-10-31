@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "tests": 58,
+  "manifestSha256": "197bea52379e490bf41c5163728dfc9415dad72b93905b5027f157eee0571bc0",
+  "actualPageBodyAndReportExtracted": true,
+  "actualNewPlayerImported": true,
+  "actualOriginalTransportsExtracted": true,
+  "actualTransportDirectSyntheticFetchAndWsUrlPassed": true,
+  "sharedPlayerAndErrorClassIdentityPassed": true,
+  "originalAuthAndJsonClientImported": true,
+  "pageTransportMockedByExistingUnitTests": true,
+  "reactAndRouterHostBridgedForJsdom": true,
+  "downloadBoundaryUsesExistingTestMock": true,
+  "noApplicationBootstrapImported": true,
+  "noProductionOrModelCalls": true,
+  "testFiles": [
+    "apps/web/src/MockInterviewPage.test.tsx",
+    "apps/web/src/mock-interview-client.test.ts",
+    "apps/web/src/MockInterviewPage.playback-recovery.test.tsx",
+    "/Users/liyulong/.codex/worktrees/cn-search-content/offersteady/artifacts/cn-mock-20261101-release/web-independent-execution/actual-transport.test.ts"
+  ]
+}

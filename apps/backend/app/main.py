@@ -16,6 +16,7 @@ from app.core.logging import configure_logging, utc_now_iso
 from app.core.responses import ApiEnvelope, success_response
 from app.core.errors import install_exception_handlers
 from app.middleware.request_context import RequestContextMiddleware
+from app.platform.cn_hot_database import with_cn_hot_database_lifespan
 from app.schemas.foundation import HealthResponse
 from app.services.admin_capacity import AdminCapacityMonitor
 from app.services.live_answer_stream_executor import LiveAnswerStreamExecutor
@@ -153,7 +154,8 @@ def create_app() -> FastAPI:
                 if callable(close):
                     close()
 
-    application = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
+    application = FastAPI(title=settings.app_name, version=settings.app_version,
+                          lifespan=with_cn_hot_database_lifespan(lifespan, settings))
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[

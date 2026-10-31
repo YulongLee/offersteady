@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+from time import monotonic
 
 import httpx
 from pydantic import ValidationError
@@ -14,10 +15,13 @@ from app.ports.storage import FileStoragePort
 from app.schemas.mock_interview import MockQuestion, MockReport
 from app.services.material_object_keys import MaterialObjectKeyFactory
 from app.services.mock_interview_rounds import MockRound
+from app.services.mock_interview_diagnostics import MockGenerationDiagnostics, safe_error_category
 
 
 class MockGenerationUnavailable(RuntimeError):
-    pass
+    def __init__(self, message: str, *, error_category: str = "internal_error"):
+        super().__init__(message)
+        self.error_category = safe_error_category(error_category)
 
 
 class MockResumeReader:
@@ -62,17 +66,27 @@ class MockInterviewGenerator:
         self.prompts = {name: (root / f"{name}.md").read_text(encoding="utf-8") for name in ("question", "report")}
         self.answer_structure = (root / "answer-structure.md").read_text(encoding="utf-8").strip()
 
-    async def _generate(self, kind: str, *, resume: str, target_role: str, rounds: tuple[MockRound, ...]) -> dict:
+    async def _generate(self, kind: str, *, resume: str, target_role: str, rounds: tuple[MockRound, ...],
+                        _diagnostics: MockGenerationDiagnostics | None = None) -> dict:
+        diagnostics = _diagnostics or MockGenerationDiagnostics.current_or_new(self.settings, kind)
+        started = monotonic()
         if len(rounds) > 10 or len(resume) > 12_100 or len(target_role) > 120:
-            raise MockGenerationUnavailable("模拟面试上下文超过限制。")
+            diagnostics.record("context_validation", started, outcome="failed", error_category="context_invalid")
+            raise MockGenerationUnavailable("模拟面试上下文超过限制。", error_category="context_invalid")
         if not self.settings.chat_qwen_api_key or not self.settings.chat_qwen_base_url:
-            raise MockGenerationUnavailable("模拟面试文本模型尚未配置。")
+            diagnostics.record("context_validation", started, outcome="failed", error_category="provider_not_configured")
+            raise MockGenerationUnavailable("模拟面试文本模型尚未配置。", error_category="provider_not_configured")
         context = {"resume": resume, "target_role": target_role,
                    "rounds": [{"question_id": r.question_id, "question": r.question, "answer": r.answer} for r in rounds],
                    "remaining_questions": 10 - len(rounds)}
+        diagnostics.record("context_validation", started)
+        stage, started = "slot_wait", monotonic()
+        category = "internal_error"
         try:
             async with asyncio.timeout(self.settings.mock_interview_provider_timeout_seconds):
                 async with self._slots:
+                    diagnostics.record(stage, started)
+                    stage, started = "provider_request", monotonic()
                     async with httpx.AsyncClient(transport=self.transport, timeout=40) as client:
                         response = await client.post(
                             self.settings.chat_qwen_base_url.rstrip("/") + "/chat/completions",
@@ -83,26 +97,54 @@ class MockInterviewGenerator:
                                                {"role": "user", "content": json.dumps(context, ensure_ascii=False)}]},
                         )
                         response.raise_for_status()
+                        diagnostics.record(stage, started)
+                        stage, started = "response_parse", monotonic()
                         if len(response.content) > 128 * 1024:
+                            category = "response_too_large"
                             raise ValueError("oversized model response")
+                        category = "response_json_invalid"
                         payload = response.json()
+                        category = "response_envelope_invalid"
                         choice = payload["choices"][0]
                         if choice.get("finish_reason") != "stop":
+                            category = "incomplete_response"
                             raise ValueError("incomplete model response")
                         content = choice["message"]["content"].strip()
                         if content.startswith("```json\n") and content.endswith("```"):
                             content = content[8:-3].strip()
+                        category = "response_json_invalid"
                         result = json.loads(content)
                         if not isinstance(result, dict):
+                            category = "structured_output_invalid"
                             raise ValueError("invalid structured output")
+                        diagnostics.record(stage, started)
                         return result
-        except (httpx.HTTPError, TimeoutError, ValueError, KeyError, IndexError, TypeError, AttributeError):
-            raise MockGenerationUnavailable("模拟面试生成暂时不可用，请在本场重试。") from None
+        except asyncio.CancelledError:
+            diagnostics.record(stage, started, outcome="cancelled")
+            raise
+        except (httpx.HTTPError, TimeoutError, ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+            status = None
+            if isinstance(exc, httpx.HTTPStatusError):
+                category, status = "provider_http_error", exc.response.status_code
+            elif isinstance(exc, (httpx.TimeoutException, TimeoutError)):
+                category = "slot_wait_timeout" if stage == "slot_wait" else "provider_timeout"
+            elif isinstance(exc, httpx.HTTPError):
+                category = "provider_transport_error"
+            diagnostics.record(stage, started, outcome="failed", error_category=category, http_status=status)
+            raise MockGenerationUnavailable("模拟面试生成暂时不可用，请在本场重试。", error_category=category) from None
+        except Exception:
+            diagnostics.record(stage, started, outcome="failed", error_category="internal_error")
+            raise
 
     async def question(self, *, resume: str, target_role: str, rounds: tuple[MockRound, ...]) -> MockQuestion:
+        diagnostics = MockGenerationDiagnostics.current_or_new(self.settings, "question")
         if len(rounds) >= 10 or any(not r.answer for r in rounds):
-            raise MockGenerationUnavailable("请完成当前回答，或查看本场报告。")
-        payload = await self._generate("question", resume=resume, target_role=target_role, rounds=rounds)
+            diagnostics.record("context_validation", monotonic(), outcome="failed", error_category="context_invalid")
+            raise MockGenerationUnavailable("请完成当前回答，或查看本场报告。", error_category="context_invalid")
+        payload = await self._generate("question", resume=resume, target_role=target_role, rounds=rounds,
+                                       _diagnostics=diagnostics)
+        started = monotonic()
+        category = "question_schema_invalid"
         try:
             question = MockQuestion.model_validate(payload)
             # One published question per turn. A model can append an unsolicited
@@ -111,18 +153,26 @@ class MockInterviewGenerator:
             if first_end:
                 question.question = question.question[:first_end.end()]
             if any(r.question == question.question for r in rounds):
+                category = "repeated_question"
                 raise ValueError("duplicate question")
+            diagnostics.record("output_validation", started)
             return question
         except (ValidationError, ValueError):
-            raise MockGenerationUnavailable("出题格式异常或内容重复，请重试。") from None
+            diagnostics.record("output_validation", started, outcome="failed", error_category=category)
+            raise MockGenerationUnavailable("出题格式异常或内容重复，请重试。", error_category=category) from None
 
     async def report(self, *, resume: str, target_role: str, rounds: tuple[MockRound, ...]) -> MockReport:
+        diagnostics = MockGenerationDiagnostics.current_or_new(self.settings, "report")
         answered = tuple(r for r in rounds if r.answer and r.answer.strip())
         if not answered:
             return MockReport(summary="本场没有已确认的有效回答，证据不足，暂不评分。")
-        payload = await self._generate("report", resume=resume, target_role=target_role, rounds=answered)
+        payload = await self._generate("report", resume=resume, target_role=target_role, rounds=answered,
+                                       _diagnostics=diagnostics)
+        started = monotonic()
+        category = "report_schema_invalid"
         try:
             report = MockReport.model_validate(payload)
+            category = "report_evidence_invalid"
             expected = {r.question_id: r.answer for r in answered}
             if report.dimensions is None or len(report.feedback) != len(expected):
                 raise ValueError("incomplete feedback")
@@ -140,6 +190,8 @@ class MockInterviewGenerator:
                 feedback.suggestion = self.answer_structure.format(answer_quote=feedback.answer_quote)
             if len(answered) < 10:
                 report.summary = f"部分报告（已回答 {len(answered)}/10 题）。" + report.summary
+            diagnostics.record("output_validation", started)
             return report
         except (ValidationError, ValueError):
-            raise MockGenerationUnavailable("报告证据校验未通过，请重试；本次未生成可信评分。") from None
+            diagnostics.record("output_validation", started, outcome="failed", error_category=category)
+            raise MockGenerationUnavailable("报告证据校验未通过，请重试；本次未生成可信评分。", error_category=category) from None

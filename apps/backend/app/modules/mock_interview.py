@@ -255,5 +255,5 @@ async def mock_microphone(socket: WebSocket, session_id: str):
                         await runtime.publish(controller)
             try:
                 await socket.close()
-            except RuntimeError:
+            except (RuntimeError, WebSocketDisconnect):
                 pass

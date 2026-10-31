@@ -12,6 +12,7 @@ dependencies = [
   "PyJWT>=2.10.1",
   "pydantic-settings>=2.11.0",
   "psycopg[binary]>=3.2.9",
+  "psycopg_pool==3.3.3",
   "python-multipart>=0.0.20",
   "redis>=5.2.0",
   "reportlab==4.4.9",

@@ -1,0 +1,27 @@
+{
+  "passed": true,
+  "candidateManifestSha256": "197bea52379e490bf41c5163728dfc9415dad72b93905b5027f157eee0571bc0",
+  "baselineFiles": 353,
+  "candidateFiles": 366,
+  "newAssets": 13,
+  "allCandidateBytesReproducedFromFrozenInputs": true,
+  "nonmockParentsOnlyReferenceChanges": {
+    "assets/AnswerWorkspace-34712720.js": "assets/AnswerWorkspace-b9b02307.js",
+    "assets/BillingPage-12d55297.js": "assets/BillingPage-912f106f.js",
+    "assets/DownloadCenter-72b4e30d.js": "assets/DownloadCenter-6cb0d459.js",
+    "assets/GuidePage-c3141d07.js": "assets/GuidePage-3fd6c16b.js",
+    "assets/LegalPage-39df4f2a.js": "assets/LegalPage-d21dd935.js",
+    "assets/LibraryManager-da1e5107.js": "assets/LibraryManager-bfede887.js",
+    "assets/LivePageLegacy-4080f5a3.js": "assets/LivePageLegacy-20e5b254.js",
+    "assets/ResumeOptimizerPage-ac1517e6.js": "assets/ResumeOptimizerPage-e4d3f530.js",
+    "assets/WrittenMultiScreen-d6303a83.js": "assets/WrittenMultiScreen-81cd6f61.js",
+    "assets/main-559fbe0b.js": "assets/main-48f3fcb5.js"
+  },
+  "originalReportAndWordExportBytes": {
+    "assets/mock-interview-report-CtmMBUmT.js": "cf83bb850c1c78b7830fefd8917bae3f2a1096b0f6f19f8c79104f079e011d1d",
+    "assets/mock-interview-word-export-BOxeSAD1.js": "d3068fe5c18ae570add7661052bbceb2d8b5b5b6551410da72f34a27f795fb9f"
+  },
+  "nginxWritten": false,
+  "originalInitializationStatementsPreserved": true,
+  "productionOrModelCalls": 0
+}

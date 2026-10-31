@@ -430,14 +430,55 @@ class DocumentService:
         knowledge_collection_id: str | None = None,
         include_deleted: bool = False,
     ) -> list[DocumentRecordResponse]:
-        if knowledge_collection_id is not None:
-            self._require_collection_access(user_id=user_id, collection_id=knowledge_collection_id)
-        records = self.repository.list_for_user(
+        records = self._list_document_records(
             user_id=user_id,
             document_kind=document_kind,
             knowledge_collection_id=knowledge_collection_id,
             include_deleted=include_deleted,
         )
+        return self._document_list_responses(records)
+
+    def list_documents_with_records(
+        self,
+        *,
+        user_id: str,
+        document_kind: MaterialKind | None = None,
+        knowledge_collection_id: str | None = None,
+        include_deleted: bool = False,
+    ) -> tuple[list[DocumentRecordResponse], dict[str, DocumentRecord]]:
+        """Return one read's views and raw records for request-local reuse only."""
+        records = self._list_document_records(
+            user_id=user_id,
+            document_kind=document_kind,
+            knowledge_collection_id=knowledge_collection_id,
+            include_deleted=include_deleted,
+        )
+        # Keep display-name disambiguation out of the authoritative raw records.
+        snapshot = {
+            record.document_id: replace(record)
+            for record in records
+            if record.owner_user_id == user_id
+        }
+        return self._document_list_responses(records), snapshot
+
+    def _list_document_records(
+        self,
+        *,
+        user_id: str,
+        document_kind: MaterialKind | None,
+        knowledge_collection_id: str | None,
+        include_deleted: bool,
+    ) -> list[DocumentRecord]:
+        if knowledge_collection_id is not None:
+            self._require_collection_access(user_id=user_id, collection_id=knowledge_collection_id)
+        return self.repository.list_for_user(
+            user_id=user_id,
+            document_kind=document_kind,
+            knowledge_collection_id=knowledge_collection_id,
+            include_deleted=include_deleted,
+        )
+
+    def _document_list_responses(self, records: list[DocumentRecord]) -> list[DocumentRecordResponse]:
         display_names = self._disambiguated_display_names(records)
         return [self._to_response(record, display_name=display_names[record.document_id]) for record in records]
 

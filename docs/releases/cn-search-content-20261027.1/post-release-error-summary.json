@@ -1,0 +1,1 @@
+{"observationStartedUtc": "2026-10-26T17:51:46.947592371Z", "observedUntilUtc": "2026-10-26T17:58:19.302572+00:00", "elapsedSeconds": 392.4, "components": {"compose-web-1": {"lines": 534, "errorOrCritical": 0, "tracebacks": 0, "http5xx": 0}, "compose-backend-1": {"lines": 943, "errorOrCritical": 0, "tracebacks": 0, "http5xx": 0}}, "rawLogsReturned": false}

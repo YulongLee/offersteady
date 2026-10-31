@@ -123,7 +123,7 @@ describe("optimized product experience", () => {
     expect(within(section!).getAllByRole("article")).toHaveLength(4);
     const benefits = [
       ["跟上每一个问题", /转写.*声音/],
-      ["回答更贴合你的经历", /简历、JD 和知识材料/],
+      ["回答更贴合你的经历", /简历提供经历依据，岗位 JD 明确重点.*真实做过的事/],
       ["截图题，也有思路", /截图|截取题目/],
       ["让下一场准备更充分", /回看问题.*回答建议.*资料来源/],
     ] as const;
@@ -205,7 +205,7 @@ describe("optimized product experience", () => {
     expect(faq).not.toBeNull();
     const answers = [
       ["面试稳是什么？", /面向求职者的AI面试助手/],
-      ["AI 面试助手如何工作？", /核对事实.*自己的语言/],
+      ["AI 面试助手如何工作？", /合成说明示例，实际建议需你核对/],
       ["面试稳如何收费？", /无需登录即可查看/],
       ["面试稳AI助手适合哪些岗位？", /不能保证面试或录用结果/],
       ["面试稳可以免费使用吗？", /具体可用权益和后续使用方式/],

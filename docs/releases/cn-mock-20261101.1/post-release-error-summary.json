@@ -1,0 +1,22 @@
+{
+  "components": {
+    "compose-backend-1": {
+      "errorOrCriticalLogLines": 0,
+      "http5xxAccessLogLines": 0,
+      "linesScanned": 372,
+      "streamFailedEvents": 0,
+      "tracebackLines": 0
+    },
+    "compose-web-1": {
+      "errorOrCriticalLogLines": 0,
+      "http5xxAccessLogLines": 0,
+      "linesScanned": 210,
+      "streamFailedEvents": 0,
+      "tracebackLines": 0
+    }
+  },
+  "onlyAggregateLogsExported": true,
+  "since": "2026-10-31T16:52:14.346000+00:00",
+  "until": "2026-10-31T16:53:55.181438+00:00",
+  "windowSeconds": 100.835
+}

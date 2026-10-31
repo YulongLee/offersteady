@@ -395,7 +395,7 @@ def test_pairing_status_reads_bound_session_only_once_per_cache_miss() -> None:
         session_reads += 1
         return SimpleNamespace(status="ended", session_mode="interview")
 
-    service.session_service = SimpleNamespace(get_session=get_session)
+    service.session_service = SimpleNamespace(get_control_state=get_session)
 
     status = service._compute_desktop_pairing_status(
         manual_code=device.manual_code,

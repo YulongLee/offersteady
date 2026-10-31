@@ -23,3 +23,7 @@
 - CrUX 字段数据：本轮不可用
 - 关键词搜索量与难度：无可信付费数据源，保持未知
 - 当前排名、点击、CTR、自然转化和外链：未知
+
+## 2026-10-26补充
+
+本轮人工读取了已登录百度资源平台PC数据，摘要和口径局限见[关键词映射](research/KEYWORD-MAP-20261026.md)。这是人工证据，不代表排名API、Google Search Console或GA4已接入。当前四页仅为本地候选，执行与验收见[本轮记录](implementation/SEO-EXECUTION-LOG-20261026.md)。

@@ -1,4 +1,6 @@
-// Contract captured from the actual running CN Web image, not Git HEAD.
+// Fingerprints of the authorized public source after the 2026-10-27 SEO update.
+// Release assembly rewrites links/dates; production byte verification is recorded
+// separately in docs/releases/cn-search-content-20261027.1/production-verification.json.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -8,11 +10,11 @@ const publicRoot = join(dirname(fileURLToPath(import.meta.url)), "public");
 const preserved = [
   {
     "path": "llms-full.txt",
-    "sha256": "571f42120eb35e4c33183bf86fe4d1468c177562168c3c75367a697a373bddd8"
+    "sha256": "bdf2922b0ffcf027dc0c13f25228eb0fe57f46f6cd815568671d08fcbdbbb8b8"
   },
   {
     "path": "public-facts.json",
-    "sha256": "325a702023158a87d4caf61b3119f7fc0ccd1f29bad6e91546dd326c1d22c7ad"
+    "sha256": "9807119acd473f7c26c7f4699aa24087a2a193ad50a0d648b0096c018ce37384"
   },
   {
     "path": "seo/features.html",
@@ -20,15 +22,15 @@ const preserved = [
   },
   {
     "path": "seo/realtime-interview.html",
-    "sha256": "108cf9afce41c7ffe3235b09fe6876378ba16b52becbe4d3b6d5a913f84b89b9"
+    "sha256": "72aa5c665bba3bb6c33dfcf1b3f9fd5d3d3def599734c2cffdea230d4331eca2"
   },
   {
     "path": "sitemap.xml",
     "sha256": "10ceb2ad257aaf46cd7a0590bacbbf0363461773e9b566fea299c2a5a2a84384"
   }
 ];
-describe("resume addition preserves unrelated published public content", () => {
-  it.each(preserved)("retains actual online $path", ({ path, sha256 }) => {
+describe("runtime optimization preserves authorized public source content", () => {
+  it.each(preserved)("retains approved source $path", ({ path, sha256 }) => {
     const bytes = readFileSync(join(publicRoot, path));
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(sha256);
   });

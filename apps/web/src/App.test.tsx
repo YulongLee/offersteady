@@ -160,7 +160,7 @@ describe("OfferSteady web application", () => {
     expect(heading).toHaveTextContent("AI 面试助手，让你的经历更好表达。");
     const hero = heading.closest("section")!;
     expect(hero).toHaveTextContent(/面向求职者的AI面试助手/);
-    expect(hero).toHaveTextContent(/结合你的简历与目标岗位/);
+    expect(hero).toHaveTextContent(/结合简历与岗位 JD.*语音追问、截图题和手动提问/);
     expect(within(hero).getByRole("link", { name: /免费使用/ })).toHaveAttribute("href", "/login");
     expect(screen.getByRole("heading", { name: "从听清问题，到讲清自己" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "跟上每一个问题" })).toBeInTheDocument();

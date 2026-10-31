@@ -23,7 +23,7 @@ from app.ports.interview_session import (
     SessionUsageRecord,
     SessionUsageTotals,
 )
-from app.ports.interview_session import SessionHeartbeatState
+from app.ports.interview_session import SessionControlState, SessionHeartbeatState
 from app.services.postgres_migrations import apply_sql_migrations
 
 
@@ -109,6 +109,24 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
             cursor.execute("SELECT * FROM interview_sessions WHERE session_id = %s AND deleted_at_ms IS NULL", (session_id,))
             row = cursor.fetchone()
         return self._row_to_session(row) if row else None
+
+    def get_control_state(self, session_id: str) -> SessionControlState | None:
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """SELECT session_id, owner_user_id, status, session_mode, interview_audio_mode
+                   FROM interview_sessions WHERE session_id = %s AND deleted_at_ms IS NULL""",
+                (session_id,),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return SessionControlState(
+            session_id=row["session_id"],
+            owner_user_id=row["owner_user_id"],
+            status=row["status"],
+            session_mode=row.get("session_mode") or "interview",
+            interview_audio_mode=row.get("interview_audio_mode") or "computer",
+        )
 
     def list_sessions_for_user(self, *, user_id: str, status=None) -> list[InterviewSessionRecord]:
         params: list[Any] = [user_id]
@@ -330,6 +348,10 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
     def _connect(self):
         if not self.settings.database_url:
             raise RuntimeError("database_url is required")
+        from app.platform.cn_hot_database import cn_hot_repository_connection
+        pooled = cn_hot_repository_connection(self.settings, "sessions")
+        if pooled is not None:
+            return pooled
         return psycopg.connect(self.settings.database_url, connect_timeout=self.settings.database_connect_timeout_seconds, application_name=f"{self.settings.database_application_name}-sessions")
 
     def _ensure_tables(self) -> None:

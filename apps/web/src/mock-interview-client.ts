@@ -45,10 +45,14 @@ export const mockSocketUrl = (id: string): string => {
 export const MOCK_WAVEFORM_BARS = 21;
 export interface MockPlaybackFrame { playing: boolean; levels: readonly number[] }
 const idlePlayback: MockPlaybackFrame = { playing: false, levels: Array<number>(MOCK_WAVEFORM_BARS).fill(0) };
+export class MockPlaybackError extends Error {
+  constructor() { super("网页声音尚未就绪，请点击朗读问题恢复播放。"); }
+}
 
 /** Bounded streaming PCM player. Stop invalidates already scheduled chunks. */
 export class MockVoicePlayer {
   onIdle: (() => void) | null = null;
+  onPlaybackUnavailable: (() => void) | null = null;
   private context: AudioContext | null = null;
   private sources = new Set<AudioBufferSourceNode>();
   private cursor = 0;
@@ -61,6 +65,8 @@ export class MockVoicePlayer {
   private lastFrameAt = -Infinity;
   private playbackStartsAt = Infinity;
   private visualizationUnavailable = false;
+  private pendingUnlocks = new Set<() => void>();
+  private playbackUnavailableNotified = false;
 
   subscribePlayback(observer: (frame: MockPlaybackFrame) => void): () => void {
     this.observers.add(observer);
@@ -114,18 +120,47 @@ export class MockVoicePlayer {
     this.animation = requestAnimationFrame(tick);
   }
   async unlock() {
+    if (this.context?.state === "closed") this.close();
     if (!this.context) {
-      this.context = new AudioContext();
-      this.context.onstatechange = () => {
-        if (this.context?.state === "running") this.startVisualization();
-        else this.stopVisualization();
+      const context = this.context = new AudioContext();
+      context.onstatechange = () => {
+        if (this.context !== context) return;
+        if (context.state === "running") {
+          this.playbackUnavailableNotified = false;
+          this.startVisualization();
+        } else {
+          this.stopVisualization();
+          // No later PCM may arrive after audio_end. Notify the page even in
+          // that case, rather than waiting forever for a suspended source to end.
+          if (this.sources.size && this.onPlaybackUnavailable && !this.playbackUnavailableNotified) {
+            this.playbackUnavailableNotified = true;
+            this.onPlaybackUnavailable();
+          }
+        }
       };
     }
-    await this.context.resume();
+    const context = this.context;
+    // Call resume directly in the user's click stack. Browsers may leave its
+    // promise pending when activation is required, so recovery must be bounded.
+    let resumed: Promise<void>;
+    try { resumed = context.resume(); }
+    catch { throw new MockPlaybackError(); }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let cancel!: () => void;
+    const deadline = new Promise<never>((_resolve, reject) => {
+      cancel = () => reject(new MockPlaybackError());
+      timer = setTimeout(cancel, 3000);
+      this.pendingUnlocks.add(cancel);
+    });
+    try {
+      await Promise.race([resumed, deadline]);
+      if (this.context !== context || context.state !== "running") throw new MockPlaybackError();
+    } catch { throw new MockPlaybackError(); }
+    finally { clearTimeout(timer); this.pendingUnlocks.delete(cancel); }
   }
   append(encoded: string) {
     const context = this.context;
-    if (!context || context.state !== "running") throw new Error("请点击朗读以允许浏览器播放声音。");
+    if (!context || context.state !== "running") throw new MockPlaybackError();
     const raw = atob(encoded);
     this.bytes += raw.length;
     if (raw.length % 2 || this.bytes > 24000 * 2 * 90) throw new Error("本题音频格式异常或超过时长上限。");
@@ -140,6 +175,7 @@ export class MockVoicePlayer {
     source.connect(context.destination);
     if (this.analyser) source.connect(this.analyser);
     const wasIdle = this.sources.size === 0;
+    if (wasIdle) this.playbackUnavailableNotified = false;
     this.sources.add(source);
     source.onended = () => {
       this.sources.delete(source);
@@ -168,6 +204,7 @@ export class MockVoicePlayer {
   }
   stop() {
     this.ended = null;
+    this.playbackUnavailableNotified = false;
     this.stopVisualization();
     this.playbackStartsAt = Infinity;
     for (const source of this.sources) {
@@ -181,6 +218,8 @@ export class MockVoicePlayer {
     this.bytes = 0;
   }
   close() {
+    for (const cancel of this.pendingUnlocks) cancel();
+    this.pendingUnlocks.clear();
     this.stop();
     const context = this.context;
     this.context = null;

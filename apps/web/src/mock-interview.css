@@ -45,6 +45,9 @@
 .mock-question { font-size: clamp(22px, 2.2vw, 30px) !important; line-height: 1.6; padding-bottom: 24px; border-bottom: 1px solid #2b3844; }
 .mock-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
 .mock-muted { font-size: 12px; }
+.mock-instructions { margin-top: 14px; color: #a6b8c5; }
+.mock-instructions summary { cursor: pointer; width: fit-content; }
+.mock-instructions p { margin-bottom: 0; }
 .mock-end { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: auto; padding-top: 40px; font-size: 12px; }
 .mock-end p { max-width: 65%; }
 .mock-wait { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 24px 0; color: #70e4c1; }

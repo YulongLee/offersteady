@@ -12,6 +12,7 @@ from app.core.errors import DomainRequestError
 from app.services.mock_interview_generation import MockInterviewGenerator, MockResumeReader, MockGenerationUnavailable
 from app.services.mock_interview_repository import MockInterviewRepository, round_state
 from app.services.mock_interview_rounds import MockRoundState
+from app.services.mock_interview_diagnostics import MockGenerationDiagnostics
 
 
 class MockInterviewJobs:
@@ -107,9 +108,15 @@ class MockInterviewJobs:
             duration_timeout = remaining_seconds <= timeout_seconds
             timeout_seconds = min(timeout_seconds, remaining_seconds)
         timeout = asyncio.timeout_at(monotonic() + timeout_seconds)
+        diagnostics = MockGenerationDiagnostics(self.repository.settings,
+            "question" if state.phase == "generating_question" else "report")
+        token = diagnostics.activate()
+        total_started = monotonic()
+        total_outcome, total_error = "success", None
         try:
             expired = await self._expire_if_due(claimed, state, user_id=user_id, session_id=session_id)
             if expired is not None:
+                total_outcome = "cancelled"
                 return expired
             async with timeout:
                 data = claimed['data']
@@ -117,16 +124,32 @@ class MockInterviewJobs:
                     resume = ''
                 else:
                     if not data.get('resume_id') or not data.get('resume_version'):
+                        total_error = "context_invalid"
                         raise ValueError('missing selected resume')
+                    resume_started = monotonic()
+                    resume_outcome, resume_error = "success", None
                     try:
                         resume = await asyncio.to_thread(self.reader.read, user_id=user_id, document_id=data['resume_id'], version_id=data['resume_version'])
                     except DomainRequestError:
+                        resume_error = "resume_unavailable"
                         if state.phase != 'generating_report':
+                            resume_outcome, total_error = "failed", "resume_unavailable"
                             raise
+                        resume_outcome = "fallback"
                         resume = '[原简历版本已不可用，本报告仅依据已确认的问答。]'
+                    except asyncio.CancelledError:
+                        resume_outcome = "cancelled"
+                        raise
+                    except Exception:
+                        resume_outcome, resume_error, total_error = "failed", "resume_unavailable", "resume_unavailable"
+                        raise
+                    finally:
+                        diagnostics.record("resume_read", resume_started,
+                            outcome=resume_outcome, error_category=resume_error)
                 args = dict(resume=resume, target_role=data['target_role'], rounds=state.rounds)
                 expired = await self._expire_if_due(claimed, state, user_id=user_id, session_id=session_id)
                 if expired is not None:
+                    total_outcome = "cancelled"
                     return expired
                 provider_attempted = True
                 if state.phase == 'generating_question':
@@ -135,17 +158,38 @@ class MockInterviewJobs:
                 else:
                     result = await self.generator.report(**args)
                     output = {'report': result.model_dump()}
-            return await asyncio.to_thread(self.repository.finish_generation, **finish, now_ms=self.now_ms(), **output)
+            result = await asyncio.to_thread(self.repository.finish_generation, **finish, now_ms=self.now_ms(), **output)
+            if self._duration_ended_question(state, result):
+                total_outcome = "cancelled"
+            return result
         except asyncio.CancelledError:
+            total_outcome = "cancelled"
             await asyncio.shield(self._release_cancelled(finish, claimed, state))
             raise
         except Exception as exc:
+            # Recovery I/O may fail too. Mark the operation failed before any
+            # recovery await so its final diagnostic cannot claim success.
+            total_outcome = "failed"
+            if total_error is None:
+                if isinstance(exc, MockGenerationUnavailable):
+                    total_error = exc.error_category
+                elif isinstance(exc, TimeoutError):
+                    total_error = "generation_timeout"
+                elif isinstance(exc, DomainRequestError):
+                    total_error = "commit_rejected"
+                else:
+                    total_error = "internal_error"
             expiry_time = self.now_ms()
             if duration_timeout and isinstance(exc, TimeoutError) and timeout.expired():
                 expiry_time = max(expiry_time, deadline)
             expired = await self._expire_if_due(claimed, state, user_id=user_id, session_id=session_id, now_ms=expiry_time)
             if expired is not None:
+                total_outcome, total_error = "cancelled", None
                 return expired
             provider_fault = isinstance(exc, MockGenerationUnavailable) or (provider_attempted and isinstance(exc, TimeoutError)) or (isinstance(exc, DomainRequestError) and exc.error_code in ('mock_repeated_question', 'mock_invalid_question'))
             await self._release_failed(finish, provider_fault=provider_fault)
             return await asyncio.to_thread(self.repository.get, user_id=user_id, session_id=session_id)
+        finally:
+            diagnostics.record("generation_total", total_started,
+                outcome=total_outcome, error_category=total_error)
+            diagnostics.reset(token)

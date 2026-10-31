@@ -2500,10 +2500,16 @@ class RealtimeSpeechService:
             if cached_state is not None:
                 return cached_state
             try:
-                bound_session = self.session_service.get_session(
-                    user_id=candidate.owner_user_id,
-                    session_id=candidate.session_id,
-                )
+                if self.settings.product_edition == "cn":
+                    bound_session = self.session_service.get_control_state(
+                        user_id=candidate.owner_user_id,
+                        session_id=candidate.session_id,
+                    )
+                else:
+                    bound_session = self.session_service.get_session(
+                        user_id=candidate.owner_user_id,
+                        session_id=candidate.session_id,
+                    )
                 resolved = (bound_session.status, bound_session.session_mode, getattr(bound_session, "interview_audio_mode", "computer"))
             except DomainRequestError:
                 resolved = ("missing", "interview", "computer")

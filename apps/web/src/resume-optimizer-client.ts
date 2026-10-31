@@ -1,6 +1,7 @@
 import { authClient } from "./auth-client";
 import { withBaseUrl } from "./api-client";
 import { readRuntimeConfig } from "./runtime-config";
+import { beginStateMutation } from "./state-read-scope";
 
 export interface ResumeOptimizerCapabilities {
   readonly enabled: boolean; readonly eligible: boolean; readonly dailyLimit: number; readonly dailyRemaining: number;
@@ -117,20 +118,25 @@ export class ResumeOptimizerError extends Error {
 export class BackendResumeOptimizerClient {
   constructor(private readonly baseUrl: string, private readonly fetchImpl: typeof fetch = (input, init) => globalThis.fetch(input, init)) {}
   private async response(path: string, init: RequestInit = {}, signal?: AbortSignal): Promise<Response> {
-    const session = authClient.readStoredSession();
-    const headers = new Headers(init.headers);
-    if (session) headers.set("Authorization", `Bearer ${session.accessToken}`);
-    if (typeof init.body === "string") headers.set("Content-Type", "application/json");
-    headers.set("Accept", path.includes("/export?") ? "application/octet-stream" : "application/json");
-    let response: Response;
-    try { response = await this.fetchImpl(withBaseUrl(this.baseUrl, `/api/v1/resume-optimizer${path}`), { ...init, headers, cache: "no-store", ...(signal ? { signal } : {}) }); }
-    catch (error) { if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError")) throw error; throw new Error("无法连接简历优化服务，请检查网络后重试。"); }
-    if (!response.ok) {
-      let code = "";
-      try { const payload = await response.json(); code = payload?.error?.details?.errorCode ?? payload?.error?.code ?? ""; } catch { /* No personal response content is exposed. */ }
-      throw new ResumeOptimizerError(code, response.status);
+    const finishMutation = beginStateMutation(`/api/v1/resume-optimizer${path}`, init.method);
+    try {
+      const session = authClient.readStoredSession();
+      const headers = new Headers(init.headers);
+      if (session) headers.set("Authorization", `Bearer ${session.accessToken}`);
+      if (typeof init.body === "string") headers.set("Content-Type", "application/json");
+      headers.set("Accept", path.includes("/export?") ? "application/octet-stream" : "application/json");
+      let response: Response;
+      try { response = await this.fetchImpl(withBaseUrl(this.baseUrl, `/api/v1/resume-optimizer${path}`), { ...init, headers, cache: "no-store", ...(signal ? { signal } : {}) }); }
+      catch (error) { if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError")) throw error; throw new Error("无法连接简历优化服务，请检查网络后重试。"); }
+      if (!response.ok) {
+        let code = "";
+        try { const payload = await response.json(); code = payload?.error?.details?.errorCode ?? payload?.error?.code ?? ""; } catch { /* No personal response content is exposed. */ }
+        throw new ResumeOptimizerError(code, response.status);
+      }
+      return response;
+    } finally {
+      finishMutation();
     }
-    return response;
   }
   private async json<T>(path: string, init: RequestInit = {}, signal?: AbortSignal): Promise<T> {
     const payload = await (await this.response(path, init, signal)).json();

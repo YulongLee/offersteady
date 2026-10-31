@@ -1,0 +1,32 @@
+{
+  "passed": true,
+  "scope": "independent_local_release_review",
+  "productionAccess": false,
+  "businessSourceEdits": false,
+  "webManifestSha256": "70d5fa3a7e85972013f63eba762a956fc6db0067203fe3ac66eb99ba7b4adcee",
+  "controllerSha256": "846e3af43b6be76a57bd2426f178b18aaf4159e91dc27d5c5236602cde5dd82c",
+  "checks": {
+    "controllerSyntheticTests": 28,
+    "graphAssemblyTests": 19,
+    "actualModuleRegressionTests": 59,
+    "actualInitializationCases": 7,
+    "newJavascriptSyntaxChecks": 14
+  },
+  "resolvedFindings": [
+    "Stopped original container recovery required fixed ownership proof, complete gates, a separate process-restoration journal and verified health; added independent TCP recovery regressions.",
+    "Generated expression extraction now selects the transpiled AST initializer rather than stripping a prefix, preserving callable objects despite emitted directives."
+  ],
+  "evidence": [
+    "review-web-runtime-final/actual-runtime-verification.json",
+    "review-web-runtime-final/actual-runtime-junit.xml",
+    "review-web-initialization-final/actual-initialization-verification.json",
+    "review-web-build/independent-auth-runtime.json",
+    "backend-candidate.json"
+  ],
+  "limits": [
+    "Reviewed root-supplied actual-image backend probe result; reviewer did not access production.",
+    "Synthetic runtime tests do not cover actual login, provider calls, audio devices, payment or live user sessions.",
+    "Fresh complete user-work and TCP gates must still pass immediately before every production switch.",
+    "No claim of zero risk or measured online P95 improvement."
+  ]
+}

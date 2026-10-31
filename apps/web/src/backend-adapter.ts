@@ -4,7 +4,8 @@ import type { AnswerProvenance, AnswerSourceReference, AnswerTaskSnapshot, Cance
 import { AppError } from "./domain";
 import type { ActiveInterviewConflict, AnswerAdvice, BillingPresentationState, CollectedScreenshot, DesktopDeviceBinding, DesktopShortcutScreenshotUpdate, IdleInterviewStatus, InterviewAppAdapter, InterviewAudioMode, InterviewLanguage, InterviewQuestion, InterviewReview, InterviewSummary, InterviewWorkspaceSnapshot, PartnerProgramState, PreparationAudioReadiness, ProgrammingLanguage, ReferralActivationResult, ReferralStatus, ScreenshotTask, SessionMode, SubmitManualAnswerResult, WebAppState } from "./domain";
 import { createJsonClient, withBaseUrl } from "./api-client";
-import { authClient } from "./auth-client";
+import { authClient, type AuthSessionScope } from "./auth-client";
+import { beginStateMutation, invalidateStateReads, stateReadCancelled, stateReadGeneration } from "./state-read-scope";
 import { createSseParser, type LiveAnswerStreamEvent, type ManualAnswerStreamUpdate } from "./live-answer-stream";
 import {
   recordSubtitleBackendStages,
@@ -557,25 +558,43 @@ export const createAuthRefreshingFetch = (
   fetchImpl: typeof fetch,
   refreshSession: () => Promise<void> = () => authClient.refresh().then(() => undefined),
 ): typeof fetch => {
-  let refreshInFlight: Promise<void> | null = null;
+  let refreshInFlight: { readonly generation: number; readonly promise: Promise<void> } | null = null;
   return async (input, init) => {
+    const scope = authClient.readScope();
+    const originalAuthorization = new Headers(init?.headers ?? (typeof Request !== "undefined" && input instanceof Request ? input.headers : undefined)).get("Authorization");
     const response = await fetchImpl(input, init);
+    if (!originalAuthorization) return response;
+    if (!authClient.isCurrentScope(scope)) throw stateReadCancelled();
     if (response.status !== 401 || !authClient.readStoredSession()) return response;
     try {
-      if (!refreshInFlight) {
-        refreshInFlight = refreshSession().finally(() => {
-          refreshInFlight = null;
-        });
+      const current = authClient.readStoredSession();
+      if (`Bearer ${current?.accessToken}` === originalAuthorization) {
+        if (!refreshInFlight || refreshInFlight.generation !== scope.generation) {
+          const flight = {
+            generation: scope.generation,
+            promise: refreshSession().finally(() => {
+              if (refreshInFlight === flight) refreshInFlight = null;
+            }),
+          };
+          refreshInFlight = flight;
+        }
+        await refreshInFlight.promise;
       }
-      await refreshInFlight;
     } catch {
-      return response;
+      if (!authClient.isCurrentScope(scope)) throw stateReadCancelled();
+      const current = authClient.readStoredSession();
+      // Another adapter may already have rotated this same session while our
+      // refresh lost the race. Its valid token can still satisfy this request.
+      if (!current || `Bearer ${current.accessToken}` === originalAuthorization) return response;
     }
+    if (!authClient.confirmRefreshScope(scope)) throw stateReadCancelled();
     const session = authClient.readStoredSession();
     if (!session) return response;
     const headers = new Headers(init?.headers);
     headers.set("Authorization", `Bearer ${session.accessToken}`);
-    return fetchImpl(input, { ...init, headers });
+    const retried = await fetchImpl(input, { ...init, headers });
+    if (!authClient.isCurrentScope(scope)) throw stateReadCancelled();
+    return retried;
   };
 };
 
@@ -1043,6 +1062,16 @@ const screenshotEventToUpdate = (event: BackendRealtimeEventListResponse["events
   };
 };
 
+interface StateReadFlight {
+  readonly key: string;
+  readonly contextKey: string;
+  readonly generation: number;
+  readonly controller: AbortController;
+  readonly promise: Promise<WebAppState>;
+  consumers: number;
+  settled: boolean;
+}
+
 export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   private readonly client;
   private readonly baseUrl: string;
@@ -1056,6 +1085,89 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
   private readonly lastTranscriptAckAtBySegment = new Map<string, number>();
   private readonly lastTranscriptAckAtBySession = new Map<string, number>();
   private performanceAckInFlight = false;
+  private readonly stateReadsInFlight = new Map<string, StateReadFlight>();
+
+  private waitForStateRead(flight: StateReadFlight, signal?: AbortSignal): Promise<WebAppState> {
+    if (signal?.aborted) return Promise.reject(stateReadCancelled());
+    return new Promise((resolve, reject) => {
+      let done = false;
+      flight.consumers += 1;
+      const cleanup = () => {
+        signal?.removeEventListener("abort", onAbort);
+        flight.consumers -= 1;
+        if (!flight.settled && flight.consumers === 0) {
+          if (this.stateReadsInFlight.get(flight.key) === flight) this.stateReadsInFlight.delete(flight.key);
+          flight.controller.abort();
+        }
+      };
+      const onAbort = () => {
+        if (done) return;
+        done = true;
+        cleanup();
+        reject(stateReadCancelled());
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
+      flight.promise.then(value => {
+        if (done) return;
+        done = true;
+        cleanup();
+        resolve(value);
+      }, error => {
+        if (done) return;
+        done = true;
+        cleanup();
+        reject(error);
+      });
+      if (signal?.aborted) onAbort();
+    });
+  }
+
+  private async loadScopedState(scope: AuthSessionScope, auth: boolean, signal: AbortSignal | undefined, retries: number): Promise<WebAppState> {
+    if (signal?.aborted || !authClient.isCurrentScope(scope)) throw stateReadCancelled();
+    const current = authClient.readScope();
+    const generation = stateReadGeneration();
+    const contextKey = JSON.stringify([current.generation, current.userId, current.accessToken, current.refreshToken, generation]);
+    const key = JSON.stringify([contextKey, auth]);
+    // Retain at most the two auth modes for the current freshness/credential
+    // context. Detached older consumers finish independently and cannot evict it.
+    for (const [oldKey, pending] of this.stateReadsInFlight) {
+      if (pending.contextKey !== contextKey) this.stateReadsInFlight.delete(oldKey);
+    }
+    let flight = this.stateReadsInFlight.get(key);
+    if (!flight || flight.controller.signal.aborted) {
+      const controller = new AbortController();
+      const pending: StateReadFlight = {
+        key, contextKey, generation, controller, consumers: 0, settled: false,
+        promise: this.client.request<WebAppState>("/api/v1/web/state", { headers: auth ? authHeaders() : {} }, controller.signal).finally(() => {
+          pending.settled = true;
+          if (this.stateReadsInFlight.get(key) === pending) this.stateReadsInFlight.delete(key);
+        }),
+      };
+      // A synchronous caller cancellation must not leave an orphan rejection.
+      void pending.promise.catch(() => undefined);
+      this.stateReadsInFlight.set(key, pending);
+      flight = pending;
+    }
+    let value: WebAppState;
+    try {
+      value = await this.waitForStateRead(flight, signal);
+    } catch (error) {
+      if (signal?.aborted || !authClient.isCurrentScope(scope)) throw stateReadCancelled();
+      if (flight.generation !== stateReadGeneration()) {
+        if (retries >= 1) throw stateReadCancelled();
+        return this.loadScopedState(scope, auth, signal, retries + 1);
+      }
+      throw error;
+    }
+    if (signal?.aborted || !authClient.isCurrentScope(scope)) throw stateReadCancelled();
+    if (flight.generation !== stateReadGeneration()) {
+      if (retries >= 1) throw stateReadCancelled();
+      return this.loadScopedState(scope, auth, signal, retries + 1);
+    }
+    // State is JSON from the API; keep callers independent on older supported
+    // browsers that do not expose structuredClone yet.
+    return typeof structuredClone === "function" ? structuredClone(value) : JSON.parse(JSON.stringify(value)) as WebAppState;
+  }
 
   private drainPerformanceAcks() {
     if (this.performanceAckInFlight) return;
@@ -1297,8 +1409,10 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
     return this.foundation;
   }
 
-  async loadState(signal?: AbortSignal, options?: { readonly auth?: boolean }): Promise<WebAppState> {
-    return this.client.request<WebAppState>("/api/v1/web/state", { headers: options?.auth === false ? {} : authHeaders() }, signal);
+  async loadState(signal?: AbortSignal, options?: { readonly auth?: boolean; readonly forceRefresh?: boolean }): Promise<WebAppState> {
+    if (signal?.aborted) throw stateReadCancelled();
+    if (options?.forceRefresh) invalidateStateReads();
+    return this.loadScopedState(authClient.readScope(), options?.auth !== false, signal, 0);
   }
 
   async getBillingState(signal?: AbortSignal): Promise<BillingPresentationState> {
@@ -1955,22 +2069,29 @@ export class BackendPreviewInterviewAdapter implements InterviewAppAdapter {
       }),
     };
     if (signal) requestInit.signal = signal;
-    const response = await this.fetchImpl(withBaseUrl(this.baseUrl, "/api/v1/live-answer/questions/stream"), requestInit);
-    if (!response.ok) throw new AppError("validation", `实时回答启动失败（${response.status}）`);
-    if (!response.body) throw new AppError("network", "当前浏览器不支持流式回答读取");
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    const parser = createSseParser(emit);
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      parser.push(decoder.decode(value, { stream: true }));
+    const finishMutation = beginStateMutation("/api/v1/live-answer/questions/stream", "POST");
+    try {
+      const response = await this.fetchImpl(withBaseUrl(this.baseUrl, "/api/v1/live-answer/questions/stream"), requestInit);
+      if (!response.ok) throw new AppError("validation", `实时回答启动失败（${response.status}）`);
+      if (!response.body) throw new AppError("network", "当前浏览器不支持流式回答读取");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      const parser = createSseParser(emit);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parser.push(decoder.decode(value, { stream: true }));
+      }
+      parser.push(decoder.decode());
+      parser.flush();
+      if (!latest) throw new AppError("validation", failureMessage);
+      if (!terminalReceived) throw new AppError("network", "回答连接已中断，请重新发起快答。");
+      return latest;
+    } finally {
+      // Settlement/release may happen at the terminal event or a broken stream,
+      // after headers were received. End the barrier only after that lifecycle.
+      finishMutation();
     }
-    parser.push(decoder.decode());
-    parser.flush();
-    if (!latest) throw new AppError("validation", failureMessage);
-    if (!terminalReceived) throw new AppError("network", "回答连接已中断，请重新发起快答。");
-    return latest;
   }
 
   acknowledgeAnswerFirstRender(command: { interviewId: string; taskId: string; clickedAtMs: number; browserEventReceiveAtMs?: number; browserRenderAtMs: number; renderedTextLength: number; timing?: LiveAnswerStreamEvent["timing"] }) {

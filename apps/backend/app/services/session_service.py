@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import replace
 from time import time
 from uuid import uuid4
 
@@ -22,7 +24,7 @@ from app.ports.interview_session import (
     SessionUsageRecord,
     SessionUsageTotals,
 )
-from app.ports.interview_session import SessionHeartbeatState
+from app.ports.interview_session import SessionControlState, SessionHeartbeatState
 from app.services.material_availability import MaterialAvailabilityValidator
 from app.services.session_mode_guard import require_standard_session
 
@@ -222,11 +224,24 @@ class SessionService:
             error_code="auto_answer_update_conflict",
         )
 
-    def list_sessions(self, *, user_id: str, status: str | None = None) -> list[InterviewSessionRecord]:
+    def list_sessions(
+        self,
+        *,
+        user_id: str,
+        status: str | None = None,
+        document_records: Mapping[str, DocumentRecord] | None = None,
+    ) -> list[InterviewSessionRecord]:
         sessions = self.repository.list_sessions_for_user(user_id=user_id, status=status)  # type: ignore[arg-type]
-        # Scope reuse to this list call so the next request sees fresh material state.
-        document_records: dict[str, DocumentRecord | None] = {}
-        return [self._refresh_bound_document_activity(session, document_records=document_records) for session in sessions]
+        # Only seed this list call with owner/id-consistent raw records. Missing
+        # entries still use the repository, including filtered/deleted documents.
+        records: dict[str, DocumentRecord | None] = {
+            document_id: replace(record)
+            for document_id, record in (document_records or {}).items()
+            if isinstance(record, DocumentRecord)
+            and document_id == record.document_id
+            and record.owner_user_id == user_id
+        }
+        return [self._refresh_bound_document_activity(session, document_records=records) for session in sessions]
 
     def delete_session(self, *, user_id: str, session_id: str) -> None:
         session = self.get_session(user_id=user_id, session_id=session_id)
@@ -245,6 +260,14 @@ class SessionService:
         if refreshed != session:
             self.repository.save_session(refreshed)
         return refreshed
+
+    def get_control_state(self, *, user_id: str, session_id: str) -> SessionControlState:
+        session = self.repository.get_control_state(session_id)
+        if session is None:
+            raise DomainRequestError("session", "get", "面试会话不存在。", 404)
+        if session.owner_user_id != user_id:
+            raise DomainRequestError("session", "get", "不能查看其他用户的面试会话。", 403)
+        return session
 
     def continue_session(self, *, user_id: str, session_id: str) -> InterviewSessionRecord:
         session = self.get_session(user_id=user_id, session_id=session_id)

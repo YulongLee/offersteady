@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MockInterviewPage, MockReportView } from "./MockInterviewPage";
-import { mockRequest, type MockSession } from "./mock-interview-client";
+import { mockRequest, MockPlaybackError, MockVoicePlayer, type MockSession } from "./mock-interview-client";
 import { authClient } from "./auth-client";
 import { downloadMockInterviewWord } from "./mock-interview-word-export";
 
@@ -125,7 +125,7 @@ describe("CN mock interviews", () => {
     await waitFor(() => expect(sockets).toHaveLength(1));
     act(() => sockets[0].onmessage({ data: JSON.stringify({ type: "state", session: row, desktopConnected: true, microphoneConnected: false }) }));
     expect(screen.getByRole("button", { name: "开始模拟面试 →" })).toBeEnabled();
-    expect(screen.getByText(/无需为模拟面试升级/)).toBeInTheDocument();
+    expect(screen.getByText(/现有正式版助手即可，仅使用麦克风/)).toBeInTheDocument();
     expect(screen.getByText(/服务器会丢弃非回答时段/)).toBeInTheDocument();
   });
   it("waits without listen/billing commands and starts once when legacy audio becomes ready", async () => {
@@ -208,5 +208,328 @@ describe("CN mock interviews", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "你的回答" }), { target: { value: "人工校正后的回答" } });
     emit({ type: "transcript", epoch: row.state.capture_epoch, text: "新的转写" });
     expect(screen.getByRole("textbox", { name: "你的回答" })).toHaveValue("人工校正后的回答");
+  });
+});
+
+
+describe("mock permission recovery without a companion update", () => {
+  beforeEach(() => { vi.resetAllMocks(); });
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+  const rowFor = (phase: MockSession["state"]["phase"]): MockSession => ({ ...session, report: null,
+    state: { ...session.state, phase, rounds: phase === "preparing" ? [] : session.state.rounds } });
+  const deferred = () => {
+    let resolve!: () => void; let reject!: (cause: Error) => void;
+    const promise = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
+    return { promise, resolve, reject };
+  };
+  async function open(row: MockSession) {
+    const sockets: any[] = [];
+    vi.stubGlobal("WebSocket", class {
+      static OPEN = 1; readyState = 1; onmessage: any; onopen: any; onclose: any;
+      send = vi.fn(); close = vi.fn(); constructor() { sockets.push(this); }
+    });
+    vi.spyOn(authClient, "readStoredSession").mockReturnValue({ accessToken: "synthetic-owner", account: { id: "synthetic" } } as ReturnType<typeof authClient.readStoredSession>);
+    vi.mocked(mockRequest).mockImplementation(async path => path.endsWith("capabilities") ? { enabled: true } : path.startsWith("/documents") ? [] : row);
+    const rendered = render(<MemoryRouter initialEntries={["/app/mock-interviews/mock-synthetic"]}><Routes><Route path="/app/mock-interviews/:id" element={<MockInterviewPage />} /></Routes></MemoryRouter>);
+    await waitFor(() => expect(sockets).toHaveLength(1));
+    const socket = sockets[0];
+    const emit = (message: object) => act(() => socket.onmessage({ data: JSON.stringify(message) }));
+    const state = (preparation?: object, next = row, desktopConnected = true) => emit({ type: "state", session: next, desktopConnected, microphoneConnected: false, preparation });
+    const commands = () => socket.send.mock.calls.map(([payload]: [string]) => JSON.parse(payload).action);
+    return { ...rendered, socket, emit, state, commands };
+  }
+  const checking = { ready: false, code: "mock_microphone_checking", message: "正在检查麦克风，请保持助手运行。" };
+  const ready = { ready: true, code: "mock_ready", message: "助手已连接，可开始面试。" };
+
+  it("bounds unknown guidance without extra polling and throttles same-session rechecks", async () => {
+    const app = await open(rowFor("preparing"));
+    vi.useFakeTimers();
+    app.state(checking, rowFor("preparing"), false);
+    expect(screen.getByRole("status", { name: "助手连接状态" })).toHaveTextContent("正在检查麦克风");
+    expect(screen.getByRole("button", { name: "开始模拟面试 →" })).toBeDisabled();
+    act(() => vi.advanceTimersByTime(20_000));
+    app.state(checking, rowFor("preparing"), false);
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(screen.getByRole("status", { name: "助手连接状态" })).toHaveTextContent("麦克风状态尚未确认");
+    expect(app.commands()).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "重新检查麦克风" }));
+    fireEvent.click(screen.getByRole("button", { name: "正在重新检查…" }));
+    expect(app.commands()).toEqual(["heartbeat"]);
+    expect(screen.getByRole("button", { name: "正在重新检查…" })).toBeDisabled();
+    act(() => vi.advanceTimersByTime(2000));
+    expect(screen.getByRole("status", { name: "助手连接状态" })).toHaveTextContent("麦克风状态尚未确认");
+    fireEvent.click(screen.getByRole("button", { name: "重新检查麦克风" }));
+    expect(app.commands()).toEqual(["heartbeat", "heartbeat"]);
+    app.state(ready);
+    expect(screen.getByRole("button", { name: "开始模拟面试 →" })).toBeEnabled();
+    expect(screen.getByRole("status", { name: "助手连接状态" })).toHaveTextContent(ready.message);
+    expect(vi.mocked(mockRequest).mock.calls.every(([, body]) => body === undefined)).toBe(true);
+    app.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("uses the existing five-second heartbeat while checking and clears timers on disconnect", async () => {
+    const app = await open(rowFor("preparing"));
+    vi.useFakeTimers();
+    act(() => app.socket.onopen());
+    app.state(checking, rowFor("preparing"), false);
+    act(() => vi.advanceTimersByTime(15_000));
+    expect(app.commands()).toEqual([undefined, "heartbeat", "heartbeat", "heartbeat"]);
+    act(() => { app.socket.readyState = 3; app.socket.onclose(); });
+    expect(screen.queryByRole("button", { name: "重新检查麦克风" })).toBeDisabled();
+    expect(vi.getTimerCount()).toBe(0);
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(screen.queryByText(/麦克风状态尚未确认/)).not.toBeInTheDocument();
+  });
+
+  it("clears only stale microphone start errors after authoritative recovery", async () => {
+    const app = await open(rowFor("preparing"));
+    app.state(checking, rowFor("preparing"), false);
+    app.emit({ type: "error", code: "mock_microphone_checking", message: "正在检查麦克风，请稍候重试。" });
+    expect(screen.getByRole("alert")).toHaveTextContent("正在检查麦克风");
+    app.state(ready);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    app.emit({ type: "error", code: "mock_generation_unavailable", message: "合成服务暂时不可用。" });
+    app.state(ready);
+    expect(screen.getByRole("alert")).toHaveTextContent("合成服务暂时不可用");
+    expect(app.commands()).toEqual([]);
+  });
+
+  it("keeps explicit denial blocked and allows a check without rebinding or losing the resume", async () => {
+    const app = await open(rowFor("preparing"));
+    app.state({ ready: false, code: "mock_microphone_required", message: "助手当前上报麦克风未授权，请检查后重新检查。" }, rowFor("preparing"), false);
+    expect(screen.getByRole("button", { name: "开始模拟面试 →" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "重新检查麦克风" }));
+    expect(app.commands()).toEqual(["heartbeat"]);
+    expect(vi.mocked(mockRequest).mock.calls.some(([, body]) => body !== undefined)).toBe(false);
+  });
+
+  it.each(["automatic-first", "manual-first"])("sends one speak when auto/manual unlock race: %s", async order => {
+    const automatic = deferred(); const manual = deferred();
+    const unlock = vi.spyOn(MockVoicePlayer.prototype, "unlock").mockReturnValueOnce(automatic.promise).mockReturnValueOnce(manual.promise);
+    const app = await open(rowFor("speaking"));
+    // Restore via the authoritative state rather than starting a new session.
+    app.state(ready, rowFor("paused")); app.state(ready);
+    expect(unlock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("status", { name: "网页声音状态" })).toHaveTextContent("正在准备网页声音");
+    fireEvent.click(screen.getByRole("button", { name: "朗读问题" }));
+    fireEvent.click(screen.getByRole("button", { name: "朗读问题" }));
+    expect(unlock).toHaveBeenCalledTimes(2);
+    if (order === "automatic-first") {
+      await act(async () => automatic.resolve()); expect(app.commands()).toEqual([]);
+      await act(async () => manual.resolve());
+    } else {
+      await act(async () => manual.resolve()); await act(async () => automatic.resolve());
+    }
+    expect(app.commands()).toEqual(["speak"]);
+  });
+
+  it("offers browser-sound retry after unlock rejection without reporting microphone denial", async () => {
+    const unlock = vi.spyOn(MockVoicePlayer.prototype, "unlock").mockRejectedValueOnce(new Error("synthetic resume failure")).mockResolvedValueOnce();
+    const app = await open(rowFor("speaking"));
+    app.state(ready, rowFor("paused")); app.state(ready);
+    expect(await screen.findByRole("status", { name: "网页声音状态" })).toHaveTextContent("网页声音尚未就绪");
+    expect(screen.getByRole("button", { name: "朗读问题" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "朗读问题" }));
+    await waitFor(() => expect(app.commands()).toEqual(["speak"]));
+    expect(unlock).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("status", { name: "网页声音状态" })).not.toBeInTheDocument();
+  });
+
+  it.each(["skip", "pause", "disconnect", "end", "unmount"])("ignores a late automatic unlock after %s", async change => {
+    const pending = deferred(); vi.spyOn(MockVoicePlayer.prototype, "unlock").mockReturnValue(pending.promise);
+    const app = await open(rowFor("speaking"));
+    app.state(ready, rowFor("paused")); app.state(ready);
+    if (change === "skip") fireEvent.click(screen.getByRole("button", { name: "我已读完，开始回答" }));
+    if (change === "pause") app.state(ready, rowFor("paused"));
+    if (change === "disconnect") act(() => { app.socket.readyState = 3; app.socket.onclose(); });
+    if (change === "end") { vi.spyOn(window, "confirm").mockReturnValue(true); fireEvent.click(screen.getByRole("button", { name: "结束面试" })); }
+    if (change === "unmount") app.unmount();
+    await act(async () => pending.resolve());
+    expect(app.commands().filter((action: string) => ["speak", "listen", "start"].includes(action))).toEqual([]);
+  });
+
+
+  it("gives an available start retry after browser unlock fails in preparation", async () => {
+    const unlock = vi.spyOn(MockVoicePlayer.prototype, "unlock").mockRejectedValueOnce(new Error("synthetic blocked resume")).mockResolvedValueOnce();
+    const app = await open(rowFor("preparing")); app.state(ready);
+    fireEvent.click(screen.getByRole("button", { name: "开始模拟面试 →" }));
+    expect(await screen.findByRole("status", { name: "网页声音状态" })).toHaveTextContent("请再次点击开始模拟面试重试");
+    expect(screen.getByRole("button", { name: "开始模拟面试 →" })).toBeEnabled();
+    expect(app.commands()).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "开始模拟面试 →" }));
+    await waitFor(() => expect(app.commands()).toEqual(["start"]));
+    expect(unlock).toHaveBeenCalledTimes(2);
+  });
+
+  it("retains an available resume instruction after browser playback suspension pauses the question", async () => {
+    vi.spyOn(MockVoicePlayer.prototype, "unlock").mockResolvedValue();
+    vi.spyOn(MockVoicePlayer.prototype, "append").mockImplementation(() => { throw new MockPlaybackError(); });
+    const app = await open(rowFor("speaking")); app.state(ready, rowFor("paused")); app.state(ready);
+    await act(async () => {});
+    app.emit({ type: "audio", questionId: "q1", pcm: "AAA=" });
+    expect(app.commands()).toContain("pause");
+    app.state(ready, rowFor("paused"));
+    expect(screen.getByRole("status", { name: "网页声音状态" })).toHaveTextContent("请点击继续本题后恢复朗读");
+    expect(screen.getByRole("button", { name: "继续本题" })).toBeEnabled();
+  });
+
+
+  it("tries restoring the first received speaking state and fences a replaced question", async () => {
+    const stale = deferred(); const fresh = deferred();
+    vi.spyOn(MockVoicePlayer.prototype, "unlock").mockReturnValueOnce(stale.promise).mockReturnValueOnce(fresh.promise);
+    const app = await open(rowFor("speaking")); app.state(ready);
+    expect(screen.getByRole("status", { name: "网页声音状态" })).toHaveTextContent("正在准备网页声音");
+    const next = { ...rowFor("speaking"), state: { ...rowFor("speaking").state, rounds: [{ ...session.state.rounds[0]!, question_id: "synthetic-q2" }] } };
+    app.state(ready, next);
+    await act(async () => stale.resolve()); expect(app.commands()).toEqual([]);
+    await act(async () => fresh.resolve()); expect(app.commands()).toEqual(["speak"]);
+    expect(JSON.parse(app.socket.send.mock.calls[0][0]).questionId).toBe("synthetic-q2");
+  });
+
+  it.each(["unmount", "reconnect"])("ignores a late socket open after %s without authenticating or leaking heartbeats", async change => {
+    const app = await open(rowFor("preparing"));
+    vi.useFakeTimers();
+    if (change === "unmount") app.unmount();
+    else fireEvent.click(screen.getByRole("button", { name: "重新连接" }));
+    act(() => app.socket.onopen());
+    act(() => vi.advanceTimersByTime(15_000));
+    expect(app.commands()).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+
+  it("cancels a pending start when the confirmed resume changes and keeps retry available", async () => {
+    const pending = deferred(); vi.spyOn(MockVoicePlayer.prototype, "unlock").mockReturnValue(pending.promise);
+    const app = await open(rowFor("preparing")); app.state(ready);
+    fireEvent.click(screen.getByRole("button", { name: "开始模拟面试 →" }));
+    app.state(ready, { ...rowFor("preparing"), resumeId: "synthetic-other-resume", resumeVersion: "v2" });
+    await act(async () => pending.resolve());
+    expect(app.commands()).toEqual([]);
+    expect(screen.getByRole("button", { name: "开始模拟面试 →" })).toBeEnabled();
+  });
+
+  it("does not start when readiness is lost during a user-gesture unlock", async () => {
+    const pending = deferred(); vi.spyOn(MockVoicePlayer.prototype, "unlock").mockReturnValue(pending.promise);
+    const app = await open(rowFor("preparing")); app.state(ready);
+    fireEvent.click(screen.getByRole("button", { name: "开始模拟面试 →" }));
+    app.state(checking, rowFor("preparing"), false);
+    await act(async () => pending.resolve());
+    expect(app.commands()).toEqual([]);
+    expect(screen.getByRole("button", { name: "开始模拟面试 →" })).toBeDisabled();
+  });
+});
+
+describe("mock session action lifecycle fences", () => {
+  beforeEach(() => { vi.resetAllMocks(); });
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+  const row = (suffix: string, phase: MockSession["state"]["phase"] = "preparing"): MockSession => ({
+    ...session, sessionId: `synthetic-${suffix}`, title: `合成场次 ${suffix}`, report: null,
+    resumeId: `resume-${suffix}`, state: { ...session.state, phase, rounds: phase === "preparing" ? [] : session.state.rounds },
+  });
+  function pending<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>(yes => { resolve = yes; });
+    return { promise, resolve };
+  }
+  function Navigation() {
+    const navigate = useNavigate();
+    return <><button onClick={() => navigate("/app/mock-interviews/synthetic-A")}>前往 A</button><button onClick={() => navigate("/app/mock-interviews/synthetic-B")}>前往 B</button></>;
+  }
+  async function open(phase: MockSession["state"]["phase"] = "preparing") {
+    const selection = pending<MockSession>(); const binding = pending<unknown>();
+    const sockets: any[] = [];
+    vi.stubGlobal("WebSocket", class {
+      static OPEN = 1; readyState = 1; onmessage: any; onopen: any; onclose: any;
+      send = vi.fn(); close = vi.fn(); constructor() { sockets.push(this); }
+    });
+    vi.spyOn(authClient, "readStoredSession").mockReturnValue({ accessToken: "synthetic-owner", account: { id: "synthetic" } } as ReturnType<typeof authClient.readStoredSession>);
+    const docs = ["A", "B", "selected"].map(id => ({ documentId: `resume-${id}`, displayName: `合成简历 ${id}`, documentVersionId: "v1", status: "ready", indexState: "indexed" }));
+    vi.mocked(mockRequest).mockImplementation(async path => {
+      if (path.endsWith("capabilities")) return { enabled: true };
+      if (path.startsWith("/documents")) return docs;
+      if (path.endsWith("/resume")) return selection.promise;
+      if (path.endsWith("/desktop-binding")) return binding.promise;
+      return row(path.endsWith("synthetic-B") ? "B" : "A", phase);
+    });
+    const rendered = render(<MemoryRouter initialEntries={["/app/mock-interviews/synthetic-A"]}><Navigation /><Routes><Route path="/app/mock-interviews/:id" element={<MockInterviewPage />} /></Routes></MemoryRouter>);
+    await waitFor(() => expect(sockets).toHaveLength(1));
+    const state = (socket: any, next: MockSession, microphoneConnected = true) => act(() => socket.onmessage({ data: JSON.stringify({ type: "state", session: next, desktopConnected: true, microphoneConnected,
+      preparation: { ready: true, code: "mock_ready", message: "助手已就绪。" } }) }));
+    state(sockets[0], row("A", phase));
+    if (phase === "preparing") await screen.findByRole("option", { name: "合成简历 selected" });
+    const commands = (socket: any) => socket.send.mock.calls.map(([payload]: [string]) => JSON.parse(payload).action);
+    return { ...rendered, sockets, selection, binding, state, commands };
+  }
+  const selected = (): MockSession => ({ ...row("A"), resumeId: "resume-selected", state: { ...row("A").state, version: 6 } });
+
+  it.each([false, true])("ignores a late resume response after changing sessions, including returning to A: %s", async returnToA => {
+    const app = await open();
+    fireEvent.change(screen.getByLabelText("选择简历"), { target: { value: "resume-selected" } });
+    fireEvent.click(screen.getByRole("button", { name: "前往 B" }));
+    await screen.findByRole("heading", { name: "合成场次 B" });
+    await waitFor(() => expect(app.sockets).toHaveLength(2)); app.state(app.sockets[1], row("B"));
+    if (returnToA) {
+      fireEvent.click(screen.getByRole("button", { name: "前往 A" }));
+      await screen.findByRole("heading", { name: "合成场次 A" });
+      await waitFor(() => expect(app.sockets).toHaveLength(3)); app.state(app.sockets[2], row("A"));
+    }
+    await act(async () => app.selection.resolve(selected()));
+    expect(screen.getByRole("heading", { name: `合成场次 ${returnToA ? "A" : "B"}` })).toBeInTheDocument();
+    expect(screen.getByLabelText("选择简历")).toHaveValue(`resume-${returnToA ? "A" : "B"}`);
+    expect(screen.getByRole("button", { name: "开始模拟面试 →" })).toBeEnabled();
+    expect(app.commands(app.sockets.at(-1))).toEqual([]);
+  });
+
+  it("accepts the current same-session resume response", async () => {
+    const app = await open();
+    fireEvent.change(screen.getByLabelText("选择简历"), { target: { value: "resume-selected" } });
+    await act(async () => app.selection.resolve(selected()));
+    expect(screen.getByLabelText("选择简历")).toHaveValue("resume-selected");
+    expect(screen.getByRole("button", { name: "开始模拟面试 →" })).toBeEnabled();
+  });
+
+  it("does not rewind an ended session when an older resume response arrives", async () => {
+    const app = await open(); vi.spyOn(window, "confirm").mockReturnValue(true);
+    fireEvent.change(screen.getByLabelText("选择简历"), { target: { value: "resume-selected" } });
+    app.state(app.sockets[0], selected());
+    fireEvent.click(screen.getByRole("button", { name: "结束面试" }));
+    app.state(app.sockets[0], { ...selected(), state: { ...selected().state, phase: "completed", version: 7 } });
+    await act(async () => app.selection.resolve(selected()));
+    expect(screen.getByText("本场练习已结束")).toBeInTheDocument();
+    expect(screen.queryByLabelText("选择简历")).not.toBeInTheDocument();
+  });
+
+  it.each(["another-session", "reconnect"])("ignores a late binding response after %s", async change => {
+    const app = await open();
+    fireEvent.change(screen.getByLabelText("桌面助手机器码"), { target: { value: "000000" } });
+    fireEvent.click(screen.getByRole("button", { name: "验证并连接" }));
+    if (change === "another-session") {
+      fireEvent.click(screen.getByRole("button", { name: "前往 B" }));
+      await screen.findByRole("heading", { name: "合成场次 B" });
+    } else {
+      act(() => { app.sockets[0].readyState = 3; app.sockets[0].onclose(); });
+      fireEvent.click(screen.getByRole("button", { name: "重新连接" }));
+    }
+    await waitFor(() => expect(app.sockets).toHaveLength(2));
+    app.state(app.sockets[1], row(change === "another-session" ? "B" : "A"));
+    await act(async () => app.binding.resolve({ bound: true }));
+    expect(screen.getByRole("status", { name: "助手连接状态" })).toHaveTextContent("助手已就绪。");
+    expect(app.commands(app.sockets[1])).toEqual([]);
+    expect(screen.getByRole("button", { name: "开始模拟面试 →" })).toBeEnabled();
+  });
+
+  it.each(["settling", "waiting"])("ending immediately fences %s microphone-listen intent before server acknowledgement", async phase => {
+    vi.spyOn(MockVoicePlayer.prototype, "unlock").mockResolvedValue(); vi.spyOn(window, "confirm").mockReturnValue(true);
+    const app = await open("speaking"); await act(async () => {});
+    app.state(app.sockets[0], row("A", "speaking"), phase !== "waiting");
+    app.sockets[0].send.mockClear(); vi.useFakeTimers();
+    fireEvent.click(screen.getByRole("button", { name: "我已读完，开始回答" }));
+    if (phase === "waiting") act(() => vi.advanceTimersByTime(1500));
+    fireEvent.click(screen.getByRole("button", { name: "结束面试" }));
+    if (phase === "settling") act(() => vi.advanceTimersByTime(1500));
+    else app.state(app.sockets[0], row("A", "speaking"));
+    expect(app.commands(app.sockets[0])).toEqual(["end"]);
+    expect(screen.queryByText(/正在等待助手收音通道连接/)).not.toBeInTheDocument();
   });
 });

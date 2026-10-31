@@ -574,8 +574,14 @@ def get_web_state(
     user_id = auth_context.user_id if auth_context else settings.development_user_id
     account = _account_payload(user)
     billing_state = billing.state_for_user(user_id=user_id)
-    document_items = documents.list_documents(user_id=user_id, include_deleted=False)
-    session_items = sessions.list_sessions(user_id=user_id) if auth_context else []
+    if settings.product_edition == "cn" and auth_context is not None:
+        document_items, document_records = documents.list_documents_with_records(
+            user_id=user_id, include_deleted=False,
+        )
+        session_items = sessions.list_sessions(user_id=user_id, document_records=document_records)
+    else:
+        document_items = documents.list_documents(user_id=user_id, include_deleted=False)
+        session_items = sessions.list_sessions(user_id=user_id) if auth_context else []
     session_items = [session for session in session_items if session.session_mode != "mock"]
     chat_questions: list[dict[str, object]] = []
     screenshot_questions: list[dict[str, object]] = []

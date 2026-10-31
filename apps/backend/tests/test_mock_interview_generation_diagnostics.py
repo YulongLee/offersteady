@@ -281,3 +281,93 @@ def test_unknown_diagnostic_fields_cannot_echo_sensitive_values(diagnostic_event
     assert len(events) == 1
     assert events[0]["kind"] == "unknown" and events[0]["error_code"] == "internal_error"
     assert "http_status" not in events[0]
+
+
+def test_global_generation_and_job_do_not_emit_cn_diagnostics(diagnostic_events):
+    requests = []
+    def handle(request):
+        requests.append(json.loads(request.content))
+        return response()
+    cfg = settings(product_edition="global")
+    service = MockInterviewGenerator(cfg, transport=httpx.MockTransport(handle))
+    assert asyncio.run(service.question(resume=PRIVATE, target_role=PRIVATE, rounds=())).question == "如何验证结果？"
+    jobs, repo, record = fake_job(generator=service, cfg=cfg)
+    assert asyncio.run(jobs.run_pending(user_id="synthetic-owner", session_id="synthetic-session")) is record
+    assert len(requests) == 2 and requests[0] == requests[1]
+    assert "failed" not in repo.finish_generation.call_args.kwargs
+    assert diagnostic_events() == []
+
+
+@pytest.mark.parametrize("mode", ["success", "http", "cancel"])
+def test_logging_failure_preserves_calls_faults_cancellation_and_context_reset(monkeypatch, diagnostic_events, mode):
+    def broken_logger(*_args, **_kwargs):
+        raise RuntimeError(PRIVATE)
+    monkeypatch.setattr("app.services.mock_interview_diagnostics.log_event", broken_logger)
+    seen = []
+    entered = asyncio.Event()
+    cfg = settings()
+    calls = []
+    def handle(request):
+        calls.append(request)
+        return response(status=429) if mode == "http" else response()
+    service = MockInterviewGenerator(cfg, transport=httpx.MockTransport(handle))
+    async def question(**args):
+        seen.append(MockGenerationDiagnostics.current_or_new(cfg, "question"))
+        entered.set()
+        if mode == "cancel":
+            await asyncio.Event().wait()
+        return await service.question(**args)
+    jobs, repo, record = fake_job(generator=SimpleNamespace(question=question), cfg=cfg)
+    async def worker():
+        try:
+            assert await jobs.run_pending(user_id="synthetic-owner", session_id="synthetic-session") is record
+        finally:
+            assert MockGenerationDiagnostics.current_or_new(cfg, "question") is not seen[0]
+    async def scenario():
+        task = asyncio.create_task(worker())
+        await asyncio.wait_for(entered.wait(), 1)
+        if mode == "cancel":
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        else:
+            await task
+    asyncio.run(scenario())
+    assert len(calls) == (0 if mode == "cancel" else 1)
+    if mode == "success":
+        assert "failed" not in repo.finish_generation.call_args.kwargs
+    else:
+        assert repo.finish_generation.call_args.kwargs["failed"] is True
+        assert repo.finish_generation.call_args.kwargs["provider_fault"] is (mode == "http")
+    assert diagnostic_events() == []
+
+
+@pytest.mark.parametrize("http_status", [True, 99, 600, PRIVATE, 429])
+def test_diagnostic_allowlist_drops_unknown_fields_and_bounds_numbers(diagnostic_events, http_status):
+    diagnostics = MockGenerationDiagnostics(settings(), "question")
+    diagnostics.record("resume_read", float("nan"), http_status=http_status,
+                       response_body=PRIVATE, exception=RuntimeError(PRIVATE), headers={PRIVATE: PRIVATE})
+    events = diagnostic_events()
+    assert len(events) == 1 and events[0]["duration_ms"] == 0
+    assert events[0].get("http_status") == (429 if type(http_status) is int and http_status == 429 else None)
+
+
+def test_failed_expiry_recovery_never_reports_generation_success(diagnostic_events):
+    clock = [1000]
+    deadline = 11_000
+    async def fail_at_deadline(**_):
+        clock[0] = deadline
+        raise MockGenerationUnavailable(PRIVATE, error_category="provider_http_error")
+    generator = SimpleNamespace(question=AsyncMock(side_effect=fail_at_deadline))
+    jobs, repo, _ = fake_job(generator=generator)
+    jobs.now_ms = lambda: clock[0]
+    repo.duration_deadline = Mock(return_value=deadline)
+    repo.expire_duration = Mock(side_effect=RuntimeError(PRIVATE))
+    with pytest.raises(RuntimeError, match=PRIVATE):
+        asyncio.run(jobs.run_pending(user_id="synthetic-owner", session_id="synthetic-session"))
+    generator.question.assert_awaited_once()
+    repo.expire_duration.assert_called_once()
+    repo.finish_generation.assert_not_called()
+    totals = [event for event in diagnostic_events() if event["stage"] == "generation_total"]
+    assert len(totals) == 1
+    assert totals[0]["outcome"] == "failed" and totals[0]["error_code"] == "provider_http_error"

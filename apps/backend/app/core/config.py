@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     database_pool_max_overflow: int = 10
     database_connect_timeout_seconds: float = 3.0
     database_application_name: str = "offersteady-backend"
+    cn_hot_database_pool_enabled: bool = False
+    cn_hot_database_pool_max_size: int = Field(default=4, ge=1, le=16)
+    cn_hot_database_pool_max_waiting: int = Field(default=16, ge=1, le=128)
+    cn_hot_database_pool_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
 
     pgvector_schema: str = "public"
     pgvector_extension_name: str = "vector"

@@ -1,0 +1,60 @@
+{
+  "passed": true,
+  "newProductionScenarios": [
+    {
+      "scenario": "Baseline or payload differs",
+      "result": "passed synthetic fail-closed checks and actual baseline/manifest equality",
+      "evidence": [
+        "scripts/test_release_cn_state_control.py::CandidatePolicyTests",
+        "input.json",
+        "prepare.stdout.txt"
+      ]
+    },
+    {
+      "scenario": "Candidate is prepared",
+      "result": "passed actual fixed-image probe, graph/byte protection, source/dependency/config/schema equality",
+      "evidence": [
+        "candidate-probe-result.json",
+        "web-actual-runtime-final/actual-runtime-verification.json",
+        "web-package-final-summary.json"
+      ]
+    },
+    {
+      "scenario": "Any protected work remains",
+      "result": "passed synthetic protected-count/TCP/defer cases; no protected work remained in actual gates",
+      "evidence": [
+        "scripts/test_release_cn_state_control.py::GateTests",
+        "production-verification.json"
+      ]
+    },
+    {
+      "scenario": "All gates pass just before switch",
+      "result": "preflight and each component cutover passed; only CN Backend/Web switched",
+      "evidence": [
+        "preflight.stdout.txt",
+        "deploy.stdout.txt",
+        "production-verification.json"
+      ]
+    },
+    {
+      "scenario": "Verification fails after an owned cutover",
+      "result": "owned candidate rollback and stopped original recovery passed synthetic tests; actual cutover succeeded so production rollback was not triggered",
+      "evidence": [
+        "scripts/test_release_cn_state_control.py::MutationTests",
+        "controller-tests.txt"
+      ]
+    },
+    {
+      "scenario": "Successful verification completes",
+      "result": "actual verify/public31/health/non-targets passed; 276-second aggregate observation had zero error/traceback/5xx/stream_failed log events",
+      "evidence": [
+        "verify.stdout.txt",
+        "production-verification.json",
+        "post-release-error-summary.json"
+      ]
+    }
+  ],
+  "priorLocalScenarioVerificationUnchanged": true,
+  "waitAutomationCreated": false,
+  "gitCommitOrPush": false
+}

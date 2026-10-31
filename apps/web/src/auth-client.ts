@@ -3,6 +3,7 @@ import type { SafeAccountSummary } from "@offersteady/protocol";
 import { createJsonClient } from "./api-client";
 import { AppError } from "./domain";
 import { readRuntimeConfig } from "./runtime-config";
+import { isStateReadCancelled, stateReadCancelled } from "./state-read-scope";
 
 const runtimeConfig = readRuntimeConfig(import.meta.env);
 const client = createJsonClient({ baseUrl: runtimeConfig.apiBaseUrl });
@@ -62,6 +63,55 @@ export interface StoredAuthSession {
   readonly account: SafeAccountSummary;
 }
 
+export interface AuthSessionScope {
+  readonly generation: number;
+  readonly userId: string | null;
+  readonly accessToken: string | null;
+  readonly refreshToken: string | null;
+}
+
+let authGeneration = 0;
+let observedAuthFingerprint: string | undefined;
+const storedAuthSnapshot = () => {
+  try {
+    const userId = (JSON.parse(readStorageItem(accountKey) ?? "null") as SafeAccountSummary | null)?.id ?? null;
+    return { userId, accessToken: readStorageItem(accessTokenKey), refreshToken: readStorageItem(refreshTokenKey) };
+  } catch {
+    // Browser storage can be blocked entirely, including the getter itself.
+    return { userId: null, accessToken: null, refreshToken: null };
+  }
+};
+const authFingerprint = (snapshot = storedAuthSnapshot()) => JSON.stringify([snapshot.userId, snapshot.accessToken, snapshot.refreshToken]);
+const transitionAuthScope = () => {
+  authGeneration += 1;
+  observedAuthFingerprint = authFingerprint();
+};
+const readAuthScope = (): AuthSessionScope => {
+  const snapshot = storedAuthSnapshot();
+  const fingerprint = authFingerprint(snapshot);
+  if (observedAuthFingerprint !== undefined && observedAuthFingerprint !== fingerprint) authGeneration += 1;
+  observedAuthFingerprint = fingerprint;
+  return { generation: authGeneration, ...snapshot };
+};
+const isCurrentAuthScope = (scope: AuthSessionScope) => {
+  const current = readAuthScope();
+  return current.generation === scope.generation && current.userId === scope.userId;
+};
+const confirmRefreshScope = (scope: AuthSessionScope) => {
+  const current = storedAuthSnapshot();
+  if (authGeneration !== scope.generation || current.userId !== scope.userId
+    || !current.accessToken || !current.refreshToken) return false;
+  // Called only after the trusted refresh callback. Login/clear/storage events
+  // advance the generation and cannot be mistaken for token rotation.
+  observedAuthFingerprint = authFingerprint(current);
+  return true;
+};
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", event => {
+    if (event.key === null || [accountKey, accessTokenKey, refreshTokenKey].includes(event.key)) transitionAuthScope();
+  });
+}
+
 interface AuthTokensResponse {
   readonly accessToken: string;
   readonly refreshToken: string;
@@ -119,7 +169,7 @@ const toSafeAccountSummary = (user: CurrentUserResponse): SafeAccountSummary => 
   })),
 });
 
-const storeSession = (result: AuthResultResponse): StoredAuthSession => {
+const storeSession = (result: AuthResultResponse, preserveLifecycle = false): StoredAuthSession => {
   const session = {
     accessToken: result.tokens.accessToken,
     refreshToken: result.tokens.refreshToken,
@@ -129,6 +179,8 @@ const storeSession = (result: AuthResultResponse): StoredAuthSession => {
   writeStorageItem(refreshTokenKey, session.refreshToken);
   writeStorageItem(accountKey, JSON.stringify(session.account));
   writeStorageItem("offersteady.prototype.auth", "true");
+  if (preserveLifecycle) observedAuthFingerprint = authFingerprint();
+  else transitionAuthScope();
   queuePromotionClaim(session.accessToken);
   return session;
 };
@@ -151,6 +203,9 @@ const queuePromotionClaim = (accessToken: string) => {
 };
 
 export const authClient = {
+  readScope: readAuthScope,
+  isCurrentScope: isCurrentAuthScope,
+  confirmRefreshScope,
   readStoredAccount(): SafeAccountSummary | null {
     try {
       const accountRaw = readStorageItem(accountKey);
@@ -179,11 +234,13 @@ export const authClient = {
     removeStorageItem(refreshTokenKey);
     removeStorageItem(accountKey);
     removeStorageItem("offersteady.prototype.auth");
+    transitionAuthScope();
   },
 
   bootstrapPrototypeIdentity(account: SafeAccountSummary) {
     if (!prototypeAuthEnabled()) return;
     persistPrototypeAccount(normalizePrototypeAccount(account));
+    transitionAuthScope();
   },
 
   async sendSmsCode(phoneNumber: string, signal?: AbortSignal) {
@@ -225,22 +282,28 @@ export const authClient = {
   },
 
   async refresh(signal?: AbortSignal): Promise<StoredAuthSession> {
+    const scope = readAuthScope();
     const existing = this.readStoredSession();
     if (!existing) throw new AppError("validation", "当前没有可恢复的登录会话");
     const refreshed = await client.request<AuthResultResponse>("/api/v1/auth/refresh", {
       method: "POST",
       body: JSON.stringify({ refreshToken: existing.refreshToken }),
     }, signal);
-    return storeSession(refreshed);
+    const current = this.readStoredSession();
+    if (!isCurrentAuthScope(scope) || current?.refreshToken !== existing.refreshToken
+      || refreshed.user.userId !== existing.account.id) throw stateReadCancelled();
+    return storeSession(refreshed, true);
   },
 
   async currentUser(signal?: AbortSignal): Promise<SafeAccountSummary> {
+    const scope = readAuthScope();
     const existing = this.readStoredSession();
     if (!existing) throw new AppError("validation", "当前没有登录态");
     const user = await client.request<CurrentUserResponse>("/api/v1/auth/me", {
       headers: authorizationHeaders(existing.accessToken),
     }, signal);
     const account = toSafeAccountSummary(user);
+    if (!isCurrentAuthScope(scope) || account.id !== existing.account.id) throw stateReadCancelled();
     writeStorageItem(accountKey, JSON.stringify(account));
     return account;
   },
@@ -251,7 +314,8 @@ export const authClient = {
       const existing = this.readStoredSession();
       if (!existing) throw new AppError("validation", "当前没有登录态");
       return { ...existing, account: current };
-    } catch {
+    } catch (error) {
+      if (signal?.aborted || isStateReadCancelled(error)) throw error;
       return this.refresh(signal);
     }
   },
@@ -262,6 +326,9 @@ export const authClient = {
       this.clear();
       return;
     }
+    // Revoke in-flight client work immediately, before the server reply arrives.
+    transitionAuthScope();
+    const scope = readAuthScope();
     try {
       await client.request("/api/v1/auth/logout", {
         method: "POST",
@@ -269,7 +336,7 @@ export const authClient = {
         body: JSON.stringify({ logoutAllDevices: false }),
       }, signal);
     } finally {
-      this.clear();
+      if (isCurrentAuthScope(scope)) this.clear();
     }
   },
 };

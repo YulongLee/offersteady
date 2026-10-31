@@ -1,0 +1,98 @@
+{
+  "catalog": [
+    {
+      "id": "pass-1",
+      "displayName": "1 天会员",
+      "kind": "time_pass",
+      "priceCents": 2990,
+      "catalogVersion": 7,
+      "durationDays": 1,
+      "knowledgeIndexAllowance": 0
+    },
+    {
+      "id": "pass-15",
+      "displayName": "15 天会员",
+      "kind": "time_pass",
+      "priceCents": 21990,
+      "catalogVersion": 10,
+      "durationDays": 15,
+      "knowledgeIndexAllowance": 2
+    },
+    {
+      "id": "pass-3",
+      "displayName": "3 天会员",
+      "kind": "time_pass",
+      "priceCents": 6990,
+      "catalogVersion": 8,
+      "durationDays": 3,
+      "knowledgeIndexAllowance": 0
+    },
+    {
+      "id": "pass-30",
+      "displayName": "30 天会员",
+      "kind": "time_pass",
+      "priceCents": 32990,
+      "catalogVersion": 11,
+      "durationDays": 30,
+      "knowledgeIndexAllowance": 2
+    },
+    {
+      "id": "pass-7",
+      "displayName": "7 天会员",
+      "kind": "time_pass",
+      "priceCents": 12990,
+      "catalogVersion": 9,
+      "durationDays": 7,
+      "knowledgeIndexAllowance": 0
+    },
+    {
+      "id": "points-1000",
+      "displayName": "1000 积分",
+      "kind": "points_pack",
+      "priceCents": 3990,
+      "catalogVersion": 12,
+      "points": 1000
+    },
+    {
+      "id": "points-10000",
+      "displayName": "10000 积分",
+      "kind": "points_pack",
+      "priceCents": 29990,
+      "catalogVersion": 14,
+      "points": 10000
+    },
+    {
+      "id": "points-3000",
+      "displayName": "3000 积分",
+      "kind": "points_pack",
+      "priceCents": 9990,
+      "catalogVersion": 13,
+      "points": 3000
+    },
+    {
+      "id": "points-30000",
+      "displayName": "30000 积分",
+      "kind": "points_pack",
+      "priceCents": 69990,
+      "catalogVersion": 15,
+      "points": 30000
+    },
+    {
+      "id": "points-66666",
+      "displayName": "66666 积分",
+      "kind": "points_pack",
+      "priceCents": 99990,
+      "catalogVersion": 16,
+      "points": 66666
+    }
+  ],
+  "rates": {
+    "catalogVersion": 16,
+    "answerPoints": 5,
+    "screenshotAnswerPoints": 15,
+    "writtenExamPoints": 30,
+    "realtimeMinutePoints": 5,
+    "knowledgeIndexMinimumPoints": 20,
+    "knowledgeIndexPointsPer1000Tokens": 4
+  }
+}
