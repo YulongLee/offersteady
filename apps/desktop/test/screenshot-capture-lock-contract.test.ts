@@ -9,7 +9,7 @@ describe("desktop screenshot lock wiring", () => {
     expect(source).toContain("screenshotCaptureLock.tryAcquire()");
     expect(source).toContain("screenshotCaptureLock.state().locked && !lockAlreadyHeld");
     expect(source).toContain("releaseAfterCapture");
-    expect(source).toContain("if (screenshotCaptureLock.state().locked) releaseScreenshotCaptureLock()");
+    expect(source).toContain("if (screenshotCaptureLock.state().locked) releaseScreenshotCaptureLock(owner)");
     expect(source).toContain("await processRemoteScreenshotRequest(identity, requestId, true)");
     expect(source).toContain("DesktopCaptureEventParser");
   });

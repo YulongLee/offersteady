@@ -1,0 +1,90 @@
+{
+  "passed": true,
+  "releaseId": "20261102-global-performance-companion-136-1",
+  "checksPassed": 30,
+  "checks": [
+    "preflight_actual_controller_success_pinned_payload",
+    "deploy_actual_controller_success_pinned_payload",
+    "verify_actual_controller_success_pinned_payload",
+    "prepared_exact_input_two_targets_six_protected_nontargets",
+    "new_real_prepared_probe_correct",
+    "rollback_real_prepared_probe_correct",
+    "backend_final_actual_image_inventory_rollback_and_no_restart",
+    "web_final_actual_image_inventory_rollback_and_no_restart",
+    "original_images_anchor_and_published136_manifest_preserved",
+    "actual_seven_idle_gates_and_tcp_clear",
+    "anonymous_access_boundaries_preserved",
+    "public_current136_and_existing_commercial_switches_healthy",
+    "six_immutable_old135_current136_expected",
+    "download_exact_macos_arm64_1.3.6",
+    "download_exact_macos_x64_1.3.6",
+    "download_exact_windows_x64_1.3.6",
+    "download_exact_macos_arm64_1.3.5",
+    "download_exact_macos_x64_1.3.5",
+    "download_exact_windows_x64_1.3.5",
+    "all34_public_route_hashes_equal_actual_candidate",
+    "bounded_postflight_window_after_public_acceptance",
+    "settings379_worker267_settings354_and_all_six_nontargets_preserved",
+    "owned_candidate_health_and_restart_valid",
+    "repaired_public16_private34_permissions_valid",
+    "three_component_bounded_counts_no_errors_tracebacks_5xx_no_sensitive_export",
+    "observer_no_models_dbwrites_lifecycle",
+    "all_three_legacy_latest_objects_bytehash_unchanged",
+    "cn_eight_original_lifecycles_and_manifest_unchanged",
+    "final_payload_exact_old_to_new_two_file_cas_14_unchanged",
+    "prepared_runtime_uses_exact_final_input_not_original_payload"
+  ],
+  "evidenceSha256": {
+    "prepared-safe-summary.json": "81a347cc44ac5fff6cc77c2e92393ad489c64e5b4d33f5e988ef396cd96643b0",
+    "preflight-result.json": "909e5b9c4d59ec2c212bcefd5af69d7c11fab9d012ef5f08383af2153328552f",
+    "deploy-result.json": "885d84b598a65b599424e64839ded8c4a07f5e77a3b9d675251e84d2d2f1f060",
+    "verify-result.json": "22778955b3221329e6dddd67cd2f941310187eaed4d6df89cace880fdf56be79",
+    "runtime-public-final-summary.json": "88635c8792886dd79c9e796e7b3628f6fe0bdb838aea9d626dabb0f048f39a0f",
+    "postflight-observation.json": "8e47396694ee9550d0d640d5841e31d228142decd8a066a937297dedc041751b",
+    "public-verification.json": "5b5f7b26625906d9a09578fabb2ed1b5d978b221bdee35d843ddbd13e370992b",
+    "cn-preservation.after.json": "937d30dccf77e9e1a8daa1e71b18290eebb729f14178ab795946b01cd7b796f9",
+    "oss-latest.before-publication.json": "ecf633f92d50c5a37d9f193e8c1fea3ea9c4713158dec0da2f114c1979972af9",
+    "oss-latest.after-publication.json": "aeb5909d324da5931562ac8c976c44fe9ac04848b9a1e6682b1a61f2e1960c05"
+  },
+  "observedWindowSeconds": 180.7,
+  "errorLines": 0,
+  "tracebacks": 0,
+  "http5xx": 0,
+  "publicDownloadExactHashes": 6,
+  "publicRoutesExactHashes": 34,
+  "blockingFindings": [],
+  "limits": [
+    "Reviewer independently cross-checked root saved real server/public evidence locally; no additional remote or production operations.",
+    "Short post-deploy observation is not a guarantee of future P95 or physical-device behavior.",
+    "No real interview, model, microphone, Bluetooth, Windows/Intel hardware acceptance performed by this reviewer."
+  ],
+  "actions": {
+    "remoteCalls": 0,
+    "productionWrites": 0,
+    "gitMutations": 0
+  },
+  "payloadCas": {
+    "oldInputSha256": "9a3b53e274e674f65f54a35dd7d452de415190e036dca608b45f4d52dc693ec5",
+    "newInputSha256": "d9c7e0336533f1865374c8c9e0049e954029c9d39ee4edbb636aa66d592e7e08",
+    "changedFiles": [
+      "controller.py",
+      "input.json"
+    ],
+    "unchangedFiles": 14,
+    "all16FinalHashesMatch": true
+  },
+  "priorIndependentReviews": {
+    "independent-payload-review.json": "ff124563b6ebfce465f279f8a4a08b955fa7c5529061ebbaf75fda27fbe8d567",
+    "independent-stopped-guard-review.json": "17bb72d387ccab4165db8247b5fcc0b12eb3c120ac09e2ce967beb192c3a0108",
+    "independent-metadata-repair-postflight-tool.json": "e9e7f073ee98dd93a860aa6a6a826b7d0a46b26512647e691627cf78300001e6"
+  },
+  "noDuplicateRestartEvidence": {
+    "newTargetRestartCounts": [
+      0,
+      0
+    ],
+    "existingSixNonTargetsFullSignaturesUnchanged": true,
+    "cnEightLifecyclesUnchanged": true,
+    "comment": "Controller ownership/intent and repeat verify guards were independently reviewed; these saved postflight results show no restarted target process. Reviewer did not read raw Docker events."
+  }
+}

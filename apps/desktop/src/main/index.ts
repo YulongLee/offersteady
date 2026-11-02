@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, Tray, desktopCapturer, globalShortcut, ipcMain, nativeImage, safeStorage, session, shell, systemPreferences } from "electron";
+import { app, BrowserWindow, Menu, Tray, desktopCapturer, globalShortcut, ipcMain, nativeImage, powerMonitor, powerSaveBlocker, safeStorage, session, shell, systemPreferences } from "electron";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -24,6 +24,13 @@ import { globalStableUserDataDirectory, legacyUserDataDirectories, migrateLegacy
 import { resolveDesktopProductEdition } from "./product-edition";
 import { loadLocalTestRuntime, localTestUserDataDirectory } from "./local-test-runtime";
 import { DesktopCapabilitySnapshot } from "./desktop-capability-snapshot";
+import { MicrophonePermissionController } from "./microphone-permission";
+import { CompanionWindowVisibility, RESTORE_WINDOW_SHORTCUT } from "./window-visibility";
+import { companionTrayImages, CompanionTrayPresentation } from "./tray-presentation";
+import { DesktopConnectionRecovery, type DesktopRegistrationContext } from "./desktop-connection-recovery";
+import { WrittenScreenshotProcessor, type WrittenScreenshotJob } from "./written-screenshot-processor";
+import { WrittenSessionAwakeGuard } from "./written-session-awake";
+import { screenshotFailureMessage } from "./global-screenshot-failure-copy";
 
 const localTestRuntime = loadLocalTestRuntime(app.isPackaged, process.resourcesPath);
 
@@ -51,6 +58,7 @@ if (process.platform === "darwin") {
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+let trayPresentation: CompanionTrayPresentation | null = null;
 let captureState: CaptureState = "not-connected";
 let isQuitting = false;
 let credentialVault: DeviceCredentialVault | null = null;
@@ -66,12 +74,26 @@ let screenshotShortcutRegistration = {
 let screenshotShortcutTriggerInFlight = false;
 const screenshotCaptureLock = new ScreenshotCaptureLock();
 let lastScreenshotShortcutTriggerAt = 0;
-let registrationInterval: NodeJS.Timeout | null = null;
+let screenshotSessionMode: string | null = null;
+let writtenScreenshotGeneration = 0;
+let writtenPendingProbeScheduled = false;
+const writtenCaptureOwners = new Map<string, number>();
+let writtenNativeSourceReadInFlight = false;
+const writtenAwake = new WrittenSessionAwakeGuard({
+  start: () => powerSaveBlocker.start("prevent-app-suspension"),
+  stop: id => { powerSaveBlocker.stop(id); },
+});
 let screenshotRequestTimer: NodeJS.Timeout | null = null;
 let realtimeAudioInterval: NodeJS.Timeout | null = null;
 let preferredScreenSourceId: string | null = null;
 let hasRegisteredThisRun = false;
 const desktopCapabilitySnapshot = new DesktopCapabilitySnapshot();
+const microphonePermission = new MicrophonePermissionController({
+  platform: process.platform,
+  readStatus: () => systemPreferences.getMediaAccessStatus("microphone"),
+  requestAccess: () => systemPreferences.askForMediaAccess("microphone"),
+});
+let restoreShortcutRegistered = false;
 let processingRemoteScreenshotRequestId: string | null = null;
 const nativeAudioProcesses = new Map<string, ChildProcess>();
 let mainRealtimeBindingKey: string | null = null;
@@ -88,8 +110,7 @@ let mainRealtimeSequences = new Map<"microphone" | "system", number>();
 let mainRealtimeEnsureInFlight = false;
 let mainRealtimeOwnsNativeAudio = false;
 let rendererOwnsNativeAudio = false;
-let desktopRegistrationInFlight = false;
-let remoteScreenshotPollInFlight = false;
+let remoteScreenshotPollOwner: number | null = null;
 let remoteScreenshotPollFailureCount = 0;
 let remoteScreenshotStreamController: AbortController | null = null;
 let remoteScreenshotLoopGeneration = 0;
@@ -519,8 +540,16 @@ const getLiveDesktopBinding = async () => {
 const getDesktopScreenshotPollingState = async () => {
   const liveBindingState = screenshotStreamEligible(captureState);
   if (!pairingIdentityStore || !liveBindingState) return { live: false as const, identity: null };
-  const identity = await pairingIdentityStore.loadOrCreate(`${app.getName()} · ${process.platform === "darwin" ? "Mac" : "Desktop"}`);
-  return { live: true as const, identity };
+  const startedAt = Date.now();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const identity = await Promise.race([
+      pairingIdentityStore.loadOrCreate(`${app.getName()} · ${process.platform === "darwin" ? "Mac" : "Desktop"}`),
+      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("screenshot_identity_timeout")), 5_000); }),
+    ]);
+    if (Date.now() - startedAt >= 5_000) throw new Error("screenshot_identity_timeout");
+    return { live: true as const, identity };
+  } finally { clearTimeout(timer); }
 };
 
 const ensureMainRealtimeAudioPublishing = async () => {
@@ -641,62 +670,58 @@ const assertOfferSteadyApiUrl = (url: string) => {
 
 const desktopCapabilities = (deviceId: string) => {
   const config = desktopConfig();
+  const permission = microphonePermission.snapshot();
   return desktopCapabilitySnapshot.forDevice(deviceId, {
     protocolVersion: config.protocolVersion,
     appVersion: config.appVersion,
     platform: config.platform,
     architecture: config.architecture,
     platformVersion: config.platformVersion,
-  }, process.platform === "darwin" ? systemPreferences.getMediaAccessStatus("microphone") : undefined);
+  }, permission.source === "os" && (process.platform === "darwin" || permission.permission !== "unknown")
+    ? permission.permission : undefined);
 };
 
-const syncDesktopRegistration = async () => {
-  if (!pairingIdentityStore) return false;
+const syncDesktopRegistration = async (context: DesktopRegistrationContext) => {
+  if (!pairingIdentityStore || !context.isCurrent()) return false;
   const identity = await pairingIdentityStore.loadOrCreate(`${app.getName()} · ${process.platform === "darwin" ? "Mac" : "Desktop"}`);
+  if (!context.isCurrent()) return false;
   const config = desktopConfig();
-  try {
-    const endpoint = hasRegisteredThisRun
-      ? `${config.apiBaseUrl}/realtime-speech/desktop-devices/${encodeURIComponent(identity.deviceId)}/heartbeat`
-      : `${config.apiBaseUrl}/realtime-speech/desktop-devices/register`;
-    const response = await fetchWithTimeout(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...(hasRegisteredThisRun ? {} : { deviceId: identity.deviceId }),
-        manualCode: identity.manualCode,
-        displayName: identity.displayName,
-        capabilities: desktopCapabilities(identity.deviceId),
-      }),
-    });
-    if (!response.ok) {
-      if (hasRegisteredThisRun && response.status === 404) hasRegisteredThisRun = false;
-      console.warn(`[desktop-registration] failed with status ${response.status}`);
-      return false;
-    }
-    hasRegisteredThisRun = true;
-    return true;
-  } catch (error) {
-    console.warn("[desktop-registration] request failed", error);
+  const endpoint = hasRegisteredThisRun
+    ? `${config.apiBaseUrl}/realtime-speech/desktop-devices/${encodeURIComponent(identity.deviceId)}/heartbeat`
+    : `${config.apiBaseUrl}/realtime-speech/desktop-devices/register`;
+  const response = await fetch(endpoint, {
+    method: "POST", signal: context.signal,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...(hasRegisteredThisRun ? {} : { deviceId: identity.deviceId }),
+      manualCode: identity.manualCode, displayName: identity.displayName,
+      capabilities: desktopCapabilities(identity.deviceId) }),
+  });
+  await response.text();
+  if (!context.isCurrent()) return false;
+  if (!response.ok) {
+    if (hasRegisteredThisRun && response.status === 404) hasRegisteredThisRun = false;
     return false;
   }
+  hasRegisteredThisRun = true;
+  return true;
 };
 
-const startDesktopRegistrationLoop = () => {
-  if (registrationInterval) clearInterval(registrationInterval);
-  const run = async () => {
-    if (desktopRegistrationInFlight) return;
-    desktopRegistrationInFlight = true;
-    try {
-      await syncDesktopRegistration();
-    } finally {
-      desktopRegistrationInFlight = false;
+const desktopConnectionRecovery = new DesktopConnectionRecovery({
+  register: syncDesktopRegistration,
+  onSuccess: context => {
+    if (screenshotSessionMode === "written" && remoteScreenshotBindingKey
+      && (remoteScreenshotSuspended || context.reason !== "heartbeat" && context.reason !== "startup")) {
+      void recoverWrittenScreenshotConnection(context);
     }
-  };
-  void run();
-  registrationInterval = setInterval(() => {
-    void run();
-  }, 15000);
-};
+  },
+  onDiagnostic: diagnostic => {
+    if (diagnostic.event === "failed" || diagnostic.event === "succeeded" && diagnostic.failures > 0) {
+      console.info("[desktop-connection]", diagnostic);
+    }
+    if (!diagnostic.online) writtenAwake.refresh(false);
+  },
+});
+const startDesktopRegistrationLoop = () => desktopConnectionRecovery.start();
 
 const desktopApiUrl = (pathName: string) => {
   const config = desktopConfig();
@@ -711,19 +736,14 @@ const permissionSettingsUrl = (kind: "microphone" | "screen" | "camera" | "audio
   return "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture";
 };
 
-const trayImage = () => {
-  const glyph = desktopCopy("稳", "O");
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" rx="8" fill="#5ee0b5"/><text x="16" y="22" text-anchor="middle" font-size="18" font-family="sans-serif" font-weight="700" fill="#07130f">${glyph}</text></svg>`;
-  return nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`);
-};
-
 const updateTray = () => {
-  if (!tray) return;
+  if (!tray || !trayPresentation) return;
   tray.setToolTip(`${desktopCopy("面试稳伴随程序", "OfferSteady Companion")} · ${stateLabels[captureState]}`);
-  tray.setContextMenu(Menu.buildFromTemplate([
+  trayPresentation.update(Menu.buildFromTemplate([
     { label: stateLabels[captureState], enabled: false },
     { type: "separator" },
-    { label: desktopCopy("打开伴随程序", "Open companion"), click: () => mainWindow?.show() },
+    { label: desktopCopy("打开伴随程序", "Open companion"), click: () => windowVisibility.restore() },
+    { label: desktopCopy("隐藏助手", "Hide companion"), click: () => windowVisibility.hide() },
     {
       label: desktopCopy("停止并退出", "Stop and quit"),
       click: () => {
@@ -733,6 +753,42 @@ const updateTray = () => {
     },
   ]));
 };
+
+const ensureTray = () => {
+  if (!tray || tray.isDestroyed()) {
+    const images = companionTrayImages(isGlobalRelease());
+    tray = new Tray(images.normal);
+    trayPresentation = new CompanionTrayPresentation(tray, {
+      platform: process.platform, images,
+      isHidden: () => windowVisibility.isHidden(),
+      restore: () => windowVisibility.restore(),
+      showMenu: menu => {
+        if (!mainWindow || mainWindow.isDestroyed()) createWindow();
+        if (!mainWindow || mainWindow.isDestroyed() || !tray || tray.isDestroyed()) return;
+        // An explicit hidden host avoids focus-dependent popup and the Tray
+        // popup API's synthetic left-click path on macOS.
+        menu.popup({ window: mainWindow });
+      },
+    });
+  }
+  updateTray();
+};
+
+const windowVisibility = new CompanionWindowVisibility({
+  hideWindow: () => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide(); },
+  showWindow: () => {
+    if (!mainWindow || mainWindow.isDestroyed()) { createWindow(); return; }
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  },
+  skipTaskbar: skip => { if (process.platform === "win32" && mainWindow && !mainWindow.isDestroyed()) mainWindow.setSkipTaskbar(skip); },
+  setTrayTransparent: () => { ensureTray(); trayPresentation?.refresh(); },
+  ...(process.platform === "darwin" ? {
+    hideDock: () => app.dock?.hide(),
+    showDock: () => app.dock?.show(),
+  } : {}),
+});
 
 const publishScreenshotCaptureLock = () => {
   const state = screenshotCaptureLock.state();
@@ -753,26 +809,35 @@ interface DesktopScreenCaptureResult {
   readonly errorMessage?: string;
 }
 
-const releaseScreenshotCaptureLock = () => {
-  screenshotCaptureLock.release();
-  return publishScreenshotCaptureLock();
+const releaseScreenshotCaptureLock = (expectedOwner?: number | null) => {
+  screenshotCaptureLock.release(expectedOwner);
+  const state = publishScreenshotCaptureLock();
+  queueMicrotask(() => writtenScreenshotProcessor.resume());
+  return state;
 };
 
 const captureCurrentScreen = async (
   screenSourceId: string | null,
   lockAlreadyHeld = false,
   releaseAfterCapture = false,
+  lifecycle?: { signal: AbortSignal; ownerToken: number },
 ): Promise<DesktopScreenCaptureResult> => {
   if (!lockAlreadyHeld && !screenshotCaptureLock.tryAcquire()) {
     return { name: "共享屏幕截取", errorMessage: screenshotCaptureLock.state().message };
   }
   if (!lockAlreadyHeld) publishScreenshotCaptureLock();
+  const ownerToken = lifecycle?.ownerToken ?? screenshotCaptureLock.ownerToken();
   const failed = (result: DesktopScreenCaptureResult) => {
-    releaseScreenshotCaptureLock();
+    releaseScreenshotCaptureLock(ownerToken);
     return result;
   };
+  if (lifecycle && writtenNativeSourceReadInFlight) {
+    return failed({ name: "共享屏幕截取", errorMessage: "屏幕截取仍在恢复，请重新打开助手后重试。" });
+  }
   let sources;
+  let ownsNativeRead = false;
   try {
+    if (lifecycle) { writtenNativeSourceReadInFlight = true; ownsNativeRead = true; }
     sources = await desktopCapturer.getSources({
       types: ["screen"],
       thumbnailSize: { width: 1920, height: 1080 },
@@ -784,7 +849,12 @@ const captureCurrentScreen = async (
         ? `获取屏幕源失败：${error.message}。请在系统设置中允许面试稳伴随程序录制屏幕后重启应用。`
         : "获取屏幕源失败，请在系统设置中允许面试稳伴随程序录制屏幕后重启应用。",
     });
+  } finally {
+    // getSources has no abort API. A timed-out native read must not multiply
+    // into more native reads on each explicit retry while its result is fenced.
+    if (ownsNativeRead) writtenNativeSourceReadInFlight = false;
   }
+  if (lifecycle?.signal.aborted || screenshotCaptureLock.ownerToken() !== ownerToken) throw new Error("screenshot_operation_obsolete");
   const requestedScreenSourceId = screenSourceId || preferredScreenSourceId;
   const selectedScreen = requestedScreenSourceId
     ? sources.find((source) => source.id === requestedScreenSourceId)
@@ -820,7 +890,7 @@ const captureCurrentScreen = async (
     originalHeight: size.height,
     extension: optimized.extension,
   };
-  if (releaseAfterCapture) releaseScreenshotCaptureLock();
+  if (releaseAfterCapture) releaseScreenshotCaptureLock(ownerToken);
   return result;
 };
 
@@ -830,6 +900,7 @@ const uploadScreenshotCapture = async (request: {
   manualCode: string;
   dataUrl: string;
   filename: string;
+  signal?: AbortSignal;
 }) => {
   const url = assertOfferSteadyApiUrl(request.url);
   const [meta, payload] = request.dataUrl.split(",", 2);
@@ -840,10 +911,9 @@ const uploadScreenshotCapture = async (request: {
   form.append("deviceId", request.deviceId);
   form.append("manualCode", request.manualCode);
   form.append("screenshot", new Blob([binary], { type: mimeType }), request.filename);
-  const response = await fetchWithTimeout(url, {
-    method: "POST",
-    body: form,
-  }, DESKTOP_UPLOAD_REQUEST_TIMEOUT_MS);
+  const response = request.signal
+    ? await fetch(url, { method: "POST", body: form, signal: request.signal })
+    : await fetchWithTimeout(url, { method: "POST", body: form }, DESKTOP_UPLOAD_REQUEST_TIMEOUT_MS);
   return {
     ok: response.ok,
     status: response.status,
@@ -861,7 +931,7 @@ const reportRemoteScreenshotFailure = async (identity: { deviceId: string; manua
       body: JSON.stringify({
         deviceId: identity.deviceId,
         manualCode: identity.manualCode,
-        message,
+        message: screenshotFailureMessage(isGlobalRelease(), message),
         stage,
       }),
     });
@@ -870,16 +940,179 @@ const reportRemoteScreenshotFailure = async (identity: { deviceId: string; manua
   }
 };
 
+interface WrittenBinding {
+  sessionId: string; bindingId: string; ownerUserId: string; deviceId: string; manualCode: string;
+}
+const isCurrentWrittenJob = (job: WrittenScreenshotJob) => !isQuitting
+  && screenshotSessionMode === "written" && screenshotStreamEligible(captureState)
+  && job.bindingKey === remoteScreenshotBindingKey && job.generation === writtenScreenshotGeneration;
+
+const readWrittenBinding = async (identity: { deviceId: string; manualCode: string }, signal: AbortSignal): Promise<WrittenBinding | null> => {
+  const response = await fetch(desktopApiUrl(`/realtime-speech/desktop-devices/pairing-status?manualCode=${encodeURIComponent(identity.manualCode)}&deviceId=${encodeURIComponent(identity.deviceId)}`), { signal });
+  if (!response.ok) { await response.body?.cancel(); return null; }
+  const envelope = await response.json() as { data?: { registered?: boolean; bound?: boolean; sessionStatus?: string; sessionMode?: string; binding?: WrittenBinding } };
+  const value = envelope.data;
+  return value?.registered && value.bound && value.sessionStatus === "live" && value.sessionMode === "written"
+    && value.binding?.deviceId === identity.deviceId && value.binding.manualCode === identity.manualCode
+    && Boolean(value.binding.ownerUserId) ? value.binding : null;
+};
+
+let writtenRecoveryCheckInFlight = false;
+const recoverWrittenScreenshotConnection = async (context: DesktopRegistrationContext) => {
+  if (writtenRecoveryCheckInFlight) return;
+  const expectedKey = remoteScreenshotBindingKey;
+  const expectedGeneration = writtenScreenshotGeneration;
+  const controller = new AbortController();
+  const startedAt = Date.now();
+  let deadline: ReturnType<typeof setTimeout> | undefined;
+  const current = () => Date.now() - startedAt < 5_000 && context.isCurrent() && !controller.signal.aborted
+    && expectedKey === remoteScreenshotBindingKey && expectedGeneration === writtenScreenshotGeneration;
+  try {
+    if (!expectedKey || !pairingIdentityStore || !current()) return;
+    writtenRecoveryCheckInFlight = true;
+    const timeout = new Promise<never>((_, reject) => {
+      deadline = setTimeout(() => { controller.abort(); reject(new Error("written_recovery_timeout")); }, 5_000);
+    });
+    const verify = async () => {
+      const identity = await pairingIdentityStore!.loadOrCreate(app.getName());
+      if (!current()) return;
+      const binding = await readWrittenBinding(identity, AbortSignal.any([context.signal, controller.signal]));
+      if (!current()) return;
+      const valid = screenshotSessionMode === "written" && screenshotStreamEligible(captureState)
+        && binding !== null && screenshotBindingKey(binding) === expectedKey;
+      writtenAwake.refresh(valid);
+      if (valid && remoteScreenshotSuspended) startRemoteScreenshotRequestLoop();
+    };
+    await Promise.race([verify(), timeout]);
+  } catch {
+    if (current()) writtenAwake.refresh(false);
+  } finally {
+    clearTimeout(deadline);
+    controller.abort();
+    writtenRecoveryCheckInFlight = false;
+  }
+};
+
+interface DeviceScreenshotRequest {
+  requestId: string; sessionId: string; ownerUserId: string; deviceId: string; manualCode: string; status: string; createdAtMs?: number;
+}
+const screenshotRequestMatchesBinding = (request: DeviceScreenshotRequest, binding: WrittenBinding, identity: { deviceId: string; manualCode: string }) =>
+  request.sessionId === binding.sessionId && request.ownerUserId === binding.ownerUserId
+  && request.deviceId === identity.deviceId && request.manualCode === identity.manualCode;
+const readWrittenRequest = async (identity: { deviceId: string; manualCode: string }, binding: WrittenBinding, signal: AbortSignal, requestId?: string) => {
+  const query = new URLSearchParams({ manualCode: identity.manualCode, sessionId: binding.sessionId,
+    ...(requestId ? { requestId } : {}) });
+  const response = await fetch(desktopApiUrl(`/screenshot-answer/desktop-devices/${encodeURIComponent(identity.deviceId)}/capture-requests/next?${query}`), { signal });
+  if (!response.ok) { await response.body?.cancel(); throw new Error("written_capture_connection_unavailable"); }
+  const envelope = await response.json() as { data?: DeviceScreenshotRequest | null; timestamp?: string };
+  const request = envelope.data;
+  if (request && !screenshotRequestMatchesBinding(request, binding, identity)) throw new Error("written_capture_scope_mismatch");
+  // Use the server envelope clock when available; do not re-photograph an old
+  // explicit request merely because a stream reconnected or recent-ID cache rotated.
+  const serverNow = envelope.timestamp ? Date.parse(envelope.timestamp) : Date.now();
+  if (request?.status === "requested" && typeof request.createdAtMs === "number"
+    && Number.isFinite(serverNow) && serverNow - request.createdAtMs >= 60_000) {
+    return { ...request, status: "expired" };
+  }
+  return request ?? null;
+};
+
+const releaseWrittenOwner = (requestId: string, token: number) => () => {
+  if (writtenCaptureOwners.get(requestId) === token) writtenCaptureOwners.delete(requestId);
+  releaseScreenshotCaptureLock(token);
+};
+
+const scheduleWrittenPendingProbe = (excludedRequestId: string) => {
+  if (writtenPendingProbeScheduled || isQuitting || screenshotSessionMode !== "written" || !remoteScreenshotBindingKey) return;
+  writtenPendingProbeScheduled = true;
+  setTimeout(() => {
+    writtenPendingProbeScheduled = false;
+    if (isQuitting || screenshotSessionMode !== "written" || !remoteScreenshotBindingKey
+      || !screenshotStreamEligible(captureState) || writtenScreenshotProcessor.snapshot().pendingCount > 0
+      || writtenScreenshotProcessor.snapshot().activeRequestId) return;
+    // One canonical read after explicit work; no extra continuous polling loop.
+    void pollRemoteScreenshotRequest(false, excludedRequestId).catch(() => undefined);
+  }, 0);
+};
+
+const writtenScreenshotProcessor = new WrittenScreenshotProcessor<DesktopScreenCaptureResult>({
+  inspect: async (job, signal) => {
+    if (!isCurrentWrittenJob(job)) return { current: false, requested: false };
+    const binding = await readWrittenBinding(job.identity, signal);
+    if (signal.aborted || !isCurrentWrittenJob(job) || !binding || screenshotBindingKey(binding) !== job.bindingKey) {
+      return { current: false, requested: false };
+    }
+    const request = await readWrittenRequest(job.identity, binding, signal, job.requestId);
+    return { current: !signal.aborted && isCurrentWrittenJob(job), requested: request?.requestId === job.requestId && request.status === "requested" };
+  },
+  acquire: job => {
+    if (!isCurrentWrittenJob(job) || !screenshotCaptureLock.tryAcquire()) return null;
+    const owner = screenshotCaptureLock.ownerToken()!;
+    writtenCaptureOwners.set(job.requestId, owner);
+    publishScreenshotCaptureLock();
+    return releaseWrittenOwner(job.requestId, owner);
+  },
+  capture: async (job, signal) => {
+    const owner = writtenCaptureOwners.get(job.requestId);
+    if (!isCurrentWrittenJob(job) || owner === undefined || signal.aborted) throw new Error("written_capture_obsolete");
+    const capture = await captureCurrentScreen(null, true, false, { signal, ownerToken: owner });
+    if (capture.errorMessage || !capture.dataUrl) throw new Error("written_capture_unavailable");
+    return capture;
+  },
+  upload: async (job, capture, signal) => {
+    if (!isCurrentWrittenJob(job) || signal.aborted || !capture.dataUrl) throw new Error("written_capture_obsolete");
+    const extension = capture.extension || "jpg";
+    const result = await uploadScreenshotCapture({
+      url: desktopApiUrl(`/screenshot-answer/capture-requests/${encodeURIComponent(job.requestId)}/desktop-upload`),
+      deviceId: job.identity.deviceId, manualCode: job.identity.manualCode,
+      dataUrl: capture.dataUrl, filename: `screen.${extension}`, signal,
+    });
+    if (!result.ok) throw new Error(`written_upload_${result.status}`);
+  },
+  report: async (job, failure, signal) => {
+    if (!isCurrentWrittenJob(job) || signal.aborted) return;
+    const response = await fetch(desktopApiUrl(`/screenshot-answer/capture-requests/${encodeURIComponent(job.requestId)}/desktop-fail`), {
+      method: "POST", signal, headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceId: job.identity.deviceId, manualCode: job.identity.manualCode,
+        message: screenshotFailureMessage(isGlobalRelease(), failure.message), stage: failure.stage === "upload" ? "upload-failed" : "capture-failed" }),
+    });
+    await response.body?.cancel();
+    // A cancelled request's terminal 409 is not a new screenshot failure.
+  },
+  notice: (job, message) => {
+    if (isCurrentWrittenJob(job)) mainWindow?.webContents.send("desktop:remote-screenshot-notice", message);
+  },
+  settled: (job, outcome) => {
+    console.info("[written-screenshot]", { outcome: outcome.status, errorCode: outcome.failure?.code ?? null });
+    if (isCurrentWrittenJob(job) && outcome.status !== "unconfirmed") scheduleWrittenPendingProbe(job.requestId);
+  },
+});
+
+const enqueueWrittenScreenshot = (identity: { deviceId: string; manualCode: string }, requestId: string, lockAlreadyHeld: boolean) => {
+  // A queued shortcut must not hold the physical lock ahead of earlier FIFO jobs.
+  if (lockAlreadyHeld) releaseScreenshotCaptureLock(screenshotCaptureLock.ownerToken());
+  const job: WrittenScreenshotJob = { requestId, identity, bindingKey: remoteScreenshotBindingKey!, generation: writtenScreenshotGeneration };
+  const result = writtenScreenshotProcessor.enqueue(job);
+  if (result.status === "full") {
+    void reportRemoteScreenshotFailure(identity, requestId, "截图请求较多，请稍候重试。", "capture-failed");
+  }
+  return result.completion.then(() => true);
+};
+
 const processRemoteScreenshotRequest = async (
   identity: { deviceId: string; manualCode: string },
   requestId: string,
   lockAlreadyHeld = false,
 ) => {
+  if (requestId && screenshotSessionMode === "written" && remoteScreenshotBindingKey) {
+    return enqueueWrittenScreenshot(identity, requestId, lockAlreadyHeld);
+  }
   if (!requestId || processingRemoteScreenshotRequestId === requestId) return true;
   if (processingRemoteScreenshotRequestId) return true;
   if (!lockAlreadyHeld && !screenshotCaptureLock.tryAcquire()) return true;
   if (!lockAlreadyHeld) publishScreenshotCaptureLock();
   processingRemoteScreenshotRequestId = requestId;
+  const owner = screenshotCaptureLock.ownerToken();
   try {
     mainWindow?.webContents.send("desktop:remote-screenshot-notice", "网页端已请求截图回答，本地助手正在截取当前屏幕。");
     const capture = await captureCurrentScreen(null, true);
@@ -902,23 +1135,40 @@ const processRemoteScreenshotRequest = async (
     mainWindow?.webContents.send("desktop:remote-screenshot-notice", `截图失败：${message}`);
   } finally {
     processingRemoteScreenshotRequestId = null;
-    if (screenshotCaptureLock.state().locked) releaseScreenshotCaptureLock();
+    if (screenshotCaptureLock.state().locked) releaseScreenshotCaptureLock(owner);
   }
   return true;
 };
 
-const pollRemoteScreenshotRequest = async (lockAlreadyHeld = false) => {
-  if (!pairingIdentityStore || processingRemoteScreenshotRequestId) return;
+const pollRemoteScreenshotRequest = async (lockAlreadyHeld = false, excludedRequestId?: string) => {
+  const owner = lockAlreadyHeld ? screenshotCaptureLock.ownerToken() : null;
+  const expectedKey = remoteScreenshotBindingKey;
+  const generation = writtenScreenshotGeneration;
+  const wasWritten = screenshotSessionMode === "written";
+  if (!pairingIdentityStore || !wasWritten && processingRemoteScreenshotRequestId) return;
   const pollingState = await getDesktopScreenshotPollingState();
-  if (!pollingState.live || !pollingState.identity) return false;
+  if (!pollingState.live || !pollingState.identity || isQuitting) return false;
+  if (wasWritten && (expectedKey !== remoteScreenshotBindingKey || generation !== writtenScreenshotGeneration)) return false;
   if (screenshotCaptureLock.state().locked && !lockAlreadyHeld) return true;
   const identity = pollingState.identity;
+  if (wasWritten) {
+    const signal = AbortSignal.timeout(5_000);
+    const binding = await readWrittenBinding(identity, signal);
+    if (!binding || screenshotBindingKey(binding) !== expectedKey) return false;
+    const request = await readWrittenRequest(identity, binding, signal);
+    if (isQuitting || expectedKey !== remoteScreenshotBindingKey || generation !== writtenScreenshotGeneration) return false;
+    if (!request || request.status !== "requested" || request.requestId === excludedRequestId) {
+      if (lockAlreadyHeld) releaseScreenshotCaptureLock(owner);
+      return true;
+    }
+    return processRemoteScreenshotRequest(identity, request.requestId, lockAlreadyHeld);
+  }
   const response = await fetchWithTimeout(desktopApiUrl(`/screenshot-answer/desktop-devices/${encodeURIComponent(identity.deviceId)}/capture-requests/next?manualCode=${encodeURIComponent(identity.manualCode)}`));
   if (!response.ok) throw new RemoteScreenshotAdmissionError("poll", response.status);
   const envelope = await response.json() as { data?: { requestId: string; status: string } | null };
   const request = envelope.data;
   if (!request || request.status !== "requested") {
-    if (lockAlreadyHeld) releaseScreenshotCaptureLock();
+    if (lockAlreadyHeld) releaseScreenshotCaptureLock(owner);
     return true;
   }
   return processRemoteScreenshotRequest(identity, request.requestId, lockAlreadyHeld);
@@ -941,6 +1191,7 @@ const triggerScreenshotShortcut = async () => {
     shortcutNotice("上一笔快捷键截屏仍在处理中，请稍候。");
     return;
   }
+  let shortcutOwner: number | null = null;
   screenshotShortcutTriggerInFlight = true;
   lastScreenshotShortcutTriggerAt = now;
   try {
@@ -955,6 +1206,7 @@ const triggerScreenshotShortcut = async () => {
       shortcutNotice(screenshotCaptureLock.state().message);
       return;
     }
+    shortcutOwner = screenshotCaptureLock.ownerToken();
     publishScreenshotCaptureLock();
     const response = await fetchWithTimeout(desktopApiUrl(`/screenshot-answer/desktop-devices/${encodeURIComponent(identity.deviceId)}/shortcut-capture-requests`), {
       method: "POST",
@@ -972,19 +1224,19 @@ const triggerScreenshotShortcut = async () => {
       } catch {
         // Keep the status-based fallback.
       }
-      releaseScreenshotCaptureLock();
+      releaseScreenshotCaptureLock(shortcutOwner);
       throw new Error(message);
     }
     shortcutNotice("快捷键已触发，正在截取当前选择的屏幕。");
     const payload = await response.json() as { data?: { requestId?: string } };
     const requestId = payload.data?.requestId;
     if (!requestId) {
-      releaseScreenshotCaptureLock();
+      releaseScreenshotCaptureLock(shortcutOwner);
       throw new Error("快捷键截屏请求缺少任务标识，请稍后重试。");
     }
     await processRemoteScreenshotRequest(identity, requestId, true);
   } catch (error) {
-    if (screenshotCaptureLock.state().locked && !processingRemoteScreenshotRequestId) releaseScreenshotCaptureLock();
+    if (screenshotCaptureLock.state().locked && !processingRemoteScreenshotRequestId) releaseScreenshotCaptureLock(shortcutOwner);
     shortcutNotice(error instanceof Error ? error.message : "快捷键截屏失败，请稍后重试。");
   } finally {
     screenshotShortcutTriggerInFlight = false;
@@ -1026,6 +1278,7 @@ const consumeRemoteScreenshotEventStream = async (
   const parser = new DesktopCaptureEventParser();
   while (!signal.aborted) {
     const { done, value } = await reader.read();
+    if (signal.aborted) return;
     if (done) break;
     for (const captureRequest of parser.push(decoder.decode(value, { stream: true }))) {
       void processRemoteScreenshotRequest(identity, captureRequest.requestId);
@@ -1047,14 +1300,15 @@ const startRemoteScreenshotRequestLoop = () => {
   };
   const run = async () => {
     if (generation !== remoteScreenshotLoopGeneration || isQuitting) return;
-    if (remoteScreenshotPollInFlight) {
+    if (remoteScreenshotPollOwner === generation) {
       schedule(50);
       return;
     }
-    remoteScreenshotPollInFlight = true;
+    remoteScreenshotPollOwner = generation;
     let streamController: AbortController | null = null;
     try {
       const state = await getDesktopScreenshotPollingState();
+      if (generation !== remoteScreenshotLoopGeneration || isQuitting) return;
       if (!state.live || !state.identity) {
         remoteScreenshotPollFailureCount = 0;
         schedule(desktopPollDelayMs("idle"));
@@ -1065,7 +1319,7 @@ const startRemoteScreenshotRequestLoop = () => {
       remoteScreenshotPollFailureCount = 0;
       await consumeRemoteScreenshotEventStream(state.identity, streamController.signal);
     } catch (error) {
-      if (isQuitting) return;
+      if (isQuitting || generation !== remoteScreenshotLoopGeneration) return;
       if (streamController?.signal.aborted) {
         schedule(0);
         return;
@@ -1082,6 +1336,7 @@ const startRemoteScreenshotRequestLoop = () => {
       try {
         await pollRemoteScreenshotRequest();
       } catch (fallbackError) {
+        if (generation !== remoteScreenshotLoopGeneration || isQuitting) return;
         if (screenshotStreamAdmissionAction(fallbackError instanceof RemoteScreenshotAdmissionError ? fallbackError.status : null) === "suspend") {
           remoteScreenshotSuspended = true;
           console.info("[remote-screenshot] fallback suspended until binding eligibility changes", {
@@ -1094,7 +1349,7 @@ const startRemoteScreenshotRequestLoop = () => {
       schedule(desktopPollDelayMs("failure", remoteScreenshotPollFailureCount));
     } finally {
       if (remoteScreenshotStreamController === streamController) remoteScreenshotStreamController = null;
-      remoteScreenshotPollInFlight = false;
+      if (remoteScreenshotPollOwner === generation) remoteScreenshotPollOwner = null;
     }
   };
   void run();
@@ -1133,6 +1388,7 @@ const createWindow = () => {
     },
   });
   mainWindow = window;
+  window.on("focus", () => desktopConnectionRecovery.recover("focus"));
 
   window.removeMenu();
   void window.loadFile(path.join(__dirname, "../renderer/index.html"));
@@ -1142,7 +1398,10 @@ const createWindow = () => {
       rendererRecoveryAttempts = [];
       rendererRecoveryResetTimer = null;
     }, 60_000);
-    if (!window.isDestroyed()) window.show();
+    if (mainWindow === window && !window.isDestroyed()) {
+      windowVisibility.showOnReady(() => window.show());
+      if (windowVisibility.isHidden() && process.platform === "win32") window.setSkipTaskbar(true);
+    }
   });
   window.webContents.on("did-finish-load", () => {
     if (rendererRecoveryContext && !window.isDestroyed()) {
@@ -1203,10 +1462,7 @@ const ownsCompanionInstance = app.requestSingleInstanceLock({
 if (!ownsCompanionInstance) app.quit();
 else {
   app.on("second-instance", () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
+    if (!isQuitting && app.isReady()) windowVisibility.restore();
   });
 
   void app.whenReady().then(async () => {
@@ -1223,6 +1479,8 @@ else {
   } catch (error) {
     console.warn("[desktop-user-data] legacy state migration failed; stable directory remains active", error);
   }
+  powerMonitor.on("resume", () => desktopConnectionRecovery.recover("resume"));
+  powerMonitor.on("suspend", () => writtenAwake.refresh(false));
   captureState = "not-connected";
   credentialVault = new DeviceCredentialVault(app.getPath("userData"), safeStorage);
   pairingIdentityStore = new DevicePairingIdentityStore(app.getPath("userData"));
@@ -1283,9 +1541,13 @@ else {
       rejectDisplayRequest("unexpected-display-source-failure");
     });
   }, { useSystemPicker: false });
-  tray = new Tray(trayImage());
-  updateTray();
+  ensureTray();
   createWindow();
+  try {
+    restoreShortcutRegistered = globalShortcut.register(RESTORE_WINDOW_SHORTCUT, () => windowVisibility.restore());
+  } catch {
+    restoreShortcutRegistered = false;
+  }
   startDesktopRegistrationLoop();
   startRemoteScreenshotRequestLoop();
   void screenshotShortcutStore.load()
@@ -1293,14 +1555,15 @@ else {
     .then(result => shortcutNotice(result.message));
 
   app.on("activate", () => {
-    if (!mainWindow) createWindow();
-    else mainWindow.show();
-    if (remoteScreenshotSuspended && screenshotStreamEligible(captureState)) startRemoteScreenshotRequestLoop();
+    if (!isQuitting) windowVisibility.restore();
+    if (screenshotSessionMode === "written") desktopConnectionRecovery.recover("focus");
+    else if (remoteScreenshotSuspended && screenshotStreamEligible(captureState)) startRemoteScreenshotRequestLoop();
   });
   });
 }
 
-ipcMain.on("capture:set-state", (_event, state: CaptureState) => {
+ipcMain.on("capture:set-state", (event, state: CaptureState) => {
+  if (event.sender !== mainWindow?.webContents) return;
   const previousState = captureState;
   captureState = state;
   updateTray();
@@ -1308,11 +1571,17 @@ ipcMain.on("capture:set-state", (_event, state: CaptureState) => {
   const suspendedTransition = remoteScreenshotSuspended
     ? screenshotStreamSuspensionTransition(previousState, state)
     : "preserve";
+  if (transition === "stop") {
+    ++writtenScreenshotGeneration;
+    writtenScreenshotProcessor.cancelAll();
+    writtenAwake.refresh(false);
+  }
   if (transition === "start" || suspendedTransition === "resume") startRemoteScreenshotRequestLoop();
   else if (transition === "stop") stopRemoteScreenshotRequestLoop();
 });
 
-ipcMain.on("desktop:screenshot-binding", (_event, binding: { sessionId?: unknown; bindingId?: unknown } | null) => {
+ipcMain.on("desktop:screenshot-binding", (event, binding: { sessionId?: unknown; bindingId?: unknown; sessionMode?: unknown } | null) => {
+  if (event.sender !== mainWindow?.webContents) return;
   const normalizedBinding = binding
     && typeof binding.sessionId === "string"
     && typeof binding.bindingId === "string"
@@ -1320,9 +1589,21 @@ ipcMain.on("desktop:screenshot-binding", (_event, binding: { sessionId?: unknown
     : null;
   const nextBindingKey = screenshotBindingKey(normalizedBinding);
   const transition = screenshotBindingTransition(remoteScreenshotBindingKey, nextBindingKey, remoteScreenshotSuspended);
+  const nextMode = normalizedBinding && typeof binding?.sessionMode === "string" ? binding.sessionMode : null;
+  if (nextBindingKey !== remoteScreenshotBindingKey || nextMode !== screenshotSessionMode) {
+    ++writtenScreenshotGeneration;
+    writtenScreenshotProcessor.cancelAll();
+  }
+  screenshotSessionMode = nextMode;
   remoteScreenshotBindingKey = nextBindingKey;
+  writtenAwake.refresh(screenshotSessionMode === "written" && Boolean(nextBindingKey)
+    && screenshotStreamEligible(captureState) && desktopConnectionRecovery.snapshot().online);
   if (transition === "stop") stopRemoteScreenshotRequestLoop();
   else if (transition === "restart" && screenshotStreamEligible(captureState)) startRemoteScreenshotRequestLoop();
+});
+
+ipcMain.on("desktop:connection-recovery", (event) => {
+  if (event.sender === mainWindow?.webContents) desktopConnectionRecovery.recover("online");
 });
 
 ipcMain.on("desktop:renderer-reliability-heartbeat", (event, heartbeat: RendererReliabilityHeartbeat) => {
@@ -1371,6 +1652,19 @@ ipcMain.handle("credential:clear", async () => {
 });
 
 ipcMain.handle("desktop:get-config", async () => desktopConfig());
+ipcMain.handle("desktop:get-window-visibility", () => ({
+  hidden: windowVisibility.isHidden(),
+  restoreShortcut: restoreShortcutRegistered ? RESTORE_WINDOW_SHORTCUT : null,
+}));
+ipcMain.handle("desktop:hide-window", event => {
+  if (event.sender !== mainWindow?.webContents || isQuitting) return { hidden: false, restoreShortcut: null };
+  try {
+    windowVisibility.hide();
+  } catch {
+    windowVisibility.restore();
+  }
+  return { hidden: windowVisibility.isHidden(), restoreShortcut: restoreShortcutRegistered ? RESTORE_WINDOW_SHORTCUT : null };
+});
 ipcMain.handle("desktop:get-native-runtime-health", async () => getNativeRuntimeHealth());
 ipcMain.handle("desktop:get-screenshot-shortcut", async () => {
   const configuredAccelerator = activeScreenshotShortcut || await screenshotShortcutStore?.load() || DEFAULT_SCREENSHOT_SHORTCUT;
@@ -1490,10 +1784,9 @@ ipcMain.handle("desktop:api-request", async (_event, request: { url: string; met
   }
 });
 
-ipcMain.handle("desktop:request-microphone-access", async () => {
-  if (process.platform !== "darwin") return true;
-  return systemPreferences.askForMediaAccess("microphone");
-});
+ipcMain.handle("desktop:get-microphone-permission", () => microphonePermission.snapshot());
+ipcMain.handle("desktop:request-microphone-permission", () => microphonePermission.request());
+ipcMain.handle("desktop:request-microphone-access", async () => (await microphonePermission.request()).permission === "granted");
 
 ipcMain.handle("desktop:request-screen-capture-access", async () => requestElectronScreenCaptureAccess());
 
@@ -1507,6 +1800,7 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   isQuitting = true;
+  windowVisibility.dispose();
   rendererRecoveryContext = null;
   if (rendererRecoveryResetTimer) {
     clearTimeout(rendererRecoveryResetTimer);
@@ -1514,10 +1808,9 @@ app.on("before-quit", () => {
   }
   captureState = "not-connected";
   screenshotCaptureLock.release();
-  if (registrationInterval) {
-    clearInterval(registrationInterval);
-    registrationInterval = null;
-  }
+  desktopConnectionRecovery.dispose();
+  writtenAwake.dispose();
+  writtenScreenshotProcessor.cancelAll();
   if (screenshotRequestTimer) {
     clearTimeout(screenshotRequestTimer);
     screenshotRequestTimer = null;

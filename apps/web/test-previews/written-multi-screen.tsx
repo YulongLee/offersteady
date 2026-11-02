@@ -22,6 +22,20 @@ const captures = new Map<string, CollectedScreenshot>();
 let sequence = 0;
 let currentAnswer: SubmitManualAnswerResult | null = null;
 const scenario = new URLSearchParams(location.search).get("scenario");
+const failureScenarios: Record<string, string> = {
+  "assistant-offline": "电脑伴随程序心跳已过期，请保持伴随程序打开。",
+  "binding-invalid": "网页端绑定已失效，请重新绑定机器码。",
+  "capture-stage-error": "截图阶段 capture-failed 失败：synthetic capture timeout",
+  "upload-stage-error": "截图阶段 upload-failed 失败：synthetic upload timeout",
+};
+let failureShown = false;
+let singleAttempt = 0;
+const failOnce = () => {
+  if (!failureShown && scenario && failureScenarios[scenario]) {
+    failureShown = true;
+    throw new Error(failureScenarios[scenario]);
+  }
+};
 const pause = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
   if (signal?.aborted) { reject(new DOMException("Aborted", "AbortError")); return; }
   const abort = () => { window.clearTimeout(timer); reject(new DOMException("Aborted", "AbortError")); };
@@ -34,11 +48,31 @@ interviewAppAdapter.captureScreenshot = async (_command, signal, onStage) => {
   await pause(350, signal);
   onStage?.({ name: "合成屏幕", stage: "uploading" });
   await pause(250, signal);
+  failOnce();
   if (scenario === "capture-error" && sequence > 0) throw new Error("合成截屏失败，请检查助手后重试。");
   const number = ++sequence;
   const capture = { requestId: `synthetic-capture-${number}`, imageId: `synthetic-image-${number}`, name: `合成长题第 ${number} 页` };
   captures.set(capture.requestId, capture);
   return capture;
+};
+interviewAppAdapter.submitScreenshotAnswer = async (command, signal, onStage) => {
+  const attempt = ++singleAttempt;
+  onStage?.({ name: "合成屏幕", stage: "waiting-desktop" });
+  if (scenario === "cancel-late-error" && attempt === 1) {
+    await pause(6000); // Intentionally uncancellable: reproduces an obsolete transport callback.
+    onStage?.({ name: "旧合成屏幕", stage: "failed", errorMessage: "旧截图请求已取消 (409)" });
+    throw new Error("旧截图请求已取消 (409)");
+  }
+  await pause(450, signal);
+  failOnce();
+  const fixtureResult = await fixture.submitScreenshotAnswer(command, signal);
+  const answerText = "这是一次合成截图回答。既有重试入口已恢复，未连接真实助手或调用模型。";
+  const result: SubmitManualAnswerResult = {
+    question: { ...fixtureResult.question, text: "合成笔试题目", advice: { ...fixtureResult.question.advice, detail: answerText, outline: [], sourceTypes: [], inference: "" } },
+    task: { ...fixtureResult.task, question: "合成笔试题目", completedText: answerText },
+  };
+  currentAnswer = result;
+  return result;
 };
 interviewAppAdapter.cancelDesktopShortcutScreenshot = async requestId => { captures.delete(requestId); };
 interviewAppAdapter.loadInterviewWorkspace = async () => ({ questions: currentAnswer ? [currentAnswer.question] : [], activeAnswerTask: currentAnswer?.task ?? null });

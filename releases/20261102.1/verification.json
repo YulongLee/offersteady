@@ -1,0 +1,43 @@
+{
+  "gitDiffCheckPassed": true,
+  "globalPublicEvidenceHashesVerified": true,
+  "longTermP95GainClaimed": false,
+  "markdownLinks": {
+    "filesChecked": 38,
+    "missing": 0,
+    "relativeLinksChecked": 103
+  },
+  "openSpecStrictChanges": [
+    "sync-global-performance-and-companion-1-3-6",
+    "release-cn-companion-1-3-6",
+    "stabilize-written-screenshot-local-1-3-6",
+    "improve-companion-permission-and-window-1-3-6"
+  ],
+  "passed": true,
+  "physicalDeviceAcceptanceClaimed": false,
+  "productionChanges": 0,
+  "restoredGlobalBusinessRegressions": {
+    "deselectedDedicatedPostgres": 4,
+    "passed": 204,
+    "realNetworkBlocked": true,
+    "source": "Full restored Global archive, frozen original tests and synthetic eval fixtures"
+  },
+  "scope": "Offline Git seal verification only; no new production reads or writes.",
+  "secretsIncluded": false,
+  "snapshotToolsSyntheticTests": {
+    "passed": 32
+  },
+  "snapshotVerification": {
+    "componentCounts": {
+      "cn-backend": 232,
+      "cn-material-worker": 196,
+      "cn-web": 366,
+      "global-backend": 303,
+      "global-material-worker": 267,
+      "global-web": 251
+    },
+    "fullArchiveMapsMatched": true,
+    "passed": true
+  },
+  "version": "20261102.1"
+}

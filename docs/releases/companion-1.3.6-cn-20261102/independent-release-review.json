@@ -1,0 +1,175 @@
+{
+  "schemaVersion": 1,
+  "reviewDate": "2026-11-02",
+  "reviewerRole": "independent release code and synthetic behavior review",
+  "passed": true,
+  "blockingFindings": [],
+  "frozenFiles": {
+    "scripts/release_cn_companion_136_manifest.py": "805d8df7fe6ca28a3c4cf9155d6bf7539d32bcc3236e18fcdbef89ad91564872",
+    "scripts/test_release_cn_companion_136_manifest.py": "0bcf15cba27eca1cf615ebedb453c330218bca86d5a75dd5ac8b14d08ad32cac",
+    "scripts/upload_cn_companion_136_object.py": "77fdd3f8e62adf8a8c2f16658237e62dbafe6ca05f8cbb8a6cf08dbc4f46c2a3",
+    "scripts/test_upload_cn_companion_136_object.py": "6ddd4d6e5bd150f4dffb5102a4108144f4c455e2ec6cc47c65b5eb0f45b942ea"
+  },
+  "scope": {
+    "cnOnly": true,
+    "version": "1.3.6",
+    "runtimeWrite": "single desktop_release_manifest.json plus its lock/staging files",
+    "newOssWrites": "three immutable 1.3.6 installer object keys only",
+    "ossLatestPointersUnchanged": true,
+    "businessSourceNotDeployed": true,
+    "noContainerRestartOrRecreate": true,
+    "noHistoricalComposeRewrite": true,
+    "unrelatedLegacyImageTagPreserved": true,
+    "noGlobalOrGitPublication": true
+  },
+  "validatedProtections": [
+    "All three official targets required; version/protocol/default OS/truthful signing and immutable CN filenames validated.",
+    "Plan pins actual running fixed image and exact 232-input baseline digest, not current source or legacy latest tag.",
+    "Live checks compare eight component identities, Config.Image, starts/restarts, Config/HostConfig/Mounts digest and Backend health.",
+    "Fifteen fixed historical Backend Compose file hashes and compose-label ownership are compared without exporting file content.",
+    "Candidate requires exact original RootFS prefix plus one layer, unchanged Config, all 232 expected hashes and manifest mode0644.",
+    "Same-directory non-symlink guarded manifest replacement checks old/new hashes and 231 non-manifest source inputs under lock, then fsync and rename.",
+    "Known-state lost acknowledgements are inspected; unknown manifest/config/source/candidate record state stops automatic overwrite.",
+    "Published reapply/verification is read-only; guarded exact rollback and repeated rollback preserve business services and immutable objects.",
+    "Future fixed-image overlay is explicit material; saved metadata alone does not modify historical Compose recreation behavior.",
+    "OSS uploads use one conditional streaming PutObject with x-oss-forbid-overwrite, and existing/conflicting objects are only reused after full bytes/MIME verification.",
+    "OSS success requires head size/MIME and complete stream SHA256; changed existing objects fail without overwrite or blind retry.",
+    "Uploader keeps server Settings/credentials on server and suppresses provider exception text and tracebacks."
+  ],
+  "executedChecks": {
+    "pytest": {
+      "files": [
+        "scripts/test_release_cn_companion_136_manifest.py",
+        "scripts/test_upload_cn_companion_136_object.py"
+      ],
+      "passed": 87,
+      "controller": 70,
+      "uploader": 17,
+      "command": "/Users/liyulong/anaconda3/bin/python -m pytest -q scripts/test_release_cn_companion_136_manifest.py scripts/test_upload_cn_companion_136_object.py"
+    },
+    "pyCompilePassed": true,
+    "diffWhitespaceCheckPassed": true,
+    "additionalIndependentSyntheticCases": [
+      {
+        "case": "unknown_manifest_after_cas",
+        "passed": true
+      },
+      {
+        "case": "config_drift_after_cas",
+        "passed": true
+      },
+      {
+        "case": "lost_switch_and_rollback_receipts",
+        "passed": true
+      },
+      {
+        "case": "rollback_unknown_manifest",
+        "passed": true
+      },
+      {
+        "case": "published_candidate_record_drift",
+        "passed": true
+      }
+    ],
+    "additionalCasesEvidence": "independent-unknown-state-checks.json"
+  },
+  "baselineEvidence": {
+    "source": "locally captured sanitized baseline, not a new remote read by reviewer",
+    "runtimeInputs": 232,
+    "runtimeInputsSha256": "f2e6c5911519a01bc3bd687748a78939d9a149eb748cfa86dd9b121bc34f8641",
+    "oldManifestSha256": "76ba8b6009071d4c4c0b824b6bbbf1c05c7d848f95c1ab08649c9e9e05c4a76a",
+    "components": 8,
+    "frozenComposeFiles": 15,
+    "runtimeConfigDigestsPresent": true
+  },
+  "nonBlockingLimits": [
+    "Candidate is intended to be freshly built under supervision from this exact controller and the reviewed single-COPY Dockerfile. Review does not independently enumerate the final image tar layer entries; RootFS prefix/config and 232-path equality must not be described as proof against arbitrary unknown extra files in an untrusted candidate. Do not substitute an unknown pre-existing tag.",
+    "This report validates release tools and synthetic cases only. Official final Mac App/DMG notarization, final artifact hashes, immutable OSS readbacks, public download checks and actual production pre/post lifecycle checks remain separate mandatory release evidence.",
+    "No physical Windows/Intel audio, real user interview or OS network/sleep acceptance is claimed.",
+    "Local Web/Backend screenshot-read and feedback business changes are excluded from this publication."
+  ],
+  "reviewActions": {
+    "sshCalls": 0,
+    "productionWrites": 0,
+    "modelCalls": 0,
+    "realUserDataAccess": false,
+    "editedProductOrReleaseToolSources": false,
+    "wroteOnlySanitizedReviewEvidence": true
+  },
+  "originalReviewActionScope": "Prepublication tool review; postpublication read-only review is separately recorded below.",
+  "postPublicationReadOnlyAddendum": {
+    "passed": true,
+    "blockingFindings": [],
+    "reason": "One published-state verification reported a configuration digest mismatch. The exact raw-digest false positive from Docker inspect Mounts order was independently reproduced without changing production or baseline.",
+    "executedPublicationController": {
+      "path": "release_cn_companion_136_manifest.executed.py",
+      "sha256": "805d8df7fe6ca28a3c4cf9155d6bf7539d32bcc3236e18fcdbef89ad91564872",
+      "prepublicationSyntheticTests": 70,
+      "unchanged": true
+    },
+    "readOnlyAcceptanceController": {
+      "path": "scripts/release_cn_companion_136_manifest.py",
+      "sha256": "e6fc8574c95c3cb78d7d3639aa0c8072e32bb31d2204517b165f1b793f36e498",
+      "controllerTestsPassed": 84,
+      "testsSha256": "6c292dcc71b72024260a9fa4bc398946267ab0a794c9eae38fe3d1824ba74097",
+      "uploaderTestsPassed": 17,
+      "combinedTestsPassed": 101,
+      "usedByReviewerForPublicationOrRollback": false
+    },
+    "patchReview": {
+      "originalWholeDigestComparedFirst": true,
+      "fallbackOnlyForExactlyTwoMounts": true,
+      "fallbackSwapsCompleteMountObjectsOnce": true,
+      "oldDigestAlgorithmAndBaselineBytesUnchanged": true,
+      "noValueOrFieldDiscarded": true,
+      "configAndHostConfigRemainExact": true,
+      "realMountFieldChangesRejected": [
+        "Source",
+        "Destination",
+        "RW",
+        "Type",
+        "Driver",
+        "Mode",
+        "Propagation"
+      ],
+      "addedRemovedDuplicateMountsRejected": true,
+      "noProductionCodeOrManifestChangeRequired": true
+    },
+    "independentObservedEvidence": {
+      "completeComponentSamples": 8,
+      "componentsPerCompleteSample": 8,
+      "completeSamplesAllDirectDigestAndLifecycleMatches": true,
+      "focusedPostgresSamples": 4,
+      "actualDirectMismatchCaptured": true,
+      "mismatchEvidence": [
+        {
+          "sample": 3,
+          "name": "compose-postgres-1",
+          "mountCount": 2,
+          "directDigest": "eaf075362c647d9c9bc82e758797e2382f76ea055c13b77dac703301a07b3c08",
+          "baselineDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+          "directMatch": false,
+          "reversedDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+          "reversedMatch": true,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        }
+      ],
+      "fullComponentsEvidence": "independent-mount-order-observation.json",
+      "focusedEvidence": "independent-mount-order-focused.json",
+      "originalBaselineSummarySha256": "d4b0ce1a735f1aec8a102bc7b09c6e6f18323c456e8c07059523333cde3b9c31",
+      "baselineUnchanged": true
+    },
+    "executedChecks": {
+      "combinedPytestPassed": 101,
+      "pyCompilePassed": true,
+      "readOnlyDockerInspectCalls": 12,
+      "productionWrites": 0,
+      "applyCalls": 0,
+      "rollbackCalls": 0,
+      "serviceRestarts": 0,
+      "rawConfigEnvValuesSavedOrPrinted": false
+    },
+    "qualification": "The independently captured current snapshot reproduces this false-positive class exactly. The original failing snapshot was not retained in raw form, so no claim is made that its entire private configuration was retrospectively reconstructed. Current observed whole configuration and lifecycle match the original baseline modulo only the order of two complete mount records."
+  }
+}

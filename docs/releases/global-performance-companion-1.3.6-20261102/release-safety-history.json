@@ -1,0 +1,110 @@
+{
+  "businessServiceActionsDuringMetadataRepair": 0,
+  "finalPermissions": {
+    "privateDirectoriesRoot0700": 2,
+    "privateFilesRoot0600": 34,
+    "publicContentUnchanged": true,
+    "publicFilesRoot0644": 16
+  },
+  "firstContainerSetGuardRejection": {
+    "action": "prepare",
+    "allPayloadHashesVerified": true,
+    "exitCode": 1,
+    "results": [
+      {
+        "ok": false,
+        "reason": "baseline_container_set_changed"
+      }
+    ]
+  },
+  "fixedHistoricalStoppedContainer": {
+    "actualSignature": {
+      "configSha256": "0d694f0b69eaa0caa369fe2588e9d2ed89bbb17be2783f02cd3bb22f2efc24ea",
+      "health": null,
+      "hostConfigSha256": "229cb2b629d3fd0630052e491427c9fd2382d6f4bc74fba1d1a66f4e3e952126",
+      "id": "b26658773fe6a73626510cba0116d31bb3154d1fb554ca521deb254ef21ef57a",
+      "image": "sha256:414cfd1c18647de7db5857d6cadb64e46d7e8508c837e7d5e639a682800a3e47",
+      "imageReference": "sha256:414cfd1c18647de7db5857d6cadb64e46d7e8508c837e7d5e639a682800a3e47",
+      "mountsSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "networkSettingsSha256": "141afbcf56bd0eb2fe360776ff29c34e173b5e3a300da1c994721fe9a068fddd",
+      "networks": [
+        "bridge"
+      ],
+      "restartCount": 0,
+      "running": false,
+      "startedAt": "2026-09-07T09:39:55.330513404Z"
+    },
+    "createdAt": "2026-09-07T09:39:55.264201562Z",
+    "finishedAt": "2026-09-07T09:40:24.856341572Z",
+    "matchesOctober22FrozenNonTarget": true,
+    "name": "zealous_bhaskara",
+    "running": false
+  },
+  "independentMetadataRepairReview": {
+    "actions": {
+      "gitMutations": 0,
+      "productionWrites": 0,
+      "remoteCalls": 0
+    },
+    "exclusions": [
+      "CN and OSS latest acceptance remain root separate checks",
+      "No production or remote acceptance run by this reviewer",
+      "Physical audio and screen hardware not retested"
+    ],
+    "metadataRepair": {
+      "noPreparedRecordBeforeRetry": true,
+      "privateOwnershipModeMustBeVerifiedPostflight": true,
+      "privatePartialPreserved": true,
+      "probeCapabilitiesUnchanged": true,
+      "public16ContentUnchanged": true,
+      "releaseLockAndHashCASReported": true,
+      "rootOwnership0644Only": true
+    },
+    "passed": true,
+    "scope": [
+      "fixed_input_and_all16_public_content_owner_mode",
+      "six_non_target_full_signatures_and_exact_eight_names",
+      "backend_web_new_owned_runtime_invariants_health_restart",
+      "backend_settings379_exact_private_baseline",
+      "worker267_full_input_map_and_settings354_pinned_hash",
+      "backend_web_private_files0600_directories0700",
+      "bounded_rows_error_traceback_http5xx_counts_no_raw_logs"
+    ],
+    "sha256": "d1a0a62a06808952bf7b632604e8da38ad07d29d1173a59a7156c5c1b398a130",
+    "syntheticTestsPassed": 17,
+    "test": "tools/global_performance_companion_136/test_postflight_observe.py",
+    "testSha256": "68ab79cf32d6b0a6b9023d539ebf92ada8f5173fb88b0031c52630f49367591f",
+    "tool": "tools/global_performance_companion_136/postflight_observe.py"
+  },
+  "publicFileMetadataRepair": {
+    "businessMutations": 0,
+    "ok": true,
+    "partialPrivatePreparationPreserved": true,
+    "preparedAbsent": true,
+    "publicFilesContentUnchanged": 16,
+    "publicFilesRootOwnedReadable": true
+  },
+  "publicFilePermissionRejection": {
+    "action": "prepare",
+    "allPayloadHashesVerified": true,
+    "exitCode": 1,
+    "results": [
+      {
+        "ok": false,
+        "reason": "release_operation_failed_private_diagnostics_only"
+      }
+    ]
+  },
+  "publicPayloadCas": {
+    "filesChanged": [
+      "controller.py",
+      "input.json"
+    ],
+    "filesVerified": 16,
+    "inputSha256": "d9c7e0336533f1865374c8c9e0049e954029c9d39ee4edbb636aa66d592e7e08",
+    "ok": true,
+    "oldPublicPayloadPreserved": true,
+    "preparedAbsent": true,
+    "productionComponentsChanged": false
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "cn": {
+    "cnManifestSha256": "d7b106a6497bce873d67c2c81b045fab520aaa7382296978a8f6a04056e10927",
+    "cnUnchangedSinceRelease": true,
+    "componentCount": 8,
+    "components": [
+      {
+        "component": "compose-web-1",
+        "sameIdImageStartedAtRestart": true
+      },
+      {
+        "component": "compose-backend-1",
+        "sameIdImageStartedAtRestart": true
+      },
+      {
+        "component": "compose-material-worker-1",
+        "sameIdImageStartedAtRestart": true
+      },
+      {
+        "component": "compose-admin-1",
+        "sameIdImageStartedAtRestart": true
+      },
+      {
+        "component": "compose-postgres-1",
+        "sameIdImageStartedAtRestart": true
+      },
+      {
+        "component": "compose-redis-1",
+        "sameIdImageStartedAtRestart": true
+      },
+      {
+        "component": "compose-promotion-analytics-1",
+        "sameIdImageStartedAtRestart": true
+      },
+      {
+        "component": "compose-analytics-1",
+        "sameIdImageStartedAtRestart": true
+      }
+    ],
+    "mutations": 0,
+    "passed": true,
+    "readOnly": true
+  },
+  "globalAllSixNonTargetsFullSignaturesUnchanged": true,
+  "oldImageReferencesPreserved": true,
+  "ossLatest": {
+    "latestObjects": {
+      "global-desktop-releases/macos/arm64/latest.json": {
+        "exists": true,
+        "sha256": "623d5235d61657cfb1e33e88ce589bd2c8b7bae3303e0ee818a3f9ea08c53c88",
+        "size": 2936
+      },
+      "global-desktop-releases/macos/x64/latest.json": {
+        "exists": true,
+        "sha256": "c9926696529d301480bd06a22dd017cacf581655409328195ec445e0c38ab197",
+        "size": 2936
+      },
+      "global-desktop-releases/windows/x64/latest.json": {
+        "exists": true,
+        "sha256": "4262be3d0c10273c0a4bd251084932c5ed9b7258d13124b6621e303c2a6bbb38",
+        "size": 2936
+      }
+    },
+    "unchanged": true,
+    "writes": 0
+  },
+  "proxyReloadExecuted": false,
+  "worker": {
+    "workerFullInventoryInputs": 267,
+    "workerInventoryUnchanged": true,
+    "workerSettingsFields": 354,
+    "workerSettingsSha256": "43bd096f3a8fbd94566d7fe1c5bb899b1a8e42bc076db3c718226599e64211cd",
+    "workerSettingsUnchanged": true
+  }
+}

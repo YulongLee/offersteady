@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "existingOperationOtherwiseIdentical": true,
+  "addedOptionalQueryParameters": [
+    "sessionId",
+    "requestId"
+  ],
+  "unchangedOtherModuleAst": true,
+  "backendRuntimeInputs": 232,
+  "onlyChangedInput": [
+    "apps/backend/app/modules/screenshot_answer.py"
+  ],
+  "runtimeOrLifespanStarted": false,
+  "productionMutations": 0
+}

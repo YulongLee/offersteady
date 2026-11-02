@@ -1,4 +1,4 @@
-> 当前国服2026-11-01已发布模拟面试网页/服务端修复，保留10月27日SEO和10月29日状态/控制减负增量（连接池关闭）；未升级伴随程序或国际服。当前代码及实际运行字节封版为 `release-cn-20261101.1`，见[封存清单与恢复说明](releases/cn-20261101.1/README.md)。实际各组件来源见[当前国服基线](docs/current-cn-baseline.md)，发布及验收见[发布记录](docs/releases/cn-mock-20261101.1.md)。
+> 当前国服业务为2026-11-01模拟面试修复，保留SEO和状态/控制减负（连接池关闭）；2026-11-02仅将[伴随助手1.3.6三平台下载上线](docs/releases/companion-1.3.6-cn-20261102.md)，热更新清单且业务容器未重启。当前代码封版为 `release-20261102.1`（助手1.3.6，含已上线版本及本地待发布配套），见[封存清单与恢复说明](releases/20261102.1/README.md)；国服业务来源仍保留 `release-cn-20261101.1`。本地Web/Backend笔试配套未部署到国服；国际服于2026-11-02完成[性能读路径与独立助手1.3.6更新](docs/releases/global-performance-companion-1.3.6-20261102.md)，保留原Global会员收费及模型；各组件和运行热清单来源以[当前国服基线](docs/current-cn-baseline.md)为准。
 
 # OfferSteady
 

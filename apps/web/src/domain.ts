@@ -236,6 +236,7 @@ export interface ScreenshotTask {
   readonly name: string;
   readonly stage: "capturing" | "waiting-desktop" | "uploading" | "uploaded" | "recognizing" | "generating" | "completed" | "failed" | "cancelled";
   readonly errorMessage?: string;
+  readonly failureStage?: "capture-failed" | "upload-failed";
 }
 
 export interface CollectedScreenshot {

@@ -465,6 +465,8 @@ async def get_next_remote_capture_request(
     device_id: str,
     request: Request,
     manual_code: str = Query(alias="manualCode"),
+    session_id: str | None = Query(default=None, alias="sessionId"),
+    request_id: str | None = Query(default=None, alias="requestId"),
     service: ScreenshotAnswerService = Depends(screenshot_answer_service),
     realtime: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[RemoteScreenshotCaptureRequestResponse | None]:
@@ -476,6 +478,50 @@ async def get_next_remote_capture_request(
     )
     if pairing_status.get("bound") is not True or pairing_status.get("sessionStatus") != "live":
         return success_response(request=request, data=None, timestamp=utc_now_iso())
+    if session_id is not None or request_id is not None:
+        binding = await run_realtime_control(
+            request,
+            realtime.get_desktop_capture_binding,
+            device_id=device_id,
+            manual_code=manual_code,
+        )
+        if (
+            binding.device_id != device_id
+            or binding.manual_code != manual_code
+            or (session_id is not None and session_id != binding.session_id)
+        ):
+            return success_response(request=request, data=None, timestamp=utc_now_iso())
+
+        def matches_current_binding(candidate) -> bool:
+            return (
+                candidate.session_id == binding.session_id
+                and candidate.owner_user_id == binding.owner_user_id
+                and candidate.device_id == device_id
+                and candidate.manual_code == manual_code
+            )
+
+        # Read repository records directly: get_task may apply stale-task updates.
+        # Inspecting a specified request must preserve cancelled/processing states.
+        if request_id is not None:
+            capture_request = await run_realtime_control(
+                request,
+                service.repository.get_remote_capture_request,
+                request_id=request_id,
+            )
+            if capture_request is not None and not matches_current_binding(capture_request):
+                capture_request = None
+        else:
+            requests = await run_realtime_control(
+                request,
+                service.repository.list_remote_capture_requests_for_session,
+                session_id=binding.session_id,
+            )
+            capture_request = min(
+                (candidate for candidate in requests if candidate.status == "requested" and matches_current_binding(candidate)),
+                key=lambda candidate: candidate.created_at_ms,
+                default=None,
+            )
+        return success_response(request=request, data=_to_remote_capture_request_response(capture_request) if capture_request is not None else None, timestamp=utc_now_iso())
     capture_request = await run_realtime_control(
         request,
         service.get_next_remote_capture_request,

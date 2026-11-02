@@ -1,0 +1,20 @@
+{
+  "releaseId": "20261102-global-performance-companion-136-1",
+  "complete": true,
+  "deployedAtMs": 1793560091804,
+  "checks": {
+    "prepare": true,
+    "preflight": true,
+    "deploy": true,
+    "verify": true,
+    "public-verification.json": true,
+    "postflight-observation.json": true,
+    "cn-preservation.after.json": true,
+    "public-state-contract-preserved.json": true,
+    "independent-final-acceptance-review.json": true,
+    "latestUnchanged": true
+  },
+  "gitPushPerformed": false,
+  "physicalDeviceAcceptanceClaimed": false,
+  "longTermP95GainClaimed": false
+}

@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "publicDownloadsVerified": 3,
+  "publishedReadOnlyVerification": true,
+  "containersRestarted": false,
+  "businessCodeDeployed": false,
+  "onlyCnCompanion": true,
+  "pendingWebBackendStillLocal": true,
+  "desktopSourceInputs": 88,
+  "nonNativeDistFiles": 26,
+  "releaseControllerTests": 70,
+  "finalReadOnlyControllerTests": 84,
+  "immutableUploadTests": 17,
+  "desktopTests": 394,
+  "packageToolTests": 20,
+  "localMarkdownLinksVerified": 51,
+  "manifestSha256": "d7b106a6497bce873d67c2c81b045fab520aaa7382296978a8f6a04056e10927",
+  "strictChangesValidated": 3,
+  "releaseTasksCompleted": 12,
+  "temporaryUploadFilesRemoved": 7
+}

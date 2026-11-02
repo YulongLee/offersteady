@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "checks": {
+    "visibleStart": true,
+    "allOwnSurfacesHidden": true,
+    "sameWindowRestored": true,
+    "recreatedWindowStaysHidden": true,
+    "recreatedWindowRestored": true,
+    "latestRapidIntentPreserved": true
+  },
+  "restoreShortcutCanRegister": true,
+  "physicalKeyboardEventTested": false,
+  "realAudioTested": false,
+  "productionRequests": 0,
+  "microphoneRequests": 0,
+  "isolatedUserData": true,
+  "compiledControllerSha256": "0928bee5fff59add9723c11aeb345a9c43e05517bdb277502229d56d941e021d"
+}

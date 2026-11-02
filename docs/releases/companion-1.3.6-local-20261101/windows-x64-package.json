@@ -1,0 +1,20 @@
+{
+  "architecture": "x64",
+  "artifact": {
+    "fileName": "OfferSteady-Companion-Setup-1.3.6-Windows-x64.exe",
+    "fileSizeBytes": 102160617,
+    "sha256": "1689ea998ef4d39fea069160a092aecaf709fee6cfd3acc821f9f2fe703d51fc"
+  },
+  "authenticode": "unsigned-not-claimed",
+  "distFilesVerified": 24,
+  "innerPayloadExactlyMatchesPackage": true,
+  "installerStubArchitecture": "x86",
+  "outerAndInnerArchiveIntegrityPassed": true,
+  "packagedFilesVerified": 102,
+  "passed": true,
+  "platform": "windows",
+  "productionOrDistributionUpdated": false,
+  "providerOrAudioTestsPerformed": false,
+  "sourceManifestSha256": "64019b46633659adec6724d23de4e092b4d05e44df5371784eab4924a260b334",
+  "version": "1.3.6"
+}

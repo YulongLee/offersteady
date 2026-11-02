@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "version": "1.3.6",
+  "sourceFileCount": 88,
+  "nonNativeDistCount": 26,
+  "threePlatformsSameSource": true,
+  "sourceMatchesTestedR3": true,
+  "nativePayloadMatchesTestedR3": true,
+  "allThreeNonNativeDistByteIdentical": true
+}

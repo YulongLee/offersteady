@@ -1,0 +1,58 @@
+{
+  "passed": true,
+  "readOnlyDockerInspectCalls": 4,
+  "productionWrites": 0,
+  "baselineUnchanged": true,
+  "samples": [
+    {
+      "sample": 0,
+      "name": "compose-postgres-1",
+      "mountCount": 2,
+      "directDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+      "baselineDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+      "directMatch": true,
+      "reversedDigest": "eaf075362c647d9c9bc82e758797e2382f76ea055c13b77dac703301a07b3c08",
+      "reversedMatch": false,
+      "compatibleMatch": true,
+      "lifecycleMatches": true
+    },
+    {
+      "sample": 1,
+      "name": "compose-postgres-1",
+      "mountCount": 2,
+      "directDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+      "baselineDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+      "directMatch": true,
+      "reversedDigest": "eaf075362c647d9c9bc82e758797e2382f76ea055c13b77dac703301a07b3c08",
+      "reversedMatch": false,
+      "compatibleMatch": true,
+      "lifecycleMatches": true
+    },
+    {
+      "sample": 2,
+      "name": "compose-postgres-1",
+      "mountCount": 2,
+      "directDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+      "baselineDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+      "directMatch": true,
+      "reversedDigest": "eaf075362c647d9c9bc82e758797e2382f76ea055c13b77dac703301a07b3c08",
+      "reversedMatch": false,
+      "compatibleMatch": true,
+      "lifecycleMatches": true
+    },
+    {
+      "sample": 3,
+      "name": "compose-postgres-1",
+      "mountCount": 2,
+      "directDigest": "eaf075362c647d9c9bc82e758797e2382f76ea055c13b77dac703301a07b3c08",
+      "baselineDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+      "directMatch": false,
+      "reversedDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+      "reversedMatch": true,
+      "compatibleMatch": true,
+      "lifecycleMatches": true
+    }
+  ],
+  "directMismatchCaptured": true,
+  "allMismatchesExactTwoMountReversal": true
+}

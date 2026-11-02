@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "createdAtUtc": "2026-11-01T05:07:27.196927+00:00",
+  "reviewer": "written_connection_recovery_independent_integration_review",
+  "version": "1.3.6",
+  "localPackageRevision": "Local-r3",
+  "decision": "no_source_blockers_for_local_packaging_and_testing",
+  "openSourceFindings": [],
+  "scope": [
+    "Actual main written admission/recovery callbacks evaluated from current source with synthetic ports.",
+    "WrittenScreenshotProcessor FIFO, canonical inspection, cancellation, bounded capture/upload/report and owner fences.",
+    "SSE generation ownership, late identity results, fallback cancellation and pending-probe exclusion.",
+    "Temporary written prevent-app-suspension lease and lifecycle release.",
+    "Existing device next endpoint optional sessionId/requestId reads and legacy no-parameter compatibility.",
+    "Mode gating, retained ordinary branch and absence of new audio starts in recovery wiring."
+  ],
+  "reviewScopeExclusions": [
+    "Reviewer authored desktop-connection-recovery.ts earlier; its tests were rerun, but independent review of that module is not claimed.",
+    "No new review of unchanged r2 visual presentation or audio implementation internals is claimed."
+  ],
+  "resolvedFindings": [
+    {
+      "id": "cross-session-canonical-request",
+      "resolution": "Request must match verified session/owner/device/manualCode; scoped reads reuse the existing device endpoint, and old Backend responses remain strictly checked."
+    },
+    {
+      "id": "obsolete-recovery-releases-current-lease",
+      "resolution": "Success/catch paths verify context and binding generation; identity plus verification share a five-second deadline with absolute wall-clock confirmation."
+    },
+    {
+      "id": "old-sse-run-affects-new-generation",
+      "resolution": "Identity is bounded; after-await/catch paths verify generation; old finally cannot clear a newer generation owner."
+    },
+    {
+      "id": "canonical-probe-reentry",
+      "resolution": "Merged one-shot pending probes exclude their just-settled request ID and do not create a zero-delay retry chain."
+    },
+    {
+      "id": "ordinary-finally-releases-written-lock",
+      "resolution": "Ordinary and shortcut cleanup release their captured owner token, so late cleanup cannot release a later written lease."
+    },
+    {
+      "id": "old-request-rephotographed-after-reconnect",
+      "resolution": "Requested work at least sixty seconds old is locally expired using the server envelope timestamp, preventing replay after reconnect or cache rotation."
+    },
+    {
+      "id": "attempted-request-replayed-after-binding-generation-recovery",
+      "resolution": "Recent attempted outcomes now use the stable device/manualCode/requestId identity, while in-flight entries retain binding/generation ownership. Cancellation during capture or upload writes the stable recent outcome synchronously before recovery can enqueue the same request in a new generation. Requests cancelled before capture remain eligible for explicit rediscovery, and fresh request IDs continue normally."
+    },
+    {
+      "id": "unabortable-native-source-reads-accumulate-after-timeout",
+      "resolution": "Written lifecycle calls retain a native-read-in-flight flag until desktopCapturer.getSources actually settles, independently of the processor timeout and capture lease. An explicit retry while native work remains pending returns a clear failure without issuing another native read; only the call owning that flag clears it in finally. Late native results retain signal and owner fencing, and later work can read sources once the original native operation ends."
+    }
+  ],
+  "reviewChecks": [
+    "A fresh same-session request is admitted with device credentials and optional sessionId/requestId, without web-login token.",
+    "Missing or mismatched owner/session/device/code is rejected; non-live, mock, stale or changed bindings cannot authorize capture.",
+    "Cancelled/processing/completed/failed work does not capture; request state is checked before and after native capture.",
+    "Late native/upload/report results cannot upload old images, notify replacement work or release a newer lock.",
+    "Unknown uploads are not blindly retried, and cancelled-request terminal 409 is not attributed to replacement work.",
+    "Old recovery rejection, expired context or overdue five-second response does not reopen delivery or release a current lease.",
+    "A pending canonical request matching the just-settled ID is not re-enqueued and produces no continuous extra polling.",
+    "Old loop identity resolve/reject after stop cannot open a stream or launch fallback; old finally preserves new owner.",
+    "Written awake protection is renewable, bounded and released on invalid binding, stop/suspend/quit; no display lock or audio start.",
+    "Ordinary branch remains selected outside written mode; its reviewed cleanup change is owner fencing only.",
+    "Backend scoped reads enforce current binding/request ownership, preserve terminal states and legacy behavior, and create no task/model/billing mutation.",
+    "Server clock rejects old work with a slow local clock and admits fresh work with an eight-hour-fast local clock.",
+    "A capture/upload attempt cancelled on binding loss is not recaptured or reuploaded when the same binding/request returns with a new generation; a different explicit request continues, and a request never captured may be rediscovered after cancellation.",
+    "An unabortable written native source read is issued once: explicit retry while pending makes no second native call, its old late result cannot release a newer lock, and native reading resumes only after actual native settlement. The guard applies only to written lifecycle calls, preserving the ordinary branch."
+  ],
+  "verification": [
+    {
+      "command": "npx vitest run apps/desktop/test/written-native-capture.test.ts apps/desktop/test/written-main-admission.test.ts apps/desktop/test/written-screenshot-processor.test.ts apps/desktop/test/written-session-awake.test.ts apps/desktop/test/desktop-connection-recovery.test.ts apps/desktop/test/screenshot-stream-policy.test.ts apps/desktop/src/main/screenshot-capture-lock.test.ts",
+      "workingDirectory": "/Users/liyulong/.codex/worktrees/cn-search-content/offersteady",
+      "testFilesPassed": 7,
+      "testsPassed": 89,
+      "testsFailed": 0,
+      "mainAdmissionTestsPassed": 36,
+      "exitCode": 0,
+      "latestRunLocalTime": "2026-11-01 13:19:16 Asia/Shanghai",
+      "processorTestsPassed": 23,
+      "nativeCaptureTestsPassed": 1
+    },
+    {
+      "command": "npm run build:main -w @offersteady/desktop -- --noEmit",
+      "workingDirectory": "/Users/liyulong/.codex/worktrees/cn-search-content/offersteady",
+      "exitCode": 0,
+      "latestRunLocalTime": "2026-11-01 13:19:16 Asia/Shanghai"
+    },
+    {
+      "command": "PYTHONPATH=apps/backend /Users/liyulong/liyulong/1_projects/offersteady/.venv/bin/python -m pytest apps/backend/tests/test_screenshot_device_request_reads.py -q",
+      "workingDirectory": "/Users/liyulong/.codex/worktrees/cn-search-content/offersteady",
+      "testsPassed": 34,
+      "testsFailed": 0,
+      "exitCode": 0,
+      "note": "One existing Starlette/httpx deprecation warning; system python lacked pytest, so the existing project environment was used."
+    }
+  ],
+  "realUserDataUsed": false,
+  "productionRequestsMadeByReviewer": false,
+  "limitations": [
+    "Synthetic tests do not establish the original incident root cause or prove App Nap caused heartbeat gaps.",
+    "No actual capture/audio, OS permissions, sleep/resume, outage or native Tray pointer interaction was exercised.",
+    "Parent owns full-suite checks, builds, signing, installer payload verification and three-platform local delivery; no packaging result is claimed here.",
+    "No SSH, deployment, upload, model call, billing operation or production modification was performed."
+  ],
+  "filesSha256": {
+    "apps/desktop/src/main/index.ts": "4560c833b58f57a73178485fb6f767eb4ee76ac7d9f622b60438944c1b19df8e",
+    "apps/desktop/src/main/written-screenshot-processor.ts": "f4610a8c3f2ed45d601eb5629215c544f89d8d45e830e580a949220daee0c0bb",
+    "apps/desktop/src/main/written-session-awake.ts": "8d17c4604fb9d4c26175f6e09bfb796871a3297de83825367f347bc8f0e59626",
+    "apps/desktop/src/main/screenshot-capture-lock.ts": "9708627e00c4e0da1941cade151980b428b163fb408973c344f4595bc7a8e74a",
+    "apps/desktop/src/main/preload.ts": "f54e4ac82bad8618521cd9eb2a996428b66dacbba9d0b99d6005df1dce89b5c0",
+    "apps/desktop/src/renderer/CompanionApp.tsx": "5b4bcb8edbc6502c004f8a065dcda3099f3191e44abc37813463e2d33356eae5",
+    "apps/desktop/src/renderer/global.d.ts": "2a6f9b97777b04ff9329ce408f9fc08a10cda615098051281c6c32452dd17af8",
+    "apps/backend/app/modules/screenshot_answer.py": "57517aaa0696c632d123da75e5e0c9ca35e51e9ab470271482ec0e611086520e",
+    "apps/desktop/test/written-main-admission.test.ts": "eb12c1ce105cc42b8b9a1748c56e5e0582f66921d57114114603d0a861bf9e0d",
+    "apps/backend/tests/test_screenshot_device_request_reads.py": "730e02a708c3b68f1a61bcd9f743f46d949b7a0b40951516b6d010335e04f5b7",
+    "apps/desktop/test/written-screenshot-processor.test.ts": "acf95f001fb5bf27bd6d70e2f2c36728fa09060e84dacd8d733bf653e74398cd",
+    "apps/desktop/test/written-native-capture.test.ts": "b21522525f614de5c2c5fa66e2db05ae2f813f76c26ef68148c5b3f2a4310f5e",
+    "apps/desktop/scripts/generate-global-companion-copy.mjs": "88754f741408be5b02f1e2aa04c48f7d86e50b146709fad22685e8472811267e",
+    "apps/desktop/src/renderer/global-copy.generated.ts": "01cd207daf9151dbb61d45f0324504d1a0f380d05ee779e227e4063c4c54bed8"
+  },
+  "lastReviewedAtUtc": "2026-11-01T05:19:31.454946+00:00",
+  "reviewAddendum": {
+    "scope": "Independent inspection and rerun of the written-only native source-read resource guard plus its accurate English mapping before complete local rebuild.",
+    "sourceChangesSincePriorReview": [
+      "apps/desktop/src/main/index.ts"
+    ],
+    "decision": "no_source_blockers_for_local_packaging_and_testing",
+    "packagingPerformedByReviewer": false,
+    "productSourceModifiedByReviewer": false
+  },
+  "reviewAddenda": [
+    {
+      "scope": "Independent inspection and rerun for the generation-independent recent request identity fix immediately before a complete local package rebuild.",
+      "sourceChangesSincePriorReview": [
+        "apps/desktop/src/main/written-screenshot-processor.ts"
+      ],
+      "decision": "no_source_blockers_for_local_packaging_and_testing",
+      "packagingPerformedByReviewer": false
+    }
+  ]
+}

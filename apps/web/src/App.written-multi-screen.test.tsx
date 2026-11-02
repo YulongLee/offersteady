@@ -236,4 +236,90 @@ describe("written multi-screen answering", () => {
     expect(screen.getByRole("button", { name: "截屏回答" })).toBeInTheDocument();
     expect(interviewAppAdapter.getScreenshotCapturePolicy).not.toHaveBeenCalled();
   });
+
+  it("shows an offline failure in the existing dialog and recovers through its existing retry", async () => {
+    vi.mocked(interviewAppAdapter.submitScreenshotAnswer).mockRejectedValueOnce(new Error("电脑伴随程序心跳已过期，请保持伴随程序打开。")).mockResolvedValueOnce(result());
+    render(<Workspace />);
+    fireEvent.click(screen.getByRole("button", { name: "截屏回答" }));
+    const dialog = await screen.findByRole("dialog", { name: "截屏回答失败" });
+    expect(within(dialog).getByText("本地助手已离线，请保持助手打开并恢复连接后重新截屏。")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "重新截屏" }));
+    await screen.findByText("合成多图回答");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(interviewAppAdapter.submitScreenshotAnswer).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["capture-failed", "upload-failed"] as const)("formats existing shortcut %s metadata in the original dialog", async failureStage => {
+    vi.mocked(interviewAppAdapter.loadDesktopShortcutScreenshotUpdates).mockResolvedValueOnce([{ requestId: "failed-shortcut", status: "failed", screenshotTask: { name: "共享屏幕截取", stage: "failed", errorMessage: "request timed out", failureStage } }]);
+    render(<Workspace />);
+    const dialog = await screen.findByRole("dialog", { name: "截屏回答失败" });
+    expect(within(dialog).getByText(failureStage === "capture-failed"
+      ? "截屏失败，请检查本地助手的共享屏幕或录制权限后重试。"
+      : "截图上传失败，请检查网络后重新截屏。")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "重新截屏" })).toBeInTheDocument();
+  });
+
+  it.each(["reject", "resolve"])("fences old single-screen %s callbacks and keeps the new request cancellable", async outcome => {
+    const old = deferred<SubmitManualAnswerResult>();
+    const current = deferred<SubmitManualAnswerResult>();
+    vi.mocked(interviewAppAdapter.submitScreenshotAnswer).mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
+    render(<Workspace />);
+    fireEvent.click(screen.getByRole("button", { name: "截屏回答" }));
+    await waitFor(() => expect(interviewAppAdapter.submitScreenshotAnswer).toHaveBeenCalledTimes(1));
+    const first = vi.mocked(interviewAppAdapter.submitScreenshotAnswer).mock.calls[0]!;
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "取消" }));
+    expect(first[1]?.aborted).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "截屏回答" }));
+    await waitFor(() => expect(interviewAppAdapter.submitScreenshotAnswer).toHaveBeenCalledTimes(2));
+    const second = vi.mocked(interviewAppAdapter.submitScreenshotAnswer).mock.calls[1]!;
+    await act(async () => {
+      second[2]?.({ name: "当前截图", stage: "waiting-desktop" });
+      first[2]?.({ name: "旧截图", stage: "failed", errorMessage: "迟到失败 (409)" });
+      first[3]?.(result());
+      if (outcome === "reject") old.reject(new Error("截图回答请求已取消。 (409)"));
+      else old.resolve(result());
+    });
+    expect(screen.getByRole("dialog", { name: "等待本地助手" })).toBeInTheDocument();
+    expect(screen.queryByText("合成多图回答")).not.toBeInTheDocument();
+    expect(screen.queryByText(/迟到失败|截图回答请求已取消/)).not.toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "取消" }));
+    expect(second[1]?.aborted).toBe(true);
+    await act(async () => current.reject(new Error("截图回答请求已取消。 (409)")));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("ignores a cancelled shortcut failure even after a newer screenshot has completed", async () => {
+    const cancelled = deferred<void>();
+    vi.mocked(interviewAppAdapter.cancelDesktopShortcutScreenshot).mockReturnValueOnce(cancelled.promise);
+    vi.mocked(interviewAppAdapter.loadDesktopShortcutScreenshotUpdates).mockResolvedValueOnce([{ requestId: "old-shortcut", status: "requested", screenshotTask: { name: "共享屏幕截取", stage: "waiting-desktop" } }]);
+    vi.mocked(interviewAppAdapter.submitScreenshotAnswer).mockResolvedValueOnce(result());
+    render(<Workspace />);
+    const oldDialog = await screen.findByRole("dialog", { name: "等待本地助手" });
+    fireEvent.click(within(oldDialog).getByRole("button", { name: "取消" }));
+    fireEvent.click(screen.getByRole("button", { name: "截屏回答" }));
+    await screen.findByText("合成多图回答");
+    await act(async () => cancelled.reject(new Error("旧截图已取消 (409)")));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByText("旧截图已取消 (409)")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "截屏回答" })).not.toBeDisabled();
+  });
+
+  it("formats a failed collection without losing earlier captures and can capture again", async () => {
+    render(<Workspace />); await enable(); await capture(1);
+    vi.mocked(interviewAppAdapter.captureScreenshot!).mockRejectedValueOnce(new Error("截图阶段 upload-failed 失败：request timed out"));
+    fireEvent.click(screen.getByRole("button", { name: "截屏" }));
+    await screen.findByText("截图上传失败，请检查网络后重新截屏。");
+    expect(within(screen.getByRole("list", { name: "待回答截图" })).getAllByRole("listitem")).toHaveLength(1);
+    await capture(2);
+    expect(interviewAppAdapter.submitScreenshotBatch).not.toHaveBeenCalled();
+  });
+
+  it("keeps ordinary screenshot failure details unchanged", async () => {
+    const message = "截图阶段 upload-failed 失败：request timed out";
+    vi.mocked(interviewAppAdapter.submitScreenshotAnswer).mockRejectedValueOnce(new Error(message));
+    render(<Workspace mode="interview" />);
+    fireEvent.click(screen.getByRole("button", { name: "截屏回答" }));
+    const dialog = await screen.findByRole("dialog", { name: "截屏回答失败" });
+    expect(within(dialog).getByText(message)).toBeInTheDocument();
+  });
 });

@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "createdAtUtc": "2026-10-31T18:33:20.176327+00:00",
+  "reviewer": "independent_companion_local_release_review",
+  "version": "1.3.6",
+  "localPackageRevision": "Local-r2",
+  "decision": "no_source_blockers_for_local_testing",
+  "openSourceFindings": [],
+  "scope": [
+    "retained fixed-size transparent Tray and same-window restoration",
+    "main-process popup and lifecycle wiring",
+    "removal of additional permission-check UI while retaining existing error retry",
+    "permission coordinator and mock microphone regressions"
+  ],
+  "resolvedFindings": [
+    {
+      "id": "mac-tray-popup-synthetic-click",
+      "resolution": "Hidden right-click delegates to injected showMenu; main uses Menu.popup with explicit existing hidden BrowserWindow. Tray.popUpContextMenu is not used by presentation, avoiding its performClick path."
+    },
+    {
+      "id": "mac-popup-coordinate-space",
+      "resolution": "Removed global Tray bounds from Menu.popup x/y. Explicit hidden host is retained and native current-pointer positioning is used."
+    }
+  ],
+  "reviewChecks": [
+    "Same Tray object remains alive across hide/restore; transparent images retain nonzero dimensions and 1x/2x representations in source.",
+    "Capture-state menu refresh selects image from current hidden state and does not add duplicate event handlers.",
+    "Window restoration occurs before best-effort Tray presentation restoration; late Dock/ready callbacks respect visibility generation.",
+    "Mac hidden left click restores directly; right click uses explicit hidden host. Missing host is recreated with show:false and visibility-aware ready handling.",
+    "Windows retains attached native context menu and click/double-click restoration is idempotent.",
+    "No added independent microphone recheck button or status block; original retry is preserved and ordinary interview controls remain covered.",
+    "Visibility operations do not call capture, binding, model or production APIs."
+  ],
+  "verification": {
+    "command": "../../node_modules/.bin/vitest run test/tray-presentation.test.ts test/window-visibility.test.ts test/microphone-permission.test.ts test/microphone-permission-coordinator.test.ts test/companion-permission-recovery.test.ts test/hide-window-button.test.tsx test/mock-microphone.test.ts",
+    "workingDirectory": "apps/desktop",
+    "testFilesPassed": 7,
+    "testsPassed": 87,
+    "testsFailed": 0,
+    "exitCode": 0,
+    "latestRunLocalTime": "2026-11-01 02:32:53 Asia/Shanghai",
+    "realUserDataUsed": false,
+    "productionRequestsMadeByReviewer": false
+  },
+  "limitations": [
+    "No physical operating-system menu-bar/tray pointer click was verified by this reviewer. EventEmitter tests are synthetic and must not be represented as physical click validation.",
+    "Parent reported CUA could not target the system menu-bar coordinates (noWindows/windowNotFoundAtPosition). This is an automation limitation, not a passed native pointer test.",
+    "Parent owns the separate native hidden-host menu popup smoke, full suite, typechecks, signing, installer rebuild and payload validation; this report does not claim those results.",
+    "No Windows or Intel Mac hardware run was performed by this reviewer."
+  ],
+  "primaryReferences": [
+    "https://raw.githubusercontent.com/electron/electron/v42.5.0/shell/browser/ui/tray_icon_cocoa.mm",
+    "https://raw.githubusercontent.com/electron/electron/v42.5.0/shell/browser/api/electron_api_menu_mac.mm",
+    "https://raw.githubusercontent.com/electron/electron/v42.5.0/lib/browser/api/menu.ts"
+  ],
+  "filesSha256": {
+    "apps/desktop/src/main/tray-presentation.ts": "8e0ecb9b79fb9340d9ef1f90e23de0cc522ae323aca59b0bd2e8cf8de55cdfea",
+    "apps/desktop/src/main/window-visibility.ts": "2b5b5df7a69c37c8e92ec7936524e686c80ff562917efe1e8c14deb265b381df",
+    "apps/desktop/src/main/index.ts": "954269fdbf64891c8936ee72a43cbd9f13ad0f8513925c87d2875910a5d4a782",
+    "apps/desktop/src/main/microphone-permission.ts": "45ed55c8b41117544a1cf2e979da80c1d218bd38984a4048d09ec332a75f2661",
+    "apps/desktop/src/main/preload.ts": "2df30e9e915fde45fcc8ea6e9cf5d34693e301b3f60f78211ff6ff73fcaf739d",
+    "apps/desktop/src/renderer/CompanionApp.tsx": "68c6d2842e9c752a76c23121a57d5bc42ebc488c95d2350965ff34135abe46bc",
+    "apps/desktop/src/renderer/HideWindowButton.tsx": "9584407fcacee481eb8891c10af1620b817f684dd9109483820e6932b2525a52",
+    "apps/desktop/src/renderer/microphone-permission-coordinator.ts": "97e2f1c5e85b526812856f2c369d994440075dbd9bc20aeb2d75ad1e88e89ea3",
+    "apps/desktop/src/renderer/audio/mock-microphone.ts": "be340964b4437559a350d5a560890d23e6d38e6d1660528b6c1102477595357d",
+    "apps/desktop/test/tray-presentation.test.ts": "61e0372e0c42895b1f08a78476dfc41249546d97aea606631237ad34193d4bee",
+    "apps/desktop/test/window-visibility.test.ts": "07abe7ba671fbac949f4693b09841972287c6a98d92479d31a1e2fdc75b4f2de",
+    "apps/desktop/test/microphone-permission.test.ts": "8f1dba7825dd9838913dcd7e0d509626a5f05b5d4058e2d6c870033a167a3822",
+    "apps/desktop/test/microphone-permission-coordinator.test.ts": "4e8124b23a2460b86e0c56919df23266676e79865233624dc8bf559897393d17",
+    "apps/desktop/test/companion-permission-recovery.test.ts": "71d9bac2191930e454f60eb428be3e974a2ce4cecdccaf21bdf28b58109fb2e0",
+    "apps/desktop/test/hide-window-button.test.tsx": "637966a0f1c11538fba34b394d7951c38ca31c4c8c6dcde3b6c9e3db1e72f97c",
+    "apps/desktop/test/mock-microphone.test.ts": "1f91777f1dc559093b54ae99ae15d36b81b4013c595a6e745be81156fa5ea4c2"
+  }
+}

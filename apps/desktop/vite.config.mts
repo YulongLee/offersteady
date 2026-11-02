@@ -32,6 +32,6 @@ export default defineConfig({
   test: {
     root: import.meta.dirname,
     environment: "node",
-    include: ["test/**/*.test.ts"],
+    include: ["test/**/*.test.{ts,tsx}", "src/main/**/*.test.ts"],
   },
 });

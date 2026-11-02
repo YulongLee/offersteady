@@ -1,0 +1,12 @@
+{
+  "localOnly": true,
+  "files": {
+    "apps/backend/app/modules/screenshot_answer.py": "57517aaa0696c632d123da75e5e0c9ca35e51e9ab470271482ec0e611086520e",
+    "apps/web/src/LivePage.tsx": "548c05e89d8bbba56dbcc1f52e2e674a2b0997a9ec59d47ff89fd0368a2a7759",
+    "apps/web/src/backend-adapter.ts": "b7073348b6c06e2c874b9b5ac81c21ed1270d8711285af93a46786d865230b2c",
+    "apps/web/src/domain.ts": "2511f9608dc54b6759e90535127805c0544f4406aa795fa8943f5193325105d4",
+    "apps/web/src/written-screenshot-feedback.ts": "d834da82b52753fb4bd88507e6d87547b26ec01bbc466c8db69fa808eda862ee"
+  },
+  "modelPromptsOrBillingModified": false,
+  "deployableProductionImageBuilt": false
+}

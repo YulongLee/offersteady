@@ -1,0 +1,16 @@
+{
+  "changedSourceInputsSinceFirstLocalPackage": [
+    "apps/desktop/scripts/generate-global-companion-copy.mjs",
+    "apps/desktop/src/main/index.ts",
+    "apps/desktop/src/main/tray-presentation.ts",
+    "apps/desktop/src/main/window-visibility.ts",
+    "apps/desktop/src/renderer/CompanionApp.tsx",
+    "apps/desktop/src/renderer/HideWindowButton.tsx",
+    "apps/desktop/src/renderer/global-copy.generated.ts"
+  ],
+  "microphonePermissionControllerUnchanged": true,
+  "microphoneCoordinatorUnchanged": true,
+  "mockAudioLifecycleUnchanged": true,
+  "version": "1.3.6",
+  "firstLocalVersion": "1.3.6"
+}

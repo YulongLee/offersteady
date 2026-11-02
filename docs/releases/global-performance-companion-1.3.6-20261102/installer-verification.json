@@ -1,0 +1,84 @@
+{
+  "desktopTests": {
+    "desktopTestFiles": 55,
+    "desktopTestsPassed": 401,
+    "desktopTypecheckPassed": true,
+    "globalFailureRegressions": 7,
+    "globalPackageToolTests": 6
+  },
+  "edition": "global",
+  "nonNativeDistFiles": 27,
+  "packages": [
+    {
+      "actualSignatureAndAudioEntitlementsPassed": true,
+      "appAndDmgNotarizedStapledGatekeeperPassed": true,
+      "architecture": "arm64",
+      "artifact": {
+        "fileName": "OfferSteady-Companion-Global-1.3.6-macOS-arm64.dmg",
+        "fileSizeBytes": 126277431,
+        "payloadExactlyMatchesVerifiedApp": true,
+        "sha256": "a9cd0121387f5c393b8d6b7d2eb01b6218f6e92b75b044b1b4feeb53fb172356"
+      },
+      "bundleId": "com.offersteady.companion.global",
+      "frozenDistFilesVerified": 27,
+      "globalRuntimeVerified": true,
+      "machOComponentsArchitectureVerified": 16,
+      "nativeCompiledPayloadVerified": true,
+      "nativeGlobalIdentityAndEnglishPermissionsVerified": true,
+      "notarized": true,
+      "passed": true,
+      "platform": "macos",
+      "signingStatus": "verified",
+      "sourceInputsVerified": 94,
+      "version": "1.3.6"
+    },
+    {
+      "actualSignatureAndAudioEntitlementsPassed": true,
+      "appAndDmgNotarizedStapledGatekeeperPassed": true,
+      "architecture": "x64",
+      "artifact": {
+        "fileName": "OfferSteady-Companion-Global-1.3.6-macOS-x64.dmg",
+        "fileSizeBytes": 129965286,
+        "payloadExactlyMatchesVerifiedApp": true,
+        "sha256": "e159a72d638de953bf009f3f8c24aba995dcec8a2d53a5f0340e6825c359a28c"
+      },
+      "bundleId": "com.offersteady.companion.global",
+      "frozenDistFilesVerified": 27,
+      "globalRuntimeVerified": true,
+      "machOComponentsArchitectureVerified": 16,
+      "nativeCompiledPayloadVerified": true,
+      "nativeGlobalIdentityAndEnglishPermissionsVerified": true,
+      "notarized": true,
+      "passed": true,
+      "platform": "macos",
+      "signingStatus": "verified",
+      "sourceInputsVerified": 94,
+      "version": "1.3.6"
+    },
+    {
+      "applicationArchitecture": "x64",
+      "architecture": "x64",
+      "artifact": {
+        "fileName": "OfferSteady-Companion-Global-Setup-1.3.6-Windows-x64.exe",
+        "fileSizeBytes": 102900062,
+        "sha256": "f0b84c6fe131c6e7dba18d48da2a7af462e7dba0cc98d8289c17214217075737"
+      },
+      "authenticode": "unsigned-certificate-tables-zero",
+      "frozenDistFilesVerified": 27,
+      "globalRuntimeVerified": true,
+      "installedFilesVerified": 78,
+      "installerPayloadExactlyMatchesPreparedPackage": true,
+      "installerStubArchitecture": "x86",
+      "notarized": false,
+      "outerAndInnerArchiveIntegrityPassed": true,
+      "passed": true,
+      "platform": "windows",
+      "signingStatus": "unsigned",
+      "version": "1.3.6"
+    }
+  ],
+  "physicalDeviceAudioAcceptancePerformed": false,
+  "providerRequestsPerformed": false,
+  "sourceInputs": 94,
+  "version": "1.3.6"
+}

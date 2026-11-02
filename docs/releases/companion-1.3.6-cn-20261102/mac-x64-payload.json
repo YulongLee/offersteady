@@ -1,0 +1,22 @@
+{
+  "actualSignatureAndAudioEntitlementsPassed": true,
+  "architecture": "x64",
+  "artifact": {
+    "fileName": "OfferSteady-Companion-1.3.6-macOS-x64.dmg",
+    "fileSizeBytes": 129963799,
+    "payloadExactlyMatchesVerifiedApp": true,
+    "sha256": "2b577117e6f8a02100b42e8e9e58fe2467242ce269286d1c1baa67940cd69ae8"
+  },
+  "bundleId": "com.offersteady.companion",
+  "distFilesVerified": 26,
+  "gatekeeper": "not-claimed-local-unnotarized",
+  "helperCount": 4,
+  "nativeRuntimeVerified": true,
+  "notarized": false,
+  "passed": true,
+  "platform": "macos",
+  "productionOrDistributionUpdated": false,
+  "providerOrAudioTestsPerformed": false,
+  "sourceManifestSha256": "1fbf9ce327e7b8544c10d8140266c830a653259a7249d9c87ac754dbd8c6d8af",
+  "version": "1.3.6"
+}

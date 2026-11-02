@@ -1,0 +1,47 @@
+{
+  "passed": true,
+  "checks": {
+    "nonemptyTransparentRetinaImage": true,
+    "sameNativeTrayBoundsRetained": true,
+    "hiddenWrittenPowerLeaseHeld": true,
+    "nativePopupViaRightClickHandlerKeepsHidden": true,
+    "trayClickHandlerRestoresSameWindow": true,
+    "sameWindowRestored": true,
+    "hiddenRecreationRespected": true,
+    "latestRapidIntentPreserved": true,
+    "writtenPowerLeaseReleased": true
+  },
+  "normalImageSize": {
+    "width": 16,
+    "height": 16
+  },
+  "transparentImageSize": {
+    "width": 16,
+    "height": 16
+  },
+  "beforeBounds": {
+    "x": 1866,
+    "y": -24,
+    "width": 32,
+    "height": 24
+  },
+  "hiddenBounds": {
+    "x": 1866,
+    "y": -24,
+    "width": 32,
+    "height": 24
+  },
+  "clickRestores": 1,
+  "activationRestores": 0,
+  "rightMenus": 1,
+  "physicalPointerEventsTested": false,
+  "pointerTestLimitation": "CUA requires a window at the status-bar point and rejected the menu-bar target; event handlers and native menu exercised separately",
+  "realAudioTested": false,
+  "productionRequests": 0,
+  "microphoneRequests": 0,
+  "compiledModules": {
+    "window-visibility": "a1018e702c290c7d2c3bb5e53d11000d312516407db99ac684b6b7cd26ce8004",
+    "tray-presentation": "18de4239eec2d64f8c3e47911638185268eab708e2dcca7a03ebad0535fc772f",
+    "written-session-awake": "cac441d41d6cf77c38d790fb3c5a374d92a95fef84fc20760c2e3d03a33cff87"
+  }
+}

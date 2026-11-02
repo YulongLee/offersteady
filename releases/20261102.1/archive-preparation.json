@@ -1,0 +1,18 @@
+{
+  "archives": {
+    "cn/backend-runtime.tar.gz": "07e1bd060eec80cec2b9ef32338d8bb49b32d35b8c20b8185397f59a3832597a",
+    "global/backend-runtime.tar.gz": "9faee3e3a6c07d8a387e695d1803c8ed4a16bff37ef244d4c4f3e773224f16b7",
+    "global/material-worker-runtime.tar.gz": "bd440b6f47cee5de495c2184d0f46fccc5d7dcf790ba105f5faba1b56a2c6638",
+    "global/web-static.tar.gz": "7cf21cb0045cdc5b9f46126bb43e6e8f035776789f8751299d63604675c01521"
+  },
+  "cnBackendInputs": 232,
+  "cnBaseCommit": "00d79ce2eb4f8281dfd434f25c47e8bd4dad4e9d",
+  "fromValidatedPublication": true,
+  "globalBackendInputs": 303,
+  "globalBaseCommit": "43f698d2c6a45280dd2f84f115a98429ebf94187",
+  "globalWebFiles": 251,
+  "globalWorkerInputs": 267,
+  "newProductionReadOrChange": false,
+  "privateConfigurationIncluded": false,
+  "rawUserDataIncluded": false
+}

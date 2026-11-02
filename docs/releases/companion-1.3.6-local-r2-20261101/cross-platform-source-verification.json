@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "version": "1.3.6",
+  "sourceInputCount": 85,
+  "allThreeSourceInputsIdentical": true,
+  "allNonNativeDistIdentical": true,
+  "nonNativeDistFileCount": 25,
+  "currentSourceMatchesFrozenInputs": true,
+  "productionOrDistributionUpdated": false
+}

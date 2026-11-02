@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "version": "1.3.6",
+  "changedInputPathsSinceR2": [
+    "apps/desktop/scripts/generate-global-companion-copy.mjs",
+    "apps/desktop/src/main/desktop-connection-recovery.ts",
+    "apps/desktop/src/main/index.ts",
+    "apps/desktop/src/main/preload.ts",
+    "apps/desktop/src/main/screenshot-capture-lock.ts",
+    "apps/desktop/src/main/written-screenshot-processor.ts",
+    "apps/desktop/src/main/written-session-awake.ts",
+    "apps/desktop/src/renderer/CompanionApp.tsx",
+    "apps/desktop/src/renderer/global-copy.generated.ts",
+    "apps/desktop/src/renderer/global.d.ts"
+  ],
+  "r2PermissionAudioAppearanceAndTransparentTrayPreserved": true,
+  "compiledRuntimeRegressionTestsExcluded": true,
+  "productionOrDistributionUpdated": false
+}

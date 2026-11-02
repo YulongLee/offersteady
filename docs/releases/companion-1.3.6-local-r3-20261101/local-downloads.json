@@ -1,0 +1,28 @@
+{
+  "version": "1.3.6",
+  "revision": "r3",
+  "files": [
+    {
+      "platform": "mac-arm64",
+      "path": "/Users/liyulong/Downloads/OfferSteady-Companion-1.3.6-Local-r3-macOS-arm64.dmg",
+      "bytes": 136474299,
+      "sha256": "108f8340e18a75abc73a08c752c4c58d11dfcab997d7be41f0e3f84f71a240b1"
+    },
+    {
+      "platform": "mac-x64",
+      "path": "/Users/liyulong/Downloads/OfferSteady-Companion-1.3.6-Local-r3-macOS-x64.dmg",
+      "bytes": 141188744,
+      "sha256": "ed124fac10c4188f8e5fa98bd3b7300654c7f8c9f2d4ae9596b93e26d69e7a3b"
+    },
+    {
+      "platform": "windows-x64",
+      "path": "/Users/liyulong/Downloads/OfferSteady-Companion-Setup-1.3.6-Local-r3-Windows-x64.exe",
+      "bytes": 102172270,
+      "sha256": "18fd93b8d8c2ff412c0baea7a728eb392ba70962bae96a1f5bb27224ab811f54"
+    }
+  ],
+  "guide": "/Users/liyulong/Downloads/OfferSteady-1.3.6-r3-本地测试说明.txt",
+  "localPreview": "http://127.0.0.1:5184/test-previews/written-multi-screen.html?scenario=assistant-offline",
+  "installedInApplications": false,
+  "productionOrDistributionUpdated": false
+}

@@ -1,0 +1,25 @@
+{
+  "id": "mac-x64-136",
+  "platform": "macos",
+  "architecture": "x64",
+  "displayName": "macOS Intel",
+  "version": "1.3.6",
+  "minimumOs": "macOS 14.2+",
+  "fileName": "OfferSteady-Companion-1.3.6-macOS-x64.dmg",
+  "fileSizeBytes": 129963799,
+  "sha256": "2b577117e6f8a02100b42e8e9e58fe2467242ce269286d1c1baa67940cd69ae8",
+  "signingStatus": "verified",
+  "installerType": "dmg",
+  "notarized": true,
+  "protocolVersion": "2.0",
+  "captureRuntime": "electron-single-owner",
+  "generatedAtMs": 1793553690754,
+  "developmentOnly": false,
+  "capabilities": {
+    "microphone": true,
+    "systemAudio": true,
+    "screenCapture": true,
+    "manualInputFallback": true,
+    "screenshotFallback": true
+  }
+}

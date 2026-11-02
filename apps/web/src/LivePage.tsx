@@ -20,6 +20,7 @@ import { createLiveSessionLeaderCoordinator } from "./live-session-leader";
 import { isFreshShortcutScreenshotAcceptance, SHORTCUT_SCREENSHOT_RECOVERY_POLL_INTERVAL_MS } from "./screenshot-shortcut-feedback";
 import type { LiveAnswerStreamEvent } from "./live-answer-stream";
 import { officialSocialContacts } from "./social-contacts";
+import { writtenScreenshotFailureMessage } from "./written-screenshot-feedback";
 import { usePrototype } from "./app-context";
 
 const sessionHomeRoute = (mode?: SessionMode) => mode === "written" ? routes.writtenExams : routes.app;
@@ -95,6 +96,7 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
   const attemptedAutoCandidates = useRef(new Set<string>());
   const previousLatestId = useRef(state.questions[0]?.id);
   const screenshotController = useRef<AbortController | null>(null);
+  const screenshotAttemptEpoch = useRef(0);
   const manualAnswerController = useRef<AbortController | null>(null);
   const manualAnswerRequest = useRef<{
     controller: AbortController;
@@ -125,17 +127,24 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
   const screenshot = actionState.screenshotTask;
   const setScreenshot = (next: ScreenshotTask | null) => setActionState(current => ({
     ...current,
-    screenshotTask: next,
+    screenshotTask: isWritten && next?.stage === "failed"
+      ? { ...next, errorMessage: writtenScreenshotFailureMessage(next.errorMessage || "截屏回答失败，请稍后重试。", next.failureStage) }
+      : next,
     screenshotAnswerStatus: next
       ? next.stage === "completed" ? "success" : next.stage === "failed" ? "failed" : next.stage === "cancelled" ? "cancelled" : "processing"
       : current.screenshotAnswerStatus ?? "idle",
   }));
+  const activateShortcutScreenshot = (requestId: string) => {
+    if (isWritten && activeShortcutScreenshotRequest.current !== requestId) screenshotAttemptEpoch.current += 1;
+    activeShortcutScreenshotRequest.current = requestId;
+  };
   const releaseCollectedScreenshots = (items: readonly CollectedScreenshot[]) => {
     for (const item of items) {
       void interviewAppAdapter.cancelDesktopShortcutScreenshot(item.requestId).catch(() => undefined);
     }
   };
   const resetScreenshotCollection = (updateView = true) => {
+    screenshotAttemptEpoch.current += 1;
     collectionEpoch.current += 1;
     collectionController.current?.abort();
     collectionController.current = null;
@@ -286,7 +295,7 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
         const latest = updates[updates.length - 1]!;
         const latestAlreadyTerminal = terminalShortcutScreenshotRequests.current.has(latest.requestId);
         if ((latest.status === "requested" || latest.status === "processing") && !latestAlreadyTerminal) {
-          activeShortcutScreenshotRequest.current = latest.requestId;
+          activateShortcutScreenshot(latest.requestId);
           setScreenshot(latest.screenshotTask);
         } else if (!latestAlreadyTerminal) {
           terminalShortcutScreenshotRequests.current.add(latest.requestId);
@@ -374,13 +383,13 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
         && isFreshShortcutScreenshotAcceptance(shortcut.acceptedAtMs, livePageMountedAtMs.current)
       ) {
         seenShortcutScreenshotNotifications.current.add(notificationId);
-        activeShortcutScreenshotRequest.current = shortcut.requestId;
+        activateShortcutScreenshot(shortcut.requestId);
         setScreenshot(shortcut.screenshotTask);
       }
       if (shortcut && shortcut.acceptedAtMs === undefined) {
         const alreadyTerminal = terminalShortcutScreenshotRequests.current.has(shortcut.requestId);
         if ((shortcut.status === "requested" || shortcut.status === "processing") && !alreadyTerminal) {
-          activeShortcutScreenshotRequest.current = shortcut.requestId;
+          activateShortcutScreenshot(shortcut.requestId);
           setScreenshot(shortcut.screenshotTask);
         } else if (!alreadyTerminal) {
           terminalShortcutScreenshotRequests.current.add(shortcut.requestId);
@@ -947,6 +956,7 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
     if (!interviewAppAdapter.captureScreenshot) { setCollectionMessage("多屏截屏暂不可用，请刷新后重试。"); return; }
     const controller = new AbortController();
     const epoch = collectionEpoch.current;
+    screenshotAttemptEpoch.current += 1;
     collectionController.current = controller;
     setCollectionBusy(true);
     setCollectionMessage("");
@@ -964,7 +974,7 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
       setCollectedScreenshots(items);
       setCollectionMessage("");
     } catch (error) {
-      if (!controller.signal.aborted && collectionEpoch.current === epoch) setCollectionMessage(error instanceof Error ? error.message : "截屏失败，请重试。");
+      if (!controller.signal.aborted && collectionEpoch.current === epoch) setCollectionMessage(writtenScreenshotFailureMessage(error instanceof Error ? error.message : "截屏失败，请重试。"));
     } finally {
       if (collectionController.current === controller) {
         collectionController.current = null;
@@ -988,6 +998,7 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
     const sources = collectedScreenshotsRef.current;
     const controller = new AbortController();
     const epoch = collectionEpoch.current;
+    screenshotAttemptEpoch.current += 1;
     batchAnswerBusyRef.current = true;
     batchSourcesRef.current = sources;
     batchTaskRef.current = null;
@@ -1020,7 +1031,7 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
       if (result.task.status === "completed") void syncBilling();
     } catch (error) {
       if (controller.signal.aborted || collectionEpoch.current !== epoch) return;
-      const message = `${error instanceof Error ? error.message : "多屏回答失败。"} 请重新截屏后再回答。`;
+      const message = `${writtenScreenshotFailureMessage(error instanceof Error ? error.message : "多屏回答失败。")} 请重新截屏后再回答。`;
       setCollectionMessage(message);
       setScreenshot(null);
       const failedQuestionId = (batchTaskRef.current as { questionId: string } | null)?.questionId ?? placeholderId;
@@ -1038,7 +1049,8 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
     }
   };
   const screenshotInstruction = "请只依据当前截图识别其中的题目、代码或系统设计内容，并给出可直接使用的中文回答。不要使用实时对话、面试官最近的问题或其他会话信息。";
-  const submitScreenshot = async () => {
+  const submitScreenshot = async (controller: AbortController) => {
+    const obsolete = () => isWritten && (controller.signal.aborted || screenshotController.current !== controller);
     const usageId = `screenshot:remote:${Date.now()}`;
     const placeholderId = `shot-pending-${Date.now()}`;
     const placeholderQuestion: InterviewQuestion = {
@@ -1064,7 +1076,8 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
       const result = await runAdapterOperation(signal => interviewAppAdapter.submitScreenshotAnswer({
         interviewId: id,
         instruction: screenshotInstruction,
-      }, signal, task => setScreenshot(task), streamed => {
+      }, signal, task => { if (!obsolete()) setScreenshot(task); }, streamed => {
+        if (obsolete()) return;
         setState(current => ({
           ...current,
           ...reconcileAnswerWorkspace(
@@ -1076,7 +1089,8 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
             { preferIncomingTask: true },
           ),
         }));
-      }), screenshotController.current?.signal);
+      }), controller.signal);
+      if (obsolete()) return;
       setState(current => ({
         ...current,
         ...reconcileAnswerWorkspace(
@@ -1091,9 +1105,11 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
       setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "success" }));
       if (result.task.status === "completed") void syncBilling();
     } catch (error) {
+      if (obsolete()) return;
       if (error instanceof DOMException && error.name === "AbortError") return;
       if (error instanceof Error && error.message === "请求已取消") return;
-      const message = error instanceof Error ? error.message : "截屏回答失败，请稍后重试。";
+      const rawMessage = error instanceof Error ? error.message : "截屏回答失败，请稍后重试。";
+      const message = isWritten ? writtenScreenshotFailureMessage(rawMessage) : rawMessage;
       setState(current => ({
         ...current,
         questions: current.questions.map(item => item.id === placeholderId ? { ...item, status: "failed", advice: { ...item.advice, detail: message, uncertain: true } } : item),
@@ -1144,12 +1160,15 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
     }
     const shortcutRequestId = activeShortcutScreenshotRequest.current;
     if (shortcutRequestId) {
+      const controllerAtCancel = screenshotController.current;
+      const epochAtCancel = screenshotAttemptEpoch.current;
       terminalShortcutScreenshotRequests.current.add(shortcutRequestId);
       activeShortcutScreenshotRequest.current = null;
       setActionState(current => ({ ...current, screenshotTask: null, screenshotAnswerStatus: "cancelled" }));
       try {
         await runAdapterOperation(signal => interviewAppAdapter.cancelDesktopShortcutScreenshot(shortcutRequestId, signal));
       } catch (error) {
+        if (isWritten && (screenshotAttemptEpoch.current !== epochAtCancel || screenshotController.current !== controllerAtCancel || activeShortcutScreenshotRequest.current !== null)) return;
         terminalShortcutScreenshotRequests.current.delete(shortcutRequestId);
         screenshotFailure(error instanceof Error ? error.message : "取消截屏回答失败，请稍后重试。");
       }
@@ -1174,6 +1193,7 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
       return;
     }
     setNotice("");
+    if (isWritten) screenshotAttemptEpoch.current += 1;
     screenshotController.current?.abort();
     const controller = new AbortController();
     screenshotController.current = controller;
@@ -1183,12 +1203,13 @@ export function LivePage({ brand, accountMenu }: { readonly brand: ReactNode; re
         .then(() => {
           if (controller.signal.aborted) return;
           setScreenshot({ name: "共享屏幕截取", stage: "recognizing" });
-          return submitScreenshot();
+          return submitScreenshot(controller);
         })
         .then(() => {
-          screenshotController.current = null;
+          if (!isWritten || screenshotController.current === controller) screenshotController.current = null;
         })
         .catch(error => {
+          if (isWritten && screenshotController.current !== controller) return;
           if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) {
             screenshotController.current = null;
             return;

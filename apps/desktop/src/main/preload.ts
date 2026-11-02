@@ -3,7 +3,8 @@ import type { CaptureState } from "@offersteady/protocol" with { "resolution-mod
 
 contextBridge.exposeInMainWorld("offersteady", {
   publishCaptureState: (state: CaptureState) => ipcRenderer.send("capture:set-state", state),
-  publishScreenshotBinding: (binding: { sessionId: string; bindingId: string } | null) => ipcRenderer.send("desktop:screenshot-binding", binding),
+  recoverConnection: () => ipcRenderer.send("desktop:connection-recovery"),
+  publishScreenshotBinding: (binding: { sessionId: string; bindingId: string; sessionMode?: string } | null) => ipcRenderer.send("desktop:screenshot-binding", binding),
   publishRendererReliabilityHeartbeat: (heartbeat: Record<string, unknown>) => ipcRenderer.send("desktop:renderer-reliability-heartbeat", heartbeat),
   publishRealtimeTransportDiagnostics: (snapshot: Record<string, unknown>) => ipcRenderer.send("desktop:realtime-transport-diagnostics", snapshot),
   getRendererRecoveryContext: () => ipcRenderer.invoke("desktop:get-renderer-recovery-context"),
@@ -48,6 +49,10 @@ contextBridge.exposeInMainWorld("offersteady", {
   probeWebUrl: (url: string) => ipcRenderer.invoke("desktop:probe-web-url", url),
   apiRequest: (request: { url: string; method?: string; headers?: Record<string, string>; body?: string | null }) => ipcRenderer.invoke("desktop:api-request", request),
   requestMicrophoneAccess: () => ipcRenderer.invoke("desktop:request-microphone-access"),
+  getMicrophonePermission: () => ipcRenderer.invoke("desktop:get-microphone-permission"),
+  requestMicrophonePermission: () => ipcRenderer.invoke("desktop:request-microphone-permission"),
+  getWindowVisibility: () => ipcRenderer.invoke("desktop:get-window-visibility"),
+  hideWindow: () => ipcRenderer.invoke("desktop:hide-window"),
   requestScreenCaptureAccess: () => ipcRenderer.invoke("desktop:request-screen-capture-access"),
   openPermissionSettings: (kind: "microphone" | "screen" | "camera" | "audio") => ipcRenderer.invoke("desktop:open-permission-settings", kind),
   requestClose: () => ipcRenderer.send("app:close"),

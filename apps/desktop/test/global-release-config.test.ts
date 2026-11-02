@@ -32,7 +32,9 @@ describe("isolated Global companion release", () => {
     expect(main).toContain("isGlobalRelease() ? [] : legacyUserDataDirectories");
     expect(main).toContain('releaseChannel: localTestRuntime ? "local-test" : isGlobalRelease() ? "global"');
     expect(main).toContain("global-runtime-config.json");
-    expect(main).toContain('desktopCopy("稳", "O")');
+    expect(main).toContain("companionTrayImages(isGlobalRelease())");
+    const trayPresentation = readFileSync(path.join(desktopRoot, "src/main/tray-presentation.ts"), "utf8");
+    expect(trayPresentation).toContain('NORMAL_IMAGES[global ? "O" : "稳"]');
     expect(main).toContain("isGlobalRelease()\n    ? defaultWebWorkspaceUrl()");
     expect(main).toContain("isGlobalRelease()\n    ? defaultApiBaseUrl()");
   });

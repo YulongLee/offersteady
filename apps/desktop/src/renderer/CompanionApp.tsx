@@ -12,6 +12,8 @@ import { createDebouncedDeviceRefresh, reconcileMicrophoneSelection } from "./au
 import appIconUrl from "./assets/app-icon.png";
 import { BINDING_LIVE_POLL_MS, desktopPollDelayMs } from "../main/polling-policy";
 import { DeviceStatusPublishGate } from "./device-status-publish-gate";
+import { HideWindowButton } from "./HideWindowButton";
+import { CapabilityRegistrationQueue, MicrophonePermissionCoordinator, probeMicrophonePermission, type MicrophonePermissionSnapshot } from "./microphone-permission-coordinator";
 
 export const companionStatusCopy: Record<CaptureState, { title: string; detail: string }> = {
   "not-connected": { title: "设备离线", detail: "助手尚未完成服务登记，请检查网络后重试。" },
@@ -287,21 +289,6 @@ const microphonePreferenceScore = (source: AudioSourceDescriptor) => {
 const sortMicrophoneSources = (sources: readonly AudioSourceDescriptor[]) =>
   [...sources].sort((left, right) => microphonePreferenceScore(left) - microphonePreferenceScore(right) || left.label.localeCompare(right.label));
 
-const requestMicrophoneAccessInBackground = async () => {
-  if (!window.offersteady?.requestMicrophoneAccess) return false;
-  let timeoutId: number | undefined;
-  try {
-    return await Promise.race([
-      window.offersteady.requestMicrophoneAccess(),
-      new Promise<boolean>((resolve) => {
-        timeoutId = window.setTimeout(() => resolve(false), 2500);
-      }),
-    ]);
-  } finally {
-    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
-  }
-};
-
 const buildRuntimeCaptureNotice = (
   live: boolean,
   runtimeStatus: DesktopRuntimeStatus | null,
@@ -453,6 +440,11 @@ const mergeBackendReceipts = (
 };
 
 export function CompanionApp() {
+  useEffect(() => {
+    const recover = () => window.offersteady?.recoverConnection?.();
+    window.addEventListener("online", recover);
+    return () => window.removeEventListener("online", recover);
+  }, []);
   const rendererStartedAtMsRef = useRef(Date.now());
   const renderCountRef = useRef(0);
   renderCountRef.current += 1;
@@ -467,6 +459,11 @@ export function CompanionApp() {
   const [permissions, setPermissions] = useState<{ microphone: AudioPermission; systemAudio: AudioPermission }>({ microphone: "unknown", systemAudio: "unknown" });
   const permissionsRef = useRef(permissions);
   permissionsRef.current = permissions;
+  const microphonePermissionRef = useRef<MicrophonePermissionCoordinator | null>(null);
+  const capabilityRegistrationRef = useRef<CapabilityRegistrationQueue<CompanionCapabilities> | null>(null);
+  const latestCapabilitiesRef = useRef<CompanionCapabilities | null>(null);
+  const selectedMicrophoneRef = useRef(selectedMicrophoneId);
+  selectedMicrophoneRef.current = selectedMicrophoneId;
   const [screenPermission, setScreenPermission] = useState<AudioPermission>("unknown");
   const [connectionNotice, setConnectionNotice] = useState("正在生成本机连接码…");
   const [connectionInfo, setConnectionInfo] = useState("暂无连接设备");
@@ -490,6 +487,8 @@ export function CompanionApp() {
   const [bindingCaptureState, setBindingCaptureState] = useState<string | null>(null);
   const [bindingInterviewAudioMode, setBindingInterviewAudioMode] = useState<InterviewAudioMode>("computer");
   const [bindingSessionMode, setBindingSessionMode] = useState<string>("interview");
+  const bindingSessionModeRef = useRef(bindingSessionMode);
+  bindingSessionModeRef.current = bindingSessionMode;
   const [nativeRuntimeHealth, setNativeRuntimeHealth] = useState<DesktopNativeRuntimeHealth | null>(null);
   const [liveSourceHealthState, setLiveSourceHealthState] = useState<readonly AudioSourceHealth[]>([]);
   const [monitorSourceHealthState, setMonitorSourceHealthState] = useState<readonly AudioSourceHealth[]>([]);
@@ -725,7 +724,6 @@ export function CompanionApp() {
   const systemAudioPresentationHealth = audioSourcePresentationHealth(systemAudioHealth, permissions.systemAudio);
   const screenPresentationHealth = permissionPresentationHealth(screenPermission, screenCaptureReady);
   const nativeRuntimeReady = nativeRuntimeHealth?.ready === true;
-  const isWindows = config?.platform === "windows";
 
   const capabilitiesFor = (runtime: DesktopRuntimeConfig): CompanionCapabilities => ({
     mockInterviewProtocol: 1,
@@ -741,12 +739,42 @@ export function CompanionApp() {
       ...systemAudioOptions.map(source => ({ id: source.id, kind: source.kind, label: source.label, available: source.available })),
     ],
   });
+  if (config) latestCapabilitiesRef.current = capabilitiesFor(config);
+
+  const updatePermissions = (update: Partial<typeof permissions>) => {
+    const current = permissionsRef.current;
+    const next = { ...current, ...update };
+    if (next.microphone === current.microphone && next.systemAudio === current.systemAudio) return;
+    permissionsRef.current = next;
+    setPermissions(next);
+    if (latestCapabilitiesRef.current) {
+      latestCapabilitiesRef.current = { ...latestCapabilitiesRef.current, ...next };
+      void capabilityRegistrationRef.current?.submit(latestCapabilitiesRef.current);
+    }
+  };
+  const updatePermissionsFromHealth = (health: readonly AudioSourceHealth[]) => {
+    const previous = permissionsRef.current;
+    const microphone = permissionFromHealth(health.find(item => item.sourceKind === "microphone"), previous.microphone);
+    updatePermissions({ microphone,
+      systemAudio: permissionFromHealth(health.find(item => item.sourceKind === "system"), previous.systemAudio) });
+    if (microphone !== previous.microphone) microphonePermissionRef.current?.record(microphone);
+  };
+
+  useEffect(() => {
+    if (config && latestCapabilitiesRef.current) void capabilityRegistrationRef.current?.submit(latestCapabilitiesRef.current);
+  }, [config, pairingIdentity, permissions.microphone, permissions.systemAudio, microphoneSources]);
+
+  useEffect(() => {
+    const recheck = () => { void microphonePermissionRef.current?.check(); };
+    window.addEventListener("focus", recheck);
+    return () => window.removeEventListener("focus", recheck);
+  }, []);
 
   const registerDesktopDevice = async (
     identity: DesktopPairingIdentity,
     runtime: DesktopRuntimeConfig,
     nextCapabilities: CompanionCapabilities,
-    options?: { silent?: boolean },
+    options?: { silent?: boolean; isCurrent?: () => boolean },
   ) => {
     try {
       const response = await desktopBackendFetch(runtime, "/realtime-speech/desktop-devices/register", {
@@ -765,7 +793,7 @@ export function CompanionApp() {
       if (!response.ok) {
         throw new Error(await readBackendError(response));
       }
-      if (!options?.silent) {
+      if (!options?.silent && (options?.isCurrent?.() ?? true)) {
         setState("ready");
         setConnectionNotice("设备在线");
         setConnectionInfo("系统权限已独立保存，等待网页连接本场面试。");
@@ -773,7 +801,7 @@ export function CompanionApp() {
       }
       return true;
     } catch (error) {
-      if (!options?.silent) {
+      if (!options?.silent && (options?.isCurrent?.() ?? true)) {
         const message = error instanceof Error ? error.message : "后端登记失败";
         setState("not-connected");
         setConnectionNotice("未连接");
@@ -800,32 +828,57 @@ export function CompanionApp() {
       setScreenSources(screens.length > 0 ? screens : defaultScreens);
       setSelectedScreenId((screens[0] ?? defaultScreens[0])?.id ?? "");
       setConnectionNotice("正在登记这台电脑…");
-      await registerDesktopDevice(identity, runtime, {
+      const initialCapabilities: CompanionCapabilities = {
         mockInterviewProtocol: 1,
         protocolVersion: runtime.protocolVersion,
         appVersion: runtime.appVersion,
         platform: runtime.platform,
         architecture: runtime.architecture,
         platformVersion: runtime.platformVersion,
-        microphone: permissions.microphone,
-        systemAudio: permissions.systemAudio,
+        microphone: permissionsRef.current.microphone,
+        systemAudio: permissionsRef.current.systemAudio,
         availableSources: [
           ...sources.map(source => ({ id: source.id, kind: source.kind, label: source.label, available: source.available })),
           ...systemAudioOptions.map(source => ({ id: source.id, kind: source.kind, label: source.label, available: true })),
         ],
-      });
-      void requestMicrophoneAccessInBackground()
-        .then(async microphoneGranted => {
-          const screenGranted = await window.offersteady?.requestScreenCaptureAccess?.().catch(() => false) ?? false;
+      };
+      const registered = await registerDesktopDevice(identity, runtime, initialCapabilities, { isCurrent: () => mounted });
+      if (!mounted) return;
+      const registration = new CapabilityRegistrationQueue<CompanionCapabilities>(capabilities =>
+        registerDesktopDevice(identity, runtime, capabilities, { silent: true }));
+      capabilityRegistrationRef.current = registration;
+      if (registered) registration.markSuccessful(initialCapabilities);
+      if (latestCapabilitiesRef.current) void registration.submit(latestCapabilitiesRef.current);
+      const permission = new MicrophonePermissionCoordinator({
+        read: async () => {
+          if (window.offersteady?.getMicrophonePermission) return window.offersteady.getMicrophonePermission();
+          const health = await window.offersteady?.getNativeRuntimeHealth?.();
+          const status = health?.microphonePermission;
+          return { permission: status === "restricted" ? "denied" : status === "not-determined" ? "prompt"
+            : status === "granted" || status === "denied" ? status : "unknown", pending: false, source: "os" };
+        },
+        request: async () => {
+          if (window.offersteady?.requestMicrophonePermission) return window.offersteady.requestMicrophonePermission();
+          if (runtime.platform !== "macos") return { permission: "unknown", pending: false, source: "unverified" };
+          const granted = await window.offersteady?.requestMicrophoneAccess?.();
+          return { permission: granted === true ? "granted" : granted === false ? "denied" : "unknown", pending: false, source: "os" };
+        },
+        probe: () => probeMicrophonePermission(navigator.mediaDevices, selectedMicrophoneRef.current),
+        onChange: snapshot => {
           if (!mounted) return;
+          updatePermissions({ microphone: snapshot.permission === "unavailable" ? "unknown" : snapshot.permission });
+          if (snapshot.permission === "granted") void refreshMicrophoneSources();
+        },
+      });
+      microphonePermissionRef.current = permission;
+      void permission.check({ request: true });
+      if (bindingSessionModeRef.current !== "mock") {
+        void window.offersteady?.requestScreenCaptureAccess?.().then(screenGranted => {
+          if (!mounted || bindingSessionModeRef.current === "mock") return;
           setScreenPermission(screenGranted ? "granted" : "denied");
-          setPermissions({
-            microphone: microphoneGranted ? "granted" : "denied",
-            systemAudio: screenGranted ? "granted" : "denied",
-          });
-          return refreshMicrophoneSources();
-        })
-        .catch(() => undefined);
+          updatePermissions({ systemAudio: screenGranted ? "granted" : "denied" });
+        }).catch(() => undefined);
+      }
     }).catch(() => {
       if (!mounted) return;
       setConnectionNotice("未连接 | 本机运行信息读取失败，请重新打开伴随程序");
@@ -833,12 +886,16 @@ export function CompanionApp() {
     });
     return () => {
       mounted = false;
+      microphonePermissionRef.current?.dispose();
+      microphonePermissionRef.current = null;
+      capabilityRegistrationRef.current?.dispose();
+      capabilityRegistrationRef.current = null;
       void localMonitorRef.current?.stop();
       void publisherRef.current?.stop();
       stopPreview();
     };
-    // Permissions are intentionally reported as the initial runtime capability here.
-    // Runtime permission updates are triggered by actual preview/capture actions.
+    // Permission state belongs to this device lifecycle. Late OS results are
+    // accepted while mounted and merged into the existing registration path.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -852,6 +909,13 @@ export function CompanionApp() {
     setIsPreviewing(false);
     setPreviewNotice(`选择要捕捉的屏幕：${currentScreenLabel}`);
   }, [currentScreenLabel]);
+
+  useEffect(() => {
+    if (bindingSessionMode !== "mock") return;
+    setShowScreenPreviewDialog(false);
+    setShowScreenshotShortcutSettings(false);
+    stopPreview();
+  }, [bindingSessionMode]);
 
   useEffect(() => {
     const mediaDevices = navigator.mediaDevices;
@@ -879,6 +943,7 @@ export function CompanionApp() {
     };
     const pollBindingAndPublishStatus = async () => {
       if (stopped) return;
+      void capabilityRegistrationRef.current?.flush();
       if (bindingPollInFlight) {
         pollAgainWhenSettled = true;
         return;
@@ -1016,7 +1081,7 @@ export function CompanionApp() {
           setPublisherRetryNonce((value) => value + 1);
         }
         window.offersteady?.publishCaptureState(nextCaptureState);
-        window.offersteady?.publishScreenshotBinding?.(mockInterview ? null : { sessionId: binding.sessionId, bindingId: binding.bindingId });
+        window.offersteady?.publishScreenshotBinding?.(mockInterview ? null : { sessionId: binding.sessionId, bindingId: binding.bindingId, sessionMode: pairingStatus.sessionMode ?? "interview" });
         const deviceStatusPayload = {
           userId: binding.ownerUserId,
           deviceId: pairingIdentity.deviceId,
@@ -1093,7 +1158,7 @@ export function CompanionApp() {
   }, [config, pairingIdentity]);
 
   useEffect(() => {
-    if (bindingCaptureState === "paused" || captureEnabled || publisherHasTakenOver || (bindingInterviewAudioMode === "computer" && !selectedSystemAudioId)) {
+    if (bindingSessionMode === "mock" || bindingCaptureState === "paused" || captureEnabled || publisherHasTakenOver || (bindingInterviewAudioMode === "computer" && !selectedSystemAudioId)) {
       void localMonitorRef.current?.stop();
       localMonitorRef.current = null;
       if (bindingCaptureState === "paused" || captureEnabled || publisherHasTakenOver) setMonitorSourceHealthState([]);
@@ -1109,10 +1174,7 @@ export function CompanionApp() {
         monitorSourceHealthRef.current = health;
         setMonitorSourceHealthState(health);
         sourceHealthRef.current = mergeDisplayedSourceHealth(liveSourceHealthRef.current, health);
-        setPermissions((current) => ({
-          microphone: permissionFromHealth(health.find((item) => item.sourceKind === "microphone"), current.microphone),
-          systemAudio: permissionFromHealth(health.find((item) => item.sourceKind === "system"), current.systemAudio),
-        }));
+        updatePermissionsFromHealth(health);
         if (hasMeaningfulAudioHealth(health)) setCaptureDiagnostic(null);
       },
       onFailure: (message) => {
@@ -1140,7 +1202,7 @@ export function CompanionApp() {
         void monitor.stop();
       }
     };
-  }, [bindingCaptureState, bindingInterviewAudioMode, captureEnabled, publisherHasTakenOver, effectiveMicrophoneId, selectedSystemAudioId]);
+  }, [bindingSessionMode, bindingCaptureState, bindingInterviewAudioMode, captureEnabled, publisherHasTakenOver, effectiveMicrophoneId, selectedSystemAudioId]);
 
   const mockCaptureEligible = bindingSessionMode === "mock" && ["preparing", "live"].includes(bindingSessionStatus ?? "");
   useEffect(() => {
@@ -1169,12 +1231,15 @@ export function CompanionApp() {
         if (next === "error") setMockMicrophoneError(message);
         else if (next === "capturing") {
           setMockMicrophoneError(null);
-          setPermissions(current => ({ ...current, microphone: "granted" }));
+          microphonePermissionRef.current?.record("granted");
         }
       },
       onLevel: level => { if (!disposed) setMockMicrophoneLevel(level); },
       onPermission: granted => {
-        if (!disposed) setPermissions(current => ({ ...current, microphone: granted ? "granted" : "denied" }));
+        if (!disposed) {
+          if (microphonePermissionRef.current) microphonePermissionRef.current.record(granted ? "granted" : "denied");
+          else updatePermissions({ microphone: granted ? "granted" : "denied" });
+        }
       },
     });
     microphone.start();
@@ -1221,10 +1286,7 @@ export function CompanionApp() {
         liveSourceHealthRef.current = health;
         sourceHealthRef.current = mergeDisplayedSourceHealth(health, monitorSourceHealthRef.current);
         setLiveSourceHealthState(health);
-        setPermissions((current) => ({
-          microphone: permissionFromHealth(health.find((item) => item.sourceKind === "microphone"), current.microphone),
-          systemAudio: permissionFromHealth(health.find((item) => item.sourceKind === "system"), current.systemAudio),
-        }));
+        updatePermissionsFromHealth(health);
         if (hasMeaningfulAudioHealth(health)) setCaptureDiagnostic(null);
       },
       onCaptureState: (captureState) => {
@@ -1418,47 +1480,38 @@ export function CompanionApp() {
     setConnectionInfo("连接码已复制");
   };
 
-  const refreshAuthorization = async () => {
-    try {
-      setState("permission-required");
-      setDesktopNotice("正在检查系统权限，机器码和设备身份不会改变…");
-      const microphoneGranted = await window.offersteady?.requestMicrophoneAccess().catch(() => false) ?? false;
-      const screenGranted = await window.offersteady?.requestScreenCaptureAccess?.().catch(() => false) ?? false;
-      setScreenPermission(screenGranted ? "granted" : "denied");
-      setPermissions({
-        microphone: microphoneGranted ? "granted" : "denied",
-        systemAudio: screenGranted ? "granted" : "denied",
-      });
-      setDesktopNotice(
-        microphoneGranted && screenGranted
-          ? "麦克风和屏幕录制权限已就绪。"
-          : isWindows
-            ? "部分权限尚未开启，请在 Windows 设置 → 隐私和安全性中允许麦克风和屏幕捕捉后重试。"
-            : "部分权限尚未开启，请在 macOS 系统设置 → 隐私与安全性中允许后重新检查。",
-      );
-      setState(activeBinding ? (captureEnabled ? "capturing" : bindingCaptureState === "paused" ? "paused" : "ready") : "ready");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "权限检查失败";
-      setDesktopNotice(`权限检查失败：${message}`);
-      setConnectionInfo(`权限检查失败：${message}`);
-      setState("error");
-    }
+  const checkMicrophonePermission = async (): Promise<MicrophonePermissionSnapshot> => {
+    const coordinator = microphonePermissionRef.current;
+    if (!coordinator) return { permission: "unknown", pending: false, source: "unverified" };
+    return coordinator.check({ request: true, probe: true });
   };
 
   const retryMockMicrophone = async () => {
     if (mockMicrophoneRetrying) return;
     setMockMicrophoneRetrying(true);
+    const coordinator = microphonePermissionRef.current;
+    const lease = desktopBindingLeaseIdentity(activeBindingRef.current);
+    const microphoneId = selectedMicrophoneRef.current;
+    const current = () => microphonePermissionRef.current === coordinator
+      && desktopBindingLeaseIdentity(activeBindingRef.current) === lease
+      && bindingSessionModeRef.current === "mock"
+      && ["preparing", "live"].includes(bindingSessionStatusRef.current ?? "")
+      && selectedMicrophoneRef.current === microphoneId;
     try {
-      const granted = await window.offersteady?.requestMicrophoneAccess().catch(() => false) ?? false;
-      setPermissions(current => ({ ...current, microphone: granted ? "granted" : "denied" }));
-      if (!granted) {
-        setMockMicrophoneError("模拟面试麦克风权限被拒绝。请在系统设置中允许麦克风，然后点击“重试麦克风”。");
+      const result = await checkMicrophonePermission();
+      if (!current()) return;
+      if (result.pending || result.permission !== "granted") {
+        setMockMicrophoneError(result.pending ? "等待系统确认麦克风，请稍后重试。"
+          : result.permission === "denied" ? "麦克风未授权，请在系统设置中开启后重试。"
+          : result.permission === "unavailable" ? "麦克风暂不可用，请检查设备后重试。"
+          : "麦克风状态尚未确认，请稍后重试。");
         return;
       }
-      await refreshMicrophoneSources(selectedMicrophoneId);
+      await refreshMicrophoneSources(microphoneId);
+      if (!current()) return;
       setMockMicrophoneRetryNonce(value => value + 1);
     } finally {
-      setMockMicrophoneRetrying(false);
+      if (microphonePermissionRef.current === coordinator) setMockMicrophoneRetrying(false);
     }
   };
 
@@ -1497,6 +1550,7 @@ export function CompanionApp() {
           <img className="brand-icon" src={appIconUrl} alt="面试稳" />
           <h1>面试稳</h1>
           <span className="brand-badge">电脑伴随助手</span>
+          <HideWindowButton />
         </div>
 
         <div className="terminal-rows">
@@ -1537,7 +1591,7 @@ export function CompanionApp() {
             </div>
           ) : null}
 
-          {bindingInterviewAudioMode === "mobile" ? <TerminalRow
+          {bindingSessionMode !== "mock" ? (bindingInterviewAudioMode === "mobile" ? <TerminalRow
             title="电脑输出"
             subtitle="手机面试不采集电脑系统音频"
             statusLabel="本场停用"
@@ -1562,9 +1616,9 @@ export function CompanionApp() {
                 ))}
               </select>
             </div>
-          </TerminalRow>}
+          </TerminalRow>) : null}
 
-          <TerminalRow title="屏幕捕捉" subtitle="选择要捕捉的屏幕" statusLabel="捕捉屏幕" presentationHealth={screenPresentationHealth}>
+          {bindingSessionMode !== "mock" ? <TerminalRow title="屏幕捕捉" subtitle="选择要捕捉的屏幕" statusLabel="捕捉屏幕" presentationHealth={screenPresentationHealth}>
             <div className="screen-control">
               <select
                 aria-label="选择屏幕捕捉来源"
@@ -1589,7 +1643,7 @@ export function CompanionApp() {
                 <small>{screenshotShortcut.registered ? activeScreenshotShortcutLabel : "未生效 · 点击设置"}</small>
               </button>
             </div>
-          </TerminalRow>
+          </TerminalRow> : null}
           {showScreenshotShortcutSettings ? (
             <div className="shortcut-settings-backdrop" role="dialog" aria-modal="true" aria-labelledby="shortcut-settings-title">
               <section className="shortcut-settings-sheet">

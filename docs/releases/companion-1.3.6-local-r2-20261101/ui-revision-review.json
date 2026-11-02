@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "checkedAtAsiaShanghai": "2026-11-01T02:35:01.172615+08:00",
+  "version": "1.3.6",
+  "localPackageRevision": "Local-r2",
+  "passed": true,
+  "baselineCommit": "00d79ce2eb4f8281dfd434f25c47e8bd4dad4e9d",
+  "baselineSource": "HEAD:apps/desktop/src/renderer/CompanionApp.tsx",
+  "currentSourceSha256": "68c6d2842e9c752a76c23121a57d5bc42ebc488c95d2350965ff34135abe46bc",
+  "microphoneRow": {
+    "exactlyMatchesSealed135": true,
+    "originalSha256": "11cad5cf415d3c46ef6f17c43e6ae3eec0cad11725345d07c1e7aeac8c15ab8d",
+    "currentSha256": "11cad5cf415d3c46ef6f17c43e6ae3eec0cad11725345d07c1e7aeac8c15ab8d",
+    "comparison": "Exact source bytes from the microphone TerminalRow opening through its closing tag; no whitespace normalization."
+  },
+  "existingErrorRetry": {
+    "exactlyMatchesSealed135": true,
+    "originalSha256": "34fca4c1a2532acfbd4a19c2eb9645cec22ce718f5fe617c5ecc4c44eca48c69",
+    "currentSha256": "34fca4c1a2532acfbd4a19c2eb9645cec22ce718f5fe617c5ecc4c44eca48c69",
+    "retainsOriginalRetryAndBusyLabels": true
+  },
+  "removedStandalonePresentation": {
+    "microphoneChecking": true,
+    "setMicrophoneChecking": true,
+    "microphonePermissionNotice": true,
+    "setMicrophonePermissionNotice": true,
+    "\"重新检查\"": true
+  },
+  "brandRowHideWindowButtonRetained": true,
+  "permissionAndRecoveryPreserved": [
+    "automatic current late grant and immediate merged registration",
+    "passive focus refresh and truthful OS/media evidence",
+    "original error-state retry uses the permission coordinator and explicit media probe",
+    "existing retry busy state remains; no new standalone check state",
+    "ordinary microphone, output, screen preview and screenshot shortcut controls retained"
+  ],
+  "focusedVerification": {
+    "executionStatus": "previously_executed_in_this_task",
+    "command": "npx vitest run -c apps/desktop/vite.config.mts apps/desktop/test/companion-permission-recovery.test.ts apps/desktop/test/microphone-permission-coordinator.test.ts apps/desktop/test/permission-session-separation.test.ts apps/desktop/test/companion-copy.test.ts",
+    "testFilesPassed": 4,
+    "testsPassed": 41,
+    "testsFailed": 0,
+    "exitCode": 0,
+    "runLocalTime": "2026-11-01 02:24:39 Asia/Shanghai",
+    "newTestsUseSyntheticServices": true,
+    "actualMicrophoneOrProductionRequests": false,
+    "rendererTypecheck": "passed",
+    "gitDiffCheck": "passed",
+    "sourceInputsSha256": {
+      "apps/desktop/src/renderer/CompanionApp.tsx": "68c6d2842e9c752a76c23121a57d5bc42ebc488c95d2350965ff34135abe46bc",
+      "apps/desktop/src/renderer/microphone-permission-coordinator.ts": "97e2f1c5e85b526812856f2c369d994440075dbd9bc20aeb2d75ad1e88e89ea3",
+      "apps/desktop/test/companion-permission-recovery.test.ts": "71d9bac2191930e454f60eb428be3e974a2ce4cecdccaf21bdf28b58109fb2e0",
+      "apps/desktop/test/microphone-permission-coordinator.test.ts": "4e8124b23a2460b86e0c56919df23266676e79865233624dc8bf559897393d17",
+      "apps/desktop/test/permission-session-separation.test.ts": "b7f5323a53b8ae884094ba29ee672428599d9c64c027613978ccafbb7909aba0",
+      "apps/desktop/test/companion-copy.test.ts": "40d7fe81a3d816fa0ebb7be7cb0e75931e36220355707fc2cce7f39e198e93f6"
+    }
+  },
+  "thisReviewActions": {
+    "productFilesModified": false,
+    "buildExecuted": false,
+    "testReexecution": false,
+    "productionTouched": false,
+    "gitWrites": false,
+    "evidenceFilesWritten": [
+      "artifacts/companion-1.3.6-local-r2/scope-verification.json",
+      "artifacts/companion-1.3.6-local-r2/ui-revision-review.json"
+    ]
+  }
+}

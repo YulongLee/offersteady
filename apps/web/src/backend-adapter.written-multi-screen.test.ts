@@ -164,4 +164,20 @@ describe("written multi-screen backend adapter", () => {
     await expect(h.adapter.submitScreenshotBatch({ interviewId: "written-1", captureRequestIds: ["a"], instruction: "answer" })).rejects.toThrow("截图已过期");
     expect(h.fetchImpl.mock.calls.filter(([url]) => String(url).endsWith("/batch-answer-requests"))).toHaveLength(1);
   });
+
+  it.each(["capture-failed", "upload-failed"])("retains existing %s metadata for written feedback without changing raw errors", async stage => {
+    const h = harness(request({ status: "failed", stage, errorMessage: "request timed out" }));
+    const onStage = vi.fn();
+    await expect(h.adapter.captureScreenshot({ interviewId: "written-1" }, undefined, onStage)).rejects.toThrow(`截图阶段 ${stage} 失败：request timed out`);
+    expect(onStage).toHaveBeenCalledWith({ name: "共享屏幕截取", stage: "failed", errorMessage: "request timed out", failureStage: stage });
+    const pushed = await h.push({ captureOnly: false, status: "failed", stage, errorMessage: "request timed out" });
+    expect(pushed.shortcutScreenshotUpdate?.screenshotTask).toMatchObject({ stage: "failed", failureStage: stage, errorMessage: "request timed out" });
+  });
+
+  it("keeps older responses without a failure stage usable", async () => {
+    const h = harness(request({ status: "failed", stage: undefined, errorMessage: "合成失败" }));
+    const onStage = vi.fn();
+    await expect(h.adapter.captureScreenshot({ interviewId: "written-1" }, undefined, onStage)).rejects.toThrow("合成失败");
+    expect(onStage).toHaveBeenCalledWith({ name: "共享屏幕截取", stage: "failed", errorMessage: "合成失败" });
+  });
 });

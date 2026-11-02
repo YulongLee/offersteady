@@ -1,0 +1,693 @@
+{
+  "passed": true,
+  "readOnlyDockerInspectCalls": 8,
+  "productionWrites": 0,
+  "noConfigurationValuesPersisted": true,
+  "baselineSummarySha256": "d4b0ce1a735f1aec8a102bc7b09c6e6f18323c456e8c07059523333cde3b9c31",
+  "baselineUnchanged": true,
+  "compatibleControllerSha256": "e6fc8574c95c3cb78d7d3639aa0c8072e32bb31d2204517b165f1b793f36e498",
+  "samples": [
+    {
+      "sample": 0,
+      "components": [
+        {
+          "name": "compose-web-1",
+          "mountCount": 0,
+          "actualDigest": "bef5afff786c9398795b54ab5695f3ce1f2a81c4492c6150cc2be0641ce676a0",
+          "baselineDigest": "bef5afff786c9398795b54ab5695f3ce1f2a81c4492c6150cc2be0641ce676a0",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-backend-1",
+          "mountCount": 0,
+          "actualDigest": "8919ef184bbd63b222fd83e893ed31940b78bac3562d1287041b59491c9c95ca",
+          "baselineDigest": "8919ef184bbd63b222fd83e893ed31940b78bac3562d1287041b59491c9c95ca",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-material-worker-1",
+          "mountCount": 0,
+          "actualDigest": "a8805b383a4b2474c8293a5a49197e01b3e6dd44f5cc7fba04152cfabfb54296",
+          "baselineDigest": "a8805b383a4b2474c8293a5a49197e01b3e6dd44f5cc7fba04152cfabfb54296",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-admin-1",
+          "mountCount": 0,
+          "actualDigest": "451044e07c0c1391faf221f93a7928f38b5db1b6bfd8b04a5c4074466f7e47c5",
+          "baselineDigest": "451044e07c0c1391faf221f93a7928f38b5db1b6bfd8b04a5c4074466f7e47c5",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-postgres-1",
+          "mountCount": 2,
+          "actualDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+          "baselineDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-redis-1",
+          "mountCount": 1,
+          "actualDigest": "e867fb8b063acc7f2444735275348f84e86fa719ebd708c21daf64acd404e9f5",
+          "baselineDigest": "e867fb8b063acc7f2444735275348f84e86fa719ebd708c21daf64acd404e9f5",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-promotion-analytics-1",
+          "mountCount": 0,
+          "actualDigest": "6482c17ead281feb3f30d2ee9898e3231a1d86c7ea441ac96c731e6a939b2d3f",
+          "baselineDigest": "6482c17ead281feb3f30d2ee9898e3231a1d86c7ea441ac96c731e6a939b2d3f",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-analytics-1",
+          "mountCount": 0,
+          "actualDigest": "ac7a190040783ed5df372cd2b70285dcc7f61e8fc9e7e520c9f40a8fd2efda95",
+          "baselineDigest": "ac7a190040783ed5df372cd2b70285dcc7f61e8fc9e7e520c9f40a8fd2efda95",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        }
+      ]
+    },
+    {
+      "sample": 1,
+      "components": [
+        {
+          "name": "compose-web-1",
+          "mountCount": 0,
+          "actualDigest": "bef5afff786c9398795b54ab5695f3ce1f2a81c4492c6150cc2be0641ce676a0",
+          "baselineDigest": "bef5afff786c9398795b54ab5695f3ce1f2a81c4492c6150cc2be0641ce676a0",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-backend-1",
+          "mountCount": 0,
+          "actualDigest": "8919ef184bbd63b222fd83e893ed31940b78bac3562d1287041b59491c9c95ca",
+          "baselineDigest": "8919ef184bbd63b222fd83e893ed31940b78bac3562d1287041b59491c9c95ca",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-material-worker-1",
+          "mountCount": 0,
+          "actualDigest": "a8805b383a4b2474c8293a5a49197e01b3e6dd44f5cc7fba04152cfabfb54296",
+          "baselineDigest": "a8805b383a4b2474c8293a5a49197e01b3e6dd44f5cc7fba04152cfabfb54296",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-admin-1",
+          "mountCount": 0,
+          "actualDigest": "451044e07c0c1391faf221f93a7928f38b5db1b6bfd8b04a5c4074466f7e47c5",
+          "baselineDigest": "451044e07c0c1391faf221f93a7928f38b5db1b6bfd8b04a5c4074466f7e47c5",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-postgres-1",
+          "mountCount": 2,
+          "actualDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+          "baselineDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-redis-1",
+          "mountCount": 1,
+          "actualDigest": "e867fb8b063acc7f2444735275348f84e86fa719ebd708c21daf64acd404e9f5",
+          "baselineDigest": "e867fb8b063acc7f2444735275348f84e86fa719ebd708c21daf64acd404e9f5",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-promotion-analytics-1",
+          "mountCount": 0,
+          "actualDigest": "6482c17ead281feb3f30d2ee9898e3231a1d86c7ea441ac96c731e6a939b2d3f",
+          "baselineDigest": "6482c17ead281feb3f30d2ee9898e3231a1d86c7ea441ac96c731e6a939b2d3f",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-analytics-1",
+          "mountCount": 0,
+          "actualDigest": "ac7a190040783ed5df372cd2b70285dcc7f61e8fc9e7e520c9f40a8fd2efda95",
+          "baselineDigest": "ac7a190040783ed5df372cd2b70285dcc7f61e8fc9e7e520c9f40a8fd2efda95",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        }
+      ]
+    },
+    {
+      "sample": 2,
+      "components": [
+        {
+          "name": "compose-web-1",
+          "mountCount": 0,
+          "actualDigest": "bef5afff786c9398795b54ab5695f3ce1f2a81c4492c6150cc2be0641ce676a0",
+          "baselineDigest": "bef5afff786c9398795b54ab5695f3ce1f2a81c4492c6150cc2be0641ce676a0",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-backend-1",
+          "mountCount": 0,
+          "actualDigest": "8919ef184bbd63b222fd83e893ed31940b78bac3562d1287041b59491c9c95ca",
+          "baselineDigest": "8919ef184bbd63b222fd83e893ed31940b78bac3562d1287041b59491c9c95ca",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-material-worker-1",
+          "mountCount": 0,
+          "actualDigest": "a8805b383a4b2474c8293a5a49197e01b3e6dd44f5cc7fba04152cfabfb54296",
+          "baselineDigest": "a8805b383a4b2474c8293a5a49197e01b3e6dd44f5cc7fba04152cfabfb54296",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-admin-1",
+          "mountCount": 0,
+          "actualDigest": "451044e07c0c1391faf221f93a7928f38b5db1b6bfd8b04a5c4074466f7e47c5",
+          "baselineDigest": "451044e07c0c1391faf221f93a7928f38b5db1b6bfd8b04a5c4074466f7e47c5",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-postgres-1",
+          "mountCount": 2,
+          "actualDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+          "baselineDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-redis-1",
+          "mountCount": 1,
+          "actualDigest": "e867fb8b063acc7f2444735275348f84e86fa719ebd708c21daf64acd404e9f5",
+          "baselineDigest": "e867fb8b063acc7f2444735275348f84e86fa719ebd708c21daf64acd404e9f5",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-promotion-analytics-1",
+          "mountCount": 0,
+          "actualDigest": "6482c17ead281feb3f30d2ee9898e3231a1d86c7ea441ac96c731e6a939b2d3f",
+          "baselineDigest": "6482c17ead281feb3f30d2ee9898e3231a1d86c7ea441ac96c731e6a939b2d3f",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-analytics-1",
+          "mountCount": 0,
+          "actualDigest": "ac7a190040783ed5df372cd2b70285dcc7f61e8fc9e7e520c9f40a8fd2efda95",
+          "baselineDigest": "ac7a190040783ed5df372cd2b70285dcc7f61e8fc9e7e520c9f40a8fd2efda95",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        }
+      ]
+    },
+    {
+      "sample": 3,
+      "components": [
+        {
+          "name": "compose-web-1",
+          "mountCount": 0,
+          "actualDigest": "bef5afff786c9398795b54ab5695f3ce1f2a81c4492c6150cc2be0641ce676a0",
+          "baselineDigest": "bef5afff786c9398795b54ab5695f3ce1f2a81c4492c6150cc2be0641ce676a0",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-backend-1",
+          "mountCount": 0,
+          "actualDigest": "8919ef184bbd63b222fd83e893ed31940b78bac3562d1287041b59491c9c95ca",
+          "baselineDigest": "8919ef184bbd63b222fd83e893ed31940b78bac3562d1287041b59491c9c95ca",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-material-worker-1",
+          "mountCount": 0,
+          "actualDigest": "a8805b383a4b2474c8293a5a49197e01b3e6dd44f5cc7fba04152cfabfb54296",
+          "baselineDigest": "a8805b383a4b2474c8293a5a49197e01b3e6dd44f5cc7fba04152cfabfb54296",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-admin-1",
+          "mountCount": 0,
+          "actualDigest": "451044e07c0c1391faf221f93a7928f38b5db1b6bfd8b04a5c4074466f7e47c5",
+          "baselineDigest": "451044e07c0c1391faf221f93a7928f38b5db1b6bfd8b04a5c4074466f7e47c5",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-postgres-1",
+          "mountCount": 2,
+          "actualDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+          "baselineDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-redis-1",
+          "mountCount": 1,
+          "actualDigest": "e867fb8b063acc7f2444735275348f84e86fa719ebd708c21daf64acd404e9f5",
+          "baselineDigest": "e867fb8b063acc7f2444735275348f84e86fa719ebd708c21daf64acd404e9f5",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-promotion-analytics-1",
+          "mountCount": 0,
+          "actualDigest": "6482c17ead281feb3f30d2ee9898e3231a1d86c7ea441ac96c731e6a939b2d3f",
+          "baselineDigest": "6482c17ead281feb3f30d2ee9898e3231a1d86c7ea441ac96c731e6a939b2d3f",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-analytics-1",
+          "mountCount": 0,
+          "actualDigest": "ac7a190040783ed5df372cd2b70285dcc7f61e8fc9e7e520c9f40a8fd2efda95",
+          "baselineDigest": "ac7a190040783ed5df372cd2b70285dcc7f61e8fc9e7e520c9f40a8fd2efda95",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        }
+      ]
+    },
+    {
+      "sample": 4,
+      "components": [
+        {
+          "name": "compose-web-1",
+          "mountCount": 0,
+          "actualDigest": "bef5afff786c9398795b54ab5695f3ce1f2a81c4492c6150cc2be0641ce676a0",
+          "baselineDigest": "bef5afff786c9398795b54ab5695f3ce1f2a81c4492c6150cc2be0641ce676a0",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-backend-1",
+          "mountCount": 0,
+          "actualDigest": "8919ef184bbd63b222fd83e893ed31940b78bac3562d1287041b59491c9c95ca",
+          "baselineDigest": "8919ef184bbd63b222fd83e893ed31940b78bac3562d1287041b59491c9c95ca",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-material-worker-1",
+          "mountCount": 0,
+          "actualDigest": "a8805b383a4b2474c8293a5a49197e01b3e6dd44f5cc7fba04152cfabfb54296",
+          "baselineDigest": "a8805b383a4b2474c8293a5a49197e01b3e6dd44f5cc7fba04152cfabfb54296",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-admin-1",
+          "mountCount": 0,
+          "actualDigest": "451044e07c0c1391faf221f93a7928f38b5db1b6bfd8b04a5c4074466f7e47c5",
+          "baselineDigest": "451044e07c0c1391faf221f93a7928f38b5db1b6bfd8b04a5c4074466f7e47c5",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-postgres-1",
+          "mountCount": 2,
+          "actualDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+          "baselineDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-redis-1",
+          "mountCount": 1,
+          "actualDigest": "e867fb8b063acc7f2444735275348f84e86fa719ebd708c21daf64acd404e9f5",
+          "baselineDigest": "e867fb8b063acc7f2444735275348f84e86fa719ebd708c21daf64acd404e9f5",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-promotion-analytics-1",
+          "mountCount": 0,
+          "actualDigest": "6482c17ead281feb3f30d2ee9898e3231a1d86c7ea441ac96c731e6a939b2d3f",
+          "baselineDigest": "6482c17ead281feb3f30d2ee9898e3231a1d86c7ea441ac96c731e6a939b2d3f",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-analytics-1",
+          "mountCount": 0,
+          "actualDigest": "ac7a190040783ed5df372cd2b70285dcc7f61e8fc9e7e520c9f40a8fd2efda95",
+          "baselineDigest": "ac7a190040783ed5df372cd2b70285dcc7f61e8fc9e7e520c9f40a8fd2efda95",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        }
+      ]
+    },
+    {
+      "sample": 5,
+      "components": [
+        {
+          "name": "compose-web-1",
+          "mountCount": 0,
+          "actualDigest": "bef5afff786c9398795b54ab5695f3ce1f2a81c4492c6150cc2be0641ce676a0",
+          "baselineDigest": "bef5afff786c9398795b54ab5695f3ce1f2a81c4492c6150cc2be0641ce676a0",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-backend-1",
+          "mountCount": 0,
+          "actualDigest": "8919ef184bbd63b222fd83e893ed31940b78bac3562d1287041b59491c9c95ca",
+          "baselineDigest": "8919ef184bbd63b222fd83e893ed31940b78bac3562d1287041b59491c9c95ca",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-material-worker-1",
+          "mountCount": 0,
+          "actualDigest": "a8805b383a4b2474c8293a5a49197e01b3e6dd44f5cc7fba04152cfabfb54296",
+          "baselineDigest": "a8805b383a4b2474c8293a5a49197e01b3e6dd44f5cc7fba04152cfabfb54296",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-admin-1",
+          "mountCount": 0,
+          "actualDigest": "451044e07c0c1391faf221f93a7928f38b5db1b6bfd8b04a5c4074466f7e47c5",
+          "baselineDigest": "451044e07c0c1391faf221f93a7928f38b5db1b6bfd8b04a5c4074466f7e47c5",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-postgres-1",
+          "mountCount": 2,
+          "actualDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+          "baselineDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-redis-1",
+          "mountCount": 1,
+          "actualDigest": "e867fb8b063acc7f2444735275348f84e86fa719ebd708c21daf64acd404e9f5",
+          "baselineDigest": "e867fb8b063acc7f2444735275348f84e86fa719ebd708c21daf64acd404e9f5",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-promotion-analytics-1",
+          "mountCount": 0,
+          "actualDigest": "6482c17ead281feb3f30d2ee9898e3231a1d86c7ea441ac96c731e6a939b2d3f",
+          "baselineDigest": "6482c17ead281feb3f30d2ee9898e3231a1d86c7ea441ac96c731e6a939b2d3f",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-analytics-1",
+          "mountCount": 0,
+          "actualDigest": "ac7a190040783ed5df372cd2b70285dcc7f61e8fc9e7e520c9f40a8fd2efda95",
+          "baselineDigest": "ac7a190040783ed5df372cd2b70285dcc7f61e8fc9e7e520c9f40a8fd2efda95",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        }
+      ]
+    },
+    {
+      "sample": 6,
+      "components": [
+        {
+          "name": "compose-web-1",
+          "mountCount": 0,
+          "actualDigest": "bef5afff786c9398795b54ab5695f3ce1f2a81c4492c6150cc2be0641ce676a0",
+          "baselineDigest": "bef5afff786c9398795b54ab5695f3ce1f2a81c4492c6150cc2be0641ce676a0",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-backend-1",
+          "mountCount": 0,
+          "actualDigest": "8919ef184bbd63b222fd83e893ed31940b78bac3562d1287041b59491c9c95ca",
+          "baselineDigest": "8919ef184bbd63b222fd83e893ed31940b78bac3562d1287041b59491c9c95ca",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-material-worker-1",
+          "mountCount": 0,
+          "actualDigest": "a8805b383a4b2474c8293a5a49197e01b3e6dd44f5cc7fba04152cfabfb54296",
+          "baselineDigest": "a8805b383a4b2474c8293a5a49197e01b3e6dd44f5cc7fba04152cfabfb54296",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-admin-1",
+          "mountCount": 0,
+          "actualDigest": "451044e07c0c1391faf221f93a7928f38b5db1b6bfd8b04a5c4074466f7e47c5",
+          "baselineDigest": "451044e07c0c1391faf221f93a7928f38b5db1b6bfd8b04a5c4074466f7e47c5",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-postgres-1",
+          "mountCount": 2,
+          "actualDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+          "baselineDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-redis-1",
+          "mountCount": 1,
+          "actualDigest": "e867fb8b063acc7f2444735275348f84e86fa719ebd708c21daf64acd404e9f5",
+          "baselineDigest": "e867fb8b063acc7f2444735275348f84e86fa719ebd708c21daf64acd404e9f5",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-promotion-analytics-1",
+          "mountCount": 0,
+          "actualDigest": "6482c17ead281feb3f30d2ee9898e3231a1d86c7ea441ac96c731e6a939b2d3f",
+          "baselineDigest": "6482c17ead281feb3f30d2ee9898e3231a1d86c7ea441ac96c731e6a939b2d3f",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-analytics-1",
+          "mountCount": 0,
+          "actualDigest": "ac7a190040783ed5df372cd2b70285dcc7f61e8fc9e7e520c9f40a8fd2efda95",
+          "baselineDigest": "ac7a190040783ed5df372cd2b70285dcc7f61e8fc9e7e520c9f40a8fd2efda95",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        }
+      ]
+    },
+    {
+      "sample": 7,
+      "components": [
+        {
+          "name": "compose-web-1",
+          "mountCount": 0,
+          "actualDigest": "bef5afff786c9398795b54ab5695f3ce1f2a81c4492c6150cc2be0641ce676a0",
+          "baselineDigest": "bef5afff786c9398795b54ab5695f3ce1f2a81c4492c6150cc2be0641ce676a0",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-backend-1",
+          "mountCount": 0,
+          "actualDigest": "8919ef184bbd63b222fd83e893ed31940b78bac3562d1287041b59491c9c95ca",
+          "baselineDigest": "8919ef184bbd63b222fd83e893ed31940b78bac3562d1287041b59491c9c95ca",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-material-worker-1",
+          "mountCount": 0,
+          "actualDigest": "a8805b383a4b2474c8293a5a49197e01b3e6dd44f5cc7fba04152cfabfb54296",
+          "baselineDigest": "a8805b383a4b2474c8293a5a49197e01b3e6dd44f5cc7fba04152cfabfb54296",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-admin-1",
+          "mountCount": 0,
+          "actualDigest": "451044e07c0c1391faf221f93a7928f38b5db1b6bfd8b04a5c4074466f7e47c5",
+          "baselineDigest": "451044e07c0c1391faf221f93a7928f38b5db1b6bfd8b04a5c4074466f7e47c5",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-postgres-1",
+          "mountCount": 2,
+          "actualDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+          "baselineDigest": "fd1379865f304e2a9bedc03699984055f39edf103448b4a4674a249a8e7ed945",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-redis-1",
+          "mountCount": 1,
+          "actualDigest": "e867fb8b063acc7f2444735275348f84e86fa719ebd708c21daf64acd404e9f5",
+          "baselineDigest": "e867fb8b063acc7f2444735275348f84e86fa719ebd708c21daf64acd404e9f5",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-promotion-analytics-1",
+          "mountCount": 0,
+          "actualDigest": "6482c17ead281feb3f30d2ee9898e3231a1d86c7ea441ac96c731e6a939b2d3f",
+          "baselineDigest": "6482c17ead281feb3f30d2ee9898e3231a1d86c7ea441ac96c731e6a939b2d3f",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        },
+        {
+          "name": "compose-analytics-1",
+          "mountCount": 0,
+          "actualDigest": "ac7a190040783ed5df372cd2b70285dcc7f61e8fc9e7e520c9f40a8fd2efda95",
+          "baselineDigest": "ac7a190040783ed5df372cd2b70285dcc7f61e8fc9e7e520c9f40a8fd2efda95",
+          "directMatch": true,
+          "twoMountReverseMatch": false,
+          "compatibleMatch": true,
+          "lifecycleMatches": true
+        }
+      ]
+    }
+  ],
+  "directMismatches": 0,
+  "allDirectMismatchesExactTwoMountReversals": true
+}

@@ -1,0 +1,354 @@
+{
+  "actions": {
+    "deploy": {
+      "action": "deploy",
+      "allPayloadHashesVerified": true,
+      "exitCode": 0,
+      "results": [
+        {
+          "components": 2,
+          "deployed": true,
+          "financialAnchorMs": 1792604406734,
+          "nonTargetsUnchanged": true
+        }
+      ]
+    },
+    "preflight": {
+      "action": "preflight",
+      "allPayloadHashesVerified": true,
+      "exitCode": 0,
+      "results": [
+        {
+          "preflightPassed": true,
+          "productionChanged": false
+        }
+      ]
+    },
+    "prepare": {
+      "action": "prepare",
+      "allPayloadHashesVerified": true,
+      "exitCode": 0,
+      "results": [
+        {
+          "components": 2,
+          "financialAnchorMs": 1792604406734,
+          "prepared": true,
+          "productionChanged": false
+        }
+      ]
+    },
+    "verify": {
+      "action": "verify",
+      "allPayloadHashesVerified": true,
+      "exitCode": 0,
+      "results": [
+        {
+          "components": 2,
+          "financialAnchorMs": 1792604406734,
+          "nonTargetsUnchanged": true,
+          "verified": true
+        }
+      ]
+    }
+  },
+  "baselines": {
+    "backend": {
+      "id": "7bc15c77cef86681d068d6157270f87338d0cab9f1b14c8cddf7d11e83ad7536",
+      "image": "sha256:63f8243bacfc075cd399032ec5ca05f669356cd087b5d57583a9ce08b474e066",
+      "startedAt": "2026-10-21T17:40:06.734602223Z"
+    },
+    "web": {
+      "id": "6e4bd43d80c1d7f5b5959c3455fc423ca07efd304ef4210a02f2b0b16aa0629d",
+      "image": "sha256:7f5fd6640aaea0b742eddb6227c41ddb7a0a0390fbe657486fdfef86efd38ad6",
+      "startedAt": "2026-10-18T23:39:05.196587551Z"
+    }
+  },
+  "effectiveSettings": {
+    "settingsFields": 379,
+    "settingsSha256": "e22dfb35810aac8d67432539aa91f2fe981874408f42b16260e9db0b1a554f31"
+  },
+  "inputSha256": "d9c7e0336533f1865374c8c9e0049e954029c9d39ee4edbb636aa66d592e7e08",
+  "prepared": {
+    "nonTargetCount": 6,
+    "offlineProbes": {
+      "new": {
+        "checks": [
+          "effective_settings_unchanged",
+          "complete_schema_only_two_optional_queries",
+          "immutable_history_exact_old_bytes_current_priority_global_only",
+          "request_local_raw_snapshot_six_reads_to_zero_equal_wire",
+          "foreign_raw_snapshot_rejected",
+          "next_read_observes_deleted_material",
+          "control_projection_five_fields_owner_checked_no_material_reads",
+          "postgres_projection_single_read_no_full_row_or_write",
+          "scoped_next_terminal_owner_session_and_legacy_contracts"
+        ],
+        "databaseWrites": 0,
+        "lifespanStarted": false,
+        "passed": true,
+        "providerCalls": 0,
+        "schemaAllowedDelta": true,
+        "settingsUnchanged": true,
+        "workersStarted": 0
+      },
+      "rollback": {
+        "checks": [
+          "effective_settings_unchanged",
+          "complete_schema_unchanged",
+          "immutable_history_exact_old_bytes_current_priority_global_only"
+        ],
+        "databaseWrites": 0,
+        "lifespanStarted": false,
+        "passed": true,
+        "providerCalls": 0,
+        "schemaAllowedDelta": true,
+        "settingsUnchanged": true,
+        "workersStarted": 0
+      }
+    },
+    "preparedInputSha256": "d9c7e0336533f1865374c8c9e0049e954029c9d39ee4edbb636aa66d592e7e08",
+    "privateFileCount": 27,
+    "privatePermissions": {
+      "backend": {
+        "mode": "0o700",
+        "uid": 0
+      },
+      "backend/runtime.env.private": {
+        "mode": "0o600",
+        "uid": 0
+      },
+      "backend/settings-before.private.json": {
+        "mode": "0o600",
+        "uid": 0
+      },
+      "prepared.json": {
+        "mode": "0o600",
+        "uid": 0
+      },
+      "web": {
+        "mode": "0o700",
+        "uid": 0
+      }
+    },
+    "targets": [
+      "backend",
+      "web"
+    ]
+  },
+  "rawLogsExported": false,
+  "releaseId": "20261102-global-performance-companion-136-1",
+  "runtime": {
+    "activeGlobalManifestSha256": "136f43b076a5064db83b1d747c45f3acb9b6d15c9299eeaadeb6a64c02f4d1dc",
+    "anonymousRoutes": {
+      "/api/v1/mock-interviews": 401,
+      "/api/v1/sessions": 401,
+      "/index.html": 404,
+      "/openapi.json": 404
+    },
+    "atMs": 1793560252211,
+    "deployed": {
+      "atMs": 1793560091804,
+      "deployed": true,
+      "services": [
+        "backend",
+        "web"
+      ]
+    },
+    "financialAnchorMs": 1792604406734,
+    "idleGates": [
+      {
+        "counts": {
+          "atMs": 1793560070741,
+          "liveInterviews": 0,
+          "livePageLeases": 0,
+          "recentAudioTracks": 0,
+          "recentPreparing": 0,
+          "runningMaterialJobs": 0,
+          "unfinishedTasks": 0
+        },
+        "exitCode": 0,
+        "gate": "legacy-gates/check-idle.py"
+      },
+      {
+        "counts": {
+          "activeOrRecentMockInterviews": 0
+        },
+        "exitCode": 0,
+        "gate": "legacy-gates/check-mock-idle.py"
+      },
+      {
+        "counts": {
+          "activeEntityOrLegacyPageLeases": 0,
+          "material_deletion_jobs": 0,
+          "material_processing_jobs": 0,
+          "material_reconcile_jobs": 0,
+          "mockControlOrGenerationLeases": 0,
+          "protectedMaterialTasks": 0
+        },
+        "exitCode": 0,
+        "gate": "global_mock_companion_idle_gate.py"
+      },
+      {
+        "counts": {
+          "invalidRuntimeMetadata": 0,
+          "livePageLeases": 0,
+          "metadataReadFailures": 0,
+          "mockEffectiveGenerationClaims": 0,
+          "mockGeneratingQuestion": 0,
+          "mockGeneratingReport": 0,
+          "mockListening": 0,
+          "mockOldPreparingWithoutLease": 0,
+          "mockPaused": 0,
+          "mockPreparingLeased": 0,
+          "mockPreparingProtected": 0,
+          "mockPreparingRecent120Seconds": 0,
+          "mockSpeaking": 0,
+          "mockUnknownPhase": 0,
+          "preparationPageLeases": 0,
+          "unfinishedChatTasks": 0,
+          "unfinishedScreenshotTasks": 0,
+          "unknownChatTaskStatuses": 0,
+          "unknownPageLeases": 0,
+          "unknownScreenshotTaskStatuses": 0
+        },
+        "exitCode": 0,
+        "gate": "extra_idle_gate.py"
+      },
+      {
+        "counts": {
+          "activeMaterialTasks": 0,
+          "availablePublisherTokens": 0,
+          "connectedDesktopPublishers": 0,
+          "ignoredLegacyFailedQueuedTasks": 0,
+          "invalidRuntimeMetadata": 0,
+          "materialDeletionJobs": 0,
+          "materialProcessingJobs": 0,
+          "materialReconcileJobs": 0,
+          "metadataReadFailures": 0,
+          "recentAudioTracks": 0,
+          "scanLimitExceeded": 0,
+          "unfinishedRemoteCaptures": 0,
+          "unknownMaterialJobStatuses": 0,
+          "unknownPublisherStatuses": 0,
+          "unknownRemoteCaptureStatuses": 0,
+          "workingDesktopPublishers": 0
+        },
+        "exitCode": 0,
+        "gate": "active_work_gate.py"
+      },
+      {
+        "counts": {
+          "invalidResumeOptimizerMetadata": 0,
+          "reservedResumeOptimizerUsage": 0,
+          "resumeOptimizerEffectiveClaims": 0,
+          "resumeOptimizerEffectiveLeases": 0,
+          "resumeOptimizerQueuedOrRunning": 0,
+          "resumeOptimizerReadFailures": 0,
+          "unknownResumeOptimizerStates": 0,
+          "unknownResumeOptimizerUsageStates": 0
+        },
+        "exitCode": 0,
+        "gate": "resume_optimizer_idle_gate.py"
+      },
+      {
+        "counts": {
+          "financialReadFailures": 0,
+          "invalidCommerceUsageMetadata": 0,
+          "invalidFinancialMetadata": 0,
+          "processingProviderEvents": 0,
+          "recentCommerceCheckouts": 0,
+          "unfinishedCommerceUsageReservations": 0,
+          "unknownCommerceStates": 0,
+          "unknownCommerceUsageStates": 0
+        },
+        "exitCode": 0,
+        "gate": "global_financial_idle_gate.py"
+      }
+    ],
+    "oldImageReferencesPreserved": true,
+    "proxyReloadExecuted": false,
+    "targets": [
+      {
+        "frozenComposeFiles": 9,
+        "frozenEnvFiles": 1,
+        "health": "healthy",
+        "id": "852d46d9a890ddb763f63167e9d4e67eeede06d12fc8a03bf59e88e9e5bd5cfb",
+        "image": "sha256:c68c315beb7977cc88c4478d8b2464a560cf9a1226056492c9402d330d9a3398",
+        "inputs": 303,
+        "restartCount": 0,
+        "rollbackImage": "sha256:9fd209582a020315f4f5a7fa50492cb0b6996b018cb40ecb0717db3006799632",
+        "service": "backend",
+        "startedAt": "2026-11-01T19:07:24.451450975Z"
+      },
+      {
+        "frozenComposeFiles": 5,
+        "frozenEnvFiles": 1,
+        "health": null,
+        "id": "a164dbd6999dbfbb47969baee68b482fdc6c100a9c3b0d8f6fcadc9a3c2523ba",
+        "image": "sha256:73c351fbc0502f50989b729174620173c80988292fe6d0d2b4fcf660f29caa44",
+        "inputs": 251,
+        "restartCount": 0,
+        "rollbackImage": "sha256:2ef84b008e1f2f73b14e3a809164992099c45ebfee51c4ef7089ec63193baf19",
+        "service": "web",
+        "startedAt": "2026-11-01T19:08:04.603972008Z"
+      }
+    ],
+    "tcpGate": {
+      "atMs": 1793560081228,
+      "establishedPort8000": 0,
+      "networkNamespaceSha256": "ea600d5885f2ecdc42f0dcf8f7f1e3a55b316df0aa075d89bfd830dcb74a17b2",
+      "passed": true,
+      "scannedRows": 47,
+      "scope": "container_tcp8000_established_only",
+      "tablesRead": 2
+    },
+    "verified": {
+      "atMs": 1793560123044,
+      "nonTargetsUnchanged": true,
+      "services": [
+        "backend",
+        "web"
+      ],
+      "verified": true
+    },
+    "webStateTopLevelFields": [
+      "account",
+      "activeAnswerTask",
+      "billing",
+      "captureState",
+      "contextSelections",
+      "interviews",
+      "knowledgeCollections",
+      "knowledgeDocuments",
+      "librarySources",
+      "preparation",
+      "questions",
+      "releaseManifest",
+      "review",
+      "speaker"
+    ]
+  },
+  "schemaAfter": {
+    "pathCount": 223,
+    "schemaSha256": "0d25024e9025059e373e63a257d652c809b2865a2ba3e2f31c1a125edc3cd097"
+  },
+  "schemaBefore": {
+    "pathCount": 223,
+    "schemaSha256": "74d2e8756f3e27b82f08be3b731c3305a4c8f0574742ff14b2046e29435f60a7"
+  },
+  "sourceConfigurationExported": false,
+  "supportFilesSha256": {
+    "active_work_gate.py": "917e010c7a2a9933915349cfbd2b5cd2bbcadced2ae9f3db367863e06eaae054",
+    "backend_tcp_idle_gate.py": "4d102932c1076a89126144a0687d7519345c3fcf4a50cf960d6ff4eb3591d291",
+    "base_helpers.py": "c3c51df28e828de704e2d83dc14220e07d8879ca002e711470f9040e77fc6cc0",
+    "controller.py": "835b29c09a19db58bcdd52fff7b9f803b2851fe4e312eb49fb57c040a69c5ece",
+    "extra_idle_gate.py": "e48f0f6c7f8edd126eade0fafada21053f77d2713e55bbe6044aff3761669cbe",
+    "global_financial_idle_gate.py": "929bf823000bedb46af46e0b2a5d8423e092e315afb15729fcfce798692a04a7",
+    "global_mock_companion_idle_gate.py": "898e496cae5638d8e56137fb6c50a92cd0e151a9d29707efd9fe09d9d51ae63f",
+    "legacy-gates/check-idle.py": "3fb49a2991e86677e142fd17e8a24ef5af7de92802ee4050055a764be6574f1d",
+    "legacy-gates/check-mock-idle.py": "daf3f0f8a6b63e5ebb9eab04fb4f948407b301234e1c1e3e24fbea658bbc81f4",
+    "ownership_primitives.py": "30f6ca9d6c992df3853600a2a8e9f6e2d41dde13d7f22bced947dce6d625a3dd",
+    "probe.py": "6a5c0c36fecc751bc55c390b8ac19305585de26769437ef5071ea9c6cfb27f31",
+    "resume_optimizer_idle_gate.py": "63b808d88e6b06abd792379130c43fe9c1aebf8ad564fe48dc908f2b41373d27"
+  }
+}

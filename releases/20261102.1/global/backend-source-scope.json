@@ -1,0 +1,54 @@
+{
+  "passed": true,
+  "baselineInputs": 302,
+  "candidateInputs": 303,
+  "changedFiles": {
+    "apps/backend/app/modules/screenshot_answer.py": "70cb65362ef164c70eb689bf5fd5b557ecb6d4b13aeb599cb14568143fbb891a",
+    "apps/backend/app/modules/web.py": "cf072484eb94106a468b4e2b1fcb2e1ad5e62c86f635f50ecf36988e8d7c8cb1",
+    "apps/backend/app/ports/interview_session.py": "026ce1f030f17e6376c9c71c78918a43da1cb73537c911758e0377758126b859",
+    "apps/backend/app/services/document_service.py": "92b2076a8c4cc0bfcdd61875cefda913934f2813ba86a9426b89d015e8ef2e5f",
+    "apps/backend/app/services/interview_session_repository.py": "29368ec6fe0cd0100e504e21b25dad939471bb68126e63cbd9e87f4beda76184",
+    "apps/backend/app/services/postgres_interview_session_repository.py": "6a48a87792a85722b9dbcb08565b21a72cf95f228d6e5bcd2a85fdda5879f0a5",
+    "apps/backend/app/services/realtime_speech_service.py": "cde3852f0285f563a95f30b330f377a8b240ea4080748e47e7a0295cca68424d",
+    "apps/backend/app/services/session_service.py": "8605e3fac9fdaa6869b0bab391d9a4e7fd9eb4eddac100a6d16528e056fc6bd0",
+    "apps/backend/app/global_desktop_release_history.json": "878903ea0a42a256d3dc3b7535f20434724f56ccfd851c7582ea0713302dbbe7"
+  },
+  "nonTargetAstPreserved": true,
+  "unchangedFiles": 294,
+  "allowedSymbols": {
+    "modules/web.py": [
+      "get_web_state",
+      "_published_desktop_entry"
+    ],
+    "services/document_service.py": [
+      "DocumentService._document_list_responses",
+      "DocumentService._list_document_records",
+      "DocumentService.list_documents",
+      "DocumentService.list_documents_with_records"
+    ],
+    "services/session_service.py": [
+      "SessionService.get_control_state",
+      "SessionService.list_sessions"
+    ],
+    "ports/interview_session.py": [
+      "InterviewSessionRepository.get_control_state",
+      "SessionControlState"
+    ],
+    "services/interview_session_repository.py": [
+      "InMemoryInterviewSessionRepository.get_control_state"
+    ],
+    "services/postgres_interview_session_repository.py": [
+      "PostgresInterviewSessionRepository.get_control_state"
+    ],
+    "services/realtime_speech_service.py": [
+      "RealtimeSpeechService._compute_desktop_pairing_status"
+    ],
+    "modules/screenshot_answer.py": [
+      "get_next_remote_capture_request"
+    ]
+  },
+  "dependencyChange": false,
+  "configurationChange": false,
+  "historyExactOriginalManifest": true,
+  "rollbackCompatibilityHelperOnly": true
+}

@@ -54,7 +54,8 @@ declare global {
   interface Window {
     offersteady: {
       publishCaptureState: (state: CaptureState) => void;
-      publishScreenshotBinding?: (binding: { readonly sessionId: string; readonly bindingId: string } | null) => void;
+      recoverConnection?: () => void;
+      publishScreenshotBinding?: (binding: { readonly sessionId: string; readonly bindingId: string; readonly sessionMode?: string } | null) => void;
       publishRendererReliabilityHeartbeat?: (heartbeat: Record<string, unknown>) => void;
       publishRealtimeTransportDiagnostics?: (snapshot: Record<string, unknown>) => void;
       getRendererRecoveryContext?: () => Promise<{
@@ -121,6 +122,10 @@ declare global {
         readonly bodyText: string;
       }>;
       requestMicrophoneAccess: () => Promise<boolean>;
+      getMicrophonePermission?: () => Promise<{ permission: "unknown" | "prompt" | "granted" | "denied" | "unavailable"; pending: boolean; source: "os" | "unverified" }>;
+      requestMicrophonePermission?: () => Promise<{ permission: "unknown" | "prompt" | "granted" | "denied" | "unavailable"; pending: boolean; source: "os" | "unverified" }>;
+      getWindowVisibility?: () => Promise<{ hidden: boolean; restoreShortcut: string | null }>;
+      hideWindow?: () => Promise<{ hidden: boolean; restoreShortcut: string | null }>;
       requestScreenCaptureAccess?: () => Promise<boolean>;
       resetPairingIdentity: () => Promise<boolean>;
       openPermissionSettings: (kind: "microphone" | "screen" | "camera" | "audio") => Promise<void>;

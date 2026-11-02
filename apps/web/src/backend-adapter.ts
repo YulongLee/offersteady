@@ -1029,7 +1029,9 @@ const screenshotStageToTask = (current: BackendRemoteScreenshotCaptureRequestRes
                 : stage === "failed" || current.status === "failed" || stage === "capture-failed" || stage === "upload-failed" ? "failed"
                   : "recognizing";
   const message = current.errorMessage || (mapped === "failed" ? "截屏回答失败，请稍后重试。" : undefined);
-  return { name: current.capturedFilename || "共享屏幕截取", stage: mapped, ...(message ? { errorMessage: message } : {}) };
+  return { name: current.capturedFilename || "共享屏幕截取", stage: mapped, ...(message ? { errorMessage: message } : {}),
+    ...(mapped === "failed" && (stage === "capture-failed" || stage === "upload-failed") ? { failureStage: stage } : {}),
+  };
 };
 
 const screenshotEventToTask = (payload: Record<string, unknown>): ScreenshotTask => {
@@ -1044,7 +1046,9 @@ const screenshotEventToTask = (payload: Record<string, unknown>): ScreenshotTask
               : stage === "cancelled" ? "cancelled"
                 : status === "failed" || stage.includes("failed") ? "failed" : "recognizing";
   const errorMessage = typeof payload.errorMessage === "string" ? payload.errorMessage : undefined;
-  return { name: "共享屏幕截取", stage: mapped, ...(errorMessage ? { errorMessage } : {}) };
+  return { name: "共享屏幕截取", stage: mapped, ...(errorMessage ? { errorMessage } : {}),
+    ...(mapped === "failed" && (stage === "capture-failed" || stage === "upload-failed") ? { failureStage: stage } : {}),
+  };
 };
 
 const screenshotEventToUpdate = (event: BackendRealtimeEventListResponse["events"][number]): DesktopShortcutScreenshotUpdate => {

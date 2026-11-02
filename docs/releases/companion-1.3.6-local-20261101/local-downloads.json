@@ -1,0 +1,20 @@
+[
+  {
+    "platform": "macos",
+    "arch": "arm64",
+    "path": "/Users/liyulong/Downloads/OfferSteady-Companion-1.3.6-Local-macOS-arm64.dmg",
+    "sha256": "a010befb20f531f5d0f50f91e54079ef67cf38da47b9f15d3c55b0c32143563c"
+  },
+  {
+    "platform": "windows",
+    "arch": "x64",
+    "path": "/Users/liyulong/Downloads/OfferSteady-Companion-Setup-1.3.6-Windows-x64.exe",
+    "sha256": "1689ea998ef4d39fea069160a092aecaf709fee6cfd3acc821f9f2fe703d51fc"
+  },
+  {
+    "platform": "macos",
+    "arch": "x64",
+    "path": "/Users/liyulong/Downloads/OfferSteady-Companion-1.3.6-Local-macOS-x64.dmg",
+    "sha256": "0177aa408644f6eb9065f35edab02083e3e92ce06e63a9f46ac6da48515794e7"
+  }
+]
