@@ -1,0 +1,63 @@
+[
+  {
+    "name": "pinned_read_history_1",
+    "value": {
+      "historyBindings": 1,
+      "commands": {
+        "HGET": 2,
+        "EVALSHA": 1
+      },
+      "networkCalls": 3,
+      "bindingDecodes": 1,
+      "dbControlReads": 1,
+      "localElapsedMs": 0.461,
+      "productionP95Measured": false
+    }
+  },
+  {
+    "name": "pinned_read_history_1191",
+    "value": {
+      "historyBindings": 1191,
+      "commands": {
+        "HGET": 2,
+        "EVALSHA": 1
+      },
+      "networkCalls": 3,
+      "bindingDecodes": 1,
+      "dbControlReads": 1,
+      "localElapsedMs": 0.31,
+      "productionP95Measured": false
+    }
+  },
+  {
+    "name": "pinned_read_history_10000",
+    "value": {
+      "historyBindings": 10000,
+      "commands": {
+        "HGET": 2,
+        "EVALSHA": 1
+      },
+      "networkCalls": 3,
+      "bindingDecodes": 1,
+      "dbControlReads": 1,
+      "localElapsedMs": 0.395,
+      "productionP95Measured": false
+    }
+  },
+  {
+    "name": "twelve_mixed_pollers",
+    "value": {
+      "pollers": 12,
+      "liveSessions": 1,
+      "idleOrEndedPollers": 11,
+      "historyBindings": 10000,
+      "commands": {
+        "HGET": 24,
+        "EVALSHA": 15
+      },
+      "networkCalls": 39,
+      "localElapsedMs": 7.555,
+      "productionP95Measured": false
+    }
+  }
+]

@@ -38,7 +38,9 @@ def control_fixture(monkeypatch, *, status="live", mode="interview", audio="comp
     monkeypatch.setattr("app.services.session_service._now_ms", lambda: clock[0])
     settings = Settings(_env_file=None, product_edition="cn", realtime_control_cache_ms=50)
     repository = InMemoryInterviewSessionRepository()
-    document_repository = Mock()
+    # This original-path fixture intentionally has only single-record reads;
+    # an unrestricted Mock would invent the optional batch capability.
+    document_repository = Mock(spec=["get_by_id"])
     document_repository.get_by_id.return_value = None
     sessions = SessionService(settings=settings, repository=repository, document_repository=document_repository)
     record = sessions.create_session(user_id=OWNER, title="Synthetic control read")
@@ -100,6 +102,7 @@ def test_cn_binding_wire_equals_full_read_for_all_modes(monkeypatch, status, mod
     writes.assert_not_called()
     fixture.documents.get_by_id.assert_not_called()
     fixture.service.settings = fixture.service.settings.model_copy(update={"product_edition": "global"})
+    fixture.sessions.settings = fixture.service.settings
     fixture.service._invalidate_control_query_cache()
     baseline = pairing(fixture)
     assert candidate == baseline
@@ -170,6 +173,7 @@ def test_foreign_binding_stays_missing_and_matches_original_error_conversion(mon
     cn = pairing(fixture)
     assert cn["sessionStatus"] == "missing" and cn["bound"] is False
     fixture.service.settings = fixture.service.settings.model_copy(update={"product_edition": "global"})
+    fixture.sessions.settings = fixture.service.settings
     fixture.service._invalidate_control_query_cache()
     assert pairing(fixture) == cn
 
@@ -186,6 +190,7 @@ def test_generation_heartbeat_and_stale_binding_contract_stays_equivalent(monkey
     cn = pairing(fixture)
     assert cn["bound"] is False and cn["state"] == "stale-bound"
     fixture.service.settings = fixture.service.settings.model_copy(update={"product_edition": "global"})
+    fixture.sessions.settings = fixture.service.settings
     fixture.service._invalidate_control_query_cache()
     assert pairing(fixture) == cn
 
@@ -300,6 +305,7 @@ def test_actual_postgres_control_path_reduces_queries_writes_and_large_row_reads
             # Compare unchanged materials and stale bindings whose documents are now absent.
             counts.clear()
             fixture.service.settings = fixture.service.settings.model_copy(update={"product_edition": "global"})
+            fixture.sessions.settings = fixture.service.settings
             baseline = pairing(fixture)
             baseline_counts = dict(counts)
             baseline_documents = document_reads.call_count
@@ -308,6 +314,7 @@ def test_actual_postgres_control_path_reduces_queries_writes_and_large_row_reads
             counts.clear()
             executed_queries.clear()
             fixture.service.settings = fixture.service.settings.model_copy(update={"product_edition": "cn"})
+            fixture.sessions.settings = fixture.service.settings
             fixture.service._invalidate_control_query_cache()
             candidate = pairing(fixture)
             candidate_counts = dict(counts)
@@ -330,6 +337,7 @@ def test_actual_postgres_control_path_reduces_queries_writes_and_large_row_reads
                     "pairingCacheBypassedForBothGroups": True, "groups": []}
                 for label, edition, expected_connections in [("originalFullRead", "global", sample_count * 7), ("cnControlProjection", "cn", sample_count)]:
                     fixture.service.settings = fixture.service.settings.model_copy(update={"product_edition": edition})
+                    fixture.sessions.settings = fixture.service.settings
                     counts.clear()
                     for values in timings.values():
                         values.clear()

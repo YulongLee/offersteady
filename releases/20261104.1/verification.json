@@ -1,0 +1,31 @@
+{
+  "snapshotToolSafetyTests": 32,
+  "globalFunctionalTests": 467,
+  "controllerAndPrimitiveTests": 154,
+  "combinedFinalToolTests": 186,
+  "restoredGlobalBusinessTests": 204,
+  "restoredGlobalBusinessDedicatedPgDeselected": 4,
+  "offlineSnapshotVerificationPassed": true,
+  "componentInputs": {
+    "cn-backend": 237,
+    "cn-material-worker": 196,
+    "cn-web": 366,
+    "global-backend": 307,
+    "global-material-worker": 267,
+    "global-web": 251
+  },
+  "openspecStrict": [
+    "sync-global-realtime-blocking-20261104",
+    "isolate-cn-realtime-shared-blocking",
+    "lighten-cn-device-status-processing"
+  ],
+  "localMarkdownLinksChecked": 132,
+  "missingLocalLinks": 0,
+  "newTextPrivacyScanIssues": 0,
+  "gitSealChangesProduction": false,
+  "privateDataIncluded": false,
+  "actualRegionalRestorePassed": {
+    "cn-backend": 237,
+    "global-backend": 307
+  }
+}

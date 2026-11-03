@@ -1,0 +1,32 @@
+{
+  "onlyTaskOwnedContainers": true,
+  "existingContainersTouched": false,
+  "productionActions": 0,
+  "containers": [
+    {
+      "kind": "postgres",
+      "container": "offersteady-cn-pinned-broad-postgres-1e369567c4",
+      "containerId": "0266011877c0289a134bc4f48952a791d629363f28bc7c4cb9e40f18024238b3",
+      "ownershipVerifiedBeforeRemoval": true,
+      "removed": true,
+      "absentAfterRemoval": true
+    },
+    {
+      "kind": "redis",
+      "container": "offersteady-cn-pinned-broad-redis-1e369567c4",
+      "containerId": "34aebbcaa25e913e0146ecf45ee1f22727a2495105adca1d0713350fbdfc223d",
+      "ownershipVerifiedBeforeRemoval": true,
+      "removed": true,
+      "absentAfterRemoval": true
+    },
+    {
+      "kind": "pool-postgres",
+      "container": "offersteady-cn-pinned-broad-pool-postgres-1e369567c4",
+      "containerId": "2d8936fb8221c4b94446a89457094eeaa99fc084da2f64b775c289d8cae76569",
+      "ownershipVerifiedBeforeRemoval": true,
+      "removed": true,
+      "absentAfterRemoval": true
+    }
+  ],
+  "ownSyntheticDatabasesRemovedBeforeContainerRemoval": true
+}

@@ -1,0 +1,55 @@
+{
+  "localOnly": true,
+  "deployed": false,
+  "gitCommittedOrPushed": false,
+  "candidate": "candidate-final",
+  "baselineInputs": 232,
+  "candidateInputs": 233,
+  "unchangedBaselineInputs": 229,
+  "compiledPython": 157,
+  "openapiFullEquality": true,
+  "openapiPaths": 203,
+  "settingsSyntheticValueEquality": true,
+  "settingsCount": 344,
+  "poolEnabled": false,
+  "mainRegression": {
+    "tests": 557,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 60,
+    "passed": 497
+  },
+  "extraPostgresAndTimingRegression": {
+    "tests": 30,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "passed": 30
+  },
+  "extraTimingRepeated": 28,
+  "newRegressionTests": 92,
+  "independentReviewPassed": true,
+  "comparison": {
+    "syntheticMaterials": 12,
+    "before": {
+      "fullSessionReads": 2,
+      "controlProjectionReads": 0,
+      "materialReads": 24,
+      "sessionWrites": 2,
+      "eventSaves": 1
+    },
+    "after": {
+      "fullSessionReads": 0,
+      "controlProjectionReads": 2,
+      "materialReads": 0,
+      "sessionWrites": 0,
+      "eventSaves": 1
+    },
+    "sessionWritesCaveat": "Two old writes occur only in this deliberately stale synthetic-material scenario, not every production request."
+  },
+  "limitations": [
+    "58 cases remain unexecuted after the two supplemental PG cases; 57 need dedicated PostgreSQL configurations and 1 is Global-only.",
+    "No production load, models, real interviews or physical audio devices were exercised.",
+    "No production P95 reduction can be inferred from this local mechanism comparison."
+  ]
+}

@@ -41,6 +41,8 @@ from app.schemas.realtime_speech import (
 from app.services.realtime_speech_service import RealtimeSpeechService
 from app.services.realtime_event_wait import run_realtime_event_wait
 from app.services.realtime_control_executor import run_realtime_control
+from app.services.cn_realtime_io_executor import run_cn_realtime_io, drain_cn_realtime_cleanup
+from app.platform.cn_device_status_timing import run_cn_device_status_control
 
 
 router = APIRouter(prefix="/realtime-speech", tags=["realtime-speech"])
@@ -56,6 +58,38 @@ descriptor = ModuleDescriptor(
     mode="active",
     notes="Session-bound realtime speech orchestration for subtitles, question detection, and Chat Service handoff.",
 )
+
+
+async def _voice_io(surface, service, operation, *, operation_name, lane="ingress", on_abandoned_result=None, **kwargs):
+    if getattr(getattr(service, "settings", None), "product_edition", None) == "cn":
+        return await run_cn_realtime_io(surface, operation, lane=lane, operation_name=operation_name,
+                                        on_abandoned_result=on_abandoned_result, **kwargs)
+    return operation(**kwargs)
+
+
+async def _disconnect_voice_publisher(surface, service, *, token, final_state="closed"):
+    kwargs = {"token": token}
+    if final_state != "closed":
+        kwargs["final_state"] = final_state
+    operation = _voice_io(surface, service, service.disconnect_publisher, lane="lifecycle",
+                          operation_name="publisher_disconnect", **kwargs)
+    if getattr(getattr(service, "settings", None), "product_edition", None) == "cn":
+        return await drain_cn_realtime_cleanup(operation)
+    return await operation
+
+
+def _cn_voice_observations(request, service):
+    values = {}
+    if getattr(getattr(service, "settings", None), "product_edition", None) == "cn":
+        for name, attribute, method in (("cnRealtimeIo", "cn_realtime_io_executor", "diagnostics"),
+                                        ("cnMainLoopDelay", "cn_main_loop_monitor", "summary")):
+            try:
+                observer = getattr(request.app.state, attribute, None)
+                if observer is not None:
+                    values[name] = getattr(observer, method)()
+            except Exception:
+                pass
+    return values
 
 
 def should_validate_realtime_session(*, last_validated_at: float, now: float) -> bool:
@@ -141,6 +175,7 @@ async def realtime_metrics(request: Request, service: RealtimeSpeechService = De
             "screenshotEventWaitExecutor": screenshot_event_wait_diagnostics,
             "screenshotStreamAdmission": screenshot_stream_diagnostics,
             "liveAnswerStreamExecutor": live_answer_stream_diagnostics,
+            **_cn_voice_observations(request, service),
         },
         timestamp=utc_now_iso(),
     )
@@ -255,6 +290,31 @@ async def create_publisher(
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[RealtimePublisherResponse]:
+    if getattr(getattr(service, "settings", None), "product_edition", None) == "cn":
+        def prepare():
+            if request.device_id is not None and request.manual_code is not None:
+                binding = service.get_desktop_active_binding(device_id=request.device_id, manual_code=request.manual_code)
+                if binding.session_id != request.session_id or binding.owner_user_id != request.user_id:
+                    raise DomainRequestError("realtime-speech", "create-publisher",
+                        "桌面设备与当前面试绑定不一致，请重新输入机器码。", 403, "desktop_binding_mismatch")
+                owner = binding.owner_user_id
+            else:
+                owner = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
+            return owner, service.session_service.get_session(user_id=owner, session_id=request.session_id)
+        resolved_user_id, session = await run_cn_realtime_io(request_context, prepare,
+            lane="lifecycle", operation_name="publisher_prepare")
+        if session.session_mode == "mock":
+            from app.modules.mock_interview import require_mock_runtime
+            publisher = await require_mock_runtime().legacy.create(user_id=resolved_user_id,
+                session_id=request.session_id, device_id=request.device_id,
+                source_kind=request.source_kind, client_name=request.client_name)
+        else:
+            publisher = await run_cn_realtime_io(request_context, service.create_publisher,
+                lane="lifecycle", operation_name="publisher_create",
+                on_abandoned_result=lambda created: service.disconnect_publisher(token=created.token),
+                user_id=resolved_user_id, session_id=request.session_id,
+                source_kind=request.source_kind, client_name=request.client_name)
+        return success_response(request=request_context, data=service._publisher_response(publisher), timestamp=utc_now_iso())
     if request.device_id is not None and request.manual_code is not None:
         binding = service.get_desktop_active_binding(
             device_id=request.device_id,
@@ -562,7 +622,8 @@ async def control_session_capture(
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[dict[str, object]]:
     user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
-    result = service.control_capture(user_id=user_id, session_id=session_id, action=request.action)
+    result = await _voice_io(request_context, service, service.control_capture, lane="lifecycle",
+        operation_name="capture_control", user_id=user_id, session_id=session_id, action=request.action)
     return success_response(request=request_context, data=result, timestamp=utc_now_iso())
 
 
@@ -828,6 +889,23 @@ async def publish_device_status(
     auth_context: AuthenticatedRequestContext | None = Depends(optional_authenticated_context),
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[dict[str, object]]:
+    if getattr(getattr(service, "settings", None), "product_edition", None) == "cn":
+        resolved_user_id = (
+            None if request.manual_code is not None
+            else resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
+        )
+        event = await run_cn_device_status_control(
+            request_context,
+            service.publish_cn_device_status,
+            user_id=resolved_user_id,
+            session_id=session_id,
+            device_id=request.device_id,
+            manual_code=request.manual_code,
+            capture_state=str(request.capture_state),
+            source_health=request.source_health,
+            capabilities=request.capabilities,
+        )
+        return success_response(request=request_context, data=event.model_dump(by_alias=True), timestamp=utc_now_iso())
     if request.manual_code is not None:
         binding = service.get_desktop_active_binding(device_id=request.device_id, manual_code=request.manual_code)
         if binding.session_id != session_id:
@@ -860,7 +938,7 @@ async def ingest_frame(
 ) -> ApiEnvelope[list[dict[str, object]]]:
     if not service.settings.realtime_legacy_http_enabled:
         raise DomainRequestError("realtime-speech", "legacy-frame-ingest", "HTTP 逐帧发布已停用，请升级桌面助手使用 WebSocket v2。", 410, "legacy_realtime_transport_disabled")
-    events = service.enqueue_audio_frame(
+    events = await _voice_io(request_context, service, service.enqueue_audio_frame, operation_name="legacy_frame",
         token=request.token,
         device_id=request.device_id,
         source_id=request.source_id,
@@ -896,12 +974,15 @@ async def realtime_ws(websocket: WebSocket) -> None:
     token = websocket.query_params.get("token", "")
     service = realtime_speech_service()
     await websocket.accept()
+    publisher_connected = False
     try:
-        service.connect_publisher(token=token)
+        await _voice_io(websocket, service, service.connect_publisher, operation_name="publisher_connect",
+            on_abandoned_result=lambda connected: service.disconnect_publisher(token=token), token=token)
+        publisher_connected = True
         while True:
             payload = RealtimeFrameRequest.model_validate(await websocket.receive_json())
             try:
-                events = service.process_audio_frame(
+                events = await _voice_io(websocket, service, service.process_audio_frame, operation_name="legacy_ws_frame",
                     token=token,
                     device_id=payload.device_id,
                     source_id=payload.source_id,
@@ -942,13 +1023,18 @@ async def realtime_ws(websocket: WebSocket) -> None:
             for event in events:
                 await websocket.send_json(event)
     except WebSocketDisconnect:
-        service.disconnect_publisher(token=token)
+        publisher_connected = False
+        await _disconnect_voice_publisher(websocket, service, token=token)
     except Exception:
         logger.exception("Legacy realtime websocket failed")
         try:
-            service.disconnect_publisher(token=token, final_state="failed")
+            publisher_connected = False
+            await _disconnect_voice_publisher(websocket, service, token=token, final_state="failed")
         finally:
             await websocket.close(code=1011)
+    finally:
+        if getattr(getattr(service, "settings", None), "product_edition", None) == "cn" and publisher_connected:
+            await _disconnect_voice_publisher(websocket, service, token=token)
 
 
 @router.websocket("/ingest-ws")
@@ -970,7 +1056,8 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
     publisher_connected = False
     try:
         try:
-            publisher = service.connect_publisher(token=token)
+            publisher = await _voice_io(websocket, service, service.connect_publisher, operation_name="publisher_connect",
+                on_abandoned_result=lambda connected: service.disconnect_publisher(token=token), token=token)
             publisher_connected = True
         except DomainRequestError as exc:
             await websocket.send_json({
@@ -984,25 +1071,27 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
             return
         if requested_protocol != service.settings.realtime_protocol_version:
             await websocket.send_json({"kind": "protocol-rejected", "payload": {"supported": service.settings.realtime_protocol_version}})
+            publisher_connected = False
             try:
-                service.disconnect_publisher(token=token)
+                await _disconnect_voice_publisher(websocket, service, token=token)
             except DomainRequestError:
                 pass
-            publisher_connected = False
             await websocket.close(code=1002)
             return
         if requested_media not in {"json-base64", "binary-v1"}:
             await websocket.send_json({"kind": "protocol-rejected", "payload": {"supportedMedia": ["json-base64", "binary-v1"]}})
-            service.disconnect_publisher(token=token)
             publisher_connected = False
+            await _disconnect_voice_publisher(websocket, service, token=token)
             await websocket.close(code=1002)
             return
-        previous_receipts = service.repository.list_frame_receipts_for_session(session_id=publisher.session_id)
+        def bootstrap():
+            receipts = service.repository.list_frame_receipts_for_session(session_id=publisher.session_id)
+            generations = {channel: service.latest_source_generation(session_id=publisher.session_id, source_kind=channel)
+                           for channel in ("microphone", "system")}
+            return receipts, generations
+        previous_receipts, resume_source_generations = await _voice_io(websocket, service, bootstrap,
+            operation_name="ingest_bootstrap")
         expected_sequence: dict[str, int] = {"microphone": 0, "system": 0}
-        resume_source_generations: dict[str, int] = {
-            channel: service.latest_source_generation(session_id=publisher.session_id, source_kind=channel)
-            for channel in ("microphone", "system")
-        }
         for receipt in previous_receipts:
             # Sequence numbers are authoritative for the lifetime of the interview
             # session and logical channel, not for one short-lived publisher token.
@@ -1083,7 +1172,8 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                     recovering_unaccepted_terminal = bool(
                         payload.is_final
                         and payload.terminal_id
-                        and not service.terminal_is_accepted(
+                        and not await _voice_io(websocket, service, service.terminal_is_accepted,
+                            operation_name="terminal_check",
                             session_id=publisher.session_id,
                             source_kind=payload.source_kind,
                             segment_id=payload.segment_id,
@@ -1125,8 +1215,8 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                                 "retryable": True,
                             },
                         })
-                        service.disconnect_publisher(token=token)
                         publisher_connected = False
+                        await _disconnect_voice_publisher(websocket, service, token=token)
                         await websocket.close(code=1013, reason="sequence-gap-budget-exhausted")
                         return
                     await websocket.send_json({"kind": "sequence-gap", "payload": {"sourceKind": payload.source_kind, "expected": expected, "received": payload.sequence}})
@@ -1139,7 +1229,7 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                     "backendFrameValidationDoneAtMs": frame_validation_done_at_ms,
                     "backendChannelRoutingDoneAtMs": channel_routing_done_at_ms,
                 }
-                admission_events = service.enqueue_audio_frame(
+                admission_events = await _voice_io(websocket, service, service.enqueue_audio_frame, operation_name="ingest_frame",
                     token=token,
                     device_id=payload.device_id,
                     source_id=payload.source_id,
@@ -1201,16 +1291,18 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
                 })
     except WebSocketDisconnect:
         if publisher_connected:
+            publisher_connected = False
             try:
-                service.disconnect_publisher(token=token)
+                await _disconnect_voice_publisher(websocket, service, token=token)
             except DomainRequestError:
                 pass
     except Exception:
         logger.exception("Realtime ingest websocket failed")
         try:
             if publisher_connected:
+                publisher_connected = False
                 try:
-                    service.disconnect_publisher(token=token, final_state="failed")
+                    await _disconnect_voice_publisher(websocket, service, token=token, final_state="failed")
                 except DomainRequestError:
                     pass
         finally:
@@ -1219,4 +1311,9 @@ async def realtime_ingest_ws(websocket: WebSocket) -> None:
             except RuntimeError:
                 pass
     finally:
-        _active_ingest_tokens.discard(token)
+        try:
+            if getattr(getattr(service, "settings", None), "product_edition", None) == "cn" and publisher_connected:
+                publisher_connected = False
+                await _disconnect_voice_publisher(websocket, service, token=token)
+        finally:
+            _active_ingest_tokens.discard(token)

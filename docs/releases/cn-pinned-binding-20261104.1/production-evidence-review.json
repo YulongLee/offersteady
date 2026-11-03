@@ -1,0 +1,41 @@
+{
+  "reviewer": "root offline recomputation plus separate production verify; no subagent review performed for this release",
+  "passed": true,
+  "baselineInputs": 237,
+  "candidateInputs": 237,
+  "changedInputs": 3,
+  "unchangedInputs": 234,
+  "fixedOwnershipVerified": true,
+  "effectiveSettings344Schema203Dependencies44Unchanged": true,
+  "companionD7Web366SevenComponentsUnchanged": true,
+  "sevenAndEntityWorkGatesPassed": true,
+  "tcpZeroAtCutover": true,
+  "residualExceptionUsed": false,
+  "naturalRouteBefore": {
+    "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+    "count": 259,
+    "p50Ms": 237.46,
+    "p95Ms": 469.27,
+    "maxMs": 658.08,
+    "atLeast500Ms": 9,
+    "atLeast1000Ms": 0
+  },
+  "naturalRouteAfter": {
+    "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+    "count": 159,
+    "p50Ms": 25.36,
+    "p95Ms": 44.04,
+    "maxMs": 90.77,
+    "atLeast500Ms": 0,
+    "atLeast1000Ms": 0
+  },
+  "trafficLimit": "Unequal idle natural windows, not active-interview high-load matched comparison or per-request pin tracing",
+  "startupProxy502": 10,
+  "afterVerifiedProxy5xx": 0,
+  "imageProbeRedisScope": "Scripted transport in image; real Lua scale and concurrency tested in local disposable Redis",
+  "healthyObservationDurationSeconds": 269.96,
+  "realModelCallsCreated": 0,
+  "userWorkEnded": 0,
+  "productionLoadTest": false,
+  "gitOperations": 0
+}

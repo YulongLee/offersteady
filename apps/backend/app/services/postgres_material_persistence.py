@@ -54,6 +54,24 @@ class PostgresDocumentRepository(DocumentRepository):
             row = cursor.fetchone()
         return self._row_to_record(row) if row else None
 
+    def get_by_ids(self, document_ids: list[str]) -> dict[str, DocumentRecord | None]:
+        """Read current records in one statement, including explicit misses.
+
+        This optional internal capability does not cache data or require other
+        DocumentRepository implementations to support a batch operation.
+        """
+        unique_ids = list(dict.fromkeys(document_ids))
+        records: dict[str, DocumentRecord | None] = dict.fromkeys(unique_ids)
+        if not unique_ids:
+            return records
+        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(self._select_sql("WHERE d.document_id = ANY(%s)"), (unique_ids,))
+            rows = cursor.fetchall()
+        for row in rows:
+            if row["document_id"] in records:
+                records[row["document_id"]] = self._row_to_record(row)
+        return records
+
     def list_for_user(self, *, user_id: str, document_kind: MaterialKind | None = None, knowledge_collection_id: str | None = None, include_deleted: bool = False) -> list[DocumentRecord]:
         clauses = ["d.owner_user_id = %s"]
         params: list[Any] = [user_id]

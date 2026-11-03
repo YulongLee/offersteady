@@ -1,0 +1,274 @@
+{
+  "scenarios": [
+    {
+      "scenario": "Slow source close or Redis during concurrent interviews",
+      "status": "passed",
+      "passingCases": {
+        "test_slow_lifecycle_does_not_occupy_ingress_control_or_loop": [
+          "test_slow_lifecycle_does_not_occupy_ingress_control_or_loop"
+        ],
+        "test_slow_candidate_network_does_not_hold_process_runtime_lock": [
+          "test_slow_candidate_network_does_not_hold_process_runtime_lock"
+        ],
+        "test_v2_order_wire_and_all_io_off_main_loop": [
+          "test_v2_order_wire_and_all_io_off_main_loop[False-False]",
+          "test_v2_order_wire_and_all_io_off_main_loop[False-True]",
+          "test_v2_order_wire_and_all_io_off_main_loop[True-False]",
+          "test_v2_order_wire_and_all_io_off_main_loop[True-True]"
+        ]
+      }
+    },
+    {
+      "scenario": "Legacy and non-target routes",
+      "status": "passed",
+      "passingCases": {
+        "test_cn_legacy_sync_work_is_isolated": [
+          "test_cn_legacy_sync_work_is_isolated[http-frames]",
+          "test_cn_legacy_sync_work_is_isolated[legacy-ws]"
+        ],
+        "test_global_v2_keeps_original_sync_calls": [
+          "test_global_v2_keeps_original_sync_calls"
+        ],
+        "test_mock_independent_transport_is_delegated_without_cn_io": [
+          "test_mock_independent_transport_is_delegated_without_cn_io"
+        ],
+        "test_actual_capture_instance_rejects_mock_before_any_side_effect": [
+          "test_actual_capture_instance_rejects_mock_before_any_side_effect[pause-cn]",
+          "test_actual_capture_instance_rejects_mock_before_any_side_effect[pause-global]",
+          "test_actual_capture_instance_rejects_mock_before_any_side_effect[resume-cn]",
+          "test_actual_capture_instance_rejects_mock_before_any_side_effect[resume-global]"
+        ]
+      }
+    },
+    {
+      "scenario": "Slow pause and concurrent resume or end",
+      "status": "passed",
+      "passingCases": {
+        "test_pause_and_resume_are_serialized_while_main_loop_remains_responsive": [
+          "test_pause_and_resume_are_serialized_while_main_loop_remains_responsive"
+        ],
+        "test_end_transaction_wins_before_late_resume_and_cannot_be_revived": [
+          "test_end_transaction_wins_before_late_resume_and_cannot_be_revived"
+        ],
+        "test_resume_billing_error_retains_original_status_code_and_capture_state": [
+          "test_resume_billing_error_retains_original_status_code_and_capture_state"
+        ]
+      }
+    },
+    {
+      "scenario": "End or supersede waits for slow pause",
+      "status": "passed",
+      "passingCases": {
+        "test_real_session_close_route_waits_for_pause_off_loop": [
+          "test_real_session_close_route_waits_for_pause_off_loop[end]",
+          "test_real_session_close_route_waits_for_pause_off_loop[supersede]"
+        ],
+        "test_supersede_changed_expected_session_retains_original_error": [
+          "test_supersede_changed_expected_session_retains_original_error[cn]",
+          "test_supersede_changed_expected_session_retains_original_error[global]"
+        ],
+        "test_end_still_denies_mock_before_termination": [
+          "test_end_still_denies_mock_before_termination[cn]",
+          "test_end_still_denies_mock_before_termination[global]"
+        ]
+      }
+    },
+    {
+      "scenario": "Cancel during connect or frame admission",
+      "status": "passed",
+      "passingCases": {
+        "test_cancel_connection_drains_inflight_before_exactly_one_disconnect": [
+          "test_cancel_connection_drains_inflight_before_exactly_one_disconnect[connect]",
+          "test_cancel_connection_drains_inflight_before_exactly_one_disconnect[frame]"
+        ],
+        "test_cancel_created_resource_compensates_once_and_drains_cleanup": [
+          "test_cancel_created_resource_compensates_once_and_drains_cleanup[False]",
+          "test_cancel_created_resource_compensates_once_and_drains_cleanup[True]"
+        ],
+        "test_cancel_late_http_publisher_creation_compensates_once": [
+          "test_cancel_late_http_publisher_creation_compensates_once"
+        ]
+      }
+    },
+    {
+      "scenario": "Saturation and shutdown",
+      "status": "passed",
+      "passingCases": {
+        "test_shutdown_wakes_waiters_cancels_queued_and_keeps_loop_responsive": [
+          "test_shutdown_wakes_waiters_cancels_queued_and_keeps_loop_responsive"
+        ],
+        "test_shutdown_then_cancel_admission_waiters_cannot_expand_compensation_capacity": [
+          "test_shutdown_then_cancel_admission_waiters_cannot_expand_compensation_capacity"
+        ],
+        "test_normal_transport_then_service_then_executor_shutdown_order": [
+          "test_normal_transport_then_service_then_executor_shutdown_order"
+        ]
+      }
+    },
+    {
+      "scenario": "Candidate update while another session ingests",
+      "status": "passed",
+      "passingCases": {
+        "test_slow_candidate_network_does_not_hold_process_runtime_lock": [
+          "test_slow_candidate_network_does_not_hold_process_runtime_lock"
+        ],
+        "test_cn_network_commands_never_own_runtime_lock": [
+          "test_cn_network_commands_never_own_runtime_lock"
+        ],
+        "test_entities_are_authoritative_cross_instance_and_never_write_snapshot": [
+          "test_entities_are_authoritative_cross_instance_and_never_write_snapshot"
+        ]
+      }
+    },
+    {
+      "scenario": "Multiple instances and reordered saves",
+      "status": "passed",
+      "passingCases": {
+        "test_same_millisecond_candidate_cas_claim_has_one_winner": [
+          "test_same_millisecond_candidate_cas_claim_has_one_winner"
+        ],
+        "test_candidate_order_owner_and_claim_are_not_overwritten": [
+          "test_candidate_order_owner_and_claim_are_not_overwritten"
+        ],
+        "test_binding_stale_and_newer_generation_win_late_saves": [
+          "test_binding_stale_and_newer_generation_win_late_saves"
+        ]
+      }
+    },
+    {
+      "scenario": "Cold start with legacy snapshot and updated entities",
+      "status": "passed",
+      "passingCases": {
+        "test_legacy_seed_never_changes_old_bytes_or_revives_cleared_session": [
+          "test_legacy_seed_never_changes_old_bytes_or_revives_cleared_session[450]",
+          "test_legacy_seed_never_changes_old_bytes_or_revives_cleared_session[None]"
+        ],
+        "test_legacy_binding_keys_stay_byte_identical_and_old_protocol_decodable": [
+          "test_legacy_binding_keys_stay_byte_identical_and_old_protocol_decodable"
+        ],
+        "test_binding_indexes_share_lifetime_and_missing_indexes_repair_once": [
+          "test_binding_indexes_share_lifetime_and_missing_indexes_repair_once"
+        ]
+      }
+    },
+    {
+      "scenario": "Clear races with seed or late candidate",
+      "status": "passed",
+      "passingCases": {
+        "test_seed_and_clear_race_cannot_resurrect_legacy_candidate": [
+          "test_seed_and_clear_race_cannot_resurrect_legacy_candidate"
+        ],
+        "test_clear_is_idempotent_and_keeps_account_history_and_other_sessions": [
+          "test_clear_is_idempotent_and_keeps_account_history_and_other_sessions"
+        ],
+        "test_other_session_activity_cannot_outlive_retirement_guard_or_revive_bound_record": [
+          "test_other_session_activity_cannot_outlive_retirement_guard_or_revive_bound_record"
+        ]
+      }
+    },
+    {
+      "scenario": "Shared documents and duplicate chunks",
+      "status": "passed",
+      "passingCases": {
+        "test_cn_get_session_uses_one_batch_and_preserves_stable_output": [
+          "test_cn_get_session_uses_one_batch_and_preserves_stable_output"
+        ],
+        "test_cn_metadata_batch_deduplicates_and_preserves_output_and_score_order": [
+          "test_cn_metadata_batch_deduplicates_and_preserves_output_and_score_order"
+        ],
+        "test_repository_without_batch_keeps_unique_id_fallback": [
+          "test_repository_without_batch_keeps_unique_id_fallback"
+        ],
+        "test_real_postgres_any_join_and_misses_use_one_closed_read_transaction": [
+          "test_real_postgres_any_join_and_misses_use_one_closed_read_transaction"
+        ]
+      }
+    },
+    {
+      "scenario": "Concurrent edit deletion and prefetch completion",
+      "status": "passed",
+      "passingCases": {
+        "test_each_get_session_reads_current_version_and_deletion_again": [
+          "test_each_get_session_reads_current_version_and_deletion_again"
+        ],
+        "test_prefetch_keeps_two_independent_material_reads_and_rejects_late_change": [
+          "test_prefetch_keeps_two_independent_material_reads_and_rejects_late_change"
+        ],
+        "test_real_postgres_batch_snapshot_is_current_statement_then_next_call_sees_change": [
+          "test_real_postgres_batch_snapshot_is_current_statement_then_next_call_sees_change"
+        ]
+      }
+    },
+    {
+      "scenario": "Main loop and worker stall independently",
+      "status": "passed",
+      "passingCases": {
+        "test_loop_timer_distinguishes_delayed_scheduling_and_resets_after_pause": [
+          "test_loop_timer_distinguishes_delayed_scheduling_and_resets_after_pause"
+        ],
+        "test_work_timing_is_fixed_numeric_private_and_observer_failure_safe": [
+          "test_work_timing_is_fixed_numeric_private_and_observer_failure_safe"
+        ],
+        "test_loop_observations_are_bounded_numeric_and_do_not_store_content": [
+          "test_loop_observations_are_bounded_numeric_and_do_not_store_content"
+        ]
+      }
+    },
+    {
+      "scenario": "Broken observer or disabled edition",
+      "status": "passed",
+      "passingCases": {
+        "test_broken_clock_and_logger_do_not_terminate_probe_or_leak_data": [
+          "test_broken_clock_and_logger_do_not_terminate_probe_or_leak_data"
+        ],
+        "test_global_lifespan_does_not_create_cn_resources": [
+          "test_global_lifespan_does_not_create_cn_resources"
+        ],
+        "test_broken_observer_does_not_change_success_or_skip_worker_shutdown": [
+          "test_broken_observer_does_not_change_success_or_skip_worker_shutdown"
+        ]
+      }
+    },
+    {
+      "scenario": "Assemble candidate and compare",
+      "status": "passed",
+      "passingCases": {
+        "test_candidate_contains_only_allowlisted_runtime_changes": [
+          "test_candidate_contains_only_allowlisted_runtime_changes"
+        ],
+        "test_reviewed_production_manifest_is_pinned": [
+          "test_reviewed_production_manifest_is_pinned"
+        ],
+        "test_changed_or_unsafe_inputs_refused_before_any_output": [
+          "test_changed_or_unsafe_inputs_refused_before_any_output[baseline]",
+          "test_changed_or_unsafe_inputs_refused_before_any_output[delta_missing]",
+          "test_changed_or_unsafe_inputs_refused_before_any_output[delta_symlink]",
+          "test_changed_or_unsafe_inputs_refused_before_any_output[incomplete_delta]",
+          "test_changed_or_unsafe_inputs_refused_before_any_output[manifest]"
+        ]
+      }
+    },
+    {
+      "scenario": "Slow I/O regression and release handoff",
+      "status": "passed",
+      "passingCases": {
+        "test_slow_lifecycle_does_not_occupy_ingress_control_or_loop": [
+          "test_slow_lifecycle_does_not_occupy_ingress_control_or_loop"
+        ],
+        "test_shutdown_then_cancel_admission_waiters_cannot_expand_compensation_capacity": [
+          "test_shutdown_then_cancel_admission_waiters_cannot_expand_compensation_capacity"
+        ]
+      }
+    }
+  ],
+  "scenarioCount": 16,
+  "suite": "candidate-final-tests.xml",
+  "allReferencedCasesActuallyPassed": true,
+  "nonTestEvidence": [
+    "candidate-equivalence.json",
+    "final-source-scope.json",
+    "lifecycle/actual-route-before-after.json",
+    "synthetic-resource-cleanup.json"
+  ],
+  "limitations": "Synthetic local scenario verification, not production or physical-device E2E."
+}

@@ -28,7 +28,8 @@ def fixture_service(monkeypatch, *, status="live", documents=3):
     settings = Settings(_env_file=None, interview_idle_warning_seconds=60,
                         interview_idle_timeout_seconds=120, realtime_web_heartbeat_ttl_seconds=45)
     repository = InMemoryInterviewSessionRepository()
-    document_repository = Mock()
+    # Keep this original single-read fixture from inventing an optional batch API.
+    document_repository = Mock(spec=["get_by_id"])
     document_repository.get_by_id.return_value = None
     sessions = SessionService(settings=settings, repository=repository, document_repository=document_repository)
     created = sessions.create_session(user_id="synthetic-owner", title="合成心跳面试")

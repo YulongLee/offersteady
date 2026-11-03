@@ -5,6 +5,7 @@ from app.services.session_mode_guard import require_standard_session
 import base64
 import concurrent.futures
 from copy import deepcopy
+from contextlib import nullcontext
 import logging
 import json
 import math
@@ -23,6 +24,7 @@ from uuid import uuid4
 from app.core.config import Settings
 from app.core.errors import DomainRequestError
 from app.core.logging import log_event
+from app.platform.cn_device_status_timing import measure_device_status_phase
 from app.ports.commercial_hardening import AiUsageRecord, CommercialHardeningRepository
 from app.ports.screenshot_answer import ScreenshotUploadPort
 from app.ports.realtime_speech import (
@@ -2368,6 +2370,38 @@ class RealtimeSpeechService:
             raise DomainRequestError("realtime-speech", "desktop-active-binding", "网页端绑定已过期，请打开面试页面重新验证机器码。", 404)
         return binding
 
+    def _get_cn_device_status_binding(self, *, device_id: str, manual_code: str) -> SessionDesktopBindingRecord:
+        # This projection is only for status publication. Capture authorization
+        # and the other binding readers retain their full-session checks.
+        code = manual_code.strip()
+        requested_device_id = device_id.strip()
+        with measure_device_status_phase("binding_repository"):
+            device = self.repository.get_desktop_device_by_code(code)
+        if device is None:
+            raise DomainRequestError("realtime-speech", "desktop-active-binding", "这台电脑尚未登记或机器码不匹配。", 404)
+        with measure_device_status_phase("binding_repository"):
+            binding = self.repository.get_latest_session_desktop_binding_for_device(device_id=requested_device_id, manual_code=device.manual_code)
+            if binding is None and device.device_id != requested_device_id:
+                binding = self.repository.get_latest_session_desktop_binding_for_device(device_id=device.device_id, manual_code=device.manual_code)
+            if binding is None:
+                binding = self.repository.get_latest_session_desktop_binding_by_code(manual_code=device.manual_code)
+        if binding is None:
+            raise DomainRequestError("realtime-speech", "desktop-active-binding", "网页端尚未输入该机器码绑定面试。", 404)
+        active = (
+            binding.status == "bound"
+            and binding.binding_generation == device.generation
+            and self._desktop_device_fresh(device)
+        )
+        if active:
+            try:
+                state = self.session_service.get_control_state(user_id=binding.owner_user_id, session_id=binding.session_id)
+                active = state.status in {"preparing", "live"}
+            except DomainRequestError:
+                active = False
+        if not active:
+            raise DomainRequestError("realtime-speech", "desktop-active-binding", "网页端绑定已过期，请打开面试页面重新验证机器码。", 404)
+        return binding
+
     def get_desktop_capture_binding(self, *, device_id: str, manual_code: str) -> SessionDesktopBindingRecord:
         code = manual_code.strip()
         requested_device_id = device_id.strip()
@@ -2551,14 +2585,19 @@ class RealtimeSpeechService:
         if pinned_session_id is not None or pinned_binding_id is not None:
             binding_lock_state = "released"
             if device is not None and pinned_session_id and pinned_binding_id:
-                pinned_binding = next((
-                    item
-                    for item in self.repository.list_session_desktop_bindings_for_device(
-                        device_id=device.device_id,
-                        manual_code=code,
-                    )
-                    if item.session_id == pinned_session_id and item.binding_id == pinned_binding_id
-                ), None)
+                pinned_read = getattr(self.repository, "get_pinned_session_desktop_binding", None)
+                if self.settings.product_edition == "cn" and callable(pinned_read):
+                    pinned_binding = pinned_read(device_id=device.device_id, manual_code=code,
+                                                 session_id=pinned_session_id, binding_id=pinned_binding_id)
+                else:
+                    pinned_binding = next((
+                        item
+                        for item in self.repository.list_session_desktop_bindings_for_device(
+                            device_id=device.device_id,
+                            manual_code=code,
+                        )
+                        if item.session_id == pinned_session_id and item.binding_id == pinned_binding_id
+                    ), None)
                 if pinned_binding is not None:
                     pinned_status, _pinned_mode, _pinned_audio_mode = session_state(pinned_binding)
                     if binding_active(pinned_binding, session_status=pinned_status):
@@ -2654,6 +2693,18 @@ class RealtimeSpeechService:
         return resolved
 
     def control_capture(self, *, user_id: str, session_id: str, action: str) -> dict[str, object]:
+        if getattr(self.settings, "product_edition", None) != "cn":
+            return self._control_capture(user_id=user_id, session_id=session_id, action=action)
+        cleanup_lock = self._acquire_session_cleanup_lock(session_id)
+        try:
+            with cleanup_lock:
+                # Read authoritative state inside the same transaction lock as
+                # end/reclamation, before changing capture or charging resume.
+                return self._control_capture(user_id=user_id, session_id=session_id, action=action)
+        finally:
+            self._release_session_cleanup_lock(session_id, cleanup_lock)
+
+    def _control_capture(self, *, user_id: str, session_id: str, action: str) -> dict[str, object]:
         session = self.session_service.get_session(user_id=user_id, session_id=session_id)
         require_standard_session(session)
         if session.session_mode == "written":
@@ -4235,11 +4286,16 @@ class RealtimeSpeechService:
                     "live-answer", "auto-claim", "上一条自动回答仍在生成。", 409,
                     error_code="auto_answer_task_in_progress",
                 )
-            claimed = self.repository.save_candidate(replace(
-                candidate,
-                answer_task_id=f"claim:{uuid4().hex}",
-                updated_at_ms=_now_ms(),
-            ))
+            proposed = replace(candidate, answer_task_id=f"claim:{uuid4().hex}", updated_at_ms=_now_ms())
+            cas = getattr(self.repository, "compare_and_save_candidate", None)
+            claimed = (cas(proposed, expected=candidate)
+                       if self.settings.product_edition == "cn" and callable(cas)
+                       else self.repository.save_candidate(proposed))
+            if claimed is None:
+                raise DomainRequestError(
+                    "live-answer", "auto-claim", "该问题已经触发过回答。", 409,
+                    error_code="auto_answer_candidate_claimed",
+                )
             self._auto_answer_active_candidates[session_id] = candidate_id
             self._publish_candidate_state(claimed)
             return claimed
@@ -4251,9 +4307,13 @@ class RealtimeSpeechService:
             candidate = self._require_candidate(user_id=user_id, candidate_id=candidate_id)
             if candidate.answer_task_id != claim_id:
                 return candidate
-            bound = self.repository.save_candidate(replace(
-                candidate, answer_task_id=task_id, updated_at_ms=_now_ms()
-            ))
+            proposed = replace(candidate, answer_task_id=task_id, updated_at_ms=_now_ms())
+            cas = getattr(self.repository, "compare_and_save_candidate", None)
+            bound = (cas(proposed, expected=candidate)
+                     if self.settings.product_edition == "cn" and callable(cas)
+                     else self.repository.save_candidate(proposed))
+            if bound is None:
+                return self.repository.get_candidate(candidate_id) or candidate
             self._publish_candidate_state(bound)
             return bound
 
@@ -4264,9 +4324,13 @@ class RealtimeSpeechService:
             candidate = self._require_candidate(user_id=user_id, candidate_id=candidate_id)
             if candidate.answer_task_id != claim_id:
                 return
-            released = self.repository.save_candidate(replace(
-                candidate, answer_task_id=None, updated_at_ms=_now_ms()
-            ))
+            proposed = replace(candidate, answer_task_id=None, updated_at_ms=_now_ms())
+            cas = getattr(self.repository, "compare_and_save_candidate", None)
+            released = (cas(proposed, expected=candidate)
+                        if self.settings.product_edition == "cn" and callable(cas)
+                        else self.repository.save_candidate(proposed))
+            if released is None:
+                return
             self._publish_candidate_state(released)
             if self._auto_answer_active_candidates.get(candidate.session_id) == candidate_id:
                 self._auto_answer_active_candidates.pop(candidate.session_id, None)
@@ -4712,6 +4776,67 @@ class RealtimeSpeechService:
         capabilities: dict[str, object],
     ) -> RealtimeEventResponse:
         self.session_service.get_session(user_id=user_id, session_id=session_id)
+        return self._publish_device_status_event(
+            user_id=user_id,
+            session_id=session_id,
+            device_id=device_id,
+            capture_state=capture_state,
+            source_health=source_health,
+            capabilities=capabilities,
+        )
+
+    def publish_cn_device_status(
+        self,
+        *,
+        user_id: str | None,
+        session_id: str,
+        device_id: str,
+        manual_code: str | None,
+        capture_state: str,
+        source_health: list[dict[str, object]],
+        capabilities: dict[str, object],
+    ) -> RealtimeEventResponse:
+        resolved_user_id = user_id
+        if manual_code is not None:
+            binding_reader = (
+                self._get_cn_device_status_binding
+                if self.settings.product_edition == "cn"
+                else self.get_desktop_active_binding
+            )
+            binding = binding_reader(device_id=device_id, manual_code=manual_code)
+            if binding.session_id != session_id:
+                raise DomainRequestError(
+                    "realtime-speech", "device-status",
+                    "该设备已连接到另一场面试，请刷新当前连接。",
+                    410, "desktop_binding_replaced",
+                )
+            resolved_user_id = binding.owner_user_id
+        arguments = dict(
+            user_id=resolved_user_id,
+            session_id=session_id,
+            device_id=device_id,
+            capture_state=capture_state,
+            source_health=source_health,
+            capabilities=capabilities,
+        )
+        if self.settings.product_edition != "cn":
+            return self.publish_device_status(**arguments)
+        # Preserve the second authoritative owner/existence check. Like the
+        # original status publisher it does not add an ended-session gate.
+        self.session_service.get_control_state(user_id=resolved_user_id, session_id=session_id)
+        return self._publish_device_status_event(**arguments, measure_repository=True)
+
+    def _publish_device_status_event(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        device_id: str,
+        capture_state: str,
+        source_health: list[dict[str, object]],
+        capabilities: dict[str, object],
+        measure_repository: bool = False,
+    ) -> RealtimeEventResponse:
         safe_source_health = [
             {
                 "sourceId": str(item.get("sourceId", "")),
@@ -4745,24 +4870,26 @@ class RealtimeSpeechService:
             }
             for item in source_health
         ]
-        event = self._save_event(
-            session_id=session_id,
-            owner_user_id=user_id,
-            kind="device-status",
-            payload={
-                "deviceId": device_id,
-                "captureState": capture_state,
-                "sourceHealth": safe_source_health,
-                "capabilities": {
-                    "platform": capabilities.get("platform"),
-                    "architecture": capabilities.get("architecture"),
-                    "protocolVersion": capabilities.get("protocolVersion"),
-                    "appVersion": capabilities.get("appVersion"),
-                    "microphone": capabilities.get("microphone"),
-                    "systemAudio": capabilities.get("systemAudio"),
-                },
+        payload = {
+            "deviceId": device_id,
+            "captureState": capture_state,
+            "sourceHealth": safe_source_health,
+            "capabilities": {
+                "platform": capabilities.get("platform"),
+                "architecture": capabilities.get("architecture"),
+                "protocolVersion": capabilities.get("protocolVersion"),
+                "appVersion": capabilities.get("appVersion"),
+                "microphone": capabilities.get("microphone"),
+                "systemAudio": capabilities.get("systemAudio"),
             },
-        )
+        }
+        with measure_device_status_phase("event_repository") if measure_repository else nullcontext():
+            event = self._save_event(
+                session_id=session_id,
+                owner_user_id=user_id,
+                kind="device-status",
+                payload=payload,
+            )
         return RealtimeEventResponse(eventId=event.event_id, kind=event.kind, payload=event.payload, createdAtMs=event.created_at_ms)
 
     def _role_for_audio_source(self, *, session_id: str, source_kind: RealtimeSourceKind) -> str:

@@ -352,8 +352,22 @@ class KnowledgeRetrievalService(RetrievalPort):
 
     def _apply_metadata_filter(self, matches, *, filter: RetrievalFilter) -> list[RetrievedChunk]:
         filtered: list[RetrievedChunk] = []
+        document_records = None
+        if self.settings.product_edition == "cn":
+            matches = list(matches)
+            document_ids = list(dict.fromkeys(match.document_id for match in matches))
+            batch_read = getattr(self.document_repository, "get_by_ids", None)
+            if document_ids and callable(batch_read):
+                current = batch_read(document_ids)
+                document_records = {document_id: current.get(document_id) for document_id in document_ids}
+            else:
+                document_records = {
+                    document_id: self.document_repository.get_by_id(document_id)
+                    for document_id in document_ids
+                }
         for match in matches:
-            record = self.document_repository.get_by_id(match.document_id)
+            record = (document_records.get(match.document_id) if document_records is not None
+                      else self.document_repository.get_by_id(match.document_id))
             if record is None:
                 continue
             if record.owner_user_id != filter.owner_user_id:

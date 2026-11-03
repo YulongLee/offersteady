@@ -27,7 +27,7 @@ def test_runtime_recovers_across_repository_instances_and_stream_cursor_advances
     assert REDIS_URL
     client = Redis.from_url(REDIS_URL, decode_responses=True)
     client.flushdb()
-    settings = Settings(redis_url=REDIS_URL, realtime_runtime_ttl_seconds=300)
+    settings = Settings(_env_file=None, product_edition="cn", database_url=None, redis_url=REDIS_URL, realtime_runtime_ttl_seconds=300)
     first = RedisRealtimeSpeechRepository(settings)
     suffix = uuid4().hex[:8]
     device = DesktopDeviceRecord(
@@ -59,7 +59,7 @@ def test_transcript_revision_advances_stream_cursor_without_realtime_event():
     assert REDIS_URL
     client = Redis.from_url(REDIS_URL, decode_responses=True)
     client.flushdb()
-    settings = Settings(redis_url=REDIS_URL, realtime_runtime_ttl_seconds=300)
+    settings = Settings(_env_file=None, product_edition="cn", database_url=None, redis_url=REDIS_URL, realtime_runtime_ttl_seconds=300)
     repository = RedisRealtimeSpeechRepository(settings)
     suffix = uuid4().hex[:8]
     session_id = f"session-transcript-{suffix}"
@@ -98,7 +98,7 @@ def test_high_frequency_entity_updates_do_not_rewrite_global_snapshot():
     client = Redis.from_url(REDIS_URL, decode_responses=True)
     client.flushdb()
     repository = RedisRealtimeSpeechRepository(
-        Settings(redis_url=REDIS_URL, realtime_runtime_ttl_seconds=300)
+        Settings(_env_file=None, product_edition="cn", database_url=None, redis_url=REDIS_URL, realtime_runtime_ttl_seconds=300)
     )
     device = DesktopDeviceRecord(
         device_id="synthetic-device",
@@ -164,7 +164,7 @@ def test_legacy_snapshot_seeds_entity_state_and_exact_indexes():
     }))
 
     repository = RedisRealtimeSpeechRepository(
-        Settings(redis_url=REDIS_URL, realtime_runtime_ttl_seconds=300)
+        Settings(_env_file=None, product_edition="cn", database_url=None, redis_url=REDIS_URL, realtime_runtime_ttl_seconds=300)
     )
 
     assert repository.get_desktop_device_by_code(device.manual_code) == device
@@ -176,7 +176,10 @@ def test_legacy_snapshot_seeds_entity_state_and_exact_indexes():
         "offersteady:realtime:runtime:v2:indexes:device-codes:v1",
         device.manual_code,
     ) == device.device_id
-    assert repository.operational_diagnostics()["entitySeedCount"] == 3
+    # CN also seeds the original binding-derived account association as its own
+    # authoritative entity; the legacy devices/binding/heartbeat still recover.
+    assert repository.get_account_desktop_device(user_id=binding.owner_user_id, device_id=device.device_id) is not None
+    assert repository.operational_diagnostics()["entitySeedCount"] == 4
 
 
 def test_newer_entity_state_overlays_legacy_and_rebuilds_missing_index():
@@ -204,7 +207,7 @@ def test_newer_entity_state_overlays_legacy_and_rebuilds_missing_index():
     )
 
     repository = RedisRealtimeSpeechRepository(
-        Settings(redis_url=REDIS_URL, realtime_runtime_ttl_seconds=300)
+        Settings(_env_file=None, product_edition="cn", database_url=None, redis_url=REDIS_URL, realtime_runtime_ttl_seconds=300)
     )
 
     assert repository.get_desktop_device_by_code(current.manual_code) == current
@@ -219,7 +222,7 @@ def test_incremental_activity_updates_preserve_other_session_fields():
     client = Redis.from_url(REDIS_URL, decode_responses=True)
     client.flushdb()
     repository = RedisRealtimeSpeechRepository(
-        Settings(redis_url=REDIS_URL, realtime_runtime_ttl_seconds=300)
+        Settings(_env_file=None, product_edition="cn", database_url=None, redis_url=REDIS_URL, realtime_runtime_ttl_seconds=300)
     )
     activity_key = "offersteady:realtime:runtime:v2:activity"
     client.hset(activity_key, "unrelated-session", 73)

@@ -46,7 +46,8 @@ def _services(monkeypatch):
     settings = Settings(_env_file=None, interview_idle_warning_seconds=60,
                         interview_idle_timeout_seconds=120)
     repository = InMemoryInterviewSessionRepository()
-    documents = Mock()
+    # These regressions model the existing get_by_id-only repository capability.
+    documents = Mock(spec=["get_by_id"])
     documents.get_by_id.return_value = _document()
     sessions = SessionService(settings=settings, repository=repository, document_repository=documents)
     return sessions, repository, documents

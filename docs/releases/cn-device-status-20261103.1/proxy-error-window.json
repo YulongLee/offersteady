@@ -1,0 +1,61 @@
+{
+  "backendHealthy": true,
+  "restartCount": 0,
+  "http5xx": [
+    {
+      "atUtc": "2026-11-02T18:14:01+00:00",
+      "secondsFromNewBackendStart": 0.715,
+      "method": "POST",
+      "status": 502,
+      "routeCategory": "realtime_control"
+    },
+    {
+      "atUtc": "2026-11-02T18:14:02+00:00",
+      "secondsFromNewBackendStart": 1.715,
+      "method": "POST",
+      "status": 502,
+      "routeCategory": "realtime_control"
+    },
+    {
+      "atUtc": "2026-11-02T18:14:02+00:00",
+      "secondsFromNewBackendStart": 1.715,
+      "method": "GET",
+      "status": 502,
+      "routeCategory": "realtime_control"
+    },
+    {
+      "atUtc": "2026-11-02T18:14:02+00:00",
+      "secondsFromNewBackendStart": 1.715,
+      "method": "GET",
+      "status": 502,
+      "routeCategory": "realtime_control"
+    },
+    {
+      "atUtc": "2026-11-02T18:14:03+00:00",
+      "secondsFromNewBackendStart": 2.715,
+      "method": "GET",
+      "status": 502,
+      "routeCategory": "realtime_control"
+    },
+    {
+      "atUtc": "2026-11-02T18:14:03+00:00",
+      "secondsFromNewBackendStart": 2.715,
+      "method": "GET",
+      "status": 502,
+      "routeCategory": "realtime_control"
+    },
+    {
+      "atUtc": "2026-11-02T18:14:03+00:00",
+      "secondsFromNewBackendStart": 2.715,
+      "method": "POST",
+      "status": 502,
+      "routeCategory": "realtime_control"
+    }
+  ],
+  "routeCategories": {
+    "realtime_control": 7
+  },
+  "last60SecondsHttp5xx": 0,
+  "observedAtUtc": "2026-11-02T18:17:28.753514+00:00",
+  "rawLogsExported": false
+}

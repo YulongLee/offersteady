@@ -1,6 +1,16 @@
-> 当前国服业务为2026-11-01模拟面试修复，保留SEO和状态/控制减负（连接池关闭）；2026-11-02仅将[伴随助手1.3.6三平台下载上线](docs/releases/companion-1.3.6-cn-20261102.md)，热更新清单且业务容器未重启。当前代码封版为 `release-20261102.1`（助手1.3.6，含已上线版本及本地待发布配套），见[封存清单与恢复说明](releases/20261102.1/README.md)；国服业务来源仍保留 `release-cn-20261101.1`。本地Web/Backend笔试配套未部署到国服；国际服于2026-11-02完成[性能读路径与独立助手1.3.6更新](docs/releases/global-performance-companion-1.3.6-20261102.md)，保留原Global会员收费及模型；各组件和运行热清单来源以[当前国服基线](docs/current-cn-baseline.md)为准。
+> 2026-11-04 05:40:36（北京时间）国际服已完成[实时共享阻塞优化](docs/releases/global-realtime-blocking-20261104.1.md)：仅Backend，307输入/295原字节保持，223完整Schema/379配置/46依赖保持，Web/助手1.3.6/worker及国服不变。两服当前公开运行快照与开发代码保存为[release-20261104.1](releases/20261104.1/README.md)，后续从该版本继续优化。当前来源分别见[国服](docs/current-cn-baseline.md)和[国际服](docs/current-global-baseline.md)。以下未提交表述均为各轮历史记录。
+
+> 2026-11-04 04:25:57（北京时间）已完成[国服固定绑定查询修复发布](docs/releases/cn-pinned-binding-20261104.1.md)：仅Backend三文件，实际237输入/234保持，Web/助手1.3.6/Global/worker及模型/收费不变，池关闭。空闲自然连接状态159条P95约44ms；切换前4秒10次502已恢复，验收后未新增。未提交/推送Git。
+
+> 此前国服于2026-11-04 03:33完成[实时共享阻塞优化发布](docs/releases/cn-realtime-shared-20261104.1.md)：仅Backend十二文件增量，实际237输入，保留Web、助手1.3.6、Global、worker及模型/收费，池关闭；独立验收通过。17次代理502集中于启动后前4秒，验收后未新增。最近Git封版仍为release-20261102.1，本轮未提交/推送。
+
+> 此前国服于2026-11-03完成[设备状态上报优化](docs/releases/cn-device-status-20261103.1.md)，仅Backend四文件增量，保留SEO、此前状态/模拟面试优化和助手1.3.6下载清单，连接池关闭；Web、worker及国际服未更新。实际组件以[当前国服基线](docs/current-cn-baseline.md)为准。最近Git封版仍为[release-20261102.1](releases/20261102.1/README.md)，本次线上增量尚未提交/推送Git，本地未发布笔试配套未混入。
 
 # OfferSteady
+
+> 本轮[本地开发与自测记录](docs/releases/cn-device-status-local-20261102.1.md)已保留，2026-11-03国服发布结果见上方记录。
+
+> 2026-11-03新增[国服实时共享阻塞优化本地候选](docs/releases/cn-realtime-shared-local-20261103.1.md)：本地完整回归956通过、1项Global专属跳过；已于2026-11-04按授权发布，真实结果见上方生产记录。
 
 OfferSteady 是一个面向求职者的 AI 面试辅助产品，目前处于产品原型与需求验证阶段。
 

@@ -32,6 +32,7 @@ from app.schemas.session import (
     UpdateInterviewAutoAnswerRequest,
 )
 from app.services.realtime_speech_service import RealtimeSpeechService
+from app.services.cn_realtime_io_executor import run_cn_realtime_io
 from app.services.session_service import SessionService
 
 
@@ -244,11 +245,16 @@ async def supersede_active_sessions(
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[SupersedeActiveSessionResponse]:
     user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
-    retired_session_ids = service.supersede_active_interviews(
-        user_id=user_id,
-        session_id=session_id,
-        expected_previous_session_id=request.expected_previous_session_id,
-    )
+    if getattr(getattr(service, "settings", None), "product_edition", None) == "cn":
+        retired_session_ids = await run_cn_realtime_io(request_context, service.supersede_active_interviews,
+            lane="lifecycle", operation_name="session_supersede", user_id=user_id, session_id=session_id,
+            expected_previous_session_id=request.expected_previous_session_id)
+    else:
+        retired_session_ids = service.supersede_active_interviews(
+            user_id=user_id,
+            session_id=session_id,
+            expected_previous_session_id=request.expected_previous_session_id,
+        )
     return success_response(
         request=request_context,
         data=SupersedeActiveSessionResponse(currentSessionId=session_id, retiredSessionIds=retired_session_ids),
@@ -393,9 +399,16 @@ async def end_session(
     service: RealtimeSpeechService = Depends(realtime_speech_service),
 ) -> ApiEnvelope[InterviewSessionResponse]:
     user_id = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
-    require_standard_session(service.session_service.get_session(user_id=user_id, session_id=session_id))
-    service.terminate_session_for_admin(user_id=user_id, session_id=session_id)
-    session = service.session_service.get_session(user_id=user_id, session_id=session_id)
+    if getattr(getattr(service, "settings", None), "product_edition", None) == "cn":
+        def end():
+            require_standard_session(service.session_service.get_session(user_id=user_id, session_id=session_id))
+            service.terminate_session_for_admin(user_id=user_id, session_id=session_id)
+            return service.session_service.get_session(user_id=user_id, session_id=session_id)
+        session = await run_cn_realtime_io(request_context, end, lane="lifecycle", operation_name="session_end")
+    else:
+        require_standard_session(service.session_service.get_session(user_id=user_id, session_id=session_id))
+        service.terminate_session_for_admin(user_id=user_id, session_id=session_id)
+        session = service.session_service.get_session(user_id=user_id, session_id=session_id)
     return success_response(request=request_context, data=_to_session_response(session), timestamp=utc_now_iso())
 
 

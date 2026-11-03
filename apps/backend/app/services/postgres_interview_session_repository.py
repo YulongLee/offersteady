@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import ExitStack
 from dataclasses import asdict
 from threading import Lock
 from typing import Any
@@ -9,6 +10,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from app.core.config import REPO_ROOT, Settings
+from app.platform.cn_device_status_timing import measure_device_status_phase
 from app.ports.interview_session import (
     ConversationContextEntry,
     IntegrationReference,
@@ -111,13 +113,18 @@ class PostgresInterviewSessionRepository(InterviewSessionRepository):
         return self._row_to_session(row) if row else None
 
     def get_control_state(self, session_id: str) -> SessionControlState | None:
-        with self._connect() as connection, connection.cursor(row_factory=dict_row) as cursor:
-            cursor.execute(
-                """SELECT session_id, owner_user_id, status, session_mode, interview_audio_mode
+        with ExitStack() as stack:
+            with measure_device_status_phase("db_acquire"):
+                connection = stack.enter_context(self._connect())
+            with connection.cursor(row_factory=dict_row) as cursor:
+                with measure_device_status_phase("db_execute"):
+                    cursor.execute(
+                        """SELECT session_id, owner_user_id, status, session_mode, interview_audio_mode
                    FROM interview_sessions WHERE session_id = %s AND deleted_at_ms IS NULL""",
-                (session_id,),
-            )
-            row = cursor.fetchone()
+                        (session_id,),
+                    )
+                with measure_device_status_phase("db_fetch"):
+                    row = cursor.fetchone()
         if row is None:
             return None
         return SessionControlState(

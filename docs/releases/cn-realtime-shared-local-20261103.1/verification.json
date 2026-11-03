@@ -1,0 +1,201 @@
+{
+  "status": "local_development_and_self_test_passed_not_deployed",
+  "branch": "codex/cn-realtime-shared-blocking-20261103",
+  "baselineImage": "sha256:5efba4abea9b12e1af2b9d2c6e8f6edb2c205afed93f4f9fc9ba862e96499229",
+  "baselineInputs": 233,
+  "candidateInputs": 237,
+  "unchangedBaselineInputs": 225,
+  "changedRuntimeInputs": 12,
+  "finalTests": {
+    "candidate": "candidate-final",
+    "candidateImportGuard": true,
+    "productEnvFilesDisabled": true,
+    "remoteProviderOptInsCleared": true,
+    "ownedLoopbackServicesOnly": true,
+    "moduleCount": 64,
+    "realModelCalls": 0,
+    "productionChanges": 0,
+    "redisVersion": "Redis server v=7.4.9 sha=00000000:0 malloc=jemalloc-5.3.0 bits=64 build=5a23d515cf8f8935",
+    "pytestExitCode": 0,
+    "suites": [
+      {
+        "tests": 957,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1
+      }
+    ],
+    "ownSyntheticDatabasesRemoved": true
+  },
+  "passed": 956,
+  "skipped": 1,
+  "failed": 0,
+  "errors": 0,
+  "schemaAndConfig": {
+    "passed": true,
+    "fullSchemaEquivalent": true,
+    "paths": 203,
+    "schemaSha256": "acee1e546feb4dd34b7e204384e4d53310ba184c62c8f425383c464509577330",
+    "settingsEquivalent": true,
+    "settingsCount": 344,
+    "settingsSha256": "319635dca725f92339dbfface416dc690cb31ee74f36bccc4d14837edf9d1d38",
+    "poolEnabled": false,
+    "compiledPython": 161,
+    "all12RootOverlayHashesMatchCandidate": true,
+    "noLifespanOrNetworkOrThreads": true,
+    "scope": "Local synthetic effective settings and current-baseline schema; not a production private-config/image probe."
+  },
+  "sourceScope": {
+    "passed": true,
+    "candidateInputs": 237,
+    "baselineInputs": 233,
+    "changedOrAddedRuntimeFiles": [
+      "apps/backend/app/main.py",
+      "apps/backend/app/modules/realtime_speech.py",
+      "apps/backend/app/modules/session.py",
+      "apps/backend/app/platform/cn_realtime_lifespan.py",
+      "apps/backend/app/platform/cn_realtime_loop_monitor.py",
+      "apps/backend/app/services/cn_realtime_entity_state.py",
+      "apps/backend/app/services/cn_realtime_io_executor.py",
+      "apps/backend/app/services/knowledge_retrieval.py",
+      "apps/backend/app/services/postgres_material_persistence.py",
+      "apps/backend/app/services/realtime_speech_service.py",
+      "apps/backend/app/services/redis_realtime_speech_repository.py",
+      "apps/backend/app/services/session_service.py"
+    ],
+    "unchangedBaselineBytesAndModes": 225,
+    "rootDeltaMatchesFrozenCandidate": true,
+    "changedTrackedFilesSinceTaskStart": [
+      "README.md",
+      "apps/backend/app/main.py",
+      "apps/backend/app/modules/realtime_speech.py",
+      "apps/backend/app/modules/session.py",
+      "apps/backend/app/services/knowledge_retrieval.py",
+      "apps/backend/app/services/postgres_material_persistence.py",
+      "apps/backend/app/services/realtime_speech_service.py",
+      "apps/backend/app/services/redis_realtime_speech_repository.py",
+      "apps/backend/app/services/session_service.py",
+      "apps/backend/tests/test_cn_control_state_reads.py",
+      "apps/backend/tests/test_foundation.py",
+      "apps/backend/tests/test_mock_interview_isolation.py",
+      "apps/backend/tests/test_realtime_redis_recovery.py",
+      "apps/backend/tests/test_state_read_efficiency.py",
+      "apps/backend/tests/test_web_heartbeat_lightweight.py"
+    ],
+    "nonTargetRuntimeChanges": [],
+    "unreleasedScreenshotKeptOutOfCandidate": true,
+    "baselineManifestSha256": "18d50582a66b4bb338301ea405ee650347c41a8998391732eab2b99ea6ba224b",
+    "candidateManifestSha256": "631ff24e28408668c9aab90145799f27eb2390506838895b0a7a593120c0b85d"
+  },
+  "auxiliaryInputLimit": {
+    "path": "packages/protocol/src/material-upload-formats.json",
+    "sha256": "e6607164d21950319ab2b6179d38ed6cf771715a2663c18db704af612907ac2f",
+    "unchangedSinceTaskStart": true,
+    "testOnlyPathResolution": true,
+    "candidateBytesChanged": false,
+    "productionAuxiliaryBytesVerifiedThisTask": false,
+    "reason": "The 233-input capture omits the JSON copied separately by backend.Dockerfile; use unchanged local package definition for synthetic upload regression only. A future actual-image probe must verify the retained auxiliary input."
+  },
+  "slowCloseSynthetic": {
+    "actual233Baseline": {
+      "routeMs": 158.53,
+      "unrelatedTimerLagMs": 153.633,
+      "closeCalls": 1,
+      "configuredExecutor": false,
+      "syntheticCloseMs": 150,
+      "realNetworkDbProviderCalls": 0
+    },
+    "currentLocalCandidate": {
+      "routeMs": 158.105,
+      "unrelatedTimerLagMs": 0.267,
+      "closeCalls": 1,
+      "configuredExecutor": true,
+      "syntheticCloseMs": 150,
+      "realNetworkDbProviderCalls": 0
+    },
+    "historicalPeakAttributed": false,
+    "productionP95Prediction": false
+  },
+  "materialReadSynthetic": [
+    {
+      "boundDocuments": 3,
+      "knowledgeSelected": true,
+      "beforeFakeConnectionAcquisitions": 18,
+      "afterFakeConnectionAcquisitions": 9,
+      "documentReadsBefore": 12,
+      "documentReadsAfter": 3
+    },
+    {
+      "boundDocuments": 2,
+      "knowledgeSelected": false,
+      "beforeFakeConnectionAcquisitions": 7,
+      "afterFakeConnectionAcquisitions": 5,
+      "documentReadsBefore": 4,
+      "documentReadsAfter": 2
+    }
+  ],
+  "redisSynthetic": {
+    "syntheticOnly": true,
+    "privateRedisVersion": "8.10.1",
+    "baselineSha256": "63e94529614eebef4baf24daf58ca27edccafe669f519b38e4b092f6eb3e0fcd",
+    "measurements": {
+      "sealed": {
+        "operations": 20,
+        "candidateCount": 100,
+        "commandCounts": {
+          "SET": 40,
+          "EXPIRE": 40,
+          "HSET": 20,
+          "EVALSHA": 20
+        },
+        "measuredCommandArgumentBytes": 3733105,
+        "p50Ms": 0.784,
+        "p95Ms": 0.872,
+        "maxMs": 0.945,
+        "globalSnapshotWriteCountIncludingWarmup": 21
+      },
+      "candidate": {
+        "operations": 20,
+        "candidateCount": 100,
+        "commandCounts": {
+          "EVALSHA": 20
+        },
+        "measuredCommandArgumentBytes": 55060,
+        "p50Ms": 0.129,
+        "p95Ms": 0.207,
+        "maxMs": 0.244,
+        "globalSnapshotWriteCountIncludingWarmup": 0
+      }
+    },
+    "limits": [
+      "Local isolated Redis; not production API P95",
+      "Argument bytes exclude RESP framing/replies and nested pipeline calls; compare bounded direct command payload only",
+      "Twenty measured saves after one warmup, not a throughput/load test"
+    ],
+    "productionConnections": 0,
+    "realModelCalls": 0,
+    "realUserData": false
+  },
+  "temporaryResourcesCleaned": true,
+  "realModelCalls": 0,
+  "productionActions": 0,
+  "gitCommits": 0,
+  "gitPushes": 0,
+  "productionP95Prediction": false,
+  "independentTestsOverlapFullSuite": true,
+  "initialFailuresRetained": true,
+  "futureDeploymentRequiresNewInstructionAndFreshActualBaselineAndIdleSingleWriterGates": true,
+  "finalChecks": {
+    "finalFrozenCandidateShaVerified": 237,
+    "rootDeltaShaVerified": 12,
+    "nonTargetRuntimeChanges": 0,
+    "markdownLinksValid": 29,
+    "diffCheckPassed": true,
+    "newTextWhitespaceAndConflictCheckPassed": true,
+    "taskOwnedSyntheticContainersRemoved": 3,
+    "productionActions": 0,
+    "gitCommitsOrPushes": 0,
+    "openspecStrictValidationPassed": true,
+    "openspecChange": "isolate-cn-realtime-shared-blocking"
+  }
+}

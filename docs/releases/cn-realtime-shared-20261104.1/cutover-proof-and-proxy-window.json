@@ -1,0 +1,42 @@
+{
+  "readOnly": true,
+  "backendId": "7849b16dc46c45c97e70b62d40391a7458c1819f37bdad58f873159936571e8d",
+  "backendImage": "sha256:dc8f3bb3aa95b6615686226c95612d7b3973860d2b2da0dd391a316134266b9b",
+  "observedAt": "2026-11-04T03:37:53.984000+08:00",
+  "sinceStartedAt": "2026-11-03T19:33:26.429918438Z",
+  "deployedAtMs": 1793734428380,
+  "rawGateHashes": {
+    "last-idle-gates.json": "fe54fa8a3fa92b522abbf28c985a4321910036209a024cb2c36b3c87bd390fad",
+    "last-entity-idle-gate.json": "3915697bd7c7a6a27fd9d3d422d40d7b409f0241d0961474966c6fbde0cac9a2"
+  },
+  "authorizationProofHashesMatch": true,
+  "progressBackend": {
+    "kind": "new",
+    "id": "7849b16dc46c45c97e70b62d40391a7458c1819f37bdad58f873159936571e8d",
+    "image": "sha256:dc8f3bb3aa95b6615686226c95612d7b3973860d2b2da0dd391a316134266b9b"
+  },
+  "deployedImages": {
+    "backend": "sha256:dc8f3bb3aa95b6615686226c95612d7b3973860d2b2da0dd391a316134266b9b"
+  },
+  "web5xx": {
+    "parsedCount": 17,
+    "unparsedCount": 0,
+    "statuses": {
+      "502": 17
+    },
+    "routeCategories": {
+      "realtime_control": 17
+    },
+    "firstAt": "2026-11-04T03:33:27+08:00",
+    "lastAt": "2026-11-04T03:33:30+08:00",
+    "firstSecondsAfterBackendStart": 0.571,
+    "lastSecondsAfterBackendStart": 3.571,
+    "beforeDeploymentVerificationCompleted": 17,
+    "afterDeploymentVerificationCompleted": 0,
+    "last60Seconds": 0,
+    "nginxErrorLevelEntries": 17
+  },
+  "rawLogsOrPathsQueriesOrUserIdentifiersExported": false,
+  "healthyAtEnd": true,
+  "restartCountAtEnd": 0
+}

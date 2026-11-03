@@ -1,0 +1,65 @@
+{
+  "reviewer": "device_status_review",
+  "result": "passed",
+  "unresolvedFindings": [],
+  "controllerSha256": "19f3dab26b92185356600047c45b171705cc6c7d70f8b03b38c7dca6620be29d",
+  "probeTemplateSha256": "9459f81fb3b039a2fbcb24288bb3a5b6ab26fd8fcadd30b365a0730ac15a9bac",
+  "injectedProbeSha256": "7e47259be0d9627aef3f0bf42520ddf79146e3e33262805c22ee2d5329b7442f",
+  "candidateImage": "sha256:5efba4abea9b12e1af2b9d2c6e8f6edb2c205afed93f4f9fc9ba862e96499229",
+  "rollbackImage": "sha256:15824dc57cdaaa817d171f11e3750cc84919750259a595c4741b042bbb2129ab",
+  "independentTests": {
+    "newController": 29,
+    "probe": 14,
+    "priorMockController": 37,
+    "priorStateController": 28,
+    "total": 108,
+    "failed": 0
+  },
+  "baselineRuntimeInputs": 232,
+  "candidateRuntimeInputs": 233,
+  "businessDeltaInputs": 4,
+  "nonTargetInputsUnchanged": 229,
+  "buildOverlayFiles": 5,
+  "onlyHotDownloadManifestDiffersBetweenRunningBaselineAndBaseImage": true,
+  "hotManifestSha256": "d7b106a6497bce873d67c2c81b045fab520aaa7382296978a8f6a04056e10927",
+  "allApprovedSourceHashesMatchTestedCandidateAndBuildOverlay": true,
+  "actualImageProbeArtifactMatchesInjectedTemplateAndFreshBaseline": true,
+  "actualImageProbeChecks": {
+    "compiledPython": 157,
+    "dependencies": 44,
+    "python": "3.13.15",
+    "settingsSha256": "4ba6de09bcb1151c047121df981d087be4b186ccb332ea17e5426a205c8e94d9",
+    "schemaSha256": "dd7da7440bf0177b590396cf09253219eac1b6bf786e98f9fd0ce4bcf8eee272",
+    "httpPaths": 203,
+    "syntheticStatusCases": 11,
+    "nonblockingCases": 2,
+    "workers": 3,
+    "allWorkersReleased": true,
+    "networkRequests": 0,
+    "databaseOperations": 0,
+    "fileWrites": 0,
+    "lifespanEntered": false
+  },
+  "protectedWorkContracts": {
+    "workGates": 7,
+    "tcpPort": 8000,
+    "nonTargetContainers": 7,
+    "financialHistoryAnchorMs": 1792600214792,
+    "originalProcessAnchorSeparatelyFrozen": true,
+    "busyGateBlocksWithoutEndingUsers": true,
+    "unknownAndDriftStop": true,
+    "knownRecoveryRepeatsOwnershipAndAllWorkGates": true,
+    "alreadyDeployedOnlyVerifies": true
+  },
+  "reviewedLocalWrappers": [
+    "build_backend_candidate.py",
+    "run_candidate_probe.py",
+    "prepare_release.py",
+    "release_action.py"
+  ],
+  "limits": [
+    "Reviewer performed local read-only review and synthetic tests; did not connect to production or execute controller actions.",
+    "Actual-image results are independently matched artifacts from the root-run server probe, not a second reviewer-run server probe.",
+    "Deployment still requires final repeated live work gates; short checks do not establish a production P95 improvement."
+  ]
+}

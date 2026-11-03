@@ -1,5 +1,6 @@
 """Legacy entry points must reject mock mode before charging or doing AI work."""
-from types import SimpleNamespace
+from types import SimpleNamespace, MethodType
+import threading
 from unittest.mock import Mock
 
 import pytest
@@ -83,6 +84,12 @@ def test_old_commands_fail_before_any_side_effect(method, kwargs, is_generator):
     obj = Mock()
     obj.get_session.return_value = session
     obj.session_service.get_session.return_value = session
+    if method is RealtimeSpeechService.control_capture:
+        # This unbound-method fixture must execute the real extracted body;
+        # an unconstrained Mock would fabricate a successful _control_capture.
+        obj.settings = SimpleNamespace(product_edition="cn")
+        obj._acquire_session_cleanup_lock.return_value = threading.Lock()
+        obj._control_capture = MethodType(RealtimeSpeechService._control_capture, obj)
     with pytest.raises(DomainRequestError) as caught:
         result = method(obj, user_id="synthetic", session_id="mock-synthetic", **kwargs)
         if is_generator:
@@ -93,3 +100,8 @@ def test_old_commands_fail_before_any_side_effect(method, kwargs, is_generator):
     obj._reserve_realtime_minute.assert_not_called()
     obj.repository.save_session.assert_not_called()
     obj.repository.save_task.assert_not_called()
+    if method is RealtimeSpeechService.control_capture:
+        obj._settle_realtime_minute.assert_not_called()
+        obj.asr_gateway.close_session.assert_not_called()
+        obj._save_event.assert_not_called()
+        obj._release_session_cleanup_lock.assert_called_once()

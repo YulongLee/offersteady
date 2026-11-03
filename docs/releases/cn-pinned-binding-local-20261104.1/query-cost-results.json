@@ -1,0 +1,51 @@
+{
+  "pinned_read_history_1": {
+    "historyBindings": 1,
+    "commands": {
+      "HGET": 2,
+      "EVALSHA": 1
+    },
+    "networkCalls": 3,
+    "bindingDecodes": 1,
+    "dbControlReads": 1,
+    "localElapsedMs": 0.336,
+    "productionP95Measured": false
+  },
+  "pinned_read_history_1191": {
+    "historyBindings": 1191,
+    "commands": {
+      "HGET": 2,
+      "EVALSHA": 1
+    },
+    "networkCalls": 3,
+    "bindingDecodes": 1,
+    "dbControlReads": 1,
+    "localElapsedMs": 0.34,
+    "productionP95Measured": false
+  },
+  "pinned_read_history_10000": {
+    "historyBindings": 10000,
+    "commands": {
+      "HGET": 2,
+      "EVALSHA": 1
+    },
+    "networkCalls": 3,
+    "bindingDecodes": 1,
+    "dbControlReads": 1,
+    "localElapsedMs": 0.326,
+    "productionP95Measured": false
+  },
+  "twelve_mixed_pollers": {
+    "pollers": 12,
+    "liveSessions": 1,
+    "idleOrEndedPollers": 11,
+    "historyBindings": 10000,
+    "commands": {
+      "HGET": 24,
+      "EVALSHA": 15
+    },
+    "networkCalls": 39,
+    "localElapsedMs": 8.715,
+    "productionP95Measured": false
+  }
+}

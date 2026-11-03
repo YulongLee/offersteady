@@ -1,0 +1,14 @@
+{
+  "apps/backend/app/main.py": "1d61a2b10a5bc4572bbe676e40954419076cc08ee234fb354e61f1d28bae85cd",
+  "apps/backend/app/modules/realtime_speech.py": "ec250621dd83a98b93a1ee72155dc083ad122344ef80bf9f79753495a3c16335",
+  "apps/backend/app/modules/session.py": "9d71143cdc330afa92bbfe353eba4c0b4165949e3b56cc739296c0855ea14d03",
+  "apps/backend/app/platform/cn_realtime_lifespan.py": "54b7709fb7a5dff7733cd48257bcd04e1cd789c49818d1d6bebb0b210393f42d",
+  "apps/backend/app/platform/cn_realtime_loop_monitor.py": "b464a83bcc35744d80ef76cf6a2c2760df0590b207c85039c9ff6885ab5c61d5",
+  "apps/backend/app/services/cn_realtime_entity_state.py": "23a7ba15c30ac651a2859b1391ca563b8799f85f1e73145cc546d8833c7b8f05",
+  "apps/backend/app/services/cn_realtime_io_executor.py": "da4b409736d1f2b4bee48442ec34037046797442ea65751fe738e756a489b8d2",
+  "apps/backend/app/services/knowledge_retrieval.py": "851b7bac82d6feee3ec4e37eda60bbbebd9b7c0c85489b7b77cd838d98a50e5b",
+  "apps/backend/app/services/postgres_material_persistence.py": "6bc75c3286d2bc9747c8178404818c6ec3b67681a0e3db5f02d457786d384601",
+  "apps/backend/app/services/realtime_speech_service.py": "d87b760d4c5fef13e3670b2e1d3d0978c7fd829288632b39ae1af56c669530ca",
+  "apps/backend/app/services/redis_realtime_speech_repository.py": "cf94a640779745788791bf3e3e18855b4713993497cccc7d442def91ea1d084c",
+  "apps/backend/app/services/session_service.py": "34280a60937b8755224ddc0fa1fe084ff6f6ffb9ee091a0c82700c7e49f4aa36"
+}

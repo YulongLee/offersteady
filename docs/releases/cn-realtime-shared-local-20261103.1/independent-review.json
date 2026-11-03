@@ -1,0 +1,122 @@
+{
+  "status": "passed",
+  "candidateInputsVerified": 237,
+  "shutdownCancelledWaitersAndLateCompensation": {
+    "during": {
+      "ingress": {
+        "submitted": 3,
+        "completed": 3,
+        "active": 0,
+        "pending": 0,
+        "waiting": 0,
+        "maxActive": 3,
+        "maxPending": 3,
+        "saturated": 0,
+        "configuredWorkers": 3,
+        "configuredQueueMax": 0,
+        "closed": 1
+      },
+      "lifecycle": {
+        "submitted": 1,
+        "completed": 0,
+        "active": 1,
+        "pending": 1,
+        "waiting": 3,
+        "maxActive": 1,
+        "maxPending": 1,
+        "saturated": 6,
+        "configuredWorkers": 1,
+        "configuredQueueMax": 0,
+        "closed": 1
+      },
+      "cleanupFailed": 0,
+      "outstanding": 4,
+      "closing": 1,
+      "poolsClosed": 0
+    },
+    "after": {
+      "ingress": {
+        "submitted": 3,
+        "completed": 3,
+        "active": 0,
+        "pending": 0,
+        "waiting": 0,
+        "maxActive": 3,
+        "maxPending": 3,
+        "saturated": 0,
+        "configuredWorkers": 3,
+        "configuredQueueMax": 0,
+        "closed": 1
+      },
+      "lifecycle": {
+        "submitted": 4,
+        "completed": 4,
+        "active": 0,
+        "pending": 0,
+        "waiting": 0,
+        "maxActive": 1,
+        "maxPending": 1,
+        "saturated": 6,
+        "configuredWorkers": 1,
+        "configuredQueueMax": 0,
+        "closed": 1
+      },
+      "cleanupFailed": 0,
+      "outstanding": 0,
+      "closing": 1,
+      "poolsClosed": 1
+    },
+    "lateOwnedResourcesCleanedExactlyOnce": [
+      0,
+      1,
+      2
+    ]
+  },
+  "workerCancelledError": {
+    "workerCalls": 1,
+    "cancelPropagatedWithoutLoop": true
+  },
+  "redis": {
+    "canonicalStalePersisted": true,
+    "emptyArrayAndFloatPreserved": true,
+    "retiredFenceKeptWhileOtherSessionPreservesSharedBinding": true,
+    "canonicalRemainsStaleEvenIfFenceMissing": true,
+    "newBindingNamespace": "offersteady:realtime:runtime:v2:entities:cn-bindings:v1",
+    "legacyV1BindingsAndIndexesByteEquivalent": true,
+    "missingNewIndexesRepaired": true,
+    "productionAccess": false
+  },
+  "sourceHashes": {
+    "apps/backend/app/services/cn_realtime_io_executor.py": "da4b409736d1f2b4bee48442ec34037046797442ea65751fe738e756a489b8d2",
+    "apps/backend/app/services/cn_realtime_entity_state.py": "b5a356301946539644a140233f7b3d17de6fed2587d34050867200104aa6e754",
+    "apps/backend/app/services/redis_realtime_speech_repository.py": "0a341cb57b336df91979dc7d2d386657404fa3bcf13e083d4747c65449c9ae7e",
+    "apps/backend/app/platform/cn_realtime_lifespan.py": "572bf67ae1043604465d19df0574b7b5bcb04daaaeadc46f334598a61d8defc9",
+    "apps/backend/app/platform/cn_realtime_loop_monitor.py": "b464a83bcc35744d80ef76cf6a2c2760df0590b207c85039c9ff6885ab5c61d5",
+    "apps/backend/app/main.py": "309809b0919ffa1289922d17b17a850e75f96104d1508ef9e0253cc2b9cb7286"
+  },
+  "builderSha256": "346b02e5addb8538e1118bee90309c40e5dd9082eb034ca7a42ceea79e45095f",
+  "staticReview": {
+    "lifespan": "CN-only injection; cancels monitor and shuts admission even if base startup/teardown fails; Global delegates unchanged.",
+    "monitor": "Fixed 512 default/4096 maximum samples, numeric labels, monotonic clock, failure-isolated logging, no user contents.",
+    "builder": "Pinned 233 runtime input hashes and image, explicit 12-file allowlist, original non-target bytes/modes, rejects existing/symlink outputs; no app startup/environment load/network."
+  },
+  "openFindings": [],
+  "productionAccess": false,
+  "limitations": [
+    "Synthetic mechanism checks do not quantify production API P95 improvement.",
+    "Legacy writer mixing is forbidden by the approved specification; old binary live-state synchronization is not claimed.",
+    "Private test metadata loss is injected only after no legacy snapshot is present."
+  ],
+  "commands": [
+    "/Users/liyulong/liyulong/1_projects/offersteady/.venv/bin/python artifacts/cn-realtime-shared-local-20261103/material-reads/final_independent_probe.py",
+    "PYTHONPATH=artifacts/cn-realtime-shared-local-20261103/candidate-final/apps/backend OFFERSTEADY_ENVIRONMENT=test OFFERSTEADY_DATABASE_URL= OFFERSTEADY_REDIS_URL= /Users/liyulong/liyulong/1_projects/offersteady/.venv/bin/python -m pytest apps/backend/tests/test_cn_realtime_io_executor.py apps/backend/tests/test_cn_realtime_io_routes.py apps/backend/tests/test_cn_realtime_entity_state.py apps/backend/tests/test_cn_realtime_lifespan.py apps/backend/tests/test_cn_realtime_loop_monitor.py apps/backend/tests/test_cn_realtime_shared_candidate.py -q --junitxml=artifacts/cn-realtime-shared-local-20261103/material-reads/final-independent-tests.xml"
+  ],
+  "independentTests": {
+    "passed": 81,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "runtimeSeconds": 2.32,
+    "junit": "final-independent-tests.xml"
+  }
+}

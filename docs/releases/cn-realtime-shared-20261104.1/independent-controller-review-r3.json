@@ -1,0 +1,41 @@
+{
+  "reviewedAt": "2026-11-03T19:30:51.385932+00:00",
+  "revision": "r3: explicitly authorized original-baseline single residual TCP connection exception",
+  "sourceSha256": {
+    "scripts/release_cn_realtime_shared.py": "3559e8924a773929517583baea1ffeb43c32017795989edc48526f96c5a07dee",
+    "scripts/test_release_cn_realtime_shared.py": "87628db61b14017a7deab962288b8ee5df2492e1627ecfecd765dfdd4de6f9a1",
+    "scripts/release_support/cn_realtime_shared_20261104/cn_entity_idle_gate.py": "bea612f20e230f363bef50d71e4f979f1c89f6afff5dadd865eabd3e1bcf601d"
+  },
+  "previousReview": "independent-controller-review-r2.json",
+  "tests": {
+    "command": "PYTHONPATH=apps/backend /Users/liyulong/liyulong/1_projects/offersteady/.venv/bin/python -m pytest scripts/test_release_cn_realtime_shared.py scripts/release_support/cn_realtime_shared_20261104/test_cn_entity_idle_gate.py -q --junitxml=artifacts/cn-realtime-shared-20261104-release/controller-entity-tests-r3.xml",
+    "passed": 97,
+    "subtestsPassed": 132,
+    "failed": 0,
+    "skipped": 0,
+    "entityCasesIncluded": 41
+  },
+  "reviewedExceptionBoundary": [
+    "Original seven business gates and standalone new-entity gate must pass in the same process before authorization is created; each attempted idle check first discards any older authorization",
+    "Authorization contains monotonic time and hashes of both actual gate output files; acceptance is limited to ten seconds and authorization is consumed at TCP entry, including failure paths",
+    "Original reviewed TCP implementation still validates exact owner, process identity, host namespace, response shape, strict integer counts and freshness before its normal busy result can be intercepted",
+    "Only exact integer one residual connection with empty progress, non-recovery mode, original baseline id/image and unchanged original process/container signature may be accepted",
+    "All original business gates and new candidate claim/active/unknown/read failures continue to block; TCP count greater than one or unknown/read/namespace/freshness/boolean/foreign-owner failures never receive the exception",
+    "New candidate and every recovery/rollback retain the original zero-TCP rule",
+    "M.tcp_gate is explicitly bound to the wrapper while the captured original implementation is called exactly once, avoiding an unwrapped M.switch cutover or recursive wrapper"
+  ],
+  "realFunctionSyntheticCoverage": [
+    "All seven original gate readers normalized and evaluated using synthetic responses, including live interviews, active mock, live page lease, unfinished chat and connected publisher rejection",
+    "New entity validate rejects pending claim, active binding and read failure, invalidating any preceding successful proof",
+    "Original TCP validation runs with synthetic Docker inspect, process identity and namespace data, testing one-connection acceptance and every listed denial",
+    "Positive exception audit is written only for the authorized original baseline; old files alone, proof expiry, tampered evidence, proof reuse and post-validation owner changes cannot authorize"
+  ],
+  "blockingFindingsRemaining": 0,
+  "reviewerProductionAccess": false,
+  "limits": [
+    "No SSH, Docker, network, database, real user or model operations were performed by reviewer tests",
+    "Only controller policy and synthetic release tests changed; runtime and approved candidate application inputs remain untouched",
+    "Actual production prepare/preflight/final gate results remain the root agent responsibility",
+    "Read-only gates are current observations; this narrow explicit user exception does not prove that a residual TCP connection is harmless in every deployment"
+  ]
+}

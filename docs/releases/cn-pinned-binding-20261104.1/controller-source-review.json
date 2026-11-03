@@ -1,0 +1,20 @@
+{
+  "reviewer": "root local source and evidence audit; no independent subagent review this release",
+  "controllerFunctionsChanged": [
+    "check_candidate_scope",
+    "idle_gates",
+    "tcp_gate"
+  ],
+  "onlyDeltaScopeAndStricterGatesChanged": true,
+  "otherReviewedLifecycleFunctionsAstIdentical": true,
+  "strictZeroTcpAllPaths": true,
+  "runtimeInputs": 237,
+  "changedInputs": 3,
+  "unchangedInputs": 234,
+  "fixedOriginalDc8Rollback": true,
+  "sourceAndSupportHashesFrozen": true,
+  "applicationCodeUnchangedSinceLocal986Regression": true,
+  "actualImageProbePassed": true,
+  "probeRedisLuaScope": "Actual-image transport is scripted; real Lua scale execution remains local disposable Redis evidence",
+  "productionDataExported": false
+}

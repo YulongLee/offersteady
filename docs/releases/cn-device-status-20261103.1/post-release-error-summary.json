@@ -1,0 +1,27 @@
+{
+  "sinceStartedAt": "2026-11-02T18:14:00.285020503Z",
+  "observedDurationSeconds": 127.79,
+  "backendId": "035642d58f7eb9ad16f46a830d153130b1d2d6e7851401b0ec620cdaeed101bf",
+  "backendImage": "sha256:5efba4abea9b12e1af2b9d2c6e8f6edb2c205afed93f4f9fc9ba862e96499229",
+  "records": {
+    "compose-backend-1": {
+      "lines": 278,
+      "errorOrCritical": 0,
+      "traceback": 0,
+      "http5xx": 0,
+      "streamFailed": 0,
+      "deviceStatusTimingSamples": 0
+    },
+    "compose-web-1": {
+      "lines": 166,
+      "errorOrCritical": 0,
+      "traceback": 0,
+      "http5xx": 7,
+      "streamFailed": 0,
+      "deviceStatusTimingSamples": 0
+    }
+  },
+  "rawLogsExported": false,
+  "productionLoadTest": false,
+  "realModelRequestsCreated": 0
+}

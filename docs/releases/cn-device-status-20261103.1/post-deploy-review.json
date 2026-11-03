@@ -1,0 +1,64 @@
+{
+  "reviewer": "device_status_review",
+  "result": "passed",
+  "unresolvedFindings": [],
+  "releaseId": "cn-device-status-20261103.1",
+  "backendId": "035642d58f7eb9ad16f46a830d153130b1d2d6e7851401b0ec620cdaeed101bf",
+  "backendImage": "sha256:5efba4abea9b12e1af2b9d2c6e8f6edb2c205afed93f4f9fc9ba862e96499229",
+  "startedAt": "2026-11-02T18:14:00.285020503Z",
+  "healthy": true,
+  "restartCount": 0,
+  "onlyBackendDeployed": true,
+  "runtimeInputs": 233,
+  "settingsCount": 344,
+  "settingsUnchanged": true,
+  "schemaPaths": 203,
+  "schemaSha256": "dd7da7440bf0177b590396cf09253219eac1b6bf786e98f9fd0ce4bcf8eee272",
+  "settingsSha256": "4ba6de09bcb1151c047121df981d087be4b186ccb332ea17e5426a205c8e94d9",
+  "dependencies": 44,
+  "python": "3.13.15",
+  "poolEnabled": false,
+  "downloadManifestSha256": "d7b106a6497bce873d67c2c81b045fab520aaa7382296978a8f6a04056e10927",
+  "rollbackPreservesHotManifest": true,
+  "nonTargetSignaturesExactIncludingLifecycleAndConfig": true,
+  "nonTargetContainers": 7,
+  "webFilesUnchanged": 366,
+  "protectedGateFieldCounts": {
+    "legacy-gates/idle_gate.py": 5,
+    "legacy-gates/check-idle.py": 4,
+    "legacy-gates/readiness-idle.py": 2,
+    "extra_idle_gate.py": 17,
+    "active_work_gate.py": 15,
+    "resume_optimizer_idle_gate.py": 6,
+    "financial_idle_gate.py": 8
+  },
+  "allProtectedCountsZero": true,
+  "nonzeroInformationalCounts": {
+    "legacy-gates/idle_gate.py": {},
+    "legacy-gates/check-idle.py": {},
+    "legacy-gates/readiness-idle.py": {},
+    "extra_idle_gate.py": {},
+    "active_work_gate.py": {
+      "ignoredLegacyFailedQueuedTasks": 7
+    },
+    "resume_optimizer_idle_gate.py": {},
+    "financial_idle_gate.py": {
+      "historicalOrphanAnswerReservations": 22
+    }
+  },
+  "establishedBackendPort8000": 0,
+  "publicRoutesPassed": 16,
+  "publicHealth": 200,
+  "controllerSha256": "19f3dab26b92185356600047c45b171705cc6c7d70f8b03b38c7dca6620be29d",
+  "noUserWorkEnded": true,
+  "gitCommittedOrPushed": false,
+  "evidenceSha256": {
+    "production-verification.json": "e0d37afb49ff20740a13180e8a9af6ab4efae07c06c861e86afcb739f07e7ceb",
+    "input.json": "1c9772fa0f2fd47e578c8ae9b48000c2ed4b3fc165346a04450bbcec8676efe2",
+    "candidate-probe-result.json": "4cd17024565cda27e5c5489da8af828c7d3a6295c2dcb05c0bc3ca02266609d0"
+  },
+  "limits": [
+    "Independent review of local collected production evidence; reviewer performed no production connection, restart or deployment.",
+    "Long-term P95 and real-client experience require subsequent normal user traffic; short verification does not establish latency improvement."
+  ]
+}

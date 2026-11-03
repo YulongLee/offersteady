@@ -1,0 +1,42 @@
+{
+  "releaseId": "cn-pinned-binding-20261104.1",
+  "status": "deployed_verified",
+  "backend": {
+    "configSha256": "eca22bc33e55da37ca27ccfbb97ec35cd9c4a449d718887807aadc757436de01",
+    "health": "healthy",
+    "hostConfigSha256": "bfdc55fd92e3a881b347ead0c040909b5a851d13a66268fe417da8273d4dc338",
+    "id": "766377a1893425c2d0ce2e20de35c83e29c5cf4b96b1bacf6296e5270bfcdc3c",
+    "image": "sha256:a1e6c069511c7ea9eefa38cd4fe662400de2d50a19a3a70f9528215ebf0f3cc9",
+    "imageReference": "sha256:a1e6c069511c7ea9eefa38cd4fe662400de2d50a19a3a70f9528215ebf0f3cc9",
+    "mountsSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "networkSettingsSha256": "bf9d1a47916253002e5d9c0f365cfda656169f5306e02a20225b59daa9236da5",
+    "networks": [
+      "compose_default"
+    ],
+    "restartCount": 0,
+    "running": true,
+    "startedAt": "2026-11-03T20:25:36.091960008Z"
+  },
+  "runtimeInputs": 237,
+  "unchangedInputs": 234,
+  "controllerSha256": "6412b38a65d2d6e05a227f2e2287a89537057ea6cef1613a5eff47e6ed56d236",
+  "strictTcpZero": true,
+  "sevenAndEntityWorkGatesPassed": true,
+  "naturalRoute": {
+    "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+    "count": 159,
+    "p50Ms": 25.36,
+    "p95Ms": 44.04,
+    "maxMs": 90.77,
+    "atLeast500Ms": 0,
+    "atLeast1000Ms": 0
+  },
+  "naturalObservationSeconds": 161.77,
+  "stableApiP95Ms": 43.64,
+  "latestCapacityApiP95Ms": 46.26,
+  "startupProxy502": 10,
+  "proxy5xxAfterVerified": 0,
+  "activeInterviewPeakImprovementMeasured": false,
+  "nonTargetChanges": 0,
+  "gitOperations": 0
+}

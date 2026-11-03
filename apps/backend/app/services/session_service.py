@@ -256,7 +256,18 @@ class SessionService:
             raise DomainRequestError("session", "get", "面试会话不存在。", 404)
         if session.owner_user_id != user_id:
             raise DomainRequestError("session", "get", "不能查看其他用户的面试会话。", 403)
-        refreshed = self._refresh_bound_document_activity(session)
+        document_records = None
+        if self.settings.product_edition == "cn" and session.session_mode != "mock":
+            batch_read = getattr(self.document_repository, "get_by_ids", None)
+            document_ids = list(dict.fromkeys(
+                bound.document_id for bound in session.material_binding.bound_documents
+            ))
+            if document_ids and callable(batch_read):
+                current = batch_read(document_ids)
+                # A miss is authoritative for this statement. Do not reread it
+                # later in this operation and revive a deleted/replaced source.
+                document_records = {document_id: current.get(document_id) for document_id in document_ids}
+        refreshed = self._refresh_bound_document_activity(session, document_records=document_records)
         if refreshed != session:
             self.repository.save_session(refreshed)
         return refreshed

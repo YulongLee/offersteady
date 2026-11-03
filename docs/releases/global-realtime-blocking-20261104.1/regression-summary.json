@@ -1,0 +1,26 @@
+{
+  "parity": {
+    "passed": true,
+    "tests": 149,
+    "failures": 0,
+    "skipped": 0
+  },
+  "business": {
+    "passed": true,
+    "tests": 204,
+    "failures": 0,
+    "skipped": 0
+  },
+  "extended": {
+    "passed": true,
+    "tests": 114,
+    "failures": 0,
+    "skipped": 0
+  },
+  "controller": {
+    "tests": 154,
+    "errors": 0,
+    "failures": 0,
+    "skipped": 0
+  }
+}

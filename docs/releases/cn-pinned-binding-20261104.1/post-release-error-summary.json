@@ -1,0 +1,98 @@
+{
+  "sinceStartedAt": "2026-11-03T20:25:36.091960008Z",
+  "observedDurationSeconds": 269.96,
+  "backendId": "766377a1893425c2d0ce2e20de35c83e29c5cf4b96b1bacf6296e5270bfcdc3c",
+  "backendImage": "sha256:a1e6c069511c7ea9eefa38cd4fe662400de2d50a19a3a70f9528215ebf0f3cc9",
+  "healthyAtObservationEnd": true,
+  "restartCountAtObservationEnd": 0,
+  "records": {
+    "compose-backend-1": {
+      "lines": 951,
+      "errorOrCritical": 0,
+      "traceback": 0,
+      "http5xx": 0,
+      "streamFailed": 0,
+      "deviceStatusTimingSamples": 0,
+      "sharedLoopTimingSamples": 8,
+      "sharedIoTimingSamples": 0,
+      "sharedCleanupWarnings": 0,
+      "lastBoundedLoopSummaries": [
+        {
+          "schema": 1,
+          "sampleCount": 480,
+          "observations": 480,
+          "capacity": 512,
+          "intervalMs": 250.0,
+          "p50Ms": 0.907,
+          "p95Ms": 1.992,
+          "maxMs": 1464.537,
+          "over50Ms": 2,
+          "over250Ms": 1
+        },
+        {
+          "schema": 1,
+          "sampleCount": 512,
+          "observations": 600,
+          "capacity": 512,
+          "intervalMs": 250.0,
+          "p50Ms": 0.922,
+          "p95Ms": 1.985,
+          "maxMs": 2.392,
+          "over50Ms": 0,
+          "over250Ms": 0
+        },
+        {
+          "schema": 1,
+          "sampleCount": 512,
+          "observations": 720,
+          "capacity": 512,
+          "intervalMs": 250.0,
+          "p50Ms": 0.924,
+          "p95Ms": 1.954,
+          "maxMs": 2.254,
+          "over50Ms": 0,
+          "over250Ms": 0
+        },
+        {
+          "schema": 1,
+          "sampleCount": 512,
+          "observations": 840,
+          "capacity": 512,
+          "intervalMs": 250.0,
+          "p50Ms": 0.935,
+          "p95Ms": 1.975,
+          "maxMs": 2.488,
+          "over50Ms": 0,
+          "over250Ms": 0
+        },
+        {
+          "schema": 1,
+          "sampleCount": 512,
+          "observations": 960,
+          "capacity": 512,
+          "intervalMs": 250.0,
+          "p50Ms": 0.928,
+          "p95Ms": 1.975,
+          "maxMs": 2.488,
+          "over50Ms": 0,
+          "over250Ms": 0
+        }
+      ]
+    },
+    "compose-web-1": {
+      "lines": 508,
+      "errorOrCritical": 0,
+      "traceback": 0,
+      "http5xx": 10,
+      "streamFailed": 0,
+      "deviceStatusTimingSamples": 0,
+      "sharedLoopTimingSamples": 0,
+      "sharedIoTimingSamples": 0,
+      "sharedCleanupWarnings": 0,
+      "lastBoundedLoopSummaries": []
+    }
+  },
+  "rawLogsExported": false,
+  "productionLoadTest": false,
+  "realModelRequestsCreated": 0
+}

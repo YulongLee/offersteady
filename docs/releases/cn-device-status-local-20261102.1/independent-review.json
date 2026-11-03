@@ -1,0 +1,63 @@
+{
+  "reviewer": "device_status_review",
+  "result": "passed",
+  "unresolvedFindings": [],
+  "independentNewRegressionTests": {
+    "passed": 92,
+    "failed": 0,
+    "warnings": [
+      "Existing Starlette httpx testclient deprecation warning."
+    ]
+  },
+  "baselineImage": "sha256:c62df7ddbb92627de83c7c2733574c862678b120a11d051b346b9d13abfcf58a",
+  "sealedArchiveAndInventoryHashes": true,
+  "baselineInputs": 232,
+  "candidateInputs": 233,
+  "changedOrAdded": [
+    "apps/backend/app/modules/realtime_speech.py",
+    "apps/backend/app/platform/cn_device_status_timing.py",
+    "apps/backend/app/services/postgres_interview_session_repository.py",
+    "apps/backend/app/services/realtime_speech_service.py"
+  ],
+  "unchangedInputs": 229,
+  "allCandidateHashesRechecked": true,
+  "candidateDeltaMatchesFrozenSource": true,
+  "archiveFileModesPreserved": true,
+  "localGeneratedPytestCacheFiles": 4,
+  "fullOpenapiMatchesBothBaselineAndSealedProduction": true,
+  "pathCount": 203,
+  "settingsSha256Equal": true,
+  "settingsCount": 344,
+  "poolEnabled": false,
+  "schemaProbeAttempts": {
+    "network": 0,
+    "threads": 0
+  },
+  "unchangedAuthorizationAndEventAst": {
+    "get_desktop_active_binding": true,
+    "_binding_is_active": true,
+    "get_desktop_capture_binding": true,
+    "get_desktop_active_binding_by_code": true,
+    "_require_active_desktop_binding": true,
+    "_save_event": true,
+    "sourceHealthSanitization": true,
+    "eventPayload": true,
+    "responseConversion": true
+  },
+  "limits": [
+    "Local candidate only; no production operations performed by reviewer.",
+    "No physical audio devices, live models, real users, production load, or dedicated PostgreSQL database exercised.",
+    "Local mechanism and compatibility checks do not predict production P95 reduction."
+  ],
+  "candidatePath": "artifacts/cn-device-status-local-20261102/candidate-final",
+  "finalTraceConstructionFailureFixReviewed": true,
+  "finalCandidateChangeFromPrevious": [
+    "apps/backend/app/platform/cn_device_status_timing.py"
+  ],
+  "finalCandidateAll233HashesRechecked": true,
+  "independentFinalSchemaProbe": "artifacts/cn-device-status-local-20261102/probes/independent-final/result.json",
+  "resolvedFindings": [
+    "Sample INFO logger inherits configured offersteady.backend handlers and level.",
+    "Failed trace creation now still clears inherited fallback context; new regression confirms no outer sample pollution."
+  ]
+}

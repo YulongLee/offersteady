@@ -23,6 +23,8 @@ from app.ports.realtime_speech import (
     WebSessionHeartbeatRecord,
 )
 from app.services.realtime_speech_repository import InMemoryRealtimeSpeechRepository
+from app.services.cn_realtime_entity_state import CNRealtimeEntityState
+from app.core.errors import DomainRequestError
 
 
 T = TypeVar("T")
@@ -67,6 +69,12 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         self._event_retention = max(100, settings.realtime_event_retention)
         self._runtime_ttl_seconds = max(300, settings.realtime_runtime_ttl_seconds)
         self._settings = settings
+        self._cn_controls = (CNRealtimeEntityState(self._redis, base=self._snapshot_key, ttl=self._runtime_ttl_seconds, retention=self._event_retention)
+                             if settings.product_edition == "cn" else None)
+        if self._cn_controls is not None:
+            self._binding_entity_key = self._cn_controls.keys[2]
+            self._latest_binding_device_key = self._cn_controls.keys[3]
+            self._latest_binding_code_key = self._cn_controls.keys[4]
         self._event_diagnostic_lock = threading.Lock()
         self._event_diagnostics = {
             "xaddCount": 0,
@@ -262,95 +270,98 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
             pipeline.execute()
             self._record_storage_diagnostic("entitySeedCount", value=len(self.desktop_devices_by_id))
 
-        raw_bindings = self._redis.hgetall(self._binding_entity_key)
-        if raw_bindings:
-            newest_by_device: dict[str, SessionDesktopBindingRecord] = {}
-            newest_by_code: dict[str, SessionDesktopBindingRecord] = {}
-            for raw in raw_bindings.values():
-                record = SessionDesktopBindingRecord(**json.loads(raw))
-                key = (record.owner_user_id, record.session_id)
-                current = self.session_bindings.get(key)
-                if current is None or (record.binding_generation, record.bound_at_ms) >= (
-                    current.binding_generation,
-                    current.bound_at_ms,
-                ):
-                    self.session_bindings[key] = record
-                device_field = self._binding_device_field(
-                    device_id=record.device_id,
-                    manual_code=record.manual_code,
-                )
-                current_device = newest_by_device.get(device_field)
-                if current_device is None or (record.binding_generation, record.bound_at_ms) >= (
-                    current_device.binding_generation,
-                    current_device.bound_at_ms,
-                ):
-                    newest_by_device[device_field] = record
-                current_code = newest_by_code.get(record.manual_code)
-                if current_code is None or (record.binding_generation, record.bound_at_ms) >= (
-                    current_code.binding_generation,
-                    current_code.bound_at_ms,
-                ):
-                    newest_by_code[record.manual_code] = record
-            pipeline = self._redis.pipeline()
-            for field, record in newest_by_device.items():
-                pipeline.hset(
-                    self._latest_binding_device_key,
-                    field,
-                    json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":")),
-                )
-            for code, record in newest_by_code.items():
-                pipeline.hset(
-                    self._latest_binding_code_key,
-                    code,
-                    json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":")),
-                )
-            pipeline.expire(self._binding_entity_key, self._runtime_ttl_seconds)
-            pipeline.expire(self._latest_binding_device_key, self._runtime_ttl_seconds)
-            pipeline.expire(self._latest_binding_code_key, self._runtime_ttl_seconds)
-            pipeline.execute()
-        elif self.session_bindings:
-            pipeline = self._redis.pipeline()
-            newest_by_device: dict[str, SessionDesktopBindingRecord] = {}
-            newest_by_code: dict[str, SessionDesktopBindingRecord] = {}
-            for record in self.session_bindings.values():
-                encoded = json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":"))
-                pipeline.hset(
-                    self._binding_entity_key,
-                    self._binding_field(user_id=record.owner_user_id, session_id=record.session_id),
-                    encoded,
-                )
-                device_field = self._binding_device_field(
-                    device_id=record.device_id,
-                    manual_code=record.manual_code,
-                )
-                current_device = newest_by_device.get(device_field)
-                if current_device is None or (record.binding_generation, record.bound_at_ms) >= (
-                    current_device.binding_generation,
-                    current_device.bound_at_ms,
-                ):
-                    newest_by_device[device_field] = record
-                current_code = newest_by_code.get(record.manual_code)
-                if current_code is None or (record.binding_generation, record.bound_at_ms) >= (
-                    current_code.binding_generation,
-                    current_code.bound_at_ms,
-                ):
-                    newest_by_code[record.manual_code] = record
-            for field, record in newest_by_device.items():
-                pipeline.hset(
-                    self._latest_binding_device_key,
-                    field,
-                    json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":")),
-                )
-            for code, record in newest_by_code.items():
-                pipeline.hset(
-                    self._latest_binding_code_key,
-                    code,
-                    json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":")),
-                )
-            for key in (self._binding_entity_key, self._latest_binding_device_key, self._latest_binding_code_key):
-                pipeline.expire(key, self._runtime_ttl_seconds)
-            pipeline.execute()
-            self._record_storage_diagnostic("entitySeedCount", value=len(self.session_bindings))
+        if self._cn_entity_mode():
+            self._overlay_cn_control_entities()
+        else:
+            raw_bindings = self._redis.hgetall(self._binding_entity_key)
+            if raw_bindings:
+                newest_by_device: dict[str, SessionDesktopBindingRecord] = {}
+                newest_by_code: dict[str, SessionDesktopBindingRecord] = {}
+                for raw in raw_bindings.values():
+                    record = SessionDesktopBindingRecord(**json.loads(raw))
+                    key = (record.owner_user_id, record.session_id)
+                    current = self.session_bindings.get(key)
+                    if current is None or (record.binding_generation, record.bound_at_ms) >= (
+                        current.binding_generation,
+                        current.bound_at_ms,
+                    ):
+                        self.session_bindings[key] = record
+                    device_field = self._binding_device_field(
+                        device_id=record.device_id,
+                        manual_code=record.manual_code,
+                    )
+                    current_device = newest_by_device.get(device_field)
+                    if current_device is None or (record.binding_generation, record.bound_at_ms) >= (
+                        current_device.binding_generation,
+                        current_device.bound_at_ms,
+                    ):
+                        newest_by_device[device_field] = record
+                    current_code = newest_by_code.get(record.manual_code)
+                    if current_code is None or (record.binding_generation, record.bound_at_ms) >= (
+                        current_code.binding_generation,
+                        current_code.bound_at_ms,
+                    ):
+                        newest_by_code[record.manual_code] = record
+                pipeline = self._redis.pipeline()
+                for field, record in newest_by_device.items():
+                    pipeline.hset(
+                        self._latest_binding_device_key,
+                        field,
+                        json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":")),
+                    )
+                for code, record in newest_by_code.items():
+                    pipeline.hset(
+                        self._latest_binding_code_key,
+                        code,
+                        json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":")),
+                    )
+                pipeline.expire(self._binding_entity_key, self._runtime_ttl_seconds)
+                pipeline.expire(self._latest_binding_device_key, self._runtime_ttl_seconds)
+                pipeline.expire(self._latest_binding_code_key, self._runtime_ttl_seconds)
+                pipeline.execute()
+            elif self.session_bindings:
+                pipeline = self._redis.pipeline()
+                newest_by_device: dict[str, SessionDesktopBindingRecord] = {}
+                newest_by_code: dict[str, SessionDesktopBindingRecord] = {}
+                for record in self.session_bindings.values():
+                    encoded = json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":"))
+                    pipeline.hset(
+                        self._binding_entity_key,
+                        self._binding_field(user_id=record.owner_user_id, session_id=record.session_id),
+                        encoded,
+                    )
+                    device_field = self._binding_device_field(
+                        device_id=record.device_id,
+                        manual_code=record.manual_code,
+                    )
+                    current_device = newest_by_device.get(device_field)
+                    if current_device is None or (record.binding_generation, record.bound_at_ms) >= (
+                        current_device.binding_generation,
+                        current_device.bound_at_ms,
+                    ):
+                        newest_by_device[device_field] = record
+                    current_code = newest_by_code.get(record.manual_code)
+                    if current_code is None or (record.binding_generation, record.bound_at_ms) >= (
+                        current_code.binding_generation,
+                        current_code.bound_at_ms,
+                    ):
+                        newest_by_code[record.manual_code] = record
+                for field, record in newest_by_device.items():
+                    pipeline.hset(
+                        self._latest_binding_device_key,
+                        field,
+                        json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":")),
+                    )
+                for code, record in newest_by_code.items():
+                    pipeline.hset(
+                        self._latest_binding_code_key,
+                        code,
+                        json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":")),
+                    )
+                for key in (self._binding_entity_key, self._latest_binding_device_key, self._latest_binding_code_key):
+                    pipeline.expire(key, self._runtime_ttl_seconds)
+                pipeline.execute()
+                self._record_storage_diagnostic("entitySeedCount", value=len(self.session_bindings))
 
         raw_heartbeats = self._redis.hgetall(self._web_heartbeat_entity_key)
         if raw_heartbeats:
@@ -396,9 +407,62 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
             pipeline.execute()
             self._record_storage_diagnostic("entitySeedCount", value=len(self.web_session_heartbeats))
 
+    def _cn_entity_mode(self) -> bool:
+        return getattr(self, "_cn_controls", None) is not None
+
+    def _overlay_cn_control_entities(self) -> None:
+        store = self._cn_controls
+        # Old v1 entities may be newer than the old snapshot. They remain raw
+        # and untouched so an idle rollback can still decode its own protocol.
+        legacy_bindings = dict(self.session_bindings)
+        for raw in self._redis.hvals(store.legacy_bindings):
+            record = SessionDesktopBindingRecord(**json.loads(raw))
+            key = (record.owner_user_id, record.session_id)
+            current = legacy_bindings.get(key)
+            if current is None or (record.binding_generation, record.bound_at_ms) >= (current.binding_generation, current.bound_at_ms):
+                legacy_bindings[key] = record
+        count = store.seed(candidates=self.candidates.values(), accounts=self.account_desktop_devices.values(),
+                           bindings=legacy_bindings.values(), activity=self.session_activity_versions)
+        self.candidates = {x.candidate_id: x for x in store.all_records("candidate")}
+        self.account_desktop_devices = {(x.owner_user_id, x.device_id): x for x in store.all_records("account")}
+        self.session_bindings = {(x.owner_user_id, x.session_id): x for x in store.all_records("binding")}
+        self._record_storage_diagnostic("entitySeedCount", value=count)
+
+    def _cn_saved(self, op, record, *, expected=None):
+        stored, version = self._cn_controls.save(op, record, expected=expected)
+        if stored is None:
+            if expected is not None:
+                return None
+            if op == "event":
+                # Match the service's established retired-event safe drop,
+                # including a restart that only knows the persistent fence.
+                return record
+            raise DomainRequestError("realtime-speech", "runtime-save", "面试会话已结束，不能继续更新实时状态。", 409, "session_not_live")
+        with self._runtime_lock:
+            if op == "candidate": self.candidates[stored.candidate_id] = stored
+            elif op == "account": self.account_desktop_devices[(stored.owner_user_id, stored.device_id)] = stored
+            elif op == "binding": self.session_bindings[(stored.owner_user_id, stored.session_id)] = stored
+            elif op in {"heartbeat", "claim"}: self.web_session_heartbeats[(stored.owner_user_id, stored.session_id)] = stored
+            elif op == "publisher":
+                self.publishers_by_id[stored.publisher_id] = stored
+                self.publishers_by_token[stored.token] = stored.publisher_id
+            elif op == "receipt": self.frame_receipts.setdefault(stored.session_id, {})[(stored.source_kind, stored.source_id)] = stored
+            elif op == "transcript": self.transcripts.setdefault(stored.session_id, {})[stored.segment_id] = stored
+            elif op == "event":
+                entries = self.events.setdefault(stored.session_id, [])
+                entries.append(stored)
+                entries.sort(key=lambda x: (x.created_at_ms, x.event_id))
+                self.event_cursors.setdefault(stored.session_id, {})[stored.event_id] = version
+                with self._event_condition:
+                    self._event_condition.notify_all()
+            if version:
+                self.session_activity_versions[stored.session_id] = max(version, self.session_activity_versions.get(stored.session_id, 0))
+        self._record_storage_diagnostic("entityWriteCount")
+        return stored
+
     def _read(self, operation: Callable[[], T]) -> T:
         with self._runtime_lock:
-            if self._settings.realtime_redis_snapshot_reload_on_access:
+            if not self._cn_entity_mode() and self._settings.realtime_redis_snapshot_reload_on_access:
                 self._reload()
             return operation()
 
@@ -446,11 +510,25 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
                 self.desktop_devices_by_code[record.manual_code] = record.device_id
             return replace(record)
         return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_desktop_device_by_code(manual_code))
-    def save_account_desktop_device(self, association): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_account_desktop_device(association))
-    def get_account_desktop_device(self, *, user_id, device_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_account_desktop_device(user_id=user_id, device_id=device_id))
-    def get_last_account_desktop_device(self, *, user_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_last_account_desktop_device(user_id=user_id))
-    def list_account_desktop_devices(self, *, user_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_account_desktop_devices(user_id=user_id))
+    def save_account_desktop_device(self, association):
+        if self._cn_entity_mode(): return self._cn_saved("account", association)
+        return self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_account_desktop_device(association))
+    def get_account_desktop_device(self, *, user_id, device_id):
+        if self._cn_entity_mode():
+            raw = self._redis.hget(self._cn_controls.accounts, f"{user_id}|{device_id}")
+            return AccountDesktopDeviceRecord(**json.loads(raw)) if raw else None
+        return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_account_desktop_device(user_id=user_id, device_id=device_id))
+    def get_last_account_desktop_device(self, *, user_id):
+        if self._cn_entity_mode():
+            records = self.list_account_desktop_devices(user_id=user_id)
+            return records[0] if records else None
+        return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_last_account_desktop_device(user_id=user_id))
+    def list_account_desktop_devices(self, *, user_id):
+        if self._cn_entity_mode():
+            return sorted((x for x in self._cn_controls.all_records("account") if x.owner_user_id == user_id), key=lambda x: (x.last_used_at_ms, x.device_id), reverse=True)
+        return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_account_desktop_devices(user_id=user_id))
     def save_session_desktop_binding(self, binding):
+        if self._cn_entity_mode(): return self._cn_saved("binding", binding)
         stored = self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_session_desktop_binding(binding))
         encoded = json.dumps(asdict(stored), ensure_ascii=True, separators=(",", ":"))
         pipeline = self._redis.pipeline()
@@ -476,26 +554,52 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
             self._binding_entity_key,
             self._binding_field(user_id=user_id, session_id=session_id),
         )
+        if self._cn_entity_mode():
+            record = self._cn_controls.decode(SessionDesktopBindingRecord, raw) if raw else None
+            return replace(record, status="stale") if record and self._cn_controls.is_retired(record.session_id) else record
         return SessionDesktopBindingRecord(**json.loads(raw)) if raw else self._read(
             lambda: super(RedisRealtimeSpeechRepository, self).get_session_desktop_binding(user_id=user_id, session_id=session_id)
         )
 
     def get_latest_session_desktop_binding_for_device(self, *, device_id, manual_code):
+        if self._cn_entity_mode(): return self._cn_controls.latest_binding(manual_code=manual_code, device_id=device_id)
         raw = self._redis.hget(
             self._latest_binding_device_key,
             self._binding_device_field(device_id=device_id, manual_code=manual_code),
         )
+        if self._cn_entity_mode():
+            record = SessionDesktopBindingRecord(**json.loads(raw)) if raw else None
+            return replace(record, status="stale") if record and self._cn_controls.is_retired(record.session_id) else record
         return SessionDesktopBindingRecord(**json.loads(raw)) if raw else self._read(
             lambda: super(RedisRealtimeSpeechRepository, self).get_latest_session_desktop_binding_for_device(device_id=device_id, manual_code=manual_code)
         )
 
     def get_latest_session_desktop_binding_by_code(self, *, manual_code):
+        if self._cn_entity_mode(): return self._cn_controls.latest_binding(manual_code=manual_code)
         raw = self._redis.hget(self._latest_binding_code_key, manual_code)
+        if self._cn_entity_mode():
+            record = SessionDesktopBindingRecord(**json.loads(raw)) if raw else None
+            return replace(record, status="stale") if record and self._cn_controls.is_retired(record.session_id) else record
         return SessionDesktopBindingRecord(**json.loads(raw)) if raw else self._read(
             lambda: super(RedisRealtimeSpeechRepository, self).get_latest_session_desktop_binding_by_code(manual_code=manual_code)
         )
-    def list_session_desktop_bindings_for_device(self, *, device_id, manual_code): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_session_desktop_bindings_for_device(device_id=device_id, manual_code=manual_code))
-    def list_session_desktop_bindings_for_user(self, *, user_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_session_desktop_bindings_for_user(user_id=user_id))
+    def list_session_desktop_bindings_for_device(self, *, device_id, manual_code):
+        if self._cn_entity_mode():
+            return sorted((x for x in self._cn_controls.all_records("binding") if x.device_id == device_id and x.manual_code == manual_code), key=lambda x: (x.bound_at_ms, x.session_id))
+        return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_session_desktop_bindings_for_device(device_id=device_id, manual_code=manual_code))
+
+    def get_pinned_session_desktop_binding(self, *, device_id, manual_code, session_id, binding_id):
+        if self._cn_entity_mode():
+            return self._cn_controls.pinned_binding(device_id=device_id, manual_code=manual_code,
+                                                    session_id=session_id, binding_id=binding_id)
+        return next((item for item in self.list_session_desktop_bindings_for_device(
+            device_id=device_id, manual_code=manual_code)
+            if item.session_id == session_id and item.binding_id == binding_id), None)
+
+    def list_session_desktop_bindings_for_user(self, *, user_id):
+        if self._cn_entity_mode():
+            return sorted((x for x in self._cn_controls.all_records("binding") if x.owner_user_id == user_id), key=lambda x: (x.bound_at_ms, x.session_id))
+        return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_session_desktop_bindings_for_user(user_id=user_id))
     def _persist_web_heartbeat_entity(self, record: WebSessionHeartbeatRecord) -> None:
         encoded = json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":"))
         pipeline = self._redis.pipeline()
@@ -512,11 +616,13 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         self._record_storage_diagnostic("entityWriteCount")
 
     def save_web_session_heartbeat(self, heartbeat):
+        if self._cn_entity_mode(): return self._cn_saved("heartbeat", heartbeat)
         with self._runtime_lock:
             stored = super().save_web_session_heartbeat(heartbeat)
         self._persist_web_heartbeat_entity(stored)
         return stored
     def get_web_session_heartbeat(self, *, user_id, session_id):
+        if self._cn_entity_mode() and self._cn_controls.is_retired(session_id): return None
         raw = self._redis.hget(
             self._web_heartbeat_entity_key,
             self._web_heartbeat_field(user_id=user_id, session_id=session_id),
@@ -525,6 +631,7 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
             lambda: super(RedisRealtimeSpeechRepository, self).get_web_session_heartbeat(user_id=user_id, session_id=session_id)
         )
     def claim_live_web_session(self, heartbeat):
+        if self._cn_entity_mode(): return self._cn_saved("claim", heartbeat)
         user_lock_key = f"{self._lock_key}:live-user:{heartbeat.owner_user_id}"
         with self._redis.lock(user_lock_key, timeout=5, blocking_timeout=2):
             with self._runtime_lock:
@@ -537,10 +644,14 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
             return stored
     def get_active_live_web_session(self, *, user_id):
         raw = self._redis.hget(self._active_web_user_key, user_id)
+        if self._cn_entity_mode():
+            record = WebSessionHeartbeatRecord(**json.loads(raw)) if raw else None
+            return None if record and self._cn_controls.is_retired(record.session_id) else record
         return WebSessionHeartbeatRecord(**json.loads(raw)) if raw else self._read(
             lambda: super(RedisRealtimeSpeechRepository, self).get_active_live_web_session(user_id=user_id)
         )
     def save_publisher(self, publisher):
+        if self._cn_entity_mode(): return self._cn_saved("publisher", publisher)
         with self._runtime_lock:
             stored = super().save_publisher(publisher)
         payload = json.dumps(asdict(stored), ensure_ascii=True, separators=(",", ":"))
@@ -556,15 +667,19 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         publisher_id = self._redis.hget(self._publisher_token_key, token)
         if publisher_id:
             return self.get_publisher(publisher_id)
+        if self._cn_entity_mode(): return None
         return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_publisher_by_token(token))
 
     def get_publisher(self, publisher_id):
         raw = self._redis.hget(self._publisher_key, publisher_id)
         if raw:
-            return RealtimePublisherRecord(**json.loads(raw))
+            record = RealtimePublisherRecord(**json.loads(raw))
+            return None if self._cn_entity_mode() and self._cn_controls.is_retired(record.session_id) else record
+        if self._cn_entity_mode(): return None
         return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_publisher(publisher_id))
 
     def list_publishers_for_session(self, *, session_id):
+        if self._cn_entity_mode() and self._cn_controls.is_retired(session_id): return []
         records = []
         for _field, raw in self._redis.hscan_iter(self._publisher_key):
             payload = json.loads(raw)
@@ -572,6 +687,7 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
                 records.append(RealtimePublisherRecord(**payload))
         if records:
             return sorted(records, key=lambda item: item.issued_at_ms)
+        if self._cn_entity_mode(): return []
         return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_publishers_for_session(session_id=session_id))
 
     def prune_publishers_for_session(self, *, session_id, keep_publisher_ids):
@@ -591,6 +707,7 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         return None
 
     def clear_session_runtime(self, *, session_id, preserve_transcripts=True):
+        cn_cleared = self._cn_controls.call("clear", session_id) if self._cn_entity_mode() else 0
         with self._runtime_lock:
             result = super().clear_session_runtime(
                 session_id=session_id,
@@ -653,14 +770,15 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         )
         pipeline.hdel(self._activity_key, session_id)
         pipeline.execute()
-        with self._redis.lock(self._lock_key, timeout=5, blocking_timeout=2):
-            with self._runtime_lock:
-                encoded = json.dumps(self._snapshot(), ensure_ascii=True, separators=(",", ":"))
-                self._redis.set(self._snapshot_key, encoded)
-                self._redis.expire(self._snapshot_key, self._runtime_ttl_seconds)
+        if not self._cn_entity_mode():
+            with self._redis.lock(self._lock_key, timeout=5, blocking_timeout=2):
+                with self._runtime_lock:
+                    encoded = json.dumps(self._snapshot(), ensure_ascii=True, separators=(",", ":"))
+                    self._redis.set(self._snapshot_key, encoded)
+                    self._redis.expire(self._snapshot_key, self._runtime_ttl_seconds)
         result["cleared_publishers"] = max(result["cleared_publishers"], len(publisher_ids))
         result["cleared_frame_receipts"] = max(result["cleared_frame_receipts"], len(receipt_fields))
-        result["cleared_candidates"] = result.get("cleared_candidates", 0)
+        result["cleared_candidates"] = max(result.get("cleared_candidates", 0), int(cn_cleared))
         result["cleared_transcripts"] = max(result["cleared_transcripts"], len(transcript_fields))
         return result
 
@@ -699,6 +817,7 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
             self._runtime_owner_scan_key_index = (start_index + 1) % len(keys)
         return owners
     def save_frame_receipt(self, receipt):
+        if self._cn_entity_mode(): return self._cn_saved("receipt", receipt)
         with self._runtime_lock:
             stored = super().save_frame_receipt(receipt)
         field = f"{stored.session_id}:{stored.source_kind}:{stored.source_id}"
@@ -721,6 +840,7 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         return sorted(records, key=lambda item: (item.source_kind, item.source_id))
 
     def save_transcript(self, segment):
+        if self._cn_entity_mode(): return self._cn_saved("transcript", segment)
         with self._runtime_lock:
             persisted_version = self._redis.hget(self._activity_key, segment.session_id)
             if persisted_version is not None:
@@ -775,11 +895,22 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
             for _field, raw in self._redis.hscan_iter(self._transcript_key, match=f"{session_id}:*")
         ]
         return sorted(records, key=lambda item: (item.started_at_ms, item.segment_id, item.revision))
-    def save_candidate(self, candidate): return self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_candidate(candidate))
-    def get_candidate(self, candidate_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_candidate(candidate_id))
-    def list_candidates_for_session(self, *, session_id): return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_candidates_for_session(session_id=session_id))
+    def save_candidate(self, candidate):
+        if self._cn_entity_mode(): return self._cn_saved("candidate", candidate)
+        return self._write(lambda: super(RedisRealtimeSpeechRepository, self).save_candidate(candidate))
+
+    def compare_and_save_candidate(self, candidate, *, expected):
+        if self._cn_entity_mode(): return self._cn_saved("candidate", candidate, expected=expected)
+        return self.save_candidate(candidate)
+    def get_candidate(self, candidate_id):
+        if self._cn_entity_mode(): return self._cn_controls.candidate(candidate_id)
+        return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_candidate(candidate_id))
+    def list_candidates_for_session(self, *, session_id):
+        if self._cn_entity_mode(): return self._cn_controls.session_candidates(session_id)
+        return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_candidates_for_session(session_id=session_id))
 
     def save_event(self, event):
+        if self._cn_entity_mode(): return self._save_cn_event(event)
         with self._runtime_lock:
             stored = super().save_event(event)
         stream_key = f"offersteady:realtime:events:{stored.session_id}"
@@ -831,6 +962,26 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
                 },
             },
         )
+
+    def _save_cn_event(self, event):
+        started_at = int(time.time() * 1000)
+        started = time.perf_counter()
+        stored = self._cn_saved("event", event)
+        if stored is event:
+            return replace(event)
+        ended_at = int(time.time() * 1000)
+        elapsed = max(0, int((time.perf_counter() - started) * 1000))
+        self._ensure_event_diagnostics()
+        with self._event_diagnostic_lock:
+            self._event_diagnostics["xaddCount"] += 1
+            self._event_diagnostics["xaddLatestMs"] = elapsed
+            self._event_diagnostics["xaddMaxMs"] = max(self._event_diagnostics["xaddMaxMs"], elapsed)
+        performance = stored.payload.get("performance")
+        if not isinstance(performance, dict): return stored
+        return replace(stored, payload={**stored.payload, "performance": {
+            **performance, "redisEventXaddStartAtMs": started_at, "redisEventXaddCompleteAtMs": ended_at,
+            "redisEventXaddAtMs": ended_at, "redisEventXaddDurationMs": elapsed,
+        }})
 
     @staticmethod
     def _event_cursor_index_key(session_id: str) -> str:

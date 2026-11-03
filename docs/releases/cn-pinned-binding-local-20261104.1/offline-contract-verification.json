@@ -1,0 +1,17 @@
+{
+  "schemaSha256": "acee1e546feb4dd34b7e204384e4d53310ba184c62c8f425383c464509577330",
+  "settingsSha256": "319635dca725f92339dbfface416dc690cb31ee74f36bccc4d14837edf9d1d38",
+  "settingsCount": 344,
+  "poolEnabled": false,
+  "compiledPython": 161,
+  "paths": 203,
+  "lifespanStarted": false,
+  "threadsStarted": 0,
+  "externalNetwork": 0,
+  "schemaAndOfflineDefaultsUnchanged": true,
+  "candidateInputsVerified": 237,
+  "unchangedRuntimeInputs": 234,
+  "auxiliaryLocalFileSha256": "e6607164d21950319ab2b6179d38ed6cf771715a2663c18db704af612907ac2f",
+  "productionPrivateConfigurationRead": false,
+  "productionChanges": 0
+}

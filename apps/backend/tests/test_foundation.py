@@ -3561,9 +3561,11 @@ def test_realtime_runtime_tracks_frame_receipts_and_asr_status(monkeypatch) -> N
             "audioBase64": payload,
         })
         event = websocket.receive_json()
+        # latestBySource describes the active source. Source teardown removes
+        # this transient timing; collect it before closing the transport.
+        runtime = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/runtime", params={"userId": "runtime-status-user"}))
     assert event["kind"] == "transcript-updated"
     assert transcript_write_count == 1
-    runtime = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/runtime", params={"userId": "runtime-status-user"}))
     assert runtime["stage"] in {"publishing", "transcribing", "web-visible"}
     assert runtime["frameReceipts"][0]["sourceKind"] == "microphone"
     assert runtime["frameReceipts"][0]["frameCount"] == 1
@@ -3583,6 +3585,12 @@ def test_realtime_runtime_tracks_frame_receipts_and_asr_status(monkeypatch) -> N
     assert transcripts["transcripts"][0]["publishedAtMs"] is not None
     assert transcripts["transcripts"][0]["performance"]["backendPushMs"] is not None
     assert transcripts["transcripts"][0]["performance"]["traceId"] == "trace-runtime-mic-1"
+
+    closed_runtime = unwrap(client.get(f"/api/v1/realtime-speech/sessions/{session_id}/runtime", params={"userId": "runtime-status-user"}))
+    assert speech_service.repository.get_publisher(publisher["publisherId"]).status == "closed"
+    assert "microphone" not in closed_runtime["performance"]["latestBySource"]
+    assert (session_id, "microphone") not in speech_service._frame_queues
+    assert closed_runtime["transcriptCount"] == 1
 
 
 def test_capture_pause_is_authoritative_and_blocks_audio_until_explicit_resume() -> None:

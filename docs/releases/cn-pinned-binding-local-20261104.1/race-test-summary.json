@@ -1,0 +1,12 @@
+{
+  "tests": 2,
+  "passed": 2,
+  "failures": 0,
+  "errors": 0,
+  "candidateRuntimeUsed": true,
+  "cases": [
+    "test_change_before_atomic_lookup_cannot_return_the_previous_live_pin[retire]",
+    "test_change_before_atomic_lookup_cannot_return_the_previous_live_pin[rebind]"
+  ],
+  "productionChanges": 0
+}

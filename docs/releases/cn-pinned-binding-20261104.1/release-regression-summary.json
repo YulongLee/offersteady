@@ -1,0 +1,9 @@
+{
+  "tests": 146,
+  "failures": 0,
+  "errors": 0,
+  "subtestsPassed": 216,
+  "scope": "controller, actual-image probe template, CN entity gate, reviewed original controller",
+  "productionOperationsByTests": 0,
+  "junitRecordedCases": 362
+}

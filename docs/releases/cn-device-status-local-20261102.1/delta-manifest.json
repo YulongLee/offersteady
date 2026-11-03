@@ -1,0 +1,17 @@
+{
+  "localOnly": true,
+  "baselineRelease": "release-20261102.1",
+  "baselineImage": "sha256:c62df7ddbb92627de83c7c2733574c862678b120a11d051b346b9d13abfcf58a",
+  "candidatePath": "artifacts/cn-device-status-local-20261102/candidate-final",
+  "baselineInputs": 232,
+  "candidateInputs": 233,
+  "unchangedBaselineInputs": 229,
+  "changedOrAdded": {
+    "apps/backend/app/modules/realtime_speech.py": "46ab0ef117da378ff87760ac36656bb752f9bec40a0ece2aa02e6da43a941eaa",
+    "apps/backend/app/platform/cn_device_status_timing.py": "502d1578b076f326a3409d32804bdff20e3ceca4f4cfff5133dfa668efee0a99",
+    "apps/backend/app/services/postgres_interview_session_repository.py": "611260aaee7571d818e7771e166ea48c48b0d8d68b21ed6efd537a0244d542f9",
+    "apps/backend/app/services/realtime_speech_service.py": "f853a7ba011e5c720dd79bb7dece0ec7578aa5f27a6b5b9e144df3ce8e3cc5bb"
+  },
+  "screenshotRouteSha256": "ec37a2b84cb609ee3e943b645fad36018d0d5cef8fc9113e098bbf4ef36b2e85",
+  "downloadManifestSha256": "d7b106a6497bce873d67c2c81b045fab520aaa7382296978a8f6a04056e10927"
+}

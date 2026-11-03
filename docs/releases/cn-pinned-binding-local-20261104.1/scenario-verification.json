@@ -1,0 +1,39 @@
+[
+  {
+    "scenario": "Valid pin remains constant work as unrelated history grows",
+    "tests": [
+      "test_cn_pinned_binding_cost.py::test_pinned_lookup_has_fixed_network_cost_with_large_history",
+      "test_cn_pinned_binding_cost.py::test_twelve_mixed_pollers_keep_each_pinned_read_bounded"
+    ],
+    "evidence": "query-cost-results.json",
+    "passed": true
+  },
+  {
+    "scenario": "A pin is missing or fails identity and liveness checks",
+    "tests": [
+      "test_cn_pinned_binding_identity.py",
+      "test_cn_control_state_reads.py"
+    ],
+    "evidence": "broad-suite/candidate-tests.xml",
+    "passed": true
+  },
+  {
+    "scenario": "Pinned lookup races with retirement, end or rebind",
+    "tests": [
+      "test_cn_pinned_binding_races.py",
+      "test_cn_pinned_binding_identity.py::test_end_between_pin_read_and_projection_cannot_reactivate_the_session",
+      "test_cn_pinned_binding_identity.py::test_live_old_pin_stays_held_until_authoritative_end_then_latest_wins"
+    ],
+    "evidence": "pinned-races.xml",
+    "passed": true
+  },
+  {
+    "scenario": "Existing repository or non-CN consumer uses the prior contract",
+    "tests": [
+      "test_cn_pinned_binding_identity.py::test_global_and_older_repositories_preserve_the_original_list_path",
+      "test_cn_control_state_reads.py::test_cn_binding_wire_equals_full_read_for_all_modes"
+    ],
+    "evidence": "broad-suite/candidate-tests.xml",
+    "passed": true
+  }
+]

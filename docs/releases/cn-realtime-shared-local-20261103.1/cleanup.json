@@ -1,0 +1,29 @@
+{
+  "onlyTaskOwnedContainers": true,
+  "existingContainersTouched": false,
+  "productionActions": 0,
+  "containers": [
+    {
+      "container": "offersteady-cn-shared-stall-pg-1d731b05c4",
+      "containerId": "43dbcaf0cf5eb6d35076e3e4e7dc62f2b42285017fe647ee4ac803e191beab8c",
+      "ownershipVerifiedBeforeRemoval": true,
+      "removed": true,
+      "absentAfterRemoval": true
+    },
+    {
+      "container": "offersteady-cn-shared-stall-redis-941c2c251f",
+      "containerId": "1042e8cdc2eabb3c4b4661d1fedcf6621e2857e25518ef5cbee1b1886a4b629b",
+      "ownershipVerifiedBeforeRemoval": true,
+      "removed": true,
+      "absentAfterRemoval": true
+    },
+    {
+      "container": "offersteady-cn-shared-stall-pool-pg-7ce983bd97",
+      "containerId": "3978760ea6769da1ab9b8ba2c6f214860c3f7166f734628978f7c93aedcfc278",
+      "ownershipVerifiedBeforeRemoval": true,
+      "removed": true,
+      "absentAfterRemoval": true
+    }
+  ],
+  "cleanupProbeAdjustment": "Docker reports lowercase no such object; normalized case after successful first owned removal."
+}

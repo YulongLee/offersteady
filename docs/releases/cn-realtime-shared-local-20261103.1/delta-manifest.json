@@ -1,0 +1,39 @@
+{
+  "localOnly": true,
+  "baselineImage": "sha256:5efba4abea9b12e1af2b9d2c6e8f6edb2c205afed93f4f9fc9ba862e96499229",
+  "baselineManifestSha256": "18d50582a66b4bb338301ea405ee650347c41a8998391732eab2b99ea6ba224b",
+  "baselineInputs": 233,
+  "candidateInputs": 237,
+  "unchangedBaselineInputs": 225,
+  "changedOrAdded": [
+    "apps/backend/app/main.py",
+    "apps/backend/app/modules/realtime_speech.py",
+    "apps/backend/app/modules/session.py",
+    "apps/backend/app/platform/cn_realtime_lifespan.py",
+    "apps/backend/app/platform/cn_realtime_loop_monitor.py",
+    "apps/backend/app/services/cn_realtime_entity_state.py",
+    "apps/backend/app/services/cn_realtime_io_executor.py",
+    "apps/backend/app/services/knowledge_retrieval.py",
+    "apps/backend/app/services/postgres_material_persistence.py",
+    "apps/backend/app/services/realtime_speech_service.py",
+    "apps/backend/app/services/redis_realtime_speech_repository.py",
+    "apps/backend/app/services/session_service.py"
+  ],
+  "productionChanges": 0,
+  "gitOperations": 0,
+  "changedFileHashes": {
+    "apps/backend/app/main.py": "309809b0919ffa1289922d17b17a850e75f96104d1508ef9e0253cc2b9cb7286",
+    "apps/backend/app/modules/realtime_speech.py": "06dc138aaeee41dec43fce843f6b7db210976ae1cbbaa40f1357964cc13bbcff",
+    "apps/backend/app/modules/session.py": "12b4b1cef0cd108a194ee16a1bec6627c546dd77439ee19042019f54c756d74a",
+    "apps/backend/app/platform/cn_realtime_lifespan.py": "572bf67ae1043604465d19df0574b7b5bcb04daaaeadc46f334598a61d8defc9",
+    "apps/backend/app/platform/cn_realtime_loop_monitor.py": "b464a83bcc35744d80ef76cf6a2c2760df0590b207c85039c9ff6885ab5c61d5",
+    "apps/backend/app/services/cn_realtime_entity_state.py": "b5a356301946539644a140233f7b3d17de6fed2587d34050867200104aa6e754",
+    "apps/backend/app/services/cn_realtime_io_executor.py": "da4b409736d1f2b4bee48442ec34037046797442ea65751fe738e756a489b8d2",
+    "apps/backend/app/services/knowledge_retrieval.py": "6723f825f64b948d8adfcc50a25301d7782b3b099d3a8cca4268f3fd151ccbfe",
+    "apps/backend/app/services/postgres_material_persistence.py": "6bc75c3286d2bc9747c8178404818c6ec3b67681a0e3db5f02d457786d384601",
+    "apps/backend/app/services/realtime_speech_service.py": "f4f2d7e8c300a45a87204838d4c9e6ef8bd40f45c23844aabfa7b5ab8c26fbb7",
+    "apps/backend/app/services/redis_realtime_speech_repository.py": "0a341cb57b336df91979dc7d2d386657404fa3bcf13e083d4747c65449c9ae7e",
+    "apps/backend/app/services/session_service.py": "07207302764ca76c0cb1e153b90ba38085950b77f8d0a1b60de75b265925a42c"
+  },
+  "candidateManifestSha256": "631ff24e28408668c9aab90145799f27eb2390506838895b0a7a593120c0b85d"
+}

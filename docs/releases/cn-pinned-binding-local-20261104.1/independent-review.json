@@ -1,0 +1,176 @@
+{
+  "reviewedAt": "2026-11-03T20:14:27.878256+00:00",
+  "reviewType": "Independent local source and synthetic security review; supplied root performance/contract and other-agent broad-run evidence checked separately",
+  "passed": true,
+  "blockingFindings": [],
+  "scope": {
+    "baselineImage": "sha256:dc8f3bb3aa95b6615686226c95612d7b3973860d2b2da0dd391a316134266b9b",
+    "baselineInputs": 237,
+    "candidateInputs": 237,
+    "unchangedInputsIndependentlyRecomputed": 234,
+    "changedInputsIndependentlyRecomputed": [
+      "apps/backend/app/services/cn_realtime_entity_state.py",
+      "apps/backend/app/services/realtime_speech_service.py",
+      "apps/backend/app/services/redis_realtime_speech_repository.py"
+    ],
+    "capturedInputModesUnchanged": true,
+    "sourceMatchesFrozenCandidate": true,
+    "sourceSha256": {
+      "apps/backend/app/services/cn_realtime_entity_state.py": "23a7ba15c30ac651a2859b1391ca563b8799f85f1e73145cc546d8833c7b8f05",
+      "apps/backend/app/services/realtime_speech_service.py": "4e1a297f9b82da241a189767d16196718ade539ce1448ce5fdd56f6682aec118",
+      "apps/backend/app/services/redis_realtime_speech_repository.py": "78543dcb51f42015ecab45c209990fde79663e82b11d20c0c45e73d2f95e6fb7"
+    },
+    "candidateManifestSha256": "dedfbb2d89950281c50180640b7a26c2019340a8b6b647a6b012375bb59f2d77"
+  },
+  "independentlyExecuted": {
+    "identityTests": {
+      "file": "apps/backend/tests/test_cn_pinned_binding_identity.py",
+      "fileSha256": "e1f31827392e238ca93fa94ad4784e6f1e81b94c757df39bac7e9561dbc4fdc3",
+      "command": "PYTHONPATH=apps/backend /Users/liyulong/liyulong/1_projects/offersteady/.venv/bin/python -B -m pytest apps/backend/tests/test_cn_pinned_binding_identity.py -q",
+      "passed": 26,
+      "failed": 0,
+      "skipped": 0,
+      "durationSeconds": 0.76,
+      "processExitCode": 0,
+      "providers": "Synthetic records and fixture-owned disposable loopback Redis only",
+      "note": "Reviewer actually executed these 26 cases; the later combined root run includes them and must not be added to the total."
+    },
+    "exactBaselineDiffReview": "Reviewed only dc8 candidate-final to the three permitted source files, avoiding unrelated changes in git HEAD diff.",
+    "sourceAndFrozenCandidateHashVerification": true,
+    "baselineAndCandidateCompleteOfflineSchemaEquality": true,
+    "baselineAndCandidateOfflineSettingsHashEquality": true
+  },
+  "safetyChecks": {
+    "readOnlyLuaBranch": "pinned_binding_lookup is excluded from keep() and only HGET owner, HGET exact binding and HEXISTS exact retirement; it does not seed, repair indexes, renew TTL, mutate owners/activity or rewrite snapshots.",
+    "identity": "Stored owner must match owner index, stored session must match requested session; inconsistency raises identity_mismatch. Device/code/binding mismatches and missing owner/record return normal miss.",
+    "failurePropagation": "Malformed stored JSON and identity failures propagate; service does not mask failure by scanning or selecting latest.",
+    "rawPrecision": "Lua returns original raw bytes plus retirement flag; Python decodes legacy/envelope records. Empty arrays, nested shape, 2**53+1 and precision-preserving float tested.",
+    "retirement": "One atomic Lua read observes binding and retired fence. Cross-instance clear, late save and restart remain stale; pin-read followed by authoritative DB end cannot reactivate a session.",
+    "ttlAndState": "DUMP bytes, remaining TTL, seed diagnostics and activity/index state remain unchanged by direct pin reads in actual disposable Redis tests.",
+    "authorityAndMode": "Existing DB control-state ownership, ended/deleted state, device generation/freshness, cache boundary and capture behavior remain; live older pin stays held until authoritative end, then original latest fallback is used.",
+    "compatibility": "Fast service path requires CN and callable optional method; Global and repositories without a callable method retain original list behavior."
+  },
+  "reviewedEvidenceFromRootOrOtherAgent": {
+    "provenance": "The reviewer read and cross-checked these artifacts and their test sources/XML; did not independently rerun the root cost suite, offline compile/contract probe or other-agent broad suite.",
+    "rootCombinedTargetedSuite": {
+      "tests": 30,
+      "passed": 30,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xmlTimeSeconds": 1.04,
+      "evidence": "pinned-final.xml"
+    },
+    "rootQueryCosts": {
+      "pinned_read_history_1": {
+        "historyBindings": 1,
+        "commands": {
+          "HGET": 2,
+          "EVALSHA": 1
+        },
+        "networkCalls": 3,
+        "bindingDecodes": 1,
+        "dbControlReads": 1,
+        "localElapsedMs": 0.336,
+        "productionP95Measured": false
+      },
+      "pinned_read_history_1191": {
+        "historyBindings": 1191,
+        "commands": {
+          "HGET": 2,
+          "EVALSHA": 1
+        },
+        "networkCalls": 3,
+        "bindingDecodes": 1,
+        "dbControlReads": 1,
+        "localElapsedMs": 0.34,
+        "productionP95Measured": false
+      },
+      "pinned_read_history_10000": {
+        "historyBindings": 10000,
+        "commands": {
+          "HGET": 2,
+          "EVALSHA": 1
+        },
+        "networkCalls": 3,
+        "bindingDecodes": 1,
+        "dbControlReads": 1,
+        "localElapsedMs": 0.326,
+        "productionP95Measured": false
+      },
+      "twelve_mixed_pollers": {
+        "pollers": 12,
+        "liveSessions": 1,
+        "idleOrEndedPollers": 11,
+        "historyBindings": 10000,
+        "commands": {
+          "HGET": 24,
+          "EVALSHA": 15
+        },
+        "networkCalls": 39,
+        "localElapsedMs": 8.715,
+        "productionP95Measured": false
+      }
+    },
+    "rootCostTestServerAssertions": "Read test_cn_pinned_binding_cost.py: before/after actual Redis INFO commandstats assert HVALS/HGETALL/HSCAN do not increase for each size and mixed-poller run, beyond client execute_command counters.",
+    "rootOfflineContract": {
+      "schemaSha256": "acee1e546feb4dd34b7e204384e4d53310ba184c62c8f425383c464509577330",
+      "settingsSha256": "319635dca725f92339dbfface416dc690cb31ee74f36bccc4d14837edf9d1d38",
+      "settingsCount": 344,
+      "poolEnabled": false,
+      "compiledPython": 161,
+      "paths": 203,
+      "lifespanStarted": false,
+      "threadsStarted": 0,
+      "externalNetwork": 0,
+      "schemaAndOfflineDefaultsUnchanged": true,
+      "candidateInputsVerified": 237,
+      "unchangedRuntimeInputs": 234,
+      "auxiliaryLocalFileSha256": "e6607164d21950319ab2b6179d38ed6cf771715a2663c18db704af612907ac2f",
+      "productionPrivateConfigurationRead": false,
+      "productionChanges": 0
+    },
+    "otherAgentBroadSuite": {
+      "tests": 987,
+      "passed": 986,
+      "skipped": 1,
+      "failures": 0,
+      "errors": 0,
+      "xmlTimeSeconds": 34.077,
+      "wrapperDurationSeconds": 34.966,
+      "candidateImportGuard": true,
+      "realModelCalls": 0,
+      "productionChanges": 0,
+      "ownedLoopbackServicesOnly": true,
+      "evidence": "broad-suite/candidate-test-summary.json"
+    }
+  },
+  "remainingNonTargetBehavior": "Some management/list_session_desktop_bindings_for_device/list_session_desktop_bindings_for_user APIs still use all_records scans. This minimal fix removes that path only from high-frequency CN pinned active-connection polling; it is not a general rewrite of all list APIs.",
+  "limitations": [
+    "All work here is local. The reviewer made no SSH, production Redis/PostgreSQL/model calls, production mutation or deployment.",
+    "Constant query cost and loopback timings do not establish production API P95. The 8.715ms mixed-poller result is a synthetic local duration, not an online P95 forecast.",
+    "Mixed-poller service tests use authoritative in-memory session fixtures and a fixture-owned real Redis; they do not measure production database connection or SQL duration.",
+    "Offline schema/default-settings equality and 161-file compilation provenance are supplied local probe results. The reviewer did not reread production private settings, and these offline hashes must not be substituted for the actual production private configuration hash.",
+    "Atomic Redis pin/retirement reads and subsequent authoritative DB checks preserve the existing split-store semantics; this does not claim an atomic transaction across Redis and PostgreSQL.",
+    "Production cutover, active-user idle gates and post-deploy health/error checks remain outside this local review and require their separately authorized release process."
+  ],
+  "evidenceSha256": {
+    "candidate-manifest.json": "dedfbb2d89950281c50180640b7a26c2019340a8b6b647a6b012375bb59f2d77",
+    "query-cost-results.json": "5a16548ba4547ec473cd3b247dd6f599032098618be0de7a777d1b5f17afb2e3",
+    "offline-contract-verification.json": "83eff47cf4fcb4f1feee2eddb40d8867e404c55cb5604c9b67544b4214c690ef",
+    "baseline-schema-probe.json": "a829a9ff0f41b0a44cedd1d74457a40aac2dd0930fedbd2a583dfd5ba8a8d7cb",
+    "candidate-schema-probe.json": "a829a9ff0f41b0a44cedd1d74457a40aac2dd0930fedbd2a583dfd5ba8a8d7cb",
+    "pinned-final.xml": "3e7b42aae9d2339203043979ffe1f8235216fce019f8e9a6b0a884e42f1e0a86",
+    "broad-suite/candidate-test-summary.json": "9afc71b300380c73d16aada0f56ddfd013b0b0a12018331f9aa2445c1de96075",
+    "broad-suite/candidate-tests.xml": "755a039f697047b41f6b77fd022c75a69f3c52c52039edeb4c13797f7f01d407"
+  },
+  "reviewerActions": {
+    "applicationFilesModified": 0,
+    "testFilesCreated": 1,
+    "productionAccess": 0,
+    "productionChanges": 0,
+    "realModelCalls": 0,
+    "gitCommitsOrPushes": 0,
+    "reviewJsonWritten": "artifacts/cn-pinned-binding-local-20261104/independent-review.json"
+  }
+}

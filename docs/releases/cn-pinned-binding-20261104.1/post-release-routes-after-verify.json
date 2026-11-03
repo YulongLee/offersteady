@@ -1,0 +1,255 @@
+{
+  "atMs": 1793737720471,
+  "scanStartMs": 1793737558703,
+  "linesScanned": 591,
+  "errorLevels": {},
+  "fixedWarnings": {},
+  "windows": {
+    "stableNatural": {
+      "withoutActiveConnection": {
+        "count": 117,
+        "p50Ms": 5.07,
+        "p95Ms": 18.36,
+        "maxMs": 100.83,
+        "atLeast500Ms": 0,
+        "atLeast1000Ms": 0
+      },
+      "withoutAdmin": {
+        "count": 273,
+        "p50Ms": 21.74,
+        "p95Ms": 42.7,
+        "maxMs": 90.77,
+        "atLeast500Ms": 0,
+        "atLeast1000Ms": 0
+      },
+      "startMs": 1793737558703,
+      "endMs": 1793737720471,
+      "apiRequests": {
+        "count": 276,
+        "p50Ms": 21.76,
+        "p95Ms": 43.64,
+        "maxMs": 100.83,
+        "atLeast500Ms": 0,
+        "atLeast1000Ms": 0
+      },
+      "routes": [
+        {
+          "route": "/api/v1/admin/payments/revenue-summary",
+          "count": 3,
+          "p50Ms": 91.9,
+          "p95Ms": 100.83,
+          "maxMs": 100.83,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/admin/capacity",
+          "count": 3,
+          "p50Ms": 74.33,
+          "p95Ms": 77.2,
+          "maxMs": 77.2,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "count": 159,
+          "p50Ms": 25.36,
+          "p95Ms": 44.04,
+          "maxMs": 90.77,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/auth/refresh",
+          "count": 2,
+          "p50Ms": 18.36,
+          "p95Ms": 18.54,
+          "maxMs": 18.54,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "other",
+          "count": 2,
+          "p50Ms": 8.1,
+          "p95Ms": 8.96,
+          "maxMs": 8.96,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/heartbeat",
+          "count": 108,
+          "p50Ms": 5.02,
+          "p95Ms": 8.82,
+          "maxMs": 31.55,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/web-heartbeat",
+          "count": 2,
+          "p50Ms": 4.5,
+          "p95Ms": 4.63,
+          "maxMs": 4.63,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/healthz",
+          "count": 12,
+          "p50Ms": 0.67,
+          "p95Ms": 1.06,
+          "maxMs": 1.06,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        }
+      ],
+      "phaseTimings": [
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "intervalMs",
+          "count": 5,
+          "p50Ms": 250.0,
+          "p95Ms": 250.0,
+          "maxMs": 250.0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "maxMs",
+          "count": 5,
+          "p50Ms": 1464.537,
+          "p95Ms": 1464.537,
+          "maxMs": 1464.537,
+          "atLeast500Ms": 4,
+          "atLeast1000Ms": 4
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "over250Ms",
+          "count": 5,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "maxMs": 1,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "over50Ms",
+          "count": 5,
+          "p50Ms": 2,
+          "p95Ms": 2,
+          "maxMs": 2,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "p50Ms",
+          "count": 5,
+          "p50Ms": 0.88,
+          "p95Ms": 0.922,
+          "maxMs": 0.922,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "p95Ms",
+          "count": 5,
+          "p50Ms": 1.992,
+          "p95Ms": 2.023,
+          "maxMs": 2.023,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        }
+      ],
+      "answerStages": [],
+      "slowTimeline": []
+    }
+  },
+  "rawLogsExported": false,
+  "identifiersExported": false,
+  "productionMutations": 0,
+  "recentProxyActiveConnectionShape": {
+    "counts": {
+      "withBothPinned": 95,
+      "status200": 159,
+      "withoutBothPinned": 64
+    },
+    "distinctDevicePaths": 11,
+    "rawQueryExported": false
+  },
+  "lastCapacityPoints": [
+    {
+      "atMs": 1793737569810,
+      "apiP95Ms": 157.92,
+      "apiErrorRate": 0.0,
+      "requestsPerMinute": 55.0,
+      "activeInterviews": 0,
+      "activeUsers": 0,
+      "activeAudioStreams": 0,
+      "databaseConnections": 1,
+      "cpuPercent": 4.18
+    },
+    {
+      "atMs": 1793737599864,
+      "apiP95Ms": 91.9,
+      "apiErrorRate": 0.0,
+      "requestsPerMinute": 106.0,
+      "activeInterviews": 0,
+      "activeUsers": 0,
+      "activeAudioStreams": 0,
+      "databaseConnections": 1,
+      "cpuPercent": 4.53
+    },
+    {
+      "atMs": 1793737629906,
+      "apiP95Ms": 90.77,
+      "apiErrorRate": 0.0,
+      "requestsPerMinute": 104.46,
+      "activeInterviews": 0,
+      "activeUsers": 0,
+      "activeAudioStreams": 0,
+      "databaseConnections": 1,
+      "cpuPercent": 1.11
+    },
+    {
+      "atMs": 1793737659960,
+      "apiP95Ms": 53.42,
+      "apiErrorRate": 0.0,
+      "requestsPerMinute": 103.79,
+      "activeInterviews": 0,
+      "activeUsers": 0,
+      "activeAudioStreams": 0,
+      "databaseConnections": 1,
+      "cpuPercent": 1.76
+    },
+    {
+      "atMs": 1793737690003,
+      "apiP95Ms": 52.81,
+      "apiErrorRate": 0.0,
+      "requestsPerMinute": 105.42,
+      "activeInterviews": 0,
+      "activeUsers": 0,
+      "activeAudioStreams": 0,
+      "databaseConnections": 1,
+      "cpuPercent": 1.11
+    },
+    {
+      "atMs": 1793737720046,
+      "apiP95Ms": 46.26,
+      "apiErrorRate": 0.0,
+      "requestsPerMinute": 104.82,
+      "activeInterviews": 0,
+      "activeUsers": 0,
+      "activeAudioStreams": 0,
+      "databaseConnections": 1,
+      "cpuPercent": 1.77
+    }
+  ]
+}
