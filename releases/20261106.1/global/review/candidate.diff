@@ -1,0 +1,584 @@
+--- baseline/apps/backend/app/modules/realtime_speech.py
++++ candidate/apps/backend/app/modules/realtime_speech.py
+@@ -301,7 +301,7 @@
+                 owner = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
+             return owner, service.session_service.get_session(user_id=owner, session_id=request.session_id)
+         resolved_user_id, session = await run_cn_realtime_io(request_context, prepare,
+-            lane="lifecycle", operation_name="publisher_prepare")
++            lane="preparation", operation_name="publisher_prepare")
+         if session.session_mode == "mock":
+             from app.modules.mock_interview import require_mock_runtime
+             publisher = await require_mock_runtime().legacy.create(user_id=resolved_user_id,
+@@ -309,7 +309,7 @@
+                 source_kind=request.source_kind, client_name=request.client_name)
+         else:
+             publisher = await run_cn_realtime_io(request_context, service.create_publisher,
+-                lane="lifecycle", operation_name="publisher_create",
++                lane="preparation", operation_name="publisher_create",
+                 on_abandoned_result=lambda created: service.disconnect_publisher(token=created.token),
+                 user_id=resolved_user_id, session_id=request.session_id,
+                 source_kind=request.source_kind, client_name=request.client_name)
+--- baseline/apps/backend/app/services/cn_provider_close_executor.py
++++ candidate/apps/backend/app/services/cn_provider_close_executor.py
+@@ -0,0 +1,74 @@
++"""Bound physical provider close handshakes after logical detachment.
++
++Only captured old connections are submitted here. Overload closes inline;
++accepted work is never discarded or retried, including during shutdown.
++"""
++from concurrent.futures import ThreadPoolExecutor
++import logging
++import threading
++
++
++class CnProviderCloseExecutor:
++    def __init__(self, logger: logging.Logger, *, workers: int = 2, queue_max: int = 8):
++        self._logger = logger
++        self._condition = threading.Condition()
++        self._slots = threading.BoundedSemaphore(workers + queue_max)
++        self._pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="cn-provider-close")
++        self._closed = False
++        self._pending = self._completed = self._failed = self._inline = self._submitted = 0
++
++    def close(self, operation):
++        job = {"operation": operation, "claimed": False, "slot": False}
++        with self._condition:
++            self._pending += 1
++            if not self._closed and self._slots.acquire(blocking=False):
++                job["slot"] = True
++                try:
++                    self._pool.submit(self._run, job)
++                    self._submitted += 1
++                    return
++                except Exception:
++                    # Thread creation may fail after submit queued the work.
++                    # Poison admission and claim this job exactly once below;
++                    # a late queued invocation becomes a no-op.
++                    self._closed = True
++            self._inline += 1
++        self._run(job)
++
++    def _run(self, job):
++        with self._condition:
++            if job["claimed"]:
++                return
++            job["claimed"] = True
++        try:
++            job["operation"]()
++        except Exception:
++            with self._condition:
++                self._failed += 1
++            try:
++                self._logger.warning('cn_provider_close_failed {"count":1}')
++            except Exception:
++                pass
++        finally:
++            if job["slot"]:
++                self._slots.release()
++            with self._condition:
++                self._pending -= 1
++                self._completed += 1
++                self._condition.notify_all()
++
++    def drain(self):
++        with self._condition:
++            self._condition.wait_for(lambda: self._pending == 0)
++
++    def shutdown(self):
++        with self._condition:
++            self._closed = True
++        self._pool.shutdown(wait=True)
++        self.drain()
++
++    def diagnostics(self):
++        with self._condition:
++            return {"pending": self._pending, "completed": self._completed,
++                    "failed": self._failed, "inline": self._inline,
++                    "submitted": self._submitted, "closed": int(self._closed)}
+--- baseline/apps/backend/app/services/cn_realtime_entity_state.py
++++ candidate/apps/backend/app/services/cn_realtime_entity_state.py
+@@ -16,6 +16,7 @@
+ _SCRIPT = r'''
+ local op, ttl = ARGV[1], tonumber(ARGV[2])
+ local C,A,B,D,I,R,V,M,O = unpack(KEYS)
++local UB,UA,UP = KEYS[16],KEYS[17],KEYS[18]
+ local base = ARGV[3]
+ local function keep(k)
+   local lifetime = (k == R or k == M or k == O) and tonumber(ARGV[4]) or ttl
+@@ -69,10 +70,107 @@
+   end
+   return encode({cn_binding_schema=1,record_json=raw,overrides={status=status}})
+ end
+-if op ~= 'seed' and op ~= 'binding_lookup' and op ~= 'pinned_binding_lookup' then
++local function owners_empty()
++  return redis.call('EXISTS',A,B) == 0
++end
++local function owners_ready()
++  return redis.call('HGET',UP,'__ready__') == '1' and
++    redis.call('HLEN',UB) == tonumber(redis.call('HGET',UP,'__binding_owners__')) and
++    redis.call('HLEN',UA) == tonumber(redis.call('HGET',UP,'__account_owners__')) and
++    redis.call('HLEN',UP) == (tonumber(redis.call('HGET',UP,'__owners__')) or -5)+4
++end
++if (op == 'binding' or op == 'account') and redis.call('HGET',UP,'__ready__') ~= '1' then
++  -- Complete shared expiry is a new empty runtime, never a partial rebuild.
++  if not owners_empty() then return redis.error_reply('cn_owner_index_not_ready') end
++  redis.call('DEL',UB,UA,UP)
++  redis.call('HSET',UP,'__ready__','1','__binding_owners__',0,'__account_owners__',0,'__owners__',0)
++end
++if (op == 'binding' or op == 'account') and not owners_ready() then
++  return redis.error_reply('cn_owner_index_incomplete')
++end
++if op ~= 'seed' and op ~= 'owner_index_seed' and op ~= 'owner_bindings' and op ~= 'owner_accounts' and op ~= 'binding_lookup' and op ~= 'pinned_binding_lookup' then
+   -- Retain the previous snapshot's shared runtime lifetime without copying its
+   -- body. Freshness/permissions remain in their original record timestamps.
+-  for _, k in ipairs({C,A,B,D,I,R,M,O}) do keep(k) end
++  for _, k in ipairs({C,A,B,D,I,R,M,O,UB,UA,UP}) do keep(k) end
++end
++local function index_member(key, uid, field, kind)
++  local raw=redis.call('HGET',key,uid)
++  local ids=raw and cjson.decode(raw) or {}
++  local found=false
++  for _, value in ipairs(ids) do if value == field then found=true; break end end
++  if not found then
++    table.insert(ids,field)
++    if redis.call('HSET',key,uid,encode(ids)) == 1 then
++      redis.call('HINCRBY',UP,kind == 'bindings' and '__binding_owners__' or '__account_owners__',1)
++    end
++  end
++  local proof_raw=redis.call('HGET',UP,'owner:' .. uid)
++  local proof=proof_raw and cjson.decode(proof_raw) or {bindings=0,accounts=0}
++  proof[kind]=#ids
++  if redis.call('HSET',UP,'owner:' .. uid,encode(proof)) == 1 then redis.call('HINCRBY',UP,'__owners__',1) end
++  keep(key); keep(UP)
++end
++if op == 'owner_index_seed' then
++  -- Rebuild once per repository startup, including after an idle rollback to
++  -- the previous single-writer protocol, which does not maintain these keys.
++  redis.call('DEL',UB,UA,UP)
++  local count=0
++  local members,proofs={},{}
++  local function collect(uid,field,kind)
++    if not members[uid] then
++      members[uid]={bindings={},accounts={}}
++      proofs[uid]={bindings=0,accounts=0}
++    end
++    table.insert(members[uid][kind],field)
++    proofs[uid][kind]=proofs[uid][kind]+1
++  end
++  for _, raw in ipairs(redis.call('HVALS',B)) do
++    local n=binding_record(raw)
++    collect(n.owner_user_id,n.owner_user_id .. '|' .. n.session_id,'bindings'); count=count+1
++  end
++  for _, raw in ipairs(redis.call('HVALS',A)) do
++    local n=cjson.decode(raw)
++    collect(n.owner_user_id,n.owner_user_id .. '|' .. n.device_id,'accounts'); count=count+1
++  end
++  local owner_count,binding_owners,account_owners=0,0,0
++  for uid, kinds in pairs(members) do
++    owner_count=owner_count+1
++    if #kinds.bindings > 0 then redis.call('HSET',UB,uid,encode(kinds.bindings)); binding_owners=binding_owners+1 end
++    if #kinds.accounts > 0 then redis.call('HSET',UA,uid,encode(kinds.accounts)); account_owners=account_owners+1 end
++    redis.call('HSET',UP,'owner:' .. uid,encode(proofs[uid]))
++  end
++  redis.call('HSET',UP,'__ready__','1','__binding_owners__',binding_owners,'__account_owners__',account_owners,'__owners__',owner_count)
++  local lifetime=math.max(ttl,redis.call('TTL',A),redis.call('TTL',B))
++  for _, key in ipairs({UB,UA,UP}) do redis.call('EXPIRE',key,lifetime) end
++  return count
++end
++if op == 'owner_bindings' or op == 'owner_accounts' then
++  if redis.call('HGET',UP,'__ready__') ~= '1' then
++    if owners_empty() and redis.call('EXISTS',UB,UA,UP) == 0 then return {} end
++    return redis.error_reply('cn_owner_index_not_ready')
++  end
++  if not owners_ready() then return redis.error_reply('cn_owner_index_incomplete') end
++  local uid=ARGV[5]
++  local is_binding=op == 'owner_bindings'
++  local key=is_binding and UB or UA; local source=is_binding and B or A
++  local kind=is_binding and 'bindings' or 'accounts'
++  local raw=redis.call('HGET',key,uid); local ids=raw and cjson.decode(raw) or {}
++  local proof_raw=redis.call('HGET',UP,'owner:' .. uid)
++  local proof=proof_raw and cjson.decode(proof_raw) or {bindings=0,accounts=0}
++  if #ids ~= proof[kind] then return redis.error_reply('cn_owner_index_incomplete') end
++  local result,seen={},{}
++  for _, field in ipairs(ids) do
++    if seen[field] then return redis.error_reply('cn_owner_index_duplicate') end
++    seen[field]=true
++    local record_raw=redis.call('HGET',source,field)
++    if record_raw then
++      local n=is_binding and binding_record(record_raw) or cjson.decode(record_raw)
++      local expected=uid .. '|' .. (is_binding and n.session_id or n.device_id)
++      if n.owner_user_id ~= uid or expected ~= field then return redis.error_reply('cn_runtime_entity_identity_mismatch') end
++      table.insert(result,{record_raw,is_binding and retired(n.session_id) and 1 or 0})
++    end
++  end
++  return result
+ end
+ local function newer_binding(n, p)
+   if n.device_id == p.device_id and n.binding_generation ~= p.binding_generation then
+@@ -83,6 +181,7 @@
+   return n.last_seen_at_ms >= p.last_seen_at_ms
+ end
+ local function index_binding(n, raw)
++  index_member(UB,n.owner_user_id,n.owner_user_id .. '|' .. n.session_id,'bindings')
+   for _, item in ipairs({{D,n.device_id .. '|' .. n.manual_code},{I,n.manual_code}}) do
+     local old = redis.call('HGET', item[1], item[2])
+     local p=old and binding_record(old)
+@@ -185,7 +284,8 @@
+     if p.last_used_at_ms > n.last_used_at_ms then return {1,old,0} end
+     n.linked_at_ms=math.min(p.linked_at_ms,n.linked_at_ms)
+   end
+-  local raw=encode(n); redis.call('HSET',A,field,raw); keep(A); return {1,raw,0}
++  local raw=encode(n); redis.call('HSET',A,field,raw); keep(A)
++  index_member(UA,n.owner_user_id,field,'accounts'); return {1,raw,0}
+ end
+ if op == 'candidate' then
+   local n=cjson.decode(ARGV[5]); local old=redis.call('HGET',C,n.candidate_id)
+@@ -336,6 +436,8 @@
+                      f"{base}:entities:session-owners:v1", f"{base}:entities:web-heartbeats:v1",
+                      f"{base}:indexes:active-web-users:v1", f"{base}:transcripts",
+                      f"{base}:publishers", f"{base}:publisher-tokens", f"{base}:receipts"]
++        self.keys.extend([f"{base}:indexes:owner-bindings:v1", f"{base}:indexes:owner-accounts:v1",
++                          f"{base}:indexes:owner-reference-proof:v1"])
+ 
+     @staticmethod
+     def encode(record):
+@@ -355,6 +457,20 @@
+                    "accounts": [self.encode(x) for x in accounts],
+                    "bindings": [self.encode(x) for x in bindings], "activity": activity}
+         return int(self.call("seed", json.dumps(payload)))
++
++    def seed_owner_indexes(self):
++        return int(self.call("owner_index_seed"))
++
++    def owner_records(self, kind, user_id):
++        cls = {"bindings": SessionDesktopBindingRecord, "accounts": AccountDesktopDeviceRecord}[kind]
++        rows = self.call("owner_" + kind, user_id)
++        result = []
++        for raw, retired in rows:
++            record = self.decode(cls, raw)
++            if record.owner_user_id != user_id:
++                raise ValueError("cn_runtime_entity_identity_mismatch")
++            result.append(replace(record, status="stale") if kind == "bindings" and retired else record)
++        return result
+ 
+     def save(self, op, record, *, expected=None):
+         result = self.call(op, self.encode(record), str(self.retention) if op == "event" else "cas" if expected is not None else "save",
+--- baseline/apps/backend/app/services/cn_realtime_io_executor.py
++++ candidate/apps/backend/app/services/cn_realtime_io_executor.py
+@@ -19,7 +19,7 @@
+     "capture_control",
+     "session_end", "session_supersede",
+ })
+-_LANES = frozenset({"ingress", "lifecycle"})
++_LANES = frozenset({"ingress", "lifecycle", "preparation"})
+ _logger = logging.getLogger("offersteady.backend.cn_realtime_io_timing")
+ _sample_lock = threading.Lock()
+ _sample_counter = 0
+@@ -257,10 +257,12 @@
+ 
+ class CnRealtimeIoExecutor:
+     def __init__(self, *, ingress_workers: int = 4, ingress_queue_max: int = 16,
+-                 lifecycle_workers: int = 2, lifecycle_queue_max: int = 8) -> None:
++                 lifecycle_workers: int = 2, lifecycle_queue_max: int = 8,
++                 preparation_workers: int = 2, preparation_queue_max: int = 8) -> None:
+         self._lanes = {
+             "ingress": _Lane(workers=ingress_workers, queue_max=ingress_queue_max, name="ingress"),
+             "lifecycle": _Lane(workers=lifecycle_workers, queue_max=lifecycle_queue_max, name="lifecycle"),
++            "preparation": _Lane(workers=preparation_workers, queue_max=preparation_queue_max, name="preparation"),
+         }
+         self._lock = threading.Lock()
+         self._closed = False
+--- baseline/apps/backend/app/services/dashscope_realtime_asr_gateway.py
++++ candidate/apps/backend/app/services/dashscope_realtime_asr_gateway.py
+@@ -15,6 +15,7 @@
+ from app.ports.interview_session import InterviewLanguage
+ from app.ports.realtime_speech import AsrUsageReport, AudioFrame, RealtimeAsrGatewayPort, TranscriptResult
+ from app.services.realtime_speech_service import NonRetryableAsrError, RetryableAsrError
++from app.services.cn_provider_close_executor import CnProviderCloseExecutor
+ from app.interview_languages import asr_language_code
+ 
+ 
+@@ -83,6 +84,7 @@
+         self._last_error_by_source: dict[str, str] = {}
+         self._frames_before_first_partial: dict[str, int] = {}
+         self._partial_listener: Callable[[AudioFrame, TranscriptResult], None] | None = None
++        self._deferred_closes = CnProviderCloseExecutor(logger) if settings.product_edition == "global" else None
+ 
+     def set_partial_listener(self, listener: Callable[[AudioFrame, TranscriptResult], None]) -> None:
+         """Publish provider partials from the receive pump, independent of audio appends."""
+@@ -252,7 +254,72 @@
+         """Close every provider source session during application shutdown."""
+         with self._source_sessions_lock:
+             session_ids = {key.split(":", 1)[0] for key in self._source_sessions}
+-        return sum(self.close_session(session_id=session_id) for session_id in session_ids)
++        try:
++            return sum(self.close_session(session_id=session_id) for session_id in session_ids)
++        finally:
++            closer = getattr(self, "_deferred_closes", None)
++            if closer is not None:
++                closer.shutdown()
++
++    def drain_deferred_closes(self) -> None:
++        if self._deferred_closes is not None:
++            self._deferred_closes.drain()
++
++    def close_session_deferred(self, *, session_id: str) -> int:
++        prefix = f"{session_id}:"
++        with self._source_sessions_lock:
++            keys = [key for key in self._source_sessions if key.startswith(prefix)]
++            sessions = [self._source_sessions.pop(key) for key in keys]
++        # Detach the entire captured generation before any saturated close can
++        # block. A later source with the same key belongs to a new generation.
++        for session in sessions:
++            self._mark_detached(session, suppress_events=True)
++        for session in sessions:
++            self._close_detached(session)
++        return len(sessions)
++
++    def close_source_deferred(self, *, session_id: str, source_kind: str) -> int:
++        return self._close_source_deferred(f"{session_id}:{source_kind}")
++
++    def _close_source_deferred(self, key: str) -> int:
++        session = self._detach_source_session(key, suppress_events=True)
++        if session is None:
++            return 0
++        self._close_detached(session)
++        return 1
++
++    def _close_detached(self, session: _SourceRealtimeSession) -> None:
++        def physical_close():
++            try:
++                session.connection.close()
++            except Exception:
++                with self._source_sessions_lock:
++                    self._closure_failures[session.source_kind] = self._closure_failures.get(session.source_kind, 0) + 1
++                raise
++        if self._deferred_closes is None:
++            try:
++                physical_close()
++            except Exception:
++                pass
++        else:
++            self._deferred_closes.close(physical_close)
++
++    def _detach_source_session(self, source_session_key: str, *, suppress_events: bool = False) -> _SourceRealtimeSession | None:
++        with self._source_sessions_lock:
++            session = self._source_sessions.pop(source_session_key, None)
++        if session is None:
++            return
++        self._mark_detached(session, suppress_events=suppress_events)
++        return session
++
++    def _mark_detached(self, session: _SourceRealtimeSession, *, suppress_events: bool) -> None:
++        self._record_closed_lifetime(session)
++        self._connection_state_by_source[session.source_kind] = "closed"
++        with session.event_condition:
++            session.closed = True
++            if suppress_events:
++                session.accepting_transcript_events = False
++            session.event_condition.notify_all()
+ 
+     def close_source(self, *, session_id: str, source_kind: str) -> int:
+         source_session_key = f"{session_id}:{source_kind}"
+--- baseline/apps/backend/app/services/realtime_speech_service.py
++++ candidate/apps/backend/app/services/realtime_speech_service.py
+@@ -744,7 +744,7 @@
+                 },
+             )
+         self._capture_control_cache[session_id] = "paused"
+-        self.asr_gateway.close_session(session_id=session_id)
++        self._close_asr_session(session_id=session_id)
+         with self._prewarm_metrics_lock:
+             self._prewarm_ready_by_session.pop(session_id, None)
+             self._prewarm_ready_at_by_session.pop(session_id, None)
+@@ -1963,7 +1963,13 @@
+                 now_ms = _now_ms()
+                 released_bindings = 0
+                 closed_publishers = 0
+-                for binding in self.repository.list_session_desktop_bindings_for_user(user_id=user_id):
++                binding_read = getattr(self.repository, "get_session_desktop_binding", None)
++                if getattr(self.settings, "product_edition", None) == "global" and callable(binding_read):
++                    current_binding = binding_read(user_id=user_id, session_id=session_id)
++                    bindings = [current_binding] if current_binding is not None else []
++                else:
++                    bindings = self.repository.list_session_desktop_bindings_for_user(user_id=user_id)
++                for binding in bindings:
+                     if binding.session_id == session_id and binding.status == "bound":
+                         self.repository.save_session_desktop_binding(replace(binding, status="stale"))
+                         released_bindings += 1
+@@ -2566,7 +2572,7 @@
+         self._capture_control_cache[session_id] = capture_state
+         if action == "pause":
+             self._stop_realtime_metering(session_id=session_id)
+-            self.asr_gateway.close_session(session_id=session_id)
++            self._close_asr_session(session_id=session_id)
+             with self._prewarm_metrics_lock:
+                 self._prewarm_ready_by_session.pop(session_id, None)
+                 self._prewarm_ready_at_by_session.pop(session_id, None)
+@@ -2796,8 +2802,10 @@
+         """Release one disconnected source without terminating the other channel."""
+         resources = {"closed_asr_sessions": 0, "cleared_queues": 0, "cleared_buffered_segments": 0, "cleared_frame_receipts": 0}
+         close_source = getattr(self.asr_gateway, "close_source", None)
++        if getattr(self.settings, "product_edition", None) == "global":
++            close_source = getattr(self.asr_gateway, "close_source_deferred", None) or close_source
+         try:
+-            resources["closed_asr_sessions"] = int(close_source(session_id=session_id, source_kind=source_kind)) if callable(close_source) else int(self.asr_gateway.close_session(session_id=session_id))
++            resources["closed_asr_sessions"] = int(close_source(session_id=session_id, source_kind=source_kind)) if callable(close_source) else self._close_asr_session(session_id=session_id)
+         except Exception as exc:
+             self.logger.warning("realtime_source_cleanup_failed", extra={"sessionId": session_id, "sourceKind": source_kind, "safeErrorCode": exc.__class__.__name__})
+         key = self._session_source_key(session_id, source_kind)
+@@ -4877,22 +4885,18 @@
+             "cleared_frame_receipts": 0,
+         }
+         if retired:
++            self._retire_session_id(session_id)
+             self._stop_realtime_metering(session_id=session_id)
++        else:
++            self._unretire_session_id(session_id)
+         try:
+-            resources["closed_asr_sessions"] = int(self.asr_gateway.close_session(session_id=session_id))
++            resources["closed_asr_sessions"] = self._close_asr_session(session_id=session_id)
+         except Exception as exc:
+             self.logger.warning("realtime_session_asr_cleanup_failed", extra={"sessionId": session_id, "safeErrorCode": exc.__class__.__name__})
+         with self._prewarm_metrics_lock:
+             self._prewarm_ready_by_session.pop(session_id, None)
+             self._prewarm_ready_at_by_session.pop(session_id, None)
+         with self._frame_worker_lock:
+-            if retired:
+-                self._retired_session_ids.add(session_id)
+-                self._retired_session_order.append(session_id)
+-                while len(self._retired_session_ids) > self._retired_session_order.maxlen:
+-                    self._retired_session_ids.discard(self._retired_session_order.popleft())
+-            else:
+-                self._retired_session_ids.discard(session_id)
+             queues = [
+                 (key, work_queue)
+                 for key, work_queue in self._frame_queues.items()
+@@ -5471,7 +5475,7 @@
+     def _verify_performance_ack_session(self, *, user_id: str, session_id: str, cacheable: bool) -> None:
+         """Authorize diagnostic acknowledgements without rereading full session state."""
+         if not cacheable:
+-            self.session_service.get_session(user_id=user_id, session_id=session_id)
++            self._read_performance_ack_access(user_id=user_id, session_id=session_id)
+             return
+ 
+         now = monotonic()
+@@ -5488,7 +5492,7 @@
+                 self._performance_ack_access_cache.pop(session_id, None)
+             self._performance_ack_access_misses += 1
+ 
+-        self.session_service.get_session(user_id=user_id, session_id=session_id)
++        self._read_performance_ack_access(user_id=user_id, session_id=session_id)
+         with self._performance_ack_access_lock:
+             self._performance_ack_access_cache[session_id] = (user_id, now + ttl)
+             while len(self._performance_ack_access_cache) > 4096:
+@@ -5572,17 +5576,18 @@
+         self._observe_trace(trace_id, **{
+             key: value for key, value in browser_fields.items() if value is not None
+         })
+-        log_event(
+-            self.logger,
+-            logging.DEBUG,
+-            settings=self.settings,
+-            event="runtime.performance_acknowledged",
+-            feature="runtime-performance",
+-            action=stage,
+-            session_id=session_id,
+-            task_id=task_id,
+-            duration_ms=duration_ms,
+-        )
++        if getattr(self.settings, "product_edition", None) != "global" or self.logger.isEnabledFor(logging.DEBUG):
++            log_event(
++                self.logger,
++                logging.DEBUG,
++                settings=self.settings,
++                event="runtime.performance_acknowledged",
++                feature="runtime-performance",
++                action=stage,
++                session_id=session_id,
++                task_id=task_id,
++                duration_ms=duration_ms,
++            )
+         return RealtimeEvent(
+             event_id=f"metric:{trace_id}:{stage}",
+             session_id=session_id,
+@@ -5696,6 +5701,51 @@
+             source_kind=source_kind,
+         )
+ 
++    def _close_asr_session(self, *, session_id: str) -> int:
++        close = self.asr_gateway.close_session
++        if getattr(self.settings, "product_edition", None) == "global":
++            deferred = getattr(self.asr_gateway, "close_session_deferred", None)
++            if callable(deferred):
++                close = deferred
++        return int(close(session_id=session_id) or 0)
++
++    def _read_performance_ack_access(self, *, user_id: str, session_id: str) -> None:
++        read = getattr(self.session_service, "get_control_state", None)
++        if getattr(self.settings, "product_edition", None) != "global" or not callable(read):
++            read = self.session_service.get_session
++        read(user_id=user_id, session_id=session_id)
++
++    def _retire_session_id(self, session_id: str) -> None:
++        frame_worker_lock = getattr(self, "_frame_worker_lock", None)
++        if frame_worker_lock is None:
++            frame_worker_lock = self._frame_worker_lock = threading.Lock()
++        with frame_worker_lock:
++            retired_session_ids = getattr(self, "_retired_session_ids", None)
++            if retired_session_ids is None:
++                retired_session_ids = self._retired_session_ids = set()
++            retired_session_order = getattr(self, "_retired_session_order", None)
++            if retired_session_order is None:
++                retired_session_order = self._retired_session_order = deque(maxlen=4096)
++            if session_id in retired_session_ids:
++                return
++            maxlen = retired_session_order.maxlen or 4096
++            if len(retired_session_order) >= maxlen:
++                expired = retired_session_order.popleft()
++                retired_session_ids.discard(expired)
++            retired_session_order.append(session_id)
++            retired_session_ids.add(session_id)
++
++    def _unretire_session_id(self, session_id: str) -> None:
++        frame_worker_lock = getattr(self, "_frame_worker_lock", None)
++        if frame_worker_lock is None:
++            return
++        with frame_worker_lock:
++            getattr(self, "_retired_session_ids", set()).discard(session_id)
++            try:
++                getattr(self, "_retired_session_order", deque()).remove(session_id)
++            except ValueError:
++                pass
++
+     def _session_is_retired(self, session_id: str) -> bool:
+         frame_worker_lock = getattr(self, "_frame_worker_lock", None)
+         if frame_worker_lock is None:
+--- baseline/apps/backend/app/services/redis_realtime_speech_repository.py
++++ candidate/apps/backend/app/services/redis_realtime_speech_repository.py
+@@ -420,6 +420,7 @@
+                 legacy_bindings[key] = record
+         count = store.seed(candidates=self.candidates.values(), accounts=self.account_desktop_devices.values(),
+                            bindings=legacy_bindings.values(), activity=self.session_activity_versions)
++        store.seed_owner_indexes()
+         self.candidates = {x.candidate_id: x for x in store.all_records("candidate")}
+         self.account_desktop_devices = {(x.owner_user_id, x.device_id): x for x in store.all_records("account")}
+         self.session_bindings = {(x.owner_user_id, x.session_id): x for x in store.all_records("binding")}
+@@ -522,7 +523,7 @@
+         return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_last_account_desktop_device(user_id=user_id))
+     def list_account_desktop_devices(self, *, user_id):
+         if self._cn_entity_mode():
+-            return sorted((x for x in self._cn_controls.all_records("account") if x.owner_user_id == user_id), key=lambda x: (x.last_used_at_ms, x.device_id), reverse=True)
++            return sorted(self._cn_controls.owner_records("accounts", user_id), key=lambda x: (x.last_used_at_ms, x.device_id), reverse=True)
+         return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_account_desktop_devices(user_id=user_id))
+     def save_session_desktop_binding(self, binding):
+         if self._cn_entity_mode(): return self._cn_saved("binding", binding)
+@@ -595,7 +596,7 @@
+ 
+     def list_session_desktop_bindings_for_user(self, *, user_id):
+         if self._cn_entity_mode():
+-            return sorted((x for x in self._cn_controls.all_records("binding") if x.owner_user_id == user_id), key=lambda x: (x.bound_at_ms, x.session_id))
++            return sorted(self._cn_controls.owner_records("bindings", user_id), key=lambda x: (x.bound_at_ms, x.session_id))
+         return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_session_desktop_bindings_for_user(user_id=user_id))
+     def _persist_web_heartbeat_entity(self, record: WebSessionHeartbeatRecord) -> None:
+         encoded = json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":"))

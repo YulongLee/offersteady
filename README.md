@@ -1,3 +1,9 @@
+> 2026-11-06 03:00:39（北京时间）国际服[读取与连接关闭隔离优化](docs/releases/global-cleanup-control-20261106.1.md)已部署并独立验收：仅Backend，308输入/301保持，223完整Schema/379配置/46依赖保持；Global会员/模型/语言、Web/worker和助手1.3.6不变，国服未重启。两服精确公开运行输入与当前开发代码封存为[release-20261106.1](releases/20261106.1/README.md)，后续从此版本继续。以下未提交表述为相应阶段历史记录。
+
+> 2026-11-06 01:22:18（北京时间）国服[定点读取与连接关闭隔离优化](docs/releases/cn-cleanup-control-20261106.1.md)已发布：仅Backend，实际1724镜像/df78容器、238输入/231保持，203完整Schema/344有效配置/44依赖及助手1.3.6/d7、Web366/七非目标保持，池false。独立验收通过；启动前3.545秒15次502已恢复，验收后无新增，未提交推送Git。
+
+> 2026-11-04 新增[国服定点读取与连接关闭隔离本地候选](docs/releases/cn-cleanup-control-local-20261104.1.md)：1013项通过、1项Global专属跳过，203完整Schema/344离线配置保持；以上为本地阶段记录；11月6日已授权发布，实际结果见上方记录。本轮未提交推送Git。
+
 > 2026-11-04 05:40:36（北京时间）国际服已完成[实时共享阻塞优化](docs/releases/global-realtime-blocking-20261104.1.md)：仅Backend，307输入/295原字节保持，223完整Schema/379配置/46依赖保持，Web/助手1.3.6/worker及国服不变。两服当前公开运行快照与开发代码保存为[release-20261104.1](releases/20261104.1/README.md)，后续从该版本继续优化。当前来源分别见[国服](docs/current-cn-baseline.md)和[国际服](docs/current-global-baseline.md)。以下未提交表述均为各轮历史记录。
 
 > 2026-11-04 04:25:57（北京时间）已完成[国服固定绑定查询修复发布](docs/releases/cn-pinned-binding-20261104.1.md)：仅Backend三文件，实际237输入/234保持，Web/助手1.3.6/Global/worker及模型/收费不变，池关闭。空闲自然连接状态159条P95约44ms；切换前4秒10次502已恢复，验收后未新增。未提交/推送Git。

@@ -1,3 +1,7 @@
+> 本轮国际服同步及Git封版未重启国服；已新鲜只读确认238输入/196worker/366Web与当前1724/df78保持。当前公开运行快照见[release-20261106.1](../releases/20261106.1/README.md)。
+
+> **2026-11-06 01:22:18（北京时间）当前国服Backend已更新。** 实际固定镜像 `sha256:1724a4e95c8fe610d2e6b98a5186a3867adde99c4126e96f55920c2beefc80cf`，容器 `df784f8286927f6221b87d963da525243aa278fd92cceaf7767fad137bddb3c1`，StartedAt `2026-11-05T17:21:56.348996183Z`；238输入/231原输入保持，203完整Schema/344有效配置/Python3.13.15与44依赖保持，池关闭。助手1.3.6/d7、Web366份及七非目标保持。严格七门禁+CN实体/TCP0/单writer切换，原a1e6为固定回退且恢复仍须重新空闲/归属保护。见[生产验收](releases/cn-cleanup-control-20261106.1.md)与[实际238输入](releases/cn-cleanup-control-20261106.1/backend-runtime-manifest.json)。启动前3.545秒15次502已恢复，验收后无新增，未提交推送Git。以下a1e6/7663等是此前历史，不代表当前Backend。
+
 > 2026-11-04当前国服a1e6基线已在国际服发布后重新只读核对，237/196/366三组件保持；两服实际公开字节及当前代码收录[release-20261104.1](../releases/20261104.1/README.md)。后续以此版本继续优化，以下“未提交Git”为对应发布当时状态。
 
 > **2026-11-04 04:25:57国服固定绑定查询修复已上线。** 实际Backend镜像 `sha256:a1e6c069511c7ea9eefa38cd4fe662400de2d50a19a3a70f9528215ebf0f3cc9`、容器 `766377a1893425c2d0ce2e20de35c83e29c5cf4b96b1bacf6296e5270bfcdc3c`、StartedAt `2026-11-03T20:25:36.091960008Z`；237输入/234保持，203完整Schema/344有效配置/44依赖保持，池false，Web366文件与七非目标不变，助手1.3.6/d7保持。三文件最小增量，严格原七项+CN实体/TCP0/单writer切换。原dc8固定回退须重新空闲与归属证明，禁止writer混跑。见[真实发布](releases/cn-pinned-binding-20261104.1.md)及[完整当前输入](releases/cn-pinned-binding-20261104.1/backend-runtime-manifest.json)。未提交推送Git，未发布笔试配套未混入。以下为较早发布历史。

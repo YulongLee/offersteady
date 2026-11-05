@@ -1,0 +1,2080 @@
+{
+  "atMs": 1793735931838,
+  "scanStartMs": 1793734920000,
+  "linesScanned": 4983,
+  "errorLevels": {},
+  "fixedWarnings": {},
+  "windows": {
+    "latest1m": {
+      "withoutActiveConnection": {
+        "count": 93,
+        "p50Ms": 22.14,
+        "p95Ms": 172.65,
+        "maxMs": 434.79,
+        "atLeast500Ms": 0,
+        "atLeast1000Ms": 0
+      },
+      "withoutAdmin": {
+        "count": 150,
+        "p50Ms": 38.32,
+        "p95Ms": 503.53,
+        "maxMs": 826.49,
+        "atLeast500Ms": 8,
+        "atLeast1000Ms": 0
+      },
+      "startMs": 1793735871838,
+      "endMs": 1793735931838,
+      "apiRequests": {
+        "count": 153,
+        "p50Ms": 39.43,
+        "p95Ms": 503.53,
+        "maxMs": 826.49,
+        "atLeast500Ms": 8,
+        "atLeast1000Ms": 0
+      },
+      "routes": [
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "count": 60,
+          "p50Ms": 275.14,
+          "p95Ms": 607.26,
+          "maxMs": 826.49,
+          "atLeast500Ms": 8,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/web/state",
+          "count": 1,
+          "p50Ms": 434.79,
+          "p95Ms": 434.79,
+          "maxMs": 434.79,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/live-answer/questions/stream",
+          "count": 1,
+          "p50Ms": 215.21,
+          "p95Ms": 215.21,
+          "maxMs": 215.21,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/web-heartbeat",
+          "count": 9,
+          "p50Ms": 60.86,
+          "p95Ms": 188.6,
+          "maxMs": 188.6,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/performance-ack",
+          "count": 14,
+          "p50Ms": 24.33,
+          "p95Ms": 172.65,
+          "maxMs": 172.65,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/screenshot-answer/sessions/{session_id}/history",
+          "count": 2,
+          "p50Ms": 70.23,
+          "p95Ms": 152.41,
+          "maxMs": 152.41,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/screenshot-answer/sessions/{session_id}/remote-capture-requests",
+          "count": 1,
+          "p50Ms": 140.2,
+          "p95Ms": 140.2,
+          "maxMs": 140.2,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/live-answer/sessions/{session_id}/history",
+          "count": 2,
+          "p50Ms": 105.7,
+          "p95Ms": 120.53,
+          "maxMs": 120.53,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/admin/payments/revenue-summary",
+          "count": 3,
+          "p50Ms": 96.18,
+          "p95Ms": 98.34,
+          "maxMs": 98.34,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/sessions/{session_id}/idle-status",
+          "count": 4,
+          "p50Ms": 57.66,
+          "p95Ms": 83.79,
+          "maxMs": 83.79,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/admin/capacity",
+          "count": 3,
+          "p50Ms": 74.66,
+          "p95Ms": 75.6,
+          "maxMs": 75.6,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/publishers",
+          "count": 1,
+          "p50Ms": 67.84,
+          "p95Ms": 67.84,
+          "maxMs": 67.84,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/binding",
+          "count": 1,
+          "p50Ms": 66.84,
+          "p95Ms": 66.84,
+          "maxMs": 66.84,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/screenshot-answer/capture-requests/{request_id}/desktop-upload",
+          "count": 1,
+          "p50Ms": 50.41,
+          "p95Ms": 50.41,
+          "maxMs": 50.41,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/device-status",
+          "count": 5,
+          "p50Ms": 44.65,
+          "p95Ms": 49.71,
+          "maxMs": 49.71,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/desktop-binding",
+          "count": 1,
+          "p50Ms": 48.96,
+          "p95Ms": 48.96,
+          "maxMs": 48.96,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/screenshot-answer/capture-requests/{request_id}",
+          "count": 2,
+          "p50Ms": 21.93,
+          "p95Ms": 47.25,
+          "maxMs": 47.25,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/by-code/{manual_code}/binding",
+          "count": 1,
+          "p50Ms": 38.2,
+          "p95Ms": 38.2,
+          "maxMs": 38.2,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/heartbeat",
+          "count": 43,
+          "p50Ms": 5.21,
+          "p95Ms": 22.73,
+          "maxMs": 35.54,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/auth/refresh",
+          "count": 1,
+          "p50Ms": 20.82,
+          "p95Ms": 20.82,
+          "maxMs": 20.82,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/healthz",
+          "count": 4,
+          "p50Ms": 0.58,
+          "p95Ms": 0.66,
+          "maxMs": 0.66,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        }
+      ],
+      "phaseTimings": [
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "intervalMs",
+          "count": 2,
+          "p50Ms": 250.0,
+          "p95Ms": 250.0,
+          "maxMs": 250.0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "maxMs",
+          "count": 2,
+          "p50Ms": 38.985,
+          "p95Ms": 38.985,
+          "maxMs": 38.985,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "over250Ms",
+          "count": 2,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "maxMs": 0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "over50Ms",
+          "count": 2,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "maxMs": 0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "p50Ms",
+          "count": 2,
+          "p50Ms": 0.852,
+          "p95Ms": 0.854,
+          "maxMs": 0.854,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "p95Ms",
+          "count": 2,
+          "p50Ms": 2.041,
+          "p95Ms": 2.247,
+          "maxMs": 2.247,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.ingress.ingest_frame",
+          "metric": "queue_ms",
+          "count": 3,
+          "p50Ms": 0.227,
+          "p95Ms": 1.437,
+          "maxMs": 1.437,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.ingress.ingest_frame",
+          "metric": "resume_ms",
+          "count": 3,
+          "p50Ms": 0.773,
+          "p95Ms": 1.915,
+          "maxMs": 1.915,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.ingress.ingest_frame",
+          "metric": "work_ms",
+          "count": 3,
+          "p50Ms": 3.8,
+          "p95Ms": 4.917,
+          "maxMs": 4.917,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        }
+      ],
+      "answerStages": [
+        {
+          "event": "chat.first_visible_answer",
+          "metric": "admission_to_visible_ms",
+          "count": 1,
+          "p50Ms": 1103,
+          "p95Ms": 1103,
+          "maxMs": 1103,
+          "atLeast500Ms": 1,
+          "atLeast1000Ms": 1
+        },
+        {
+          "event": "chat.first_visible_answer",
+          "metric": "provider_to_visible_ms",
+          "count": 1,
+          "p50Ms": 908,
+          "p95Ms": 908,
+          "maxMs": 908,
+          "atLeast500Ms": 1,
+          "atLeast1000Ms": 0
+        },
+        {
+          "event": "chat.prompt_quality_completed",
+          "metric": "completion_ms",
+          "count": 1,
+          "p50Ms": 4574,
+          "p95Ms": 4574,
+          "maxMs": 4574,
+          "atLeast500Ms": 1,
+          "atLeast1000Ms": 1
+        },
+        {
+          "event": "chat.prompt_quality_completed",
+          "metric": "first_token_ms",
+          "count": 1,
+          "p50Ms": 593,
+          "p95Ms": 593,
+          "maxMs": 593,
+          "atLeast500Ms": 1,
+          "atLeast1000Ms": 0
+        },
+        {
+          "event": "chat.provider_first_token",
+          "metric": "admission_to_provider_ms",
+          "count": 1,
+          "p50Ms": 195,
+          "p95Ms": 195,
+          "maxMs": 195,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "event": "chat.provider_first_token",
+          "metric": "executor_admission_to_generator_ms",
+          "count": 1,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "maxMs": 0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "event": "chat.provider_first_token",
+          "metric": "provider_first_token_ms",
+          "count": 1,
+          "p50Ms": 593,
+          "p95Ms": 593,
+          "maxMs": 593,
+          "atLeast500Ms": 1,
+          "atLeast1000Ms": 0
+        },
+        {
+          "event": "chat.provider_first_token",
+          "metric": "route_to_executor_admission_ms",
+          "count": 1,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "maxMs": 0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        }
+      ],
+      "slowTimeline": []
+    },
+    "latest5m": {
+      "withoutActiveConnection": {
+        "count": 575,
+        "p50Ms": 23.01,
+        "p95Ms": 107.81,
+        "maxMs": 491.66,
+        "atLeast500Ms": 0,
+        "atLeast1000Ms": 0
+      },
+      "withoutAdmin": {
+        "count": 843,
+        "p50Ms": 35.65,
+        "p95Ms": 812.84,
+        "maxMs": 3539.69,
+        "atLeast500Ms": 59,
+        "atLeast1000Ms": 29
+      },
+      "startMs": 1793735631838,
+      "endMs": 1793735931838,
+      "apiRequests": {
+        "count": 852,
+        "p50Ms": 35.73,
+        "p95Ms": 812.84,
+        "maxMs": 3539.69,
+        "atLeast500Ms": 59,
+        "atLeast1000Ms": 29
+      },
+      "routes": [
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "count": 277,
+          "p50Ms": 278.0,
+          "p95Ms": 1843.4,
+          "maxMs": 3539.69,
+          "atLeast500Ms": 59,
+          "atLeast1000Ms": 29
+        },
+        {
+          "route": "/api/v1/web/state",
+          "count": 2,
+          "p50Ms": 434.79,
+          "p95Ms": 491.66,
+          "maxMs": 491.66,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/live-answer/questions/stream",
+          "count": 2,
+          "p50Ms": 209.98,
+          "p95Ms": 215.21,
+          "maxMs": 215.21,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/web-heartbeat",
+          "count": 42,
+          "p50Ms": 47.58,
+          "p95Ms": 158.73,
+          "maxMs": 188.6,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/screenshot-answer/sessions/{session_id}/history",
+          "count": 10,
+          "p50Ms": 80.61,
+          "p95Ms": 152.41,
+          "maxMs": 152.41,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/screenshot-answer/sessions/{session_id}/remote-capture-requests",
+          "count": 1,
+          "p50Ms": 140.2,
+          "p95Ms": 140.2,
+          "maxMs": 140.2,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/live-answer/sessions/{session_id}/history",
+          "count": 10,
+          "p50Ms": 86.21,
+          "p95Ms": 120.53,
+          "maxMs": 120.53,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/admin/payments/revenue-summary",
+          "count": 9,
+          "p50Ms": 96.18,
+          "p95Ms": 120.52,
+          "maxMs": 120.52,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/publishers",
+          "count": 5,
+          "p50Ms": 70.89,
+          "p95Ms": 113.3,
+          "maxMs": 113.3,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/stream",
+          "count": 1,
+          "p50Ms": 112.53,
+          "p95Ms": 112.53,
+          "maxMs": 112.53,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/desktop-binding",
+          "count": 9,
+          "p50Ms": 57.47,
+          "p95Ms": 107.81,
+          "maxMs": 107.81,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/admin/capacity",
+          "count": 10,
+          "p50Ms": 75.6,
+          "p95Ms": 88.57,
+          "maxMs": 88.57,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/performance-ack",
+          "count": 230,
+          "p50Ms": 24.3,
+          "p95Ms": 88.53,
+          "maxMs": 172.65,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/sessions/{session_id}/idle-status",
+          "count": 20,
+          "p50Ms": 53.62,
+          "p95Ms": 83.79,
+          "maxMs": 111.08,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/device-status",
+          "count": 23,
+          "p50Ms": 46.81,
+          "p95Ms": 72.48,
+          "maxMs": 75.34,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/binding",
+          "count": 1,
+          "p50Ms": 66.84,
+          "p95Ms": 66.84,
+          "maxMs": 66.84,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/delivery-metrics",
+          "count": 2,
+          "p50Ms": 38.73,
+          "p95Ms": 54.14,
+          "maxMs": 54.14,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/screenshot-answer/capture-requests/{request_id}/desktop-upload",
+          "count": 1,
+          "p50Ms": 50.41,
+          "p95Ms": 50.41,
+          "maxMs": 50.41,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/screenshot-answer/capture-requests/{request_id}",
+          "count": 2,
+          "p50Ms": 21.93,
+          "p95Ms": 47.25,
+          "maxMs": 47.25,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/by-code/{manual_code}/binding",
+          "count": 2,
+          "p50Ms": 31.18,
+          "p95Ms": 38.2,
+          "maxMs": 38.2,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/screenshot-answer/desktop-devices/{device_id}/capture-requests/stream",
+          "count": 14,
+          "p50Ms": 6.36,
+          "p95Ms": 38.03,
+          "maxMs": 38.03,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/auth/refresh",
+          "count": 5,
+          "p50Ms": 19.81,
+          "p95Ms": 21.33,
+          "maxMs": 21.33,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/heartbeat",
+          "count": 199,
+          "p50Ms": 4.99,
+          "p95Ms": 15.76,
+          "maxMs": 35.54,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/healthz",
+          "count": 20,
+          "p50Ms": 0.64,
+          "p95Ms": 0.76,
+          "maxMs": 1.28,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        }
+      ],
+      "phaseTimings": [
+        {
+          "group": "cn_device_status_timing",
+          "metric": "binding_repository_ms",
+          "count": 1,
+          "p50Ms": 1.847,
+          "p95Ms": 1.847,
+          "maxMs": 1.847,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_device_status_timing",
+          "metric": "db_acquire_ms",
+          "count": 1,
+          "p50Ms": 30.908,
+          "p95Ms": 30.908,
+          "maxMs": 30.908,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_device_status_timing",
+          "metric": "db_execute_ms",
+          "count": 1,
+          "p50Ms": 4.436,
+          "p95Ms": 4.436,
+          "maxMs": 4.436,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_device_status_timing",
+          "metric": "db_fetch_ms",
+          "count": 1,
+          "p50Ms": 0.021,
+          "p95Ms": 0.021,
+          "maxMs": 0.021,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_device_status_timing",
+          "metric": "event_repository_ms",
+          "count": 1,
+          "p50Ms": 2.619,
+          "p95Ms": 2.619,
+          "maxMs": 2.619,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_device_status_timing",
+          "metric": "queue_ms",
+          "count": 1,
+          "p50Ms": 0.103,
+          "p95Ms": 0.103,
+          "maxMs": 0.103,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_device_status_timing",
+          "metric": "work_ms",
+          "count": 1,
+          "p50Ms": 40.873,
+          "p95Ms": 40.873,
+          "maxMs": 40.873,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "intervalMs",
+          "count": 10,
+          "p50Ms": 250.0,
+          "p95Ms": 250.0,
+          "maxMs": 250.0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "maxMs",
+          "count": 10,
+          "p50Ms": 88.628,
+          "p95Ms": 104.171,
+          "maxMs": 104.171,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "over250Ms",
+          "count": 10,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "maxMs": 0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "over50Ms",
+          "count": 10,
+          "p50Ms": 1,
+          "p95Ms": 3,
+          "maxMs": 3,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "p50Ms",
+          "count": 10,
+          "p50Ms": 0.852,
+          "p95Ms": 0.882,
+          "maxMs": 0.882,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "p95Ms",
+          "count": 10,
+          "p50Ms": 2.247,
+          "p95Ms": 2.685,
+          "maxMs": 2.685,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.ingress.ingest_frame",
+          "metric": "queue_ms",
+          "count": 81,
+          "p50Ms": 0.194,
+          "p95Ms": 1.359,
+          "maxMs": 4.489,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.ingress.ingest_frame",
+          "metric": "resume_ms",
+          "count": 81,
+          "p50Ms": 0.653,
+          "p95Ms": 1.915,
+          "maxMs": 5.413,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.ingress.ingest_frame",
+          "metric": "work_ms",
+          "count": 81,
+          "p50Ms": 1.926,
+          "p95Ms": 6.78,
+          "maxMs": 29.816,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        }
+      ],
+      "answerStages": [
+        {
+          "event": "chat.first_visible_answer",
+          "metric": "admission_to_visible_ms",
+          "count": 2,
+          "p50Ms": 1103,
+          "p95Ms": 1602,
+          "maxMs": 1602,
+          "atLeast500Ms": 2,
+          "atLeast1000Ms": 2
+        },
+        {
+          "event": "chat.first_visible_answer",
+          "metric": "provider_to_visible_ms",
+          "count": 2,
+          "p50Ms": 908,
+          "p95Ms": 1413,
+          "maxMs": 1413,
+          "atLeast500Ms": 2,
+          "atLeast1000Ms": 1
+        },
+        {
+          "event": "chat.prompt_quality_completed",
+          "metric": "completion_ms",
+          "count": 2,
+          "p50Ms": 4574,
+          "p95Ms": 6726,
+          "maxMs": 6726,
+          "atLeast500Ms": 2,
+          "atLeast1000Ms": 2
+        },
+        {
+          "event": "chat.prompt_quality_completed",
+          "metric": "first_token_ms",
+          "count": 2,
+          "p50Ms": 593,
+          "p95Ms": 901,
+          "maxMs": 901,
+          "atLeast500Ms": 2,
+          "atLeast1000Ms": 0
+        },
+        {
+          "event": "chat.provider_first_token",
+          "metric": "admission_to_provider_ms",
+          "count": 2,
+          "p50Ms": 189,
+          "p95Ms": 195,
+          "maxMs": 195,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "event": "chat.provider_first_token",
+          "metric": "executor_admission_to_generator_ms",
+          "count": 2,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "maxMs": 1,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "event": "chat.provider_first_token",
+          "metric": "provider_first_token_ms",
+          "count": 2,
+          "p50Ms": 593,
+          "p95Ms": 901,
+          "maxMs": 901,
+          "atLeast500Ms": 2,
+          "atLeast1000Ms": 0
+        },
+        {
+          "event": "chat.provider_first_token",
+          "metric": "route_to_executor_admission_ms",
+          "count": 2,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "maxMs": 0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        }
+      ],
+      "slowTimeline": [
+        {
+          "atMs": 1793735636604,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1646.4
+        },
+        {
+          "atMs": 1793735636636,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1674.78
+        },
+        {
+          "atMs": 1793735636656,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1598.37
+        },
+        {
+          "atMs": 1793735636669,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1600.02
+        },
+        {
+          "atMs": 1793735636757,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1184.25
+        },
+        {
+          "atMs": 1793735648647,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1904.29
+        },
+        {
+          "atMs": 1793735648749,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1971.96
+        },
+        {
+          "atMs": 1793735648749,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1955.8
+        },
+        {
+          "atMs": 1793735648758,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1783.73
+        },
+        {
+          "atMs": 1793735648764,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1904.47
+        },
+        {
+          "atMs": 1793735660764,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1986.96
+        },
+        {
+          "atMs": 1793735660810,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1801.13
+        },
+        {
+          "atMs": 1793735660853,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1843.4
+        },
+        {
+          "atMs": 1793735660862,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1856.21
+        },
+        {
+          "atMs": 1793735660868,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1858.94
+        },
+        {
+          "atMs": 1793735674193,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 3360.89
+        },
+        {
+          "atMs": 1793735674277,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 3397.87
+        },
+        {
+          "atMs": 1793735674355,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 3397.26
+        },
+        {
+          "atMs": 1793735674495,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 3539.69
+        },
+        {
+          "atMs": 1793735674934,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 3477.51
+        },
+        {
+          "atMs": 1793735675143,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 3426.82
+        },
+        {
+          "atMs": 1793735685810,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1413.59
+        },
+        {
+          "atMs": 1793735685951,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1434.85
+        },
+        {
+          "atMs": 1793735686019,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1459.43
+        },
+        {
+          "atMs": 1793735696997,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1058.84
+        },
+        {
+          "atMs": 1793735697625,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1517.78
+        },
+        {
+          "atMs": 1793735697713,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1552.05
+        },
+        {
+          "atMs": 1793735697804,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1319.48
+        },
+        {
+          "atMs": 1793735834921,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1012.73
+        }
+      ]
+    },
+    "idleBeforeTest": {
+      "withoutActiveConnection": {
+        "count": 193,
+        "p50Ms": 5.17,
+        "p95Ms": 21.05,
+        "maxMs": 115.21,
+        "atLeast500Ms": 0,
+        "atLeast1000Ms": 0
+      },
+      "withoutAdmin": {
+        "count": 440,
+        "p50Ms": 35.38,
+        "p95Ms": 504.14,
+        "maxMs": 966.26,
+        "atLeast500Ms": 26,
+        "atLeast1000Ms": 0
+      },
+      "startMs": 1793734920000,
+      "endMs": 1793735220000,
+      "apiRequests": {
+        "count": 445,
+        "p50Ms": 35.47,
+        "p95Ms": 504.14,
+        "maxMs": 966.26,
+        "atLeast500Ms": 26,
+        "atLeast1000Ms": 0
+      },
+      "routes": [
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "count": 252,
+          "p50Ms": 249.1,
+          "p95Ms": 530.6,
+          "maxMs": 966.26,
+          "atLeast500Ms": 26,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/admin/payments/revenue-summary",
+          "count": 5,
+          "p50Ms": 90.78,
+          "p95Ms": 115.21,
+          "maxMs": 115.21,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/admin/capacity",
+          "count": 5,
+          "p50Ms": 78.65,
+          "p95Ms": 108.42,
+          "maxMs": 108.42,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/binding",
+          "count": 1,
+          "p50Ms": 66.78,
+          "p95Ms": 66.78,
+          "maxMs": 66.78,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/by-code/{manual_code}/binding",
+          "count": 1,
+          "p50Ms": 42.03,
+          "p95Ms": 42.03,
+          "maxMs": 42.03,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/auth/refresh",
+          "count": 5,
+          "p50Ms": 19.38,
+          "p95Ms": 19.92,
+          "maxMs": 19.92,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/heartbeat",
+          "count": 176,
+          "p50Ms": 5.12,
+          "p95Ms": 10.54,
+          "maxMs": 43.18,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/web-heartbeat",
+          "count": 5,
+          "p50Ms": 4.81,
+          "p95Ms": 4.98,
+          "maxMs": 4.98,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/healthz",
+          "count": 20,
+          "p50Ms": 0.63,
+          "p95Ms": 0.7,
+          "maxMs": 1.11,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        }
+      ],
+      "phaseTimings": [
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "intervalMs",
+          "count": 10,
+          "p50Ms": 250.0,
+          "p95Ms": 250.0,
+          "maxMs": 250.0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "maxMs",
+          "count": 10,
+          "p50Ms": 13.347,
+          "p95Ms": 23.737,
+          "maxMs": 23.737,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "over250Ms",
+          "count": 10,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "maxMs": 0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "over50Ms",
+          "count": 10,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "maxMs": 0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "p50Ms",
+          "count": 10,
+          "p50Ms": 0.912,
+          "p95Ms": 0.938,
+          "maxMs": 0.938,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "p95Ms",
+          "count": 10,
+          "p50Ms": 1.973,
+          "p95Ms": 2.006,
+          "maxMs": 2.006,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        }
+      ],
+      "answerStages": [],
+      "slowTimeline": []
+    },
+    "testSince0348": {
+      "withoutActiveConnection": {
+        "count": 1079,
+        "p50Ms": 22.78,
+        "p95Ms": 117.26,
+        "maxMs": 670.03,
+        "atLeast500Ms": 1,
+        "atLeast1000Ms": 0
+      },
+      "withoutAdmin": {
+        "count": 1625,
+        "p50Ms": 35.85,
+        "p95Ms": 1274.89,
+        "maxMs": 3539.69,
+        "atLeast500Ms": 200,
+        "atLeast1000Ms": 112
+      },
+      "startMs": 1793735280000,
+      "endMs": 1793735931838,
+      "apiRequests": {
+        "count": 1662,
+        "p50Ms": 36.15,
+        "p95Ms": 1265.02,
+        "maxMs": 3539.69,
+        "atLeast500Ms": 201,
+        "atLeast1000Ms": 112
+      },
+      "routes": [
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "count": 583,
+          "p50Ms": 286.78,
+          "p95Ms": 1772.6,
+          "maxMs": 3539.69,
+          "atLeast500Ms": 200,
+          "atLeast1000Ms": 112
+        },
+        {
+          "route": "/api/v1/admin/dashboard",
+          "count": 3,
+          "p50Ms": 451.51,
+          "p95Ms": 670.03,
+          "maxMs": 670.03,
+          "atLeast500Ms": 1,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/web/state",
+          "count": 5,
+          "p50Ms": 459.1,
+          "p95Ms": 491.66,
+          "maxMs": 491.66,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/admin/analytics/trends",
+          "count": 6,
+          "p50Ms": 246.41,
+          "p95Ms": 308.63,
+          "maxMs": 308.63,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/live-answer/questions/stream",
+          "count": 3,
+          "p50Ms": 215.21,
+          "p95Ms": 221.6,
+          "maxMs": 221.6,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/sessions/{session_id}/start",
+          "count": 1,
+          "p50Ms": 189.21,
+          "p95Ms": 189.21,
+          "maxMs": 189.21,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/admin/payments/revenue-summary",
+          "count": 27,
+          "p50Ms": 103.02,
+          "p95Ms": 183.66,
+          "maxMs": 200.72,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/web-heartbeat",
+          "count": 73,
+          "p50Ms": 51.28,
+          "p95Ms": 156.11,
+          "maxMs": 188.6,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/screenshot-answer/sessions/{session_id}/history",
+          "count": 18,
+          "p50Ms": 92.03,
+          "p95Ms": 152.41,
+          "maxMs": 152.41,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/admin/server-health",
+          "count": 2,
+          "p50Ms": 136.63,
+          "p95Ms": 149.12,
+          "maxMs": 149.12,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/admin/capacity",
+          "count": 28,
+          "p50Ms": 78.36,
+          "p95Ms": 148.51,
+          "maxMs": 174.69,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/screenshot-answer/sessions/{session_id}/remote-capture-requests",
+          "count": 6,
+          "p50Ms": 92.49,
+          "p95Ms": 141.57,
+          "maxMs": 141.57,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/desktop-binding",
+          "count": 18,
+          "p50Ms": 59.85,
+          "p95Ms": 127.93,
+          "maxMs": 127.93,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/live-answer/sessions/{session_id}/history",
+          "count": 18,
+          "p50Ms": 86.21,
+          "p95Ms": 120.53,
+          "maxMs": 120.53,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/sessions/{session_id}/idle-status",
+          "count": 37,
+          "p50Ms": 59.55,
+          "p95Ms": 120.39,
+          "maxMs": 122.88,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/publishers",
+          "count": 7,
+          "p50Ms": 70.89,
+          "p95Ms": 117.3,
+          "maxMs": 117.3,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/stream",
+          "count": 3,
+          "p50Ms": 79.86,
+          "p95Ms": 112.53,
+          "maxMs": 112.53,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/admin/session",
+          "count": 1,
+          "p50Ms": 107.05,
+          "p95Ms": 107.05,
+          "maxMs": 107.05,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/metrics",
+          "count": 1,
+          "p50Ms": 94.09,
+          "p95Ms": 94.09,
+          "maxMs": 94.09,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/screenshot-answer/desktop-devices/{device_id}/capture-requests/stream",
+          "count": 16,
+          "p50Ms": 6.36,
+          "p95Ms": 90.79,
+          "maxMs": 90.79,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/screenshot-answer/capture-requests/{request_id}/desktop-upload",
+          "count": 2,
+          "p50Ms": 50.41,
+          "p95Ms": 81.57,
+          "maxMs": 81.57,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/auth/me",
+          "count": 1,
+          "p50Ms": 79.33,
+          "p95Ms": 79.33,
+          "maxMs": 79.33,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/device-status",
+          "count": 37,
+          "p50Ms": 45.71,
+          "p95Ms": 75.34,
+          "maxMs": 177.06,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/performance-ack",
+          "count": 370,
+          "p50Ms": 24.57,
+          "p95Ms": 75.09,
+          "maxMs": 172.65,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/binding",
+          "count": 2,
+          "p50Ms": 66.84,
+          "p95Ms": 70.84,
+          "maxMs": 70.84,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/screenshot-answer/capture-requests/{request_id}",
+          "count": 3,
+          "p50Ms": 47.25,
+          "p95Ms": 66.93,
+          "maxMs": 66.93,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/delivery-metrics",
+          "count": 6,
+          "p50Ms": 43.0,
+          "p95Ms": 54.14,
+          "maxMs": 54.14,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/by-code/{manual_code}/binding",
+          "count": 4,
+          "p50Ms": 36.5,
+          "p95Ms": 40.78,
+          "maxMs": 40.78,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/auth/refresh",
+          "count": 10,
+          "p50Ms": 19.69,
+          "p95Ms": 24.02,
+          "maxMs": 24.02,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/heartbeat",
+          "count": 420,
+          "p50Ms": 5.13,
+          "p95Ms": 17.15,
+          "maxMs": 185.87,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/healthz",
+          "count": 43,
+          "p50Ms": 0.64,
+          "p95Ms": 0.93,
+          "maxMs": 2.36,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        }
+      ],
+      "phaseTimings": [
+        {
+          "group": "cn_device_status_timing",
+          "metric": "binding_repository_ms",
+          "count": 1,
+          "p50Ms": 1.847,
+          "p95Ms": 1.847,
+          "maxMs": 1.847,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_device_status_timing",
+          "metric": "db_acquire_ms",
+          "count": 1,
+          "p50Ms": 30.908,
+          "p95Ms": 30.908,
+          "maxMs": 30.908,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_device_status_timing",
+          "metric": "db_execute_ms",
+          "count": 1,
+          "p50Ms": 4.436,
+          "p95Ms": 4.436,
+          "maxMs": 4.436,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_device_status_timing",
+          "metric": "db_fetch_ms",
+          "count": 1,
+          "p50Ms": 0.021,
+          "p95Ms": 0.021,
+          "maxMs": 0.021,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_device_status_timing",
+          "metric": "event_repository_ms",
+          "count": 1,
+          "p50Ms": 2.619,
+          "p95Ms": 2.619,
+          "maxMs": 2.619,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_device_status_timing",
+          "metric": "queue_ms",
+          "count": 1,
+          "p50Ms": 0.103,
+          "p95Ms": 0.103,
+          "maxMs": 0.103,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_device_status_timing",
+          "metric": "work_ms",
+          "count": 1,
+          "p50Ms": 40.873,
+          "p95Ms": 40.873,
+          "maxMs": 40.873,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "intervalMs",
+          "count": 22,
+          "p50Ms": 250.0,
+          "p95Ms": 250.0,
+          "maxMs": 250.0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "maxMs",
+          "count": 22,
+          "p50Ms": 99.368,
+          "p95Ms": 136.013,
+          "maxMs": 136.013,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "over250Ms",
+          "count": 22,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "maxMs": 0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "over50Ms",
+          "count": 22,
+          "p50Ms": 1,
+          "p95Ms": 3,
+          "maxMs": 3,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "p50Ms",
+          "count": 22,
+          "p50Ms": 0.863,
+          "p95Ms": 0.916,
+          "maxMs": 0.92,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "p95Ms",
+          "count": 22,
+          "p50Ms": 2.085,
+          "p95Ms": 2.615,
+          "maxMs": 2.685,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.ingress.ingest_frame",
+          "metric": "queue_ms",
+          "count": 155,
+          "p50Ms": 0.179,
+          "p95Ms": 1.012,
+          "maxMs": 4.489,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.ingress.ingest_frame",
+          "metric": "resume_ms",
+          "count": 155,
+          "p50Ms": 0.691,
+          "p95Ms": 2.017,
+          "maxMs": 5.413,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.ingress.ingest_frame",
+          "metric": "work_ms",
+          "count": 155,
+          "p50Ms": 1.723,
+          "p95Ms": 6.78,
+          "maxMs": 29.816,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.lifecycle.publisher_create",
+          "metric": "queue_ms",
+          "count": 1,
+          "p50Ms": 0.093,
+          "p95Ms": 0.093,
+          "maxMs": 0.093,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.lifecycle.publisher_create",
+          "metric": "resume_ms",
+          "count": 1,
+          "p50Ms": 0.448,
+          "p95Ms": 0.448,
+          "maxMs": 0.448,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.lifecycle.publisher_create",
+          "metric": "work_ms",
+          "count": 1,
+          "p50Ms": 24.085,
+          "p95Ms": 24.085,
+          "maxMs": 24.085,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        }
+      ],
+      "answerStages": [
+        {
+          "event": "chat.first_visible_answer",
+          "metric": "admission_to_visible_ms",
+          "count": 3,
+          "p50Ms": 1221,
+          "p95Ms": 1602,
+          "maxMs": 1602,
+          "atLeast500Ms": 3,
+          "atLeast1000Ms": 3
+        },
+        {
+          "event": "chat.first_visible_answer",
+          "metric": "provider_to_visible_ms",
+          "count": 3,
+          "p50Ms": 1026,
+          "p95Ms": 1413,
+          "maxMs": 1413,
+          "atLeast500Ms": 3,
+          "atLeast1000Ms": 2
+        },
+        {
+          "event": "chat.prompt_quality_completed",
+          "metric": "completion_ms",
+          "count": 3,
+          "p50Ms": 6149,
+          "p95Ms": 6726,
+          "maxMs": 6726,
+          "atLeast500Ms": 3,
+          "atLeast1000Ms": 3
+        },
+        {
+          "event": "chat.prompt_quality_completed",
+          "metric": "first_token_ms",
+          "count": 3,
+          "p50Ms": 623,
+          "p95Ms": 901,
+          "maxMs": 901,
+          "atLeast500Ms": 3,
+          "atLeast1000Ms": 0
+        },
+        {
+          "event": "chat.provider_first_token",
+          "metric": "admission_to_provider_ms",
+          "count": 3,
+          "p50Ms": 195,
+          "p95Ms": 195,
+          "maxMs": 195,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "event": "chat.provider_first_token",
+          "metric": "executor_admission_to_generator_ms",
+          "count": 3,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "maxMs": 1,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "event": "chat.provider_first_token",
+          "metric": "provider_first_token_ms",
+          "count": 3,
+          "p50Ms": 623,
+          "p95Ms": 901,
+          "maxMs": 901,
+          "atLeast500Ms": 3,
+          "atLeast1000Ms": 0
+        },
+        {
+          "event": "chat.provider_first_token",
+          "metric": "route_to_executor_admission_ms",
+          "count": 3,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "maxMs": 0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        }
+      ],
+      "slowTimeline": [
+        {
+          "atMs": 1793735600773,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1721.53
+        },
+        {
+          "atMs": 1793735612848,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1880.0
+        },
+        {
+          "atMs": 1793735612916,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1948.95
+        },
+        {
+          "atMs": 1793735612923,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1955.17
+        },
+        {
+          "atMs": 1793735612946,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 2192.43
+        },
+        {
+          "atMs": 1793735613060,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1703.48
+        },
+        {
+          "atMs": 1793735624816,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1884.74
+        },
+        {
+          "atMs": 1793735624838,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1848.11
+        },
+        {
+          "atMs": 1793735624865,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1809.62
+        },
+        {
+          "atMs": 1793735624904,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1809.99
+        },
+        {
+          "atMs": 1793735624968,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1305.16
+        },
+        {
+          "atMs": 1793735636604,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1646.4
+        },
+        {
+          "atMs": 1793735636636,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1674.78
+        },
+        {
+          "atMs": 1793735636656,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1598.37
+        },
+        {
+          "atMs": 1793735636669,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1600.02
+        },
+        {
+          "atMs": 1793735636757,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1184.25
+        },
+        {
+          "atMs": 1793735648647,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1904.29
+        },
+        {
+          "atMs": 1793735648749,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1971.96
+        },
+        {
+          "atMs": 1793735648749,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1955.8
+        },
+        {
+          "atMs": 1793735648758,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1783.73
+        },
+        {
+          "atMs": 1793735648764,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1904.47
+        },
+        {
+          "atMs": 1793735660764,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1986.96
+        },
+        {
+          "atMs": 1793735660810,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1801.13
+        },
+        {
+          "atMs": 1793735660853,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1843.4
+        },
+        {
+          "atMs": 1793735660862,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1856.21
+        },
+        {
+          "atMs": 1793735660868,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1858.94
+        },
+        {
+          "atMs": 1793735674193,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 3360.89
+        },
+        {
+          "atMs": 1793735674277,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 3397.87
+        },
+        {
+          "atMs": 1793735674355,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 3397.26
+        },
+        {
+          "atMs": 1793735674495,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 3539.69
+        },
+        {
+          "atMs": 1793735674934,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 3477.51
+        },
+        {
+          "atMs": 1793735675143,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 3426.82
+        },
+        {
+          "atMs": 1793735685810,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1413.59
+        },
+        {
+          "atMs": 1793735685951,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1434.85
+        },
+        {
+          "atMs": 1793735686019,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1459.43
+        },
+        {
+          "atMs": 1793735696997,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1058.84
+        },
+        {
+          "atMs": 1793735697625,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1517.78
+        },
+        {
+          "atMs": 1793735697713,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1552.05
+        },
+        {
+          "atMs": 1793735697804,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1319.48
+        },
+        {
+          "atMs": 1793735834921,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "elapsedMs": 1012.73
+        }
+      ]
+    }
+  },
+  "rawLogsExported": false,
+  "identifiersExported": false,
+  "productionMutations": 0,
+  "recentProxyActiveConnectionShape": {
+    "counts": {
+      "withoutBothPinned": 107,
+      "status200": 277,
+      "withBothPinned": 170
+    },
+    "distinctDevicePaths": 12,
+    "rawQueryExported": false
+  },
+  "lastCapacityPoints": [
+    {
+      "atMs": 1793735763361,
+      "apiP95Ms": 1729.61,
+      "apiErrorRate": 0.0,
+      "requestsPerMinute": 137.27,
+      "activeInterviews": 1,
+      "activeUsers": 1,
+      "activeAudioStreams": 1,
+      "databaseConnections": 1,
+      "cpuPercent": 7.48
+    },
+    {
+      "atMs": 1793735793407,
+      "apiP95Ms": 1674.78,
+      "apiErrorRate": 0.0,
+      "requestsPerMinute": 150.15,
+      "activeInterviews": 1,
+      "activeUsers": 1,
+      "activeAudioStreams": 2,
+      "databaseConnections": 1,
+      "cpuPercent": 9.51
+    },
+    {
+      "atMs": 1793735823450,
+      "apiP95Ms": 1598.37,
+      "apiErrorRate": 0.0,
+      "requestsPerMinute": 163.54,
+      "activeInterviews": 1,
+      "activeUsers": 1,
+      "activeAudioStreams": 1,
+      "databaseConnections": 1,
+      "cpuPercent": 9.32
+    },
+    {
+      "atMs": 1793735853521,
+      "apiP95Ms": 1566.37,
+      "apiErrorRate": 0.0,
+      "requestsPerMinute": 172.24,
+      "activeInterviews": 1,
+      "activeUsers": 1,
+      "activeAudioStreams": 2,
+      "databaseConnections": 1,
+      "cpuPercent": 9.39
+    },
+    {
+      "atMs": 1793735883593,
+      "apiP95Ms": 1434.85,
+      "apiErrorRate": 0.0,
+      "requestsPerMinute": 172.07,
+      "activeInterviews": 1,
+      "activeUsers": 1,
+      "activeAudioStreams": 2,
+      "databaseConnections": 1,
+      "cpuPercent": 9.6
+    },
+    {
+      "atMs": 1793735913650,
+      "apiP95Ms": 858.38,
+      "apiErrorRate": 0.0,
+      "requestsPerMinute": 174.1,
+      "activeInterviews": 1,
+      "activeUsers": 1,
+      "activeAudioStreams": 1,
+      "databaseConnections": 1,
+      "cpuPercent": 5.68
+    }
+  ]
+}

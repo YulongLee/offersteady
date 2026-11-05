@@ -1,0 +1,9 @@
+{
+  "apps/backend/app/modules/realtime_speech.py": "9fce4d6156297fb5011a6b3d42a847b05a261d7b039eec118dc4f0095c3b5649",
+  "apps/backend/app/services/cn_provider_close_executor.py": "ac7118182956e8dfd9bb622323282ed6d1a625ac3bebb9384545ccf669a1dea7",
+  "apps/backend/app/services/cn_realtime_entity_state.py": "dff3963af27f4f5347e447304f983e0bd687d69c3dda8fded702bf8ea9c1be2a",
+  "apps/backend/app/services/cn_realtime_io_executor.py": "2e109eac1f73ab00e0f39ea5fcf40481560ebeaa8e368ef7f083667e78c4452e",
+  "apps/backend/app/services/dashscope_realtime_asr_gateway.py": "099d4658a1fc838335780a9f6d93104e5dd0eb170a2f6990292d4d159ca595ca",
+  "apps/backend/app/services/realtime_speech_service.py": "69f36dd5315f86ab52acb25f31fb31ed1b0f47d9cf08143d22cd0a0b614f0921",
+  "apps/backend/app/services/redis_realtime_speech_repository.py": "68670aad5f2df24714bb23fb8a303d036e8649d0c2c7d9b9d28781ea6a78a128"
+}

@@ -1,0 +1,15 @@
+{
+  "tests": {
+    "tests": 366,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "passedTests": 146,
+  "passedSubtests": 220,
+  "sourceReview": "controller-source-review.json",
+  "actualImageProbe": "candidate-probe-result.json",
+  "productionMutationsByTests": 0,
+  "controllerSha256": "01b8b73d00254318aa9458aa24836e5efc713f8ae2179ce28a0408e6ca95a8bd",
+  "probeTemplateSha256": "57658ecc1f04a6c2be2c45f590b01fff82acbec8cd4df11728d86dd27a977e5d"
+}

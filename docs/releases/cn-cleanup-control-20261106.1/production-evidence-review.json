@@ -1,0 +1,38 @@
+{
+  "verifiedAt": "2026-11-06 01:22:18 Asia/Shanghai",
+  "runtimeInputs": 238,
+  "preservedOriginalInputs": 231,
+  "controllerSha256": "01b8b73d00254318aa9458aa24836e5efc713f8ae2179ce28a0408e6ca95a8bd",
+  "candidateImage": "sha256:1724a4e95c8fe610d2e6b98a5186a3867adde99c4126e96f55920c2beefc80cf",
+  "sevenWorkGatesZero": true,
+  "cnEntityProtectedFieldsZero": true,
+  "tcpZero": true,
+  "singleWriterVerified": true,
+  "allContractsAndNonTargetsVerified": true,
+  "startupProxy502": 15,
+  "lastProxyErrorSecondsAfterStart": 3.545,
+  "proxyErrorsAfterDeploymentVerified": 0,
+  "naturalWindowSeconds": 120.497,
+  "ordinaryHttpNaturalStats": {
+    "atLeast1000Ms": 0,
+    "atLeast500Ms": 0,
+    "count": 162,
+    "maxMs": 74.53,
+    "p50Ms": 21.22,
+    "p95Ms": 47.0
+  },
+  "matchedActiveLoadComparisonPerformed": false,
+  "noUserWorkEnded": true,
+  "gitPublication": false,
+  "evidenceFilesSha256": {
+    "production-verification.json": "a82e4c61d8abcb0748ecb165bb5f9fcbb3db642948ea26b1a8fab0f4461a88d4",
+    "backend-runtime-manifest.json": "1e63d9c2cda653d93bd8cddd55b7f9e6959ad9e6e26e94df4bd4083cf4cc038d",
+    "candidate-probe-result.json": "71bf848147adbcbb255b375f38a6d9410e70ac73c466e2fc9058c94ff83563af",
+    "release-regression-summary.json": "f1ea70cda42601a654e0bad7bcdccf8e77b8d9e0e32b4050c35211be623c8606",
+    "controller-source-review.json": "a62e447fff218f801d8532ac04c2b86743bcb813accf19ab033fad2a73c8eb27",
+    "post-release-error-summary.json": "1c308a9f7e5b8453046860c6d30d042feac5a436bf0470f46d6edc4437879bba",
+    "proxy-error-window.json": "155ed38ea4f2ebe1a6013d41c41574043b774c0b8719986c0d76052af11b43d8",
+    "post-verification-natural-routes.json": "6a2657dbcd25ed936b11f363f07d7b087dfc46109043630aaa6a2212ce9fe850",
+    "verification-boundary.json": "dab151c06e2c5366cc64e419fd849e9c6a46899b89176a5a0b5629c88fc022a7"
+  }
+}

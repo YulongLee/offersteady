@@ -1,0 +1,198 @@
+{
+  "atMs": 1793899571676,
+  "backendOwnershipAndHealthChecked": true,
+  "errorLevels": {},
+  "fixedWarnings": {},
+  "identifiersExported": false,
+  "lastCapacityPoints": [
+    {
+      "activeAudioStreams": 0,
+      "activeInterviews": 0,
+      "activeUsers": 0,
+      "apiErrorRate": 0.0,
+      "apiP95Ms": 50.61,
+      "atMs": 1793899470395,
+      "cpuPercent": 0.94,
+      "databaseConnections": 1,
+      "requestsPerMinute": 86.78
+    },
+    {
+      "activeAudioStreams": 0,
+      "activeInterviews": 0,
+      "activeUsers": 0,
+      "apiErrorRate": 0.0,
+      "apiP95Ms": 50.48,
+      "atMs": 1793899500437,
+      "cpuPercent": 0.85,
+      "databaseConnections": 1,
+      "requestsPerMinute": 84.96
+    },
+    {
+      "activeAudioStreams": 0,
+      "activeInterviews": 0,
+      "activeUsers": 0,
+      "apiErrorRate": 0.0,
+      "apiP95Ms": 50.48,
+      "atMs": 1793899530480,
+      "cpuPercent": 0.92,
+      "databaseConnections": 1,
+      "requestsPerMinute": 84.52
+    },
+    {
+      "activeAudioStreams": 0,
+      "activeInterviews": 0,
+      "activeUsers": 0,
+      "apiErrorRate": 0.0,
+      "apiP95Ms": 47.0,
+      "atMs": 1793899560522,
+      "cpuPercent": 0.89,
+      "databaseConnections": 1,
+      "requestsPerMinute": 83.94
+    }
+  ],
+  "linesScanned": 344,
+  "productionMutations": 0,
+  "rawLogsExported": false,
+  "recentProxyActiveConnectionShape": {
+    "counts": {
+      "status200": 92,
+      "withBothPinned": 57,
+      "withoutBothPinned": 35
+    },
+    "distinctDevicePaths": 8,
+    "rawQueryExported": false
+  },
+  "scanStartMs": 1793899451179,
+  "windows": {
+    "stableNatural": {
+      "answerStages": [],
+      "apiRequests": {
+        "atLeast1000Ms": 0,
+        "atLeast500Ms": 0,
+        "count": 162,
+        "maxMs": 74.53,
+        "p50Ms": 21.22,
+        "p95Ms": 47.0
+      },
+      "endMs": 1793899571676,
+      "phaseTimings": [
+        {
+          "atLeast1000Ms": 0,
+          "atLeast500Ms": 0,
+          "count": 4,
+          "group": "cn_main_loop_timing",
+          "maxMs": 250.0,
+          "metric": "intervalMs",
+          "p50Ms": 250.0,
+          "p95Ms": 250.0
+        },
+        {
+          "atLeast1000Ms": 0,
+          "atLeast500Ms": 0,
+          "count": 4,
+          "group": "cn_main_loop_timing",
+          "maxMs": 7.033,
+          "metric": "maxMs",
+          "p50Ms": 2.98,
+          "p95Ms": 7.033
+        },
+        {
+          "atLeast1000Ms": 0,
+          "atLeast500Ms": 0,
+          "count": 4,
+          "group": "cn_main_loop_timing",
+          "maxMs": 0,
+          "metric": "over250Ms",
+          "p50Ms": 0,
+          "p95Ms": 0
+        },
+        {
+          "atLeast1000Ms": 0,
+          "atLeast500Ms": 0,
+          "count": 4,
+          "group": "cn_main_loop_timing",
+          "maxMs": 0,
+          "metric": "over50Ms",
+          "p50Ms": 0,
+          "p95Ms": 0
+        },
+        {
+          "atLeast1000Ms": 0,
+          "atLeast500Ms": 0,
+          "count": 4,
+          "group": "cn_main_loop_timing",
+          "maxMs": 0.86,
+          "metric": "p50Ms",
+          "p50Ms": 0.858,
+          "p95Ms": 0.86
+        },
+        {
+          "atLeast1000Ms": 0,
+          "atLeast500Ms": 0,
+          "count": 4,
+          "group": "cn_main_loop_timing",
+          "maxMs": 1.934,
+          "metric": "p95Ms",
+          "p50Ms": 1.894,
+          "p95Ms": 1.934
+        }
+      ],
+      "routes": [
+        {
+          "atLeast1000Ms": 0,
+          "atLeast500Ms": 0,
+          "count": 92,
+          "maxMs": 74.53,
+          "p50Ms": 22.86,
+          "p95Ms": 52.95,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection"
+        },
+        {
+          "atLeast1000Ms": 0,
+          "atLeast500Ms": 0,
+          "count": 6,
+          "maxMs": 41.95,
+          "p50Ms": 40.12,
+          "p95Ms": 41.95,
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/device-status"
+        },
+        {
+          "atLeast1000Ms": 0,
+          "atLeast500Ms": 0,
+          "count": 64,
+          "maxMs": 7.62,
+          "p50Ms": 5.07,
+          "p95Ms": 6.49,
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/heartbeat"
+        },
+        {
+          "atLeast1000Ms": 0,
+          "atLeast500Ms": 0,
+          "count": 8,
+          "maxMs": 0.72,
+          "p50Ms": 0.57,
+          "p95Ms": 0.72,
+          "route": "/healthz"
+        }
+      ],
+      "slowTimeline": [],
+      "startMs": 1793899451179,
+      "withoutActiveConnection": {
+        "atLeast1000Ms": 0,
+        "atLeast500Ms": 0,
+        "count": 70,
+        "maxMs": 41.95,
+        "p50Ms": 5.08,
+        "p95Ms": 40.12
+      },
+      "withoutAdmin": {
+        "atLeast1000Ms": 0,
+        "atLeast500Ms": 0,
+        "count": 162,
+        "maxMs": 74.53,
+        "p50Ms": 21.22,
+        "p95Ms": 47.0
+      }
+    }
+  }
+}

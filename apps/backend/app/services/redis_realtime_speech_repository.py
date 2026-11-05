@@ -423,6 +423,7 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
                 legacy_bindings[key] = record
         count = store.seed(candidates=self.candidates.values(), accounts=self.account_desktop_devices.values(),
                            bindings=legacy_bindings.values(), activity=self.session_activity_versions)
+        store.seed_owner_indexes()
         self.candidates = {x.candidate_id: x for x in store.all_records("candidate")}
         self.account_desktop_devices = {(x.owner_user_id, x.device_id): x for x in store.all_records("account")}
         self.session_bindings = {(x.owner_user_id, x.session_id): x for x in store.all_records("binding")}
@@ -525,7 +526,7 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
         return self._read(lambda: super(RedisRealtimeSpeechRepository, self).get_last_account_desktop_device(user_id=user_id))
     def list_account_desktop_devices(self, *, user_id):
         if self._cn_entity_mode():
-            return sorted((x for x in self._cn_controls.all_records("account") if x.owner_user_id == user_id), key=lambda x: (x.last_used_at_ms, x.device_id), reverse=True)
+            return sorted(self._cn_controls.owner_records("accounts", user_id), key=lambda x: (x.last_used_at_ms, x.device_id), reverse=True)
         return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_account_desktop_devices(user_id=user_id))
     def save_session_desktop_binding(self, binding):
         if self._cn_entity_mode(): return self._cn_saved("binding", binding)
@@ -598,7 +599,7 @@ class RedisRealtimeSpeechRepository(InMemoryRealtimeSpeechRepository):
 
     def list_session_desktop_bindings_for_user(self, *, user_id):
         if self._cn_entity_mode():
-            return sorted((x for x in self._cn_controls.all_records("binding") if x.owner_user_id == user_id), key=lambda x: (x.bound_at_ms, x.session_id))
+            return sorted(self._cn_controls.owner_records("bindings", user_id), key=lambda x: (x.bound_at_ms, x.session_id))
         return self._read(lambda: super(RedisRealtimeSpeechRepository, self).list_session_desktop_bindings_for_user(user_id=user_id))
     def _persist_web_heartbeat_entity(self, record: WebSessionHeartbeatRecord) -> None:
         encoded = json.dumps(asdict(record), ensure_ascii=True, separators=(",", ":"))

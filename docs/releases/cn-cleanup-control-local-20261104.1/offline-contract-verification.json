@@ -1,0 +1,40 @@
+{
+  "baselineImage": "sha256:a1e6c069511c7ea9eefa38cd4fe662400de2d50a19a3a70f9528215ebf0f3cc9",
+  "baselineInputs": 237,
+  "candidateInputs": 238,
+  "changed": [
+    "apps/backend/app/modules/realtime_speech.py",
+    "apps/backend/app/services/cn_realtime_entity_state.py",
+    "apps/backend/app/services/cn_realtime_io_executor.py",
+    "apps/backend/app/services/dashscope_realtime_asr_gateway.py",
+    "apps/backend/app/services/realtime_speech_service.py",
+    "apps/backend/app/services/redis_realtime_speech_repository.py"
+  ],
+  "added": [
+    "apps/backend/app/services/cn_provider_close_executor.py"
+  ],
+  "unchangedInputs": 231,
+  "candidateManifestSha256": "61a5c7604bb2229933d331a4644807c67546fe8ed6e468a504e66279dbfd63e8",
+  "completeSchemaEqual": true,
+  "schemaPaths": 203,
+  "schemaSha256": "acee1e546feb4dd34b7e204384e4d53310ba184c62c8f425383c464509577330",
+  "offlineSettingsEqual": true,
+  "offlineSettingsCount": 344,
+  "offlineSettingsSha256": "3a0db9935c9f712610cfe4c2e45bbb6ac594eb3a6eb5eecc8851690837466646",
+  "compiledPython": 162,
+  "poolEnabled": false,
+  "dependencyDeclarationUnchanged": true,
+  "sealedRuntimeDependencyCount": 44,
+  "sealedRuntimeDependenciesSha256": "94b1b1f2259983d0d438ab38d6efe1ef9693aef1b471a88711bab9cc9e282c29",
+  "candidateImageDependencyProbePerformed": false,
+  "newRuntimeDependencyImports": "stdlib only",
+  "helperManifestSha256": "d7b106a6497bce873d67c2c81b045fab520aaa7382296978a8f6a04056e10927",
+  "ancillaryFormatSha256": "e6607164d21950319ab2b6179d38ed6cf771715a2663c18db704af612907ac2f",
+  "sqlAndPromptsUnchanged": true,
+  "productionPrivateConfigRead": false,
+  "sshOperations": 0,
+  "deployments": 0,
+  "gitPublications": 0,
+  "modelsCalled": 0,
+  "nonTargetsModified": false
+}

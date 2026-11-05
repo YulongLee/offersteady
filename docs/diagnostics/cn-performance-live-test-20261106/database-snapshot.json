@@ -1,0 +1,40 @@
+{
+  "atMs": 1793903227789,
+  "dbConnectSingleProbeMs": 33.338,
+  "activity": {
+    "elapsedMs": 5.561,
+    "rows": []
+  },
+  "waits": {
+    "elapsedMs": 3.375,
+    "rows": [
+      {
+        "blocked": 0,
+        "idle_in_transaction": 0,
+        "longest_active_ms": null
+      }
+    ]
+  },
+  "counter": {
+    "elapsedMs": 1.457,
+    "rows": [
+      {
+        "numbackends": 2,
+        "deadlocks": 0,
+        "blks_read": 329585303,
+        "blks_hit": 14974416494
+      }
+    ]
+  },
+  "redisPingSingleProbeMs": 6.08,
+  "redis": {
+    "connected_clients": 10,
+    "blocked_clients": 2,
+    "instantaneous_ops_per_sec": 622,
+    "rejected_connections": 0,
+    "evicted_keys": 0
+  },
+  "poolEnabled": false,
+  "readOnly": true,
+  "rawQueriesAndIdentifiersExported": false
+}

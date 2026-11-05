@@ -1,0 +1,721 @@
+{
+  "atMs": 1793903457511,
+  "scanStartMs": 1793903157511,
+  "linesScanned": 1120,
+  "errorLevels": {},
+  "fixedWarnings": {},
+  "windows": {
+    "latest60s": {
+      "withoutActiveConnection": {
+        "count": 47,
+        "p50Ms": 5.11,
+        "p95Ms": 102.59,
+        "maxMs": 111.12,
+        "atLeast500Ms": 0,
+        "atLeast1000Ms": 0
+      },
+      "withoutAdmin": {
+        "count": 92,
+        "p50Ms": 21.35,
+        "p95Ms": 52.46,
+        "maxMs": 111.12,
+        "atLeast500Ms": 0,
+        "atLeast1000Ms": 0
+      },
+      "startMs": 1793903397511,
+      "endMs": 1793903457511,
+      "apiRequests": {
+        "count": 93,
+        "p50Ms": 21.41,
+        "p95Ms": 53.05,
+        "maxMs": 111.12,
+        "atLeast500Ms": 0,
+        "atLeast1000Ms": 0
+      },
+      "apiStatusCounts": {
+        "None": 93
+      },
+      "routes": [
+        {
+          "route": "/api/v1/sessions/{session_id}/idle-status",
+          "count": 1,
+          "p50Ms": 111.12,
+          "p95Ms": 111.12,
+          "maxMs": 111.12,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/desktop-binding",
+          "count": 1,
+          "p50Ms": 108.73,
+          "p95Ms": 108.73,
+          "maxMs": 108.73,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/admin/payments/revenue-summary",
+          "count": 1,
+          "p50Ms": 102.59,
+          "p95Ms": 102.59,
+          "maxMs": 102.59,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/admin/capacity",
+          "count": 1,
+          "p50Ms": 92.37,
+          "p95Ms": 92.37,
+          "maxMs": 92.37,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/publishers",
+          "count": 1,
+          "p50Ms": 66.29,
+          "p95Ms": 66.29,
+          "maxMs": 66.29,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/device-status",
+          "count": 6,
+          "p50Ms": 42.26,
+          "p95Ms": 45.07,
+          "maxMs": 45.07,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "count": 46,
+          "p50Ms": 22.14,
+          "p95Ms": 44.73,
+          "maxMs": 52.46,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/web-heartbeat",
+          "count": 2,
+          "p50Ms": 6.0,
+          "p95Ms": 39.61,
+          "maxMs": 39.61,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/auth/refresh",
+          "count": 1,
+          "p50Ms": 18.37,
+          "p95Ms": 18.37,
+          "maxMs": 18.37,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/heartbeat",
+          "count": 34,
+          "p50Ms": 5.03,
+          "p95Ms": 9.18,
+          "maxMs": 53.05,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/healthz",
+          "count": 4,
+          "p50Ms": 0.56,
+          "p95Ms": 0.64,
+          "maxMs": 0.64,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        }
+      ],
+      "phaseTimings": [
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "intervalMs",
+          "count": 2,
+          "p50Ms": 250.0,
+          "p95Ms": 250.0,
+          "maxMs": 250.0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "maxMs",
+          "count": 2,
+          "p50Ms": 15.609,
+          "p95Ms": 15.609,
+          "maxMs": 15.609,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "over250Ms",
+          "count": 2,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "maxMs": 0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "over50Ms",
+          "count": 2,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "maxMs": 0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "p50Ms",
+          "count": 2,
+          "p50Ms": 0.819,
+          "p95Ms": 0.834,
+          "maxMs": 0.834,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "p95Ms",
+          "count": 2,
+          "p50Ms": 1.886,
+          "p95Ms": 1.899,
+          "maxMs": 1.899,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.preparation.publisher_prepare",
+          "metric": "queue_ms",
+          "count": 1,
+          "p50Ms": 0.126,
+          "p95Ms": 0.126,
+          "maxMs": 0.126,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.preparation.publisher_prepare",
+          "metric": "resume_ms",
+          "count": 1,
+          "p50Ms": 0.305,
+          "p95Ms": 0.305,
+          "maxMs": 0.305,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.preparation.publisher_prepare",
+          "metric": "work_ms",
+          "count": 1,
+          "p50Ms": 36.802,
+          "p95Ms": 36.802,
+          "maxMs": 36.802,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        }
+      ],
+      "answerStages": [],
+      "slowTimeline": []
+    },
+    "latest5m": {
+      "withoutActiveConnection": {
+        "count": 256,
+        "p50Ms": 5.77,
+        "p95Ms": 95.77,
+        "maxMs": 216.86,
+        "atLeast500Ms": 0,
+        "atLeast1000Ms": 0
+      },
+      "withoutAdmin": {
+        "count": 464,
+        "p50Ms": 21.78,
+        "p95Ms": 62.51,
+        "maxMs": 216.86,
+        "atLeast500Ms": 0,
+        "atLeast1000Ms": 0
+      },
+      "startMs": 1793903157511,
+      "endMs": 1793903457511,
+      "apiRequests": {
+        "count": 474,
+        "p50Ms": 21.87,
+        "p95Ms": 74.99,
+        "maxMs": 216.86,
+        "atLeast500Ms": 0,
+        "atLeast1000Ms": 0
+      },
+      "apiStatusCounts": {
+        "None": 474
+      },
+      "routes": [
+        {
+          "route": "/api/v1/realtime-speech/metrics",
+          "count": 1,
+          "p50Ms": 216.86,
+          "p95Ms": 216.86,
+          "maxMs": 216.86,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/desktop-binding",
+          "count": 7,
+          "p50Ms": 77.12,
+          "p95Ms": 127.43,
+          "maxMs": 127.43,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/performance-ack",
+          "count": 7,
+          "p50Ms": 24.97,
+          "p95Ms": 125.84,
+          "maxMs": 125.84,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/admin/payments/revenue-summary",
+          "count": 10,
+          "p50Ms": 95.48,
+          "p95Ms": 120.44,
+          "maxMs": 120.44,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/sessions/{session_id}/idle-status",
+          "count": 11,
+          "p50Ms": 60.51,
+          "p95Ms": 111.12,
+          "maxMs": 111.12,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/admin/capacity",
+          "count": 10,
+          "p50Ms": 79.5,
+          "p95Ms": 105.81,
+          "maxMs": 105.81,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/live-answer/sessions/{session_id}/history",
+          "count": 1,
+          "p50Ms": 101.31,
+          "p95Ms": 101.31,
+          "maxMs": 101.31,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/device-status",
+          "count": 38,
+          "p50Ms": 42.16,
+          "p95Ms": 92.23,
+          "maxMs": 99.08,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/screenshot-answer/sessions/{session_id}/history",
+          "count": 1,
+          "p50Ms": 74.99,
+          "p95Ms": 74.99,
+          "maxMs": 74.99,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/sessions/{session_id}/web-heartbeat",
+          "count": 17,
+          "p50Ms": 42.08,
+          "p95Ms": 74.93,
+          "maxMs": 74.93,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/publishers",
+          "count": 2,
+          "p50Ms": 66.29,
+          "p95Ms": 74.87,
+          "maxMs": 74.87,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+          "count": 218,
+          "p50Ms": 23.07,
+          "p95Ms": 48.37,
+          "maxMs": 72.14,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/screenshot-answer/desktop-devices/{device_id}/capture-requests/stream",
+          "count": 2,
+          "p50Ms": 5.62,
+          "p95Ms": 42.0,
+          "maxMs": 42.0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/auth/refresh",
+          "count": 5,
+          "p50Ms": 18.37,
+          "p95Ms": 19.33,
+          "maxMs": 19.33,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/heartbeat",
+          "count": 153,
+          "p50Ms": 4.74,
+          "p95Ms": 9.91,
+          "maxMs": 53.05,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/by-code/{manual_code}/binding",
+          "count": 1,
+          "p50Ms": 9.03,
+          "p95Ms": 9.03,
+          "maxMs": 9.03,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/screenshot-answer/desktop-devices/{device_id}/capture-requests/next",
+          "count": 1,
+          "p50Ms": 4.65,
+          "p95Ms": 4.65,
+          "maxMs": 4.65,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/binding",
+          "count": 1,
+          "p50Ms": 3.35,
+          "p95Ms": 3.35,
+          "maxMs": 3.35,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "route": "/healthz",
+          "count": 20,
+          "p50Ms": 0.61,
+          "p95Ms": 0.74,
+          "maxMs": 1.22,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        }
+      ],
+      "phaseTimings": [
+        {
+          "group": "cn_device_status_timing",
+          "metric": "binding_repository_ms",
+          "count": 2,
+          "p50Ms": 1.398,
+          "p95Ms": 6.259,
+          "maxMs": 6.259,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_device_status_timing",
+          "metric": "db_acquire_ms",
+          "count": 2,
+          "p50Ms": 27.568,
+          "p95Ms": 62.949,
+          "maxMs": 62.949,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_device_status_timing",
+          "metric": "db_execute_ms",
+          "count": 2,
+          "p50Ms": 4.381,
+          "p95Ms": 8.034,
+          "maxMs": 8.034,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_device_status_timing",
+          "metric": "db_fetch_ms",
+          "count": 2,
+          "p50Ms": 0.021,
+          "p95Ms": 0.028,
+          "maxMs": 0.028,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_device_status_timing",
+          "metric": "event_repository_ms",
+          "count": 2,
+          "p50Ms": 2.604,
+          "p95Ms": 5.171,
+          "maxMs": 5.171,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_device_status_timing",
+          "metric": "queue_ms",
+          "count": 2,
+          "p50Ms": 0.135,
+          "p95Ms": 0.434,
+          "maxMs": 0.434,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_device_status_timing",
+          "metric": "work_ms",
+          "count": 2,
+          "p50Ms": 36.915,
+          "p95Ms": 84.441,
+          "maxMs": 84.441,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "intervalMs",
+          "count": 10,
+          "p50Ms": 250.0,
+          "p95Ms": 250.0,
+          "maxMs": 250.0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "maxMs",
+          "count": 10,
+          "p50Ms": 15.823,
+          "p95Ms": 155.113,
+          "maxMs": 155.113,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "over250Ms",
+          "count": 10,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "maxMs": 0,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "over50Ms",
+          "count": 10,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "maxMs": 1,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "p50Ms",
+          "count": 10,
+          "p50Ms": 0.804,
+          "p95Ms": 0.834,
+          "maxMs": 0.834,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_main_loop_timing",
+          "metric": "p95Ms",
+          "count": 10,
+          "p50Ms": 1.906,
+          "p95Ms": 2.014,
+          "maxMs": 2.014,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.ingress.ingest_frame",
+          "metric": "queue_ms",
+          "count": 76,
+          "p50Ms": 0.173,
+          "p95Ms": 0.359,
+          "maxMs": 0.515,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.ingress.ingest_frame",
+          "metric": "resume_ms",
+          "count": 76,
+          "p50Ms": 0.645,
+          "p95Ms": 1.347,
+          "maxMs": 2.141,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.ingress.ingest_frame",
+          "metric": "work_ms",
+          "count": 76,
+          "p50Ms": 1.559,
+          "p95Ms": 4.634,
+          "maxMs": 29.126,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.preparation.publisher_prepare",
+          "metric": "queue_ms",
+          "count": 2,
+          "p50Ms": 0.126,
+          "p95Ms": 0.334,
+          "maxMs": 0.334,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.preparation.publisher_prepare",
+          "metric": "resume_ms",
+          "count": 2,
+          "p50Ms": 0.305,
+          "p95Ms": 0.898,
+          "maxMs": 0.898,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        },
+        {
+          "group": "cn_realtime_io_timing.preparation.publisher_prepare",
+          "metric": "work_ms",
+          "count": 2,
+          "p50Ms": 36.802,
+          "p95Ms": 44.026,
+          "maxMs": 44.026,
+          "atLeast500Ms": 0,
+          "atLeast1000Ms": 0
+        }
+      ],
+      "answerStages": [],
+      "slowTimeline": []
+    }
+  },
+  "rawLogsExported": false,
+  "identifiersExported": false,
+  "productionMutations": 0,
+  "proxyHttpStatusCounts": {
+    "200": 466,
+    "401": 10,
+    "101": 2,
+    "404": 3
+  },
+  "proxyHttp5xxByRoute": {},
+  "backendRequestStatusNotLogged": true,
+  "recentProxyActiveConnectionShape": {
+    "counts": {
+      "withBothPinned": 153,
+      "status200": 218,
+      "withoutBothPinned": 65
+    },
+    "distinctDevicePaths": 10,
+    "rawQueryExported": false
+  },
+  "lastCapacityPoints": [
+    {
+      "atMs": 1793903286183,
+      "apiP95Ms": 87.97,
+      "apiErrorRate": 0.0,
+      "requestsPerMinute": 162.62,
+      "activeInterviews": 1,
+      "activeUsers": 1,
+      "activeAudioStreams": 2,
+      "databaseConnections": 1,
+      "cpuPercent": 4.21
+    },
+    {
+      "atMs": 1793903316233,
+      "apiP95Ms": 83.45,
+      "apiErrorRate": 0.0,
+      "requestsPerMinute": 149.76,
+      "activeInterviews": 1,
+      "activeUsers": 1,
+      "activeAudioStreams": 1,
+      "databaseConnections": 1,
+      "cpuPercent": 4.4
+    },
+    {
+      "atMs": 1793903346276,
+      "apiP95Ms": 80.7,
+      "apiErrorRate": 0.0,
+      "requestsPerMinute": 138.93,
+      "activeInterviews": 1,
+      "activeUsers": 1,
+      "activeAudioStreams": 1,
+      "databaseConnections": 1,
+      "cpuPercent": 5.0
+    },
+    {
+      "atMs": 1793903376319,
+      "apiP95Ms": 78.85,
+      "apiErrorRate": 0.0,
+      "requestsPerMinute": 126.3,
+      "activeInterviews": 1,
+      "activeUsers": 1,
+      "activeAudioStreams": 2,
+      "databaseConnections": 1,
+      "cpuPercent": 3.24
+    },
+    {
+      "atMs": 1793903406361,
+      "apiP95Ms": 80.94,
+      "apiErrorRate": 0.0,
+      "requestsPerMinute": 113.28,
+      "activeInterviews": 1,
+      "activeUsers": 1,
+      "activeAudioStreams": 2,
+      "databaseConnections": 1,
+      "cpuPercent": 3.15
+    },
+    {
+      "atMs": 1793903436404,
+      "apiP95Ms": 74.99,
+      "apiErrorRate": 0.0,
+      "requestsPerMinute": 102.25,
+      "activeInterviews": 1,
+      "activeUsers": 1,
+      "activeAudioStreams": 0,
+      "databaseConnections": 1,
+      "cpuPercent": 1.24
+    }
+  ]
+}

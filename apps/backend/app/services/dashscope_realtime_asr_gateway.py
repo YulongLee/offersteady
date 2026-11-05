@@ -15,6 +15,7 @@ from app.core.config import Settings
 from app.ports.interview_session import InterviewLanguage
 from app.ports.realtime_speech import AsrUsageReport, AudioFrame, RealtimeAsrGatewayPort, TranscriptResult
 from app.services.realtime_speech_service import NonRetryableAsrError, RetryableAsrError
+from app.services.cn_provider_close_executor import CnProviderCloseExecutor
 
 
 @dataclass
@@ -81,6 +82,7 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         self._last_error_by_source: dict[str, str] = {}
         self._frames_before_first_partial: dict[str, int] = {}
         self._partial_listener: Callable[[AudioFrame, TranscriptResult], None] | None = None
+        self._deferred_closes = CnProviderCloseExecutor(logger) if settings.product_edition == "cn" else None
 
     def set_partial_listener(self, listener: Callable[[AudioFrame, TranscriptResult], None]) -> None:
         """Publish provider partials from the receive pump, independent of audio appends."""
@@ -249,7 +251,49 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
         """Close every provider source session during application shutdown."""
         with self._source_sessions_lock:
             session_ids = {key.split(":", 1)[0] for key in self._source_sessions}
-        return sum(self.close_session(session_id=session_id) for session_id in session_ids)
+        try:
+            return sum(self.close_session(session_id=session_id) for session_id in session_ids)
+        finally:
+            closer = getattr(self, "_deferred_closes", None)
+            if closer is not None:
+                closer.shutdown()
+
+    def drain_deferred_closes(self) -> None:
+        if self._deferred_closes is not None:
+            self._deferred_closes.drain()
+
+    def close_session_deferred(self, *, session_id: str) -> int:
+        prefix = f"{session_id}:"
+        with self._source_sessions_lock:
+            keys = [key for key in self._source_sessions if key.startswith(prefix)]
+            sessions = [self._source_sessions.pop(key) for key in keys]
+        # Detach the entire captured generation before any saturated close can
+        # block. A later source with the same key belongs to a new generation.
+        for session in sessions:
+            self._mark_detached(session, suppress_events=True)
+        for session in sessions:
+            self._close_detached(session)
+        return len(sessions)
+
+    def close_source_deferred(self, *, session_id: str, source_kind: str) -> int:
+        return self._close_source_deferred(f"{session_id}:{source_kind}")
+
+    def _close_source_deferred(self, key: str) -> int:
+        session = self._detach_source_session(key, suppress_events=True)
+        if session is None:
+            return 0
+        self._close_detached(session)
+        return 1
+
+    def _close_detached(self, session: _SourceRealtimeSession) -> None:
+        if self._deferred_closes is None:
+            try:
+                session.connection.close()
+            except Exception:
+                pass
+        else:
+            # Capture the retired object, never look up a replacement by key.
+            self._deferred_closes.close(session.connection.close)
 
     def close_source(self, *, session_id: str, source_kind: str) -> int:
         source_session_key = f"{session_id}:{source_kind}"
@@ -718,19 +762,29 @@ class DashScopeRealtimeAsrGateway(RealtimeAsrGatewayPort):
                         )
 
     def _close_source_session(self, source_session_key: str) -> None:
+        session = self._detach_source_session(source_session_key)
+        if session is not None:
+            try:
+                session.connection.close()
+            except Exception:
+                pass
+
+    def _detach_source_session(self, source_session_key: str, *, suppress_events: bool = False) -> _SourceRealtimeSession | None:
         with self._source_sessions_lock:
             session = self._source_sessions.pop(source_session_key, None)
         if session is None:
             return
+        self._mark_detached(session, suppress_events=suppress_events)
+        return session
+
+    def _mark_detached(self, session: _SourceRealtimeSession, *, suppress_events: bool) -> None:
         self._record_closed_lifetime(session)
         self._connection_state_by_source[session.source_kind] = "closed"
         with session.event_condition:
             session.closed = True
+            if suppress_events:
+                session.accepting_transcript_events = False
             session.event_condition.notify_all()
-        try:
-            session.connection.close()
-        except Exception:
-            pass
 
     def _record_closed_lifetime(self, session: _SourceRealtimeSession) -> None:
         lifetime_ms = max(0, int((time.monotonic() - session.created_at_monotonic) * 1000))

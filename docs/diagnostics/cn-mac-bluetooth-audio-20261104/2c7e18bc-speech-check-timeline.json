@@ -1,0 +1,78 @@
+{
+  "monitorStartedAtMs": 1793738698542,
+  "rows": [
+    {
+      "relativeToMonitorMs": -48156,
+      "capturedAtMs": 1793738650386,
+      "micCapture": 21512,
+      "micUnique": 515,
+      "micUniqueFps": 0,
+      "micPending": 0
+    },
+    {
+      "relativeToMonitorMs": -38157,
+      "capturedAtMs": 1793738660385,
+      "micCapture": 21981,
+      "micUnique": 518,
+      "micUniqueFps": 0.3,
+      "micPending": 3
+    },
+    {
+      "relativeToMonitorMs": -28157,
+      "capturedAtMs": 1793738670385,
+      "micCapture": 22449,
+      "micUnique": 524,
+      "micUniqueFps": 0.6,
+      "micPending": 0
+    },
+    {
+      "relativeToMonitorMs": -18158,
+      "capturedAtMs": 1793738680384,
+      "micCapture": 22914,
+      "micUnique": 524,
+      "micUniqueFps": 0,
+      "micPending": 0
+    },
+    {
+      "relativeToMonitorMs": -8157,
+      "capturedAtMs": 1793738690385,
+      "micCapture": 23379,
+      "micUnique": 529,
+      "micUniqueFps": 0.5,
+      "micPending": 0
+    },
+    {
+      "relativeToMonitorMs": 1843,
+      "capturedAtMs": 1793738700385,
+      "micCapture": 23846,
+      "micUnique": 529,
+      "micUniqueFps": 0,
+      "micPending": 0
+    },
+    {
+      "relativeToMonitorMs": 11843,
+      "capturedAtMs": 1793738710385,
+      "micCapture": 24315,
+      "micUnique": 529,
+      "micUniqueFps": 0,
+      "micPending": 0
+    },
+    {
+      "relativeToMonitorMs": 21843,
+      "capturedAtMs": 1793738720385,
+      "micCapture": 24784,
+      "micUnique": 530,
+      "micUniqueFps": 0.1,
+      "micPending": 1
+    },
+    {
+      "relativeToMonitorMs": 31843,
+      "capturedAtMs": 1793738730385,
+      "micCapture": 25253,
+      "micUnique": 530,
+      "micUniqueFps": 0,
+      "micPending": 1
+    }
+  ],
+  "noSpeechTextOrAudioRecorded": true
+}

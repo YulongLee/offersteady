@@ -1,0 +1,41 @@
+{
+  "version": "20261106.1",
+  "passed": true,
+  "restored": {
+    "cn-backend": {
+      "exactInputCount": 238,
+      "compiledPython": 162,
+      "allBytesMatch": true
+    },
+    "global-backend": {
+      "exactInputCount": 308,
+      "compiledPython": 172,
+      "allBytesMatch": true
+    }
+  },
+  "snapshotToolTestsPassed": 32,
+  "restoredGlobalBusinessTestsPassed": 204,
+  "restoredGlobalPgCasesDeselected": 4,
+  "fullGlobalRealPgCasesAlreadyPassed": true,
+  "sixComponentCounts": {
+    "cn-backend": 238,
+    "cn-material-worker": 196,
+    "cn-web": 366,
+    "global-backend": 308,
+    "global-material-worker": 267,
+    "global-web": 251
+  },
+  "privateConfigurationRead": false,
+  "productionChanges": 0,
+  "networkCalls": 0,
+  "newGlobalTestsPassed": 497,
+  "newGlobalControllerAndSupportTestsPassed": 194,
+  "privacy": {
+    "stagedFilesChecked": 175,
+    "textAndArchiveMembersChecked": 719,
+    "issues": [],
+    "rawUserDataIncluded": false,
+    "privateEnvironmentIncluded": false,
+    "unrelatedSeoExcluded": true
+  }
+}

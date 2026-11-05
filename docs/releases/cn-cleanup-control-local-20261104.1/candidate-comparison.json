@@ -1,0 +1,177 @@
+{
+  "variant": "candidate",
+  "syntheticOnly": true,
+  "productionP95Measured": false,
+  "realModels": 0,
+  "scale": [
+    {
+      "history": 1,
+      "elapsedMs": 1.262,
+      "pythonCpuMs": 0.165,
+      "commands": {
+        "EVALSHA": 2
+      },
+      "recordDecodes": 2,
+      "serverGlobalScans": 0
+    },
+    {
+      "history": 1242,
+      "elapsedMs": 1.438,
+      "pythonCpuMs": 0.159,
+      "commands": {
+        "EVALSHA": 2
+      },
+      "recordDecodes": 2,
+      "serverGlobalScans": 0
+    },
+    {
+      "history": 10000,
+      "elapsedMs": 1.218,
+      "pythonCpuMs": 0.158,
+      "commands": {
+        "EVALSHA": 2
+      },
+      "recordDecodes": 2,
+      "serverGlobalScans": 0
+    }
+  ],
+  "mixed": [
+    {
+      "sessions": 6,
+      "sources": 12,
+      "history": 1242,
+      "endToAckAndPrepareMs": 224.857,
+      "pythonCpuMs": 29.84,
+      "operationP95Ms": {
+        "end": 224.501,
+        "prepare": 18.483,
+        "ack": 8.158
+      },
+      "lanes": {
+        "ingress": {
+          "submitted": 0,
+          "completed": 0,
+          "active": 0,
+          "pending": 0,
+          "waiting": 0,
+          "maxActive": 0,
+          "maxPending": 0,
+          "saturated": 0,
+          "configuredWorkers": 4,
+          "configuredQueueMax": 16,
+          "closed": 0
+        },
+        "lifecycle": {
+          "submitted": 6,
+          "completed": 6,
+          "active": 0,
+          "pending": 0,
+          "waiting": 0,
+          "maxActive": 2,
+          "maxPending": 6,
+          "saturated": 0,
+          "configuredWorkers": 2,
+          "configuredQueueMax": 8,
+          "closed": 0
+        },
+        "preparation": {
+          "submitted": 6,
+          "completed": 6,
+          "active": 0,
+          "pending": 0,
+          "waiting": 0,
+          "maxActive": 2,
+          "maxPending": 6,
+          "saturated": 0,
+          "configuredWorkers": 2,
+          "configuredQueueMax": 8,
+          "closed": 0
+        },
+        "cleanupFailed": 0,
+        "outstanding": 0,
+        "closing": 0,
+        "poolsClosed": 0
+      },
+      "failures": [],
+      "syntheticCloseDelayMsPerSource": 150,
+      "closeBeforeShutdown": {
+        "pending": 9,
+        "completed": 3,
+        "failed": 0,
+        "inline": 1,
+        "submitted": 11,
+        "closed": 0
+      },
+      "allOldConnectionsClosedAfterDrain": 12
+    },
+    {
+      "sessions": 10,
+      "sources": 20,
+      "history": 1242,
+      "endToAckAndPrepareMs": 688.16,
+      "pythonCpuMs": 100.174,
+      "operationP95Ms": {
+        "end": 687.751,
+        "prepare": 85.513,
+        "ack": 42.172
+      },
+      "lanes": {
+        "ingress": {
+          "submitted": 0,
+          "completed": 0,
+          "active": 0,
+          "pending": 0,
+          "waiting": 0,
+          "maxActive": 0,
+          "maxPending": 0,
+          "saturated": 0,
+          "configuredWorkers": 4,
+          "configuredQueueMax": 16,
+          "closed": 0
+        },
+        "lifecycle": {
+          "submitted": 10,
+          "completed": 10,
+          "active": 0,
+          "pending": 0,
+          "waiting": 0,
+          "maxActive": 2,
+          "maxPending": 10,
+          "saturated": 0,
+          "configuredWorkers": 2,
+          "configuredQueueMax": 8,
+          "closed": 0
+        },
+        "preparation": {
+          "submitted": 10,
+          "completed": 10,
+          "active": 0,
+          "pending": 0,
+          "waiting": 0,
+          "maxActive": 2,
+          "maxPending": 10,
+          "saturated": 0,
+          "configuredWorkers": 2,
+          "configuredQueueMax": 8,
+          "closed": 0
+        },
+        "cleanupFailed": 0,
+        "outstanding": 0,
+        "closing": 0,
+        "poolsClosed": 0
+      },
+      "failures": [],
+      "syntheticCloseDelayMsPerSource": 150,
+      "closeBeforeShutdown": {
+        "pending": 7,
+        "completed": 13,
+        "failed": 0,
+        "inline": 5,
+        "submitted": 15,
+        "closed": 0
+      },
+      "allOldConnectionsClosedAfterDrain": 20
+    }
+  ],
+  "ownSyntheticDatabaseRemoved": true
+}

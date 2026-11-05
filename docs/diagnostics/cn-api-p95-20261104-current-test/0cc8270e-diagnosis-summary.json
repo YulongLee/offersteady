@@ -1,0 +1,140 @@
+{
+  "observedThroughCst": "2026-11-04 03:58:51",
+  "scope": "Read-only CN active test diagnosis; no production changes or deployment",
+  "actualBackendImage": "sha256:dc8f3bb3aa95b6615686226c95612d7b3973860d2b2da0dd391a316134266b9b",
+  "sourceHashesMatched": true,
+  "apiMetricWindowMs": 300000,
+  "testWindow": {
+    "startMs": 1793735280000,
+    "endMs": 1793735931838,
+    "allRequests": {
+      "count": 1662,
+      "p50Ms": 36.15,
+      "p95Ms": 1265.02,
+      "maxMs": 3539.69,
+      "atLeast500Ms": 201,
+      "atLeast1000Ms": 112
+    },
+    "withoutActiveConnection": {
+      "count": 1079,
+      "p50Ms": 22.78,
+      "p95Ms": 117.26,
+      "maxMs": 670.03,
+      "atLeast500Ms": 1,
+      "atLeast1000Ms": 0
+    },
+    "withoutAdmin": {
+      "count": 1625,
+      "p50Ms": 35.85,
+      "p95Ms": 1274.89,
+      "maxMs": 3539.69,
+      "atLeast500Ms": 200,
+      "atLeast1000Ms": 112
+    },
+    "activeConnection": {
+      "route": "/api/v1/realtime-speech/desktop-devices/{device_id}/active-connection",
+      "count": 583,
+      "p50Ms": 286.78,
+      "p95Ms": 1772.6,
+      "maxMs": 3539.69,
+      "atLeast500Ms": 200,
+      "atLeast1000Ms": 112
+    }
+  },
+  "bindingRecordCount": 1191,
+  "recentDistinctPollingDevicePaths": 12,
+  "pinnedParameterPresence": {
+    "counts": {
+      "withoutBothPinned": 107,
+      "status200": 277,
+      "withBothPinned": 170
+    },
+    "distinctDevicePaths": 12,
+    "rawQueryExported": false
+  },
+  "confirmedCodeRegression": "CN pinned binding lookup now reads all bindings then performs sequential retirement HEXISTS for each before device filtering; old snapshotReload=false path filtered in process.",
+  "operationCountDerivation": {
+    "hvals": 1,
+    "hexists": 1191,
+    "totalPerBindingList": 1192,
+    "isProductionInjectedMeasurement": false,
+    "localSyntheticCases": [
+      {
+        "records": 1,
+        "hvals": 1,
+        "hexists": 1,
+        "total": 2
+      },
+      {
+        "records": 10,
+        "hvals": 1,
+        "hexists": 10,
+        "total": 11
+      },
+      {
+        "records": 100,
+        "hvals": 1,
+        "hexists": 100,
+        "total": 101
+      },
+      {
+        "records": 1000,
+        "hvals": 1,
+        "hexists": 1000,
+        "total": 1001
+      }
+    ]
+  },
+  "currentDbSnapshot": {
+    "atMs": 1793735618006,
+    "dbConnectSingleProbeMs": 23.259,
+    "activity": {
+      "elapsedMs": 5.923,
+      "rows": []
+    },
+    "waits": {
+      "elapsedMs": 2.572,
+      "rows": [
+        {
+          "blocked": 0,
+          "idle_in_transaction": 0,
+          "longest_active_ms": null
+        }
+      ]
+    },
+    "counter": {
+      "elapsedMs": 1.104,
+      "rows": [
+        {
+          "numbackends": 1,
+          "deadlocks": 0,
+          "blks_read": 290843360,
+          "blks_hit": 14385574864
+        }
+      ]
+    },
+    "redisPingSingleProbeMs": 5.159,
+    "redis": {
+      "connected_clients": 15,
+      "blocked_clients": 3,
+      "instantaneous_ops_per_sec": 641,
+      "rejected_connections": 0,
+      "evicted_keys": 0
+    },
+    "poolEnabled": false,
+    "readOnly": true,
+    "rawQueriesAndIdentifiersExported": false
+  },
+  "limitations": [
+    "Exact per-request Redis time allocation was not instrumented in production.",
+    "Excluding the slow route is diagnostic recomputation, not measured post-fix performance.",
+    "The independent local synthetic test counted calls; it did not simulate production load.",
+    "Pinned-parameter aggregate proves branch use, not a per-request trace join or all-client ownership.",
+    "No conclusion that every interview feature or browser rendering is healthy is supported."
+  ],
+  "productionMutations": 0,
+  "realModelsCalled": 0,
+  "realInterviewsCreated": 0,
+  "productionLoadTest": false,
+  "gitCommitsOrPushes": 0
+}

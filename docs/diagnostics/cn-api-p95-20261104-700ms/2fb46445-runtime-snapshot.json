@@ -1,0 +1,725 @@
+{
+  "passed": true,
+  "atMs": 1793774268299,
+  "httpElapsedMs": 512.343,
+  "settings": {
+    "product_edition": "cn",
+    "realtime_asr_provider": "qwen-realtime-asr-compatible",
+    "realtime_asr_connect_timeout_seconds": 8.0,
+    "integration_http_timeout_seconds": 20.0,
+    "realtime_redis_snapshot_reload_on_access": false,
+    "realtime_control_worker_count": 8,
+    "realtime_control_queue_max": 64,
+    "cn_hot_database_pool_enabled": false,
+    "realtime_session_reclamation_enabled": true,
+    "realtime_session_reclamation_dry_run": false,
+    "realtime_asr_partial_timeout_seconds": 0.03,
+    "realtime_asr_finalize_timeout_seconds": 2.0,
+    "realtime_asr_frame_timeout_seconds": 12.0,
+    "realtime_asr_prewarm_enabled": true,
+    "realtime_asr_attachment_prewarm_enabled": true
+  },
+  "metrics": {
+    "activeQueueWorkers": 7,
+    "queuedFrames": 2,
+    "activeDesktopTransports": 6,
+    "fileDescriptors": 93,
+    "currentResidentSetKb": 828332,
+    "maxResidentSetKb": 828860,
+    "cnRealtimeIo": {
+      "cleanupFailed": 0,
+      "outstanding": 0,
+      "closing": 0,
+      "poolsClosed": 0
+    },
+    "cnMainLoopDelay": {
+      "sampleCount": 512,
+      "observations": 145828,
+      "capacity": 512,
+      "intervalMs": 250.0,
+      "p50Ms": 10.755,
+      "p95Ms": 98.488,
+      "maxMs": 435.514,
+      "over50Ms": 100,
+      "over250Ms": 5
+    },
+    "controlExecutor": {
+      "submitted": 104554,
+      "completed": 104554,
+      "active": 0,
+      "maxActive": 8,
+      "maxPending": 8,
+      "saturated": 0
+    },
+    "liveAnswerStreamExecutor": {
+      "submitted": 227,
+      "completed": 227,
+      "active": 0,
+      "pending": 0,
+      "maxActive": 3,
+      "maxPending": 1,
+      "saturated": 0,
+      "configuredWorkers": 8,
+      "configuredQueueMax": 8,
+      "configuredEventQueueMax": 16
+    },
+    "questionPrefetch": {
+      "submitted": 6220,
+      "coalesced": 1383,
+      "started": 4836,
+      "completed": 4836,
+      "failed": 0,
+      "staleRejected": 0,
+      "expired": 0,
+      "overflow": 0,
+      "cleared": 0,
+      "maxActive": 2,
+      "maxPending": 3,
+      "maxKeys": 53,
+      "active": 0,
+      "pending": 1,
+      "keys": 32,
+      "workers": 2
+    },
+    "controlPlane": {
+      "cacheHits": 86,
+      "cacheMisses": 54443,
+      "cacheEntries": 29,
+      "singleflightWaits": 0,
+      "inflight": 0,
+      "desktopHeartbeatPersisted": 36367,
+      "desktopHeartbeatCoalesced": 248,
+      "desktopHeartbeatTrackedDevices": 47
+    },
+    "eventStore": {
+      "xaddCount": 63282,
+      "xaddLatestMs": 20,
+      "xaddMaxMs": 369,
+      "xreadCount": 157255,
+      "xreadLatestMs": 834,
+      "xreadMaxMs": 1290,
+      "eventLatestLagMs": 24,
+      "streamLength": 1001,
+      "pendingEvents": 0,
+      "pendingApplicable": false,
+      "globalSnapshotWriteCount": 0,
+      "globalSnapshotLatestBytes": 0,
+      "entityWriteCount": 573718,
+      "entitySeedCount": 0
+    },
+    "resourceReaper": {
+      "runs": 1224,
+      "reclaimedSessions": 0,
+      "failures": 0,
+      "lastRunAtMs": 1793774260965,
+      "lastErrorCode": null
+    },
+    "shortLivedState": {
+      "sessionSourceCounters": 12,
+      "sessionSourceTimings": 11,
+      "acceptedTerminalKeys": 11,
+      "sourceGenerationKeys": 11,
+      "languageCacheEntries": 9,
+      "captureControlEntries": 6,
+      "sessionCleanupLockEntries": 0,
+      "sessionActivityEntries": 6,
+      "publisherStatusCacheEntries": 16,
+      "stableQuestionEntries": 256,
+      "retiredSessionIds": 42
+    },
+    "sessionReclamation": {
+      "enabled": true,
+      "dryRun": false,
+      "activeTrackedSessions": 6,
+      "candidates": 54,
+      "dryRunCandidates": 0,
+      "reclaimed": 53,
+      "failures": 1,
+      "lastDurationMs": 12597,
+      "maxDurationMs": 25054,
+      "releasedBindings": 40,
+      "closedPublishers": 21,
+      "closedAsrSessions": 47,
+      "clearedQueues": 15,
+      "clearedBufferedSegments": 11,
+      "clearedFrameReceipts": 38,
+      "clearedRealtimeEvents": 23610,
+      "clearedRuntimePublishers": 27
+    },
+    "cnRealtimeIoLanes": {
+      "ingress": {
+        "submitted": 220939,
+        "completed": 220939,
+        "active": 0,
+        "pending": 0,
+        "waiting": 0,
+        "maxActive": 4,
+        "maxPending": 7,
+        "saturated": 0,
+        "configuredWorkers": 4,
+        "configuredQueueMax": 16,
+        "closed": 0
+      },
+      "lifecycle": {
+        "submitted": 837,
+        "completed": 837,
+        "active": 0,
+        "pending": 0,
+        "waiting": 0,
+        "maxActive": 2,
+        "maxPending": 3,
+        "saturated": 0,
+        "configuredWorkers": 2,
+        "configuredQueueMax": 8,
+        "closed": 0
+      }
+    },
+    "asr": {
+      "microphone": {
+        "connection_recreations": 444,
+        "asr_connection_create_count": 444,
+        "asr_connection_reconnect_count": 394,
+        "asr_connection_lifetime_ms": 31958801,
+        "asr_connection_completed_lifetime_avg_ms": 139285,
+        "asr_connection_completed_lifetime_max_ms": 5631916,
+        "active_provider_sessions": 9,
+        "task_start_count": 15905,
+        "task_finish_count": 15556,
+        "task_failure_count": 1,
+        "partial_count": 23075,
+        "final_count": 15556,
+        "provider_sentence_final_count": 4924,
+        "blank_result_suppressed": 75662,
+        "provider_timeout_count": 12,
+        "append_count": 178119,
+        "utterance_count": 15904,
+        "utterances_per_connection": 35.82
+      },
+      "system": {
+        "connection_recreations": 203,
+        "asr_connection_create_count": 203,
+        "asr_connection_reconnect_count": 164,
+        "asr_connection_lifetime_ms": 31958807,
+        "asr_connection_completed_lifetime_avg_ms": 254495,
+        "asr_connection_completed_lifetime_max_ms": 5630896,
+        "active_provider_sessions": 8,
+        "task_start_count": 2631,
+        "task_finish_count": 2527,
+        "task_failure_count": 2,
+        "partial_count": 8100,
+        "final_count": 2527,
+        "provider_sentence_final_count": 1657,
+        "blank_result_suppressed": 33880,
+        "provider_timeout_count": 4,
+        "append_count": 81740,
+        "utterance_count": 2629,
+        "utterances_per_connection": 12.951
+      }
+    },
+    "delivery": {
+      "counts": {
+        "connect": 88,
+        "first-snapshot": 83,
+        "fallback-snapshot": 4
+      },
+      "latestDurationMs": {
+        "connect": 572,
+        "first-snapshot": 4648,
+        "fallback-snapshot": 1507
+      }
+    },
+    "traceSummary": {
+      "traceCount": 4096,
+      "distributions": {
+        "liveToPublisherConnectedMs": {
+          "count": 4094,
+          "p50": 846,
+          "p95": 3162,
+          "p99": 3162,
+          "max": 3162
+        },
+        "publisherConnectedToSourceReadyMs": {
+          "count": 4094,
+          "p50": 80,
+          "p95": 3063591,
+          "p99": 3063591,
+          "max": 3063591
+        },
+        "liveToFirstFrameSendMs": {
+          "count": 224,
+          "p50": 1566991,
+          "p95": 3173800,
+          "p99": 3189391,
+          "max": 3190583
+        },
+        "desktopVadToWorkletMs": {
+          "count": 4093,
+          "p50": 2146,
+          "p95": 8451,
+          "p99": 11199,
+          "max": 11901
+        },
+        "desktopWorkletToRendererMs": {
+          "count": 4094,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        "desktopRendererToPcmMs": {
+          "count": 4094,
+          "p50": 0,
+          "p95": 0,
+          "p99": 1,
+          "max": 1
+        },
+        "desktopPcmToRingBufferMs": {
+          "count": 4094,
+          "p50": 0,
+          "p95": 1,
+          "p99": 1,
+          "max": 6
+        },
+        "desktopRingBufferToEnqueueMs": {
+          "count": 4094,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 1
+        },
+        "desktopEnqueueToFlushMs": {
+          "count": 4094,
+          "p50": 0,
+          "p95": 3318,
+          "p99": 4890,
+          "max": 5630
+        },
+        "desktopFlushToWsSendMs": {
+          "count": 4094,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        "backendWsToValidationMs": {
+          "count": 4094,
+          "p50": 0,
+          "p95": 1,
+          "p99": 1,
+          "max": 4
+        },
+        "backendValidationToRoutingMs": {
+          "count": 4094,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 1
+        },
+        "backendRoutingToQueueMs": {
+          "count": 4094,
+          "p50": 16,
+          "p95": 61,
+          "p99": 99,
+          "max": 329
+        },
+        "backendQueueMs": {
+          "count": 3126,
+          "p50": 7,
+          "p95": 762,
+          "p99": 8498,
+          "max": 25614
+        },
+        "backendWorkerToLockWaitMs": {
+          "count": 3103,
+          "p50": 1,
+          "p95": 176,
+          "p99": 4531,
+          "max": 25857
+        },
+        "backendAsrLockWaitMs": {
+          "count": 3103,
+          "p50": 0,
+          "p95": 0,
+          "p99": 1,
+          "max": 793
+        },
+        "backendLockToQwenEnqueueMs": {
+          "count": 3103,
+          "p50": 0,
+          "p95": 42,
+          "p99": 68,
+          "max": 208
+        },
+        "backendQwenEnqueueToWsSendMs": {
+          "count": 3084,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 1
+        },
+        "backendQwenWsSendMs": {
+          "count": 3098,
+          "p50": 8,
+          "p95": 38,
+          "p99": 84,
+          "max": 344
+        },
+        "speechStartToFirstFrameSendMs": {
+          "count": 211,
+          "p50": 110,
+          "p95": 1034,
+          "p99": 4767,
+          "max": 10833
+        },
+        "firstFrameToQwenAppendMs": {
+          "count": 137,
+          "p50": 9306,
+          "p95": 58491,
+          "p99": 63179,
+          "max": 66423
+        },
+        "networkMs": {
+          "count": 3384,
+          "p50": 591,
+          "p95": 58157,
+          "p99": 58908,
+          "max": 59289
+        },
+        "preprocessMs": {
+          "count": 4094,
+          "p50": 11,
+          "p95": 47,
+          "p99": 80,
+          "max": 325
+        },
+        "queueWaitMs": {
+          "count": 3126,
+          "p50": 7,
+          "p95": 762,
+          "p99": 8498,
+          "max": 25614
+        },
+        "asrInputLagMs": {
+          "count": 3095,
+          "p50": 12,
+          "p95": 194,
+          "p99": 4546,
+          "max": 25897
+        },
+        "qwenPartialMs": {
+          "count": 116,
+          "p50": 251,
+          "p95": 1293,
+          "p99": 7225,
+          "max": 10449
+        },
+        "qwenLatestAppendToPartialMs": {
+          "count": 644,
+          "p50": 79,
+          "p95": 527,
+          "p99": 875,
+          "max": 1970
+        },
+        "revisionQwenToEventMs": {
+          "count": 549,
+          "p50": 27,
+          "p95": 77,
+          "p99": 111,
+          "max": 158
+        },
+        "revisionEventToRedisXaddStartMs": {
+          "count": 549,
+          "p50": 0,
+          "p95": 1,
+          "p99": 867,
+          "max": 8331
+        },
+        "revisionRedisXaddMs": {
+          "count": 636,
+          "p50": 9,
+          "p95": 37,
+          "p99": 71,
+          "max": 319
+        },
+        "revisionRedisToSseMs": {
+          "count": 623,
+          "p50": 35,
+          "p95": 253,
+          "p99": 470,
+          "max": 576
+        },
+        "revisionSseToBrowserChunkMs": {
+          "count": 1,
+          "p50": 11,
+          "p95": 11,
+          "p99": 11,
+          "max": 11
+        },
+        "revisionBrowserChunkToParseMs": {
+          "count": 338,
+          "p50": 0,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "revisionBrowserParseToStoreStartMs": {
+          "count": 0,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "max": null
+        },
+        "revisionStoreUpdateMs": {
+          "count": 0,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "max": null
+        },
+        "revisionStoreToReactRenderMs": {
+          "count": 0,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "max": null
+        },
+        "revisionReactRenderToCommitMs": {
+          "count": 338,
+          "p50": 0,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "revisionReactCommitToPaintMs": {
+          "count": 338,
+          "p50": 4,
+          "p95": 5,
+          "p99": 9,
+          "max": 11
+        },
+        "revisionQwenToPaintMs": {
+          "count": 51,
+          "p50": 140,
+          "p95": 7752,
+          "p99": 9843,
+          "max": 9843
+        },
+        "qwenPartialToRedisXaddMs": {
+          "count": 636,
+          "p50": 46,
+          "p95": 5764,
+          "p99": 8652,
+          "max": 10467
+        },
+        "redisXaddToXreadMs": {
+          "count": 339,
+          "p50": 8,
+          "p95": 239,
+          "p99": 436,
+          "max": 529
+        },
+        "redisXreadToSseSendMs": {
+          "count": 623,
+          "p50": 29,
+          "p95": 120,
+          "p99": 185,
+          "max": 499
+        },
+        "sseDeliveryMs": {
+          "count": 1,
+          "p50": 11,
+          "p95": 11,
+          "p99": 11,
+          "max": 11
+        },
+        "browserStateUpdateMs": {
+          "count": 0,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "max": null
+        },
+        "browserRenderMs": {
+          "count": 340,
+          "p50": 8,
+          "p95": 11,
+          "p99": 15,
+          "max": 1455
+        },
+        "browserStateToReactRenderMs": {
+          "count": 0,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "max": null
+        },
+        "endToEndPartialMs": {
+          "count": 338,
+          "p50": 1026,
+          "p95": 7295,
+          "p99": 13540,
+          "max": 16794
+        },
+        "speechStartToBrowserFirstPartialMs": {
+          "count": 48,
+          "p50": 2645,
+          "p95": 10028,
+          "p99": 18153,
+          "max": 18153
+        },
+        "speechEndToCommitMs": {
+          "count": 114,
+          "p50": 11146,
+          "p95": 58315,
+          "p99": 58996,
+          "max": 59527
+        },
+        "commitToFinalMs": {
+          "count": 192,
+          "p50": 192,
+          "p95": 651,
+          "p99": 1024,
+          "max": 1080
+        },
+        "speechEndToFinalMs": {
+          "count": 115,
+          "p50": 11333,
+          "p95": 58494,
+          "p99": 59797,
+          "max": 59937
+        },
+        "lastMeaningfulSpeechToCommitMs": {
+          "count": 126,
+          "p50": 6840,
+          "p95": 58745,
+          "p99": 59477,
+          "max": 59697
+        },
+        "lastMeaningfulSpeechToFinalMs": {
+          "count": 132,
+          "p50": 4716,
+          "p95": 58955,
+          "p99": 60107,
+          "max": 60278
+        },
+        "lastMeaningfulSpeechToTerminalEnqueueMs": {
+          "count": 391,
+          "p50": 369,
+          "p95": 501,
+          "p99": 514,
+          "max": 515
+        },
+        "terminalEnqueueToProviderFinalMs": {
+          "count": 115,
+          "p50": 11333,
+          "p95": 58494,
+          "p99": 59797,
+          "max": 59937
+        },
+        "providerFinalToBrowserPaintMs": {
+          "count": 17,
+          "p50": 2944,
+          "p95": 9788,
+          "p99": 9788,
+          "max": 9788
+        },
+        "answerAdmissionToProviderMs": {
+          "count": 2,
+          "p50": 1497,
+          "p95": 1497,
+          "p99": 1497,
+          "max": 1497
+        },
+        "answerRouteToExecutorAdmissionMs": {
+          "count": 0,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "max": null
+        },
+        "answerExecutorAdmissionToGeneratorMs": {
+          "count": 0,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "max": null
+        },
+        "answerRouteToGeneratorMs": {
+          "count": 0,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "max": null
+        },
+        "answerProviderToFirstTokenMs": {
+          "count": 2,
+          "p50": 1275,
+          "p95": 1275,
+          "p99": 1275,
+          "max": 1275
+        },
+        "answerFirstTokenToVisibleMs": {
+          "count": 2,
+          "p50": 443,
+          "p95": 443,
+          "p99": 443,
+          "max": 443
+        },
+        "answerVisibleToSseYieldMs": {
+          "count": 2,
+          "p50": 5,
+          "p95": 5,
+          "p99": 5,
+          "max": 5
+        },
+        "answerAdmissionToSseYieldMs": {
+          "count": 2,
+          "p50": 3220,
+          "p95": 3220,
+          "p99": 3220,
+          "max": 3220
+        },
+        "answerBrowserReceiveToRenderMs": {
+          "count": 2,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        "answerClickToRenderMs": {
+          "count": 2,
+          "p50": 6104,
+          "p95": 6104,
+          "p99": 6104,
+          "max": 6104
+        },
+        "screenshotClickToRenderMs": {
+          "count": 0,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "max": null
+        }
+      },
+      "revisionStageCounts": {
+        "qwen": 655,
+        "event": 549,
+        "redisXadd": 636,
+        "redisXread": 623,
+        "sse": 624,
+        "browser": 338,
+        "store": 0,
+        "reactCommit": 338,
+        "paint": 338
+      }
+    }
+  },
+  "historicalPeakMatched": false,
+  "rawEndpointPayloadExported": false,
+  "runtime": {
+    "id": "766377a1893425c2d0ce2e20de35c83e29c5cf4b96b1bacf6296e5270bfcdc3c",
+    "image": "sha256:a1e6c069511c7ea9eefa38cd4fe662400de2d50a19a3a70f9528215ebf0f3cc9",
+    "restarts": 0,
+    "startedAt": "2026-11-03T20:25:36.091960008Z"
+  }
+}

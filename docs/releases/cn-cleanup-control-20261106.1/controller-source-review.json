@@ -1,0 +1,14 @@
+{
+  "reviewedBase": "scripts/release_cn_pinned_binding.py",
+  "baseSha256": "6412b38a65d2d6e05a227f2e2287a89537057ea6cef1613a5eff47e6ed56d236",
+  "newControllerSha256": "01b8b73d00254318aa9458aa24836e5efc713f8ae2179ce28a0408e6ca95a8bd",
+  "changedFunctions": [
+    "check_candidate_scope",
+    "verify"
+  ],
+  "allOtherLifecycleFunctionAstsUnchanged": true,
+  "nonFunctionChanges": "fixed release/root/baseline/rollback/checksums, approved six changes and one added path, import alias/documentation",
+  "sevenWorkGatesPreserved": true,
+  "cnEntityGatePreserved": true,
+  "strictTcpAndSingleWriterPreserved": true
+}

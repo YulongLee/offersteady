@@ -1,0 +1,96 @@
+[
+  {
+    "name": "pinned_read_history_1",
+    "value": {
+      "historyBindings": 1,
+      "commands": {
+        "HGET": 2,
+        "EVALSHA": 1
+      },
+      "networkCalls": 3,
+      "bindingDecodes": 1,
+      "dbControlReads": 1,
+      "localElapsedMs": 0.846,
+      "productionP95Measured": false
+    }
+  },
+  {
+    "name": "pinned_read_history_1191",
+    "value": {
+      "historyBindings": 1191,
+      "commands": {
+        "HGET": 2,
+        "EVALSHA": 1
+      },
+      "networkCalls": 3,
+      "bindingDecodes": 1,
+      "dbControlReads": 1,
+      "localElapsedMs": 0.747,
+      "productionP95Measured": false
+    }
+  },
+  {
+    "name": "pinned_read_history_10000",
+    "value": {
+      "historyBindings": 10000,
+      "commands": {
+        "HGET": 2,
+        "EVALSHA": 1
+      },
+      "networkCalls": 3,
+      "bindingDecodes": 1,
+      "dbControlReads": 1,
+      "localElapsedMs": 0.922,
+      "productionP95Measured": false
+    }
+  },
+  {
+    "name": "twelve_mixed_pollers",
+    "value": {
+      "pollers": 12,
+      "liveSessions": 1,
+      "idleOrEndedPollers": 11,
+      "historyBindings": 10000,
+      "commands": {
+        "HGET": 24,
+        "EVALSHA": 15
+      },
+      "networkCalls": 39,
+      "localElapsedMs": 11.961,
+      "productionP95Measured": false
+    }
+  },
+  {
+    "name": "owner_reads_1",
+    "value": {
+      "history": 1,
+      "transportCalls": {
+        "EVALSHA": 2
+      },
+      "recordDecodes": 2,
+      "globalServerScans": 0
+    }
+  },
+  {
+    "name": "owner_reads_1242",
+    "value": {
+      "history": 1242,
+      "transportCalls": {
+        "EVALSHA": 2
+      },
+      "recordDecodes": 2,
+      "globalServerScans": 0
+    }
+  },
+  {
+    "name": "owner_reads_10000",
+    "value": {
+      "history": 10000,
+      "transportCalls": {
+        "EVALSHA": 2
+      },
+      "recordDecodes": 2,
+      "globalServerScans": 0
+    }
+  }
+]

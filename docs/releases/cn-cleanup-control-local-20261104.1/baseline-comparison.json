@@ -1,0 +1,138 @@
+{
+  "variant": "baseline",
+  "syntheticOnly": true,
+  "productionP95Measured": false,
+  "realModels": 0,
+  "scale": [
+    {
+      "history": 1,
+      "elapsedMs": 0.747,
+      "pythonCpuMs": 0.153,
+      "commands": {
+        "HVALS": 2,
+        "HEXISTS": 1
+      },
+      "recordDecodes": 2,
+      "serverGlobalScans": 2
+    },
+    {
+      "history": 1242,
+      "elapsedMs": 273.611,
+      "pythonCpuMs": 36.43,
+      "commands": {
+        "HVALS": 2,
+        "HEXISTS": 1242
+      },
+      "recordDecodes": 2484,
+      "serverGlobalScans": 2
+    },
+    {
+      "history": 10000,
+      "elapsedMs": 2153.954,
+      "pythonCpuMs": 286.478,
+      "commands": {
+        "HVALS": 2,
+        "HEXISTS": 10000
+      },
+      "recordDecodes": 20000,
+      "serverGlobalScans": 2
+    }
+  ],
+  "mixed": [
+    {
+      "sessions": 6,
+      "sources": 12,
+      "history": 1242,
+      "endToAckAndPrepareMs": 2224.964,
+      "pythonCpuMs": 378.384,
+      "operationP95Ms": {
+        "end": 2195.747,
+        "prepare": 2214.576,
+        "ack": 12.496
+      },
+      "lanes": {
+        "ingress": {
+          "submitted": 0,
+          "completed": 0,
+          "active": 0,
+          "pending": 0,
+          "waiting": 0,
+          "maxActive": 0,
+          "maxPending": 0,
+          "saturated": 0,
+          "configuredWorkers": 4,
+          "configuredQueueMax": 16,
+          "closed": 0
+        },
+        "lifecycle": {
+          "submitted": 12,
+          "completed": 12,
+          "active": 0,
+          "pending": 0,
+          "waiting": 0,
+          "maxActive": 2,
+          "maxPending": 10,
+          "saturated": 2,
+          "configuredWorkers": 2,
+          "configuredQueueMax": 8,
+          "closed": 0
+        },
+        "cleanupFailed": 0,
+        "outstanding": 0,
+        "closing": 0,
+        "poolsClosed": 0
+      },
+      "failures": [],
+      "syntheticCloseDelayMsPerSource": 150,
+      "allOldConnectionsClosedAfterDrain": 12
+    },
+    {
+      "sessions": 10,
+      "sources": 20,
+      "history": 1242,
+      "endToAckAndPrepareMs": 4251.272,
+      "pythonCpuMs": 623.823,
+      "operationP95Ms": {
+        "end": 4203.472,
+        "prepare": 4239.991,
+        "ack": 281.342
+      },
+      "lanes": {
+        "ingress": {
+          "submitted": 0,
+          "completed": 0,
+          "active": 0,
+          "pending": 0,
+          "waiting": 0,
+          "maxActive": 0,
+          "maxPending": 0,
+          "saturated": 0,
+          "configuredWorkers": 4,
+          "configuredQueueMax": 16,
+          "closed": 0
+        },
+        "lifecycle": {
+          "submitted": 20,
+          "completed": 20,
+          "active": 0,
+          "pending": 0,
+          "waiting": 0,
+          "maxActive": 2,
+          "maxPending": 10,
+          "saturated": 10,
+          "configuredWorkers": 2,
+          "configuredQueueMax": 8,
+          "closed": 0
+        },
+        "cleanupFailed": 0,
+        "outstanding": 0,
+        "closing": 0,
+        "poolsClosed": 0
+      },
+      "failures": [],
+      "syntheticCloseDelayMsPerSource": 150,
+      "allOldConnectionsClosedAfterDrain": 20
+    }
+  ],
+  "ownSyntheticDatabaseRemoved": true
+}

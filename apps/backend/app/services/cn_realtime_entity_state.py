@@ -16,6 +16,7 @@ from app.ports.realtime_speech import AccountDesktopDeviceRecord, QuestionCandid
 _SCRIPT = r'''
 local op, ttl = ARGV[1], tonumber(ARGV[2])
 local C,A,B,D,I,R,V,M,O = unpack(KEYS)
+local UB,UA,UP = KEYS[16],KEYS[17],KEYS[18]
 local base = ARGV[3]
 local function keep(k)
   local lifetime = (k == R or k == M or k == O) and tonumber(ARGV[4]) or ttl
@@ -69,10 +70,107 @@ local function binding_raw(raw, status)
   end
   return encode({cn_binding_schema=1,record_json=raw,overrides={status=status}})
 end
-if op ~= 'seed' and op ~= 'binding_lookup' and op ~= 'pinned_binding_lookup' then
+local function owners_empty()
+  return redis.call('EXISTS',A,B) == 0
+end
+local function owners_ready()
+  return redis.call('HGET',UP,'__ready__') == '1' and
+    redis.call('HLEN',UB) == tonumber(redis.call('HGET',UP,'__binding_owners__')) and
+    redis.call('HLEN',UA) == tonumber(redis.call('HGET',UP,'__account_owners__')) and
+    redis.call('HLEN',UP) == (tonumber(redis.call('HGET',UP,'__owners__')) or -5)+4
+end
+if (op == 'binding' or op == 'account') and redis.call('HGET',UP,'__ready__') ~= '1' then
+  -- Complete shared expiry is a new empty runtime, never a partial rebuild.
+  if not owners_empty() then return redis.error_reply('cn_owner_index_not_ready') end
+  redis.call('DEL',UB,UA,UP)
+  redis.call('HSET',UP,'__ready__','1','__binding_owners__',0,'__account_owners__',0,'__owners__',0)
+end
+if (op == 'binding' or op == 'account') and not owners_ready() then
+  return redis.error_reply('cn_owner_index_incomplete')
+end
+if op ~= 'seed' and op ~= 'owner_index_seed' and op ~= 'owner_bindings' and op ~= 'owner_accounts' and op ~= 'binding_lookup' and op ~= 'pinned_binding_lookup' then
   -- Retain the previous snapshot's shared runtime lifetime without copying its
   -- body. Freshness/permissions remain in their original record timestamps.
-  for _, k in ipairs({C,A,B,D,I,R,M,O}) do keep(k) end
+  for _, k in ipairs({C,A,B,D,I,R,M,O,UB,UA,UP}) do keep(k) end
+end
+local function index_member(key, uid, field, kind)
+  local raw=redis.call('HGET',key,uid)
+  local ids=raw and cjson.decode(raw) or {}
+  local found=false
+  for _, value in ipairs(ids) do if value == field then found=true; break end end
+  if not found then
+    table.insert(ids,field)
+    if redis.call('HSET',key,uid,encode(ids)) == 1 then
+      redis.call('HINCRBY',UP,kind == 'bindings' and '__binding_owners__' or '__account_owners__',1)
+    end
+  end
+  local proof_raw=redis.call('HGET',UP,'owner:' .. uid)
+  local proof=proof_raw and cjson.decode(proof_raw) or {bindings=0,accounts=0}
+  proof[kind]=#ids
+  if redis.call('HSET',UP,'owner:' .. uid,encode(proof)) == 1 then redis.call('HINCRBY',UP,'__owners__',1) end
+  keep(key); keep(UP)
+end
+if op == 'owner_index_seed' then
+  -- Rebuild once per repository startup, including after an idle rollback to
+  -- the previous single-writer protocol, which does not maintain these keys.
+  redis.call('DEL',UB,UA,UP)
+  local count=0
+  local members,proofs={},{}
+  local function collect(uid,field,kind)
+    if not members[uid] then
+      members[uid]={bindings={},accounts={}}
+      proofs[uid]={bindings=0,accounts=0}
+    end
+    table.insert(members[uid][kind],field)
+    proofs[uid][kind]=proofs[uid][kind]+1
+  end
+  for _, raw in ipairs(redis.call('HVALS',B)) do
+    local n=binding_record(raw)
+    collect(n.owner_user_id,n.owner_user_id .. '|' .. n.session_id,'bindings'); count=count+1
+  end
+  for _, raw in ipairs(redis.call('HVALS',A)) do
+    local n=cjson.decode(raw)
+    collect(n.owner_user_id,n.owner_user_id .. '|' .. n.device_id,'accounts'); count=count+1
+  end
+  local owner_count,binding_owners,account_owners=0,0,0
+  for uid, kinds in pairs(members) do
+    owner_count=owner_count+1
+    if #kinds.bindings > 0 then redis.call('HSET',UB,uid,encode(kinds.bindings)); binding_owners=binding_owners+1 end
+    if #kinds.accounts > 0 then redis.call('HSET',UA,uid,encode(kinds.accounts)); account_owners=account_owners+1 end
+    redis.call('HSET',UP,'owner:' .. uid,encode(proofs[uid]))
+  end
+  redis.call('HSET',UP,'__ready__','1','__binding_owners__',binding_owners,'__account_owners__',account_owners,'__owners__',owner_count)
+  local lifetime=math.max(ttl,redis.call('TTL',A),redis.call('TTL',B))
+  for _, key in ipairs({UB,UA,UP}) do redis.call('EXPIRE',key,lifetime) end
+  return count
+end
+if op == 'owner_bindings' or op == 'owner_accounts' then
+  if redis.call('HGET',UP,'__ready__') ~= '1' then
+    if owners_empty() and redis.call('EXISTS',UB,UA,UP) == 0 then return {} end
+    return redis.error_reply('cn_owner_index_not_ready')
+  end
+  if not owners_ready() then return redis.error_reply('cn_owner_index_incomplete') end
+  local uid=ARGV[5]
+  local is_binding=op == 'owner_bindings'
+  local key=is_binding and UB or UA; local source=is_binding and B or A
+  local kind=is_binding and 'bindings' or 'accounts'
+  local raw=redis.call('HGET',key,uid); local ids=raw and cjson.decode(raw) or {}
+  local proof_raw=redis.call('HGET',UP,'owner:' .. uid)
+  local proof=proof_raw and cjson.decode(proof_raw) or {bindings=0,accounts=0}
+  if #ids ~= proof[kind] then return redis.error_reply('cn_owner_index_incomplete') end
+  local result,seen={},{}
+  for _, field in ipairs(ids) do
+    if seen[field] then return redis.error_reply('cn_owner_index_duplicate') end
+    seen[field]=true
+    local record_raw=redis.call('HGET',source,field)
+    if record_raw then
+      local n=is_binding and binding_record(record_raw) or cjson.decode(record_raw)
+      local expected=uid .. '|' .. (is_binding and n.session_id or n.device_id)
+      if n.owner_user_id ~= uid or expected ~= field then return redis.error_reply('cn_runtime_entity_identity_mismatch') end
+      table.insert(result,{record_raw,is_binding and retired(n.session_id) and 1 or 0})
+    end
+  end
+  return result
 end
 local function newer_binding(n, p)
   if n.device_id == p.device_id and n.binding_generation ~= p.binding_generation then
@@ -83,6 +181,7 @@ local function newer_binding(n, p)
   return n.last_seen_at_ms >= p.last_seen_at_ms
 end
 local function index_binding(n, raw)
+  index_member(UB,n.owner_user_id,n.owner_user_id .. '|' .. n.session_id,'bindings')
   for _, item in ipairs({{D,n.device_id .. '|' .. n.manual_code},{I,n.manual_code}}) do
     local old = redis.call('HGET', item[1], item[2])
     local p=old and binding_record(old)
@@ -185,7 +284,8 @@ if op == 'account' then
     if p.last_used_at_ms > n.last_used_at_ms then return {1,old,0} end
     n.linked_at_ms=math.min(p.linked_at_ms,n.linked_at_ms)
   end
-  local raw=encode(n); redis.call('HSET',A,field,raw); keep(A); return {1,raw,0}
+  local raw=encode(n); redis.call('HSET',A,field,raw); keep(A)
+  index_member(UA,n.owner_user_id,field,'accounts'); return {1,raw,0}
 end
 if op == 'candidate' then
   local n=cjson.decode(ARGV[5]); local old=redis.call('HGET',C,n.candidate_id)
@@ -336,6 +436,8 @@ class CNRealtimeEntityState:
                      f"{base}:entities:session-owners:v1", f"{base}:entities:web-heartbeats:v1",
                      f"{base}:indexes:active-web-users:v1", f"{base}:transcripts",
                      f"{base}:publishers", f"{base}:publisher-tokens", f"{base}:receipts"]
+        self.keys.extend([f"{base}:indexes:owner-bindings:v1", f"{base}:indexes:owner-accounts:v1",
+                          f"{base}:indexes:owner-reference-proof:v1"])
 
     @staticmethod
     def encode(record):
@@ -355,6 +457,20 @@ class CNRealtimeEntityState:
                    "accounts": [self.encode(x) for x in accounts],
                    "bindings": [self.encode(x) for x in bindings], "activity": activity}
         return int(self.call("seed", json.dumps(payload)))
+
+    def seed_owner_indexes(self):
+        return int(self.call("owner_index_seed"))
+
+    def owner_records(self, kind, user_id):
+        cls = {"bindings": SessionDesktopBindingRecord, "accounts": AccountDesktopDeviceRecord}[kind]
+        rows = self.call("owner_" + kind, user_id)
+        result = []
+        for raw, retired in rows:
+            record = self.decode(cls, raw)
+            if record.owner_user_id != user_id:
+                raise ValueError("cn_runtime_entity_identity_mismatch")
+            result.append(replace(record, status="stale") if kind == "bindings" and retired else record)
+        return result
 
     def save(self, op, record, *, expected=None):
         result = self.call(op, self.encode(record), str(self.retention) if op == "event" else "cas" if expected is not None else "save",

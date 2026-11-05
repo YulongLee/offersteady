@@ -1,0 +1,355 @@
+{
+  "atMs": 1793738889699,
+  "matchedLocalDevice": true,
+  "boundRecordStatus": "bound",
+  "currentSession": {
+    "status": "live",
+    "mode": "interview",
+    "audioMode": "computer"
+  },
+  "latestStatusSamples": [
+    {
+      "atMs": 1793738889118,
+      "sourceHealth": [
+        {
+          "frameCount": 82,
+          "lastFrameAtMs": 1793738888224,
+          "lastSignalAtMs": 1793738888224,
+          "level": 0.0,
+          "noiseFloor": 0.00032,
+          "sourceGeneration": 53,
+          "sourceKind": "microphone",
+          "state": "silent",
+          "stage": "track-live",
+          "turnState": "idle"
+        },
+        {
+          "frameCount": 728,
+          "lastFrameAtMs": 1793738888522,
+          "lastSignalAtMs": 1793738888522,
+          "level": 0.0,
+          "noiseFloor": 0.00022,
+          "sourceGeneration": 111,
+          "sourceKind": "system",
+          "state": "silent",
+          "stage": "track-live",
+          "turnState": "idle"
+        }
+      ]
+    },
+    {
+      "atMs": 1793738878619,
+      "sourceHealth": [
+        {
+          "frameCount": 47,
+          "lastFrameAtMs": 1793738870208,
+          "lastSignalAtMs": 1793738873536,
+          "level": 0.0,
+          "noiseFloor": 0.0001,
+          "sourceGeneration": 51,
+          "sourceKind": "microphone",
+          "state": "silent",
+          "stage": "track-live",
+          "turnState": "idle"
+        },
+        {
+          "frameCount": 653,
+          "lastFrameAtMs": 1793738877972,
+          "lastSignalAtMs": 1793738877972,
+          "level": 0.076,
+          "noiseFloor": 0.00031,
+          "sourceGeneration": 110,
+          "sourceKind": "system",
+          "stage": "frames-produced",
+          "turnState": "speaking"
+        }
+      ]
+    },
+    {
+      "atMs": 1793738864373,
+      "sourceHealth": [
+        {
+          "frameCount": 22,
+          "lastFrameAtMs": 1793738863041,
+          "lastSignalAtMs": 1793738863125,
+          "level": 0.087,
+          "noiseFloor": 0.0001,
+          "sourceGeneration": 49,
+          "sourceKind": "microphone",
+          "state": "receiving",
+          "stage": "signal-detected",
+          "turnState": "speaking"
+        },
+        {
+          "frameCount": 552,
+          "lastFrameAtMs": 1793738863082,
+          "lastSignalAtMs": 1793738863124,
+          "level": 0.096,
+          "noiseFloor": 0.0005,
+          "sourceGeneration": 106,
+          "sourceKind": "system",
+          "state": "receiving",
+          "stage": "signal-detected",
+          "turnState": "speaking"
+        }
+      ]
+    },
+    {
+      "atMs": 1793738841104,
+      "sourceHealth": [
+        {
+          "frameCount": 3,
+          "lastFrameAtMs": 1793738830443,
+          "lastSignalAtMs": 1793738833813,
+          "level": 0.0,
+          "noiseFloor": 0.0001,
+          "sourceGeneration": 47,
+          "sourceKind": "microphone",
+          "state": "silent",
+          "stage": "track-live",
+          "turnState": "idle"
+        },
+        {
+          "frameCount": 385,
+          "lastFrameAtMs": 1793738840852,
+          "lastSignalAtMs": 1793738840895,
+          "level": 0.072,
+          "noiseFloor": 0.0004,
+          "sourceGeneration": 102,
+          "sourceKind": "system",
+          "state": "receiving",
+          "stage": "frames-produced",
+          "turnState": "idle"
+        }
+      ]
+    },
+    {
+      "atMs": 1793738830897,
+      "sourceHealth": [
+        {
+          "frameCount": 2,
+          "lastFrameAtMs": 1793738830144,
+          "lastSignalAtMs": 1793738830144,
+          "level": 0.0,
+          "noiseFloor": 0.00028,
+          "sourceGeneration": 47,
+          "sourceKind": "microphone",
+          "state": "silent",
+          "stage": "track-live",
+          "turnState": "tail"
+        },
+        {
+          "frameCount": 304,
+          "lastFrameAtMs": 1793738830271,
+          "lastSignalAtMs": 1793738830271,
+          "level": 0.048,
+          "noiseFloor": 0.00038,
+          "sourceGeneration": 101,
+          "sourceKind": "system",
+          "state": "receiving",
+          "stage": "frames-produced",
+          "turnState": "speaking"
+        }
+      ]
+    },
+    {
+      "atMs": 1793738819807,
+      "sourceHealth": [
+        {
+          "level": 0.0,
+          "noiseFloor": 0.0001,
+          "sourceGeneration": 46,
+          "sourceKind": "microphone",
+          "state": "silent",
+          "stage": "track-live",
+          "turnState": "idle"
+        },
+        {
+          "frameCount": 222,
+          "lastFrameAtMs": 1793738819391,
+          "lastSignalAtMs": 1793738819519,
+          "level": 0.002,
+          "noiseFloor": 0.00028,
+          "sourceGeneration": 100,
+          "sourceKind": "system",
+          "state": "receiving",
+          "stage": "frames-produced",
+          "turnState": "speaking"
+        }
+      ]
+    },
+    {
+      "atMs": 1793738808387,
+      "sourceHealth": [
+        {
+          "level": 0.0,
+          "noiseFloor": 0.0001,
+          "sourceGeneration": 46,
+          "sourceKind": "microphone",
+          "state": "silent",
+          "stage": "track-live",
+          "turnState": "idle"
+        },
+        {
+          "frameCount": 145,
+          "lastFrameAtMs": 1793738808005,
+          "lastSignalAtMs": 1793738808005,
+          "level": 0.041,
+          "noiseFloor": 0.00023,
+          "sourceGeneration": 98,
+          "sourceKind": "system",
+          "state": "receiving",
+          "stage": "frames-produced",
+          "turnState": "tail"
+        }
+      ]
+    },
+    {
+      "atMs": 1793738785377,
+      "sourceHealth": [
+        {
+          "frameCount": 640,
+          "lastFrameAtMs": 1793738771073,
+          "lastSignalAtMs": 1793738772991,
+          "level": 0.001,
+          "noiseFloor": 0.0002,
+          "sourceGeneration": 47,
+          "sourceKind": "microphone",
+          "state": "silent",
+          "stage": "track-live",
+          "turnState": "idle"
+        },
+        {
+          "frameCount": 5023,
+          "lastFrameAtMs": 1793738773933,
+          "lastSignalAtMs": 1793738773954,
+          "level": 0.037,
+          "noiseFloor": 7e-05,
+          "sourceGeneration": 96,
+          "sourceKind": "system",
+          "state": "receiving",
+          "stage": "signal-detected",
+          "turnState": "speaking"
+        }
+      ]
+    },
+    {
+      "atMs": 1793738774512,
+      "sourceHealth": [
+        {
+          "frameCount": 640,
+          "lastFrameAtMs": 1793738771073,
+          "lastSignalAtMs": 1793738772991,
+          "level": 0.001,
+          "noiseFloor": 0.0002,
+          "sourceGeneration": 47,
+          "sourceKind": "microphone",
+          "state": "silent",
+          "stage": "track-live",
+          "turnState": "idle"
+        },
+        {
+          "frameCount": 5023,
+          "lastFrameAtMs": 1793738773933,
+          "lastSignalAtMs": 1793738773954,
+          "level": 0.037,
+          "noiseFloor": 7e-05,
+          "sourceGeneration": 96,
+          "sourceKind": "system",
+          "state": "receiving",
+          "stage": "signal-detected",
+          "turnState": "speaking"
+        }
+      ]
+    },
+    {
+      "atMs": 1793738754673,
+      "sourceHealth": [
+        {
+          "frameCount": 620,
+          "lastFrameAtMs": 1793738719889,
+          "lastSignalAtMs": 1793738745379,
+          "level": 0.0,
+          "noiseFloor": 0.0001,
+          "sourceGeneration": 44,
+          "sourceKind": "microphone",
+          "state": "silent",
+          "stage": "track-live",
+          "turnState": "idle"
+        },
+        {
+          "frameCount": 4891,
+          "lastFrameAtMs": 1793738753399,
+          "lastSignalAtMs": 1793738753442,
+          "level": 0.001,
+          "noiseFloor": 0.00025,
+          "sourceGeneration": 94,
+          "sourceKind": "system",
+          "state": "receiving",
+          "stage": "signal-detected",
+          "turnState": "tail"
+        }
+      ]
+    },
+    {
+      "atMs": 1793738741130,
+      "sourceHealth": [
+        {
+          "frameCount": 620,
+          "lastFrameAtMs": 1793738719889,
+          "lastSignalAtMs": 1793738736695,
+          "level": 0.0,
+          "noiseFloor": 0.0001,
+          "sourceGeneration": 44,
+          "sourceKind": "microphone",
+          "state": "silent",
+          "stage": "track-live",
+          "turnState": "idle"
+        },
+        {
+          "frameCount": 4778,
+          "lastFrameAtMs": 1793738739766,
+          "lastSignalAtMs": 1793738739788,
+          "level": 0.067,
+          "noiseFloor": 0.00033,
+          "sourceGeneration": 92,
+          "sourceKind": "system",
+          "state": "receiving",
+          "stage": "signal-detected",
+          "turnState": "speaking"
+        }
+      ]
+    },
+    {
+      "atMs": 1793738716337,
+      "sourceHealth": [
+        {
+          "frameCount": 618,
+          "lastFrameAtMs": 1793738683079,
+          "lastSignalAtMs": 1793738713638,
+          "level": 0.0,
+          "noiseFloor": 0.0001,
+          "sourceGeneration": 43,
+          "sourceKind": "microphone",
+          "state": "silent",
+          "stage": "track-live",
+          "turnState": "idle"
+        },
+        {
+          "frameCount": 4568,
+          "lastFrameAtMs": 1793738715839,
+          "lastSignalAtMs": 1793738715924,
+          "level": 0.078,
+          "noiseFloor": 0.00024,
+          "sourceGeneration": 88,
+          "sourceKind": "system",
+          "state": "receiving",
+          "stage": "signal-detected",
+          "turnState": "speaking"
+        }
+      ]
+    }
+  ],
+  "rawUserSessionDeviceOrContentExported": false,
+  "productionMutations": 0
+}

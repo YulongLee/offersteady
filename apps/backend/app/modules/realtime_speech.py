@@ -302,7 +302,7 @@ async def create_publisher(
                 owner = resolve_owned_user_id(explicit_user_id=request.user_id, auth_context=auth_context)
             return owner, service.session_service.get_session(user_id=owner, session_id=request.session_id)
         resolved_user_id, session = await run_cn_realtime_io(request_context, prepare,
-            lane="lifecycle", operation_name="publisher_prepare")
+            lane="preparation", operation_name="publisher_prepare")
         if session.session_mode == "mock":
             from app.modules.mock_interview import require_mock_runtime
             publisher = await require_mock_runtime().legacy.create(user_id=resolved_user_id,
@@ -310,7 +310,7 @@ async def create_publisher(
                 source_kind=request.source_kind, client_name=request.client_name)
         else:
             publisher = await run_cn_realtime_io(request_context, service.create_publisher,
-                lane="lifecycle", operation_name="publisher_create",
+                lane="preparation", operation_name="publisher_create",
                 on_abandoned_result=lambda created: service.disconnect_publisher(token=created.token),
                 user_id=resolved_user_id, session_id=request.session_id,
                 source_kind=request.source_kind, client_name=request.client_name)

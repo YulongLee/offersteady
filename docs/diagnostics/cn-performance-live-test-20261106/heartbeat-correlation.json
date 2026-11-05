@@ -1,0 +1,14 @@
+{
+  "observedAtMs": 1793903759492,
+  "tracedSessionCount": 1,
+  "heartbeatStatusesForTracedSessions": {
+    "200": 35
+  },
+  "heartbeatStatusesForOtherSessions": {
+    "401": 10
+  },
+  "tracedHeartbeatGroups": 1,
+  "otherHeartbeatGroups": 1,
+  "rawIdsExported": false,
+  "readOnly": true
+}

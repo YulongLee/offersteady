@@ -1,0 +1,38 @@
+{
+  "cn-backend": {
+    "archive": "releases/20261106.1/cn/backend-runtime.tar.gz",
+    "inventory": "releases/20261106.1/cn/backend-runtime-manifest.json",
+    "count": 238,
+    "image": "sha256:1724a4e95c8fe610d2e6b98a5186a3867adde99c4126e96f55920c2beefc80cf"
+  },
+  "cn-material-worker": {
+    "archive": "releases/cn-20261101.1/material-worker-runtime.tar.gz",
+    "inventory": "releases/cn-20261101.1/material-worker-runtime-manifest.json",
+    "count": 196,
+    "image": "sha256:df6b8500500e955aa2f01c3bc0c5b40dab218296459f4e8341da268bb6b0ee43"
+  },
+  "cn-web": {
+    "archive": "releases/cn-20261101.1/web-static.tar.gz",
+    "inventory": "releases/cn-20261101.1/web-static-manifest.json",
+    "count": 366,
+    "image": "sha256:4586bab84a0c18b4aadba9e9be079960372abdc6334030c01f59dbb45bffff76"
+  },
+  "global-backend": {
+    "archive": "releases/20261106.1/global/backend-runtime.tar.gz",
+    "inventory": "releases/20261106.1/global/backend-runtime-manifest.json",
+    "count": 308,
+    "image": "sha256:687fe1b4b421eb11024bbe6fd36f8ff81a973cf37a74f43e653e7e9321752bea"
+  },
+  "global-material-worker": {
+    "archive": "releases/20261102.1/global/material-worker-runtime.tar.gz",
+    "inventory": "releases/20261102.1/global/material-worker-runtime-manifest.json",
+    "count": 267,
+    "image": "sha256:dc8a809fce79291d15a127f8121fe7f87a3d1f51b3d77422aba81c569115890d"
+  },
+  "global-web": {
+    "archive": "releases/20261102.1/global/web-static.tar.gz",
+    "inventory": "releases/20261102.1/global/web-static-manifest.json",
+    "count": 251,
+    "image": "sha256:73c351fbc0502f50989b729174620173c80988292fe6d0d2b4fcf660f29caa44"
+  }
+}

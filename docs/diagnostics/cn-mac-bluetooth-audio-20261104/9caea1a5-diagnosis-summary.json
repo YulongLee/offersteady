@@ -1,0 +1,92 @@
+{
+  "scope": "Read-only Mac CN audio diagnosis; existing user voluntarily spoke in their current interview",
+  "installedVersion": "1.3.6",
+  "mainAndRendererAudioInputEntitlements": true,
+  "runningCnMainProcesses": 1,
+  "matchedCurrentLocalDevice": true,
+  "currentMatchedSession": {
+    "status": "live",
+    "mode": "interview",
+    "audioMode": "computer"
+  },
+  "confirmedTransportObservations": {
+    "desktopEnqueueToFlushMs": {
+      "count": 3331,
+      "p50": 0,
+      "p95": 1480,
+      "p99": 3468,
+      "max": 4902
+    },
+    "backendQueueMs": {
+      "count": 3245,
+      "p50": 1,
+      "p95": 5,
+      "p99": 231,
+      "max": 937
+    },
+    "backendAsrLockWaitMs": {
+      "count": 3244,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 149
+    },
+    "latestAppendToPartialMs": {
+      "count": 592,
+      "p50": 78,
+      "p95": 358,
+      "p99": 497,
+      "max": 602
+    },
+    "redisToSseMs": {
+      "count": 591,
+      "p50": 3,
+      "p95": 9,
+      "p99": 15,
+      "max": 27
+    }
+  },
+  "traceScope": "Process cumulative and mixed channels; not the requested ten seconds or per-user accuracy measurement",
+  "wifi": [
+    {
+      "spairport_network_channel": "11 (2GHz, 20MHz)",
+      "spairport_network_mcs": 6,
+      "spairport_network_phymode": "802.11ax",
+      "spairport_network_rate": 68,
+      "spairport_signal_noise": "-61 dBm / -82 dBm"
+    },
+    {}
+  ],
+  "systemProxyEnabled": {
+    "HTTPEnable": true,
+    "HTTPSEnable": true,
+    "SOCKSEnable": true,
+    "ProxyAutoConfigEnable": false
+  },
+  "proxyActualTargetRouteKnown": false,
+  "installedAudioProcessingVerified": [
+    "echoCancellation ideal true",
+    "noiseSuppression ideal true",
+    "autoGainControl ideal true",
+    "adaptive VAD"
+  ],
+  "bluetoothDefaultInputOutputObserved": true,
+  "bluetoothObservedSampleRateHz": 24000,
+  "sampleRateByItselfProvesRecognitionFailure": false,
+  "notEstablished": [
+    "Unique causal contribution of Bluetooth profile, DSP/VAD, ACK backpressure, network/proxy, backend lifecycle changes or browser timing",
+    "Whether every second of the requested utterance overlapped the sampled interval",
+    "ASR word-error rate without reference speech/transcript",
+    "Cross-host clock-corrected network or SSE latency",
+    "Whether CN traffic actually traversed the enabled proxy"
+  ],
+  "nextIsolationChecks": [
+    "Keep headset microphone unchanged and compare existing 5GHz WiFi or wired link",
+    "Keep headset for output and compare another available wired/USB input",
+    "Instrument transport queue/ACK versus capture signal before changing VAD or audio processing policies"
+  ],
+  "localOrProductionSettingsChanged": false,
+  "newInterviewCreated": false,
+  "agentInitiatedProviderCalls": 0,
+  "rawAudioTranscriptDeviceSessionIdentityExported": false
+}

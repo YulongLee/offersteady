@@ -1,0 +1,131 @@
+{
+  "sinceStartedAt": "2026-11-05T19:00:16.221773511Z",
+  "observedDurationSeconds": 214.51,
+  "verifiedAtMs": 1793905272521,
+  "atMs": 1793905430732,
+  "backendId": "bf9eab2626100d1b090de78e3cab6f6fa00a727d6181c54c61ccb3e4f70eb197",
+  "backendImage": "sha256:687fe1b4b421eb11024bbe6fd36f8ff81a973cf37a74f43e653e7e9321752bea",
+  "healthyAtObservationEnd": true,
+  "restartCountAtObservationEnd": 0,
+  "records": {
+    "offersteady-global-backend-1": {
+      "windows": {
+        "sinceStartup": {
+          "lines": 56,
+          "errorOrCritical": 0,
+          "traceback": 0,
+          "http5xx": 0,
+          "streamFailed": 0,
+          "cleanupWarnings": 0
+        },
+        "afterVerify": {
+          "lines": 37,
+          "errorOrCritical": 0,
+          "traceback": 0,
+          "http5xx": 0,
+          "streamFailed": 0,
+          "cleanupWarnings": 0
+        },
+        "last60Seconds": {
+          "lines": 10,
+          "errorOrCritical": 0,
+          "traceback": 0,
+          "http5xx": 0,
+          "streamFailed": 0,
+          "cleanupWarnings": 0
+        }
+      },
+      "http5xxSecondsAfterStart": [],
+      "schemaValidationRequests": {
+        "count": 3,
+        "p50Ms": 7.75,
+        "p95Ms": 1892.92,
+        "maxMs": 1892.92
+      },
+      "httpAfterVerifyIncludingAcceptance": {
+        "count": 3,
+        "p50Ms": 10.3,
+        "p95Ms": 252.13,
+        "maxMs": 252.13
+      },
+      "lastBoundedLoopSummaries": [
+        {
+          "schema": 1,
+          "sampleCount": 480,
+          "observations": 480,
+          "capacity": 512,
+          "intervalMs": 250.0,
+          "p50Ms": 0.808,
+          "p95Ms": 1.898,
+          "maxMs": 1671.246,
+          "over50Ms": 1,
+          "over250Ms": 1
+        },
+        {
+          "schema": 1,
+          "sampleCount": 512,
+          "observations": 600,
+          "capacity": 512,
+          "intervalMs": 250.0,
+          "p50Ms": 0.79,
+          "p95Ms": 1.885,
+          "maxMs": 4.801,
+          "over50Ms": 0,
+          "over250Ms": 0
+        },
+        {
+          "schema": 1,
+          "sampleCount": 512,
+          "observations": 720,
+          "capacity": 512,
+          "intervalMs": 250.0,
+          "p50Ms": 0.788,
+          "p95Ms": 1.893,
+          "maxMs": 4.801,
+          "over50Ms": 0,
+          "over250Ms": 0
+        }
+      ]
+    },
+    "offersteady-global-web-1": {
+      "windows": {
+        "sinceStartup": {
+          "lines": 76,
+          "errorOrCritical": 0,
+          "traceback": 0,
+          "http5xx": 0,
+          "streamFailed": 0,
+          "cleanupWarnings": 0
+        },
+        "afterVerify": {
+          "lines": 6,
+          "errorOrCritical": 0,
+          "traceback": 0,
+          "http5xx": 0,
+          "streamFailed": 0,
+          "cleanupWarnings": 0
+        },
+        "last60Seconds": {
+          "lines": 0,
+          "errorOrCritical": 0,
+          "traceback": 0,
+          "http5xx": 0,
+          "streamFailed": 0,
+          "cleanupWarnings": 0
+        }
+      },
+      "http5xxSecondsAfterStart": [],
+      "schemaValidationRequests": {
+        "count": 0
+      },
+      "httpAfterVerifyIncludingAcceptance": {
+        "count": 0
+      },
+      "lastBoundedLoopSummaries": []
+    }
+  },
+  "rawLogsExported": false,
+  "userIdentifiersExported": false,
+  "productionLoadTest": false,
+  "realModelRequestsCreated": 0
+}

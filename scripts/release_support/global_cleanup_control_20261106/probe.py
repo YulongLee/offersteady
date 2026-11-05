@@ -1,0 +1,602 @@
+"""Offline actual-image CN shared-blocking probe; one expectation map.
+
+Run with --network=none --read-only --cap-drop=ALL and server-local settings.
+Never enter application lifespan or call a database/provider. Every fixture is
+synthetic. Only named synthetic/control/CN-I/O workers may start; all are joined
+before success. No production value or synthetic identifier is output.
+
+EXPECTED keys: inventory, python, dependencies, settingsSha256, openapiSha256,
+httpPaths and ancillary. The controller must obtain ancillary from the actual
+baseline image, then supply its fixed material-upload-formats.json path/SHA.
+"""
+from __future__ import annotations
+
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
+import hashlib
+import importlib.metadata
+import json
+import logging
+from math import isfinite
+import os
+from pathlib import Path
+import platform
+import re
+import socket
+import sys
+import threading
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
+
+EXPECTED = {'inventory': {'ai/prompts/README.md': 'c23a8ee13d7b156a8c615bd88e3776181cdcc45cf7f81ba6a5d9c4376d41a568', 'ai/prompts/chat-service/continuation.en.md': '95989b17e55324a7b82e042608315abf1f8477600424d1e2f3b90f15b257f426', 'ai/prompts/chat-service/continuation.md': 'd4b4880b802f4573da9c9d1c7837ab1d0f87a44c2a96541ed3c95d130c4df64a', 'ai/prompts/chat-service/detail.en.md': 'b4984f9be58d6d4b4f0819e21fffab66795bcd6b2afd2240d5384349fc10f255', 'ai/prompts/chat-service/detail.md': '7c7efcda04559435ab91044b0439d037e82201deb5a9f114c01fc757f11b21d0', 'ai/prompts/chat-service/quick.en.md': '26443efd71ada5c230ffe25211a08994d26af084d223d29a388a06f85306e738', 'ai/prompts/chat-service/quick.md': '8b20f1783abafbb1980f3c3d5cee7e165d359d5249df864bcaa2fe1f2a514372', 'ai/prompts/chat-service/system-v3.md': '1e640d13e62d39aae5423c86c0b616af42ae4a36f1cecec8104c3b70c8e9dcef', 'ai/prompts/chat-service/system.en.md': '81f09c9e6f6fe01efc80dbb4b8cd182508d889854ac27a3281c11e72538bc269', 'ai/prompts/chat-service/system.md': 'e84d13f4e140edfe8b45b776c9ba05e8273b58b54bb14afa8b7d80d3f9eb8b1d', 'ai/prompts/global-interview/de-DE/continuation.md': '879d554544767d42f810e2436e6f1714ffa56fdc3fac9050f9c301699f4eb733', 'ai/prompts/global-interview/de-DE/detail.md': '2b2e819a43216c31a7de9ddddfe481b328c11ba6d1e1751b3c4915ee6e76f570', 'ai/prompts/global-interview/de-DE/quick.md': '25b84361af12d115b9c6f239792ebb58f301d5615d6b93f7730507c80fb2ffe0', 'ai/prompts/global-interview/de-DE/screenshot.md': 'a85728bfdb797c2f9d00fa0c220e0b16419b6b9170f49946eedc189aae8dd23c', 'ai/prompts/global-interview/de-DE/system.md': '6f2a9879afbf7a76bf5aaa6743f6bd69feb4ffdb2ad231cf595051acfe1f8f82', 'ai/prompts/global-interview/en-US/continuation.md': '06eb3bc824b444434331a81ab2b9582d57bb059946f252bb7752db0e8a00d530', 'ai/prompts/global-interview/en-US/detail.md': '6f56330fab757c5308f3555d45ff20c7e5761fb9441c51f5d245b8b7b3960688', 'ai/prompts/global-interview/en-US/quick.md': '2d455d1b48145849d5b5520ba4c7c037bc17aae1529d280be9d6c1f050f8c275', 'ai/prompts/global-interview/en-US/screenshot.md': '6c13e4d0d5ccb89e47c496a9136de448254aa49c61258c94b001f35d94e25640', 'ai/prompts/global-interview/en-US/system.md': '04cd7c855c6784aaf18c3636b91978c661f67803989ecef532459334485e066a', 'ai/prompts/global-interview/es-ES/continuation.md': 'eb3eabe1e0c3559e156aa9f47e367ae40f1c68f7125a7123a544d4608862d9c2', 'ai/prompts/global-interview/es-ES/detail.md': 'fd238a8fba3ca7f74f4ab7f2d1f4d5c9242057b7b58007a0572ac0cc1b4bf5fe', 'ai/prompts/global-interview/es-ES/quick.md': '6ef4b6ad5bed762adaeed99a859525598b531b9506455507188156d7eea7ac75', 'ai/prompts/global-interview/es-ES/screenshot.md': '28647cb2ee0244e533074c2d0f2b990b6a7bcbef1823f7bd947b73aa71ca1123', 'ai/prompts/global-interview/es-ES/system.md': '205e74b5d97e50d12763f6f9b52a1c1d66d673345c1df754baf0468416455d5a', 'ai/prompts/global-interview/fr-FR/continuation.md': '1914f3447566439d7285d13cc341dff740d115580ca3923d77560a6077d296aa', 'ai/prompts/global-interview/fr-FR/detail.md': 'bbfab272acece6eaeb3ebd2b32d1241e0c8f058eb90a75fba763521b4721bbf3', 'ai/prompts/global-interview/fr-FR/quick.md': 'b79a05f73022e018632ec2419796b958a61a212422fcc1007906ece2bafaed98', 'ai/prompts/global-interview/fr-FR/screenshot.md': '1808d2a45b5955efee8bf8fc1abd25267f9d29680ae51e3cf95aa1267fdb6309', 'ai/prompts/global-interview/fr-FR/system.md': 'd54e4b7b407c02a7ec669f04681a7d3dbf7e87376fae61163cb790279a10e89c', 'ai/prompts/global-interview/it-IT/continuation.md': '6914e92706d718a2af7e124ebe7d82ee6c27f8fd42aa2fde0af83461a49c2ff5', 'ai/prompts/global-interview/it-IT/detail.md': 'f6ad49df5eae40b53811b913e7dcafa60ea4a2d20b4d2d0f314bb42e50950124', 'ai/prompts/global-interview/it-IT/quick.md': '719bb37eb5b256f58c2163e5f46d469405bd8b1312c80411c602faf58826d852', 'ai/prompts/global-interview/it-IT/screenshot.md': '4d5644ec1e7caaa304f325441f2ad57678cf6b58c4701d6e20dcbc7d91b705ca', 'ai/prompts/global-interview/it-IT/system.md': '70267939c7c8fb85c023ab1e663772e0632f8427d8801fcfb4e7ea73cc53ff5d', 'ai/prompts/global-interview/ja-JP/continuation.md': '0b5c20baf83f8c9b6f95cbde17ebc00f2a357f162fb15aa0e8e6e32b56199849', 'ai/prompts/global-interview/ja-JP/detail.md': '592faffc49adbd670297625c2ed938dc5bf5a545b4cc152e2067e6cca1fb1a6c', 'ai/prompts/global-interview/ja-JP/quick.md': '9805cb2f2dda7101d8c6b9923c3054ca730d009031617c6115765c3bf42a4a75', 'ai/prompts/global-interview/ja-JP/screenshot.md': 'a92b7aa64c1135f64b6602d7ee34ff42dd66cc030d59c88f9cdc1395a67deefd', 'ai/prompts/global-interview/ja-JP/system.md': 'c06b2083f1b8ffc6a9c9a356d15e89d6bbe62b50ea35553f93bc3a5904ab704c', 'ai/prompts/global-interview/ko-KR/continuation.md': 'da22835eb57a766c37053121ece25ed781fbebdb6b806892bc7db0f870656279', 'ai/prompts/global-interview/ko-KR/detail.md': 'de3082c2b35c065f9252c7942a2bcc73622d5ccc6b736b028629f51e538931de', 'ai/prompts/global-interview/ko-KR/quick.md': '6281abca30e029961d64d815a53d428b5b4ff0554ad44ba4ab2c70b84ffc34b2', 'ai/prompts/global-interview/ko-KR/screenshot.md': 'f950c1d138879de0bf81b44aac01b263d71d9f7cc78a8094d8ce408ed5f98cb2', 'ai/prompts/global-interview/ko-KR/system.md': '8f2d1746b2b8c8eacae9d2de48e20b1c50afa8d3ac04bbdc7086f96e8bf57cb8', 'ai/prompts/global-interview/pt-BR/continuation.md': 'dc2f65dc31bfbe57d67f2f34b5901a2dcb72782182ce9962edad502f51c95252', 'ai/prompts/global-interview/pt-BR/detail.md': 'd3a04e4e5f632ed5b2fd0b3fd4cc2d1abc5abeb37380b1d42c49a1752b191065', 'ai/prompts/global-interview/pt-BR/quick.md': 'b88c50ccfe15372f80c3fe7e9f806ef0fad3257576179626b31f4bf434747cea', 'ai/prompts/global-interview/pt-BR/screenshot.md': 'f6733fe199017c1d837e8a778c4904c8478d0c31d9715ecdc38802019f047f1e', 'ai/prompts/global-interview/pt-BR/system.md': '3e508274285edb65305a7ffad3e61e082b9718938a5316cb66c48112459558a9', 'ai/prompts/global-interview/ru-RU/continuation.md': '22b86e0e3c2cd46b03f945a1bed5678c938d82d5226c7ae6ba37a5e15aa78311', 'ai/prompts/global-interview/ru-RU/detail.md': 'f5b47ebb6de97d9842483c0d2299c5cf5bd74393d4229cf8de7fafb4363869a5', 'ai/prompts/global-interview/ru-RU/quick.md': '684d6bf2f2bd113a677b0687ff075c6d0a614b9bba401a38d361fb75690962ea', 'ai/prompts/global-interview/ru-RU/screenshot.md': 'cb7f45bef9f49c06144b2e35d3f16e92e6f35e9fc922a3e5907d5fb71ebad4b6', 'ai/prompts/global-interview/ru-RU/system.md': 'cac634c3b05167a5fe8ef341d14959ec379288264d1be17c918c8b17f2296082', 'ai/prompts/global-interview/zh-CN/continuation.md': 'da9be82c83c1f8a493e3d69732641e2c547b2849db98182397d3c8f127b8dd78', 'ai/prompts/global-interview/zh-CN/detail.md': '1c243ff0a0f02845812c2e1ce501ae9ec417e6d7fe984dad9db19ff894c237e7', 'ai/prompts/global-interview/zh-CN/quick.md': '46b8daa8c600eb494fd6ff8b4fcde2fb071a175b78e98c50afadbb8f083df40b', 'ai/prompts/global-interview/zh-CN/screenshot.md': 'bb67f08eac3faed98bc819821191807e23e60335fa062edb8f5c925dedabaf7d', 'ai/prompts/global-interview/zh-CN/system.md': 'b51565f8dbd51466b459c187f7fcec0fa7f0430d144cea8678dc488265a00a66', 'ai/prompts/global-screenshot-instruction-v1.txt': '743549d6bffc3e23f30d973092ef4adf10bc20a42c41a77f03018d31c7dde5d0', 'ai/prompts/mock-interview/answer-structure.md': '4ef41e892499bffe67558b837e6b4a5c70f10533c9b247f840cd036c99b83d96', 'ai/prompts/mock-interview/en/answer-structure.md': '30f8229fb58da72b02b1b76dca263247359afa2c1942418b05baf5cb59bd20c4', 'ai/prompts/mock-interview/en/question.md': 'b6e37f3b02e406f25d5c97e1387eba2b96a4d97ccb2032aa27127005ddde288f', 'ai/prompts/mock-interview/en/report.md': '58e29ced73b2a95df225801698d7574e75e72caa41da3d418c6ea7cd44564b57', 'ai/prompts/mock-interview/en/tts.txt': '9f74483a0a5dd019ac013cf746a17bf2998cdeaa2dcf8b7e6b2935002ef80fea', 'ai/prompts/mock-interview/question.md': '8fd1fbc0ef6f6e7abc641f548d2e2fee35db04d80c57a1dde787ff7c225c63cd', 'ai/prompts/mock-interview/report.md': '2a3d09711b7eb3dbcdbf0187d71f6dccbe210cbc7addfb147a5a8645f4ac249d', 'ai/prompts/mock-interview/tts.txt': 'a40515717c54dba2ce20b3f8c1d4f2955252fa7b5f3934e0ba08e1ba207bc67c', 'ai/prompts/programming-policy/policy.en.md': '219670eed2f0c2cbcdc3c50cdac29ff1d68f1fe63da05e92f9a9a634ccbca011', 'ai/prompts/programming-policy/policy.md': '47368570999be8ed50070f6e280c5e5bdb205a836fd140f71a76119f4cfdeb74', 'ai/prompts/resume-optimizer/review.en.v1.md': 'e72801bb298357a0e8f54e84c8f45915d6a1922b7ebf9499a10ab3d5abbb41f3', 'ai/prompts/screenshot-answer/system-v1.md': 'a5439942e8a421cfe9e6e8c4fdce71678bb8be22991582a82e2e2e7d2a349e0b', 'ai/prompts/screenshot-answer/system.en.md': 'b868664c2f8feba31763c2749d28ccf96277e05a1bebac7c4f732e21c746584b', 'ai/prompts/screenshot-answer/system.md': 'edd6812d53240ba6ab249c4803679ee960f2b1382a514735cd6120df382c1068', 'apps/backend/app/__init__.py': 'c7a401fa1dbc4189255d002741ff7ab4a30bf0c64b25d2bcdc987b88723bed5a', 'apps/backend/app/adapters/__init__.py': '5384bfdb2df380b6557cc7a71d16891415bccaa87699406e236f752c6415389f', 'apps/backend/app/adapters/oss_storage.py': 'ac84828377f8a9c1b0ec83d1d303497a45d34f66067760d2956dba159794ad5d', 'apps/backend/app/api/__init__.py': '5645d3ba205ea9d1a0e80fd4b2381fde91e928b9e2263ddb32578704addac9d7', 'apps/backend/app/api/admin.py': 'd7a5dc0cc2472ca97a4c5d390376566f7838cf53d5e02ca43bec377f2c8dc76d', 'apps/backend/app/api/admin_global_commerce.py': '01330187bda3063b7d79b85118e3a2a3cb7cde70f41303d67d28e17f0af13150', 'apps/backend/app/api/admin_promotion.py': '117ce62fa60c8b38e9f5e23283921fc73cfe4fa5dad0bbe442250fa24ba65c5a', 'apps/backend/app/api/promotion.py': 'c3ae744fd8233b866c6fb490771c80b6b6691a19965d7c940a84e3b24e48a764', 'apps/backend/app/api/routers/__init__.py': '6a4d3814ef27df4a3fa435f48fe7e244c40c3ecd1de8b260c010988cb6e5f3fb', 'apps/backend/app/api/routers/system.py': 'b893fe4e816bad3c4af43e1a8e4bbb1f285e8ae543d9c86675a1309e04b4eee1', 'apps/backend/app/api/v1.py': 'e09065858200eb93f111cd806a123d4b3c7b00013dc7d1b9837a769b23070d2c', 'apps/backend/app/assets/resume-optimizer/NotoSansCJKsc-Regular.ttf': 'fa2124fd2197ba2f050d48e1e66284d0aa00900657897eec679ab04d2913c429', 'apps/backend/app/assets/resume-optimizer/OFL.txt': '6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2', 'apps/backend/app/assets/resume-optimizer/source.json': 'ded280036992b432cbc44134c0c1f8a910565ae5bbd4ae41e8b5859af1031174', 'apps/backend/app/config.py': '8cc298bfc8ce3ba2dff8ee2d29f7ab76a0f2601266486e89c3dda96107c70da0', 'apps/backend/app/core/config.py': 'eb08a0c3451f2cd9fdd0aeb9dbe761313746ec62727ad85e3f86d898affedb79', 'apps/backend/app/core/errors.py': 'f821ad52cfa04117dd8d9888dded51f3293f6e3a68b1dc4bb11a51672fd3bee3', 'apps/backend/app/core/logging.py': '1cfd23c7bf714cd2dd9c45ea6d439c906633d755bf575f616d526c3f90cbb9ad', 'apps/backend/app/core/request_context.py': '2b1d072915927ef1b4a5eb7efef93840a00c079fcb88a6242061331042e60fce', 'apps/backend/app/core/responses.py': '4cedbe41efae8655846467d8136a23cb57aa8a834917fb716c433bad5f5b8c18', 'apps/backend/app/deps.py': '4d4ed4379f5e242cce39bf5195ae18db42769c718f0020b580038238b9c1928b', 'apps/backend/app/desktop_release_manifest.json': 'e47013440662e2d5209f991e224aca2f0de1299a065b8623834c512a28eec027', 'apps/backend/app/global_desktop_release_history.json': '878903ea0a42a256d3dc3b7535f20434724f56ccfd851c7582ea0713302dbbe7', 'apps/backend/app/global_desktop_release_manifest.json': '136f43b076a5064db83b1d747c45f3acb9b6d15c9299eeaadeb6a64c02f4d1dc', 'apps/backend/app/interview_languages.py': 'f014c7e55fd6758ff1c44dc0a1d605b6e2b012fc0c98e4051147d96e5a966de6', 'apps/backend/app/main.py': '1d61a2b10a5bc4572bbe676e40954419076cc08ee234fb354e61f1d28bae85cd', 'apps/backend/app/material_formats.py': 'efab7d20e8288f570ab8652d1130f3b7ed2edb8fd11630af9f97a69fd8bb0172', 'apps/backend/app/middleware/request_context.py': '61eb30de386a04d1e948b439a30295aff4e84192fda97773bc838ac6347b0da3', 'apps/backend/app/modules/__init__.py': 'b45973b814e6ae9d0a608f5ae7422cf0143f1e956d61e30d08201177c7da2a78', 'apps/backend/app/modules/authentication.py': '2de0f64502c21bea696b8ef040012165cdaf4d8bd0eafca57f1a26df94f65c56', 'apps/backend/app/modules/billing.py': '6f5a8a574661e948115c997e33dd5c8e1d98baf7730daf4483507632bba2f3a3', 'apps/backend/app/modules/common.py': '0469c3a903f5a0ce35cc16452a1e40262330ec5915e2ab09e0e2346421ad1e2d', 'apps/backend/app/modules/document_processing.py': 'fe24f901343c16b1184077cf522fc9fc214bc579e3b27cf16365fe9dbee3d503', 'apps/backend/app/modules/document_service.py': 'a92094ba4e484e6ca0f5a6ac9b29375efcfd971ba191d4c09c5d7d5959985574', 'apps/backend/app/modules/global_commerce.py': '5f3afc6bf0278158d8e51e1aade409ef2c9ec1403a8fa176c0a49146648533c0', 'apps/backend/app/modules/job_description.py': '4ca84cca74390705d6a77e7dbf8136c68c5e7440136e3a09878b4f75ff9815d7', 'apps/backend/app/modules/knowledge.py': '2189a304a86b58f98d06fe0a4c86d1ee8654cdfffeb9061ede2bf4c6248df4a9', 'apps/backend/app/modules/knowledge_retrieval.py': '9dadab5f7884fdef3642f371b3e40a7a646f19f4fd5b3d43307fa8fde05d657e', 'apps/backend/app/modules/live_answer.py': '011f24300e50c8679d8e5cad79e73a2203a54a6decca9ecdb9b41f46fbf6d01e', 'apps/backend/app/modules/mock_interview.py': '5898bf28caa004c495a12ec099fd2ecd7fc596a20adea8ac590a2cc61805faf5', 'apps/backend/app/modules/mock_interview_legacy.py': '7b36d6c9f14a3d625a7ac645e3ca79ea9f0751c1bd43e4deaf6ddf1d387e9b9e', 'apps/backend/app/modules/realtime_speech.py': '9fce4d6156297fb5011a6b3d42a847b05a261d7b039eec118dc4f0095c3b5649', 'apps/backend/app/modules/resume.py': 'daab602f8140c6f08ac9e0e96d956ab86fe0b4c4d6a5804246825916c610df27', 'apps/backend/app/modules/resume_optimizer.py': 'aaab63348eacfef7177fdfcbdcc49630be8b625a393e52d756ae3265e40f858c', 'apps/backend/app/modules/screenshot_answer.py': '70cb65362ef164c70eb689bf5fd5b557ecb6d4b13aeb599cb14568143fbb891a', 'apps/backend/app/modules/session.py': '9d71143cdc330afa92bbfe353eba4c0b4165949e3b56cc739296c0855ea14d03', 'apps/backend/app/modules/system.py': '8826eecc3e26b7436f4a0c262f47bd8b35e6d774f8078c7a99a8e494aa8eb188', 'apps/backend/app/modules/web.py': 'cf072484eb94106a468b4e2b1fcb2e1ad5e62c86f635f50ecf36988e8d7c8cb1', 'apps/backend/app/platform/cn_realtime_lifespan.py': '54b7709fb7a5dff7733cd48257bcd04e1cd789c49818d1d6bebb0b210393f42d', 'apps/backend/app/platform/cn_realtime_loop_monitor.py': 'b464a83bcc35744d80ef76cf6a2c2760df0590b207c85039c9ff6885ab5c61d5', 'apps/backend/app/platform/database.py': '99deb33b4b3f5c85973187dae12b2d02a99e2b53ec1c7d1e959f31c7271b1ce2', 'apps/backend/app/platform/object_storage.py': 'e8ff28890f56ccebcb79445f506d5695d802b08fd3e32d54284de7d745afe12a', 'apps/backend/app/platform/pgvector.py': '848cbf97964325afa85bde6971d424f64a92a3245b5af35270486498f445203d', 'apps/backend/app/platform/retrieval_boundary.py': '79ddddb72f04b7e5ef459aa78f26ae3c2316b27f4cbccc1ee728fd42bfe94a01', 'apps/backend/app/ports/answer_generation.py': '00c5ff8e5466a200c283f1c4dc67379f3f59e08461a18dcb160821c4838f1077', 'apps/backend/app/ports/authentication.py': 'e33a8f817bf6bab2f3a3f42a29d3b4fc1d144bc075b4bca5a5808c48c7ce7945', 'apps/backend/app/ports/billing_persistence.py': '7eb776322891efee2b45ddff5846729cf504c45a7ec5be91b729f0881fb4a062', 'apps/backend/app/ports/chat.py': 'a9c55c281724e937e7b3d8b109f531b2026b08edef1a312c9a2a7d5b19ec8e98', 'apps/backend/app/ports/commercial_hardening.py': '8d2bba33c5e65a278d198f1ea7811da1fa3928b56762da3395202a7ff3f05955', 'apps/backend/app/ports/document_processing.py': '3c602c00d60c06fc59810d583ae2f1775fbf4c709f00722a0136b89b9c3e7495', 'apps/backend/app/ports/document_repository.py': '10d629aad531a82c7e6040a9d9a39e4d71501b261adfa9b9b16a474f40c8ae7c', 'apps/backend/app/ports/global_commerce.py': '205ce379c3abca273d88ff929c0e75aaacec45cfcaabb231213ad5148fc5ee28', 'apps/backend/app/ports/international_commerce_provider.py': '98717000b827131915d05a9aad866e844887190686c2bf3d30687f990d21e457', 'apps/backend/app/ports/interview_session.py': '026ce1f030f17e6376c9c71c78918a43da1cb73537c911758e0377758126b859', 'apps/backend/app/ports/parsing.py': '6c31b5c36888525a24290a7079f6cc48b5b6a3d7079d7bd07b69180aa081e50c', 'apps/backend/app/ports/points_redemption.py': '60bd1278fcfd24575452dd6a8cb336852766b7ee01380b00ef0c4414cab3f0df', 'apps/backend/app/ports/realtime_speech.py': '52f4a9585433c3921229797e32b71ea64b70ad5066133da19f263642df162d56', 'apps/backend/app/ports/retrieval.py': '118adb630c0c81dbaf1217d13047332e7747c2f33b645a0dd4c4b383fa0c3540', 'apps/backend/app/ports/screenshot_analysis.py': '205ead9dd8acf932e790f675380ca2eda31ab274e16508605ce204dfb0115c3c', 'apps/backend/app/ports/screenshot_answer.py': '059ef14896ddabd27e53e666c3a50803c07ebf2ad6b40a978dc18c2376fa76a5', 'apps/backend/app/ports/storage.py': '0f22c3e5cd4ee663bca51d27a0e6996916e2eda7753dbe2cc83885b99db2daaf', 'apps/backend/app/ports/streaming.py': 'e279618d9f6633ee0158189e2998af39cd2cf5376d64fb2b8b03c86728a1dfc3', 'apps/backend/app/ports/web_search.py': 'ddbfd4f25ad93f4b1749c7afe0854c2c8e16b819105e9d217a2adc2449af15b6', 'apps/backend/app/schemas/admin.py': 'b0e457bc772f52b4840d193ff47fdac5763e19e239920da15b13fc7137bd9ae2', 'apps/backend/app/schemas/authentication.py': '16b1ff30cd764c9875e80522c496e012f329521badc036aa9417b3c470848e58', 'apps/backend/app/schemas/document_processing.py': '47f21b25c4d20275cf10358a833f6a2324e095a1bc8d22e7971872aa54283d8f', 'apps/backend/app/schemas/document_service.py': '262fcb80a526a145129cd73e695901263e52b1ade1e37e650525b99f4058ee92', 'apps/backend/app/schemas/foundation.py': '5d04614e9e931e878284584e09c4d3f6d44496ab61a4b73400c13a422c308b59', 'apps/backend/app/schemas/live_answer.py': '271e08ea11becc48683cc690eeea9fbd1269187016135359906d9918063bfda3', 'apps/backend/app/schemas/material_upload.py': '192f76c59c4198cc8cc81d5ed27cba6acde25ba8895754d53899d21489b4cf46', 'apps/backend/app/schemas/mock_interview.py': '86db9960d73f812052b1ac0c80718e32db57a16f3a67ca68c1379d4967d36eb9', 'apps/backend/app/schemas/promotion.py': '8b2342f2f835393b010dc90db97e674d72279621712d25594defeaf86b585896', 'apps/backend/app/schemas/realtime_speech.py': '5e5dfa1f3e612aaec8603aaa477ab6483244705e9fbb15ab60d714933691c46a', 'apps/backend/app/schemas/resume_optimizer.py': 'e9fccbeeaccb2be712203c28db3b1f9ec7478fa5c91b8f94fca7e530cf5f0336', 'apps/backend/app/schemas/retrieval.py': '7cc3de63416e71987486ac6f123f78749b830308c03f91b77546cd6c5c4e1618', 'apps/backend/app/schemas/screenshot_answer.py': 'a242fa5f707f07d2d26573f888451981c4e159ab0158625f4927b6f94dc09d22', 'apps/backend/app/schemas/session.py': '60bc974b1fc0b0a933931f34f6d22887648a88a9367d5f84c040fa3ddf76a45f', 'apps/backend/app/services/__init__.py': '5384bfdb2df380b6557cc7a71d16891415bccaa87699406e236f752c6415389f', 'apps/backend/app/services/admin_analytics.py': 'fceb02206cc944fabc40c3cf7e377e6cca5729f9f9f9fb253e0a8af37e2a5c41', 'apps/backend/app/services/admin_analytics_job.py': '89477b1dc881b772fe27815dd344362b3eff46eceff95b08ce849b2c9d6e045b', 'apps/backend/app/services/admin_bootstrap.py': 'e48f1d13b57cae3f89e20923f5bf21885398fd80d623b6eb30afea4c0cc8aa33', 'apps/backend/app/services/admin_capacity.py': '8bc03bca0fba3855c059f0076f90cb5a46f69e866a1ee0a54bfb392d25ba74e8', 'apps/backend/app/services/admin_repository.py': '9dea14317a9d1bf7d49fc9c94c47d38186320f8750da28a13b1c4d2df451986c', 'apps/backend/app/services/admin_service.py': '8f0af398172d599aa5266cf0eb5c527c703753417dad203508c64e0a891df9fa', 'apps/backend/app/services/alipay_provider.py': '68dc6bd82a9f1b4347519c3b2cb14692cbf756cb7fad3e3e8b5896dd53f6f359', 'apps/backend/app/services/authentication_repository.py': '4f6a17e1ca136031fd112d098ee269056e8f0c92d42a0cbe93d08407644c4e50', 'apps/backend/app/services/authentication_service.py': '8a29bd76fc250b93dabdb8a0a27a52dfc759a05103175313492f81bbefb6a622', 'apps/backend/app/services/baidu_ranking.py': 'ec06e0e2816237645a83b9f904882a5d5d2dc9f24193fea5ec31c65f25a9059a', 'apps/backend/app/services/billing_service.py': 'c22921ce53e0afe835bb1c5f97353129a64e3e2476499907da938ca9124352c0', 'apps/backend/app/services/chat_repository.py': '431180e0ea8fa847fc1e30b4ae591e1efb7d57efd182d197c676d1980f74e52f', 'apps/backend/app/services/chat_service.py': '46d9db278aadc4eae36f8a17552ee307e9ddcdbd386c8d3f4297f86b70b8f890', 'apps/backend/app/services/cn_provider_close_executor.py': 'ac7118182956e8dfd9bb622323282ed6d1a625ac3bebb9384545ccf669a1dea7', 'apps/backend/app/services/cn_realtime_entity_state.py': 'dff3963af27f4f5347e447304f983e0bd687d69c3dda8fded702bf8ea9c1be2a', 'apps/backend/app/services/cn_realtime_io_executor.py': '2e109eac1f73ab00e0f39ea5fcf40481560ebeaa8e368ef7f083667e78c4452e', 'apps/backend/app/services/commercial_hardening.py': 'd0880f32765f5fab6e533dd80002032dc43e483bb86698d3a0ef3ed5c54d5d63', 'apps/backend/app/services/commercial_worker.py': '753c9b1e4ef50c1df115508a49b3ca0bae2bf31d2f95ca6134d6f81b7f4f352f', 'apps/backend/app/services/creem_provider.py': '426f922092b0da070efdf4be0e1b7d0e06bd183e045ce7753a89bc2e3ac786ca', 'apps/backend/app/services/dashscope_realtime_asr_gateway.py': '099d4658a1fc838335780a9f6d93104e5dd0eb170a2f6990292d4d159ca595ca', 'apps/backend/app/services/dashscope_task_asr_gateway.py': 'bc3e98f4a726a6289abb383983ce49010b0c4bcc94295308dca168ef7672549c', 'apps/backend/app/services/document_parser.py': '0d6c192bd471643f66921cf33a0541718cee0c8eb0647a6bd45b50ff57962015', 'apps/backend/app/services/document_processing.py': '233b064cfc70d2cb4289eb65328e1ae247d687871d13a4e23bb2ae53bbb5951e', 'apps/backend/app/services/document_processing_adapters.py': '8fa749eac4871b1601f2671419a6e11fce97136a8b464ebedc1e7a2175509e2f', 'apps/backend/app/services/document_processing_repository.py': '3d2d852638cf754fc2c615266e411937884d70d014f98ef29f081270f520fca1', 'apps/backend/app/services/document_repository.py': 'ae455d34d8caa79014b72e40f1e3b9787e852ffe5ec6ad89b623a7b0aa697435', 'apps/backend/app/services/document_service.py': '92b2076a8c4cc0bfcdd61875cefda913934f2813ba86a9426b89d015e8ef2e5f', 'apps/backend/app/services/email_verification_provider.py': 'ce7b85612ce303177be34e53aa2b0f7cb5e6742d130e0c3f61009177061f1eb2', 'apps/backend/app/services/embedding_pipeline.py': 'f4bd8db3fe67e690fbdaf9b91d7c0e7d907e064d7f288e2ec6114ada3a37aa7e', 'apps/backend/app/services/end_to_end_integration.py': '937eab572940366af5350b925ed10c0e59ff5857d68f832596c6359699c0d564', 'apps/backend/app/services/global_checkout_service.py': 'dc4966da97c3367975fc7ad78c85befa3864ba922b22c9dd8f8e04f01d1dac7d', 'apps/backend/app/services/global_commerce_repository.py': 'cfc99fb08bf7cf4cd98361dc24d393b3ab97977f6a20f26b7d9d20c2c6abd5d9', 'apps/backend/app/services/global_commerce_service.py': '2ff146d92215e03e9bf80ed7a120115809502ad843e293343ad459b7a30e860e', 'apps/backend/app/services/global_creem_configuration_service.py': '5c5f5b8dd650d8e42d905f2e25f4a2816627574b5a5fa0228ff30862a027424f', 'apps/backend/app/services/global_mock_interview_repository.py': 'b837fa6bcb4c6103ed38da15b38849d73a1b782d6e18314f6874d953e34858d7', 'apps/backend/app/services/global_usage_billing_adapter.py': '09ff0e8bac0e12109b878193e589dd13275a7e9d8df07e306ed92f120c4081c2', 'apps/backend/app/services/integration_verification.py': '297243b64be13a8656ad82e1de4568089f977c709cb8a7bd323c28b0fe9f6454', 'apps/backend/app/services/interview_session_repository.py': '29368ec6fe0cd0100e504e21b25dad939471bb68126e63cbd9e87f4beda76184', 'apps/backend/app/services/knowledge_index_quote.py': 'a44ffe259837e79c8271bf0c6040b28a7c89d6db3f8b759becee2c542eceb12e', 'apps/backend/app/services/knowledge_retrieval.py': '851b7bac82d6feee3ec4e37eda60bbbebd9b7c0c85489b7b77cd838d98a50e5b', 'apps/backend/app/services/live_answer_stream_executor.py': '7bace4fc81f42f4b48744b84f9e607d90c0e8f929c37c23f5a44cbaf139c9bcd', 'apps/backend/app/services/material_availability.py': '4cdc4729e511031cc4c71cb7b23dfebd1f418c305632c20b9962356ae578a95f', 'apps/backend/app/services/material_deletion.py': '4910e2d07c4e4f2855df18b6cdccf69e1d3b73b61d0cd80575d68ebc24b955db', 'apps/backend/app/services/material_ingestion.py': 'a0361c311c2585bb45eae1087818efed62a8c77362f3aec04bda3dd822216fc8', 'apps/backend/app/services/material_object_keys.py': '4592d6b8d1093a3617ccacba2128109ca75ba50ea3df98bf6e707452b6234075', 'apps/backend/app/services/mock_interview_audio.py': 'e285d62ea12eefe2f4ef6edd29944409931fee529e0657f4555e87d1b1ba5a73', 'apps/backend/app/services/mock_interview_diagnostics.py': 'd6d40594f9c2a003c8df5541034946adf512b2fefa294cde4b8a611b28af1aea', 'apps/backend/app/services/mock_interview_generation.py': '60712e9638ed355f9c8976f28b9df61389be8aaba8130cd52c96964ef38022f4', 'apps/backend/app/services/mock_interview_jobs.py': '9a24a2fc10969e0a6c443d54b09fbbc0e1bb34881b4366336ed87d9d15ba6322', 'apps/backend/app/services/mock_interview_legacy.py': '97a5846395a631617339ee8a433431ab939e53d88dd73f5bde5a02b881c53f9f', 'apps/backend/app/services/mock_interview_repository.py': '94cbee4cc7c85c28f3e8ab63fa5f82aeb0923bb752214050fe48ff083099fbbe', 'apps/backend/app/services/mock_interview_rounds.py': 'b7990c8bcbc33c651ab444379e078e28bb056cdb4ff91ad545d2644221bb1afd', 'apps/backend/app/services/mock_interview_runtime.py': '2c08d5235f27a5226d02de26d5741ca990a3c2aa37a7514a9c45183c73fd6cf5', 'apps/backend/app/services/mock_interview_tts.py': 'e43af611b79bd66b2d48fde47470557f2fbced3a4942d49e1e51a95cae997aae', 'apps/backend/app/services/mzfpay_provider.py': '9c2ad8e3447af2aa5f3caaee35ed3ac432e595a3510aa9980979c5246dbb2b1e', 'apps/backend/app/services/payment_channel_service.py': 'a2e8f5d6bd7e395a259d8fe9b2aac5ce532b7f6a138210b0e72f9a9df35dd693', 'apps/backend/app/services/payment_reconciliation.py': '484c28ebfa762370898695f27e4d33577a1b9e1b381c0039d9ead3c6a445e24b', 'apps/backend/app/services/postgres_authentication_repository.py': '28b6f39c21a89b8ae88f49598af6c425e67802097727ed5d0f18f1b92ab17cfa', 'apps/backend/app/services/postgres_billing_repository.py': '644e2f593617e1b76782ff659c27f0beca01924ac62dd0fcaa5f3ec4a77a233d', 'apps/backend/app/services/postgres_global_commerce_repository.py': 'f2a585feb7250361c8001422c99dc407f05339ab900d7041953e77e1408faf46', 'apps/backend/app/services/postgres_interview_session_repository.py': '6a48a87792a85722b9dbcb08565b21a72cf95f228d6e5bcd2a85fdda5879f0a5', 'apps/backend/app/services/postgres_material_persistence.py': '6bc75c3286d2bc9747c8178404818c6ec3b67681a0e3db5f02d457786d384601', 'apps/backend/app/services/postgres_migrations.py': 'b372b42696c9acf7a7b7672b5202f3dc95bc4bb69e44e51125617156501c713d', 'apps/backend/app/services/postgres_points_redemption_repository.py': '20ff35a5ad8b966b5e6a20e5ced4ceafc3a7277de5a76b5b250aacecd28a6b2b', 'apps/backend/app/services/programming_prompt.py': '31d8c67a0f221ca382d7a6eafac64b699a05c62f6da238dc54bd64e8707bf593', 'apps/backend/app/services/promotion_analytics_job.py': '8b95f2ba3b845c5152e6fe1aa8cec7436498ea2f9eb00b7e568aa2c55d35511b', 'apps/backend/app/services/promotion_repository.py': 'ccf54c92481d083cc8b75f248526b0e27bd9a6b4e049f0591dd8d3f2471baa48', 'apps/backend/app/services/question_prefetch_scheduler.py': '36bc5ab7fc2329945a3becdedc0ccc0a38356c334e8b32a735610c58774d744f', 'apps/backend/app/services/realtime_control_executor.py': '49258e90349e5fb32682e26fc75ef1833aca5214824ef00430e9d7b6d70a0430', 'apps/backend/app/services/realtime_event_wait.py': 'b6146abf4db5035eb4352575eb61a7bd8b9c1ba01eb55968fd258753d964c7c4', 'apps/backend/app/services/realtime_speech_repository.py': '7540a398264d44ec760385a5994094ad3a996eac20cc87a5f3859c1057327df7', 'apps/backend/app/services/realtime_speech_service.py': '69f36dd5315f86ab52acb25f31fb31ed1b0f47d9cf08143d22cd0a0b614f0921', 'apps/backend/app/services/redis_live_task_repositories.py': 'f20ecb44738396f17a8863c7f6844e686cacdc4812a136e1ca4562dede67159f', 'apps/backend/app/services/redis_realtime_speech_repository.py': '68670aad5f2df24714bb23fb8a303d036e8649d0c2c7d9b9d28781ea6a78a128', 'apps/backend/app/services/resume_optimizer_export.py': 'bfadb294dde928b175762e126e36b5d21a37c1a2f8ed0fa6a9ec00a32adb0999', 'apps/backend/app/services/resume_optimizer_provider.py': 'bb8684517334bab51e44d8d10db0252529eafae1ac81d4ded5f0f4c3b91c776a', 'apps/backend/app/services/resume_optimizer_repository.py': '149c09c70daf1fbf1c0053f55246d00e3e4e7b864e8eaeadfe034dfbe58d373e', 'apps/backend/app/services/resume_optimizer_service.py': '505764cc2eebc56c0f426f9a07b59abc77e02badb01bcd3b4d16acbc1bda2683', 'apps/backend/app/services/resume_optimizer_source.py': '6c61e9e62f0eca699261ca95db0ebf920b7d28e70acc48b673035149223324bc', 'apps/backend/app/services/screenshot_answer_performance.py': '8d4d0d6263699779adc7bf6b857c7bf2cb8f56f136e6b0f0b1bf1c431e95ff66', 'apps/backend/app/services/screenshot_answer_repository.py': '16df19c0a595621cfa84847f48867798b03da83501e706f03b9881a073b99219', 'apps/backend/app/services/screenshot_answer_service.py': '8e2e5bfc5e5bcedade64ecd369c3c8c3cf8f32bc7e1b991d741d5f205f4b3a72', 'apps/backend/app/services/screenshot_stream_admission.py': '6467fabb6675f5483430750571442194dfbd8621363601ceb810e6bf3cfbf7f2', 'apps/backend/app/services/session_mode_guard.py': 'cbb726b645d8ed82af93fa63362706f970ff63e1bb8392d162d73d883a45eeab', 'apps/backend/app/services/session_service.py': '34280a60937b8755224ddc0fa1fe084ff6f6ffb9ee091a0c82700c7e49f4aa36', 'apps/backend/app/services/sms_verification_provider.py': '8a8c2a19f0fa0d6ee30239f3ac56164963661998d1bb68466032946894319ce3', 'apps/backend/app/services/upload_intent_repository.py': '5ca514b3f11f0668cf82325c819e11d6b1710ef0557a35729f144d723fab964e', 'apps/backend/app/services/web_search_gateway.py': 'e382df112b85708e571849ad1d518c4cee63a917099a6632395acef7158db997', 'apps/backend/app/services/wechat_pay_provider.py': '8a9bec3579d972662b8dd57ec61afb8a9abec9b60c4a7cac80fa4cd927637963', 'apps/backend/app/worker.py': '799f884210678a62648b647927357c52224b5db3852d46fe438e604b8b4ee6f3', 'apps/backend/migrations/README.md': '1ab4b68abb9b0c5418d351399cd07430d738779156adbd150453bf0cf4112475', 'apps/backend/migrations/versions/0001_document_service_metadata.sql': '3892ad4085548d788ba253992ebe1adfac2ae24619ebd75b836aa309c372d9bc', 'apps/backend/migrations/versions/0002_document_processing_pipeline.sql': '4be9e56adf2afb60a2546578584b8972216349ab7aa9ffc60258d29ed4a16a06', 'apps/backend/migrations/versions/0003_commercial_material_rag_persistence.sql': 'e2d83184eb6f23804b0484452a41256ed5fa11d279b88c2a150cb8745eabfc5b', 'apps/backend/migrations/versions/0004_interview_session_persistence.sql': '3e73be86ad70284d6b164f678375b6e003f077eed476e509377ac6272efb4ef3', 'apps/backend/migrations/versions/0005_commercial_architecture_hardening.sql': 'bd2e2fe76d8c2d2b091f1befa836a28e5f6d38b74e29ca9c32c19992e8e8c57b', 'apps/backend/migrations/versions/0006_sms_authentication_service.sql': '6309d78762ac28d93246d26470381d8f3212c890e46861845e6f88a9c3683408', 'apps/backend/migrations/versions/0007_realtime_interview_runtime.sql': 'fe6c0365d7fc4fe519d1bd6238770da6f6e56ed25d4d6922038b2258c3abfd3b', 'apps/backend/migrations/versions/0008_persistent_points_redemption.sql': '784ca0852c587c51a87dda6b8ec9635a149afebbd39ac07e4f900f8a6e3eb926', 'apps/backend/migrations/versions/0009_commercial_billing_persistence.sql': '381369cf69684be492dafc43dbd9ec2acb8093ff353a0eb638b956221d6336c0', 'apps/backend/migrations/versions/0010_payment_recovery_reconciliation.sql': 'c442714fa4c76f58623a59f046e40bec1afa91404280b0cc3f675c468083824b', 'apps/backend/migrations/versions/0011_enable_pgvector_extension.sql': 'f5da00a0e65224732b53a62c2e87bfbb3066d6a4f801a0eddd4fb20df274c158', 'apps/backend/migrations/versions/0012_billable_interview_usage.sql': '773af13216ed2fe8571e6d4f3c688291befe5a494bdf2c54cb6c314e62ad8681', 'apps/backend/migrations/versions/0013_official_alipay_payments.sql': 'c2a9f57d921f82bf65a38274123f48c635f7d69f875d814d167c3c7741b3434e', 'apps/backend/migrations/versions/0014_commercial_admin_console.sql': '70b7d1a181a1a0fbaeae5a8ca7cfc45c439c80bfecc8198bffe6477cda8aabcb', 'apps/backend/migrations/versions/0015_admin_redemption_batches.sql': 'e4b58c285276c7fd26cd37d31f258b61fc7e06eeee2112d0fb6b0a4876399096', 'apps/backend/migrations/versions/0016_idle_interview_lifecycle.sql': '3cf0d238accade6fa0f4df3de3e3e7ca4a529515e10fe0c730f61b4ae2274163', 'apps/backend/migrations/versions/0017_admin_operations_analytics.sql': '72d6a8ce666c57d335b3cdd1c71697be18e4e29fa7fe29a7adf93938a6d1ca0e', 'apps/backend/migrations/versions/0018_admin_managed_billing_catalog.sql': '5f2ccce0657dd9fd2493712efa60dfabff1ed8b0bc2cfd9c116788ce3a25e61f', 'apps/backend/migrations/versions/0019_admin_payment_channels.sql': 'b96d4ab7546fac4fa2dca2ad40f90bbe207f13bba5286ebd84f2a5c676e59cc7', 'apps/backend/migrations/versions/0020_admin_payment_diagnostics.sql': 'ab4797a233f61081d0abac7b1e7cc4ebf1dd02d3a378658984e35700e17bdd98', 'apps/backend/migrations/versions/0021_referral_rewards.sql': 'edd873cb2caef7e927badceac2ecb4b5f7eeca31b1b2dc7bd7bc5ac8eba855ab', 'apps/backend/migrations/versions/0022_referral_ledger_constraint_repair.sql': '40c4672fef8b6eea3475430ce06dc57160dd91560d99f5c2cb380bab2ad34f16', 'apps/backend/migrations/versions/0023_stale_usage_reservation_recovery.sql': '0237023caa33aad2c2aadd897ef14ffba7a71d8c53dcc39a61693512c14c77a0', 'apps/backend/migrations/versions/0024_ai_runtime_performance_metrics.sql': 'fb524a3615dde8655ac275edbe5865c96ab9513b2054d1cb0cb4e32476ff14f0', 'apps/backend/migrations/versions/0025_referral_ledger_constraint_repair_v2.sql': '596f8facb0ee00474224f988ab0e5d5b9c0b052d7bbf3975639824019092731d', 'apps/backend/migrations/versions/0026_knowledge_collection_lifecycle.sql': 'be4e9dfb2829ef12ddf64be80d8939e1bcbba5d6ee84adc12d56d31ee0200214', 'apps/backend/migrations/versions/0027_knowledge_index_billing_sources.sql': '9e18957183f2f5394ddfd5035a7c54a50569f9fee4339222201ae8ac63e2b4bf', 'apps/backend/migrations/versions/0028_restore_unstarted_interviews.sql': '62ddf496b18553329f4ea8f892826a82e4c7f98aab79fb037c5dfb11f1342cf3', 'apps/backend/migrations/versions/0029_early_referral_mutual_rewards.sql': 'bbf7a2532d23fd92da4f03cba9dca9e34d698a16bfde6db9b3357814c2b791fa', 'apps/backend/migrations/versions/0030_dysmsapi_code_digest.sql': 'c2e98bebf654acf5e741e43a7e15e03458fb8eebf2f5666fdd826fab9e3a0e64', 'apps/backend/migrations/versions/0031_capacity_metric_granularity.sql': '0eae54a3a627654486d9de281df079f23823b922f45aa185cd688aa0bc009c9e', 'apps/backend/migrations/versions/0032_realtime_minute_billing.sql': '6f28d32929478f0a0ff649b0949cefeed7a0df5cf6ba6e1ff2ec809dca11385d', 'apps/backend/migrations/versions/0033_interview_language.sql': '43c4dbee6084f86dea70b156f44d8a676c467b98c0501db2f029370332529377', 'apps/backend/migrations/versions/0034_interview_programming_preference.sql': '8f6875500b0d066c826fc3fd5a5c0c7be6368d86d33d5fed31d904e20dcee072', 'apps/backend/migrations/versions/0035_session_auto_answer.sql': '489b637fa188a5d05a4d03ea6a67b9840dd1e6f2c18010eb14f1f2c5eb1a6109', 'apps/backend/migrations/versions/0036_written_exam_mode.sql': 'ca1065f98d2e827adfb44095eafda739b137bdef7895180cb309bad9235a2887', 'apps/backend/migrations/versions/0037_written_exam_billing_constraints.sql': '2267d05c9067a2acc7cf6b0bcf2794c654b9503d68fee147b3b53abbc744a0da', 'apps/backend/migrations/versions/0038_promotion_center.sql': '0a289302e44b0e1140ce1801773cc8cb325180f6f2d0c14c22b0e3b5ced70d21', 'apps/backend/migrations/versions/0039_global_email_authentication.sql': '9a7ebf40cb1740f57e53e317430b1ead74ee7978a475c834dadb1b3ecb857b0d', 'apps/backend/migrations/versions/0040_global_creem_commerce.sql': '85a56da57c3c5c26b3658c8bf4e301843cef7d067cabe02b89ed278c78967b31', 'apps/backend/migrations/versions/0041_global_password_authentication.sql': 'b74e0938461e7e41759a52d6b1db4ed200954202b734e561c5377ee1dc455f42', 'apps/backend/migrations/versions/0042_global_creem_lifecycle_hardening.sql': 'dfbb182e8865143847c126dd8997a35e6e6d444d2f145ae40c6544c8810d2c45', 'apps/backend/migrations/versions/0043_global_creem_admin_configuration.sql': '9bc95c9954f2aebd1c3857577d775c1fd0c305b9693291b52fd1d161d3c2a920', 'apps/backend/migrations/versions/0044_durable_material_processing.sql': '800208f15ed82feb07bc21233893e8ad7b55901653c2c86a597fd258e30b7105', 'apps/backend/migrations/versions/0045_global_commerce_catalog_v2.sql': 'ccaacddd537965130470eef1cd52dc3d85858120b6851b298c2bfe2e5e688d49', 'apps/backend/migrations/versions/0046_global_knowledge_token_entitlements.sql': 'e4e2b8f8a98917d40fb598772cd8279ba0e991d8c4086344f5363d9166b183d4', 'apps/backend/migrations/versions/0047_baidu_ranking_monitoring.sql': 'd09fc17be807fa07b92a5366041e64b79c084a4e47491ba8bc109daacd6f3d5d', 'apps/backend/migrations/versions/0048_global_interview_language_preferences.sql': '7e9ccc8d42331688ed6fc4da8a62c22a03af9948cb95848c697c51a6511df1cd', 'apps/backend/migrations/versions/0049_interview_audio_mode.sql': '8ebbfb9a7f5803d617df51ba6f474326281de9775d12b5360484dbd0f9e4b4b0', 'apps/backend/migrations/versions/0051_mock_interviews.sql': 'ee554bdba7b0f67d5df836a0d2e167168470c88847663442e6b1f7705f4bcd26', 'apps/backend/migrations/versions/0052_global_mock_interviews.sql': '52cb5d2f2ee9ee383fb5137f1b85c43fa93bf548219410e824079a054a23086c', 'apps/backend/migrations/versions/0053_global_resume_optimizer.sql': '218502d8e306d37b5c57935a2f08887b3fa8a00695d84e31a7b501de766258f4', 'apps/backend/migrations/versions/README.md': '628633961730735d9332c17124da529a66ae527b2684dd5bc5191ab0b0239763', 'apps/backend/pyproject.toml': '51fee1b28d9cc3abcc061dbd9e08d4773919d34206882f7843e6bedef1d3338c'}, 'python': '3.13.16', 'dependencies': {'PyJWT': '2.15.1', 'aliyun-python-sdk-core': '2.16.1', 'aliyun-python-sdk-kms': '2.16.5', 'annotated-doc': '0.0.5', 'annotated-types': '0.8.0', 'anyio': '4.15.1', 'argon2-cffi': '25.1.0', 'argon2-cffi-bindings': '26.1.0', 'certifi': '2026.7.22', 'cffi': '2.1.1', 'charset-normalizer': '3.5.2', 'click': '8.5.0', 'crcmod': '1.7', 'cryptography': '50.0.2', 'fastapi': '0.143.0', 'h11': '0.16.0', 'httpcore': '1.0.9', 'httpx': '0.28.1', 'idna': '3.20', 'jmespath': '1.1.0', 'offersteady-backend': '0.1.0', 'opentelemetry-api': '1.45.1', 'oss2': '2.19.1', 'pillow': '12.3.0', 'pip': '26.2.1', 'psycopg': '3.3.6', 'psycopg-binary': '3.3.6', 'pycparser': '3.11', 'pycryptodome': '3.24.0', 'pydantic': '2.14.0', 'pydantic-settings': '2.15.0', 'pydantic_core': '2.50.0', 'python-dotenv': '1.2.4', 'python-multipart': '0.0.32', 'python-socks': '3.1.1', 'redis': '8.1.0', 'reportlab': '4.4.9', 'requests': '2.34.2', 'six': '1.17.0', 'starlette': '1.7.0', 'typing-inspection': '0.4.4', 'typing_extensions': '4.16.0', 'urllib3': '2.8.0', 'uvicorn': '0.54.0', 'websocket-client': '1.9.2', 'websockets': '17.2'}, 'settingsSha256': 'e22dfb35810aac8d67432539aa91f2fe981874408f42b16260e9db0b1a554f31', 'openapiSha256': '0d25024e9025059e373e63a257d652c809b2865a2ba3e2f31c1a125edc3cd097', 'httpPaths': 223, 'ancillary': {'packages/protocol/src/material-upload-formats.json': 'e6607164d21950319ab2b6179d38ed6cf771715a2663c18db704af612907ac2f'}}
+
+sys.dont_write_bytecode = True
+WORKERS = []
+OWNER, SESSION, DEVICE, CODE = ("synthetic-probe-owner", "synthetic-probe-session",
+    "synthetic-probe-device", "000000")
+NOW = 1_800_000_000_000
+ANCILLARY_PATH = "packages/protocol/src/material-upload-formats.json"
+DESKTOP_MANIFEST_SHA256 = '136f43b076a5064db83b1d747c45f3acb9b6d15c9299eeaadeb6a64c02f4d1dc'
+
+
+class ProbeError(RuntimeError):
+    pass
+
+
+def require(value, code):
+    if not value:
+        raise ProbeError(code)
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def serialize(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+
+
+def deny(*args, **kwargs):
+    raise ProbeError("external_io_forbidden")
+
+
+def install_guards():
+    def audit(event, args):
+        if event in {"subprocess.Popen", "os.system", "os.fork", "os.forkpty", "os.posix_spawn",
+            "socket.connect", "socket.getaddrinfo", "socket.sendto", "sqlite3.connect", "os.mkdir",
+            "os.rename", "os.remove", "os.rmdir", "os.chmod", "os.chown", "os.utime",
+            "os.link", "os.symlink", "os.truncate"}:
+            deny()
+        if event == "open" and len(args) >= 3 and isinstance(args[2], int):
+            if args[2] & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC | os.O_APPEND):
+                deny()
+    sys.addaudithook(audit)
+    socket.socket.connect = socket.socket.connect_ex = deny
+    socket.create_connection = socket.getaddrinfo = deny
+    original_start = threading.Thread.start
+    def tracked_start(worker, *args, **kwargs):
+        require(worker.name.startswith(("synthetic-cn-shared-probe", "realtime-control",
+            "cn-realtime-ingress", "cn-realtime-lifecycle", "cn-realtime-preparation", "cn-provider-close"))
+            or getattr(getattr(worker, "_target", None), "__name__", None) == "_do_shutdown",
+            "unapproved_worker_thread")
+        WORKERS.append(worker)
+        return original_start(worker, *args, **kwargs)
+    threading.Thread.start = tracked_start
+    import psycopg
+    psycopg.connect = psycopg.Connection.connect = psycopg.AsyncConnection.connect = deny
+
+
+def verify_source(root, expected):
+    """Only read/compile inputs. Ancillary SHA must come from the actual baseline.
+
+    The ancillary JSON was outside the original 233-input capture; accepting its
+    absence or silently substituting a local checkout would hide image drift.
+    """
+    actual = {p.relative_to(root).as_posix(): sha(p.read_bytes())
+        for directory in ("apps/backend/app", "ai/prompts", "apps/backend/migrations")
+        for p in (root / directory).rglob("*") if p.is_file() and "__pycache__" not in p.parts
+        and p.suffix != ".pyc" and p.name != ".desktop-release-manifest.lock"}
+    actual["apps/backend/pyproject.toml"] = sha((root / "apps/backend/pyproject.toml").read_bytes())
+    require(actual == expected["inventory"] and len(actual) == 308, "application_inventory_mismatch")
+    compiled = 0
+    for path in (root / "apps/backend/app").rglob("*.py"):
+        if not path.name.startswith("._"):
+            compile(path.read_bytes(), str(path), "exec"); compiled += 1
+    require(compiled == 172, "compiled_python_count_changed")
+    ancillary = expected.get("ancillary")
+    require(isinstance(ancillary, dict) and set(ancillary) == {ANCILLARY_PATH}
+        and re.fullmatch(r"[0-9a-f]{64}", str(ancillary[ANCILLARY_PATH])) is not None,
+        "baseline_ancillary_expectation_missing")
+    path = root / ANCILLARY_PATH
+    require(path.is_file() and sha(path.read_bytes()) == ancillary[ANCILLARY_PATH],
+        "baseline_ancillary_mismatch")
+    manifest_path = root / "apps/backend/app/global_desktop_release_manifest.json"
+    require(sha(manifest_path.read_bytes()) == DESKTOP_MANIFEST_SHA256,
+        "companion_release_manifest_changed")
+    manifest = json.loads(manifest_path.read_bytes())
+    require(len(manifest["entries"]) == 3 and {entry["version"] for entry in manifest["entries"]} == {"1.3.6"},
+        "companion_release_version_changed")
+    return actual, compiled
+
+
+def forbid_lifespan(application):
+    application.router.lifespan_context = deny
+    application.router.startup = deny
+
+
+def fixture(settings, *, edition="global"):
+    from app.ports.interview_session import SessionBoundDocument
+    from app.ports.realtime_speech import DesktopDeviceRecord, SessionDesktopBindingRecord
+    from app.services.interview_session_repository import InMemoryInterviewSessionRepository
+    from app.services.realtime_speech_service import RealtimeSpeechService
+    from app.services.session_service import SessionService
+    repository = InMemoryInterviewSessionRepository()
+    documents = Mock(spec=["get_by_id"])
+    documents.get_by_id.return_value = None
+    selected = settings.model_copy(update={"product_edition": edition})
+    sessions = SessionService(settings=selected, repository=repository, document_repository=documents)
+    record = sessions.create_session(user_id=OWNER, title="Synthetic device status")
+    record = replace(record, session_id=SESSION, status="live", material_binding=replace(
+        record.material_binding, session_id=SESSION, bound_documents=[SessionBoundDocument(
+            document_id=f"synthetic-material-{i}", document_kind="knowledge", display_name="Synthetic",
+            status="ready") for i in range(12)]))
+    repository.sessions = {SESSION: record}
+    repository.get_session = Mock(wraps=repository.get_session)
+    repository.get_control_state = Mock(wraps=repository.get_control_state)
+    repository.save_session = Mock(wraps=repository.save_session)
+    device = DesktopDeviceRecord(device_id=DEVICE, manual_code=CODE, display_name="Synthetic desktop",
+        capabilities={}, registered_at_ms=NOW, last_seen_at_ms=NOW)
+    binding = SessionDesktopBindingRecord(binding_id="synthetic-probe-binding", session_id=SESSION,
+        owner_user_id=OWNER, device_id=DEVICE, manual_code=CODE, display_name="Synthetic desktop",
+        capabilities={}, bound_at_ms=NOW, last_seen_at_ms=NOW)
+    state = SimpleNamespace(device=device, binding=binding, fallback=False)
+    def lookup(*, device_id, manual_code):
+        return state.binding if not state.fallback else None
+    events = Mock(side_effect=lambda event: event)
+    service = object.__new__(RealtimeSpeechService)
+    service.settings, service.session_service = selected, sessions
+    service.repository = SimpleNamespace(get_desktop_device_by_code=lambda code: state.device,
+        get_latest_session_desktop_binding_for_device=Mock(side_effect=lookup),
+        get_latest_session_desktop_binding_by_code=Mock(side_effect=lambda **_: state.binding),
+        save_event=events)
+    return SimpleNamespace(service=service, sessions=sessions, repository=repository,
+        documents=documents, record=record, state=state, events=events)
+
+
+
+
+async def expect_error(call, status, error_code=None):
+    from app.core.errors import DomainRequestError
+    try:
+        await call
+    except DomainRequestError as error:
+        require(error.status_code == status and (error_code is None or error.error_code == error_code),
+            "synthetic_error_contract_changed")
+    else:
+        raise ProbeError("synthetic_invalid_status_authorized")
+
+
+
+
+
+
+
+
+async def until(predicate, code):
+    async with asyncio.timeout(2):
+        while not predicate():
+            await asyncio.sleep(.001)
+    require(predicate(), code)
+
+
+async def synthetic_voice_lanes(settings, request, control):
+    from app.modules.realtime_speech import _disconnect_voice_publisher, _voice_io
+    from app.services.cn_realtime_io_executor import CnRealtimeIoExecutor
+    executor = CnRealtimeIoExecutor()
+    diag = executor.diagnostics()
+    require((diag["ingress"]["configuredWorkers"], diag["ingress"]["configuredQueueMax"],
+        diag["lifecycle"]["configuredWorkers"], diag["lifecycle"]["configuredQueueMax"]) == (4, 16, 2, 8),
+        "cn_io_default_capacity_changed")
+    checked = 0
+    try:
+        for configured in (True, False):
+            entered, release = threading.Event(), threading.Event()
+            calls = []
+            def close(**kwargs):
+                calls.append(threading.get_ident()); entered.set()
+                require(release.wait(3), "synthetic_close_not_released")
+            service = SimpleNamespace(settings=settings, disconnect_publisher=close)
+            request.app.state.cn_realtime_io_executor = executor if configured else None
+            task = asyncio.create_task(_disconnect_voice_publisher(request, service, token="synthetic-token"))
+            try:
+                await until(entered.is_set, "synthetic_close_not_started")
+                require(not task.done() and len(calls) == 1 and calls[0] != threading.get_ident(),
+                    "close_blocked_main_loop")
+                require(await asyncio.wait_for(executor.run(lambda: 17, operation_name="ingest_frame"), 1) == 17
+                    and await asyncio.wait_for(control.run(lambda: 19), 1) == 19,
+                    "close_occupied_ingress_or_control_lane")
+                release.set(); await asyncio.wait_for(task, 2)
+                require(len(calls) == 1, "close_replayed")
+                checked += 1
+            finally:
+                release.set(); await asyncio.gather(task, return_exceptions=True)
+        # Global keeps the original direct call; it must not enter a CN pool.
+        original = SimpleNamespace(settings=SimpleNamespace(product_edition="cn"))
+        identity = await _voice_io(request, original, threading.get_ident, operation_name="ingest_frame")
+        require(identity == threading.get_ident(), "global_voice_dispatch_changed")
+    finally:
+        executor.shutdown()
+        request.app.state.cn_realtime_io_executor = None
+    return {"voiceNonblockingCases": checked, "voiceDefaultCapacityPassed": True,
+        "slowCloseLeavesIngressAndControlAvailable": True, "globalVoiceDispatchUnchanged": True}
+
+
+async def synthetic_cancel_and_shutdown():
+    """Admitted resource cleanup survives cancellation/shutdown without expanding capacity."""
+    from app.services.cn_realtime_io_executor import CnRealtimeIoExecutor
+    executor = CnRealtimeIoExecutor(ingress_workers=3, ingress_queue_max=0,
+        lifecycle_workers=1, lifecycle_queue_max=0)
+    entered, release, occupied, release_close = [], threading.Event(), threading.Event(), threading.Event()
+    created, cleaned, forbidden = [], [], []
+    def close():
+        occupied.set(); require(release_close.wait(3), "synthetic_lane_not_released")
+    def create(index):
+        entered.append(index)
+        require(release.wait(3), "synthetic_create_not_released")
+        created.append(index); return index
+    blocker = asyncio.create_task(executor.run(close, lane="lifecycle", operation_name="publisher_disconnect"))
+    owners = [asyncio.create_task(executor.run(lambda i=i: create(i), operation_name="publisher_create",
+        on_abandoned_result=lambda result: cleaned.append(result))) for i in range(3)]
+    waiters = []
+    try:
+        await until(lambda: len(entered) == 3 and occupied.is_set(), "synthetic_owners_not_started")
+        waiters = [asyncio.create_task(executor.run(lambda: forbidden.append(1), lane="lifecycle",
+            operation_name="publisher_disconnect")) for _ in range(3)]
+        await until(lambda: executor.diagnostics()["lifecycle"]["waiting"] == 3, "synthetic_waiters_not_started")
+        for task in owners: task.cancel("synthetic-original-cancellation")
+        await asyncio.sleep(0)
+        executor.shutdown()
+        for task in waiters: task.cancel()
+        await asyncio.gather(*waiters, return_exceptions=True)
+        release.set()
+        await until(lambda: len(created) == 3, "synthetic_create_did_not_finish")
+        await asyncio.sleep(.01)
+        for task in owners: task.cancel()
+        require(cleaned == [] and not any(task.done() for task in owners)
+            and executor.diagnostics()["lifecycle"]["maxPending"] == 1,
+            "shutdown_cleanup_capacity_expanded_or_skipped")
+        release_close.set(); await blocker
+        results = await asyncio.gather(*owners, return_exceptions=True)
+        require(all(isinstance(value, asyncio.CancelledError) for value in results)
+            and sorted(created) == sorted(cleaned) == [0, 1, 2] and not forbidden,
+            "cancelled_creation_replayed_or_cleanup_lost")
+        try:
+            await executor.run(lambda: forbidden.append(1), operation_name="ingest_frame")
+        except RuntimeError:
+            pass
+        else:
+            raise ProbeError("closed_executor_accepted_new_business")
+        await asyncio.sleep(0)
+        final = executor.diagnostics()
+        require(final["cleanupFailed"] == final["outstanding"] == 0 and final["poolsClosed"] == 1
+            and final["lifecycle"]["maxPending"] == 1 and final["ingress"]["pending"] == 0
+            and final["lifecycle"]["pending"] == 0, "shutdown_resource_or_capacity_contract_changed")
+        return {"cancelledResourcesCreated": 3, "cancelledResourcesCleaned": 3,
+            "shutdownRejectsNewBusiness": True, "shutdownCleanupCapacityPassed": True}
+    finally:
+        release.set(); release_close.set()
+        await asyncio.gather(blocker, *owners, *waiters, return_exceptions=True)
+        executor.shutdown()
+
+
+def synthetic_metadata_and_modes(settings):
+    from app.core.errors import DomainRequestError
+    from app.ports.retrieval import RetrievalFilter, RetrievedChunk
+    from app.services.knowledge_retrieval import KnowledgeRetrievalService
+    from app.services.realtime_speech_service import RealtimeSpeechService
+    from app.services.session_mode_guard import require_standard_session
+    record = SimpleNamespace(document_id="synthetic-doc", owner_user_id=OWNER, status="ready",
+        index_state="indexed", document_kind="knowledge", document_version_id="synthetic-version",
+        knowledge_collection_id="synthetic-collection", display_name="Synthetic")
+    foreign = SimpleNamespace(**{**vars(record), "owner_user_id": "synthetic-other"})
+    values = {"synthetic-doc": record, "synthetic-foreign": foreign, "synthetic-missing": None}
+    matches = [RetrievedChunk(document_id=key, document_kind="knowledge", chunk_id=f"synthetic-chunk-{i}",
+        chunk_index=i, content="Synthetic content", score=score)
+        for i, (key, score) in enumerate([("synthetic-doc", .4), ("synthetic-doc", .9),
+            ("synthetic-foreign", .99), ("synthetic-missing", .8)])]
+    service = object.__new__(KnowledgeRetrievalService); service.settings = settings
+    filter = RetrievalFilter(owner_user_id=OWNER, document_kinds=["knowledge"],
+        document_version_ids=["synthetic-version"], knowledge_collection_ids=["synthetic-collection"])
+    for batch in (True, False):
+        repository = Mock(spec=["get_by_id", "get_by_ids"] if batch else ["get_by_id"])
+        repository.get_by_id.side_effect = values.get
+        if batch: repository.get_by_ids.side_effect = lambda ids: {key: values.get(key) for key in ids}
+        service.document_repository = repository
+        result = service._apply_metadata_filter(matches, filter=filter)
+        require([item.score for item in result] == [.9, .4]
+            and all(item.metadata["ownerUserId"] == OWNER for item in result), "metadata_owner_or_sort_changed")
+        require(repository.get_by_id.call_count == (0 if batch else 3)
+            and (not batch or repository.get_by_ids.call_args.args == (list(values),)),
+            "metadata_unique_read_contract_changed")
+    # Actual mode guards, including the service boundary, execute before any
+    # real billing/ASR/provider method. Instances deliberately have no such deps.
+    require_standard_session(SimpleNamespace(session_mode="interview"))
+    require_standard_session(SimpleNamespace(session_mode="written"))
+    for mode, code in (("mock", "mock_dedicated_command_required"), ("written", "written_exam_audio_disabled")):
+        realtime = object.__new__(RealtimeSpeechService)
+        realtime.settings = settings
+        realtime._session_activity_lock = threading.Lock()
+        realtime._session_cleanup_locks = {}; realtime._session_cleanup_lock_users = {}
+        realtime.session_service = SimpleNamespace(get_session=lambda **_: SimpleNamespace(session_mode=mode))
+        try:
+            realtime.control_capture(user_id=OWNER, session_id=SESSION, action="pause")
+        except DomainRequestError as error:
+            require(error.status_code == 409 and error.error_code == code, "legacy_mode_error_changed")
+        else:
+            raise ProbeError("legacy_mode_guard_bypassed")
+        require(realtime._session_cleanup_locks == realtime._session_cleanup_lock_users == {},
+            "mode_guard_left_cleanup_lock")
+    return {"metadataBatchAndFallbackPassed": True, "ordinaryWrittenMockGuardsPassed": True}
+
+
+def synthetic_loop_monitor():
+    from app.platform.cn_realtime_loop_monitor import CnMainLoopMonitor
+    monitor = CnMainLoopMonitor(max_samples=3, emit_every=1000)
+    for value in [1, 10, 50, 250, 500, float("nan"), float("inf"), -1]: monitor.observe(value)
+    values = monitor.summary()
+    require(values["sampleCount"] == values["capacity"] == 3 and values["observations"] == 5
+        and values["maxMs"] == values["p95Ms"] == 500 and values["over250Ms"] == 2
+        and all(type(value) in (int, float) and isfinite(value) and value >= 0 for value in values.values()),
+        "loop_monitor_bounds_or_privacy_changed")
+    return {"loopMonitorBoundedNumericPassed": True}
+
+
+
+def synthetic_pinned_binding(settings):
+    # Execute the actual repository/getter/service code with a scripted Redis
+    # transport. Actual Lua execution and scale counts were tested separately
+    # against an owned localhost Redis; no Redis is contacted by this probe.
+    from dataclasses import asdict
+    from app.services.cn_realtime_entity_state import CNRealtimeEntityState
+    from app.services.redis_realtime_speech_repository import RedisRealtimeSpeechRepository
+    from app.services import realtime_speech_service as realtime
+    costs = []
+    for history in (1, 1191, 10000):
+        target = fixture(settings)
+        target.state.binding = replace(target.state.binding, capabilities={"large": 2**53 + 1, "array": []})
+        raw = json.dumps(asdict(target.state.binding))
+        calls = []
+        class SyntheticRedis:
+            def hget(self, key, field):
+                calls.append("hget")
+                if key == "synthetic-codes" and field == CODE: return DEVICE
+                if key == "synthetic-devices" and field == DEVICE: return json.dumps(asdict(target.state.device))
+                raise ProbeError("unexpected_pinned_read")
+            def hvals(self, key):
+                raise ProbeError("pinned_global_scan_forbidden")
+        store = object.__new__(CNRealtimeEntityState)
+        store.redis = SyntheticRedis(); store._legacy_deadline = None; store.ttl = 300
+        store.base = "synthetic-runtime"; store.keys = ["synthetic-key-" + str(i) for i in range(15)]
+        def scripted(*, keys, args):
+            calls.append("scripted_evalsha")
+            require(args[0] == "pinned_binding_lookup" and args[4:] == [SESSION, target.state.binding.binding_id, DEVICE, CODE],
+                    "pinned_identity_arguments_changed")
+            return [raw, 0]
+        store._script = scripted
+        repository = object.__new__(RedisRealtimeSpeechRepository)
+        repository._cn_controls = store; repository._redis = store.redis
+        repository._device_code_index_key = "synthetic-codes"; repository._device_entity_key = "synthetic-devices"
+        repository._runtime_lock = threading.RLock()
+        repository.desktop_devices_by_id = {}; repository.desktop_devices_by_code = {}
+        target.service.repository = repository
+        target.service._capture_control_cache = {SESSION: "capturing"}
+        with patch.object(realtime, "_now_ms", return_value=NOW):
+            result = target.service._compute_desktop_pairing_status(manual_code=CODE, device_id=DEVICE,
+                pinned_session_id=SESSION, pinned_binding_id=target.state.binding.binding_id)
+        require(result["bound"] is True and result["bindingLockState"] == "held", "pinned_wire_contract_changed")
+        require(result["binding"]["capabilities"] == target.state.binding.capabilities, "pinned_precision_changed")
+        require(calls == ["hget", "hget", "scripted_evalsha"], "pinned_network_cost_changed")
+        target.repository.get_control_state.assert_called_once_with(SESSION)
+        target.repository.get_session.assert_not_called()
+        costs.append(len(calls))
+        retired_raw = store._script
+        store._script = lambda **kw: [raw, 1]
+        require(repository.get_pinned_session_desktop_binding(device_id=DEVICE, manual_code=CODE,
+            session_id=SESSION, binding_id=target.state.binding.binding_id).status == "stale", "pinned_retirement_changed")
+        store._script = lambda **kw: ["", -1]
+        try:
+            repository.get_pinned_session_desktop_binding(device_id=DEVICE, manual_code=CODE,
+                session_id=SESSION, binding_id=target.state.binding.binding_id)
+        except ValueError as error:
+            require(str(error) == "cn_runtime_entity_identity_mismatch", "pinned_identity_error_changed")
+        else:
+            raise ProbeError("pinned_identity_error_swallowed")
+    return {"pinnedSyntheticScaleCases": len(costs), "pinnedPairingTransportCalls": costs,
+            "pinnedActualLuaExecutedInImageProbe": False, "pinnedGlobalScanForbidden": True,
+            "pinnedIdentityRetirementPrecisionPassed": True}
+
+
+async def scenarios(settings):
+    from fastapi import Request
+    from app.services import realtime_speech_service as realtime
+    from app.services.realtime_control_executor import RealtimeControlExecutor
+    asyncio.get_running_loop().set_default_executor(ThreadPoolExecutor(max_workers=1,
+        thread_name_prefix="synthetic-cn-shared-probe"))
+    executor = RealtimeControlExecutor(max_workers=1, queue_max=1)
+    request = Request({"type": "http", "app": SimpleNamespace(state=SimpleNamespace(realtime_control_executor=executor))})
+    try:
+        with patch.object(realtime, "_now_ms", return_value=NOW):
+            result = {}
+        result.update(await synthetic_voice_lanes(settings, request, executor))
+        result.update(await synthetic_cancel_and_shutdown())
+        result.update(synthetic_metadata_and_modes(settings))
+        result.update(synthetic_loop_monitor())
+        result.update(synthetic_pinned_binding(settings))
+        return result
+    finally:
+        executor.shutdown()
+
+
+"""Source fragment embedded in the single read-only actual-image probe."""
+
+
+async def synthetic_cleanup_control(settings, request):
+    from collections import deque
+    from dataclasses import asdict
+    import time
+    from app.ports.realtime_speech import AccountDesktopDeviceRecord
+    from app.services.cn_realtime_entity_state import CNRealtimeEntityState
+    from app.services.redis_realtime_speech_repository import RedisRealtimeSpeechRepository
+    from app.services import realtime_speech_service as realtime
+    from app.services.dashscope_realtime_asr_gateway import DashScopeRealtimeAsrGateway, _SourceRealtimeSession
+    from app.services.cn_provider_close_executor import CnProviderCloseExecutor
+    from app.services.cn_realtime_io_executor import CnRealtimeIoExecutor
+
+    target = fixture(settings)
+    binding = replace(target.state.binding, capabilities={"array": [], "precision": 2**53+1})
+    account = AccountDesktopDeviceRecord(OWNER, DEVICE, CODE, 1, 2)
+    store = object.__new__(CNRealtimeEntityState)
+    store._legacy_deadline = None; store.ttl = 300; store.base = "synthetic-runtime"
+    store.keys = ["synthetic-key-"+str(i) for i in range(18)]
+    calls = []
+    def scripted(*, keys, args):
+        calls.append(args[0])
+        require(args[4:] == [OWNER], "owner_reference_identity_changed")
+        record = binding if args[0] == "owner_bindings" else account
+        require(args[0] in {"owner_bindings", "owner_accounts"}, "owner_read_operation_changed")
+        return [[json.dumps(asdict(record)), 0]]
+    store._script = scripted
+    repository = object.__new__(RedisRealtimeSpeechRepository)
+    repository._cn_controls = store
+    require(repository.list_session_desktop_bindings_for_user(user_id=OWNER) == [binding]
+        and repository.list_account_desktop_devices(user_id=OWNER) == [account]
+        and calls == ["owner_bindings", "owner_accounts"], "owner_read_dispatch_changed")
+    # Lua execution and scale budgets are proved by the real local Redis suite;
+    # this isolated image probe only verifies the shipped Python dispatch.
+    service = object.__new__(realtime.RealtimeSpeechService)
+    service.settings = settings
+    service.logger = logging.getLogger("synthetic-lightweight-ack")
+    service.logger.setLevel(logging.INFO)
+    access = Mock()
+    service.session_service = SimpleNamespace(get_control_state=access, get_session=deny)
+    service._trace_lock = threading.Lock(); service._trace_records = {}; service._trace_order = deque(maxlen=4096)
+    service._performance_ack_access_lock = threading.Lock(); service._performance_ack_access_cache = {}; service._performance_ack_access_hits = service._performance_ack_access_misses = 0
+    service._latest_timing = lambda **kwargs: None
+    with patch.object(realtime, "log_event", side_effect=deny):
+        for stage in ("transcript-delivery", "transcript-render", "answer-first-render", "screenshot-first-render"):
+            event = service.acknowledge_runtime_timing(user_id=OWNER, session_id=SESSION,
+                trace_id="synthetic-trace", stage=stage, duration_ms=20)
+            require(event.kind == "performance-ack" and event.payload["stage"] == stage, "ack_wire_changed")
+    require(access.call_count == 4, "ack_lightweight_authority_missing")
+
+    gateway = DashScopeRealtimeAsrGateway(settings, logging.getLogger("synthetic-close"))
+    entered, release = threading.Event(), threading.Event()
+    def slow_close():
+        entered.set(); require(release.wait(3), "synthetic_physical_close_not_released")
+    old = _SourceRealtimeSession(SimpleNamespace(close=slow_close), 16000,
+        time.monotonic(), time.monotonic(), SESSION+":microphone", "microphone")
+    gateway._source_sessions[SESSION+":microphone"] = old
+    try:
+        require(gateway.close_source_deferred(session_id=SESSION, source_kind="microphone") == 1,
+            "deferred_close_capability_missing")
+        await until(entered.is_set, "deferred_close_not_started")
+        require(old.closed and not old.accepting_transcript_events
+            and SESSION+":microphone" not in gateway._source_sessions, "old_source_not_fenced")
+        replacement = Mock()
+        gateway._source_sessions[SESSION+":microphone"] = _SourceRealtimeSession(replacement, 16000,
+            time.monotonic(), time.monotonic(), SESSION+":microphone", "microphone")
+        release.set(); gateway.drain_deferred_closes()
+        require(replacement.close.call_count == 0, "old_close_touched_replacement")
+    finally:
+        release.set(); gateway.close_all_sessions()
+
+    # Both lifecycle workers are occupied; preparation must still progress.
+    executor = CnRealtimeIoExecutor()
+    ready, finish = [], threading.Event()
+    def block():
+        ready.append(1); require(finish.wait(3), "synthetic_lifecycle_not_released")
+    blockers = [asyncio.create_task(executor.run(block, lane="lifecycle",
+        operation_name="publisher_disconnect")) for _ in range(2)]
+    create_entered, create_finish, cleaned = threading.Event(), threading.Event(), []
+    def create():
+        create_entered.set(); require(create_finish.wait(3), "synthetic_prepare_not_released"); return "synthetic-created"
+    pending = None
+    try:
+        await until(lambda: len(ready) == 2, "both_lifecycle_workers_not_occupied")
+        require(await asyncio.wait_for(executor.run(lambda: 23, lane="preparation",
+            operation_name="publisher_prepare"), 1) == 23, "preparation_blocked_by_lifecycle")
+        pending = asyncio.create_task(executor.run(create, lane="preparation",
+            operation_name="publisher_create", on_abandoned_result=cleaned.append))
+        await until(create_entered.is_set, "preparation_create_not_started")
+        pending.cancel(); create_finish.set(); finish.set()
+        result = await asyncio.gather(pending, return_exceptions=True)
+        require(isinstance(result[0], asyncio.CancelledError) and cleaned == ["synthetic-created"],
+            "preparation_cancel_cleanup_lost_or_replayed")
+        await asyncio.gather(*blockers)
+        diag = executor.diagnostics()["preparation"]
+        require((diag["configuredWorkers"], diag["configuredQueueMax"]) == (2, 8), "preparation_capacity_changed")
+    finally:
+        finish.set(); create_finish.set()
+        await asyncio.gather(*blockers, *([pending] if pending is not None else []), return_exceptions=True)
+        executor.shutdown()
+
+    # A submit can fail after enqueue. A late queued call must be a no-op.
+    closer = CnProviderCloseExecutor(logging.getLogger("synthetic-submit"), workers=1, queue_max=0)
+    queued, closed = [], []
+    def failed_submit(operation, *args):
+        queued.append((operation, args)); raise RuntimeError("synthetic-start-failure")
+    try:
+        with patch.object(closer._pool, "submit", failed_submit):
+            closer.close(lambda: closed.append(1))
+            operation, args = queued[0]; operation(*args)
+            require(closed == [1] and closer.diagnostics()["pending"] == 0,
+                "ambiguous_submit_replayed_close_or_permit")
+    finally:
+        closer.shutdown()
+    return {"ownerScopedReadDispatchPassed": True, "ownerScopedReadActualLuaExecuted": False,
+        "lightweightAckStages": 4, "disabledAckDebugSerializationSkipped": True,
+        "detachedOldCloseCannotTouchReplacement": True, "preparationIndependentFromBothLifecycleWorkers": True,
+        "preparationCancelledResourceCompensatedOnce": True, "ambiguousCloseSubmitExactlyOnce": True}
+
+def main():
+    require(isinstance(EXPECTED, dict), "release_expectations_missing")
+    install_guards()
+    root = Path("/app")
+    actual, compiled = verify_source(root, EXPECTED)
+    require(platform.python_version() == EXPECTED["python"] == "3.13.16", "python_version_changed")
+    deps = dict(sorted((d.metadata["Name"], d.version) for d in importlib.metadata.distributions()))
+    require(deps == EXPECTED["dependencies"] and len(deps) == 46, "unapproved_dependency_change")
+    sys.path.insert(0, str(root / "apps/backend"))
+    from app.core.config import Settings
+    settings = Settings(_env_file=None)
+    require(settings.product_edition == "global" and settings.environment == "production", "runtime_region_changed")
+    values = settings.model_dump(mode="json")
+    require(len(values) == 379 and sha(serialize(values)) == EXPECTED["settingsSha256"], "existing_settings_changed")
+    from app import main as application
+    forbid_lifespan(application.app)
+    schema = application.app.openapi()
+    require(sha(json.dumps(schema, sort_keys=True, separators=(",", ":")).encode()) == EXPECTED["openapiSha256"], "openapi_changed")
+    require(len(schema["paths"]) == EXPECTED["httpPaths"] == 223, "api_routes_changed")
+    result = asyncio.run(scenarios(settings))
+    result.update(asyncio.run(synthetic_cleanup_control(settings, None)))
+    for worker in WORKERS: worker.join(timeout=3)
+    require(not any(worker.is_alive() for worker in WORKERS), "synthetic_worker_not_released")
+    image = os.environ.get("OFFERSTEADY_RELEASE_PROBE_IMAGE", "")
+    print(json.dumps({"passed": True, "image": image if re.fullmatch(r"sha256:[0-9a-f]{64}", image) else None,
+        "runtimeFiles": len(actual), "compiledPython": compiled, "python": platform.python_version(),
+        "dependencyCount": len(deps), "dependenciesUnchanged": True, "existingSettingsUnchanged": True,
+        "settingsCount": len(values), "poolEnabled": False, "baselineAncillaryUnchanged": True,
+        "companionReleaseManifestUnchanged": True, "companionVersion": "1.3.6",
+        "settingsSha256": EXPECTED["settingsSha256"], "openapiSha256": EXPECTED["openapiSha256"], "httpPaths": len(schema["paths"]),
+        "workerThreadsStarted": len(WORKERS), "allSyntheticWorkersReleased": True, "databaseOperations": 0,
+        "networkRequests": 0, "fileWrites": 0, "lifespanEntered": False, "privateValuesPrinted": False, **result}, sort_keys=True))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as exc:
+        print(json.dumps({"passed": False, "errorType": type(exc).__name__,
+            "errorCode": str(exc) if isinstance(exc, ProbeError) else "probe_failed", "privateValuesPrinted": False}))
+        raise SystemExit(1) from None

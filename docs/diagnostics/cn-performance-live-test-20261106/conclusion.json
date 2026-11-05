@@ -1,0 +1,75 @@
+{
+  "firstAtBeijing": "2026-11-06 02:27:07",
+  "secondAtBeijing": "2026-11-06 02:30:58",
+  "sampleSeparationSeconds": 230.363,
+  "activeInterviewsObserved": 1,
+  "latestCapacitySample": {
+    "atMs": 1793903436404,
+    "apiP95Ms": 74.99,
+    "apiErrorRate": 0.0,
+    "requestsPerMinute": 102.25,
+    "activeInterviews": 1,
+    "activeUsers": 1,
+    "activeWebSessions": 0,
+    "onlineDevices": 0,
+    "activeAudioStreams": 0,
+    "cpuPercent": 1.24,
+    "memoryPercent": 2.7,
+    "hostMemoryPercent": 21.41,
+    "diskPercent": 31.03,
+    "loadAverage1m": 0.76,
+    "databaseConnections": 1,
+    "databaseConnectionLimit": 100,
+    "controlApiP95Ms": 74.99,
+    "controlApiRequestCount": 509,
+    "recoverySnapshotP95Ms": 0.0,
+    "recoverySnapshotRequestCount": 0
+  },
+  "latest60s": {
+    "count": 93,
+    "p50Ms": 21.41,
+    "p95Ms": 53.05,
+    "maxMs": 111.12,
+    "atLeast500Ms": 0,
+    "atLeast1000Ms": 0
+  },
+  "latest5m": {
+    "count": 474,
+    "p50Ms": 21.87,
+    "p95Ms": 74.99,
+    "maxMs": 216.86,
+    "atLeast500Ms": 0,
+    "atLeast1000Ms": 0
+  },
+  "asrCounterDeltas": {
+    "microphone": {
+      "append_count": 38,
+      "partial_count": 0,
+      "final_count": 5,
+      "task_failure_count": 0,
+      "provider_timeout_count": 0,
+      "asr_connection_reconnect_count": 0
+    },
+    "system": {
+      "append_count": 1082,
+      "partial_count": 206,
+      "final_count": 25,
+      "task_failure_count": 0,
+      "provider_timeout_count": 0,
+      "asr_connection_reconnect_count": 0
+    }
+  },
+  "api5xxObserved": 0,
+  "serverErrorsObserved": 0,
+  "backendQueueDepth": 0,
+  "currentIoLaneSaturation": 0,
+  "mainLoopP95Ms": 1.873,
+  "userConfirmedBrowserBackgrounded": true,
+  "browserLongTailReason": "consistent with background requestAnimationFrame delay; per-frame attribution not proven",
+  "auth401BelongsToOtherObservedSession": true,
+  "multiUserPeakValidated": false,
+  "readOnly": true,
+  "realModelRequestsCreated": 0,
+  "productionChanges": 0,
+  "rawUserDataExported": false
+}

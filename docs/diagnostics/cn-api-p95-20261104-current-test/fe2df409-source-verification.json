@@ -1,0 +1,10 @@
+{
+  "runtimeFiles": {
+    "app/services/realtime_speech_service.py": "f4f2d7e8c300a45a87204838d4c9e6ef8bd40f45c23844aabfa7b5ab8c26fbb7",
+    "app/services/redis_realtime_speech_repository.py": "0a341cb57b336df91979dc7d2d386657404fa3bcf13e083d4747c65449c9ae7e",
+    "app/services/cn_realtime_entity_state.py": "b5a356301946539644a140233f7b3d17de6fed2587d34050867200104aa6e754",
+    "app/services/admin_capacity.py": "c19b72df52909fb1aa5e4845644aee9c263260b16f78115b5997a5dffd21e385"
+  },
+  "fixedCandidateMatches": true,
+  "productionMutations": 0
+}

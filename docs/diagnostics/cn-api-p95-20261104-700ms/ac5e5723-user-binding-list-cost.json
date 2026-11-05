@@ -1,0 +1,40 @@
+{
+  "actualReleaseSourceUsed": true,
+  "findings": [
+    {
+      "syntheticHistory": 1,
+      "redisOperations": {
+        "HVALS": 1,
+        "HEXISTS": 1
+      },
+      "totalRoundTrips": 2,
+      "bindingDecodes": 1,
+      "syntheticElapsedMs": 0.013,
+      "productionLatencyMeasured": false
+    },
+    {
+      "syntheticHistory": 1191,
+      "redisOperations": {
+        "HVALS": 1,
+        "HEXISTS": 1191
+      },
+      "totalRoundTrips": 1192,
+      "bindingDecodes": 1191,
+      "syntheticElapsedMs": 2.621,
+      "productionLatencyMeasured": false
+    },
+    {
+      "syntheticHistory": 10000,
+      "redisOperations": {
+        "HVALS": 1,
+        "HEXISTS": 10000
+      },
+      "totalRoundTrips": 10001,
+      "bindingDecodes": 10000,
+      "syntheticElapsedMs": 25.026,
+      "productionLatencyMeasured": false
+    }
+  ],
+  "realRedisOrDatabaseOrProviderCalls": 0,
+  "productionChanges": 0
+}

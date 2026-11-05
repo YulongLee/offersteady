@@ -1,0 +1,135 @@
+{
+  "atMs": 1793735854254,
+  "windowMs": 300000,
+  "activeConnectionDistinctDevicePaths": 12,
+  "perDeviceAnonymousCounts": [
+    {
+      "requests": 26,
+      "atLeast1000Ms": 12,
+      "maxMs": 3539.69
+    },
+    {
+      "requests": 26,
+      "atLeast1000Ms": 9,
+      "maxMs": 3477.51
+    },
+    {
+      "requests": 23,
+      "atLeast1000Ms": 3,
+      "maxMs": 3426.82
+    },
+    {
+      "requests": 27,
+      "atLeast1000Ms": 12,
+      "maxMs": 3397.87
+    },
+    {
+      "requests": 26,
+      "atLeast1000Ms": 12,
+      "maxMs": 3397.26
+    },
+    {
+      "requests": 27,
+      "atLeast1000Ms": 10,
+      "maxMs": 3360.89
+    },
+    {
+      "requests": 29,
+      "atLeast1000Ms": 0,
+      "maxMs": 92.91
+    },
+    {
+      "requests": 30,
+      "atLeast1000Ms": 0,
+      "maxMs": 74.33
+    },
+    {
+      "requests": 29,
+      "atLeast1000Ms": 0,
+      "maxMs": 70.17
+    },
+    {
+      "requests": 16,
+      "atLeast1000Ms": 0,
+      "maxMs": 63.89
+    },
+    {
+      "requests": 1,
+      "atLeast1000Ms": 0,
+      "maxMs": 61.74
+    },
+    {
+      "requests": 4,
+      "atLeast1000Ms": 0,
+      "maxMs": 61.11
+    }
+  ],
+  "redisShape": {
+    "keys": {
+      "cnBindings": {
+        "type": "hash",
+        "fields": 1191,
+        "memoryBytes": 1927860
+      },
+      "retiredSessions": {
+        "type": "hash",
+        "fields": 1,
+        "memoryBytes": 160
+      },
+      "devices": {
+        "type": "hash",
+        "fields": 933,
+        "memoryBytes": 1102566
+      },
+      "legacyBindings": {
+        "type": "none",
+        "fields": 0,
+        "memoryBytes": null
+      },
+      "candidates": {
+        "type": "hash",
+        "fields": 2,
+        "memoryBytes": 4528
+      }
+    },
+    "commandstats": {
+      "cmdstat_hgetall": {
+        "calls": 193,
+        "usec": 25619,
+        "usec_per_call": 132.74,
+        "rejected_calls": 0,
+        "failed_calls": 1
+      },
+      "cmdstat_hexists": {
+        "calls": 903261,
+        "usec": 2132408,
+        "usec_per_call": 2.36,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_evalsha": {
+        "calls": 1370911,
+        "usec": 76406737,
+        "usec_per_call": 55.73,
+        "rejected_calls": 0,
+        "failed_calls": 2
+      },
+      "cmdstat_hvals": {
+        "calls": 122311,
+        "usec": 3778656,
+        "usec_per_call": 30.89,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_hget": {
+        "calls": 47348943,
+        "usec": 422465118,
+        "usec_per_call": 8.92,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      }
+    }
+  },
+  "rawIdsOrLogsExported": false,
+  "productionMutations": 0
+}

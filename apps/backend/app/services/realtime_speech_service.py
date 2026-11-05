@@ -881,7 +881,7 @@ class RealtimeSpeechService:
                 },
             )
         self._capture_control_cache[session_id] = "paused"
-        self.asr_gateway.close_session(session_id=session_id)
+        self._close_asr_session(session_id=session_id)
         with self._prewarm_metrics_lock:
             self._prewarm_ready_by_session.pop(session_id, None)
             self._prewarm_ready_at_by_session.pop(session_id, None)
@@ -2100,7 +2100,13 @@ class RealtimeSpeechService:
                 now_ms = _now_ms()
                 released_bindings = 0
                 closed_publishers = 0
-                for binding in self.repository.list_session_desktop_bindings_for_user(user_id=user_id):
+                binding_read = getattr(self.repository, "get_session_desktop_binding", None)
+                if getattr(self.settings, "product_edition", None) == "cn" and callable(binding_read):
+                    current_binding = binding_read(user_id=user_id, session_id=session_id)
+                    bindings = [current_binding] if current_binding is not None else []
+                else:
+                    bindings = self.repository.list_session_desktop_bindings_for_user(user_id=user_id)
+                for binding in bindings:
                     if binding.session_id == session_id and binding.status == "bound":
                         self.repository.save_session_desktop_binding(replace(binding, status="stale"))
                         released_bindings += 1
@@ -2732,7 +2738,7 @@ class RealtimeSpeechService:
         self._capture_control_cache[session_id] = capture_state
         if action == "pause":
             self._stop_realtime_metering(session_id=session_id)
-            self.asr_gateway.close_session(session_id=session_id)
+            self._close_asr_session(session_id=session_id)
             with self._prewarm_metrics_lock:
                 self._prewarm_ready_by_session.pop(session_id, None)
                 self._prewarm_ready_at_by_session.pop(session_id, None)
@@ -2958,12 +2964,22 @@ class RealtimeSpeechService:
         self._log(logging.INFO, "realtime_speech.publisher_connected", session_id=connected.session_id, publisher_id=connected.publisher_id, state=connected.status)
         return connected
 
+    def _close_asr_session(self, *, session_id: str) -> int:
+        close = self.asr_gateway.close_session
+        if getattr(self.settings, "product_edition", None) == "cn":
+            deferred = getattr(self.asr_gateway, "close_session_deferred", None)
+            if callable(deferred):
+                close = deferred
+        return int(close(session_id=session_id) or 0)
+
     def _cleanup_source_resources(self, *, session_id: str, source_kind: RealtimeSourceKind) -> dict[str, int]:
         """Release one disconnected source without terminating the other channel."""
         resources = {"closed_asr_sessions": 0, "cleared_queues": 0, "cleared_buffered_segments": 0, "cleared_frame_receipts": 0}
         close_source = getattr(self.asr_gateway, "close_source", None)
+        if getattr(self.settings, "product_edition", None) == "cn":
+            close_source = getattr(self.asr_gateway, "close_source_deferred", None) or close_source
         try:
-            resources["closed_asr_sessions"] = int(close_source(session_id=session_id, source_kind=source_kind)) if callable(close_source) else int(self.asr_gateway.close_session(session_id=session_id))
+            resources["closed_asr_sessions"] = int(close_source(session_id=session_id, source_kind=source_kind)) if callable(close_source) else self._close_asr_session(session_id=session_id)
         except Exception as exc:
             self.logger.warning("realtime_source_cleanup_failed", extra={"sessionId": session_id, "sourceKind": source_kind, "safeErrorCode": exc.__class__.__name__})
         key = self._session_source_key(session_id, source_kind)
@@ -5139,7 +5155,7 @@ class RealtimeSpeechService:
         else:
             self._unretire_session_id(session_id)
         try:
-            resources["closed_asr_sessions"] = int(self.asr_gateway.close_session(session_id=session_id))
+            resources["closed_asr_sessions"] = self._close_asr_session(session_id=session_id)
         except Exception as exc:
             self.logger.warning("realtime_session_asr_cleanup_failed", extra={"sessionId": session_id, "safeErrorCode": exc.__class__.__name__})
         with self._prewarm_metrics_lock:
@@ -5718,10 +5734,16 @@ class RealtimeSpeechService:
         )
         return current_cursor, [event for event in events if event.owner_user_id == user_id], resumable
 
+    def _read_performance_ack_access(self, *, user_id: str, session_id: str) -> None:
+        read = getattr(self.session_service, "get_control_state", None)
+        if getattr(self.settings, "product_edition", None) != "cn" or not callable(read):
+            read = self.session_service.get_session
+        read(user_id=user_id, session_id=session_id)
+
     def _verify_performance_ack_session(self, *, user_id: str, session_id: str, cacheable: bool) -> None:
         """Authorize content-free render telemetry without rereading full state."""
         if not cacheable:
-            self.session_service.get_session(user_id=user_id, session_id=session_id)
+            self._read_performance_ack_access(user_id=user_id, session_id=session_id)
             return
         lock = getattr(self, "_performance_ack_access_lock", None)
         if lock is None:
@@ -5744,7 +5766,7 @@ class RealtimeSpeechService:
                     raise DomainRequestError("session", "get", "不能查看其他用户的面试会话。", 403)
                 cache.pop(session_id, None)
             self._performance_ack_access_misses = getattr(self, "_performance_ack_access_misses", 0) + 1
-        self.session_service.get_session(user_id=user_id, session_id=session_id)
+        self._read_performance_ack_access(user_id=user_id, session_id=session_id)
         with lock:
             cache[session_id] = (user_id, now + ttl)
             while len(cache) > 4096:
@@ -5828,17 +5850,18 @@ class RealtimeSpeechService:
         self._observe_trace(trace_id, **{
             key: value for key, value in browser_fields.items() if value is not None
         })
-        log_event(
-            self.logger,
-            logging.DEBUG,
-            settings=self.settings,
-            event="runtime.performance_acknowledged",
-            feature="runtime-performance",
-            action=stage,
-            session_id=session_id,
-            task_id=task_id,
-            duration_ms=duration_ms,
-        )
+        if getattr(self.settings, "product_edition", None) != "cn" or self.logger.isEnabledFor(logging.DEBUG):
+            log_event(
+                self.logger,
+                logging.DEBUG,
+                settings=self.settings,
+                event="runtime.performance_acknowledged",
+                feature="runtime-performance",
+                action=stage,
+                session_id=session_id,
+                task_id=task_id,
+                duration_ms=duration_ms,
+            )
         return RealtimeEvent(
             event_id=f"metric:{trace_id}:{stage}",
             session_id=session_id,

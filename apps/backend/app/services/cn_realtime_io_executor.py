@@ -19,7 +19,7 @@ _OPERATIONS = frozenset({
     "capture_control",
     "session_end", "session_supersede",
 })
-_LANES = frozenset({"ingress", "lifecycle"})
+_LANES = frozenset({"ingress", "lifecycle", "preparation"})
 _logger = logging.getLogger("offersteady.backend.cn_realtime_io_timing")
 _sample_lock = threading.Lock()
 _sample_counter = 0
@@ -257,10 +257,12 @@ class _Lane:
 
 class CnRealtimeIoExecutor:
     def __init__(self, *, ingress_workers: int = 4, ingress_queue_max: int = 16,
-                 lifecycle_workers: int = 2, lifecycle_queue_max: int = 8) -> None:
+                 lifecycle_workers: int = 2, lifecycle_queue_max: int = 8,
+                 preparation_workers: int = 2, preparation_queue_max: int = 8) -> None:
         self._lanes = {
             "ingress": _Lane(workers=ingress_workers, queue_max=ingress_queue_max, name="ingress"),
             "lifecycle": _Lane(workers=lifecycle_workers, queue_max=lifecycle_queue_max, name="lifecycle"),
+            "preparation": _Lane(workers=preparation_workers, queue_max=preparation_queue_max, name="preparation"),
         }
         self._lock = threading.Lock()
         self._closed = False

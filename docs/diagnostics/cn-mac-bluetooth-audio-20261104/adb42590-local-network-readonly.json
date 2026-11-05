@@ -1,0 +1,22 @@
+{
+  "atMs": 1793739037273,
+  "currentWifi": [
+    {
+      "spairport_network_channel": "11 (2GHz, 20MHz)",
+      "spairport_network_mcs": 6,
+      "spairport_network_phymode": "802.11ax",
+      "spairport_network_rate": 68,
+      "spairport_signal_noise": "-61 dBm / -82 dBm"
+    },
+    {}
+  ],
+  "systemProxyEnabled": {
+    "HTTPEnable": true,
+    "HTTPSEnable": true,
+    "SOCKSEnable": true,
+    "ProxyAutoConfigEnable": false
+  },
+  "defaultRouteInterface": "en1",
+  "ssidMacIpProxyHostOrCredentialsExported": false,
+  "settingsChanged": false
+}

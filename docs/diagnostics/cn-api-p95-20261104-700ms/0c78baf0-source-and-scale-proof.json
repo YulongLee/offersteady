@@ -1,0 +1,12 @@
+{
+  "atMs": 1793774473160,
+  "actualRuntimeSourceMatchesFixedRelease": true,
+  "checkedFiles": 6,
+  "bindingMetadataCounts": {
+    "bindings": 1242,
+    "retired": 45
+  },
+  "healthy": true,
+  "restartCount": 0,
+  "privateDataReadOrExported": false
+}

@@ -1,0 +1,27 @@
+{
+  "observedAtMs": 1793899571634,
+  "sinceStartedAt": "2026-11-05T17:21:56.348996183Z",
+  "secondsSinceStart": 255.286,
+  "linesRead": 423,
+  "parsedHttp5xx": 15,
+  "nginxErrorLines": 15,
+  "statuses": {
+    "502": 15
+  },
+  "routeCategories": {
+    "realtime_control": 9,
+    "active_connection": 6
+  },
+  "firstErrorAtMs": 1793899316872,
+  "lastErrorAtMs": 1793899319893,
+  "firstErrorSecondsAfterStart": 0.524,
+  "lastErrorSecondsAfterStart": 3.545,
+  "beforeDeploymentVerified": 15,
+  "afterDeploymentVerified": 0,
+  "afterFirst15Seconds": 0,
+  "last60Seconds": 0,
+  "backendHealthyAtEnd": true,
+  "backendRestartCountAtEnd": 0,
+  "rawLogsOrIdentifiersExported": false,
+  "productionMutations": 0
+}

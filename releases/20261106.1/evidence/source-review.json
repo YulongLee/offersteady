@@ -1,0 +1,47 @@
+{
+  "apps/backend/app/modules/realtime_speech.py": {
+    "changedOrAddedFunctions": [
+      "create_publisher"
+    ],
+    "otherFunctionAstsUnchanged": true
+  },
+  "apps/backend/app/services/redis_realtime_speech_repository.py": {
+    "changedOrAddedFunctions": [
+      "_overlay_cn_control_entities",
+      "list_account_desktop_devices",
+      "list_session_desktop_bindings_for_user"
+    ],
+    "otherFunctionAstsUnchanged": true
+  },
+  "apps/backend/app/services/dashscope_realtime_asr_gateway.py": {
+    "changedOrAddedFunctions": [
+      "__init__",
+      "_close_detached",
+      "_close_source_deferred",
+      "_detach_source_session",
+      "_mark_detached",
+      "close_all_sessions",
+      "close_session_deferred",
+      "close_source_deferred",
+      "drain_deferred_closes",
+      "physical_close"
+    ],
+    "otherFunctionAstsUnchanged": true
+  },
+  "apps/backend/app/services/realtime_speech_service.py": {
+    "changedOrAddedFunctions": [
+      "_cleanup_source_resources",
+      "_close_asr_session",
+      "_control_capture",
+      "_pause_for_insufficient_realtime_balance",
+      "_read_performance_ack_access",
+      "_reset_realtime_session",
+      "_retire_session_id",
+      "_unretire_session_id",
+      "_verify_performance_ack_session",
+      "acknowledge_runtime_timing",
+      "terminate_session_for_admin"
+    ],
+    "otherFunctionAstsUnchanged": true
+  }
+}

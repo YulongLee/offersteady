@@ -1,0 +1,38 @@
+{
+  "candidate": "artifacts/cn-cleanup-control-local-20261104/candidate",
+  "candidateManifestSha256": "61a5c7604bb2229933d331a4644807c67546fe8ed6e468a504e66279dbfd63e8",
+  "candidateImportGuard": true,
+  "candidateInputsVerifiedBeforeRun": 238,
+  "productEnvFilesDisabled": true,
+  "remoteProviderOptInsCleared": true,
+  "ownedLoopbackServicesOnly": true,
+  "moduleCount": 71,
+  "foundationCases": 2,
+  "realModelCalls": 0,
+  "productionChanges": 0,
+  "redisVersion": "Redis server v=7.4.9 sha=00000000:0 malloc=jemalloc-5.3.0 bits=64 build=5a23d515cf8f8935",
+  "knownExcludedGlobalOnlyModules": {
+    "modules": [
+      "global_mock_postgres",
+      "global_mock_api",
+      "global_mock_turn_cleanup"
+    ],
+    "reason": "These import Global-only services absent from the actual233-input CN baseline as well as candidate; do not mix Global runtime sources into the CN package. Shared Global branches remain covered by targeted new tests."
+  },
+  "networkGuard": "No external DNS/connect, only registered owned/dynamic loopback ports",
+  "newDependenciesInstalled": 0,
+  "unrelatedServicesTouched": 0,
+  "pytestExitCode": 0,
+  "suites": [
+    {
+      "tests": 1014,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    }
+  ],
+  "candidateInputsVerifiedAfterRun": 238,
+  "testSourcesUnchanged": true,
+  "ownSyntheticDatabasesRemoved": true,
+  "durationSeconds": 37.617
+}
