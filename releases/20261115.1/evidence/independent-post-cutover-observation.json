@@ -1,0 +1,43 @@
+{
+  "scope": "国服发布后只读脱敏聚合；不含原始日志、请求路径或用户标识",
+  "backend_identity": {
+    "container_id_prefix": "924af801",
+    "image_sha256_prefix": "4c1b3c60",
+    "started_at_utc": "2026-11-14T16:37:20.97575829Z"
+  },
+  "cutover_window": {
+    "beijing_date": "2026-11-15",
+    "start_beijing": "00:37:10",
+    "end_beijing": "00:37:24",
+    "web_http_502_count": 52,
+    "web_error_lines_count_same_minute": 52,
+    "interpretation": "52 是 HTTP 状态计数；错误行与请求不可相加。时间与后台重建重合，但仅凭聚合不能确认因果或用户影响。"
+  },
+  "initial_bounded_aggregate": {
+    "window": "采样时回溯最近 5 分钟；具体采样时间未记录",
+    "tail_limit_per_container": 4000,
+    "backend_lines": 535,
+    "backend_tail_limit_reached": false,
+    "backend_http_5xx": 0,
+    "backend_error_critical_traceback_lines": 0,
+    "backend_stream_failed_lines": 0,
+    "web_lines": 646,
+    "web_tail_limit_reached": false,
+    "web_http_5xx": 52,
+    "web_error_critical_traceback_lines": 52,
+    "web_stream_failed_lines": 0,
+    "limitation": "只覆盖该采样时点之前的有界窗口，不代表全部请求或更长时间状态。"
+  },
+  "later_web_aggregate": {
+    "sampled_at_utc": "2026-11-14T16:40:19.101986+00:00",
+    "sampled_at_beijing": "2026-11-15 00:40:19",
+    "window": "采样时回溯最近 1 分钟",
+    "lines": 136,
+    "tail_limit": 4000,
+    "tail_limit_reached": false,
+    "http_5xx": 0,
+    "error_critical_traceback_lines": 0,
+    "limitation": "只证明该 1 分钟有界样本未见上述匹配项，不证明所有用户或业务链路无故障。"
+  },
+  "privacy": "仅保存脱敏计数与时间；原始日志未保存。"
+}

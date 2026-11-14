@@ -169,9 +169,9 @@ def _release_manifest() -> dict[str, object]:
     if published is not None:
         public_entries: list[dict[str, object]] = []
         for raw_entry in published["entries"]:
-            if not isinstance(raw_entry, dict):
+            if not isinstance(raw_entry, dict) or raw_entry.get("hiddenFromListing") is True:
                 continue
-            entry = {key: value for key, value in raw_entry.items() if key != "objectKey"}
+            entry = {key: value for key, value in raw_entry.items() if key not in ("objectKey", "hiddenFromListing")}
             filename = entry.pop("fileName", None)
             if isinstance(filename, str) and filename and _is_public_desktop_entry(raw_entry):
                 download_url = f"/api/v1/web/downloads/desktop/{filename}"

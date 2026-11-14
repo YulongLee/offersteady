@@ -1,0 +1,16 @@
+{
+  "offersteady-global-backend-1": {
+    "inspect_ok": true,
+    "identity": "bf9eab2626100d1b090de78e3cab6f6fa00a727d6181c54c61ccb3e4f70eb197 sha256:687fe1b4b421eb11024bbe6fd36f8ff81a973cf37a74f43e653e7e9321752bea true",
+    "known_files_checked": 308,
+    "file_hashes_match": true
+  },
+  "offersteady-global-web-1": {
+    "inspect_ok": true,
+    "identity": "a164dbd6999dbfbb47969baee68b482fdc6c100a9c3b0d8f6fcadc9a3c2523ba sha256:73c351fbc0502f50989b729174620173c80988292fe6d0d2b4fcf660f29caa44 true",
+    "known_files_checked": 267,
+    "file_hashes_match": true
+  },
+  "observedAtUTC": "2026-11-14T17:34:53.593634+00:00",
+  "coverage_note": "Known public files checked; unknown additional files and private configuration not inspected."
+}

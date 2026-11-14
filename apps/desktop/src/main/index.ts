@@ -2,6 +2,9 @@ import { app, BrowserWindow, Menu, Tray, desktopCapturer, globalShortcut, ipcMai
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { floatingInterviewPage, initializeFloatingInterview, openFloatingInterview, requestWindowCaptureProtection } from "./floating-interview";
+import { floatingReleaseDataDirectory } from "./floating-release-data";
+import { captureMacPreviewSources } from "./floating-screen-capture";
 import type { CaptureState } from "@offersteady/protocol" with { "resolution-mode": "import" };
 import { DeviceCredentialVault } from "./credential-vault";
 import { DevicePairingIdentityStore } from "./device-pairing";
@@ -20,9 +23,9 @@ import { DesktopCaptureEventParser } from "./capture-event-stream";
 import { decideRendererRecovery } from "./renderer-recovery-policy";
 import { RealtimeTransportDiagnosticsLog } from "./realtime-transport-diagnostics-log";
 import { canAcquireDisplaySources, resolveDisplayMediaSource, type ScreenPermissionStatus } from "./display-media-access";
-import { globalStableUserDataDirectory, legacyUserDataDirectories, migrateLegacyCompanionState, stableUserDataDirectory } from "./user-data-bootstrap";
+import { legacyUserDataDirectories, migrateLegacyCompanionState } from "./user-data-bootstrap";
 import { resolveDesktopProductEdition } from "./product-edition";
-import { loadLocalTestRuntime, localTestUserDataDirectory } from "./local-test-runtime";
+import { loadLocalTestRuntime } from "./local-test-runtime";
 import { DesktopCapabilitySnapshot } from "./desktop-capability-snapshot";
 import { MicrophonePermissionController } from "./microphone-permission";
 import { CompanionWindowVisibility, RESTORE_WINDOW_SHORTCUT } from "./window-visibility";
@@ -33,6 +36,8 @@ import { WrittenSessionAwakeGuard } from "./written-session-awake";
 import { screenshotFailureMessage } from "./global-screenshot-failure-copy";
 
 const localTestRuntime = loadLocalTestRuntime(app.isPackaged, process.resourcesPath);
+const floatingPreviewBuild = app.isPackaged && existsSync(floatingInterviewPage);
+const floatingLocalTestBuild = floatingPreviewBuild && !existsSync(path.join(process.resourcesPath, "cn-floating-production"));
 
 const packagedGlobalRuntimeConfigPath = () => path.join(process.resourcesPath, "global-runtime-config.json");
 const isGlobalRelease = () => resolveDesktopProductEdition({
@@ -43,10 +48,8 @@ const isGlobalRelease = () => resolveDesktopProductEdition({
 const desktopCopy = (domestic: string, global: string) => isGlobalRelease() ? global : domestic;
 
 const originalUserDataDirectory = app.getPath("userData");
-const stableCompanionUserDataDirectory = localTestRuntime ? localTestUserDataDirectory(app.getPath("appData")) : isGlobalRelease()
-  ? globalStableUserDataDirectory(app.getPath("appData"))
-  : stableUserDataDirectory(app.getPath("appData"));
-const companionLegacyUserDataDirectories = localTestRuntime || isGlobalRelease() ? [] : legacyUserDataDirectories(app.getPath("appData"), originalUserDataDirectory);
+const stableCompanionUserDataDirectory = floatingReleaseDataDirectory(app.getPath("appData"), app.getVersion(), floatingPreviewBuild, !floatingLocalTestBuild, Boolean(localTestRuntime), isGlobalRelease());
+const companionLegacyUserDataDirectories = floatingLocalTestBuild || localTestRuntime || isGlobalRelease() ? [] : legacyUserDataDirectories(app.getPath("appData"), originalUserDataDirectory);
 app.setPath("userData", stableCompanionUserDataDirectory);
 
 // Local ad-hoc builds cannot reliably retain Apple's separate Audio Capture
@@ -744,6 +747,7 @@ const updateTray = () => {
     { type: "separator" },
     { label: desktopCopy("打开伴随程序", "Open companion"), click: () => windowVisibility.restore() },
     { label: desktopCopy("隐藏助手", "Hide companion"), click: () => windowVisibility.hide() },
+    ...(floatingPreviewBuild ? [{ label: desktopCopy("桌面浮窗", "Floating window"), click: openFloatingInterview }] : []),
     {
       label: desktopCopy("停止并退出", "Stop and quit"),
       click: () => {
@@ -834,19 +838,23 @@ const captureCurrentScreen = async (
   if (lifecycle && writtenNativeSourceReadInFlight) {
     return failed({ name: "共享屏幕截取", errorMessage: "屏幕截取仍在恢复，请重新打开助手后重试。" });
   }
+  const requestedScreenSourceId = screenSourceId || preferredScreenSourceId;
+  const useFilteredCapture = floatingPreviewBuild && process.platform === "darwin";
   let sources;
   let ownsNativeRead = false;
   try {
     if (lifecycle) { writtenNativeSourceReadInFlight = true; ownsNativeRead = true; }
-    sources = await desktopCapturer.getSources({
-      types: ["screen"],
-      thumbnailSize: { width: 1920, height: 1080 },
-    });
+    sources = useFilteredCapture
+      ? await captureMacPreviewSources(requestedScreenSourceId, lifecycle?.signal)
+      : await desktopCapturer.getSources({
+        types: ["screen"],
+        thumbnailSize: { width: 1920, height: 1080 },
+      });
   } catch (error) {
     return failed({
       name: "共享屏幕截取",
       errorMessage: error instanceof Error
-        ? `获取屏幕源失败：${error.message}。请在系统设置中允许面试稳伴随程序录制屏幕后重启应用。`
+        ? `获取屏幕源失败：${error.message}。${useFilteredCapture ? "" : "请在系统设置中允许面试稳伴随程序录制屏幕后重启应用。"}`
         : "获取屏幕源失败，请在系统设置中允许面试稳伴随程序录制屏幕后重启应用。",
     });
   } finally {
@@ -855,10 +863,9 @@ const captureCurrentScreen = async (
     if (ownsNativeRead) writtenNativeSourceReadInFlight = false;
   }
   if (lifecycle?.signal.aborted || screenshotCaptureLock.ownerToken() !== ownerToken) throw new Error("screenshot_operation_obsolete");
-  const requestedScreenSourceId = screenSourceId || preferredScreenSourceId;
-  const selectedScreen = requestedScreenSourceId
-    ? sources.find((source) => source.id === requestedScreenSourceId)
-    : sources[0];
+  const selectedScreen = useFilteredCapture || !requestedScreenSourceId
+    ? sources[0]
+    : sources.find((source) => source.id === requestedScreenSourceId);
   if (requestedScreenSourceId && !selectedScreen) {
     return failed({
       name: "共享屏幕截取",
@@ -1387,6 +1394,7 @@ const createWindow = () => {
       backgroundThrottling: false,
     },
   });
+  if (floatingPreviewBuild && process.platform === "darwin") requestWindowCaptureProtection(window);
   mainWindow = window;
   window.on("focus", () => desktopConnectionRecovery.recover("focus"));
 
@@ -1541,6 +1549,9 @@ else {
       rejectDisplayRequest("unexpected-display-source-failure");
     });
   }, { useSystemPicker: false });
+  if (floatingPreviewBuild) {
+    initializeFloatingInterview(localTestRuntime?.webWorkspaceUrl, async () => (await pairingIdentityStore?.load())?.manualCode ?? null);
+  }
   ensureTray();
   createWindow();
   try {
@@ -1699,7 +1710,7 @@ ipcMain.handle("desktop:list-screens", async () => {
   try {
     const sources = await desktopCapturer.getSources({
       types: ["screen"],
-      thumbnailSize: { width: 1280, height: 720 },
+      thumbnailSize: floatingPreviewBuild && process.platform === "darwin" ? { width: 0, height: 0 } : { width: 1280, height: 720 },
     });
     return sources.map((source, index) => ({
       id: source.id,

@@ -1,0 +1,26 @@
+[
+  {
+    "name": "OfferSteady-Companion-2.0.0-macOS-arm64.dmg",
+    "id": "11eb40c6-b57b-4351-8d8a-1259413a624e",
+    "status": "Accepted",
+    "createdDate": "2026-11-14T06:25:21.486Z"
+  },
+  {
+    "name": "OfferSteady-Companion-2.0.0-macOS-x64.dmg",
+    "id": "cd7972ed-e6c7-4d1a-a41b-8cd8ce17f6ba",
+    "status": "Accepted",
+    "createdDate": "2026-11-14T06:25:20.133Z"
+  },
+  {
+    "name": "OfferSteady-Companion-2.0.0-macOS-arm64-App.zip",
+    "id": "963f3759-1f8d-4a31-98cc-846fde84bdf2",
+    "status": "Accepted",
+    "createdDate": "2026-11-14T06:23:20.216Z"
+  },
+  {
+    "name": "OfferSteady-Companion-2.0.0-macOS-x64-App.zip",
+    "id": "9693ad38-084f-465f-97b1-8e16551083ca",
+    "status": "Accepted",
+    "createdDate": "2026-11-14T06:23:19.247Z"
+  }
+]

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'">
+  <title>桌面浮窗</title>
+</head>
+<body>
+  <header>
+    <div class="identity"><strong>桌面浮窗</strong><span id="build-label" hidden>国服测试</span></div>
+    <div class="window-controls">
+      <label>透明度
+        <input id="transparency" type="range" min="0" max="60" step="1" value="0" disabled>
+        <output id="transparency-value" for="transparency">0%</output>
+      </label>
+      <button id="tuck-away" type="button" title="从菜单栏选择桌面浮窗可恢复" hidden>收起</button>
+    </div>
+  </header>
+  <main>
+    <section aria-live="polite">
+      <h1 id="status-title">正在连接面试稳</h1>
+      <p id="status-detail">登录和面试将在此窗口打开。</p>
+      <button id="retry" type="button" hidden>重新连接</button>
+    </section>
+  </main>
+  <footer><span id="protection"></span><span id="host"></span></footer>
+  <script type="module" src="./online-shell.ts"></script>
+</body>
+</html>

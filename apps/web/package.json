@@ -13,6 +13,7 @@
     "test:seo-build": "node scripts/verify-seo-build.mjs",
     "test:route-split": "node scripts/verify-route-split.mjs",
     "review:live": "node scripts/review-live-workspace.mjs",
+    "review:mobile-scroll": "node scripts/review-mobile-scroll.mjs",
     "doctor:access": "node scripts/doctor-local-access.mjs"
   },
   "dependencies": {

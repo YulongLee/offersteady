@@ -1,0 +1,36 @@
+{
+  "sampled_at_utc": "2026-11-14T17:35:39.732691+00:00",
+  "scope": "CN web and material worker public program/runtime files only; no environment or user data",
+  "results": {
+    "compose-material-worker-1": {
+      "identity": {
+        "id": "7c717cef4f22a8863a7602cf306cf94bf7940eb31c888f26035d09510704c2ad",
+        "image": "sha256:df6b8500500e955aa2f01c3bc0c5b40dab218296459f4e8341da268bb6b0ee43",
+        "running": true
+      },
+      "identity_stable_during_read": true,
+      "expected_count": 196,
+      "actual_count": 196,
+      "matches_snapshot": true,
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "snapshot_manifest": "releases/cn-20261101.1/material-worker-runtime-manifest.json"
+    },
+    "compose-web-1": {
+      "identity": {
+        "id": "682985b4275883d52f4cfc67a53ec12f576abbfe57340f4c1d4c720e9000932c",
+        "image": "sha256:4586bab84a0c18b4aadba9e9be079960372abdc6334030c01f59dbb45bffff76",
+        "running": true
+      },
+      "identity_stable_during_read": true,
+      "expected_count": 366,
+      "actual_count": 366,
+      "matches_snapshot": true,
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "snapshot_manifest": "releases/cn-20261101.1/web-static-manifest.json"
+    }
+  }
+}

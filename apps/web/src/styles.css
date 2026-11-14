@@ -1288,7 +1288,8 @@ h1, h2, h3, p { margin-top: 0; }
   .mobile-live-tabs button span { border-radius: 999px; background: var(--surface-3); color: currentColor; padding: 2px 6px; font-size: 7px; }
   .mobile-live-panel { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 8px 8px 12px; }
   .mobile-live-panel .conversation-monitor, .mobile-live-panel .answer-workspace { min-height: 100%; max-height: none; overflow: hidden; }
-  .mobile-live-panel .conversation-monitor { display: flex; flex: 1 1 auto; }
+  /* Bound the list so its contained touch scrolling has a real scroll range. */
+  .mobile-live-panel .conversation-monitor { display: flex; flex: 1 1 auto; height: 100%; min-height: 0; }
   .mobile-live-panel .conversation-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
   .mobile-live-panel .answer-workspace, .mobile-live-panel .answer-workspace.mobile-answer-expanded { display: block; height: auto; min-height: 100%; overflow: visible; transition: none; }
   .mobile-interview-controls { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--panel-bg-strong) 96%, transparent); box-shadow: 0 -12px 32px rgba(0,0,0,.16); padding: 8px 10px max(8px, env(safe-area-inset-bottom)); }

@@ -1,0 +1,14 @@
+{
+  "changedLifecycleFunctions": [],
+  "unchangedFunctions": 26,
+  "onlyChangedFunction": "check_candidate_scope",
+  "fixedSourceCount": 1,
+  "baselineInputs": 238,
+  "candidateInputs": 238,
+  "unchangedOriginalInputs": 237,
+  "strictTcpZero": true,
+  "originalSevenGates": true,
+  "entityGate": true,
+  "singleWriter": true,
+  "recoveryGuardsUnchanged": true
+}

@@ -1,0 +1,56 @@
+/* Local styling inside the trusted website view. All actions stay owned by the website. */
+.public-shell:has(.login-card) .public-nav { display: none; }
+.public-shell:has(.login-card) .center-page {
+  min-height: 100dvh;
+  display: grid;
+  place-items: safe center;
+  padding: 16px;
+  background: radial-gradient(ellipse at 50% 12%, #203a44, #142330 70%);
+}
+.public-shell .login-card {
+  width: min(100%, 374px);
+  padding: 22px;
+  border: 1px solid #35515b;
+  border-radius: 15px;
+}
+.public-shell .login-card h1 { font-size: 23px; line-height: 1.35; }
+.public-shell .login-card :is(.logo-lockup, .prototype-badge) { margin-bottom: 3px; }
+.public-shell .login-card .sms-login-form input { min-height: 38px; }
+
+.machine-code-panel { grid-template-columns: minmax(0, 1fr); }
+.machine-code-panel > :is(label:has(input[inputmode="numeric"][maxlength="6"]), small, .connection-divider, .last-device-choice),
+.machine-code-panel > button.primary,
+.machine-code-panel > button.ghost:not([data-floating-local-connect]),
+.check-panel:has(.machine-code-panel):not(:has(.companion-update-required))
+  .check-list li:nth-child(2):not(.done) div > span,
+.check-panel:has(.machine-code-panel):not(:has(.companion-update-required))
+  :is(.check-list:has(li:first-child.done):has(li:nth-child(2):not(.done)) ~ .blocked-help:not(.context-disclosure)) {
+  display: none;
+}
+.check-panel:has(.machine-code-panel):not(:has(.companion-update-required))
+  .check-list li:nth-child(2):not(.done) div::after {
+  content: "通过本机伴随助手连接";
+  color: var(--muted);
+}
+
+.focused-live-page {
+  --answer-font-size: 15px;
+  --live-bg: #142330;
+  --panel-bg-soft: #142330;
+  --panel-bg-strong: #142330;
+  --line: #293d4c;
+}
+.focused-live-page .question-block h1 { font-size: clamp(17px, 3vw, 22px); line-height: 1.45; }
+.focused-live-page .advice-card { background: #192d38; }
+.focused-live-page .answer-body p { line-height: 1.65; }
+.focused-live-page .answer-pagination button { min-height: 28px; }
+.focused-live-page .conversation-turn p { font-size: 13px; }
+
+@media (max-width: 720px) {
+  .focused-live-page .mobile-live-tabs { grid-template-columns: repeat(2, 96px); }
+  .focused-live-page .mobile-live-tabs button { font-size: 13px; }
+  .focused-live-page .answer-workspace-head { align-items: center; flex-direction: row; }
+  .focused-live-page .answer-pagination { width: auto; }
+  .focused-live-page .answer-pagination button { flex: none; }
+  .focused-live-page .mobile-interview-controls textarea { min-height: 38px; font-size: 13px; }
+}

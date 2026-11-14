@@ -76,3 +76,15 @@ npm run review:live -w @offersteady/web
 2. 如果都不可访问，运行 `npm run dev:web`
 3. 若需要巡检或稳定端口，再运行 `npm run preview:web`
 4. 页面能打开后，再执行 `npm run review:live -w @offersteady/web`
+
+## 手机面试滚动回归
+
+```bash
+npm run review:mobile-scroll -w @offersteady/web
+```
+
+此检查自行启动隔离的本地服务，使用实际回答、对话和模拟面试组件及合成数据，不需要已有登录态。外部网络请求会被阻断，不创建真实会话。检查 320×568、390×844、430×932、667×375 四种视口，覆盖长回答、长对话、模拟面试准备、作答及报告末尾操作。
+
+运行环境需已有 Playwright 和浏览器。若它们位于工作区外，可通过 `PLAYWRIGHT_MODULE` 指定模块绝对路径，通过 `BROWSER_PATH` 指定浏览器路径，脚本不安装或下载组件。默认 Chromium 验证触摸滑动、回看位置和跟随最新转写。`BROWSER_ENGINE=webkit` 仅验证布局、滚动范围及滚动事件，因为当前驱动不支持移动 WebKit 的手势注入，不能视为 iPhone 真机触摸验收。
+
+结果和截图默认保存在 `artifacts/mobile-scroll-review/`，可用 `OFFERSTEADY_REVIEW_ARTIFACTS` 指定其他目录。本检查不会发布网页。

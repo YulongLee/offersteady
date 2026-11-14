@@ -1,0 +1,25 @@
+{
+  "arch": "arm64",
+  "records_expected": 286,
+  "records_actual": 286,
+  "matches": true,
+  "checks": {
+    "app_signature": {
+      "passed": true
+    },
+    "app_ticket": {
+      "passed": true
+    },
+    "dmg_ticket": {
+      "passed": true
+    },
+    "gatekeeper": {
+      "passed": true
+    },
+    "architecture": {
+      "passed": true,
+      "value": "arm64"
+    }
+  },
+  "sha256": "99eeea79ef001e37c1347e8c87493291177973db83ded048f33421966904bbad"
+}

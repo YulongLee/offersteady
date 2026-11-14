@@ -1,0 +1,54 @@
+{
+  "offersteady-global-backend-1": {
+    "inspect_ok": true,
+    "identity": "bf9eab2626100d1b090de78e3cab6f6fa00a727d6181c54c61ccb3e4f70eb197 sha256:687fe1b4b421eb11024bbe6fd36f8ff81a973cf37a74f43e653e7e9321752bea true",
+    "hash_checks_match": true,
+    "known_files_checked": 308,
+    "inventory_read_ok": true,
+    "inventory_count": 308,
+    "extra_count": 1,
+    "missing_count": 1,
+    "extra_paths": [
+      "apps/backend/app/.global-companion-200.lock"
+    ],
+    "missing_paths": [
+      "apps/backend/pyproject.toml"
+    ],
+    "pyproject_checked_individually": true,
+    "normalization_note": "pyproject.toml individually verified by hash but not included in directory walk; publication lock is runtime metadata, not source.",
+    "source_extra_paths": [],
+    "source_missing_paths": []
+  },
+  "offersteady-global-web-1": {
+    "inspect_ok": true,
+    "identity": "a164dbd6999dbfbb47969baee68b482fdc6c100a9c3b0d8f6fcadc9a3c2523ba sha256:73c351fbc0502f50989b729174620173c80988292fe6d0d2b4fcf660f29caa44 true",
+    "hash_checks_match": true,
+    "known_files_checked": 267,
+    "inventory_read_ok": true,
+    "inventory_count": 267,
+    "extra_count": 0,
+    "missing_count": 0,
+    "extra_paths": [],
+    "missing_paths": []
+  },
+  "offersteady-global-material-worker-1": {
+    "inspect_ok": true,
+    "identity": "e6f68f5f182e73e831e7b9c0633d3a8edd46e2cc0c1d1badc2cedd09a2591fea sha256:dc8a809fce79291d15a127f8121fe7f87a3d1f51b3d77422aba81c569115890d true",
+    "hash_checks_match": true,
+    "known_files_checked": 267,
+    "inventory_read_ok": true,
+    "inventory_count": 266,
+    "extra_count": 0,
+    "missing_count": 1,
+    "extra_paths": [],
+    "missing_paths": [
+      "apps/backend/pyproject.toml"
+    ],
+    "pyproject_checked_individually": true,
+    "normalization_note": "pyproject.toml individually verified by hash but not included in directory walk; publication lock is runtime metadata, not source.",
+    "source_extra_paths": [],
+    "source_missing_paths": []
+  },
+  "observedAtUTC": "2026-11-14T17:37:16.204133+00:00",
+  "scope": "backend and worker app/migrations/prompts and web document root, excluding __pycache__ and pyc; regular files only; no private environment/config or user data read."
+}

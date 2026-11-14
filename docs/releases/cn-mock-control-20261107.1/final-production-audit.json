@@ -1,0 +1,14 @@
+{
+  "releaseId": "cn-mock-control-20261107.1",
+  "changedBusinessFiles": [
+    "apps/backend/app/modules/mock_interview.py"
+  ],
+  "originalInputsPreserved": 237,
+  "actualImageVerified": true,
+  "candidateModuleSha256": "8440326d43aa1a14fef76d907d2b608496aaa533b354e4934fe6abeb1e96e40c",
+  "companionUpdateRequired": false,
+  "naturalTrafficRequestsCreated": 0,
+  "gitCommittedOrPushed": false,
+  "preexistingGlobalOnlyCaseDeselected": 1,
+  "productionRollbackPerformed": false
+}

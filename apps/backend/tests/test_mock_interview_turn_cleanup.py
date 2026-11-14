@@ -331,3 +331,47 @@ def test_microphone_disconnected_close_is_safe_and_preserves_a_replacement(repos
         finally:
             await runtime.detach(controller)
     asyncio.run(run())
+
+
+def test_old_control_final_close_preserves_reconnected_controller_capture_and_balance(repositories, monkeypatch):
+    async def run():
+        runtime, old, _, _, gateways, _, _, _, billing = await listening_runtime(repositories)
+        sid, owner = old.session_id, old.user_id
+        attach = runtime.attach
+        newer = None
+        monkeypatch.setattr(api, "require_mock_runtime", lambda: runtime)
+        monkeypatch.setattr(api, "authentication_service", lambda: SimpleNamespace(
+            authenticate_access_token=lambda **_: SimpleNamespace(user_id=owner)))
+        monkeypatch.setattr(runtime, "attach", AsyncMock(return_value=old))
+
+        class Socket:
+            reads = 0
+            async def accept(self):
+                pass
+            async def receive_text(self):
+                nonlocal newer
+                self.reads += 1
+                if self.reads == 1:
+                    return json.dumps({"accessToken": "synthetic-token"})
+                await runtime.detach(old)
+                newer = await attach(user_id=owner, session_id=sid, send=AsyncMock())
+                await runtime.command(newer, action="resume", version=round_state(newer.record).version)
+                raise WebSocketDisconnect(code=1006)
+            async def send_json(self, payload):
+                pass
+            async def close(self):
+                raise WebSocketDisconnect(code=1006)
+
+        balance = billing.state_for_user(user_id=owner).balance
+        try:
+            await api.mock_control(Socket(), sid)
+            assert old.closed and runtime.controllers[sid] is newer
+            assert not newer.closed and round_state(newer.record).phase == "listening"
+            capture = runtime.audio._captures[sid]
+            assert not capture.closed and not capture.revoked
+            assert billing.state_for_user(user_id=owner).balance == balance
+            gateways[-1].close_session.assert_not_called()
+        finally:
+            await runtime.shutdown()
+        assert runtime.controllers == {} and runtime.audio.snapshot()["captures"] == 0
+    asyncio.run(run())

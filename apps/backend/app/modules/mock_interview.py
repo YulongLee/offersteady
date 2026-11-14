@@ -180,7 +180,7 @@ async def mock_control(socket: WebSocket, session_id: str):
                 await runtime.detach(controller)
             try:
                 await socket.close()
-            except RuntimeError:
+            except (RuntimeError, WebSocketDisconnect):
                 pass
 
 

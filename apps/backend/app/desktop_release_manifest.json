@@ -1,7 +1,85 @@
 {
   "version": 1,
-  "generatedAtMs": 1793553796001,
+  "generatedAtMs": 1794670931216,
   "entries": [
+    {
+      "id": "mac-arm64-200",
+      "platform": "macos",
+      "architecture": "arm64",
+      "displayName": "macOS Apple Silicon",
+      "version": "2.0.0",
+      "minimumOs": "macOS 14.2+",
+      "fileName": "OfferSteady-Companion-2.0.0-macOS-arm64.dmg",
+      "fileSizeBytes": 136608975,
+      "sha256": "99eeea79ef001e37c1347e8c87493291177973db83ded048f33421966904bbad",
+      "signingStatus": "verified",
+      "distributionStatus": "published",
+      "notarized": true,
+      "publishedAtMs": 1794670931216,
+      "protocolVersion": "2.0",
+      "captureRuntime": "electron-single-owner",
+      "developmentOnly": false,
+      "objectKey": "desktop-releases/macos/arm64/2.0.0/OfferSteady-Companion-2.0.0-macOS-arm64.dmg",
+      "capabilities": {
+        "microphone": true,
+        "systemAudio": true,
+        "screenCapture": true,
+        "manualInputFallback": true,
+        "screenshotFallback": true
+      }
+    },
+    {
+      "id": "mac-x64-200",
+      "platform": "macos",
+      "architecture": "x64",
+      "displayName": "macOS Intel",
+      "version": "2.0.0",
+      "minimumOs": "macOS 14.2+",
+      "fileName": "OfferSteady-Companion-2.0.0-macOS-x64.dmg",
+      "fileSizeBytes": 142139062,
+      "sha256": "8cdfbf524ce8abf0763a7e28c8d647781405deb5f0574412624f4f857527b27f",
+      "signingStatus": "verified",
+      "distributionStatus": "published",
+      "notarized": true,
+      "publishedAtMs": 1794670931216,
+      "protocolVersion": "2.0",
+      "captureRuntime": "electron-single-owner",
+      "developmentOnly": false,
+      "objectKey": "desktop-releases/macos/x64/2.0.0/OfferSteady-Companion-2.0.0-macOS-x64.dmg",
+      "capabilities": {
+        "microphone": true,
+        "systemAudio": true,
+        "screenCapture": true,
+        "manualInputFallback": true,
+        "screenshotFallback": true
+      }
+    },
+    {
+      "id": "win-x64-200",
+      "platform": "windows",
+      "architecture": "x64",
+      "displayName": "Windows 10/11 安装版",
+      "version": "2.0.0",
+      "minimumOs": "Windows 10 22H2+",
+      "fileName": "OfferSteady-Companion-Setup-2.0.0-Windows-x64.exe",
+      "fileSizeBytes": 102182232,
+      "sha256": "2ca70baa786662c176d2a3d78831e5c1029a1369dfd68e15d799dbb5346a8af8",
+      "signingStatus": "unsigned",
+      "distributionStatus": "published",
+      "notarized": false,
+      "publishedAtMs": 1794670931216,
+      "protocolVersion": "2.0",
+      "captureRuntime": "electron-wasapi-loopback",
+      "developmentOnly": false,
+      "objectKey": "desktop-releases/windows/x64/2.0.0/OfferSteady-Companion-Setup-2.0.0-Windows-x64.exe",
+      "capabilities": {
+        "microphone": true,
+        "systemAudio": true,
+        "screenCapture": true,
+        "manualInputFallback": true,
+        "screenshotFallback": true
+      }
+    },
     {
       "id": "mac-arm64-136",
       "platform": "macos",
@@ -26,7 +104,8 @@
         "screenCapture": true,
         "manualInputFallback": true,
         "screenshotFallback": true
-      }
+      },
+      "hiddenFromListing": true
     },
     {
       "id": "mac-x64-136",
@@ -52,7 +131,8 @@
         "screenCapture": true,
         "manualInputFallback": true,
         "screenshotFallback": true
-      }
+      },
+      "hiddenFromListing": true
     },
     {
       "id": "win-x64-136",
@@ -78,7 +158,8 @@
         "screenCapture": true,
         "manualInputFallback": true,
         "screenshotFallback": true
-      }
+      },
+      "hiddenFromListing": true
     }
   ]
 }

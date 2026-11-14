@@ -1,0 +1,9 @@
+{
+  "baselineImage": "sha256:1724a4e95c8fe610d2e6b98a5186a3867adde99c4126e96f55920c2beefc80cf",
+  "baselineModuleSha256": "ac575f7286278b235eba5a91a373479c0d084cbb423af437c3e613bc4b30fde5",
+  "explicitWorktreePythonPath": true,
+  "oldBaselineFailures": 4,
+  "oldBaselinePasses": 8,
+  "candidateFocusedPasses": 12,
+  "ignoredInitialWrongEditableImport": true
+}

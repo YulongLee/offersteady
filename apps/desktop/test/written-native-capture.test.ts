@@ -12,6 +12,7 @@ it("fences an unabortable timed-out native read without starting overlapping nat
   const native = vi.fn().mockImplementationOnce(() => new Promise(done => { resolve = done; })).mockResolvedValue([]);
   const lock = new ScreenshotCaptureLock();
   const capture = new Function("desktopCapturer", "screenshotCaptureLock", "releaseScreenshotCaptureLock", `
+    const floatingPreviewBuild = false;
     let writtenNativeSourceReadInFlight = false;
     let preferredScreenSourceId = null;
     const publishScreenshotCaptureLock = () => undefined;

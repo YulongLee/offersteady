@@ -1,0 +1,76 @@
+{
+  "version": "20261115.1",
+  "branch": "codex/release-20261115-1",
+  "tag": "release-20261115.1",
+  "parentRelease": "release-20261106.1",
+  "applicationSecretsIncluded": false,
+  "rawUserDataIncluded": false,
+  "productionChangesByGitSeal": false,
+  "companionVersion": "2.0.0",
+  "components": {
+    "cn-backend": {
+      "archive": "releases/20261115.1/cn/backend-runtime.tar.gz",
+      "inventory": "releases/20261115.1/cn/backend-runtime-manifest.json",
+      "count": 238,
+      "image": "sha256:4c1b3c60ba2366bce93831cc0684aab703935388f8b38a6d1a95444f9d96b25e"
+    },
+    "cn-material-worker": {
+      "archive": "releases/cn-20261101.1/material-worker-runtime.tar.gz",
+      "inventory": "releases/cn-20261101.1/material-worker-runtime-manifest.json",
+      "count": 196,
+      "image": "sha256:df6b8500500e955aa2f01c3bc0c5b40dab218296459f4e8341da268bb6b0ee43"
+    },
+    "cn-web": {
+      "archive": "releases/cn-20261101.1/web-static.tar.gz",
+      "inventory": "releases/cn-20261101.1/web-static-manifest.json",
+      "count": 366,
+      "image": "sha256:4586bab84a0c18b4aadba9e9be079960372abdc6334030c01f59dbb45bffff76"
+    },
+    "global-backend": {
+      "archive": "releases/20261115.1/global/backend-runtime.tar.gz",
+      "inventory": "releases/20261115.1/global/backend-runtime-manifest.json",
+      "count": 308,
+      "image": "sha256:687fe1b4b421eb11024bbe6fd36f8ff81a973cf37a74f43e653e7e9321752bea"
+    },
+    "global-material-worker": {
+      "archive": "releases/20261102.1/global/material-worker-runtime.tar.gz",
+      "inventory": "releases/20261102.1/global/material-worker-runtime-manifest.json",
+      "count": 267,
+      "image": "sha256:dc8a809fce79291d15a127f8121fe7f87a3d1f51b3d77422aba81c569115890d"
+    },
+    "global-web": {
+      "archive": "releases/20261115.1/global/web-static.tar.gz",
+      "inventory": "releases/20261115.1/global/web-static-manifest.json",
+      "count": 267,
+      "image": "sha256:73c351fbc0502f50989b729174620173c80988292fe6d0d2b4fcf660f29caa44"
+    }
+  },
+  "files": {
+    "releases/20261102.1/global/material-worker-runtime-manifest.json": "8ad251a702fa86fdab16ffe1153b070a2aecb0d42e475e6548c0e48a78f97944",
+    "releases/20261102.1/global/material-worker-runtime.tar.gz": "bd440b6f47cee5de495c2184d0f46fccc5d7dcf790ba105f5faba1b56a2c6638",
+    "releases/20261115.1/README.md": "54f5093ae8b23adc2b0c294505419380bd4c9eef80ccdd5c806e1af0f5620f05",
+    "releases/20261115.1/cn/backend-runtime-manifest.json": "240e5edd7f525150a7054960909a556b274081a3004a467686a559c017bcbd9c",
+    "releases/20261115.1/cn/backend-runtime.tar.gz": "71e997cb4bb99fd67506bf1f82f683d1aa9565419157e7c053e3feb77cb7ae89",
+    "releases/20261115.1/cn/non-target-verification.json": "9447e1bab37081301d03edd3fb06e34d4bdf3e9004a0e79e72df78240ef7030e",
+    "releases/20261115.1/components.json": "5178af18d8651ea4ee0ce3447b5d79df50cd2ccf3c5edbbededbb5cb824b93c6",
+    "releases/20261115.1/evidence/arm64-mounted-verification.json": "98be3ff2bbfec17b169ab717319b7982dae3e85da6b838845caf3da6fc9e75d2",
+    "releases/20261115.1/evidence/independent-post-cutover-observation.json": "6ec432554d00dbbaa016c3e681aedcc47c00ff999ff1ab99d4b415cce008c827",
+    "releases/20261115.1/evidence/notary-submissions.json": "4791670b2c9ae9944932dce4d03140c99cd920ab09d5f11ba0256956c19d8fdf",
+    "releases/20261115.1/evidence/x64-mounted-verification.json": "7723ad0d885dbfa91193c4019ca7e9dacb37e03d60d656944c2d93bc8623abd1",
+    "releases/20261115.1/global/README.md": "2a956e77d48219de51b8eb9c082320d21ef790aa9bea209d6d6b45079af4cab6",
+    "releases/20261115.1/global/backend-runtime-manifest.json": "dde278442d76bc9084c2775a8318d34e85485e402f0bbdf24c7b483c5b757d0c",
+    "releases/20261115.1/global/backend-runtime.tar.gz": "96f98258454c930ad443196f1ca9006dd6a0b299f460250a4d6ca283adcdd31a",
+    "releases/20261115.1/global/desktop-source.tar.gz": "38742ad4ffb0571c1b0e705adee0169e2dddb45f5ea2d217c06e69455293f30c",
+    "releases/20261115.1/global/runtime-complete-inventory-verification.json": "e1adfc8703ddeea53b6c33b4756d2f3ec9036c7a0062afc31d96fd275ed01949",
+    "releases/20261115.1/global/runtime-source-readonly-verification.json": "f070f11c2a6ef8b14220faecba624749453e50d4e85ae13e4039b72bf6de16c8",
+    "releases/20261115.1/global/snapshot-manifest.json": "a3435fa1ccac4e3eba9ecd8e41df4652234faa90ed1e137f7b56db8e3cb7dcdd",
+    "releases/20261115.1/global/web-static-manifest.json": "3114791be8bb86633be6df24bd629643a837631d058054d30dbdf80d337be48d",
+    "releases/20261115.1/global/web-static.tar.gz": "fb6561831a5274c13baeda79a6545758f3c6fa0fec734d2c89a1e6238ccc91af",
+    "releases/20261115.1/tools/restore_snapshot.py": "139182295c33fd7a1de0963a0132ef894d5041843e1ffc341d56edd92b09eae1",
+    "releases/20261115.1/tools/verify_snapshot.py": "aeca60c3e4b4dac0f4ed15966895f4922ae71687ddf0b00d1f5140012979f86d",
+    "releases/cn-20261101.1/material-worker-runtime-manifest.json": "62afcc0a27c856293496000ced108acedafac8719d7efb712785c51580e42d15",
+    "releases/cn-20261101.1/material-worker-runtime.tar.gz": "13e6425565227d923bdf20d6a2b19dc8a9ef73f87ee584ad00baec0d182ff22c",
+    "releases/cn-20261101.1/web-static-manifest.json": "368acb2a6123e3f7994659ec6ae0fac7b759ed49daccac274260490f5067ca3b",
+    "releases/cn-20261101.1/web-static.tar.gz": "91400bae3352c45dfa7106971e5cad8d1095e98e2757c9871cf1e81c0fb7aa1e"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "candidateImportVerified": {
+    "path": "/Users/liyulong/.codex/worktrees/cn-search-content/offersteady/artifacts/cn-mock-control-20261107-release/candidate/apps/backend/app/modules/mock_interview.py",
+    "sha256": "8440326d43aa1a14fef76d907d2b608496aaa533b354e4934fe6abeb1e96e40c"
+  },
+  "results": {
+    "control-unit": {
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "cn-mock-regressions": {
+      "tests": 271,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "release-regressions": {
+      "tests": 417,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "mockDeselectedGlobalOnly": 1,
+  "globalOnlyCaseFailsUnchangedBaseline": true,
+  "actualImageProbePassed": true,
+  "productionModelCalls": 0,
+  "productionTestSessions": 0
+}
